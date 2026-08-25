@@ -7,8 +7,9 @@
  * стосується модулів — ключі, підписи, порядок у UI, дефолти за роллю — живе
  * тут, а решта файлів імпортує.
  *
- * **Додаючи модуль**, достатньо дописати рядок у MODULE_DEFINITIONS і привʼязати
- * `moduleKey` до пункту сайдбару та до ModuleRouteGate у App.tsx.
+ * **Додаючи модуль**, допиши рядок у MODULE_DEFINITIONS, признач його посадам у
+ * ROLE_MENUS і привʼяжи `moduleKey` до пункту сайдбару та до ModuleRouteGate у
+ * App.tsx. Модуль, забутий у ROLE_MENUS, не побачить ніхто, крім власника.
  *
  * «Сповіщення» свідомо НЕ модуль: вони потрібні всім і перемикача не мають.
  */
@@ -52,8 +53,6 @@ const isOwner = (ctx: RoleContext) => (ctx.accessRole ?? "").trim().toLowerCase(
 const job = (ctx: RoleContext) => (ctx.jobRole ?? "").trim().toLowerCase();
 
 const ownerOrSeo = (ctx: RoleContext) => isOwner(ctx) || job(ctx) === "seo";
-const ownerSeoOrAccountant = (ctx: RoleContext) =>
-  isOwner(ctx) || ["seo", "accountant", "chief_accountant"].includes(job(ctx));
 
 export type ModuleDefinition = {
   key: ModuleKey;
@@ -77,8 +76,6 @@ export type ModuleDefinition = {
    * «Ролях і доступах» показуємо заблокованим із поясненням.
    */
   restrictedTo?: (ctx: RoleContext) => boolean;
-  /** Чи ввімкнений за замовчуванням, якщо в module_access нічого не записано. */
-  defaultFor?: (ctx: RoleContext) => boolean;
   /**
    * Ключ, від якого успадкувати значення для старих записів, де цього ключа
    * ще не існувало. Без цього розділення одного модуля на кілька мовчки
@@ -88,32 +85,29 @@ export type ModuleDefinition = {
 };
 
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
-  { key: "overview", label: "Огляд", group: "orders", defaultFor: () => true },
+  { key: "overview", label: "Огляд", group: "orders" },
   // Чотири пункти «замовлень» раніше сиділи на спільному ключі `orders`, тож
   // не можна було дати прорахунки без відвантаження. Розділили — а старі
   // записи успадковують те саме значення, щоб ніхто нічого не втратив.
   { key: "customers", label: "Замовники", group: "orders", inheritsFrom: "orders" },
   { key: "quotes", label: "Прорахунки", group: "orders", inheritsFrom: "orders" },
-  { key: "orders", label: "Замовлення", group: "orders", defaultFor: () => true },
+  { key: "orders", label: "Замовлення", group: "orders" },
   { key: "shipping", label: "До відвантаження", group: "orders", inheritsFrom: "orders" },
 
-  // Дефолти нижче навмисно повторюють ті, що діяли до реєстру: каталог,
-  // логістика й підрядники були вимкнені всім, крім власника.
   { key: "catalog", label: "Каталог", group: "operations" },
   { key: "logistics", label: "Логістика", group: "operations" },
-  { key: "design", label: "Дизайн", group: "operations", defaultFor: () => true },
-  { key: "contractors", label: "Підрядники та постачальники", group: "operations", defaultFor: isOwner },
-  { key: "stock", label: "Склад", group: "operations", defaultFor: ownerOrSeo },
-  { key: "marketing", label: "Маркетинг", group: "operations", defaultFor: (ctx) => ownerOrSeo(ctx) || job(ctx) === "marketer" },
+  { key: "design", label: "Дизайн", group: "operations" },
+  { key: "contractors", label: "Підрядники та постачальники", group: "operations" },
+  { key: "stock", label: "Склад", group: "operations" },
+  { key: "marketing", label: "Маркетинг", group: "operations" },
 
-  { key: "finance", label: "Фінанси", group: "finance", defaultFor: ownerSeoOrAccountant },
-  { key: "vchasno", label: "Вчасно — завантаження", group: "finance", defaultFor: ownerSeoOrAccountant },
+  { key: "finance", label: "Фінанси", group: "finance" },
+  { key: "vchasno", label: "Вчасно — завантаження", group: "finance" },
   {
     key: "vchasno_send",
     label: "Вчасно — надсилання",
     group: "finance",
     hint: "Надсилання контрагенту — лише уповноважена особа",
-    defaultFor: (ctx) => isOwner(ctx) || job(ctx) === "chief_accountant",
   },
 
   {
@@ -128,9 +122,6 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     label: "Ролі та доступи",
     group: "account",
     hint: "Керування правами інших людей",
-    // Збігається з тими, хто має це зараз (owner + два SEO), тож перенесення
-    // зі старого ключа `team` нікого не позбавляє доступу.
-    defaultFor: ownerOrSeo,
   },
   // Ключ лишається `nova_poshta` (він у базі), а підпис уже про весь розділ:
   // за ним стоять усі зовнішні сервіси, а не одна служба доставки.
@@ -145,18 +136,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     // тим, що справді є на сторінці: інакше на питання «які в нас інтеграції»
     // приходить неповна відповідь.
     hint: "Ключі й підключення зовнішніх сервісів: Нова Пошта, Вчасно, Telegram, Dropbox, OpenAI",
-    defaultFor: ownerOrSeo,
   },
-  { key: "pulse", label: "Пульс команди", group: "account", hint: "Аналітика активності", defaultFor: ownerOrSeo },
+  { key: "pulse", label: "Пульс команди", group: "account", hint: "Аналітика активності" },
   {
     key: "dev",
     label: "Dev",
     group: "account",
     hint: "Беклог доробок, релізи, здоровʼя системи",
-    // Дефолт і обмеження — той самий предикат, що вже стоїть на «Складі» й
-    // «Маркетингу». Дефолтом, а не галочкою вручну: інакше про доступ для
-    // другого SEO згадають у найкращому разі через тиждень після найму.
-    defaultFor: ownerOrSeo,
     // Дошку доробок і релізи база віддає лише власнику й SEO. Без цього
     // обмеження увімкнена галочка привела б людину на порожній екран.
     restrictedTo: ownerOrSeo,
@@ -164,6 +150,102 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
 ];
 
 export const MODULE_KEYS = MODULE_DEFINITIONS.map((item) => item.key);
+
+/**
+ * Стартовий набір сторінок посади — що людина бачить у меню, поки їй нічого
+ * не міняли руками.
+ *
+ * Дефолт потрібен у трьох місцях: новій людині без запису в `module_access`,
+ * картці доступів у «Ролях і доступах» і режимі «Приміряти посаду» (там людини
+ * немає взагалі, тож брати значення нема звідки). До 25.08.2026 дефолт жив
+ * окремим `defaultFor` у кожного модуля — і половина ключів його просто не
+ * мала: «Замовники», «Прорахунки», «Каталог», «До відвантаження» й «Логістика»
+ * були вимкнені геть усім, включно з власником. У звичайному режимі цього не
+ * бачив ніхто (у команди ключі записані явно), зате «приміряв менеджера»
+ * показувало меню з чотирьох пунктів — без замовників, прорахунків і каталогу.
+ *
+ * Набори знято з того, що в людей цих посад справді стоїть у проді (заміряно
+ * 25.08.2026). Посади, яких зараз ніхто не займає, зібрані за аналогією з
+ * найближчою — і таблиця свідомо перелічує всі посади з JOB_ROLE_NAMES, щоб
+ * нова посада не діставалась мовчки в запасний набір (тест це стереже).
+ *
+ * Дефолт нікому нічого не забирає: збережене значення завжди сильніше (див.
+ * normalizeModuleAccess), тож правка тут міняє лише новачків і режим посади.
+ */
+
+/** Продажі: замовник → прорахунок → замовлення, плюс каталог і дизайн-дошка. */
+const SALES_MENU: ModuleKey[] = ["overview", "customers", "quotes", "orders", "catalog", "design"];
+
+/** Бухгалтерія: документи ходять навколо замовлення, від складу до підрядника. */
+const ACCOUNTING_MENU: ModuleKey[] = [
+  "overview",
+  "customers",
+  "quotes",
+  "orders",
+  "shipping",
+  "catalog",
+  "logistics",
+  "stock",
+  "contractors",
+  "vchasno",
+];
+
+/** Маркетинг: матеріал — готові візуали, а не замовлення й ціни. */
+const MARKETING_MENU: ModuleKey[] = ["overview", "design", "marketing"];
+
+const ROLE_MENUS: Record<string, ModuleKey[]> = {
+  // — Продажі —
+  manager: SALES_MENU,
+  sales_manager: SALES_MENU,
+  junior_sales_manager: SALES_MENU,
+  top_manager: SALES_MENU,
+  office_manager: SALES_MENU,
+  // PM веде замовлення далі за менеджера — звідси склад зразків і підрядники.
+  pm: [...SALES_MENU, "stock", "contractors"],
+
+  // — Дизайн —
+  // Дизайнер працює з прорахунку: там і ТЗ, і замовник, і моделі з каталогу.
+  designer: SALES_MENU,
+
+  // — Виробництво —
+  head_of_production: [...SALES_MENU, "stock", "logistics", "contractors"],
+  // Друкар і пакувальник цін не бачать: їм треба замовлення, макет і склад.
+  printer: ["overview", "orders", "catalog", "design", "stock"],
+  packer: ["overview", "orders", "shipping", "catalog", "stock"],
+
+  // — Логістика —
+  head_of_logistics: [...SALES_MENU, "shipping", "logistics", "contractors"],
+  logistics: ["overview", "customers", "orders", "shipping", "catalog", "logistics"],
+
+  // — Бухгалтерія —
+  // Молодший бухгалтер без «Фінансів»: їх ріже RLS (has_finance_access), і
+  // галочка привела б його на порожній екран замість даних.
+  junior_accountant: ACCOUNTING_MENU,
+  accountant: [...ACCOUNTING_MENU, "finance"],
+  chief_accountant: [...ACCOUNTING_MENU, "finance", "vchasno_send"],
+
+  // — Маркетинг —
+  marketer: MARKETING_MENU,
+  smm: MARKETING_MENU,
+
+  // — Решта —
+  // IT тримає ключі до зовнішніх сервісів, але не веде продажі.
+  it_specialist: ["overview", "orders", "catalog", "design", "nova_poshta"],
+  // SEO — заступник власника: бачить усе, що йому дозволяє роль.
+  seo: MODULE_KEYS,
+};
+
+/**
+ * Посада не з довідника (вписана руками або порожня) — найбезпечніший мінімум,
+ * а не «нічого»: людині все одно треба кудись зайти.
+ */
+const FALLBACK_MENU: ModuleKey[] = ["overview", "orders", "design"];
+
+/** Rule 0: власник відкриває будь-яку сторінку повз галочки — див. docs/SECURITY.md. */
+function roleMenu(ctx: RoleContext): ModuleKey[] {
+  if (isOwner(ctx)) return MODULE_KEYS;
+  return ROLE_MENUS[job(ctx)] ?? FALLBACK_MENU;
+}
 
 const DEFINITION_BY_KEY = new Map<ModuleKey, ModuleDefinition>(
   MODULE_DEFINITIONS.map((item) => [item.key, item])
@@ -182,18 +264,6 @@ export const MODULE_GROUPS: Array<{ group: ModuleGroup; label: string; modules: 
   modules: MODULE_DEFINITIONS.filter((item) => item.group === group),
 }));
 
-/**
- * Доступи «за замовчуванням» для ролі — коли в module_access порожньо.
- * Використовується і як база для нормалізації, і для нових запрошень.
- */
-/**
- * Перетин доступів для режиму «Дивитись як»: показуємо модулі обраної посади,
- * але жодного, якого немає у власних.
- *
- * Без цього режим ставав би обхідним шляхом до чужих даних: доступи в CRM
- * персональні, а RLS у таблицях — командна (по team_id). Тобто відкривши
- * «Фінанси», яких у тебе немає, ти справді прочитав би їх із бази.
- */
 /** Усі модулі відкриті — те, що фактично має owner (Rule 0). */
 export function fullModuleAccess(): ModuleAccess {
   const result = {} as ModuleAccess;
@@ -203,6 +273,14 @@ export function fullModuleAccess(): ModuleAccess {
   return result;
 }
 
+/**
+ * Перетин доступів для режиму «Дивитись як»: показуємо модулі обраної посади,
+ * але жодного, якого немає у власних.
+ *
+ * Без цього режим ставав би обхідним шляхом до чужих даних: доступи в CRM
+ * персональні, а RLS у таблицях — командна (по team_id). Тобто відкривши
+ * «Фінанси», яких у тебе немає, ти справді прочитав би їх із бази.
+ */
 export function intersectModuleAccess(own: ModuleAccess, target: ModuleAccess): ModuleAccess {
   const result = {} as ModuleAccess;
   MODULE_KEYS.forEach((key) => {
@@ -211,7 +289,13 @@ export function intersectModuleAccess(own: ModuleAccess, target: ModuleAccess): 
   return result;
 }
 
+/**
+ * Доступи «за замовчуванням» для посади — коли в `module_access` порожньо.
+ * База і для нормалізації збереженого запису, і для нових запрошень, і для
+ * режиму «Приміряти посаду». Набори — у ROLE_MENUS вище.
+ */
 export function defaultModuleAccess(ctx: RoleContext = {}): ModuleAccess {
+  const menu = new Set(roleMenu(ctx));
   const result = {} as ModuleAccess;
   MODULE_DEFINITIONS.forEach((item) => {
     if (item.alwaysOn) {
@@ -222,7 +306,7 @@ export function defaultModuleAccess(ctx: RoleContext = {}): ModuleAccess {
       result[item.key] = false;
       return;
     }
-    result[item.key] = item.defaultFor?.(ctx) ?? false;
+    result[item.key] = menu.has(item.key);
   });
   return result;
 }
@@ -244,6 +328,7 @@ export function normalizeModuleAccess(
 ): ModuleAccess {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   const ctx: RoleContext = { accessRole, jobRole };
+  const defaults = defaultModuleAccess(ctx);
   const result = {} as ModuleAccess;
 
   MODULE_DEFINITIONS.forEach((item) => {
@@ -268,7 +353,7 @@ export function normalizeModuleAccess(
         return;
       }
     }
-    result[item.key] = item.defaultFor?.(ctx) ?? false;
+    result[item.key] = defaults[item.key];
   });
 
   return result;

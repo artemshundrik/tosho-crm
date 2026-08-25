@@ -212,9 +212,9 @@ function isPrivileged(ctx: FeatureViewerContext): boolean {
 
 export function isFeatureVisible(def: FeatureDefinition, ctx: FeatureViewerContext): boolean {
   // Власник бачить усе — так само, як у сайдбарі, де гілка isSuperAdmin
-  // обходить перевірку модуля. Без цього каталог розходився б із меню:
-  // напр. `customers` не має defaultFor, тож у чистих дефолтах вимкнений
-  // навіть власнику, і фічі за ним зникали б у нього зі списку.
+  // обходить перевірку модуля. Дефолти посад (ROLE_MENUS у moduleAccess.ts)
+  // власнику й так віддають усе, але покладатись на них тут не варто: у
+  // контекст може прийти запис із бази, де щось знято руками.
   if (isOwner(ctx)) return true;
 
   // Увага: hasModuleAccess дозволяє за замовчуванням — відсутній ключ читається

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { JOB_ROLE_NAMES } from "./jobRoles";
 import {
   defaultModuleAccess,
   hasModuleAccess,
@@ -99,6 +100,81 @@ describe("обмежені модулі (restrictedTo)", () => {
     const legacy = { overview: true, orders: true, design: true };
     expect(normalizeModuleAccess(legacy, "member", "designer").dev).toBe(false);
     expect(normalizeModuleAccess(legacy, "member", "manager").dev).toBe(false);
+  });
+});
+
+/**
+ * Стартові набори посад. Найдорожча помилка тут — не «дали зайве», а «посада
+ * лишилась без сторінок»: саме так режим «Приміряти посаду» показував
+ * менеджеру меню з чотирьох пунктів, бо половина ключів не мала дефолту.
+ */
+describe("стартове меню посади", () => {
+  it("менеджер бачить замовників, прорахунки й каталог", () => {
+    const access = defaultModuleAccess({ accessRole: "member", jobRole: "manager" });
+    expect(access.customers).toBe(true);
+    expect(access.quotes).toBe(true);
+    expect(access.catalog).toBe(true);
+    expect(access.orders).toBe(true);
+    expect(access.design).toBe(true);
+  });
+
+  it("дизайнер працює з прорахунку, тож замовники й прорахунки в нього є", () => {
+    const access = defaultModuleAccess(DESIGNER);
+    expect(access.customers).toBe(true);
+    expect(access.quotes).toBe(true);
+  });
+
+  it("маркетолог лишається без замовлень і цін", () => {
+    const access = defaultModuleAccess({ accessRole: "member", jobRole: "marketer" });
+    expect(access.marketing).toBe(true);
+    expect(access.design).toBe(true);
+    expect(access.orders).toBe(false);
+    expect(access.quotes).toBe(false);
+    expect(access.customers).toBe(false);
+  });
+
+  it("бухгалтерія: «Фінанси» лише тим, кого пускає RLS", () => {
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "junior_accountant" }).finance).toBe(false);
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "junior_accountant" }).vchasno).toBe(true);
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "accountant" }).finance).toBe(true);
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "chief_accountant" }).vchasno_send).toBe(true);
+  });
+
+  it("логіст бачить відвантаження, а менеджер — ні", () => {
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "logistics" }).shipping).toBe(true);
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "manager" }).shipping).toBe(false);
+  });
+
+  it("власник відкриває все — Rule 0", () => {
+    const access = defaultModuleAccess(OWNER);
+    expect(Object.values(access).every(Boolean)).toBe(true);
+  });
+
+  it("кожна посада з довідника має свій набір, а не запасний", () => {
+    // Запасний набір — це «overview + замовлення + дизайн». Нова посада, забута
+    // в ROLE_MENUS, мовчки провалилась би саме в нього.
+    const fallback = defaultModuleAccess({ accessRole: "member", jobRole: "невідома-посада" });
+    for (const role of Object.keys(JOB_ROLE_NAMES)) {
+      const access = defaultModuleAccess({ accessRole: "member", jobRole: role });
+      expect(access, role).not.toEqual(fallback);
+    }
+  });
+
+  it("посада без запису в довіднику лишається з робочим мінімумом", () => {
+    const access = defaultModuleAccess({ accessRole: "member", jobRole: null });
+    expect(access.overview).toBe(true);
+    expect(access.orders).toBe(true);
+    expect(access.design).toBe(true);
+    expect(access.finance).toBe(false);
+    expect(access.members_access).toBe(false);
+  });
+
+  it("збережене значення сильніше за дефолт — правка наборів нікого не роззброює", () => {
+    // Настя-маркетолог має design=true в базі, хоч набір посади це й дає;
+    // важливіше зворотне: явний false лишається false.
+    const access = normalizeModuleAccess({ catalog: false }, "member", "manager");
+    expect(access.catalog).toBe(false);
+    expect(access.quotes).toBe(true);
   });
 });
 

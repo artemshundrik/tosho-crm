@@ -688,7 +688,13 @@ export function TeamMembersPage() {
     setEditProfileProbationEndDate(meta?.probationEndDate ?? "");
     setEditProfileManagerUserId(meta?.managerUserId ?? "");
     setEditProfileModuleAccess(
-      normalizeMemberModuleAccessForRole(meta?.moduleAccess ?? DEFAULT_MODULE_ACCESS, member.access_role, member.job_role)
+      // Дефолт беремо за ПОСАДОЮ людини, а не безрольовий: інакше картка того,
+      // кого ще немає в довіднику, показувала б чужий мінімум із трьох пунктів.
+      normalizeMemberModuleAccessForRole(
+        meta?.moduleAccess ?? defaultModuleAccess({ accessRole: member.access_role, jobRole: member.job_role }),
+        member.access_role,
+        member.job_role
+      )
     );
   }, [memberMetaByUserId]);
 

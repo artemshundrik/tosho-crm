@@ -129,12 +129,13 @@ describe("видимість", () => {
   });
 
   it("можливість за модулем ховається, коли модуль вимкнений дефолтами", () => {
-    // ГОЧА: `customers` має inheritsFrom, але не має defaultFor — тобто в
-    // ЧИСТИХ дефолтах він вимкнений, а успадкування спрацьовує лише для
-    // наявних записів у module_access (normalizeModuleAccess).
+    // Маркетолог, а не дизайнер: у стартовому наборі маркетолога немає
+    // замовників (ROLE_MENUS у moduleAccess.ts), тож фічі за цим модулем не
+    // мають до нього доходити. У дизайнера замовники є — він працює з
+    // прорахунку.
     const gated = FEATURE_DEFINITIONS.filter((def) => def.moduleKey === "customers");
     expect(gated.length).toBeGreaterThan(0);
-    const visibleKeys = visibleFeatures(DESIGNER).map((def) => def.key);
+    const visibleKeys = visibleFeatures(MARKETER).map((def) => def.key);
     for (const def of gated) {
       expect(visibleKeys, def.key).not.toContain(def.key);
     }
