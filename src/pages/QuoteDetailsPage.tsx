@@ -129,7 +129,9 @@ import {
 } from "@/features/orders/orderRecords";
 import type { LucideIcon } from "lucide-react";
 import {
+  AlertTriangle,
   ArrowLeft,
+  Banknote,
   Copy,
   Eye,
   FileDown,
@@ -284,7 +286,7 @@ type QuoteDetailsPageProps = {
   quoteId: string;
 };
 
-type QuotePageTab = "products" | "design" | "deadlines" | "discussion" | "details";
+type QuotePageTab = "products" | "design" | "deadlines" | "discussion" | "details" | "economics";
 
 type QuoteDetailsCachePayload = {
   quote: QuoteSummaryRow;
@@ -1379,9 +1381,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     quote?.deadline_at,
     runs,
   ]);
-  const quoteRequirementsHint = quoteRequirements.length
-    ? `Заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`
-    : null;
 
   const loadRuns = useCallback(async () => {
     setRunsLoading(true);
@@ -2287,6 +2286,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     .filter(Boolean)
     .join("\n\n");
   const nextAction = STATUS_NEXT_ACTION[currentStatus] ?? STATUS_NEXT_ACTION.new;
+
+  /**
+   * Чому перехід статусу зараз неможливий — людською мовою.
+   *
+   * Раніше ці три причини виражались одним способом: кнопка ставала сірою.
+   * Сіра кнопка не каже НІЧОГО — ні того, що бракує поля, ні того, що картку
+   * тримає колега. Тепер причина пишеться текстом там, куди людина клікає,
+   * а кнопок-інвалідів у шапці немає взагалі.
+   *
+   * Порядок перевірок = порядок, у якому їх можна усунути: спершу права
+   * (нічого не вдієш), потім чужий лок (можна попросити), потім поля (можна
+   * заповнити самому).
+   */
+  const statusBlockReason = !canEditQuoteContent
+    ? "Змінювати статус може менеджер цього прорахунку або керівник."
+    : quoteLockedByOther
+      ? `${quoteLock.holderName ?? "Інший користувач"} зараз редагує прорахунок — статус зміниться, коли редагування завершиться.`
+      : quoteRequirements.length > 0
+        ? `Спершу заповніть: ${quoteRequirements.join(", ")}.`
+        : null;
 
   const canEditRuns = useMemo(
     () =>
@@ -5282,6 +5301,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     badge?: string | number | null;
     attention?: boolean;
     mobileOnly?: boolean;
+    soon?: boolean;
   }> = [
     {
       value: "products",
@@ -5318,14 +5338,32 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       badge: canViewSummarySection ? formatCurrency(totals.total, quote.currency) : null,
       mobileOnly: true,
     },
+    // «Економіка» стоїть останньою і поки що веде на заглушку: вкладку ще
+    // узгоджують (REQ-56), і доки рішення не ухвалені, формула ціни лишається
+    // рівно такою, як зараз. Порожня вкладка з чесним «скоро» краща за
+    // вигаданий макет, який доведеться переробляти.
+    {
+      value: "economics",
+      label: "Економіка",
+      icon: Banknote,
+      soon: true,
+    },
   ];
 
   return (
     <div className="text-foreground">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-transparent">
         <div className="px-4 py-2 md:px-5 lg:px-6">
-          <div className="flex min-h-10 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-start gap-3 lg:items-center">
+          {/*
+            Один ряд і на телефоні теж.
+            Було: колонка до lg — тобто на телефоні номер стояв окремим рядком,
+            а під ним на всю ширину лягала смуга дій. Дві третини висоти екрана
+            над контентом займала шапка. Тепер це один ряд, що переноситься лише
+            коли справді не влазить, а дії тримаються праворуч у будь-якій ширині.
+          */}
+          <div className="flex min-h-10 flex-wrap items-center gap-x-2 gap-y-2 sm:gap-x-3">
+            {/* Номер і кнопка назад — те, що не має стискатись ніколи. */}
+            <div className="flex shrink-0 items-center gap-2 lg:gap-3">
               <Button
                 variant="ghost"
                 size="icon"
@@ -5337,16 +5375,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
 
-              <div className="min-w-0">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <HoverCopyText
-                    value={quote.number ?? quote.id}
-                    textClassName="font-mono text-[17px] font-medium tracking-wide text-foreground"
-                    successMessage="Номер прорахунку скопійовано"
-                    copyLabel="Скопіювати номер прорахунку"
-                  >
-                    {quote.number ?? quote.id}
-                  </HoverCopyText>
+              <HoverCopyText
+                value={quote.number ?? quote.id}
+                textClassName="font-mono text-[15px] font-medium tracking-wide text-foreground sm:text-[17px]"
+                successMessage="Номер прорахунку скопійовано"
+                copyLabel="Скопіювати номер прорахунку"
+              >
+                {quote.number ?? quote.id}
+              </HoverCopyText>
+            </div>
+
+            {/*
+              Мітки (тип, КП/набори, хто дивиться) на телефоні їдуть власним
+              рядком під номером — `order-3 w-full`. Інакше вони змагаються за
+              ширину зі статусом і номер обрізається до «TS-0226…», хоча саме
+              номер тут головний. На lg усе повертається в один ряд.
+            */}
+            <div className="order-3 w-full lg:order-none lg:w-auto">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <QuoteTypeBadge quoteType={quote.quote_type} />
                   {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
                     <>
@@ -5358,9 +5404,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       ))}
                     </>
                   ) : null}
-                  <Badge className={cn("border", statusClasses[currentStatus] ?? statusClasses.new)}>
-                    {formatStatusLabel(currentStatus)}
-                  </Badge>
                   {quoteViewers.length > 0 ? (
                     <div className="ml-1 inline-flex items-center gap-1.5 text-muted-foreground">
                       <Eye className="h-3.5 w-3.5" />
@@ -5384,68 +5427,136 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       ) : null}
                     </div>
                   ) : null}
-                </div>
               </div>
             </div>
 
-            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0 lg:justify-end">
+            <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5 lg:order-none">
               {currentStatus === "approved" ? (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-2 max-sm:flex-1"
+                  className="h-8 gap-2"
                   onClick={() => void openCreateOrderDialog()}
                 >
                   <FileDown className="h-4 w-4" />
-                  <span className="truncate">Створити замовлення</span>
+                  {/* На телефоні лишається сама іконка: підпис із трьох слів
+                      з'їдав рядок, а поруч стоїть статус, який важливіший. */}
+                  <span className="truncate max-sm:sr-only">Створити замовлення</span>
                 </Button>
               ) : null}
-              {(!designTask || canCreateMoreDesignTasks) && !designTaskLoading ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-2 max-sm:flex-1"
-                  disabled={designTaskSaving || !canEditQuoteContent}
-                  onClick={() => {
-                    setDesignTaskError(null);
-                    // Одразу підставляємо першу позицію без задачі — найчастіший
-                    // сценарій, і людині лишається натиснути «Створити».
-                    setDesignTaskItemId(itemsWithoutDesignTask[0]?.id ?? null);
-                    setCreateDesignTaskDialogOpen(true);
-                  }}
-                >
-                  <Palette className="h-4 w-4" />
-                  <span className="truncate">
-                    {designTaskSaving
-                      ? "Створення..."
-                      : designTasks.length > 0
-                        ? "Ще одна дизайн-задача"
-                        : "Створити дизайн-задачу"}
-                  </span>
-                </Button>
-              ) : null}
-              <Button
-                variant="primary"
-                size="sm"
-                className="h-8 gap-2 max-sm:flex-1"
-                disabled={!canEditQuoteContent || statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
-                onClick={handlePrimaryStatusAction}
-              >
-                {createElement(statusIcons[nextAction.nextStatus ?? currentStatus] ?? Clock, {
-                  className: "h-4 w-4",
-                })}
-                <span className="truncate">{nextAction.ctaLabel}</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-2 max-sm:flex-1"
-                disabled={!canEditQuoteContent || statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
-                onClick={openStatusDialog}
-              >
-                <span className="truncate">Змінити статус</span>
-                <ChevronDown className="h-3 w-3" />
-              </Button>
+              {/*
+                Статус — контрол, а не бейдж поруч із кнопками.
+                Раніше в шапці стояли підряд бейдж статусу, CTA переходу,
+                «Змінити статус» і «Створити дизайн-задачу»: чотири рівноцінні
+                прямокутники, з яких неможливо було зчитати, який стан зараз і
+                яка дія головна. Тепер стан і дія — один елемент: видно, де ти
+                стоїш, а всі переходи лежать під ним.
+
+                Тригер НІКОЛИ не буває disabled. Причина, чому перехід зараз
+                неможливий, має бути читабельною — вона написана всередині меню,
+                а не схована в сірій кнопці, по якій нічого не стається.
+              */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      // На телефоні контрол вужчий: номер прорахунку і статус
+                      // мають стати в один рядок на 375px, інакше шапка росте
+                      // до трьох рядків і з'їдає екран.
+                      "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-semibold transition-[filter] hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 sm:gap-1.5 sm:px-2.5 sm:text-sm",
+                      statusClasses[currentStatus] ?? statusClasses.new
+                    )}
+                    aria-label={`Статус: ${formatStatusLabel(currentStatus)}. Змінити`}
+                  >
+                    {/* Іконку на телефоні ховаємо: статус там і так кольоровий
+                        і підписаний, а 20 px вирішують, чи стане він у рядок
+                        поруч із номером. */}
+                    {createElement(statusIcons[currentStatus] ?? Clock, {
+                      className: "hidden h-3.5 w-3.5 sm:block",
+                    })}
+                    <span className="truncate">{formatStatusLabel(currentStatus)}</span>
+                    {statusBusy ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3 opacity-70" />
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[268px]">
+                  {statusBlockReason ? (
+                    // Текст стану замість мертвої кнопки: людина бачить, чого
+                    // саме бракує, і де це виправити.
+                    <div className="tone-warning-subtle m-1 flex items-start gap-2 rounded-lg px-2.5 py-2 text-xs leading-relaxed">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span>{statusBlockReason}</span>
+                    </div>
+                  ) : nextAction.nextStatus ? (
+                    <>
+                      <DropdownMenuLabel className="text-3xs uppercase tracking-caps text-muted-foreground">
+                        Наступний крок
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        className="tone-success-subtle font-semibold focus:tone-success-subtle"
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          handlePrimaryStatusAction();
+                        }}
+                      >
+                        {createElement(statusIcons[nextAction.nextStatus] ?? Clock, {
+                          className: "mr-2 h-4 w-4",
+                        })}
+                        <span className="truncate">{nextAction.ctaLabel}</span>
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-3xs uppercase tracking-caps text-muted-foreground">
+                    Змінити статус
+                  </DropdownMenuLabel>
+                  {STATUS_OPTIONS.filter((option) => option !== "cancelled").map((option) => {
+                    const isCurrent = option === currentStatus;
+                    return (
+                      <DropdownMenuItem
+                        key={`status-${option}`}
+                        disabled={Boolean(statusBlockReason) || isCurrent}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          void handleQuickStatusChange(option, "");
+                        }}
+                      >
+                        {createElement(statusIcons[option] ?? Clock, {
+                          className: "mr-2 h-4 w-4 text-muted-foreground",
+                        })}
+                        <span className="truncate">{formatStatusLabel(option)}</span>
+                        {isCurrent ? <Check className="ml-auto h-3.5 w-3.5 text-muted-foreground" /> : null}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={Boolean(statusBlockReason)}
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      openStatusDialog();
+                    }}
+                  >
+                    <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                    Змінити з приміткою…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={Boolean(statusBlockReason) || currentStatus === "cancelled"}
+                    className="text-destructive focus:text-destructive"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      setCancelDialogOpen(true);
+                    }}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Скасувати прорахунок…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -5453,6 +5564,29 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {(!designTask || canCreateMoreDesignTasks) && !designTaskLoading ? (
+                    <>
+                      <DropdownMenuItem
+                        disabled={designTaskSaving || !canEditQuoteContent}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          setDesignTaskError(null);
+                          // Одразу підставляємо першу позицію без задачі — найчастіший
+                          // сценарій, і людині лишається натиснути «Створити».
+                          setDesignTaskItemId(itemsWithoutDesignTask[0]?.id ?? null);
+                          setCreateDesignTaskDialogOpen(true);
+                        }}
+                      >
+                        <Palette className="mr-2 h-4 w-4" />
+                        {designTaskSaving
+                          ? "Створення..."
+                          : designTasks.length > 0
+                            ? "Ще одна дизайн-задача"
+                            : "Створити дизайн-задачу"}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  ) : null}
                   <DropdownMenuItem
                     disabled={!quote || (!canEditQuoteContent && !isLogisticsJobRole(viewerJobRole))}
                     onSelect={(event) => {
@@ -5494,10 +5628,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
       <div className="grid grid-cols-1 xl:h-[calc(100dvh-112px)] xl:grid-cols-[minmax(0,1.9fr)_360px] xl:items-start xl:overflow-hidden">
         <main className="min-w-0 px-4 pb-10 pt-0 md:px-5 lg:px-6 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden xl:pb-0 2xl:px-8">
-          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:shrink-0 2xl:-mx-8 2xl:px-8">
-            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/*
+            Вкладки — підкресленням, а не рамковими пігулками.
+            Рамка навколо кожної вкладки давала другу сітку поверх шапки: чотири
+            коробки в ряд читались як чотири кнопки дії, і активна вкладка
+            губилась серед них. Тепер активна тримається вагою тексту і тонкою
+            рискою знизу — рядок вкладок перестав сперечатися зі смугою дій.
+          */}
+          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:shrink-0 2xl:-mx-8 2xl:px-8">
+            <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {quotePageTabs.map((tab) => {
-                const Icon = tab.icon;
                 const isActive = activeQuoteTab === tab.value;
                 return (
                   <button
@@ -5505,28 +5645,36 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     type="button"
                     onClick={() => setActiveQuoteTab(tab.value)}
                     className={cn(
-                      "relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                      "relative inline-flex h-11 shrink-0 items-center gap-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                      // Підкреслення малюємо псевдоелементом на самій кнопці, а не
+                      // окремим вузлом: інакше воно стрибає на 1px від нижньої
+                      // межі контейнера при скролі вкладок.
+                      "after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors",
                       isActive
-                        ? "border-primary/35 bg-primary/10 text-primary"
-                        : "border-border/45 bg-background text-muted-foreground hover:border-border hover:bg-muted/30 hover:text-foreground",
+                        ? "font-semibold text-foreground after:bg-primary"
+                        : "font-medium text-muted-foreground after:bg-transparent hover:text-foreground",
                       tab.mobileOnly && "xl:hidden"
                     )}
                     aria-pressed={isActive}
                   >
-                    <Icon className="h-4 w-4" />
                     <span>{tab.label}</span>
                     {tab.badge ? (
                       <span
                         className={cn(
-                          "max-w-[96px] truncate rounded-md px-1.5 py-0.5 text-2xs font-semibold leading-none",
-                          isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                          "max-w-[96px] truncate text-2xs tabular-nums",
+                          isActive ? "text-muted-foreground" : "text-muted-foreground/75"
                         )}
                       >
                         {tab.badge}
                       </span>
                     ) : null}
+                    {tab.soon ? (
+                      <span className="rounded-[5px] bg-accent-tone-soft px-1.5 py-px text-3xs font-bold uppercase tracking-caps-tight text-accent-tone-foreground">
+                        скоро
+                      </span>
+                    ) : null}
                     {tab.attention ? (
-                      <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden />
                     ) : null}
                   </button>
                 );
@@ -5534,7 +5682,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
           </div>
           <div className="space-y-6 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pb-8">
-            {quoteLockedByOther || quoteLock.releaseRequestedByName || quoteLock.idleSecondsLeft !== null || quoteLock.releasedReason || statusError || quoteRequirementsHint ? (
+            {quoteLockedByOther || quoteLock.releaseRequestedByName || quoteLock.idleSecondsLeft !== null || quoteLock.releasedReason || statusError || quoteRequirements.length > 0 ? (
               <div className="space-y-3">
                 <EntityLockBanner
                   lock={quoteLock}
@@ -5544,16 +5692,51 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 />
 
                 {statusError && (
-                  <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    <XCircle className="h-4 w-4" />
-                    {statusError}
+                  <div className="tone-danger-subtle flex items-start gap-3 rounded-xl border px-3.5 py-3 text-sm">
+                    <span
+                      className="tone-danger grid h-7 w-7 shrink-0 place-items-center rounded-lg border"
+                      aria-hidden
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="min-w-0 flex-1 self-center leading-relaxed">{statusError}</span>
                   </div>
                 )}
 
-                {quoteRequirementsHint ? (
-                  <div className="tone-warning rounded-lg border px-4 py-3 text-sm">
-                    <span className="font-medium">Прорахунок не готовий до збереження або зміни статусу.</span>{" "}
-                    {quoteRequirementsHint}
+                {/*
+                  Чого бракує — списком, а не одним реченням.
+                  Раніше це був суцільний рядок «Заповніть обов'язкові поля: A, B (тираж 30 шт),
+                  C (тираж 30 шт)» — на трьох тиражах він розповзався на два рядки, і в ньому
+                  неможливо було порахувати, скільки саме пунктів лишилось. Пункти окремими
+                  чипами читаються перерахунком: видно кількість і видно кожен.
+                  Текст пунктів беремо як є з quoteRequirements — це той самий гейт збереження.
+                */}
+                {quoteRequirements.length > 0 ? (
+                  <div className="tone-warning-subtle rounded-xl border px-3.5 py-3">
+                    <div className="flex items-start gap-3">
+                      <span
+                        className="tone-warning grid h-7 w-7 shrink-0 place-items-center rounded-lg border"
+                        aria-hidden
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-relaxed">
+                          Прорахунок не готовий до збереження або зміни статусу
+                        </p>
+                        <ul className="mt-2 flex flex-wrap gap-1.5">
+                          {quoteRequirements.map((requirement) => (
+                            <li
+                              key={`requirement-${requirement}`}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-current/25 bg-background/45 px-2.5 py-0.5 text-2xs font-medium"
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-warning-solid" aria-hidden />
+                              {requirement}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
 
@@ -8326,6 +8509,49 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                 </TabsContent>
               </Tabs>
+            </section>
+
+            {/*
+              «Економіка» — заглушка, а не порожня вкладка.
+              Розкладка ціни вже працює в «Активному підсумку» справа, тож тут
+              чесно сказано, що саме додасться і чому воно ще не додане. Формулу
+              ціни ця вкладка не чіпає: доки відкриті питання не закриті, все
+              рахується рівно так, як рахувалось.
+            */}
+            <section className={cn("py-2", activeQuoteTab !== "economics" && "hidden")}>
+              <div className="mx-auto flex max-w-[560px] flex-col items-center gap-4 py-10 text-center">
+                <div
+                  className="grid h-12 w-12 place-items-center rounded-2xl border border-border/60 bg-muted text-muted-foreground"
+                  aria-hidden
+                >
+                  <Banknote className="h-5 w-5" />
+                </div>
+                <div className="space-y-1.5">
+                  <h2 className="text-lg font-semibold tracking-tight">Економіка — скоро</h2>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Тут буде розкладка ціни, фактичні витрати замовлення й порівняння тиражів. Вкладку
+                    ще узгоджують — доки рішення не ухвалені, прорахунок рахує ціну так само, як
+                    рахував.
+                  </p>
+                </div>
+                <div className="grid w-full gap-2 text-left">
+                  <div className="flex items-start gap-2.5 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success-foreground" aria-hidden />
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      <span className="font-medium text-foreground">Розкладка ціни вже працює.</span>{" "}
+                      Собівартість, потрібний ВП, сталі витрати й податки видно в «Активному підсумку»
+                      праворуч.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
+                    <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      <span className="font-medium text-foreground">Є відкриті питання.</span> Кілька
+                      рішень щодо вкладки ще не ухвалені, тому тут заглушка, а не вигаданий екран.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </section>
           </div>
         </main>
