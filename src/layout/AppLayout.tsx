@@ -572,21 +572,31 @@ const ROUTES = {
 /**
  * Хореографія згортання сайдбара — двофазна. Згортання: підписи гаснуть
  * каскадом (затримки --sb-out на пунктах), і лише потім їде ширина — тому вся
- * геометрія слухає var(--sb-w-delay) з кореня лейаута (80мс при згортанні,
+ * геометрія слухає var(--sb-w-delay) з кореня лейаута (60мс при згортанні,
  * 0 при розгортанні). Розгортання навпаки: ширина одразу, підписи наздоганяють
- * (--sb-in). Крива з перельотом — та сама, що погоджена в макеті «Фінал».
+ * (--sb-in).
+ *
+ * Крива — БЕЗ перельоту. У макеті «Фінал» на горизонтальному русі стояла
+ * пружина cubic-bezier(.34,1.4,.45,1): ширина перескакувала ціль приблизно на
+ * 14px і вертáлась. Артем 25.08 сказав, що це занадто пружно навіть тут, тож
+ * правило «переліт лише на горизонталі» звузилось до «перельоту немає ніде».
+ * Заміна — різкий старт і довге м'яке приземлення. Без відскоку рух втрачає
+ * запал і починає здаватись млявим, тому разом із кривою: 320→280мс і затримка
+ * другої фази 80→60мс. Той самий рядок продубльований інлайном ще у двох
+ * місцях — left шапки і padding рядка меню; шукати за «280ms_cubic-bezier».
  */
 const SB_GEOM_TRANSITION =
-  "[transition-duration:320ms] [transition-timing-function:cubic-bezier(0.34,1.4,0.45,1)] [transition-delay:var(--sb-w-delay,0ms)] motion-reduce:transition-none";
+  "[transition-duration:280ms] [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] [transition-delay:var(--sb-w-delay,0ms)] motion-reduce:transition-none";
 
 /**
- * Те саме, але БЕЗ перельоту — для всього, що рухається по вертикалі.
+ * Те саме, але власною кривою — для всього, що рухається по вертикалі.
  *
- * Пружина личить висувній ширині: вона їде вбік і нічого не штовхає. А на
- * висоті заголовка чи вертикальному відступі той самий переліт означає, що
- * значення на мить перескакує ціль і повертається, — і весь стовпчик пунктів
- * під ним смикається вгору-вниз. Найгірше це чути на розгортанні, де висота
- * росте з нуля і переліт нічим не обрізаний.
+ * Тепер, коли й горизонталь без перельоту, різниця між двома константами лише
+ * у формі приземлення. Але заборона лишається в силі на майбутнє: на висоті
+ * заголовка чи вертикальному відступі переліт означає, що значення на мить
+ * перескакує ціль і повертається, — і весь стовпчик пунктів під ним смикається
+ * вгору-вниз. Найгірше це чути на розгортанні, де висота росте з нуля і
+ * переліт нічим не обрізаний.
  */
 const SB_STACK_TRANSITION =
   "[transition-duration:280ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] [transition-delay:var(--sb-w-delay,0ms)] motion-reduce:transition-none";
@@ -2128,7 +2138,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         )}
         /* Затримка другої фази згортання сайдбара — на корені, бо її слухають
            і сам сайдбар, і сусіди по дереву: шапка, смуга «Дивитись як», <main>. */
-        style={{ "--sb-w-delay": sidebarCollapsed ? "80ms" : "0ms" } as React.CSSProperties}
+        style={{ "--sb-w-delay": sidebarCollapsed ? "60ms" : "0ms" } as React.CSSProperties}
       >
       {/* DESKTOP SIDEBAR */}
       <aside
@@ -2360,7 +2370,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             // left їде разом із шириною сайдбара (та сама крива й затримка з
             // var(--sb-w-delay)); кольори лишаються на своїх швидких 200мс.
             "fixed top-[var(--view-as-offset,0px)] right-0 z-20 border-b border-border/40",
-            "[transition:left_320ms_cubic-bezier(0.34,1.4,0.45,1)_var(--sb-w-delay,0ms),background-color_200ms_linear,backdrop-filter_200ms_linear,border-color_200ms_linear]",
+            "[transition:left_280ms_cubic-bezier(0.32,0.72,0,1)_var(--sb-w-delay,0ms),background-color_200ms_linear,backdrop-filter_200ms_linear,border-color_200ms_linear]",
             "motion-reduce:transition-none",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
             sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]",
@@ -3114,7 +3124,7 @@ function SidebarGroup({
                 // Падінг їде другою фазою хореографії (var(--sb-w-delay)) —
                 // рядок лишається на всю ширину в обох станах, і іконка
                 // доцентровується самим звуженням, без демонтажу підпису.
-                "[transition:padding_320ms_cubic-bezier(0.34,1.4,0.45,1)_var(--sb-w-delay,0ms),background-color_150ms_linear,color_150ms_linear]",
+                "[transition:padding_280ms_cubic-bezier(0.32,0.72,0,1)_var(--sb-w-delay,0ms),background-color_150ms_linear,color_150ms_linear]",
                 "motion-reduce:transition-none",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                 collapsed
