@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { registerOverlay } from "@/components/ui/overlayPresence"
+import { OverlayPresenceMarker } from "@/components/ui/overlayPresence"
 import { UnsavedChangesPrompt, UnsavedGuardListener, useUnsavedGuard } from "@/components/ui/unsaved-guard"
 
 const Sheet = SheetPrimitive.Root
@@ -119,10 +119,6 @@ const SheetContent = React.forwardRef<
   // закривав би підтвердження, а не дровер.
   const closeRef = React.useRef<HTMLButtonElement>(null)
 
-  // Поки панель відкрита, смуга вкладок ховається — та сама причина, що й у
-  // модалок: вона висить поверх нижнього краю й ловить дотики.
-  React.useEffect(() => registerOverlay(), [])
-
   return (
   <SheetPortal>
     <SheetOverlay className={overlayClassName} />
@@ -177,6 +173,11 @@ const SheetContent = React.forwardRef<
       {/* НЕ прибирати tabIndex={-1}: Radix шукає перший елемент із tabIndex >= 0
           і поставив би сюди фокус при відкритті. CSS-клас `hidden` його не
           рятує — фільтр дивиться на властивість, а не на стилі. */}
+      {/* Поки панель відкрита, смуга вкладок ховається: вона висить поверх
+          нижнього краю й ловила б дотики замість пунктів аркуша. Маркер — тут,
+          поруч зі слухачем захисту, і рівно з тієї ж причини: обгортка
+          `SheetContent` лишається в дереві й при закритій панелі. */}
+      <OverlayPresenceMarker />
       {/* Слухач захисту — усередині вмісту, щоб жити рівно стільки, скільки
           відкритий дровер. Пояснення — у useUnsavedGuard. */}
       <UnsavedGuardListener enabled={guard.listening} touchedRef={guard.touchedRef} />

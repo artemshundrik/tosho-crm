@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 /**
  * Скільки перекривних поверхонь (нижніх аркушів) зараз відкрито.
@@ -50,4 +50,22 @@ function getServerSnapshot() {
 /** true, поки хоч один нижній аркуш відкритий. */
 export function useOverlayOpen() {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+/**
+ * Маркер присутності: реєструє поверхню, поки САМ змонтований.
+ *
+ * ЧОМУ НЕ ЕФЕКТ У ТІЛІ `DialogContent`/`SheetContent`, ЯК БУЛО СПОЧАТКУ.
+ * Radix ховає лише вміст ПОРТАЛУ — сама обгортка `<DialogContent>` лишається
+ * в дереві весь час, відкрите вікно чи ні. Тож ефект на монтуванні
+ * спрацьовував для КОЖНОГО аркуша застосунку одразу після завантаження й
+ * ніколи не звільнявся: заміряно на «Огляді» — лічильник доростав до 6 без
+ * жодного відкритого вікна, і смуга вкладок на телефоні зникала назавжди.
+ *
+ * Цей компонент ставиться ВСЕРЕДИНУ вмісту порталу, тож живе рівно стільки,
+ * скільки поверхня справді відкрита.
+ */
+export function OverlayPresenceMarker() {
+  useEffect(() => registerOverlay(), []);
+  return null;
 }

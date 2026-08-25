@@ -3,7 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UnsavedChangesPrompt, UnsavedGuardListener, useUnsavedGuard } from "@/components/ui/unsaved-guard";
-import { registerOverlay } from "@/components/ui/overlayPresence";
+import { OverlayPresenceMarker } from "@/components/ui/overlayPresence";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -75,15 +75,6 @@ const DialogContent = React.forwardRef<
   // того діалогу й закриє підтвердження замість модалки.
   const closeRef = React.useRef<HTMLButtonElement>(null);
 
-  /**
-   * Поки модалка відкрита, смуга вкладок на телефоні ховається.
-   *
-   * Radix монтує вміст лише на час відкриття, тож реєстрації на монтуванні
-   * досить. Без цього смуга висіла поверх нижнього краю модалки — а саме там
-   * тепер живуть її кнопки, бо на телефоні вікно прилипає до низу.
-   */
-  React.useEffect(() => registerOverlay(), []);
-
   return (
   <DialogPortal>
     <DialogOverlay className={overlayClassName} />
@@ -136,8 +127,22 @@ const DialogContent = React.forwardRef<
         "max-md:!translate-x-0 max-md:!translate-y-0",
         "max-md:!max-h-[88dvh] max-md:!rounded-b-none max-md:!rounded-t-[28px] max-md:!border-x-0 max-md:!border-b-0",
         "max-md:pb-[calc(env(safe-area-inset-bottom)+1rem)]",
-        // Знизу вгору, а не «виринає з центру»: жест той самий, що в аркушів.
-        "max-md:data-[state=open]:slide-in-from-bottom-10",
+        /*
+         * Знизу вгору — і згори вниз. Жест той самий, що в аркушів.
+         *
+         * ПАРА, А НЕ ОДНА ПОЛОВИНА. Спершу тут стояв лише вхід
+         * (`slide-in-from-bottom-10`), а вихід лишався базовим — `zoom-out-95`
+         * із згасанням. Виходило, що вікно виїжджає знизу, а зникає,
+         * здуваючись на місці: рух туди й назад читався як два різні предмети.
+         * Аркуш (`sheet.tsx`, варіант `bottom`) завжди тримав обидві половини
+         * симетричними, і модалка на телефоні — це той самий аркуш.
+         *
+         * Масштаб на телефоні гаситься навмисно (`zoom-*-100`): коли поверхня
+         * приклеєна до нижнього краю на всю ширину, зменшувати її нема куди —
+         * зум лише розмиває чистий вертикальний рух.
+         */
+        "max-md:data-[state=open]:slide-in-from-bottom-10 max-md:data-[state=open]:zoom-in-100",
+        "max-md:data-[state=closed]:slide-out-to-bottom-10 max-md:data-[state=closed]:zoom-out-100",
         className
       )}
       translate="no"
@@ -170,6 +175,11 @@ const DialogContent = React.forwardRef<
       }}
       {...props}
     >
+      {/* Поки модалка відкрита, смуга вкладок на телефоні ховається: вона
+          висить поверх нижнього краю, а саме там тепер живуть кнопки вікна.
+          Маркер стоїть ВСЕРЕДИНІ вмісту порталу — обгортка `DialogContent`
+          лишається в дереві й при закритому вікні (див. overlayPresence). */}
+      <OverlayPresenceMarker />
       {/* НЕ прибирати tabIndex={-1}: Radix шукає перший елемент із tabIndex >= 0
           і поставив би сюди фокус при відкритті. CSS-клас `hidden` не рятує —
           фільтр дивиться на властивість, а не на стилі. */}
