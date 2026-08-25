@@ -2979,13 +2979,30 @@ function SidebarGroup({
     // Висота — спокійною кривою без перельоту: пружина тут смикала б увесь
     // стовпчик пунктів під заголовком. Текст гасне швидше за складання
     // висоти, тож напис не встигає розмазатись по русі.
-    "[transition:max-height_280ms_cubic-bezier(0.2,0.8,0.2,1)_var(--sb-w-delay,0ms),opacity_160ms_ease,transform_200ms_ease,color_150ms_linear]",
+    //
+    // Зсуву вбік тут свідомо НЕМАЄ. Підпис пункту може дозволити собі відʼїзд
+    // вліво: він довгий, його підрізає сама рамка, що звужується, і рух
+    // читається як втягування. Короткий заголовок секції нічим не підрізаний,
+    // тож той самий зсув поверх стискання по висоті давав діагональний кидок —
+    // напис буквально відлітав кудись убік. Гасне на місці.
+    "[transition:max-height_280ms_cubic-bezier(0.2,0.8,0.2,1)_var(--sb-w-delay,0ms),opacity_180ms_ease_var(--sb-hdr-delay,0ms),color_150ms_linear]",
     "motion-reduce:transition-none",
-    // Стеля впритул до реальної висоти напису (19px): із запасом у 32px
+    // Стеля впритул до реальної висоти напису (20px): із запасом у 32px
     // перші дві третини анімації йшли вхолосту, і рух читався як ривок
     // наприкінці замість рівного розкладання.
-    collapsed ? "max-h-0 opacity-0 -translate-x-2 pointer-events-none" : "max-h-5"
+    collapsed ? "max-h-0 opacity-0 pointer-events-none" : "max-h-5"
   );
+  /**
+   * Заголовок стоїть у тій самій хвилі, що й пункти під ним.
+   *
+   * Без цього всі чотири заголовки гасли одночасно, поки пункти йшли
+   * каскадом, — і замість однієї хвилі згори вниз виходило два незалежні
+   * рухи. Номер у хвилі беремо на півкроку раніше за перший пункт групи:
+   * заголовок над ним, отже й гаснути має першим.
+   */
+  const headerVars = {
+    "--sb-hdr-delay": collapsed ? `${Math.max(0, stagger * 10 - 5)}ms` : `${75 + stagger * 8}ms`,
+  } as React.CSSProperties;
 
   /**
    * Активний пункт видно навіть у згорнутій секції.
@@ -3007,6 +3024,7 @@ function SidebarGroup({
             aria-hidden={collapsed}
             tabIndex={collapsed ? -1 : undefined}
             title={collapsed ? undefined : isCollapsed ? `Розгорнути «${label}»` : `Згорнути «${label}»`}
+            style={headerVars}
             className={cn(
               // 11px замість 10: заголовок секції — клікабельний контрол, а в
               // нашому ж розборі примітивів записано, що 11px на клікабельному
@@ -3045,6 +3063,7 @@ function SidebarGroup({
           </button>
         ) : (
           <h4
+            style={headerVars}
             className={cn(
               "px-[9px] text-2xs leading-4 font-semibold uppercase tracking-caps-tight text-muted-foreground/75",
               headerMorph,
