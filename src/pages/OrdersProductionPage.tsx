@@ -10,6 +10,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanSkeleton, MobileStatusBoard, MobileStatusChips } from "@/components/kanban";
+import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1077,7 +1078,7 @@ export default function OrdersProductionPage() {
                  * вона просто розпирала сторінку вбік. Картка тут та сама, що
                  * й на дошці, тож два вигляди не розходяться.
                  */
-                <div className="space-y-2 px-4">
+                <div className={cn(MOBILE_PAGE_BODY, MOBILE_CARD_LIST, "pb-3")}>
                   {/* Та сама смуга статусів, що на дошці, — у списку працює
                       фільтром готовності (картка 146). */}
                   <MobileStatusChips
@@ -1089,7 +1090,7 @@ export default function OrdersProductionPage() {
                     ]}
                     activeKey={headerFilter}
                     onSelect={(key) => setHeaderFilter(key as HeaderFilter)}
-                    className="pb-1"
+                    className={MOBILE_CHIPS_ROW}
                   />
                   {filteredRecords.map((record) => (
                     <div key={record.id}>{renderOrderCard(record)}</div>
@@ -1291,7 +1292,7 @@ export default function OrdersProductionPage() {
                * Телефон: статуси й картки замість трьох колонок по третині
                * екрана — на 375px колонка виходила ~125px завширшки (картка 146).
                */
-              <div className="px-4 pb-3 pt-1">
+              <div className={cn(MOBILE_PAGE_BODY, "pb-3")}>
                 <MobileStatusBoard
                   columns={ORDER_READINESS_COLUMNS.map((column) => ({
                     key: column.id,

@@ -110,8 +110,8 @@ const GIANT_THRESHOLD = 2000;
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12802,
   "src/pages/QuoteDetailsPage.tsx": 9929,
-  "src/pages/QuotesPage.tsx": 8444,
-  "src/pages/DesignPage.tsx": 6008,
+  "src/pages/QuotesPage.tsx": 8445,
+  "src/pages/DesignPage.tsx": 6009,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
   // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
@@ -126,7 +126,7 @@ const CEILINGS = {
   "src/components/design/DesignersDashboard.tsx": 2702,
   "src/features/orders/orderRecords.ts": 2614,
   "src/lib/toshoApi.ts": 2607,
-  "src/pages/TeamPage.tsx": 2420,
+  "src/pages/TeamPage.tsx": 2427,
   "src/pages/ProfilePage.tsx": 2156,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,
 };

@@ -7,6 +7,7 @@ import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { KanbanColumnHeader } from "@/components/kanban/KanbanColumnHeader";
 import { MobileStatusBoard } from "@/components/kanban/MobileStatusBoard";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
@@ -283,7 +284,7 @@ export function DevRequestBoard({
   // не `md:hidden`: інакше React будує й комітить обидві дошки.
   if (isNarrowViewport) {
     return (
-      <div className="px-4 pb-3 pt-1">
+      <div className={cn(MOBILE_PAGE_BODY, "pb-3")}>
         <MobileStatusBoard
           columns={BOARD_COLUMNS.map((column) => ({
             key: column.status,

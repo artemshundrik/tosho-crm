@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ElementType, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { toneDotClass, toneTextClass, type Tone } from "@/lib/statusTones";
+import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW } from "@/layout/mobileRhythm";
 
 export type MobileStatusColumn<T> = {
   /** Ключ стану — той самий, що в реєстрі дошок (`kanbanBoards.ts`). */
@@ -162,11 +163,11 @@ export function MobileStatusBoard<T>({
         }))}
         activeKey={resolvedKey}
         onSelect={setActiveKey}
-        className="pb-3"
+        className={MOBILE_CHIPS_ROW}
       />
 
       {/* Картки лише активного статусу. */}
-      <div className="flex min-h-0 flex-col gap-2">
+      <div className={cn("flex min-h-0 flex-col", MOBILE_CARD_LIST)}>
         {active && active.items.length > 0 ? (
           active.items.map((item) => <div key={getItemKey(item)}>{renderCard(item)}</div>)
         ) : (

@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { KanbanSkeleton } from "@/components/kanban/KanbanSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { MOBILE_CARD_LIST, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
 import {
   BoardFilters,
@@ -490,7 +491,7 @@ export default function DevRequestsPage() {
            * вікна: картки обривались, а прокрутки не було (картка 146).
            */
           showBoardSkeleton ? (
-            <div className="space-y-2 px-4 py-3">
+            <div className={cn(MOBILE_PAGE_BODY, MOBILE_CARD_LIST, "pb-3")}>
               {Array.from({ length: 4 }).map((_, index) => (
                 <Skeleton key={index} className="h-24 w-full rounded-2xl" />
               ))}

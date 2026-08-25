@@ -63,6 +63,7 @@ import { useDeferredHeavySurface } from "@/hooks/useDeferredHeavySurface";
 import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
 import { useKanbanViewportHeight } from "@/hooks/useKanbanViewportHeight";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
@@ -5200,7 +5201,7 @@ export default function DesignPage() {
                  * `md:hidden` на цей самий тернарник.
                  */
                 <MobileStatusBoard
-                  className="px-4 pb-3 pt-1"
+                  className={cn(MOBILE_PAGE_BODY, "pb-3")}
                   columns={DESIGN_COLUMNS.map((col) => ({
                     key: col.id,
                     label: col.label,

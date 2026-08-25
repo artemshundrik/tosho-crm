@@ -185,6 +185,7 @@ import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeS
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard, MobileStatusChips } from "@/components/kanban";
+import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
 import { isOffBoardStatus } from "@/lib/kanbanBoards";
@@ -6664,7 +6665,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ) : (
             <>
             {isNarrowViewport ? (
-            <div className="space-y-3 px-4 pb-3 pt-1">
+            <div className={cn(MOBILE_PAGE_BODY, MOBILE_CARD_LIST, "pb-3")}>
               {/* Та сама смуга статусів, що й на дошці: у списку вона працює
                   фільтром. Без неї список був єдиним місцем, де статус
                   доводилось шукати в аркуші фільтрів (картка 146). */}
@@ -6672,7 +6673,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 chips={mobileStatusChips}
                 activeKey={status}
                 onSelect={setStatusFilter}
-                className="pb-1"
+                className={MOBILE_CHIPS_ROW}
               />
               {filteredAndSortedRows.map((row) => {
                 const membership = quoteMembershipByQuoteId.get(row.id);
@@ -7274,7 +7275,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
              * вбік (картка 146). Картку малює та сама функція, що й колонку на
              * десктопі, тож вигляд не розходиться.
              */
-            <div className="px-4 pb-3 pt-1">
+            <div className={cn(MOBILE_PAGE_BODY, "pb-3")}>
               <MobileStatusBoard
                 columns={KANBAN_COLUMNS.map((column) => ({
                   key: column.id,

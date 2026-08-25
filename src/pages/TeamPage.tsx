@@ -33,6 +33,7 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MobileStatusChips } from "@/components/kanban";
+import { MOBILE_CHIPS_ROW } from "@/layout/mobileRhythm";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import {
@@ -1474,13 +1475,17 @@ export function TeamPage() {
   const quotaPeople = quotaPeopleMemo;
 
   return (
-    <div className="space-y-4 pb-8">
-      {/* Вкладки сторінки на телефоні — окрема стрічка в тілі, а не в аркуші
-          фільтрів: це головна навігація розділу, і ховати її за кнопкою було б
-          те саме, що ховати вкладки браузера (картка 146). Та сама стрічка,
-          що й статуси на дошках, — щоб мова інтерфейсу не роздвоювалась. */}
+    <>
+      {/* Вкладки сторінки на телефоні — окрема стрічка, а не в аркуші фільтрів:
+          це головна навігація розділу, і ховати її за кнопкою було б те саме,
+          що ховати вкладки браузера (картка 146).
+
+          Стоїть ПОЗА контейнером зі `space-y-4` навмисно: там вона отримувала
+          б і власний відступ знизу, і 16px проміжку контейнера — разом 28
+          замість 12, і «Команда» через це дихала ширше за дошки. Тепер відступ
+          один і спільний — MOBILE_CHIPS_ROW. */}
       {isNarrowViewport ? (
-        <div>
+        <div className={MOBILE_CHIPS_ROW}>
           <MobileStatusChips
             chips={[
               { key: "people", label: "Люди", count: activeMembers.length },
@@ -1498,6 +1503,7 @@ export function TeamPage() {
         </div>
       ) : null}
 
+      <div className="space-y-4 pb-8">
       {tab === "people" ? (
         <>
           {/* [&>*]:min-w-0 — елемент сітки типово має min-width:auto, тож картка
@@ -2162,7 +2168,8 @@ export function TeamPage() {
         // Свята міняють і баланси, і сітку планера — перезавантажуємо все.
         onSaved={() => void reloadAbsenceData()}
       />
-    </div>
+      </div>
+    </>
   );
 }
 
