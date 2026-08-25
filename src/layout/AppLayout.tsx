@@ -1074,6 +1074,25 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   const header = baseHeader;
 
+  /**
+   * Чи рендериться щось МІЖ шапкою застосунку й вмістом сторінки.
+   *
+   * ЧОМУ ЦЕ ПОТРІБНО (заміряно 25.08.2026). Відступ згори складався з двох
+   * доданків: `pt-[76px]` на <main> — це 57px заміряної шапки плюс 19px запасу —
+   * і `pt-6` (24px) на цій колонці. На сторінках зі смугою дій обидва працюють:
+   * 19px відділяють смугу від шапки, 24px — вміст від смуги. А на сторінках без
+   * смуги між ними не рендериться НІЧОГО, і 19 + 24 просто складались у 43px.
+   * Стільки було в Огляді, Релізах, Стеку й Інтеграціях — приблизно вдвічі
+   * більше за орієнтир (GitHub на тому ж Primer: 16px на вузькому, 24px на
+   * 1440, заміряно на живому сайті).
+   *
+   * Заголовок у колонці й «надзаголовок» — обидва `hidden md:flex`, тож на
+   * телефоні вони теж нічого не відділяють: там відступ знімається так само.
+   */
+  const hasToolbarAboveContent = toolbarKind !== "none" || hasHeaderActions;
+  const hasColumnHeaderAboveContent =
+    header.showPageHeader !== false || (!hasHeaderActions && Boolean(header.eyebrow));
+
   const workspacePresence = useWorkspacePresenceState({
     teamId,
     userId,
@@ -2566,7 +2585,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           className={cn(
             "w-full overflow-x-clip pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:pb-0",
             isCanvasMode
-              ? "px-0 pt-[calc(56px+var(--view-as-offset,0px))] md:px-0 lg:px-0"
+              // 56px тут було прибитим числом, а шапка заміряно 57 — перший
+              // піксель вмісту полотняних сторінок лежав під смугою. Тепер
+              // резерв бере ту саму змінну, що й липкі шапки таблиць.
+              ? "px-0 pt-[calc(var(--app-header-base-height)+var(--view-as-offset,0px))] md:px-0 lg:px-0"
               : "pt-[calc(76px+var(--view-as-offset,0px))]"
           )}
           data-canvas-mode={isCanvasMode ? "on" : "off"}
@@ -2589,7 +2611,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           <div className={cn(isCanvasMode ? "" : "px-4 md:px-5 lg:px-6")}>
             <div
               className={cn(
-                isCanvasMode ? "min-w-0" : "mx-auto max-w-[1600px] min-w-0 space-y-6 pt-6"
+                isCanvasMode
+                  ? "min-w-0"
+                  : cn(
+                      "mx-auto max-w-[1600px] min-w-0 space-y-6",
+                      // Відступ лише тоді, коли є що від чого відділяти.
+                      hasToolbarAboveContent
+                        ? "pt-6"
+                        : hasColumnHeaderAboveContent
+                          ? "pt-0 md:pt-6"
+                          : "pt-0"
+                    )
               )}
             >
               {/* Заголовок у контентній колонці: тільки коли немає окремої смуги дій. */}
