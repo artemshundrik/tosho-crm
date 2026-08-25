@@ -188,7 +188,13 @@ export function ThreadFeed({
                       б і тоді, коли курсор просто в порожньому місці рядка. */}
                   <div
                     className={cn(
-                      "flex min-w-0 max-w-[76%] flex-col gap-1",
+                      // 92%, а не 76%: класична месенджерна ширина розрахована на
+                      // вікно в пів екрана, а ця стрічка живе в колонці 380-412 px.
+                      // Там чверть, віддана «щоб було видно, що баббл не на всю
+                      // ширину», коштувала 90 px — і посилання ламались на стовпчик
+                      // у три символи. Своє від чужого і так відрізняється кольором
+                      // та боком, а не запасом порожнечі.
+                      "flex min-w-0 max-w-[92%] flex-col gap-1",
                       block.own && "items-end"
                     )}
                   >
@@ -225,10 +231,12 @@ export function ThreadFeed({
                     ) : entry.body ? (
                       <div
                         className={cn(
-                          "relative cursor-default rounded-2xl py-1.5 pl-2.5 pr-12 text-xs leading-snug",
-                          // місце під час зарезервовано ОДНАКОВЕ в усіх станах —
-                          // інакше баббл стрибав завширшки, щойно надсилання
-                          // завершувалось.
+                          "cursor-default rounded-2xl px-2.5 py-1.5 text-xs leading-snug",
+                          // Час НЕ накладкою в куті, а окремим рядком під текстом.
+                          // Накладка вимагала тримати 48 px порожнього поля справа
+                          // в кожному повідомленні — і довгі посилання ламались на
+                          // вузькі стовпчики по 3-4 символи, хоч місце в колонці
+                          // було. Тепер рядок тексту йде до правого краю баббла.
                           entry.pending && "opacity-60",
                           restricted
                             ? "border border-warning-soft-border bg-warning-soft text-foreground"
@@ -288,7 +296,7 @@ export function ThreadFeed({
 
                         <span
                           className={cn(
-                            "pointer-events-none absolute bottom-1.5 right-2.5 inline-flex items-center gap-1 whitespace-nowrap text-3xs tabular-nums",
+                            "pointer-events-none mt-0.5 flex items-center justify-end gap-1 whitespace-nowrap text-3xs tabular-nums leading-none",
                             block.own && !restricted ? "text-primary-foreground/80" : "text-muted-foreground"
                           )}
                         >
