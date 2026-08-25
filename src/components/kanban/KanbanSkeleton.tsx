@@ -5,7 +5,16 @@ import { KanbanColumn } from "./KanbanColumn";
 
 type KanbanSkeletonColumn = {
   id: string;
-  label: string;
+  /**
+   * Підпис колонки. Без нього малюється сіра риска.
+   *
+   * Необов'язковий саме тому, що цей каркас показують ДВІЧІ й у різних умовах.
+   * Перший раз — поки їде чанк сторінки: тоді підписів колонок не знає ніхто,
+   * бо вони живуть у самій сторінці. Другий — коли сторінка вже є, але даних
+   * ще немає: там підписи справжні. Форма при цьому мусить бути та сама, тож
+   * різниця звужена до одного рядка тексту.
+   */
+  label?: string;
   className?: string;
 };
 
@@ -15,6 +24,12 @@ type KanbanSkeletonProps = {
   boardClassName?: string;
   rowClassName?: string;
   cardsPerColumn?: number;
+  /**
+   * Ширина колонки рядком CSS — для випадку, коли вона приходить З РЕЄСТРУ, а
+   * не з коду. Класом це не робиться: Tailwind збирає класи наперед, і
+   * `basis-[${...}]` зі змінної не згенерується взагалі.
+   */
+  columnWidth?: string;
 };
 
 export function KanbanSkeleton({
@@ -23,6 +38,7 @@ export function KanbanSkeleton({
   boardClassName,
   rowClassName,
   cardsPerColumn = 3,
+  columnWidth,
 }: KanbanSkeletonProps) {
   return (
     <div
@@ -49,15 +65,27 @@ export function KanbanSkeleton({
         {columns.map((column, columnIndex) => (
           <KanbanColumn
             key={column.id}
-            className={cn("kanban-column-surface h-full basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] shrink-0", column.className)}
+            className={cn(
+              "kanban-column-surface h-full shrink-0",
+              !columnWidth && "basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)]",
+              column.className
+            )}
+            style={columnWidth ? { flexBasis: columnWidth } : undefined}
             bodyClassName="space-y-2 px-2.5 pb-1.5 pt-2.5"
             header={
               <div className="kanban-column-header flex shrink-0 items-center justify-between gap-2 px-3.5 py-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <Skeleton className="h-2.5 w-2.5 shrink-0 rounded-full" />
-                  <span className="truncate text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-                    {column.label}
-                  </span>
+                  {column.label ? (
+                    <span className="truncate text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {column.label}
+                    </span>
+                  ) : (
+                    // Риска рівно тієї ж висоти, що й рядок тексту (h-3 у
+                    // рядку 2xs): інакше шапка колонки міняла б висоту в мить,
+                    // коли підписи нарешті приїхали, і дошка сіпалась би.
+                    <Skeleton className={cn("h-3 rounded-full", columnIndex % 2 === 0 ? "w-20" : "w-24")} />
+                  )}
                 </div>
                 <Skeleton className="h-3 w-5 rounded-full" />
               </div>

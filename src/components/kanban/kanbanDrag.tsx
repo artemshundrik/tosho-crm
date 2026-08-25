@@ -377,20 +377,27 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
       ghost.removeAttribute("data-kanban-item");
       document.body.appendChild(ghost);
 
-      // Порожня пунктирна рамка розміром із картку — показує МІСЦЕ. Сіра, як і
-      // решта перетягування: колір на дошці лишається за станом і тривогою.
-      const slot = document.createElement("div");
+      // МІСЦЕ — ЦЕ ПРИГЛУШЕНА САМА КАРТКА, а не порожня рамка з сірою заливкою.
+      // Перший захід малював абстрактний прямокутник, і він програвав одразу
+      // двома способами: заокруглення доводилось вгадувати змінною (а картка
+      // бере його з класу), і на дошці з'являлась фігура, якої в CRM більше
+      // ніде немає. Клон вирішує обидва: радіус, розміри й начинка — рівно ті
+      // самі, бо це буквально та сама картка, тільки притишена.
+      const slot = card.cloneNode(true) as HTMLElement;
+      slot.removeAttribute("data-kanban-card");
+      slot.removeAttribute("data-kanban-item");
       slot.style.cssText = [
         "position: fixed",
         "left: 0",
         "top: 0",
         `width: ${rect.width}px`,
         `height: ${rect.height}px`,
+        "margin: 0",
         "pointer-events: none",
         "z-index: 55",
-        "border-radius: var(--radius-lg)",
-        "border: 1px dashed hsl(var(--foreground) / 0.28)",
-        "background: hsl(var(--foreground) / 0.04)",
+        "opacity: 0.4",
+        "border-style: dashed",
+        "box-shadow: none",
         `transition: transform ${GAP_MS}ms ${GAP_EASING}`,
         `transform: translate3d(${rect.left}px, ${rect.top}px, 0)`,
       ].join(";");

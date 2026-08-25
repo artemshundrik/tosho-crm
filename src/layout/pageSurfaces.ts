@@ -28,6 +28,8 @@
  * pre-push: нову сторінку з тулбаром, але без запису тут, запушити не дадуть.
  */
 
+import { KANBAN_BOARDS, type KanbanBoardKey } from "@/lib/kanbanBoards";
+
 /**
  * Форма майбутнього вмісту — за нею малюється каркас завантаження.
  *
@@ -132,6 +134,17 @@ export type PageSurface = {
 const KANBAN_FLUID_COLUMN = "clamp(224px, calc((100cqw - 52px) / 4.2), 312px)";
 
 /**
+ * Скільки колонок намалює каркас — З ТОГО Ж РЕЄСТРУ, що й самі дошки.
+ *
+ * Було записано руками, і числа розійшлися з дійсністю: тут стояло 6 і 7, а на
+ * прорахунках і дизайні колонок 5 і 6. Каркас малював зайвий стовпчик, а за
+ * мить сторінка прибирала його — саме це й читалось як стрибок макета.
+ * Списувати число з дошки очима безнадійно: колонки додають і прибирають у
+ * kanbanBoards.ts, і згадати про цей файл ніхто не зобов'язаний.
+ */
+const boardColumnCount = (key: KanbanBoardKey) => KANBAN_BOARDS[key].onBoard.length;
+
+/**
  * Порядок має значення: перший збіг виграє, тож картки сутностей стоять перед
  * своїми списками (`/design/:id` перед `/design`).
  */
@@ -143,7 +156,7 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
 
   { id: "customers", path: "/orders/customers", page: "src/pages/OrdersCustomersPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "quote-details", path: "/orders/estimates/:id", page: "src/pages/OrdersEstimateDetailsPage.tsx", toolbar: "none", shape: "quote-record", canvas: true },
-  { id: "quotes", path: "/orders/estimates", page: "src/pages/OrdersEstimatesPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: 6, columnWidth: KANBAN_FLUID_COLUMN }, view: { storageKey: "quotes_view_mode", boardValue: "kanban", fallbackShape: "table" } },
+  { id: "quotes", path: "/orders/estimates", page: "src/pages/OrdersEstimatesPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: boardColumnCount("quotes"), columnWidth: KANBAN_FLUID_COLUMN }, view: { storageKey: "quotes_view_mode", boardValue: "kanban", fallbackShape: "table" } },
   { id: "order-details", path: "/orders/production/:id", page: "src/pages/OrdersProductionDetailsRoutePage.tsx", toolbar: "none", shape: "detail", canvas: true, maxWidth: 1760 },
   // «Замовлення» відкриваються реєстром: канбан там вмикають вручну й вибір не
   // зберігається, тож типова форма розділу — таблиця, а не дошка.
@@ -153,7 +166,7 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "catalog", path: "/catalog/products", page: "src/features/catalog/ProductCatalogPage/index.tsx", toolbar: "none", shape: "split" },
   { id: "logistics", path: "/logistics", page: "src/pages/LogisticsPage.tsx", toolbar: "none", shape: "list" },
   { id: "design-task", path: "/design/:id", page: "src/pages/DesignTaskPage.tsx", toolbar: "none", shape: "design-record", canvas: true },
-  { id: "design", path: "/design", page: "src/pages/DesignPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: 7, columnWidth: KANBAN_FLUID_COLUMN } },
+  { id: "design", path: "/design", page: "src/pages/DesignPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: boardColumnCount("design"), columnWidth: KANBAN_FLUID_COLUMN } },
   { id: "contractors", path: "/contractors", page: "src/pages/ContractorsPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "stock", path: "/stock/samples", page: "src/pages/SampleStockPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "finances", path: "/finances", page: "src/pages/FinancesPage.tsx", toolbar: "none", shape: "dashboard", canvas: true },
@@ -171,7 +184,7 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "features", path: "/whats-new/features", page: "src/pages/FeaturesPage.tsx", toolbar: "full", shape: "grid" },
   { id: "whats-new", path: "/whats-new", page: "src/pages/WhatsNewPage.tsx", toolbar: "full", shape: "list", maxWidth: 760 },
 
-  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: 5, columnWidth: "300px" } },
+  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: boardColumnCount("devRequests"), columnWidth: "300px" } },
   { id: "dev-releases", path: "/dev/releases", page: "src/pages/ReleasesPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
   { id: "dev-health", path: "/dev/health", page: "src/pages/AdminObservabilityPage.tsx", toolbar: "none", shape: "dashboard" },
   // Смуги дій немає навмисно: вкладки «за шарами / за терміновістю» живуть у

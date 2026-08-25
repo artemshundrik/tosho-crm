@@ -2,6 +2,7 @@ import * as React from "react";
 import { useLocation } from "react-router-dom";
 
 import { useSkeletonVisible } from "@/components/app/loadingHandoff";
+import { KanbanSkeleton } from "@/components/kanban/KanbanSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRouteLoadingSignal } from "@/layout/routeProgress";
 import { resolvePageSurface, resolveSurfaceShape, type PageShape, type PageToolbarKind } from "@/layout/pageSurfaces";
@@ -48,31 +49,6 @@ function Line({ w, h = "h-3.5", dim }: { w: string; h?: string; dim?: boolean })
   return <Skeleton className={cn(h, w, "rounded-full", dim && "opacity-70")} />;
 }
 
-/** Картка канбан-колонки: та сама розмітка, що й у справжніх дошок. */
-function BoardCard({ seed }: { seed: number }) {
-  return (
-    <div className="rounded-2xl border border-border/50 bg-card/82 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <Line w={seed % 2 === 0 ? "w-[68%]" : "w-[52%]"} />
-            <Line w="w-[44%]" h="h-3" dim />
-          </div>
-        </div>
-      </div>
-      <div className="mt-3 space-y-2">
-        <Line w={seed % 3 === 0 ? "w-[86%]" : "w-[74%]"} h="h-3" dim />
-        <Line w="w-[62%]" h="h-3" dim />
-      </div>
-      <div className="mt-3 flex items-center gap-2 border-t border-border/40 pt-3">
-        <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
-        <Line w="w-[46%]" h="h-3" />
-      </div>
-    </div>
-  );
-}
-
 /** Блок-секція картки сутності. */
 function SectionBlock({ rows = 3, title = "w-32" }: { rows?: number; title?: string }) {
   return (
@@ -90,41 +66,29 @@ function SectionBlock({ rows = 3, title = "w-32" }: { rows?: number; title?: str
 /* ────────────────────────────────── форми ───────────────────────────────── */
 
 /**
- * Дошка. Повторює KanbanBoard/KanbanColumn один в один: та сама смуга прокрутки
- * з `px-4 pt-4`, та сама ширина колонки `clamp(224px … 312px)` від ширини
- * контейнера, ті самі поверхні колонок. Інакше перехід від цього каркаса до
- * власного каркаса дошки читався б як перебудова екрана.
+ * Дошка. Малює ТОЙ САМИЙ KanbanSkeleton, що й сторінки.
+ *
+ * НАВІЩО. Каркас дошки показують двічі поспіль: спершу поки їде чанк сторінки
+ * (цей компонент), потім поки їдуть дані (каркас усередині самої сторінки).
+ * Доки це були дві різні розмітки, перехід між ними читався як стрибок — Артем
+ * описав його точно: «спочатку один лояут, потім стрибає на інший, і потім уже
+ * перестрибує». Різниця була не косметична: своя картка-заглушка, свої відступи
+ * і — головне — своя кількість колонок, узята з реєстру руками. Там стояло 6 і
+ * 7, а на дошках прорахунків і дизайну їх 5 і 6.
+ *
+ * Тепер розмітка одна на обидва покази, а кількість колонок береться з того ж
+ * реєстру, що й самі дошки (KANBAN_BOARDS), тож розійтися вони більше не
+ * можуть. Лишається єдина чесна різниця: тут підписів колонок ще ніхто не знає,
+ * тож замість них риски тієї ж висоти.
  */
 function BoardShape({ board }: ShapeProps) {
   const { columns, columnWidth } = board ?? DEFAULT_BOARD;
   return (
     <div className="h-[calc(100dvh-177px)] min-h-[420px] overflow-hidden">
-      <div className="h-full overflow-hidden px-4 pt-4 pb-6 [container-type:inline-size] [scrollbar-gutter:stable_both-edges] md:px-5 md:pt-5 md:pb-7">
-        <div className="flex h-full w-max items-stretch gap-4 pb-2">
-          {Array.from({ length: columns }).map((_, columnIndex) => (
-            <div
-              key={columnIndex}
-              className="kanban-column-surface flex h-full shrink-0 flex-col"
-              // Ширина — рядком із реєстру, слово в слово як у самої дошки:
-              // клас тут не годиться, бо значення різне в різних розділів.
-              style={{ flexBasis: columnWidth }}
-            >
-              <div className="kanban-column-header flex shrink-0 items-center justify-between gap-2 px-3.5 py-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Skeleton className="h-2.5 w-2.5 shrink-0 rounded-full" />
-                  <Line w={columnIndex % 2 === 0 ? "w-20" : "w-24"} h="h-3" />
-                </div>
-                <Line w="w-5" h="h-3" dim />
-              </div>
-              <div className="min-h-0 flex-1 space-y-2 px-2.5 pb-1.5 pt-2.5">
-                {Array.from({ length: 3 }).map((_, cardIndex) => (
-                  <BoardCard key={cardIndex} seed={columnIndex + cardIndex} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <KanbanSkeleton
+        columns={Array.from({ length: columns }).map((_, index) => ({ id: `column-${index}` }))}
+        columnWidth={columnWidth}
+      />
     </div>
   );
 }
