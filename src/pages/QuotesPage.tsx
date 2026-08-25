@@ -184,7 +184,7 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard, MobileStatusChips } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanCardList, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard, MobileStatusChips } from "@/components/kanban";
 import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
@@ -674,10 +674,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const quotesKanbanAutoloadLockRef = useRef(false);
   const quotesKanbanAutoloadTimerRef = useRef<number | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
-  const [dragPlaceholder, setDragPlaceholder] = useState<{
-    columnId: string;
-    index: number;
-  } | null>(null);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>(
@@ -4572,7 +4568,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (currentStatus === status) {
       setDraggingId(null);
       setDragOverColumnId(null);
-      setDragPlaceholder(null);
       return;
     }
     try {
@@ -4594,7 +4589,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     } finally {
       setDraggingId(null);
       setDragOverColumnId(null);
-      setDragPlaceholder(null);
     }
   };
 
@@ -5936,7 +5930,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         onDragEnd={() => {
           setDraggingId(null);
           setDragOverColumnId(null);
-          setDragPlaceholder(null);
         }}
         onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
         // Чанк картки прорахунку їде на наведенні, а не в мить кліку (REQ-136).
@@ -7333,47 +7326,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         if (dragOverColumnId === column.id) {
                           setDragOverColumnId(null);
                         }
-                        if (dragPlaceholder?.columnId === column.id) {
-                          setDragPlaceholder(null);
-                        }
                       }}
                       onDrop={(e) => {
                         e.preventDefault();
                         handleDropToStatus(column.id);
                       }}
                     >
-                      <div
-                        className={cn("px-2.5 pb-1.5 pt-2.5 space-y-2", draggingId && "pb-2")}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          if (!draggingId) return;
-                          if (dragOverColumnId !== column.id) {
-                            setDragOverColumnId(column.id);
-                          }
-                          const listNode = e.currentTarget;
-                          const cardNodes = Array.from(
-                            listNode.querySelectorAll<HTMLElement>("[data-kanban-card='true']")
-                          );
-                          let nextIndex = cardNodes.length;
-                          for (let i = 0; i < cardNodes.length; i += 1) {
-                            const rect = cardNodes[i].getBoundingClientRect();
-                            if (e.clientY < rect.top + rect.height / 2) {
-                              nextIndex = i;
-                              break;
-                            }
-                          }
-                          if (
-                            dragPlaceholder?.columnId !== column.id ||
-                            dragPlaceholder.index !== nextIndex
-                          ) {
-                            setDragPlaceholder({ columnId: column.id, index: nextIndex });
-                          }
-                        }}
-                      >
-                        {items.length === 0 ? (
-                          draggingId && dragPlaceholder?.columnId === column.id ? (
-                            <div className="kanban-drop-placeholder rounded-[var(--radius-md)] border-2 border-dashed px-3 py-5" />
-                          ) : (
+                      <div className={cn("px-2.5 pb-1.5 pt-2.5", draggingId && "pb-2")}>
+                        <KanbanCardList
+                          items={items}
+                          getKey={(row) => row.id}
+                          renderItem={(row, index) => renderQuoteKanbanCard(row, column.id, index)}
+                          emptyState={
                             <div className="kanban-empty-state rounded-md border border-dashed border-border/50 text-muted-foreground/70 text-2xs py-6 px-3 text-center">
                               <div className="mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-full border border-border/50 bg-muted/20">
                                 {(() => {
@@ -7386,25 +7350,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               <p className="text-2xs font-medium">Немає прорахунків</p>
                               <p className="mt-1 text-3xs text-muted-foreground/60">Перетягніть картку сюди</p>
                             </div>
-                          )
-                        ) : (
-                          items.map((row, index) => {
-                            return (
-                              <div key={row.id}>
-                                {draggingId && dragPlaceholder?.columnId === column.id && dragPlaceholder.index === index ? (
-                                  <div className="kanban-drop-placeholder-inline" />
-                                ) : null}
-                                {renderQuoteKanbanCard(row, column.id, index)}
-                              </div>
-                            );
-                          })
-                        )}
-                        {items.length > 0 &&
-                        draggingId &&
-                        dragPlaceholder?.columnId === column.id &&
-                        dragPlaceholder.index === items.length ? (
-                          <div className="kanban-drop-placeholder-inline" />
-                        ) : null}
+                          }
+                        />
                       </div>
                     </KanbanColumn>
                   );

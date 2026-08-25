@@ -4,6 +4,7 @@ import { Lightbulb } from "lucide-react";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
+import { KanbanCardList } from "@/components/kanban/KanbanCardList";
 import { KanbanColumnHeader } from "@/components/kanban/KanbanColumnHeader";
 import { MobileStatusBoard } from "@/components/kanban/MobileStatusBoard";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
@@ -346,7 +347,16 @@ export function DevRequestBoard({
             }}
           >
             {groupBy === "none"
-              ? items.map(renderCard)
+              ? (
+                  <KanbanCardList
+                    items={items}
+                    getKey={(request) => String(request.id)}
+                    renderItem={(request) => renderCard(request)}
+                    emptyState={
+                      <p className="px-1 py-6 text-center text-xs text-muted-foreground">Порожньо</p>
+                    }
+                  />
+                )
               : groupRequests(items, groupBy, column.status).map((group) => {
                   const key = collapsedKey(groupBy, group.id);
                   const isCollapsed = collapsed.has(key);
@@ -357,11 +367,19 @@ export function DevRequestBoard({
                         collapsed={isCollapsed}
                         onToggle={() => toggleGroup(key)}
                       />
-                      {isCollapsed ? null : group.items.map(renderCard)}
+                      {isCollapsed ? null : (
+                        <KanbanCardList
+                          items={group.items}
+                          getKey={(request) => String(request.id)}
+                          renderItem={(request) => renderCard(request)}
+                        />
+                      )}
                     </div>
                   );
                 })}
-            {items.length === 0 ? (
+            {/* Порожній стан для згрупованого режиму: у режимі без груп його
+                показує сам KanbanCardList, щоб остання картка встигла попрощатись. */}
+            {items.length === 0 && groupBy !== "none" ? (
               <p className="px-1 py-6 text-center text-xs text-muted-foreground">Порожньо</p>
             ) : null}
           </KanbanColumn>

@@ -69,7 +69,7 @@ import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, KanbanVirtualList, MobileStatusBoard } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanCardList, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard } from "@/components/kanban";
 import { CancelledDesignTasksList } from "@/components/design/CancelledDesignTasksList";
 import { boardColumnStatuses, isOffBoardStatus } from "@/lib/kanbanBoards";
 import {
@@ -5263,19 +5263,24 @@ export default function DesignPage() {
                       stopDraggingTask();
                     }}
                   >
-                    {items.length === 0 ? (
-                      <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
-                        Немає задач
-                      </div>
-                    ) : (
+                    {
                       // Малюємо лише видимі картки: у найбільшій колонці їх
                       // бувають сотні, і саме вони тримали 57 тисяч вузлів DOM.
-                      <KanbanVirtualList
-                        items={items}
-                        getKey={(task) => task.id}
-                        renderItem={(task) => renderTaskCard(task, { draggable: true })}
-                      />
-                    )}
+                      // Віртуалізація тепер живе всередині KanbanCardList — там
+                      // же, де приїзд, переїзд і від'їзд картки, спільні з
+                      // рештою дошок (REQ-159).
+                    }
+                    <KanbanCardList
+                      items={items}
+                      getKey={(task) => task.id}
+                      renderItem={(task) => renderTaskCard(task, { draggable: true })}
+                      virtualize
+                      emptyState={
+                        <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
+                          Немає задач
+                        </div>
+                      }
+                    />
                   </KanbanColumn>
                 );
               })}
