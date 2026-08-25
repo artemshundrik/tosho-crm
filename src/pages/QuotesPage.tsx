@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
 import { cn } from "@/lib/utils";
-import { morphNavigate } from "@/lib/viewTransitionMorph";
 import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
 import type { Database, Json } from "@/lib/database.types";
@@ -5939,21 +5938,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           setDragOverColumnId(null);
           setDragPlaceholder(null);
         }}
-        // Картка не зникає, а розкривається в сторінку прорахунку (REQ-158).
-        // `currentTarget` — сама оболонка картки, тож тримати ref на кожну
-        // картку в колонці не потрібно.
-        onClick={
-          canOpen
-            ? (event) => morphNavigate(event.currentTarget, () => navigate(`/orders/estimates/${row.id}`))
-            : undefined
-        }
+        onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
         // Чанк картки прорахунку їде на наведенні, а не в мить кліку (REQ-136).
         onMouseEnter={preloadQuoteDetailsRoute}
         onFocus={preloadQuoteDetailsRoute}
         onTouchStart={preloadQuoteDetailsRoute}
         interactive={canOpen}
         disabled={!canOpen}
-        className={cn(draggingId === row.id && "ring-2 ring-primary/30 opacity-90")}
+        dragging={draggingId === row.id}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
@@ -7315,6 +7307,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       data-quote-status-column={column.id}
                       className={cn(
                         "kanban-column-surface transition-colors",
+                        draggingId && "kanban-column-armed",
                         draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
                         "basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] shrink-0 flex flex-col h-full"
                       )}

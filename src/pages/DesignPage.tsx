@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
 import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
-import { morphNavigate } from "@/lib/viewTransitionMorph";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -4461,12 +4460,9 @@ export default function DesignPage() {
           options?.draggable ? (event) => startDraggingTask(event as React.DragEvent<HTMLDivElement>, task.id) : undefined
         }
         onDragEnd={options?.draggable ? stopDraggingTask : undefined}
-        // Картка розкривається в сторінку задачі, а не змінюється на неї
-        // стрибком (REQ-158). Тільки для звичайного кліку: відкриття в новій
-        // вкладці (⌘/середня кнопка нижче) морфити нічого й не може.
-        onClick={(event) => {
+        onClick={() => {
           if (suppressCardClick) return;
-          morphNavigate(event.currentTarget, () => openTask(task.id));
+          openTask(task.id);
         }}
         // Чанк сторінки задачі (294 кБ) починає їхати на наведенні, а не в мить
         // кліку (REQ-136). Обробник сталий, тож у списку карток нічого не
@@ -4488,9 +4484,7 @@ export default function DesignPage() {
           }
         }}
         surface="raised"
-        className={cn(
-          draggingId === task.id && "ring-2 ring-primary/40"
-        )}
+        dragging={draggingId === task.id}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -5236,7 +5230,7 @@ export default function DesignPage() {
                     key={col.id}
                     className={cn(
                       "kanban-column-surface basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] h-full transition-colors",
-                      draggingId && "border-primary/35",
+                      draggingId && "kanban-column-armed",
                       dropTargetStatus === col.id && "kanban-column-drop-target"
                     )}
                     header={

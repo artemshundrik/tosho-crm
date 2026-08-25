@@ -9635,12 +9635,7 @@ export default function DesignTaskPage() {
   ];
 
   return (
-    // data-morph — ціль морфінгу з картки на дошці дизайну (REQ-158).
-    <div
-      ref={layoutRootRef}
-      data-morph="surface"
-      className="w-full max-w-none space-y-4 pb-20 md:pb-0 xl:space-y-0 xl:pb-0"
-    >
+    <div ref={layoutRootRef} className="w-full max-w-none space-y-4 pb-20 md:pb-0 xl:space-y-0 xl:pb-0">
       <div className="grid grid-cols-1 xl:h-full xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden">
         <div className="min-w-0 space-y-4 xl:min-h-0 xl:h-full xl:overflow-y-auto">
       <EntityHeader

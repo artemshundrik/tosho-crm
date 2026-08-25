@@ -186,12 +186,10 @@ export function DevRequestBoard({
         onDragStart={(event) => startDragging(event, request.id)}
         onDragEnd={stopDragging}
         density="compact"
+        dragging={draggingId === request.id}
         className={cn(
           urgent && "dev-request-card-urgent",
-          // Перетягування має власний вигляд на кожній дошці; зведемо після
-          // того, як побачимо всі чотири поруч у дизайн-системі.
-          canManage && "cursor-grab active:cursor-grabbing",
-          draggingId === request.id && "opacity-50"
+          canManage && "cursor-grab active:cursor-grabbing"
         )}
       >
         {/* ── Пріоритет, тип словом, номер і меню ── */}
@@ -312,7 +310,7 @@ export function DevRequestBoard({
             key={column.status}
             className={cn(
               "kanban-column-surface h-full w-[300px] shrink-0 transition-colors",
-              draggingId && "border-primary/35",
+              draggingId && "kanban-column-armed",
               hoverStatus === column.status && "kanban-column-drop-target"
             )}
             header={

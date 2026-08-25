@@ -223,14 +223,7 @@ export function isThemeTransitionInFlight(): boolean {
 const REVEAL_DURATION_MS = 460;
 const REVEAL_EASING = "cubic-bezier(0.42, 0.04, 0.3, 0.96)";
 
-/**
- * Чи просить система прибрати рух.
- *
- * Експортовано, бо цю ж відповідь питає морфінг картки в сторінку
- * (lib/viewTransitionMorph.ts): обидва ефекти — великі рухи на весь екран, і
- * вимикатись вони мусять за однією ознакою, а не за двома схожими копіями.
- */
-export function prefersReducedMotion(): boolean {
+function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
   try {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
