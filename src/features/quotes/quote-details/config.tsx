@@ -238,10 +238,27 @@ export function formatQuoteType(value: string | null | undefined) {
   return (value && QUOTE_TYPE_LABELS[value]) || value || "Не вказано";
 }
 
+/**
+ * Гроші на картці прорахунку.
+ *
+ * ДВА ЗНАКИ ПІСЛЯ КОМИ, А НЕ ТРИ. `toLocaleString("uk-UA")` без опцій дає до
+ * трьох знаків — і ціна 46,0222 ₴ малювалась як «46,022». Поруч у тій самій
+ * картці стоять «4 644» і «8 284», де пробіл — розділювач тисяч, тож око
+ * читало сорок шість тисяч за товар собівартістю 25,80 ₴ (скарга менеджера
+ * 25.08.2026). Копійки — це два знаки, третього в грошах не буває.
+ *
+ * Ціле число лишається без «,00»: більшість сум тут цілі, і хвіст із нулів
+ * додав би шуму там, де його не було.
+ */
 export function formatCurrency(value: number | null | undefined, currency?: string | null) {
   if (value === null || value === undefined) return "Не вказано";
   const label = currency ?? "UAH";
-  return `${value.toLocaleString("uk-UA")} ${label}`;
+  const rounded = Math.round(value * 100) / 100;
+  const fractionDigits = Number.isInteger(rounded) ? 0 : 2;
+  return `${rounded.toLocaleString("uk-UA", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })} ${label}`;
 }
 
 export function getInitials(value?: string | null) {
