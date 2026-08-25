@@ -29,6 +29,8 @@
     "_telegram.ts",
     "_lib/assistantAccess.ts",
     "_lib/assistantAccess.test.ts",
+    "_lib/absenceSubmit.ts",
+    "_lib/absenceSubmit.test.ts",
     "_lib/appUrl.ts",
     "_lib/devRequestBoard.ts",
     "_lib/devRequestBoard.test.ts",

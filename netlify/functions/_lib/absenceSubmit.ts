@@ -49,6 +49,45 @@ export function formatAbsenceRange(row: { start_date: string; end_date: string }
     : `${formatAbsenceShort(row.start_date)} – ${formatAbsenceShort(row.end_date)}`;
 }
 
+/** Наступна календарна дата за ключем YYYY-MM-DD. Арифметика в UTC: ключ — це дата, а не момент. */
+function nextDateKey(dateKey: string) {
+  const stamp = Date.parse(`${dateKey}T00:00:00Z`);
+  return Number.isNaN(stamp) ? "" : new Date(stamp + 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Тіло сповіщення про ВЖЕ ЗАФІКСОВАНУ відсутність — те, що читає вся команда.
+ *
+ * Раніше тут стояло «— зафіксовано без погодження» жовтим кольором. Формально
+ * правда (лікарняний справді не йде на погодження), але читалось як протокол
+ * порушення, тим самим тоном, яким приходить «заявка без рішення». Команді до
+ * порядку погодження діла немає — їй треба знати, що людини не буде, і коли
+ * саме. Тому дата тут словами, а правило лишилось там, де воно комусь
+ * потрібне: у формі подання й у меню бота.
+ *
+ * «З дому» — не відсутність, а присутність поза офісом: тексти й тон ті самі,
+ * що в ранкового крона (team-events-reminders).
+ */
+export function absenceFactBody(
+  absence: { start_date: string; end_date: string; kind: string },
+  todayKey: string
+) {
+  const single = absence.start_date === absence.end_date;
+  const wfh = absence.kind.trim() === "wfh";
+
+  // «Сьогодні» без тире: це прислівник, а не дата, і пауза тут зайва.
+  if (single && todayKey && absence.start_date === todayKey) {
+    return wfh ? "Сьогодні з дому. Задачі й дзвінки — як звичайно." : "Сьогодні не на місці.";
+  }
+
+  const when =
+    single && todayKey && absence.start_date === nextDateKey(todayKey)
+      ? `Завтра, ${formatAbsenceShort(absence.start_date)}`
+      : formatAbsenceRange(absence);
+
+  return wfh ? `${when} — з дому. Задачі й дзвінки — як звичайно.` : `${when} — не на місці.`;
+}
+
 type ProfileStatusRow = { user_id?: string | null; employment_status?: string | null };
 
 /**
@@ -234,14 +273,16 @@ export async function notifySubmittedAbsence(
         user_id: row.userId,
         title: approvedFact ? `${kindLabel}: ${actorName}` : `Заявка: ${kindLabel.toLowerCase()} — ${actorName}`,
         body: approvedFact
-          ? `${range} — зафіксовано без погодження.`
+          ? absenceFactBody(absence, todayKey)
           : `${range}${businessDays ? ` · ${businessDays} ${absence.kind === "vacation" ? "кал" : "роб"}. дн.` : ""}${comment ? ` — «${comment}»` : ""}`,
         href: eventKey
           ? `/team?reminder=${encodeURIComponent(eventKey)}`
           : approvedFact
             ? "/team?tab=calendar"
             : "/team?tab=requests",
-        type: approvedFact ? "warning" : "info",
+        // Обидві гілки — info. Жовтий тут колись стояв у «зафіксовано без
+        // погодження» і читався як інцидент; лікарняний колеги ним не є.
+        type: "info" as const,
         telegramActions:
           !approvedFact && (row.isOwner || !requesterPrivileged)
             ? [{ text: "✅ Підтвердити", callbackData: `absd:a:${absence.id}` }]
@@ -338,12 +379,14 @@ export async function notifyAbsenceRecordedForMember(
         rows.push({
           user_id: userId,
           title: action === "record" ? `${kindLabel}: ${memberName}` : `${memberName} повертається`,
+          // Команді — сама новина, а не діловодство: хто вніс запис, важливо
+          // тому, кого він стосується (він отримує це вище окремим рядком).
           body:
             action === "record"
-              ? `${range} — записано керівництвом.`
+              ? absenceFactBody(absence, todayKey)
               : `${kindLabel} ${range} скасовано — людина на місці.`,
           href: "/team?tab=calendar",
-          type: action === "record" ? "warning" : "info",
+          type: "info",
         });
       }
     }
