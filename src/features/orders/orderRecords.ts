@@ -19,6 +19,8 @@ import {
   type QuoteListRow,
   type QuoteRun,
 } from "@/lib/toshoApi";
+import { needsApprovedRunChoice, pickApprovedRun } from "@/lib/quoteRuns";
+import { collectRunsForItem, getRunLineTotal, getRunUnitPrice } from "@/features/orders/orderItemPricing";
 import { normalizeUnitLabel } from "@/lib/units";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
@@ -79,23 +81,21 @@ export type OrderDesignAsset = {
   storagePath?: string | null;
 };
 
-const getRunUnitPrice = (run: QuoteRun) => {
-  const quantity = Math.max(0, Number(run.quantity) || 0);
-  const model = Number(run.unit_price_model ?? 0) || 0;
-  const print = Number(run.unit_price_print ?? 0) || 0;
-  const logistics = Number(run.logistics_cost ?? 0) || 0;
-  const logisticsPerUnit = quantity > 0 ? logistics / quantity : 0;
-  return model + print + logisticsPerUnit;
-};
-
-const getRunLineTotal = (run: QuoteRun) => {
-  const quantity = Math.max(0, Number(run.quantity) || 0);
-  const model = Number(run.unit_price_model ?? 0) || 0;
-  const print = Number(run.unit_price_print ?? 0) || 0;
-  const logistics = Number(run.logistics_cost ?? 0) || 0;
-  return (model + print) * quantity + logistics;
-};
-
+/**
+ * ЦІНА ДЛЯ ЗАМОВЛЕННЯ — ПРОДАЖНА, А НЕ СОБІВАРТІСТЬ.
+ *
+ * Тут два роки жила формула `model + print + логістика` — тобто рівно те, у що
+ * товар обходиться НАМ. Націнку (валовий прибуток під заробіток менеджера,
+ * постійні витрати, ПДВ) вона не бачила зовсім, і замовлення, рахунок та
+ * специфікація виходили за собівартістю. Заміряно на проді 25.08.2026:
+ * TS-0726-0013 — 74 300 ₴ замість 152 300 ₴, TS-0526-0024 — 35 184 ₴ замість
+ * 69 504 ₴.
+ *
+ * Той самий баг уже ловили в КП (коміт e715f29, 24.06.2026) — тоді полагодили
+ * КП, а шлях у замовлення лишили. Тому рахунок тепер один на всіх:
+ * `getRunSalePricingFromRun` із `src/lib/quoteRuns.ts`, і власної арифметики
+ * грошей у цьому файлі більше немає.
+ */
 const parseStringArray = (value: unknown) =>
   Array.isArray(value)
     ? value.map((entry) => (typeof entry === "string" ? entry.trim() : "")).filter((entry): entry is string => !!entry)
@@ -982,7 +982,10 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     const manager = quote.assigned_to ? memberById.get(quote.assigned_to) : null;
     const baseItems = itemsByQuoteId.get(quote.id) ?? [];
     const quoteRuns = runsByQuoteId.get(quote.id) ?? [];
-    const firstRun = quoteRuns[0] ?? null;
+    // Чи лишився невирішеним вибір «який тираж погодив клієнт» — хоч в одній
+    // позиції. Нижче з цього виростає блокер: доки вибору немає, замовлення
+    // бралось за першим створеним тиражем, і ніхто про це не знав.
+    let runChoicePending = false;
     const items = baseItems.map((item) => {
       const quoteItem = quoteItemById.get(item.id);
       const catalogModelId = quoteItem?.catalog_model_id?.trim?.() || "";
@@ -992,9 +995,11 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       const nextImageUrl = catalogModel?.image_url ?? catalogModel?.thumb_url ?? attachmentImage ?? null;
       const description = resolveQuoteItemDescription(quoteItem, catalogModel);
       const methodsSummary = formatQuoteItemMethodsSummary(quoteItem?.methods, methodNamesById);
-      const itemRun =
-        quoteRuns.find((run) => run.quote_item_id === item.quoteItemId || run.quote_item_id === item.id) ??
-        (baseItems.length === 1 ? firstRun : null);
+      const itemRuns = collectRunsForItem(quoteRuns, item, baseItems.length);
+      if (needsApprovedRunChoice(itemRuns)) runChoicePending = true;
+      // Поки вибір не зроблено, для картки беремо перший тираж — але лише щоб
+      // показати суму: створити з неї замовлення не дасть блокер.
+      const itemRun = pickApprovedRun(itemRuns) ?? itemRuns[0] ?? null;
       if (!itemRun) {
         return {
           ...item,
@@ -1118,6 +1123,12 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       { label: "Вказано повне ПІБ підписанта (прізвище, імʼя, по-батькові)", done: hasFullSignatoryName, blocking: true },
       ...(isVatPayer ? [{ label: "Вказано ІПН платника ПДВ (12 цифр)", done: hasValidVatId, blocking: true }] : []),
       { label: "Підготовлені позиції для рахунку та СП", done: items.length > 0, blocking: true },
+      // Кілька тиражів на позицію = кілька різних цін. Доки не позначено, який
+      // із них погодив клієнт, замовлення робити нема з чого — до 25.08.2026
+      // мовчки брався перший створений.
+      ...(runChoicePending
+        ? [{ label: "Позначено тираж, який погодив клієнт", done: false, blocking: true }]
+        : []),
       ...(requiresVisualization ? [{ label: "Візуал погоджено", done: hasApprovedVisualization, blocking: true }] : []),
       ...(requiresLayout ? [{ label: "Макет погоджено", done: hasApprovedLayout, blocking: true }] : []),
     ];
@@ -1437,7 +1448,6 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       const baseItems = itemsByOrderId.get(order.id) ?? [];
       const linkedQuote = order.quote_id ? linkedQuoteById.get(order.quote_id) ?? null : null;
       const linkedRuns = order.quote_id ? linkedRunsByQuoteId.get(order.quote_id) ?? [] : [];
-      const firstRun = linkedRuns[0] ?? null;
       const items = baseItems.map((item) => {
         const quoteItem = item.quoteItemId ? storedQuoteItemById.get(item.quoteItemId) ?? null : null;
         const catalogModelId = quoteItem?.catalog_model_id?.trim?.() || item.catalogModelId?.trim?.() || "";
@@ -1448,9 +1458,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         const description = resolveQuoteItemDescription(quoteItem, catalogModel) ?? item.description ?? null;
         const methodsSummary =
           quoteItem?.methods ? formatQuoteItemMethodsSummary(quoteItem.methods, storedMethodNamesById) : item.methodsSummary;
-        const itemRun =
-          linkedRuns.find((run) => run.quote_item_id === item.quoteItemId || run.quote_item_id === item.id) ??
-          (baseItems.length === 1 ? firstRun : null);
+        const itemRuns = collectRunsForItem(linkedRuns, item, baseItems.length);
+        const itemRun = pickApprovedRun(itemRuns) ?? itemRuns[0] ?? null;
         if (!itemRun) {
           return {
             ...item,
@@ -1461,14 +1470,21 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             thumbUrl: nextThumbUrl,
           };
         }
+        // ЗБЕРЕЖЕНЕ ЗАМОВЛЕННЯ — ЗНІМОК, І ЙОГО ВЛАСНІ ЧИСЛА ГОЛОВНІ.
+        //
+        // Було навпаки: тираж прорахунку перебивав збережену позицію. Через це
+        // правка прорахунку тихо рухала суму вже підписаного замовлення — при
+        // тому, що сама картка прорахунку позиції після замовлення закриває
+        // саме щоб «не розвести документи». Тепер тираж лише заповнює
+        // порожнечу (нуль) у старих замовленнях, а не переписує домовлене.
         const runQuantity = Math.max(0, Number(itemRun.quantity) || 0);
         const unitPrice = getRunUnitPrice(itemRun);
         const lineTotal = getRunLineTotal(itemRun);
         return {
           ...item,
-          qty: runQuantity > 0 ? runQuantity : item.qty,
-          unitPrice: unitPrice > 0 ? unitPrice : item.unitPrice,
-          lineTotal: lineTotal > 0 ? lineTotal : item.lineTotal,
+          qty: item.qty > 0 ? item.qty : runQuantity,
+          unitPrice: item.unitPrice > 0 ? item.unitPrice : unitPrice,
+          lineTotal: item.lineTotal > 0 ? item.lineTotal : lineTotal,
           description,
           methodsSummary,
           catalogSourceUrl: catalogModel?.source_url ?? item.catalogSourceUrl ?? null,

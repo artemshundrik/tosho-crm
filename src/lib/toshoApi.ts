@@ -73,6 +73,8 @@ export type QuoteRun = {
   manager_rate: number;
   fixed_cost_rate: number;
   vat_rate: number;
+  /** Тираж, який погодив клієнт: саме він їде в замовлення (scripts/quote-run-approved.sql). */
+  is_approved?: boolean;
 };
 
 export type QuoteItemPreviewRow = {
@@ -112,7 +114,7 @@ export type CatalogModelMetadataLookup = {
 };
 
 const QUOTE_RUN_SELECT =
-  "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,manager_rate,fixed_cost_rate,vat_rate";
+  "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,manager_rate,fixed_cost_rate,vat_rate,is_approved";
 const QUOTE_RUN_LEGACY_SELECT =
   "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost";
 
@@ -1249,7 +1251,7 @@ export async function getQuoteRuns(quoteId: string) {
   if (
     error &&
     /column/i.test(error.message ?? "") &&
-    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
+    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
   ) {
     ({ data, error } = await runQuery(true));
   }
@@ -1266,6 +1268,7 @@ export async function getQuoteRuns(quoteId: string) {
     manager_rate: resolveNumericRate(run.manager_rate, 10),
     fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
     vat_rate: resolveNumericRate(run.vat_rate, 20),
+    is_approved: run.is_approved === true,
   }));
 }
 
@@ -1314,7 +1317,7 @@ export async function listQuoteRunsForQuotes(params: {
     if (
       error &&
       /column/i.test(error.message ?? "") &&
-      /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
+      /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
     ) {
       ({ data, error } = await runQuery(ids, true));
     }
@@ -1357,6 +1360,7 @@ export async function listQuoteRunsForQuotes(params: {
       manager_rate: resolveNumericRate(run.manager_rate, 10),
       fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
       vat_rate: resolveNumericRate(run.vat_rate, 20),
+      is_approved: run.is_approved === true,
     });
     byQuote.set(quoteId, list);
   });
@@ -1378,6 +1382,9 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
       manager_rate: run.manager_rate,
       fixed_cost_rate: run.fixed_cost_rate,
       vat_rate: run.vat_rate,
+      // Без цього поля пересохранення тиражів гасило б вибір клієнта:
+      // upsert по id перезаписує рядок цілком.
+      is_approved: run.is_approved === true,
     } as Record<string, unknown>;
     if (run.id) {
       base.id = run.id;
@@ -1393,7 +1400,7 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
   if (
     error &&
     /column/i.test(error.message ?? "") &&
-    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
+    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
   ) {
     const fallbackPayload = payload.map((entry) => {
       const legacyPayload = { ...entry };
@@ -1401,6 +1408,7 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
       delete legacyPayload.manager_rate;
       delete legacyPayload.fixed_cost_rate;
       delete legacyPayload.vat_rate;
+      delete legacyPayload.is_approved;
       return legacyPayload;
     });
     ({ data, error } = await supabase
@@ -1422,6 +1430,7 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
     manager_rate: resolveNumericRate(run.manager_rate, 10),
     fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
     vat_rate: resolveNumericRate(run.vat_rate, 20),
+    is_approved: run.is_approved === true,
   }));
 }
 

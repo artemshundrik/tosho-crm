@@ -3528,6 +3528,7 @@ export type Database = {
           desired_manager_income: number | null
           fixed_cost_rate: number | null
           id: string
+          is_approved: boolean | null
           logistics_cost: number | null
           manager_rate: number | null
           quantity: number
@@ -3543,6 +3544,7 @@ export type Database = {
           desired_manager_income?: number | null
           fixed_cost_rate?: number | null
           id?: string
+          is_approved?: boolean | null
           logistics_cost?: number | null
           manager_rate?: number | null
           quantity: number
@@ -3558,6 +3560,7 @@ export type Database = {
           desired_manager_income?: number | null
           fixed_cost_rate?: number | null
           id?: string
+          is_approved?: boolean | null
           logistics_cost?: number | null
           manager_rate?: number | null
           quantity?: number

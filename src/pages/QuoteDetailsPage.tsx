@@ -107,10 +107,13 @@ import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import {
   computeRunSalePricing,
   mergeQuoteRunsWithExisting,
+  needsApprovedRunChoice,
+  pickApprovedRun,
   validateRunEconomics,
   MIN_MANAGER_INCOME,
   MIN_RUN_MARKUP,
 } from "@/lib/quoteRuns";
+import { pluralUk } from "@/lib/lastSeen";
 import {
   canOpenQuoteDetails,
   canViewQuoteSummary,
@@ -1426,6 +1429,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
         fixed_cost_rate: companyRates.fixedCostRate,
         vat_rate: companyRates.vatRate,
+        is_approved: false,
       },
     ]);
     setSelectedRunId(newId);
@@ -1466,6 +1470,34 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     );
   };
 
+  /**
+   * Позначити тираж як погоджений клієнтом.
+   *
+   * ОДИН НА ПОЗИЦІЮ — інакше «погоджено» перестає бути відповіддю на питання
+   * «що ми виробляємо». Це ж обмеження стоїть і в базі частковим унікальним
+   * індексом, тож зняття з сусідів тут не косметика: без нього запис упав би.
+   *
+   * Повторне натискання знімає позначку: помилилися — виправили, а не живете
+   * з чужим тиражем у замовленні.
+   */
+  const toggleApprovedRun = (runId: string | null | undefined, quoteItemId?: string | null) => {
+    if (!runId) return;
+    const scopeItemId = quoteItemId ?? null;
+    setRuns((prev) => {
+      const target = prev.find((run) => run.id === runId);
+      if (!target) return prev;
+      const nextValue = target.is_approved !== true;
+      return prev.map((run) => {
+        if (run.id === runId) return { ...run, is_approved: nextValue };
+        // Знімаємо позначку лише в сусідів ЦІЄЇ позиції: у прорахунку з кількох
+        // товарів кожен має власний погоджений тираж.
+        const sameItem = (run.quote_item_id ?? null) === scopeItemId;
+        if (nextValue && sameItem && run.is_approved) return { ...run, is_approved: false };
+        return run;
+      });
+    });
+  };
+
   const saveRuns = async (nextRuns?: QuoteRun[] | unknown, options?: { silent?: boolean }) => {
     const silent = options?.silent === true;
     if (quoteRequirements.length > 0) {
@@ -1488,6 +1520,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
         fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
         vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
+        is_approved: run.is_approved === true,
       }));
       // delete missing (present before, absent now)
       const originalIds = new Set(
@@ -1559,6 +1592,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
           fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
           vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
+          is_approved: run.is_approved === true,
         }))
       ),
     [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, runs]
@@ -1578,6 +1612,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
           fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
           vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
+          is_approved: run.is_approved === true,
         }))
       ),
     [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, runsOriginal]
@@ -1745,7 +1780,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [items]);
 
   const selectedRun = useMemo(
-    () => runs.find((run) => run.id === selectedRunId) ?? runs[0] ?? null,
+    () => runs.find((run) => run.id === selectedRunId) ?? pickApprovedRun(runs) ?? runs[0] ?? null,
     [runs, selectedRunId]
   );
 
@@ -1768,7 +1803,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       );
       if (itemRuns.length === 0) return null;
       const selectedForItem = selectedRunIdByItem[itemId];
-      return itemRuns.find((run) => run.id && run.id === selectedForItem) ?? itemRuns[0] ?? null;
+      // Поки людина не перемкнула вкладку сама — показуємо й рахуємо ТОЙ тираж,
+      // який погодив клієнт. Раніше типовим був просто перший створений, і
+      // підсумок картки залежав від того, що давніше додали.
+      return (
+        itemRuns.find((run) => run.id && run.id === selectedForItem) ??
+        pickApprovedRun(itemRuns) ??
+        itemRuns[0] ??
+        null
+      );
     },
     [items.length, runs, selectedRunIdByItem]
   );
@@ -4219,15 +4262,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       // try/catch React Compiler не вміє й через нього пропускає всю сторінку
       // разом із перевірками лінту (REQ-109).
       const statusNotifyActorUserId = userId ?? null;
-      try {
-        await notifyQuoteInitiatorOnStatusChange({
-          quoteId,
-          fromStatus: previousStatus,
-          toStatus: nextStatus,
-          actorUserId: statusNotifyActorUserId,
-        });
-      } catch (notifyError) {
-        console.warn("Failed to notify quote initiator about status change", notifyError);
+      // Сповіщаємо лише про СПРАВЖНІЙ перехід. Той самий статус (наприклад,
+      // повторне «Затверджено» або збереження нотатки без зміни стану) база
+      // ігнорує — і в історію статусів, і в аудит нічого не пише. Сповіщення
+      // ж досі летіло щоразу, і в Telegram сипались однакові повідомлення.
+      const statusActuallyChanged = previousStatus !== nextStatus;
+      if (statusActuallyChanged) {
+        try {
+          await notifyQuoteInitiatorOnStatusChange({
+            quoteId,
+            fromStatus: previousStatus,
+            toStatus: nextStatus,
+            actorUserId: statusNotifyActorUserId,
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify quote initiator about status change", notifyError);
+        }
       }
       const logged = await logQuoteActivity(
         {
@@ -5541,7 +5591,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <div>
                     <div className="text-base font-semibold tracking-tight text-foreground">Товари і тиражі</div>
                     <div className="text-xs text-muted-foreground">
-                      {items.length} {items.length === 1 ? "товар" : "товари"} · {runs.length} тиражів · фіксовано
+                      {pluralUk(items.length, "товар", "товари", "товарів")} ·{" "}
+                      {pluralUk(runs.length, "тираж", "тиражі", "тиражів")} · фіксовано
                     </div>
                   </div>
                 </div>
@@ -6075,18 +6126,30 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       {itemRuns.map((run, runIndex) => {
                                         const qty = Number(run.quantity) || 0;
                                         const isSelected = !!run.id && activeItemRun?.id === run.id;
+                                        const isApproved = run.is_approved === true;
                                         return (
                                           <button
                                             key={run.id ?? `${item.id}:run-pill:${runIndex}`}
                                             type="button"
                                             onClick={() => selectRunForItem(run, item.id)}
+                                            title={isApproved ? "Цей тираж погодив клієнт" : undefined}
                                             className={cn(
                                               "inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                                               isSelected
                                                 ? "border-primary bg-primary text-primary-foreground"
-                                                : "border-border/60 bg-background hover:bg-muted/40"
+                                                : isApproved
+                                                  ? "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/70"
+                                                  : "border-border/60 bg-background hover:bg-muted/40"
                                             )}
                                           >
+                                            {isApproved ? (
+                                              <Check
+                                                className={cn(
+                                                  "h-3.5 w-3.5 shrink-0",
+                                                  isSelected ? "text-primary-foreground" : "text-success-foreground"
+                                                )}
+                                              />
+                                            ) : null}
                                             <span className="font-mono text-base tabular-nums">{qty}</span>
                                             <span className={cn("text-xs", isSelected ? "text-primary-foreground/75" : "text-muted-foreground")}>
                                               {normalizeUnitLabel(item.unit)}
@@ -6132,18 +6195,59 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               </span>
                                             </div>
                                           </div>
-                                          {canEditRuns ? (
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
-                                              onClick={() => void removeRun(activeItemRunIndex)}
-                                            >
-                                              <Trash2 className="h-3.5 w-3.5" />
-                                              Видалити
-                                            </Button>
-                                          ) : null}
+                                          <div className="flex items-center gap-1">
+                                            {/* Рішення клієнта фіксується там, де воно ухвалюється, —
+                                                на самому тиражі. Саме звідси беруться кількість і ціна
+                                                в замовлення; без позначки замовлення бралось за першим
+                                                створеним тиражем (25.08.2026). */}
+                                            {canEditRuns ? (
+                                              <Button
+                                                variant={activeItemRun.is_approved ? "secondary" : "ghost"}
+                                                size="sm"
+                                                className={cn(
+                                                  "h-8 gap-1.5",
+                                                  activeItemRun.is_approved
+                                                    ? "bg-success-soft text-success-foreground hover:bg-success-soft/70"
+                                                    : "text-muted-foreground"
+                                                )}
+                                                onClick={() => toggleApprovedRun(activeItemRun.id, activeItemRun.quote_item_id ?? item.id)}
+                                                title={
+                                                  activeItemRun.is_approved
+                                                    ? "Зняти позначку погодження"
+                                                    : "Цей тираж погодив клієнт — саме він піде в замовлення"
+                                                }
+                                              >
+                                                <Check className="h-3.5 w-3.5" />
+                                                {activeItemRun.is_approved ? "Погоджено клієнтом" : "Погодив клієнт"}
+                                              </Button>
+                                            ) : activeItemRun.is_approved ? (
+                                              <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-success-soft px-2.5 text-xs font-medium text-success-foreground">
+                                                <Check className="h-3.5 w-3.5" />
+                                                Погоджено клієнтом
+                                              </span>
+                                            ) : null}
+                                            {canEditRuns ? (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
+                                                onClick={() => void removeRun(activeItemRunIndex)}
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                                Видалити
+                                              </Button>
+                                            ) : null}
+                                          </div>
                                         </div>
+
+                                        {/* Поки вибору немає, замовлення з прорахунку не зробити —
+                                            краще сказати це тут, ніж за три кроки у вікні створення. */}
+                                        {needsApprovedRunChoice(itemRuns) ? (
+                                          <div className="mb-4 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-xs text-warning-copy">
+                                            Тиражів кілька — позначте той, який погодив клієнт. Саме з нього
+                                            підуть кількість і ціна в замовлення.
+                                          </div>
+                                        ) : null}
 
                                         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                                           <div className="space-y-2">

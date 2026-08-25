@@ -91,6 +91,30 @@ export function getRunSalePricingFromRun(run: QuoteRun): RunSalePricing {
   });
 }
 
+/**
+ * Який тираж вважається погодженим клієнтом — єдине правило на всі місця
+ * (замовлення, підсумок картки, КП).
+ *
+ * ТРИ СТАНИ, а не два. `null` тут означає «вибір не зроблено, а зробити його
+ * треба» — і це не те саме, що «тиражів немає». Саме на цьому стані стоїть
+ * блокер створення замовлення: доти замовлення бралось за ПЕРШИМ створеним
+ * тиражем, і рішення клієнта ніхто не питав (25.08.2026).
+ *
+ * Коли тираж один, вибирати нема з чого — беремо його й нічого не питаємо:
+ * зайве підтвердження там, де двозначності немає, лише дратує.
+ */
+export function pickApprovedRun<T extends { is_approved?: boolean }>(runs: T[]): T | null {
+  const approved = runs.filter((run) => run.is_approved === true);
+  if (approved.length > 0) return approved[0];
+  if (runs.length === 1) return runs[0];
+  return null;
+}
+
+/** Чи треба питати людину, який тираж погоджено: тиражів кілька й жоден не позначений. */
+export function needsApprovedRunChoice<T extends { is_approved?: boolean }>(runs: T[]): boolean {
+  return runs.length > 1 && !runs.some((run) => run.is_approved === true);
+}
+
 export function mergeQuoteRunsWithExisting({
   existingRuns,
   nextRuns,
@@ -159,6 +183,8 @@ export function mergeQuoteRunsWithExisting({
           : resolveNumericRate(managerRate, defaultManagerRate),
         fixed_cost_rate: resolveNumericRate(source?.fixed_cost_rate, defaultFixedCostRate),
         vat_rate: resolveNumericRate(source?.vat_rate, defaultVatRate),
+        // Позначку «погоджено клієнтом» несе наявний тираж; новий її не має.
+        is_approved: source?.is_approved === true,
       } satisfies QuoteRun;
     });
 
