@@ -130,6 +130,7 @@ import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
+  APPROVAL_GATE_HINT,
   canChangeDesignStatus,
   DESIGN_ALL_STATUSES,
   DESIGN_STATUS_LABELS,
@@ -5327,7 +5328,17 @@ export default function DesignTaskPage() {
       return;
     }
     if (nextStatus === "approved" && approvalBlockers.length > 0) {
-      toast.error(`Щоб затвердити дизайн, закрийте блокери: ${approvalBlockers.join(", ")}.`);
+      // Той самий підхід, що й у гейта дедлайну вище: не просто відмова, а
+      // перехід туди, де це закривають — потрібний таб «Результату».
+      if (missingApprovalKind) {
+        setActiveDesignTab("result");
+        setActiveDesignOutputTab(missingApprovalKind);
+        setUploadTargetKind(missingApprovalKind);
+        setAddLinkKind(missingApprovalKind);
+      }
+      toast.error(`Щоб затвердити дизайн, закрийте блокери: ${approvalBlockers.join(", ")}.`, {
+        description: APPROVAL_GATE_HINT,
+      });
       return;
     }
     const previousStatus = task.status;
@@ -7155,6 +7166,26 @@ export default function DesignTaskPage() {
     ]
   );
 
+  /**
+   * Якого саме типу матеріалу бракує — щоб клік по заблокованій «Затверджено
+   * замовником» відкрив потрібний таб «Результату», а не просто сказав «не можна».
+   *
+   * Гейт довго був тупиком: він називав, чого бракує, але не казав, ЧИМ це
+   * закривають. Люди тицяли галочку зліва від файлу (вона про масові дії) і
+   * тиснули «Затверджено замовником» ще раз — з тим самим текстом у відповідь.
+   * Погодження ставить кнопка «Погодити» в рядку матеріалу.
+   */
+  const missingApprovalKind: DesignOutputKind | null = useMemo(() => {
+    if (requiresVisualizationOutput && selectedVisualizationOutputFileIds.length === 0) return "visualization";
+    if (requiresLayoutOutput && selectedLayoutOutputFileIds.length === 0) return "layout";
+    return null;
+  }, [
+    requiresLayoutOutput,
+    requiresVisualizationOutput,
+    selectedLayoutOutputFileIds.length,
+    selectedVisualizationOutputFileIds.length,
+  ]);
+
   useEffect(() => {
     let active = true;
 
@@ -8911,9 +8942,16 @@ export default function DesignTaskPage() {
         <span className="text-xs text-muted-foreground">
           {approvedCount > 0
             ? "Погоджене піде у «Фінал» при експорті в Dropbox, решта — в «Архів»."
-            : kind === "visualization"
-              ? "Тут має бути превʼю виробу або нанесення, яке погоджує замовник."
-              : "Тут має бути фінальний друкарський / виробничий макет."}
+            : requiresThisKind && totalFilesInKind > 0
+              ? // Смуга, на яку людина дивиться, коли гейт не пускає, — тут і має
+                // стояти відповідь «а чим погоджують». Без неї галочка зліва
+                // читалась як «обраний варіант». Порожньому розділу цей текст ні
+                // до чого — там ще нічого погоджувати, і корисніша підказка
+                // «що сюди кладуть».
+                APPROVAL_GATE_HINT
+              : kind === "visualization"
+                ? "Тут має бути превʼю виробу або нанесення, яке погоджує замовник."
+                : "Тут має бути фінальний друкарський / виробничий макет."}
         </span>
       </div>
     );

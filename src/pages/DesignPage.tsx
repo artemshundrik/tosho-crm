@@ -32,6 +32,7 @@ import { PersonHoverCard, toPersonHoverCardData } from "@/components/app/PersonH
 import { PartyHoverCard } from "@/components/app/PartyHoverCard";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
+  APPROVAL_GATE_HINT,
   canChangeDesignStatus,
   getApprovalBlockers,
   getDesignStatusActionLabel,
@@ -3146,7 +3147,9 @@ export default function DesignPage() {
         hasLayoutOutputs: readHasLayoutOutputs(currentMetadata, task.designTaskType),
       });
       if (blockers.length > 0) {
-        toast.error(`Щоб затвердити дизайн, закрийте блокери: ${blockers.join(", ")}.`);
+        toast.error(`Щоб затвердити дизайн, закрийте блокери: ${blockers.join(", ")}.`, {
+          description: APPROVAL_GATE_HINT,
+        });
         return;
       }
     }
