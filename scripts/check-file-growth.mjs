@@ -73,13 +73,24 @@ const GIANT_THRESHOLD = 2000;
  * рік, дублював фільтр статусу й перезавантажував дошку на кожне натискання.
  * Шлях до скасованих — той самий фільтр, що був завжди.
  *
+ * ПІДНЯТО 25.08.2026 — замовлення за собівартістю й вибір погодженого тиражу.
+ * Спершу винесено все, що виноситься: гроші замовлення поїхали з
+ * `orderRecords` в окремий `orderItemPricing` (і аж тоді отримали тести —
+ * усередині orderRecords їх не написати, він тягне клієнт Supabase), а правило
+ * «один погоджений тираж на позицію» — у `lib/quoteRuns`
+ * (`applyApprovedRunToggle`). Те, що лишилось у чотирьох файлах, окремо жити
+ * не може: одне поле, протягнуте крізь чотири мапери читання й запису
+ * (toshoApi), гілка розмітки з кнопкою «Погодив клієнт» усередині дерева
+ * позиції (QuoteDetailsPage), два ранні виходи в обробниках дошки
+ * (QuotesPage) і блокер готовності поруч із рештою блокерів (orderRecords).
+ *
  * Перші чотири — ті самі сторінки-гіганти, заради яких усе й затівалось.
  * Скорочувати їх ніхто не зобовʼязаний одним заходом; головне, щоб не росли.
  */
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12802,
-  "src/pages/QuoteDetailsPage.tsx": 9847,
-  "src/pages/QuotesPage.tsx": 8420,
+  "src/pages/QuoteDetailsPage.tsx": 9929,
+  "src/pages/QuotesPage.tsx": 8437,
   "src/pages/DesignPage.tsx": 6008,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
@@ -93,8 +104,8 @@ const CEILINGS = {
   "src/components/quotes/NewQuoteDialog.tsx": 2732,
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
   "src/components/design/DesignersDashboard.tsx": 2702,
-  "src/features/orders/orderRecords.ts": 2598,
-  "src/lib/toshoApi.ts": 2579,
+  "src/features/orders/orderRecords.ts": 2614,
+  "src/lib/toshoApi.ts": 2588,
   "src/pages/TeamPage.tsx": 2344,
   "src/pages/ProfilePage.tsx": 2156,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,

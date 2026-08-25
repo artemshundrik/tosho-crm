@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { collectRunsForItem, getRunLineTotal, getRunUnitPrice } from "./orderItemPricing";
-import { needsApprovedRunChoice, pickApprovedRun } from "@/lib/quoteRuns";
+import { applyApprovedRunToggle, needsApprovedRunChoice, pickApprovedRun } from "@/lib/quoteRuns";
 import type { QuoteRun } from "@/lib/toshoApi";
 
 /**
@@ -97,5 +97,35 @@ describe("тиражі позиції", () => {
   it("для однієї з кількох позицій чужі тиражі не підтягує", () => {
     const orphan = run({ id: "orphan", quote_item_id: null });
     expect(collectRunsForItem([orphan], { id: "item-1", quoteItemId: "item-1" }, 2)).toEqual([]);
+  });
+});
+
+describe("позначка «погоджено клієнтом»", () => {
+  const a = run({ id: "a", quantity: 180 });
+  const b = run({ id: "b", quantity: 270 });
+  const otherItem = run({ id: "c", quote_item_id: "item-2" });
+
+  it("гасить позначку в сусідів тієї самої позиції", () => {
+    const next = applyApprovedRunToggle([{ ...a, is_approved: true }, b], "b", "item-1");
+    expect(next.map((r) => [r.id, r.is_approved])).toEqual([
+      ["a", false],
+      ["b", true],
+    ]);
+  });
+
+  it("не чіпає тиражі іншої позиції", () => {
+    const next = applyApprovedRunToggle([a, { ...otherItem, is_approved: true }], "a", "item-1");
+    expect(next.find((r) => r.id === "c")?.is_approved).toBe(true);
+  });
+
+  it("повторне натискання знімає позначку", () => {
+    const next = applyApprovedRunToggle([{ ...a, is_approved: true }, b], "a", "item-1");
+    expect(next.every((r) => r.is_approved !== true)).toBe(true);
+  });
+
+  it("невідомий тираж лишає масив як був", () => {
+    const runs = [a, b];
+    expect(applyApprovedRunToggle(runs, "no-such-id", "item-1")).toBe(runs);
+    expect(applyApprovedRunToggle(runs, null, "item-1")).toBe(runs);
   });
 });

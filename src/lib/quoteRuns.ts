@@ -115,6 +115,40 @@ export function needsApprovedRunChoice<T extends { is_approved?: boolean }>(runs
   return runs.length > 1 && !runs.some((run) => run.is_approved === true);
 }
 
+/**
+ * Перемкнути позначку «погоджено клієнтом» на одному тиражі.
+ *
+ * ОДИН ПОГОДЖЕНИЙ НА ПОЗИЦІЮ — і це не косметика: те саме обмеження стоїть у
+ * базі частковим унікальним індексом, тож без зняття позначки в сусідів запис
+ * просто впав би.
+ *
+ * Повторне натискання знімає позначку: помилились — виправили, а не живете з
+ * чужим тиражем у замовленні.
+ *
+ * Чиста функція над масивом, а не метод сторінки: картка прорахунку й так
+ * дев'ять тисяч рядків, а перевірити правило «сусіди гаснуть» треба тестом, а
+ * не очима.
+ */
+export function applyApprovedRunToggle<T extends { id?: string | null; quote_item_id?: string | null; is_approved?: boolean }>(
+  runs: T[],
+  runId: string | null | undefined,
+  quoteItemId?: string | null
+): T[] {
+  if (!runId) return runs;
+  const target = runs.find((run) => run.id === runId);
+  if (!target) return runs;
+  const nextValue = target.is_approved !== true;
+  const scopeItemId = quoteItemId ?? null;
+  return runs.map((run) => {
+    if (run.id === runId) return { ...run, is_approved: nextValue };
+    // Гасимо позначку лише в сусідів ЦІЄЇ позиції: у прорахунку з кількох
+    // товарів кожен має власний погоджений тираж.
+    const sameItem = (run.quote_item_id ?? null) === scopeItemId;
+    if (nextValue && sameItem && run.is_approved) return { ...run, is_approved: false };
+    return run;
+  });
+}
+
 export function mergeQuoteRunsWithExisting({
   existingRuns,
   nextRuns,

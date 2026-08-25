@@ -105,6 +105,7 @@ import {
 } from "@/lib/toshoApi";
 import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import {
+  applyApprovedRunToggle,
   computeRunSalePricing,
   mergeQuoteRunsWithExisting,
   needsApprovedRunChoice,
@@ -1470,32 +1471,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     );
   };
 
-  /**
-   * Позначити тираж як погоджений клієнтом.
-   *
-   * ОДИН НА ПОЗИЦІЮ — інакше «погоджено» перестає бути відповіддю на питання
-   * «що ми виробляємо». Це ж обмеження стоїть і в базі частковим унікальним
-   * індексом, тож зняття з сусідів тут не косметика: без нього запис упав би.
-   *
-   * Повторне натискання знімає позначку: помилилися — виправили, а не живете
-   * з чужим тиражем у замовленні.
-   */
+  /** Позначка «погоджено клієнтом» — правило живе в lib/quoteRuns і накрите тестами. */
   const toggleApprovedRun = (runId: string | null | undefined, quoteItemId?: string | null) => {
-    if (!runId) return;
-    const scopeItemId = quoteItemId ?? null;
-    setRuns((prev) => {
-      const target = prev.find((run) => run.id === runId);
-      if (!target) return prev;
-      const nextValue = target.is_approved !== true;
-      return prev.map((run) => {
-        if (run.id === runId) return { ...run, is_approved: nextValue };
-        // Знімаємо позначку лише в сусідів ЦІЄЇ позиції: у прорахунку з кількох
-        // товарів кожен має власний погоджений тираж.
-        const sameItem = (run.quote_item_id ?? null) === scopeItemId;
-        if (nextValue && sameItem && run.is_approved) return { ...run, is_approved: false };
-        return run;
-      });
-    });
+    setRuns((prev) => applyApprovedRunToggle(prev, runId, quoteItemId));
   };
 
   const saveRuns = async (nextRuns?: QuoteRun[] | unknown, options?: { silent?: boolean }) => {
