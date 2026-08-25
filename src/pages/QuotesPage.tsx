@@ -1766,6 +1766,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [teamId]);
 
   const handleRowStatusChange = async (quoteId: string, nextStatus: string) => {
+    if (rows.find((row) => row.id === quoteId)?.status === nextStatus) return;
     setRowStatusBusy(quoteId);
     setRowStatusError(null);
     try {
@@ -4560,6 +4561,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const handleDropToStatus = async (status: string) => {
     if (!draggingId) return;
+    // КИНУЛИ ТУДИ, ДЕ Й БУЛО — НІЧОГО НЕ РОБИМО.
+    //
+    // База такий «перехід» проковтує мовчки (обидва тригери мають
+    // `when (old.status is distinct from new.status)`), а от сповіщення
+    // відправлялось щоразу. Звідси чотири однакові «Прорахунок затверджено»
+    // о 09:52 25.08.2026 при одному-єдиному переході в історії статусів.
+    const currentStatus = rows.find((row) => row.id === draggingId)?.status ?? null;
+    if (currentStatus === status) {
+      setDraggingId(null);
+      setDragOverColumnId(null);
+      setDragPlaceholder(null);
+      return;
+    }
     try {
       await setQuoteStatus({ quoteId: draggingId, status });
       try {
@@ -5114,6 +5128,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     try {
       await Promise.all(
         Array.from(selectedIds).map(async (id) => {
+          // Ті, що вже в цьому статусі, пропускаємо: у базі це порожня операція,
+          // а сповіщення пішло б кожному вдруге.
+          if (rows.find((row) => row.id === id)?.status === nextStatus) return;
           await setQuoteStatus({ quoteId: id, status: nextStatus });
           try {
             await notifyQuoteInitiatorOnStatusChange({

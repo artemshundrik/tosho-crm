@@ -198,6 +198,10 @@ export async function notifyQuoteInitiatorOnStatusChange(params: {
   actorUserId?: string | null;
 }) {
   const fromStatus = (params.fromStatus ?? "").trim().toLowerCase();
+  // Не перехід — не подія. Другий рубіж після перевірок на самих сторінках:
+  // база однакові статуси одне за одним ігнорує (тригери історії й аудиту
+  // мають `when (old.status is distinct from new.status)`), а Telegram — ні.
+  if (fromStatus && fromStatus === params.toStatus.trim().toLowerCase()) return;
   const alert = getQuoteStatusAlert(fromStatus, params.toStatus);
   if (!alert) return;
 
