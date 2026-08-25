@@ -2265,6 +2265,30 @@
   color: hsl(var(--primary));
 }
 
+/* Посилання й згадки у ВЛАСНОМУ бабблі.
+   Спільний рендер тексту фарбує їх у --primary — це правильно на світлому тлі
+   чужого повідомлення, але власний баббл сам залитий тим самим кольором, і
+   посилання зникало б синім по синьому. Перефарбовуємо на колір тексту баббла,
+   лишаючи підкреслення як ознаку посилання. */
+.thread-bubble-own a {
+  color: hsl(var(--primary-foreground));
+  text-decoration-color: hsl(var(--primary-foreground) / 0.55);
+}
+.thread-bubble-own a:hover {
+  color: hsl(var(--primary-foreground) / 0.85);
+}
+.thread-bubble-own .text-primary {
+  color: hsl(var(--primary-foreground));
+}
+/* Кнопка копіювання поруч із посиланням: на синьому тлі сірий текст брудний. */
+.thread-bubble-own button {
+  color: hsl(var(--primary-foreground) / 0.75);
+}
+.thread-bubble-own button:hover {
+  background-color: hsl(var(--primary-foreground) / 0.16);
+  color: hsl(var(--primary-foreground));
+}
+
 /* ── Перемикання теми: кругова хвиля з точки натиску (REQ-52) ─────────────
    Працює через View Transitions API. Браузер знімає сторінку «до» і «після»
    і показує обидва знімки одночасно — новий проступає колом із того місця,

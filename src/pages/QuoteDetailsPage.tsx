@@ -8703,11 +8703,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 onClick={() => setPartyCardOpen(true)}
                 className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               >
+                {/* 36 px — це рівно висота двох рядків поруч: назва (13.5/16) плюс
+                    рядок менеджера (11/15) із проміжком. Аватар на 28 «висів» проти
+                    них, і блок читався як три різні висоти замість одного рядка. */}
                 <EntityAvatar
                   src={quote.customer_logo_url ?? null}
                   name={quote.customer_name ?? "Замовник / Лід"}
                   fallback={getInitials(quote.customer_name)}
-                  size={28}
+                  size={36}
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px] font-semibold leading-tight">
@@ -8844,8 +8847,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         aria-expanded={sideSummaryOpen}
                         aria-label={sideSummaryOpen ? "Згорнути склад ціни" : "Показати склад ціни"}
                       >
+                        {/* Розгорнуто — вістря вгору («згорнути»), згорнуто — вниз
+                            («показати ще»). Стрілка описує ДІЮ по кліку, а не стан:
+                            вниз при вже розкритому складі обіцяла те, чого немає. */}
                         <ChevronDown
-                          className={cn("h-3.5 w-3.5 transition-transform", !sideSummaryOpen && "-rotate-90")}
+                          className={cn("h-3.5 w-3.5 transition-transform", sideSummaryOpen && "rotate-180")}
                           aria-hidden
                         />
                       </button>

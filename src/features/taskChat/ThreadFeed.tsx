@@ -2,6 +2,7 @@ import React from "react";
 import { ChevronDown, Clock, Lock, MessageSquare, Send } from "lucide-react";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { buildThreadBlocks, type ThreadEntry } from "@/lib/taskThread";
+import { renderInlineRichText } from "@/components/ui/rich-text-links";
 import { cn } from "@/lib/utils";
 import { eventTone } from "./threadEvents";
 import { ThreadAttachmentCard } from "./ThreadAttachmentCard";
@@ -272,7 +273,18 @@ export function ThreadFeed({
                           </span>
                         ) : null}
 
-                        <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{entry.body}</span>
+                        {/*
+                          Посилання в розмові — клікабельні, з кнопкою копіювання.
+                          Доти тіло повідомлення виводилось сирим рядком: адреси
+                          товарів, якими люди обмінюються тут щодня, лишались
+                          звичайним текстом — ні відкрити, ні скопіювати без
+                          виділення мишею. renderInlineRichText той самий, що на
+                          картці прорахунку, тож поведінка збігається з рештою
+                          застосунку, а не вигадується для чату.
+                        */}
+                        <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+                          {renderInlineRichText(entry.body, { highlightMentions: true })}
+                        </span>
 
                         <span
                           className={cn(
