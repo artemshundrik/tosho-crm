@@ -72,8 +72,22 @@ export function DevRequestQueue({
 
   const canAddMore = todayIds.length < TODAY_LIMIT;
 
+  /*
+   * ДВІ КОЛОНКИ НА ШИРОКОМУ ЕКРАНІ.
+   *
+   * Спершу полиці стояли одна під одною, і «Дрібниці» опинялись найнижче — до
+   * них треба було долистати повз усе інше, тобто заходили туди рівно ніколи.
+   * Ліворуч лишається те, що читають зверху вниз і по чому ухвалюють рішення
+   * («Сьогодні» → «Можна брати»); праворуч — довідкове: що стоїть не через
+   * тебе, що чекає деплою і дрібниці, які беруть, коли є хвилина.
+   *
+   * Заразом це прибирає другу ваду: рядок на всю ширину екрана має назву на
+   * третину й дві третини порожнечі.
+   */
   return (
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-7 xl:grid xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] xl:items-start xl:gap-x-8">
+      {/* ── ліва колонка: те, за що беруться ── */}
+      <div className="flex flex-col gap-7">
       {/* ── Сьогодні ── */}
       <Shelf title="Сьогодні" hint={`${todayOrdered.length} з ${TODAY_LIMIT}`}>
         <div className="flex flex-col gap-2">
@@ -123,17 +137,10 @@ export function DevRequestQueue({
         )}
       </Shelf>
 
-      {/* ── Стоїть за людьми ── */}
-      {shelves.blocked.length > 0 ? (
-        <Shelf title="Стоїть за людьми" hint="не через тебе">
-          <Rows
-            requests={shelves.blocked}
-            onSelect={onSelect}
-            onAddToday={canAddMore ? addToday : undefined}
-          />
-        </Shelf>
-      ) : null}
+      </div>
 
+      {/* ── права колонка: довідкове ── */}
+      <div className="flex flex-col gap-7">
       {/* ── Дрібниці ── */}
       {shelves.papercuts.length > 0 ? (
         <Shelf title="Дрібниці" hint="рядками, не картками">
@@ -151,6 +158,17 @@ export function DevRequestQueue({
         </Shelf>
       ) : null}
 
+      {/* ── Стоїть за людьми ── */}
+      {shelves.blocked.length > 0 ? (
+        <Shelf title="Стоїть за людьми" hint="не через тебе">
+          <Rows
+            requests={shelves.blocked}
+            onSelect={onSelect}
+            onAddToday={canAddMore ? addToday : undefined}
+          />
+        </Shelf>
+      ) : null}
+
       {/* ── Готово, чекає деплою ── */}
       {shelves.shipped.length > 0 ? (
         <Shelf title="Готово, чекає деплою" hint={String(shelves.shipped.length)}>
@@ -158,9 +176,11 @@ export function DevRequestQueue({
         </Shelf>
       ) : null}
 
-      {/* ── Не розібрано ── */}
+      </div>
+
+      {/* ── Не розібрано: на всю ширину, під обома колонками ── */}
       {shelves.triage.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border/60 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border/60 px-4 py-3 xl:col-span-2">
           <Inbox className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           <span className="text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">{shelves.triage.length}</span> не
@@ -267,47 +287,59 @@ function Rows({
     <ul className="divide-y divide-border/50 overflow-hidden rounded-xl border border-border/60 bg-card">
       {requests.map((request) => (
         <li key={request.id}>
-          <div className="group flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/40">
+          {/*
+           * ПЕРЕНОС, А НЕ ОБРІЗАННЯ. У двоколонковому вигляді права колонка
+           * вужча за ліву, і в один рядок назва разом із чипом «чекає СЕО · 27
+           * дн» не влазила: назва зрізалась до однієї літери. Назва — головне
+           * в рядку, тож вона тримає власний мінімум, а мітки й кнопка
+           * переносяться під неї, коли місця бракує.
+           */}
+          <div className="group flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 transition-colors hover:bg-muted/40">
             <PriorityBars priority={request.priority} />
             <button
               type="button"
               onClick={() => onSelect(request)}
-              className="flex min-w-0 flex-1 items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+              className="flex min-w-[min(100%,15rem)] flex-1 items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
             >
               <span
-                className={cn("shrink-0 text-2xs font-semibold", toneTextClass[KIND_TONE[request.kind]])}
+                className={cn(
+                  "hidden shrink-0 text-2xs font-semibold sm:inline",
+                  toneTextClass[KIND_TONE[request.kind]]
+                )}
               >
                 {KIND_LABELS[request.kind]}
               </span>
               <span className="truncate text-sm">{request.title}</span>
             </button>
 
-            <WaitChip request={request} />
-            <ShippedChip request={request} />
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <WaitChip request={request} />
+              <ShippedChip request={request} />
 
-            <HoverCopyText
-              value={request.label}
-              textClassName="hidden font-mono text-2xs font-semibold text-muted-foreground sm:inline"
-              successMessage="Номер запиту скопійовано"
-              copyLabel="Скопіювати номер запиту"
-            />
+              <HoverCopyText
+                value={request.label}
+                textClassName="hidden font-mono text-2xs font-semibold text-muted-foreground sm:inline"
+                successMessage="Номер запиту скопійовано"
+                copyLabel="Скопіювати номер запиту"
+              />
 
-            {onAddToday && canTakeToday(request) ? (
+              {onAddToday && canTakeToday(request) ? (
               /*
                * Кнопка завжди в розмітці, лише тихіша до наведення: на телефоні
                * наведення не існує, а з клавіатури до прихованої не дійти.
                */
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => onAddToday(request)}
-                aria-label={`Взяти на сьогодні: ${request.title}`}
-                className="shrink-0 gap-1 opacity-70 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Сьогодні</span>
-              </Button>
-            ) : null}
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => onAddToday(request)}
+                  aria-label={`Взяти на сьогодні: ${request.title}`}
+                  className="shrink-0 gap-1 opacity-70 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Сьогодні</span>
+                </Button>
+              ) : null}
+            </div>
           </div>
         </li>
       ))}

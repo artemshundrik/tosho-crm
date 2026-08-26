@@ -44,10 +44,13 @@ export function PageHeaderToolbarSlot({
   surfaceId,
   kind,
   canvasMode,
+  sticky = false,
 }: {
   surfaceId: string | null;
   kind: PageToolbarKind;
   canvasMode: boolean;
+  /** Липнути під шапкою при прокрутці. Вмикає реєстр поверхонь. */
+  sticky?: boolean;
 }) {
   const actions = usePageHeaderActionsNode(surfaceId);
   const pending = kind !== "none" && !actions;
@@ -90,7 +93,21 @@ export function PageHeaderToolbarSlot({
     // статусів, яка й так читається окремим шаром. Відступи там же вужчі:
     // ряд порожнечі над списком коштував екранного місця ні за що
     // (картка 146). Десктоп лишається як був.
-    <div className="border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] max-md:border-b-0 supports-[backdrop-filter]:backdrop-blur-md">
+    <div
+      className={cn(
+        "border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] max-md:border-b-0 supports-[backdrop-filter]:backdrop-blur-md",
+        /*
+         * `--app-header-height` — та сама змінна, на якій стоять липкі шапки
+         * таблиць: вона вже враховує смугу «Дивитись як». Своє число тут
+         * розійшлося б із нею мовчки.
+         *
+         * z-20, а не вище: шапка застосунку лишається над смугою, дровери й
+         * модалки — тим паче. Заливка обов'язкова — інакше рядки списку
+         * просвічують крізь смугу під час прокрутки.
+         */
+        sticky && "sticky top-[var(--app-header-height)] z-20"
+      )}
+    >
       <div
         className={cn(
           "min-w-0",

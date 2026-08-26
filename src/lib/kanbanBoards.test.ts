@@ -94,8 +94,8 @@ describe("скасоване поза дошкою", () => {
     expect(isOnBoardStatus(key, "cancelled")).toBe(false);
   });
 
-  it("«Ідеї», «Не робимо» й «Викочено» лишаються поза дошкою запитів", () => {
-    expect([...OFF_BOARD_STATUSES]).toEqual(["someday", "wont_do", "released"]);
+  it("«Ідеї» та «Не робимо» лишаються поза дошкою запитів", () => {
+    expect([...OFF_BOARD_STATUSES]).toEqual(["someday", "wont_do"]);
     expect([...offBoardStatuses("devRequests")]).toEqual([...OFF_BOARD_STATUSES]);
   });
 

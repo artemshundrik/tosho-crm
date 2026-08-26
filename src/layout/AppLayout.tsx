@@ -2785,6 +2785,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             surfaceId={surfaceId}
             kind={toolbarKind}
             canvasMode={isCanvasMode}
+            // Липкість вмикає реєстр поверхонь, а не сторінка: смуга живе тут,
+            // і сторінка дотягнутись до її позиціювання не може.
+            sticky={pageSurface?.stickyToolbar ?? false}
           />
 
           <div className={cn(isCanvasMode ? "" : "px-4 md:px-5 lg:px-6")}>

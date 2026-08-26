@@ -6,7 +6,7 @@ import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { themeLook } from "./themeRegistry";
-import { KIND_ICONS, KIND_TONE, type DevRequest, type RequestKind } from "./types";
+import { KIND_TONE, type DevRequest, type RequestKind } from "./types";
 
 /**
  * «Щоденник» — усе, що поїхало в прод, за днями.
@@ -60,6 +60,21 @@ const DAY_SUMMARY_LABELS: Record<RequestKind, string> = {
   bug: "виправлено",
   friction: "покращено",
   feature: "додано",
+};
+
+/**
+ * Що зробили з цією карткою — словом, у рядку.
+ *
+ * Іконка тут не працює, і це перевірено очима: три однакові кружечки в стовпчик
+ * не кажуть нічого, поки не наведеш. Слово читається без наведення, а «Виправлено
+ * / Покращено / Додано» ще й точніше за тип картки: тип каже, ЩО БУЛО НЕ ТАК, а
+ * в щоденнику питання інше — ЩО МИ ЗРОБИЛИ. Ті самі слова стоять на картці для
+ * чату (RELEASE_BADGE_LABELS), тож рядок і картинка розкажуть однаково.
+ */
+const DONE_LABELS: Record<RequestKind, string> = {
+  bug: "Виправлено",
+  friction: "Покращено",
+  feature: "Додано",
 };
 
 function daySummary(requests: DevRequest[]): string {
@@ -155,37 +170,42 @@ export function DevRequestLog({
             {day.requests.map((request) => {
               const look = themeLook(request.theme);
               const ThemeIcon = look?.icon;
-              const KindIcon = KIND_ICONS[request.kind];
               return (
                 <li key={request.id}>
                   {/*
                    * Рядок — кнопка, а не div з onClick: інакше в нього не
                    * потрапити з клавіатури, і жодного стану фокуса не буде.
                    */}
-                  <div className="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40">
+                  <div className="group flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-muted/40">
                     <button
                       type="button"
                       onClick={() => onSelect(request)}
                       className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
                     >
-                      {/* Дві іконки, і кожна про своє: ЩО це була за робота
-                          (тип) і ДО ЧОГО вона належала (напрям). Тип є завжди,
-                          напрям — ні, тож місце під нього тримаємо порожнім, аби
-                          назви не стрибали вліво-вправо від рядка до рядка. */}
-                      <KindIcon
-                        className={cn("h-4 w-4 shrink-0", toneTextClass[KIND_TONE[request.kind]])}
-                        aria-hidden
-                      />
-                      {ThemeIcon ? (
-                        <ThemeIcon
-                          className={cn("h-4 w-4 shrink-0", look ? toneTextClass[look.tone] : null)}
-                          aria-hidden
-                        />
-                      ) : (
-                        <span className="h-4 w-4 shrink-0" aria-hidden />
-                      )}
-                      <span className="truncate text-sm font-medium">{request.title}</span>
+                      {/* Той самий порядок, що в рядку «Черги»: спершу слово
+                          про роботу, потім назва. Місце під іконку напряму більше
+                          НЕ резервуємо — порожній відступ на сотні рядків читався
+                          як зайве поле, а не як вирівнювання. */}
+                      <span
+                        className={cn(
+                          "w-[86px] shrink-0 text-2xs font-semibold",
+                          toneTextClass[KIND_TONE[request.kind]]
+                        )}
+                      >
+                        {DONE_LABELS[request.kind]}
+                      </span>
+                      <span className="truncate text-sm">{request.title}</span>
                     </button>
+
+                    {ThemeIcon && look ? (
+                      /* Напрям — тихою іконкою праворуч, а не попереду назви:
+                         він потрібен рідше за саму назву, і в потоці ста рядків
+                         його місце — на краю, а не в точці, з якої читають. */
+                      <ThemeIcon
+                        className={cn("hidden h-4 w-4 shrink-0 sm:block", toneTextClass[look.tone])}
+                        aria-label={request.theme ?? undefined}
+                      />
+                    ) : null}
 
                     <HoverCopyText
                       value={request.label}

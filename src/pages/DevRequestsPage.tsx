@@ -240,11 +240,14 @@ export default function DevRequestsPage() {
     // різні склади карток означали б, що вкладки сперечаються, і довіряти
     // не можна було б жодній.
     return all.filter((request) =>
-      view === "board" || view === "queue"
-        ? // Викоченого на дошці більше немає: 103 картки зі 168 не потребують
-          // жодного рішення, а місце й увагу забирали щодня. Вони цілі — у
-          // «Щоденнику». Картка з живим хвостом сюди не провалюється: гейт
-          // релізу лишає її в «Готово локально» з підписом «частина в проді».
+      view === "board"
+        ? request.status !== "someday" &&
+          request.status !== "wont_do" &&
+          !isArchivedRequest(request, now)
+        : view === "queue"
+        ? // «Черга» відповідає на «за що хвататись», і викочене на це питання
+          // не відповідає ніяк: воно вже зроблене. На дошці воно лишається
+          // останньою колонкою — там питання інше, «чим закінчився шлях».
           request.status !== "released" &&
           request.status !== "someday" &&
           request.status !== "wont_do" &&
@@ -294,6 +297,10 @@ export default function DevRequestsPage() {
     const now = new Date();
     return {
       board: all.filter(
+        (r) => r.status !== "someday" && r.status !== "wont_do" && !isArchivedRequest(r, now)
+      ).length,
+      // Лічильник «Черги» свій: викоченого там немає, тож число дошки їй бреше.
+      queue: all.filter(
         (r) =>
           r.status !== "released" &&
           r.status !== "someday" &&
@@ -429,7 +436,7 @@ export default function DevRequestsPage() {
             >
               <ListChecks className="h-4 w-4" />
               Черга
-              <CountBadge value={counts.board} loading={showBoardSkeleton} />
+              <CountBadge value={counts.queue} loading={showBoardSkeleton} />
             </Button>
             <Button
               variant="segmented"
