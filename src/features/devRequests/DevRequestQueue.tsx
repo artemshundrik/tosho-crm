@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { checklistProgress, type ChecklistItem } from "./checklist";
 import { groupRequests } from "./grouping";
 import { PriorityBars } from "./PriorityBars";
-import { canTakeToday, papercutLabel, splitQueue, TODAY_LIMIT } from "./queueShelves";
+import { canTakeToday, papercutLabel, splitQueue } from "./queueShelves";
 import { themeLook } from "./themeRegistry";
 import { KIND_LABELS, KIND_TONE, type DevRequest } from "./types";
 
@@ -62,15 +62,13 @@ export function DevRequestQueue({
   const freeGroups = useMemo(() => groupRequests(shelves.free, "theme"), [shelves.free]);
 
   const addToday = (request: DevRequest) => {
-    if (todayIds.length >= TODAY_LIMIT || todayIds.includes(request.id)) return;
+    if (todayIds.includes(request.id)) return;
     onToday([...todayIds, request.id]);
   };
 
   const dropToday = (request: DevRequest) => {
     onToday(todayIds.filter((id) => id !== request.id));
   };
-
-  const canAddMore = todayIds.length < TODAY_LIMIT;
 
   /*
    * Згорнуті напрями живуть у стані вигляду, а не в localStorage: це рішення
@@ -105,24 +103,20 @@ export function DevRequestQueue({
       {/* ── Сьогодні: на всю ширину, над обома колонками ──
           Це заголовок дня, а не одна з полиць: три справи, заради яких сюди й
           заходять. У колонці вони ділили б увагу з довідковим. */}
-      <Shelf title="Сьогодні" hint={`${todayOrdered.length} з ${TODAY_LIMIT}`} className="xl:col-span-2">
-        <div className="flex flex-col gap-2 xl:grid xl:grid-cols-3 xl:gap-3">
+      <Shelf
+        title="Сьогодні"
+        hint={todayOrdered.length > 0 ? String(todayOrdered.length) : undefined}
+        className="xl:col-span-2"
+      >
+        {/* Дві в рядок, а не три: назва справи має влазити цілком. На трьох
+            колонках вона зрізалась уже на середньому заголовку. */}
+        <div className="flex flex-col gap-2 md:grid md:grid-cols-2 md:gap-3">
           {todayOrdered.map((request) => (
             <TodayRow key={request.id} request={request} onSelect={onSelect} onDrop={dropToday} />
           ))}
-          {Array.from({ length: TODAY_LIMIT - todayOrdered.length }, (_, index) => (
-            <p
-              key={`slot-${index}`}
-              className="hidden items-center justify-center rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-2xs text-muted-foreground xl:flex"
-            >
-              {todayOrdered.length === 0 && index === 0
-                ? "Вибери зі списку нижче не більше трьох справ"
-                : "вільне місце"}
-            </p>
-          ))}
           {todayOrdered.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground xl:hidden">
-              Порожньо. Вибери зі списку нижче не більше трьох справ — решта чекатиме, не вимагаючи уваги.
+            <p className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground md:col-span-2">
+              Порожньо. Познач тут те, що збираєшся зробити сьогодні — решта чекатиме, не вимагаючи уваги.
             </p>
           ) : null}
         </div>
@@ -173,7 +167,7 @@ export function DevRequestQueue({
                     <Rows
                       requests={group.items}
                       onSelect={onSelect}
-                      onAddToday={canAddMore ? addToday : undefined}
+                      onAddToday={addToday}
                     />
                   )}
                 </div>

@@ -7,7 +7,6 @@ import {
   papercutLabel,
   pruneToday,
   splitQueue,
-  TODAY_LIMIT,
 } from "./queueShelves";
 import type { DevRequest, RequestStatus } from "./types";
 
@@ -79,8 +78,13 @@ describe("полиці черги", () => {
 });
 
 describe("вибране на сьогодні", () => {
-  it("на день можна взяти три справи", () => {
-    expect(TODAY_LIMIT).toBe(3);
+  it("стелі немає — скільки взяв, стільки й лежить", () => {
+    // Три місця тут стояли до 27.08.2026; правило знято на прохання Артема.
+    // Полиця від цього не стає другим беклогом лише завдяки чистці нижче.
+    const many = Array.from({ length: 9 }, (_, i) => make(String(i + 1), "queued"));
+    const ids = many.map((r) => r.id);
+    expect(splitQueue(many, ids).today).toHaveLength(9);
+    expect(pruneToday(ids, many)).toHaveLength(9);
   });
 
   it("брати можна лише те, про що рішення вже є", () => {
