@@ -49,6 +49,19 @@ export const inviteRequestSchema = z
     availabilityEndDate: z.string().nullable().optional(),
     startDate: z.string().nullable().optional(),
     probationEndDate: z.string().nullable().optional(),
+    /**
+     * Форма шле статус працевлаштування разом з рештою профілю — приймаємо,
+     * щоб `.strict()` не завалив увесь запит, але НАВМИСНО не записуємо.
+     *
+     * Статусом керує окремий ендпойнт `team-member-employment`: він стежить за
+     * дозволеними переходами («звільнити можна лише активного», «повернути —
+     * лише звільненого»), зводить значення до `active`/`inactive` і пише в
+     * `tosho.team_member_profiles` — таблицю, з якої `tosho.is_user_blocked`
+     * вирішує, чи пускати людину в CRM узагалі. Другий шлях запису тут прийняв
+     * би від адміністратора будь-який рядок повз ці правила; сьогодні він ліг
+     * би в `user_metadata`, якого ніхто не читає, — але саме так і зʼявляються
+     * обходи через рік.
+     */
     employmentStatus: z.string().nullable().optional(),
     managerUserId: z.string().nullable().optional(),
     // Ключі модулів не перелічуємо: реєстр живе у src/lib/moduleAccess.ts, а тут
@@ -790,7 +803,6 @@ export const handler = async (event: HttpEvent) => {
     const availabilityEndDate = availabilityWindowApplies
       ? (payload.availabilityEndDate ?? "").toString().trim()
       : "";
-    const employmentStatus = (payload.employmentStatus ?? "").toString().trim();
     const startDate = (payload.startDate ?? "").toString().trim();
     const probationEndDate = (payload.probationEndDate ?? "").toString().trim();
     const managerUserId = (payload.managerUserId ?? "").toString().trim();
@@ -829,7 +841,6 @@ export const handler = async (event: HttpEvent) => {
       availability_status: availabilityStatus,
       availability_start_date: availabilityStartDate || null,
       availability_end_date: availabilityEndDate || null,
-      employment_status: employmentStatus || null,
       start_date: startDate || null,
       probation_end_date: probationEndDate || null,
       manager_user_id: managerUserId || null,
@@ -856,7 +867,6 @@ export const handler = async (event: HttpEvent) => {
         availabilityStatus,
         availabilityStartDate,
         availabilityEndDate,
-        employmentStatus,
         startDate,
         probationEndDate,
         managerUserId,
