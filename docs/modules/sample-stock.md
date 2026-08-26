@@ -8,7 +8,7 @@
 - **Nav:** "Склад", operations group, `moduleKey: "stock"` — `src/layout/AppLayout.tsx:460`; `ROUTES.sampleStock = "/stock/samples"` (`AppLayout.tsx:426`). Command-palette entry `src/components/app/CommandPalette.tsx:382`.
 - **Main tables (`tosho`):** `sample_stock_items` (inventory rows) + `sample_stock_movements` (append-only ledger). DDL/RPC/RLS all live in `scripts/sample-stock-schema.sql`; seed in `scripts/sample-stock-seed-from-numbers.sql`.
 - **Movement RPC:** `tosho.adjust_sample_stock_item(p_item_id, p_team_id, p_movement_type, p_quantity, p_comment)` (`scripts/sample-stock-schema.sql:103`) — the only path that writes a ledger row.
-- **Access / permissions:** module key `stock`, gated by `ModuleRouteGate` (`App.tsx:529`) on the `moduleAccess.stock` flag or Super Admin. Default access: Super Admin + SEO on, others off unless toggled (`CODEX_WORKFLOWS.md:172`). Team-scoped RLS via `public.is_team_member(team_id)`.
+- **Access / permissions:** module key `stock`, gated by `ModuleRouteGate` (`App.tsx:529`) on the `moduleAccess.stock` flag or Super Admin. Default access: Super Admin + CEO on, others off unless toggled (`CODEX_WORKFLOWS.md:172`). Team-scoped RLS via `public.is_team_member(team_id)`.
 - **Workflow:** `CODEX_WORKFLOWS.md` §7A "Sample Stock Change".
 - **Related:** [overview.md](overview.md). Deliberately **separate from the product catalog** used by quote configuration — see [quotes.md](quotes.md); do not conflate (`DB_MAP.md:198`).
 

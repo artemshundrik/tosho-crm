@@ -202,7 +202,7 @@ function isOwner(ctx: FeatureViewerContext): boolean {
 }
 
 /**
- * Власник і SEO не звужуються за посадою — це задум, а не діра в правах.
+ * Власник і CEO не звужуються за посадою — це задум, а не діра в правах.
  * Повторює хелпер `ownerOrSeo` із moduleAccess.ts.
  */
 function isPrivileged(ctx: FeatureViewerContext): boolean {

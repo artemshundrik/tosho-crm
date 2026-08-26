@@ -183,7 +183,7 @@ export async function loadPayDefaults(workspaceId: string): Promise<DesignerPayD
   };
 }
 
-/** RLS сама віддасть лише свої рядки дизайнеру і всі — SEO/owner. */
+/** RLS сама віддасть лише свої рядки дизайнеру і всі — CEO/owner. */
 export async function loadPayRates(workspaceId: string, userId?: string): Promise<DesignerPayRate[]> {
   let query = payrollTable("employee_pay_rates")
     .select(

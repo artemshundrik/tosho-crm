@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
 
 /**
- * Вкладка «Оплата» в картці співробітника (тільки owner/SEO).
+ * Вкладка «Оплата» в картці співробітника (тільки owner/CEO).
  *
  * Модель: docs/DESIGNER_PAYROLL_DESIGN.md
  *

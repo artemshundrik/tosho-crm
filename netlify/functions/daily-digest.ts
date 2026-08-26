@@ -27,8 +27,8 @@ import {
 // Щоденні дайджести в Telegram — див. docs/DAILY_DIGESTS_DESIGN.md.
 //
 //   ?kind=tech              — системний звіт (owner/admin), ранок
-//   ?kind=business_morning  — «що сьогодні» (owner/admin + SEO), ранок
-//   ?kind=business_evening  — «що сталося» (owner/admin + SEO), вечір
+//   ?kind=business_morning  — «що сьогодні» (owner/admin + CEO), ранок
+//   ?kind=business_evening  — «що сталося» (owner/admin + CEO), вечір
 //   ?dry=1                  — відрендерити й повернути текст, нічого не слати
 //   ?force=1                — проігнорувати захист «раз на добу»
 //   ?only=<email>           — надіслати лише одній людині (звужує коло, не
@@ -683,7 +683,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   // --- Відсутності: хто поза грою сьогодні, що зміниться завтра, що висить ---
   // Джерело — журнал tosho.team_absences (workspace-скоуп, не team!): той
   // самий, що живить планер «Команди» і бот. Аудиторія цього дайджесту —
-  // owner/SEO, тож і лічильник заявок на погодженні тут доречний.
+  // owner/CEO, тож і лічильник заявок на погодженні тут доречний.
   {
     const tomorrowKey = shiftDays(todayKey, 1);
     const workspaceIds = Array.from(new Set(members.map((m) => m.workspaceId)));

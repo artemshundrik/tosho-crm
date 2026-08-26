@@ -10411,7 +10411,7 @@ export default function DesignTaskPage() {
                         const isDeleting = changeRequestDeletingId === request.id;
                         const isOwn = Boolean(request.requested_by && userId && request.requested_by === userId);
                         const isNewestChangeRequest = request.id === newestChangeRequestId;
-                        // Author may manage only the newest правка; SEO/admin manage any.
+                        // Author may manage only the newest правка; CEO/admin manage any.
                         const canManageOwnChangeRequest =
                           (isOwn && isNewestChangeRequest) || canEditBriefChangeRequests;
                         const canDelete = canManageOwnChangeRequest;

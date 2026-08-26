@@ -429,7 +429,7 @@ export function PersonAccessHistorySection({
 // ---------------------------------------------------------------------------
 // Time spent in the CRM for one person, from the pre-aggregated
 // tosho.user_activity_daily (populated by the presence heartbeat).
-// RLS restricts that table to workspace owner/SEO, so render this only for them.
+// RLS restricts that table to workspace owner/CEO, so render this only for them.
 // ---------------------------------------------------------------------------
 function sumMinutes(rows: MinutesRow[], fromDay: string) {
   return rows.reduce((acc, row) => {

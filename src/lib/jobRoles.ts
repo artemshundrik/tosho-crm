@@ -21,7 +21,7 @@ export const JOB_ROLE_NAMES: Record<string, string> = {
   chief_accountant: "Головний бухгалтер",
   marketer: "Маркетолог",
   smm: "СММ",
-  seo: "SEO",
+  seo: "CEO",
   it_specialist: "IT-спеціаліст",
 };
 

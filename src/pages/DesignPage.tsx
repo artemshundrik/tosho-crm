@@ -60,7 +60,7 @@ import {
   withDesignTaskCollaboratorMetadata,
 } from "@/lib/designTaskCollaborators";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { PresenceAvatarStack } from "@/components/app/workspace-presence-widgets";
+import { CardViewersBadge } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { useDeferredHeavySurface } from "@/hooks/useDeferredHeavySurface";
 import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
@@ -1600,7 +1600,7 @@ export default function DesignPage() {
     if (!userId || !effectiveTeamId) return;
     // Mark applied up-front so this probe runs exactly once; then ask the DB
     // directly (pagination-proof) whether this user manages any work at all —
-    // design tasks OR quotes, so SEO who manage only quotes still land on себе.
+    // design tasks OR quotes, so CEO who manage only quotes still land on себе.
     setDefaultManagerFilterApplied(true);
     let cancelled = false;
     void (async () => {
@@ -1694,7 +1694,7 @@ export default function DesignPage() {
     void loadTeamWorkloadTasks();
   }, [loadTeamWorkloadTasks]);
 
-  // SEO/Superadmin бачать аналітику всіх дизайнерів; решта — лише свою
+  // CEO/Superadmin бачать аналітику всіх дизайнерів; решта — лише свою
   // (та сама політика, що була в звіті файлів).
   const canSeeAllDesignerFiles = permissions.isSuperAdmin || permissions.isSeo;
 
@@ -4473,19 +4473,10 @@ export default function DesignPage() {
         }}
         surface="raised"
       >
+        <CardViewersBadge viewers={cardViewers} />
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
-              {cardViewers.length > 0 ? (
-                <span
-                  className="inline-flex shrink-0"
-                  title={`Зараз у картці: ${cardViewers.map((viewer) => viewer.displayName).join(", ")}`}
-                >
-                  <PresenceAvatarStack entries={cardViewers} max={3} size={18} tight />
-                </span>
-              ) : null}
-            </div>
+            <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
               {isLinkedQuote ? (
                 <HoverCopyText

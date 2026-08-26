@@ -1381,7 +1381,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!hasParty) issues.push("Замовник або Лід");
     if (!hasDeadline) issues.push("Дедлайн прорахунку");
 
-    // Захист від продажу за собівартістю (рішення СЕО 18.08).
+    // Захист від продажу за собівартістю (рішення CEO 18.08).
     //
     // Перевірка живе САМЕ ТУТ, а не на кнопці «Зберегти»: тиражі мають
     // автозбереження через 900 мс після правки, і гейт на кнопці воно б
@@ -2450,7 +2450,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const itemsLockedHint = quoteConvertedToOrder
     ? `Замовлення${quoteOrderRef?.quoteNumber ? ` ${quoteOrderRef.quoteNumber}` : ""} вже зберегло копію позицій. Зміна прорахунку розвела б документи, тому позиції тут закриті.`
     : null;
-  // Разове попередження про новий поріг заробітку (СЕО 19.08: «попередь
+  // Разове попередження про новий поріг заробітку (CEO 19.08: «попередь
   // команду — при вході в прорахунок вікно по центру екрану»). Прапорець у
   // localStorage, а не в базі: це оголошення, а не право. Побачив ще раз —
   // нічого страшного; не побачив зовсім — гірше.
@@ -5048,7 +5048,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    * Пишемо лише на «На погодженні» й «Затверджено» — до них правки це звичайна
    * робота, і журнал з них перетворився б на шум. Подробиці кожного поля веде
    * тригер audit_quote_items у базі; сюди йде рядок, який видно всій команді,
-   * бо саму tosho.audit_log читають лише власник і СЕО.
+   * бо саму tosho.audit_log читають лише власник і CEO.
    */
   const logItemChange = async (kind: "update" | "delete", item: QuoteItem) => {
     if (!teamId || !itemChangeNeedsTrace) return;

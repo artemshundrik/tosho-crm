@@ -249,7 +249,20 @@ const JOB_ROLE_OPTIONS: JobRoleOption[] = [
   { value: "chief_accountant", label: "Головний бухгалтер" },
   { value: "marketer", label: "Маркетолог" },
   { value: "smm", label: "СММ" },
-  { value: "seo", label: "SEO" },
+  /**
+   * ЦЕ КЕРІВНИК, А НЕ ПОШУКОВА ОПТИМІЗАЦІЯ.
+   *
+   * Значення в базі — `seo`, і воно лишається: на ньому тримаються політики RLS
+   * (`tosho.is_owner_or_seo()`), доступ до фінансів, приватні картки й
+   * погодження відпусток. Перейменувати його означає переписати політики в базі
+   * — окрема робота з міграцією.
+   *
+   * А от ПІДПИС був небезпечний. «CEO» у списку поруч із «Маркетолог» і «СММ»
+   * читається як фахівець із пошукової оптимізації — тобто рядова посада. Той,
+   * хто виставив би її новому маркетологу, мовчки видав би йому права рівня
+   * власника. Тепер підпис каже, що це насправді: CEO.
+   */
+  { value: "seo", label: "CEO" },
   { value: "it_specialist", label: "IT-спеціаліст" },
 ];
 
@@ -326,7 +339,7 @@ function supportsManagerRate(role: string | null) {
 /**
  * Значення доступів, зведене з роллю.
  *
- * Раніше тут стояли три локальні `if`-и (owner→підрядники, owner/SEO→склад,
+ * Раніше тут стояли три локальні `if`-и (owner→підрядники, owner/CEO→склад,
  * фінансові посади→фінанси) — копії правил, які живуть у реєстрі модулів. Вони
  * й розійшлися з меню: сторінка показувала «Фінанси» ввімкненими, а сайдбар
  * ховав пункт. Тепер рішення одне на всіх — `normalizeModuleAccess`.
@@ -654,7 +667,7 @@ export function TeamMembersPage() {
   const canManage = isSuperAdmin || isAdmin;
   const canManageManagerRates = isSuperAdmin || isSeo;
   const canOpenProfileCard = canManage || canManageManagerRates;
-  // "Пульс" (team activity analytics) is owner/SEO only — the CEO surface.
+  // "Пульс" (team activity analytics) is owner/CEO only — the CEO surface.
   const canPulse = isSuperAdmin || isSeo;
 
   const openEditProfileDialog = useCallback((member: Member) => {
@@ -1287,7 +1300,7 @@ export function TeamMembersPage() {
     !!panelMember &&
     (isSuperAdmin || (panelMember.user_id !== currentUserId && (panelMember.access_role ?? null) !== "owner"));
   const visiblePersonSections = PERSON_SECTIONS.filter((section) => {
-    // Оплата — це зарплати: показуємо лише owner/SEO, як і RLS у базі.
+    // Оплата — це зарплати: показуємо лише owner/CEO, як і RLS у базі.
     if (section.key === "pay") return isSuperAdmin || isSeo;
     if (section.key === "access" || section.key === "hr") return canOpenProfileCard;
     if (section.key === "profile") return canOpenProfileCard;

@@ -12,7 +12,7 @@ export type { QuotaAbsenceKind };
 // reason. A single-day absence has startDate === endDate.
 // Backed by tosho.team_absences (scripts/team-absences.sql + team-absences-quotas.sql).
 //
-// RLS: читає будь-який учасник воркспейсу, пише owner/SEO. Self-service запити
+// RLS: читає будь-який учасник воркспейсу, пише owner/CEO. Self-service запити
 // (Фаза 2) додадуть insert самому за себе зі статусом pending.
 
 export type TeamAbsenceKind = "sick_leave" | "day_off" | "vacation" | "wfh" | "other";
@@ -277,9 +277,9 @@ export async function listTeamAbsencesForUserYear(params: {
 }
 
 /**
- * Внести відсутність ЗА людину. Owner/SEO — право перевіряє RLS на сервері.
+ * Внести відсутність ЗА людину. Owner/CEO — право перевіряє RLS на сервері.
  *
- * Через серверну функцію, бо раніше цей шлях МОВЧАВ: SEO ставив людині
+ * Через серверну функцію, бо раніше цей шлях МОВЧАВ: CEO ставив людині
  * відпустку, а людина дізнавалась про це, лише якщо сама відкривала CRM —
  * хоча запис міняє її баланс і ріже норму (а отже бонус).
  */
@@ -305,7 +305,7 @@ export async function createTeamAbsence(params: {
   return mapAbsenceRow(parsed.absence as TeamAbsenceRow);
 }
 
-/** Змінити чужий запис. Owner/SEO — право перевіряє RLS на сервері. */
+/** Змінити чужий запис. Owner/CEO — право перевіряє RLS на сервері. */
 export async function updateTeamAbsence(params: {
   id: string;
   /** Воркспейс сервер бере з членства викликача, тому в підписі його немає. */
@@ -329,7 +329,7 @@ export async function updateTeamAbsence(params: {
 }
 
 /**
- * Прибрати запис. Owner/SEO — право перевіряє RLS на сервері.
+ * Прибрати запис. Owner/CEO — право перевіряє RLS на сервері.
  *
  * Воркспейс сервер бере з членства викликача, а не з аргументу — тому в
  * підписі його вже немає.
@@ -389,7 +389,7 @@ function isLocalhost(): boolean {
  * Створити ВЛАСНУ заявку — через серверну функцію.
  *
  * Раніше вставку робив браузер, а сповіщення слав він же: закрив вкладку
- * відразу після «Надіслати» — заявка в базі є, а SEO про неї не знає ніколи.
+ * відразу після «Надіслати» — заявка в базі є, а CEO про неї не знає ніколи.
  * Тепер запис і сповіщення — один серверний виклик.
  *
  * Сама вставка на сервері йде ЮЗЕРСЬКИМ клієнтом, тож RLS і тригери (квота
@@ -470,7 +470,7 @@ export async function decideAbsenceRequest(params: {
 /**
  * Причини рішень. Колонку `decision_comment` знято з табличного select
  * (вона видна всій команді), тож читаємо її окремим RPC: заявник бачить свої,
- * owner/SEO — усі.
+ * owner/CEO — усі.
  */
 export async function loadAbsenceDecisionComments(year: number): Promise<Map<string, string>> {
   const { data, error } = await supabase

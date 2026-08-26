@@ -147,7 +147,7 @@ import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { PresenceAvatarStack } from "@/components/app/workspace-presence-widgets";
+import { CardViewersBadge } from "@/components/app/workspace-presence-widgets";
 import {
   DELIVERY_TYPE_OPTIONS,
   KANBAN_COLUMNS,
@@ -915,7 +915,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (!currentUserId || !teamId) return;
     // Mark applied up-front so this probe runs exactly once; then ask the DB
     // directly (pagination-proof) whether this user manages any work at all —
-    // quotes OR design tasks, so SEO who manage only designs still land on себе.
+    // quotes OR design tasks, so CEO who manage only designs still land on себе.
     setDefaultManagerFilterApplied(true);
     let cancelled = false;
     void (async () => {
@@ -5927,6 +5927,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         interactive={canOpen}
         disabled={!canOpen}
       >
+        <CardViewersBadge viewers={cardViewers} />
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <ColumnStatusIcon
@@ -5940,14 +5941,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             >
               {row.number ?? "Не вказано"}
             </HoverCopyText>
-            {cardViewers.length > 0 ? (
-              <span
-                className="ml-1 inline-flex shrink-0"
-                title={`Зараз у картці: ${cardViewers.map((viewer) => viewer.displayName).join(", ")}`}
-              >
-                <PresenceAvatarStack entries={cardViewers} max={3} size={18} tight />
-              </span>
-            ) : null}
           </div>
           <div className="flex max-w-[150px] flex-wrap items-center justify-end gap-1.5 shrink-0">
             <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-3xs font-semibold">

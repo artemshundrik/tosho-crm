@@ -131,7 +131,7 @@ import { SegmentedGroup } from "@/components/ui/segmented-group";
  *
  * Три вкладки: Люди · Календар · Запити. Один дизайн для всіх, але глибина
  * різна за роллю — свій баланс бачить кожен, чужі залишки й редактор квот
- * лише owner/SEO (рішення CEO 2026-08-01, docs/TEAM_ABSENCES_DESIGN.md).
+ * лише owner/CEO (рішення CEO 2026-08-01, docs/TEAM_ABSENCES_DESIGN.md).
  *
  * ДЖЕРЕЛО ПРАВДИ ПРО ВІДСУТНІСТЬ — журнал `tosho.team_absences`. Раніше
  * сторінка одночасно читала журнал і поле `availability_status` у профілі,
@@ -298,10 +298,10 @@ export function TeamPage() {
    */
   const lastSeenByUser = useTeamLastSeen(teamId);
 
-  /** Вносити відсутності за інших і бачити чужі залишки може owner/SEO. */
+  /** Вносити відсутності за інших і бачити чужі залишки може owner/CEO. */
   const canManageAbsences = permissions.isSuperAdmin || permissions.isSeo;
   /**
-   * Хто може ВИРІШИТИ конкретну заявку. Правило сервера: заявку SEO або
+   * Хто може ВИРІШИТИ конкретну заявку. Правило сервера: заявку CEO або
    * власника вирішує лише власник. Кнопки, які завжди відповідають 403,
    * гірші за їхню відсутність — тому ховаємо їх ще тут.
    */
@@ -311,7 +311,7 @@ export function TeamPage() {
    * Активна вкладка живе в URL (`?tab=`), а не лише в стані.
    *
    * Причина конкретна: сповіщення «Заявка: відпустка — Ілля» вело на /team, і
-   * SEO щоразу відкривав «Людей», а далі клацав у «Запити» — тобто посилання
+   * CEO щоразу відкривав «Людей», а далі клацав у «Запити» — тобто посилання
    * не доводило до дії, заради якої його надіслали. Тепер href веде рівно на
    * потрібну вкладку. Для сповіщень, які вже лежать у дзвіночку зі старим
    * href, вкладку виводимо з ключа `reminder=` — переписувати їх у базі
@@ -339,7 +339,7 @@ export function TeamPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>("all");
-  /** Щільний вид списку. Лише owner/SEO — у решти таблиця була б з одного рядка. */
+  /** Щільний вид списку. Лише owner/CEO — у решти таблиця була б з одного рядка. */
   const [peopleView, setPeopleView] = useState<"cards" | "balances">("cards");
   const [sortMode, setSortMode] = useState<SortMode>("presence");
   const [monthOffset, setMonthOffset] = useState(0);
@@ -1183,7 +1183,7 @@ export function TeamPage() {
   /**
    * Клік по вільному дню в планері.
    *
-   * Owner/SEO вносить факт будь-кому; решта може клікнути лише свій рядок —
+   * Owner/CEO вносить факт будь-кому; решта може клікнути лише свій рядок —
    * і це відкриває ЗАЯВКУ, а не адмінське внесення. Сам планер уже гейтить,
    * чиї клітинки клікабельні (canPickForOthers), тут лишається обрати режим.
    */
@@ -1756,7 +1756,7 @@ export function TeamPage() {
                   presenceExact: member.inactive ? null : formatLastSeenExact(member.lastSeenAt),
                   absence: toAvatarAbsence(member.absenceToday),
                 };
-                // Приватність: свій баланс бачить кожен, чужі — лише owner/SEO.
+                // Приватність: свій баланс бачить кожен, чужі — лише owner/CEO.
                 const showBalance = canManageAbsences || member.userId === userId;
                 return (
                   <TeamMemberCard
@@ -2117,7 +2117,7 @@ export function TeamPage() {
           findOwnConflict={findOwnConflict}
           editingId={absenceEditingId}
           onSubmit={handleAbsenceSubmit}
-          // Видаляти може лише той, хто взагалі керує відсутностями (owner/SEO) —
+          // Видаляти може лише той, хто взагалі керує відсутностями (owner/CEO) —
           // це той самий набір, що дозволяють RLS-політики team_absences_delete.
           onDelete={canManageAbsences && absenceEditingId ? handleAbsenceDeleteFromDialog : undefined}
           deleting={Boolean(absenceEditingId) && absenceDeletingId === absenceEditingId}
@@ -2247,12 +2247,12 @@ function AbsenceRow({
   hideName?: boolean;
   avatarUrl?: string | null;
   initials?: string;
-  /** Причина рішення — приходить окремим RPC, видна лише заявнику й owner/SEO. */
+  /** Причина рішення — приходить окремим RPC, видна лише заявнику й owner/CEO. */
   decisionComment?: string | null;
   /** Баланс заявника — щоб рішення приймалось із цифрами перед очима. */
   balance?: AbsenceBalance | null;
   canDecide?: boolean;
-  /** Чому кнопок немає: напр. «вирішує власник» — для заявок SEO очима SEO. */
+  /** Чому кнопок немає: напр. «вирішує власник» — для заявок CEO очима CEO. */
   decisionNote?: string;
   deciding?: boolean;
   onApprove?: () => void;

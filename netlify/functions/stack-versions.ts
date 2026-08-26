@@ -269,7 +269,7 @@ async function authorize(event: HttpEvent, supabaseUrl: string, anonKey: string,
     accessRole: (membership?.access_role as string | null) ?? null,
     jobRole: (membership?.job_role as string | null) ?? null,
   });
-  // Той самий предикат, що і в RLS таблиці: власник або SEO.
+  // Той самий предикат, що і в RLS таблиці: власник або CEO.
   if (level !== "full") return { ok: false as const, response: jsonResponse(403, { error: "Forbidden" }) };
   return { ok: true as const, actor: "user" as const };
 }

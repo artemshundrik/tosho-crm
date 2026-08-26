@@ -60,7 +60,7 @@ function pickCeoUserIds(rows: TeamMemberRoleRow[]) {
 }
 
 /**
- * Хто дізнається про новий прорахунок: власник, адміністратор, SEO і проєктний
+ * Хто дізнається про новий прорахунок: власник, адміністратор, CEO і проєктний
  * менеджер. Ширше за «керівництво» нижче — PM веде виробництво й має бачити
  * появу прорахунку, хоч і не є керівником.
  */
@@ -84,7 +84,7 @@ function pickOwnerAndSeoUserIds(rows: TeamMemberRoleRow[]) {
 }
 
 // Approver pool for contract revisions: access_role='owner' OR job_role='seo'.
-// SEO users act as alternate contract approvers per project rule.
+// CEO users act as alternate contract approvers per project rule.
 const pickContractApproverUserIds = pickOwnerAndSeoUserIds;
 
 function pickDesignerUserIds(rows: TeamMemberRoleRow[]) {
@@ -550,7 +550,7 @@ export async function notifyCustomerLeadManagerAssigned(params: {
 /* ------------------------------------------------------------------ */
 
 /**
- * Хто вирішує заявки: owner + SEO. Резолвимо по workspace_id, а не по teamId,
+ * Хто вирішує заявки: owner + CEO. Резолвимо по workspace_id, а не по teamId,
  * бо відсутності ключуються воркспейсом (див. tosho.team_absences).
  */
 async function resolveAbsenceApproverUserIds(workspaceId: string): Promise<string[]> {
@@ -570,7 +570,7 @@ async function resolveAbsenceApproverUserIds(workspaceId: string): Promise<strin
     .filter((value): value is string => !!value);
 }
 
-/** Нова заявка чекає на рішення — летить owner і SEO, окрім самого заявника. */
+/** Нова заявка чекає на рішення — летить owner і CEO, окрім самого заявника. */
 export async function notifyAbsenceRequestSubmitted(params: {
   workspaceId: string;
   requesterUserId: string;

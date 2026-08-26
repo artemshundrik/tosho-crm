@@ -163,7 +163,7 @@ export type FeatureDefinition = {
 };
 
 /**
- * Власник і SEO бачать усе — це задум, а не діра в правах.
+ * Власник і CEO бачать усе — це задум, а не діра в правах.
  * Повторює хелпер ownerOrSeo із moduleAccess.ts.
  */
 function isPrivileged(ctx: FeatureViewerContext): boolean {
@@ -462,7 +462,7 @@ drop policy if exists feature_adoption_self_read on tosho.feature_adoption;
 create policy feature_adoption_self_read on tosho.feature_adoption
   for select using (user_id = auth.uid());
 
--- Зріз по команді бачать лише власник і SEO — решті достатньо свого рядка.
+-- Зріз по команді бачать лише власник і CEO — решті достатньо свого рядка.
 drop policy if exists feature_adoption_privileged_read on tosho.feature_adoption;
 create policy feature_adoption_privileged_read on tosho.feature_adoption
   for select using (

@@ -56,7 +56,7 @@ describe("значення в історії", () => {
   });
 
   it("прапорці читаються як стан, а не як true/false", () => {
-    expect(auditValueLabel("is_private", true)).toBe("лише власник і СЕО");
+    expect(auditValueLabel("is_private", true)).toBe("лише власник і CEO");
     expect(auditValueLabel("is_private", false)).toBe("вся команда");
     // auto_classified у базі означає «поставив агент», людині ж цікаве
     // протилежне — чи вже підтвердили.

@@ -2574,7 +2574,7 @@ export default function OrdersProductionDetailsPage() {
                 <div className="text-sm font-medium">Номер і дата договору</div>
                 {!isCeo ? (
                   <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs font-medium text-muted-foreground">
-                    Тільки СЕО / власник
+                    Тільки CEO / власник
                   </span>
                 ) : null}
               </div>
@@ -2604,7 +2604,7 @@ export default function OrdersProductionDetailsPage() {
               <p className="text-xs text-muted-foreground">
                 {isCeo
                   ? "Якщо паперовий договір вже існує — встав його реальні № і дату. Інакше залишиться номер замовлення CRM і дата створення."
-                  : "Змінювати № і дату договору може лише СЕО або власник. Зараз підставляться номер замовлення CRM і дата створення."}
+                  : "Змінювати № і дату договору може лише CEO або власник. Зараз підставляться номер замовлення CRM і дата створення."}
               </p>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
@@ -2732,14 +2732,14 @@ export default function OrdersProductionDetailsPage() {
                     : null;
                 setContractDialogSubmitting(true);
                 try {
-                  // № і дату договору може змінювати лише СЕО/власник. Для решти — лишаємо як є (override не застосовуємо).
+                  // № і дату договору може змінювати лише CEO/власник. Для решти — лишаємо як є (override не застосовуємо).
                   const contractNumberOverride = isCeo
                     ? (contractNumberInput.trim() || null)
                     : (record.contractNumber ?? null);
                   const contractDateOverride = isCeo
                     ? (contractDateInput.trim() || null)
                     : (record.contractDate ?? null);
-                  // Зберігаємо параметри генерації (строки, пролонгація, оплата) + (для СЕО) № і дату.
+                  // Зберігаємо параметри генерації (строки, пролонгація, оплата) + (для CEO) № і дату.
                   // Завдяки цьому вже створений договір потім відкривається одним кліком без модалки.
                   if (record && record.source === "stored" && teamId) {
                     try {

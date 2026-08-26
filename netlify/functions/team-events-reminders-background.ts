@@ -163,10 +163,10 @@ export function resolveAudience(memberships: MembershipRow[], knownProfiles: Tea
     knownProfiles.map((profile) => [`${profile.workspace_id}:${profile.user_id}`, profile])
   );
   const recipientIdsByWorkspace = new Map<string, string[]>();
-  /** owner/SEO — адресати ескалацій по завислих заявках. */
+  /** owner/CEO — адресати ескалацій по завислих заявках. */
   const approverIdsByWorkspace = new Map<string, string[]>();
   const ownerIdsByWorkspace = new Map<string, string[]>();
-  /** Хто сам є SEO/owner — їхні заявки вирішує лише власник. */
+  /** Хто сам є CEO/owner — їхні заявки вирішує лише власник. */
   const privilegedByKey = new Set<string>();
 
   for (const membership of memberships) {
@@ -511,7 +511,7 @@ export const handler = async (event: HttpEvent) => {
         emittedEvents += 1;
 
         // Аудиторія — уся команда, включно з лікарняним. Був період, коли
-        // лікарняний вважали медичною деталлю й слали лише owner/SEO, але це
+        // лікарняний вважали медичною деталлю й слали лише owner/CEO, але це
         // не сходилось: тип відсутності й так видно всім у планері, а без
         // пуша людині ставлять задачу на того, кого сьогодні немає.
         for (const recipientId of workspaceRecipients) {
@@ -533,7 +533,7 @@ export const handler = async (event: HttpEvent) => {
     // --- Ескалація завислих заявок -------------------------------------
     // Заявка, яку ніхто не вирішив, — тихий вбивця self-service: людина не
     // знає, чи купувати квитки, і повертається до «спитаю в лічку». Тому
-    // owner/SEO отримують нагадування раз на день (href містить дату, тож
+    // owner/CEO отримують нагадування раз на день (href містить дату, тож
     // щогодинний cron шле лише перше входження), а заявка, що стартує вже
     // завтра або вже почалась, — маркується терміновою.
     const escalationRows: PendingNotificationRow[] = [];
@@ -550,8 +550,8 @@ export const handler = async (event: HttpEvent) => {
       const submittedQuietly = request.created_at ? isQuietHour(new Date(request.created_at)) : false;
       if (!urgent && !aged && !submittedQuietly) continue;
 
-      // Заявку SEO/власника вирішує лише власник (те саме правило, що в
-      // team-absence-request) — SEO №2 отримав би нагадування без права дії.
+      // Заявку CEO/власника вирішує лише власник (те саме правило, що в
+      // team-absence-request) — CEO №2 отримав би нагадування без права дії.
       const pool = privilegedByKey.has(`${request.workspace_id}:${request.user_id}`)
         ? (ownerIdsByWorkspace.get(request.workspace_id) ?? [])
         : (approverIdsByWorkspace.get(request.workspace_id) ?? []);

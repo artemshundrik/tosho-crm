@@ -93,7 +93,7 @@ export function isDeliverable(member: TeamMemberRow): boolean {
   return status !== "inactive" && status !== "rejected";
 }
 
-/** Фін-ролі: власник/адмін + SEO + бухгалтери — той самий набір, що бачить Фінанси. */
+/** Фін-ролі: власник/адмін + CEO + бухгалтери — той самий набір, що бачить Фінанси. */
 export function isFinanceRole(member: TeamMemberRow): boolean {
   const access = norm(member.accessRole);
   const job = norm(member.jobRole);

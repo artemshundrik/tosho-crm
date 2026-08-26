@@ -24,7 +24,7 @@
 | `src/lib/teamAbsenceQuotas.test.ts` | **Create.** Юніт-тести робочих днів і залишків. |
 | `src/components/team/AbsencePlanner.tsx` | **Create.** Сітка люди×дні (бари, штриховка pending, вихідні/свята, сьогодні). |
 | `src/components/team/MyBalanceCard.tsx` | **Create.** «Мій баланс» — три квоти + сегментована шкала відпустки. |
-| `src/components/team/QuotaEditorDialog.tsx` | **Create.** Редактор річних лімітів (owner/SEO). |
+| `src/components/team/QuotaEditorDialog.tsx` | **Create.** Редактор річних лімітів (owner/CEO). |
 | `src/components/team/AbsenceDialog.tsx` | **Create.** Створення/редагування відсутності з підрахунком робочих днів і залишку. |
 | `src/components/team/TeamMemberCard.tsx` | **Create.** Картка людини; баланси рендеряться лише коли `showBalances`. |
 | `src/pages/TeamPage.tsx` | **Modify.** Вкладки, рольова видимість, дані з журналу. |
@@ -36,9 +36,9 @@
 **Files:** Create `scripts/team-absences-quotas.sql`
 
 - [ ] **Step 1:** Написати міграцію: `alter table tosho.team_absences add column if not exists status text not null default 'approved'` + check(`pending|approved|declined|cancelled`), `requested_by uuid`, `decided_by uuid`, `decided_at timestamptz`, `decision_comment text`; індекс `(workspace_id, status)`.
-- [ ] **Step 2:** `create table if not exists tosho.team_absence_quotas (workspace_id, user_id, year, vacation_days int not null default 18, day_off_days int not null default 6, sick_days int not null default 10, updated_by, updated_at, primary key (workspace_id, user_id, year))`; RLS: select — сам або owner/SEO; write — owner/SEO; grant authenticated; revoke anon.
-- [ ] **Step 3:** `create table if not exists tosho.team_absence_events` (аудит: absence_id, action, actor_user_id, payload jsonb, created_at); RLS select — owner/SEO; insert — service_role.
-- [ ] **Step 4:** RPC `tosho.team_absence_balances(p_year int)` — `security definer`, повертає рядок на людину (user_id, quota+used по трьох типах); усередині: якщо викликач не owner/SEO — повертає лише свій рядок. Робочі дні рахуються з `ua_workday_exceptions` (пн–пт, виняток перебиває).
+- [ ] **Step 2:** `create table if not exists tosho.team_absence_quotas (workspace_id, user_id, year, vacation_days int not null default 18, day_off_days int not null default 6, sick_days int not null default 10, updated_by, updated_at, primary key (workspace_id, user_id, year))`; RLS: select — сам або owner/CEO; write — owner/CEO; grant authenticated; revoke anon.
+- [ ] **Step 3:** `create table if not exists tosho.team_absence_events` (аудит: absence_id, action, actor_user_id, payload jsonb, created_at); RLS select — owner/CEO; insert — service_role.
+- [ ] **Step 4:** RPC `tosho.team_absence_balances(p_year int)` — `security definer`, повертає рядок на людину (user_id, quota+used по трьох типах); усередині: якщо викликач не owner/CEO — повертає лише свій рядок. Робочі дні рахуються з `ua_workday_exceptions` (пн–пт, виняток перебиває).
 - [ ] **Step 5:** Застосувати до прод-БД: `psql "$BACKUP_DB_URL" -f scripts/team-absences-quotas.sql` (креденшели з `.env.backup`).
 - [ ] **Step 6:** Перевірити: `select status, count(*) from tosho.team_absences group by 1` — усі legacy рядки `approved`; `select * from tosho.team_absence_balances(2026)` як owner і як звичайний користувач (симуляція ролі через `set_config('request.jwt.claims', ...)`).
 - [ ] **Step 7:** Commit.
@@ -57,7 +57,7 @@
 **Files:** Modify `src/lib/teamAbsences.ts`; Create `src/lib/teamAbsenceQuotas.ts`, `src/lib/teamAbsenceQuotas.test.ts`
 
 - [ ] **Step 1:** `teamAbsences.ts`: тип `TeamAbsenceStatus`, поле `status` у `TeamAbsence`, у `ABSENCE_COLUMNS`, у мапері; `TEAM_ABSENCE_KIND_TONE: Record<TeamAbsenceKind, Tone>` (vacation→info, sick_leave→warning, day_off→accent, other→neutral) як ЄДИНЕ джерело тону; badge-класи виводяться з нього через `toneBadgeClass`; `listTeamAbsencesForMonth` приймає `statuses` (дефолт approved+pending).
-- [ ] **Step 2:** `teamAbsenceQuotas.ts`: `countBusinessDays(start, end, exceptions)`, `loadWorkdayExceptions(workspaceId, from, to)`, `loadAbsenceBalances(year)` (RPC), `loadQuotas/saveQuota` (owner/SEO), типи `AbsenceBalance`.
+- [ ] **Step 2:** `teamAbsenceQuotas.ts`: `countBusinessDays(start, end, exceptions)`, `loadWorkdayExceptions(workspaceId, from, to)`, `loadAbsenceBalances(year)` (RPC), `loadQuotas/saveQuota` (owner/CEO), типи `AbsenceBalance`.
 - [ ] **Step 3:** Тести: вихідні не рахуються; виняток-календар перебиває; діапазон в один день = 1; залишок = квота − використано.
 - [ ] **Step 4:** `npx vitest run src/lib/teamAbsenceQuotas.test.ts` — PASS. Commit.
 
@@ -79,8 +79,8 @@
 - [ ] **Step 1:** Стан `tab: "people" | "calendar" | "requests"`; сегменти в `topLeft` тулбара з `CountBadge`; фільтри/пошук показуються лише на вкладці «Люди».
 - [ ] **Step 2:** «Хто відсутній сьогодні» рахується з `absences` (approved, що покривають сьогодні), а не з `availabilityStatus`.
 - [ ] **Step 3:** Вкладка «Люди»: `MyBalanceCard` + «Зараз відсутні» + «Події» + стрічка 14 днів (`AbsencePlanner` з `days=14`, тільки відсутні) + сітка карток (`showBalances = isSuperAdmin || isSeo`).
-- [ ] **Step 4:** Вкладка «Календар»: місячний `AbsencePlanner` + легенда + смуга pending (owner/SEO).
-- [ ] **Step 5:** Вкладка «Запити»: свої записи + інбокс pending для owner/SEO (кнопки рішення — заглушені до Фази 2, показують стан).
+- [ ] **Step 4:** Вкладка «Календар»: місячний `AbsencePlanner` + легенда + смуга pending (owner/CEO).
+- [ ] **Step 5:** Вкладка «Запити»: свої записи + інбокс pending для owner/CEO (кнопки рішення — заглушені до Фази 2, показують стан).
 - [ ] **Step 6:** `npx tsc --noEmit` + `npm run lint` — без нових помилок. Commit.
 
 ## Task 6: Верифікація

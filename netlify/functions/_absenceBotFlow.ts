@@ -59,7 +59,7 @@ export function kindMenuScreen(): { text: string; keyboard: InlineKeyboard } {
       "📝 <b>Оформити відсутність</b>",
       "",
       "🤒 Лікарняний — фіксується одразу, без погодження",
-      "🏖 Відпустка · 🌤 Day-off · 🏠 З дому — заявка на рішення SEO",
+      "🏖 Відпустка · 🌤 Day-off · 🏠 З дому — заявка на рішення CEO",
       "",
       "Можна одразу текстом:",
       "<code>лікарняний 05.08–08.08</code>",
@@ -114,7 +114,7 @@ export function presetMenuScreen(kind: AbsenceBotKind): { text: string; keyboard
       text: [
         "🏠 <b>З дому</b> — які дні?",
         "",
-        "Квоту не списує й норму не ріже. Заявка піде на погодження SEO.",
+        "Квоту не списує й норму не ріже. Заявка піде на погодження CEO.",
         "Інші дати — напиши: <code>з дому 06.08–08.08</code>",
       ].join("\n"),
       keyboard: [
@@ -135,7 +135,7 @@ export function presetMenuScreen(kind: AbsenceBotKind): { text: string; keyboard
       text: [
         "🌤 <b>Day-off</b> — який день?",
         "",
-        "Заявка піде на погодження SEO.",
+        "Заявка піде на погодження CEO.",
         "Інша дата — напиши: <code>day-off 15.08</code>",
       ].join("\n"),
       keyboard: [
@@ -153,7 +153,7 @@ export function presetMenuScreen(kind: AbsenceBotKind): { text: string; keyboard
       "🏖 <b>Відпустка</b>",
       "",
       "Напиши діапазон текстом: <code>відпустка 12.08–19.08</code>",
-      "Заявка піде на погодження SEO, рішення прийде сюди.",
+      "Заявка піде на погодження CEO, рішення прийде сюди.",
     ].join("\n"),
     keyboard: [[back]],
   };
@@ -200,7 +200,7 @@ export function confirmScreen(
       "",
       kind === "sick_leave" || instant
         ? "Зафіксується одразу — команда отримає сповіщення."
-        : "Заявка піде на погодження SEO — рішення прийде сюди.",
+        : "Заявка піде на погодження CEO — рішення прийде сюди.",
     ].join("\n"),
     keyboard: [
       [
@@ -365,8 +365,8 @@ export async function submitAbsenceFromBot(params: {
       `📨 <b>Заявку надіслано</b> · ${label(kind).toLowerCase()} ${range}` + (days ? ` · ${days}` : ""),
       "",
       deferred
-        ? "SEO побачить її зранку — рішення прийде сюди."
-        : "SEO отримає сповіщення — рішення прийде сюди.",
+        ? "CEO побачить її зранку — рішення прийде сюди."
+        : "CEO отримає сповіщення — рішення прийде сюди.",
     ].join("\n"),
   };
 }

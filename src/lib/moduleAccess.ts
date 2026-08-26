@@ -132,7 +132,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "finance",
     label: "Фінанси",
     group: "finance",
-    // Дзеркало `tosho.has_finance_access`: власник, SEO і три бухгалтерські
+    // Дзеркало `tosho.has_finance_access`: власник, CEO і три бухгалтерські
     // посади. Галочка тут не важить нічого — вирішує посада.
     roleDecides: (ctx) => hasDefaultFinanceAccess(ctx.accessRole, ctx.jobRole),
   },
@@ -187,7 +187,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     label: "Dev",
     group: "account",
     hint: "Беклог доробок, релізи, здоровʼя системи",
-    // Дошку доробок і релізи база віддає лише власнику й SEO. Без цього
+    // Дошку доробок і релізи база віддає лише власнику й CEO. Без цього
     // обмеження увімкнена галочка привела б людину на порожній екран.
     restrictedTo: ownerOrSeo,
   },
@@ -265,7 +265,7 @@ const ROLE_MENUS: Record<string, ModuleKey[]> = {
 
   // — Бухгалтерія —
   // Усі три бухгалтерські посади мають «Фінанси» (рішення CEO 26.08.2026), але
-  // жодна не має «Виплат команді»: зарплати колег — це власник і SEO.
+  // жодна не має «Виплат команді»: зарплати колег — це власник і CEO.
   junior_accountant: [...ACCOUNTING_MENU, "finance"],
   accountant: [...ACCOUNTING_MENU, "finance"],
   chief_accountant: [...ACCOUNTING_MENU, "finance", "vchasno_send"],
@@ -277,7 +277,7 @@ const ROLE_MENUS: Record<string, ModuleKey[]> = {
   // — Решта —
   // IT тримає ключі до зовнішніх сервісів, але не веде продажі.
   it_specialist: ["overview", "orders", "catalog", "design", "nova_poshta"],
-  // SEO — заступник власника: бачить усе, що йому дозволяє роль.
+  // CEO — заступник власника: бачить усе, що йому дозволяє роль.
   seo: MODULE_KEYS,
 };
 
@@ -436,7 +436,7 @@ export function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: st
 }
 
 /**
- * Виплати команді — ВУЖЧИЙ контур усередині Фінансів: власник і SEO, більше ніхто.
+ * Виплати команді — ВУЖЧИЙ контур усередині Фінансів: власник і CEO, більше ніхто.
  *
  * Бухгалтер веде рахунки, витрати й податки, але не бачить, хто скільки
  * отримує. Це не «фінанси суворіше» — це інше питання й інша відповідь, тому й

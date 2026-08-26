@@ -60,11 +60,14 @@ describe("isQueueCommand", () => {
 });
 
 describe("isOwnerOrSeo — головний гейт черги", () => {
-  it("власник і SEO проходять", () => {
+  it("власник і CEO проходять", () => {
     expect(isOwnerOrSeo({ accessRole: "owner", jobRole: null })).toBe(true);
     expect(isOwnerOrSeo({ accessRole: "member", jobRole: "seo" })).toBe(true);
     // Регістр і краї з бази приходять як є.
     expect(isOwnerOrSeo({ accessRole: " OWNER ", jobRole: null })).toBe(true);
+    // Значення в базі — саме `seo`, у будь-якому регістрі. Підпис ролі в
+    // інтерфейсі каже «CEO», але сюди приходить те, що записано, і плутати
+    // одне з одним не можна.
     expect(isOwnerOrSeo({ accessRole: null, jobRole: "SEO" })).toBe(true);
   });
 

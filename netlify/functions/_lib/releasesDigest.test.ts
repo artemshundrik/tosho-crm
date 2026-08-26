@@ -10,7 +10,7 @@ import {
 import type { ScopedChange } from "../../../src/lib/releaseHistory";
 
 /**
- * Ці рядки йдуть у Telegram власнику й SEO. Помилка не падає — вона просто
+ * Ці рядки йдуть у Telegram власнику й CEO. Помилка не падає — вона просто
  * показує неправильні цифри або, гірше, цифри тому, кому їх слати не мали.
  */
 
@@ -56,7 +56,7 @@ describe("рядок у тех-звіт", () => {
   });
 });
 
-describe("справи для SEO", () => {
+describe("справи для CEO", () => {
   it("до трьох справ, людською, без цифр", () => {
     const bullets = businessReleaseBullets([
       change({ sha: "1", subject: "перша", releasedAt: "2026-08-07T10:00:00+03:00" }),

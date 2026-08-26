@@ -9,17 +9,17 @@ import {
   resolveAccessLevel,
 } from "./assistantAccess";
 
-// Реальні ролі з прода: власник має job_role=seo, обидва СЕО — access_role=admin.
+// Реальні ролі з прода: власник має job_role=seo, обидва CEO — access_role=admin.
 const OWNER = { accessRole: "owner", jobRole: "seo" };
-const SEO = { accessRole: "admin", jobRole: "seo" };
+const CEO = { accessRole: "admin", jobRole: "seo" };
 const MANAGER = { accessRole: "member", jobRole: "manager" };
 const DESIGNER = { accessRole: "member", jobRole: "designer" };
 const ACCOUNTANT = { accessRole: "member", jobRole: "accountant" };
 
 describe("resolveAccessLevel", () => {
-  it("власник і SEO — повний доступ", () => {
+  it("власник і CEO — повний доступ", () => {
     expect(resolveAccessLevel(OWNER)).toBe("full");
-    expect(resolveAccessLevel(SEO)).toBe("full");
+    expect(resolveAccessLevel(CEO)).toBe("full");
   });
 
   it("менеджери й PM — рівень продажів", () => {
@@ -73,7 +73,7 @@ describe("статистика про інших людей", () => {
 
 describe("внутрішня кухня", () => {
   it("стан системи — лише власнику, навіть при повному рівні", () => {
-    // SEO має рівень full, але бекапи й cron його не стосуються.
+    // CEO має рівень full, але бекапи й cron його не стосуються.
     expect(canSeeSystemHealth("full", true)).toBe(true);
     expect(canSeeSystemHealth("full", false)).toBe(false);
     expect(canSeeSystemHealth("sales", false)).toBe(false);

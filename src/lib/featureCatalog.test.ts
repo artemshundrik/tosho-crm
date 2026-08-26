@@ -32,7 +32,7 @@ function ctx(role: { accessRole: string | null; jobRole: string | null }): Featu
 const DESIGNER = ctx({ accessRole: "member", jobRole: "designer" });
 const MANAGER = ctx({ accessRole: "member", jobRole: "manager" });
 const MARKETER = ctx({ accessRole: "member", jobRole: "marketer" });
-const SEO = ctx({ accessRole: "admin", jobRole: "seo" });
+const CEO = ctx({ accessRole: "admin", jobRole: "seo" });
 const OWNER = ctx({ accessRole: "owner", jobRole: "it_specialist" });
 
 // Синтетичні визначення: правило видимості має працювати й для тих
@@ -111,7 +111,7 @@ describe("групування для рейки", () => {
 describe("видимість", () => {
   it("можливості без модуля бачать усі ролі", () => {
     for (const def of FEATURE_DEFINITIONS.filter((item) => item.moduleKey === null)) {
-      for (const viewer of [DESIGNER, MANAGER, MARKETER, SEO, OWNER]) {
+      for (const viewer of [DESIGNER, MANAGER, MARKETER, CEO, OWNER]) {
         expect(isFeatureVisible(def, viewer), `${def.key} / ${viewer.jobRole}`).toBe(true);
       }
     }
@@ -150,7 +150,7 @@ describe("видимість", () => {
 
   it("модуль із доступом показує можливість", () => {
     expect(isFeatureVisible(GALLERY, MARKETER)).toBe(true);
-    expect(isFeatureVisible(GALLERY, SEO)).toBe(true);
+    expect(isFeatureVisible(GALLERY, CEO)).toBe(true);
   });
 
   it("jobRoles звужує всередині модуля", () => {
@@ -160,10 +160,10 @@ describe("видимість", () => {
     expect(isFeatureVisible(TIMER, MANAGER)).toBe(false);
   });
 
-  it("власник і SEO бачать усе — це задум, а не діра в правах", () => {
+  it("власник і CEO бачать усе — це задум, а не діра в правах", () => {
     for (const def of [GALLERY, TIMER]) {
       expect(isFeatureVisible(def, OWNER), def.key).toBe(true);
-      expect(isFeatureVisible(def, SEO), def.key).toBe(true);
+      expect(isFeatureVisible(def, CEO), def.key).toBe(true);
     }
   });
 

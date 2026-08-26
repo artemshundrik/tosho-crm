@@ -110,7 +110,7 @@ describe("permissionsForViewAs", () => {
   });
 
   it("не додає вміння, якого немає у справжніх правах", () => {
-    // SEO не редагує ролі учасників; приміряна посада не має цього змінити.
+    // CEO не редагує ролі учасників; приміряна посада не має цього змінити.
     expect(seo.canEditMemberRoles).toBe(false);
     const seoAsOwner = permissionsForViewAs(seo, owner);
     expect(seoAsOwner.canEditMemberRoles).toBe(false);

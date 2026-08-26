@@ -103,7 +103,7 @@ export function auditValueLabel(field: string, value: unknown): string {
     case "module_key":
       return moduleKeyLabel(value) ?? String(value);
     case "is_private":
-      return value ? "лише власник і СЕО" : "вся команда";
+      return value ? "лише власник і CEO" : "вся команда";
     case "auto_classified":
       return value ? "ні, поставив агент" : "так, підтверджено людиною";
     case "zone":

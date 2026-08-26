@@ -3,7 +3,7 @@
 -- Навіщо: досі ці два числа були КОНСТАНТАМИ В КОДІ, ще й продубльованими у
 -- двох файлах (QuotesPage.tsx і QuoteDetailsPage.tsx). Щоб змінити ставку,
 -- потрібен був деплой, а якби хтось поправив лише один файл — прорахунки з
--- різних екранів рахувались би по-різному. Рішення СЕО 18.08: винести в
+-- різних екранів рахувались би по-різному. Рішення CEO 18.08: винести в
 -- налаштування, щоб міняти самому.
 --
 -- Ставка МЕНЕДЖЕРА сюди НЕ переїжджає: вона персональна й живе в
@@ -18,7 +18,7 @@ create table if not exists tosho.company_pricing_rates (
   updated_by uuid
 );
 
--- Історія: СЕО просив бачити, «що було в той день/час» — хто поставив, коли,
+-- Історія: CEO просив бачити, «що було в той день/час» — хто поставив, коли,
 -- і з чого на що. Веде ТРИГЕР, а не клієнт: запис, який залежить від того, чи
 -- не забув про нього фронт, історією не є.
 create table if not exists tosho.company_pricing_rate_changes (
@@ -72,7 +72,7 @@ create trigger company_pricing_rates_audit
 alter table tosho.company_pricing_rates enable row level security;
 alter table tosho.company_pricing_rate_changes enable row level security;
 
--- ЧИТАТИ ставки має ВСЯ команда, не лише СЕО: ціна рахується на клієнті, і
+-- ЧИТАТИ ставки має ВСЯ команда, не лише CEO: ціна рахується на клієнті, і
 -- якщо менеджер не побачить рядка, він мовчки впаде на дефолти — той самий
 -- прорахунок показував би різні ціни різним людям.
 drop policy if exists company_pricing_rates_select on tosho.company_pricing_rates;
@@ -85,7 +85,7 @@ create policy company_pricing_rates_select on tosho.company_pricing_rates
     )
   );
 
--- МІНЯТИ — власник або СЕО. Той самий набір, що вирішує персональні ставки.
+-- МІНЯТИ — власник або CEO. Той самий набір, що вирішує персональні ставки.
 drop policy if exists company_pricing_rates_insert on tosho.company_pricing_rates;
 create policy company_pricing_rates_insert on tosho.company_pricing_rates
   for insert with check (

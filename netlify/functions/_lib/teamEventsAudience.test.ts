@@ -64,7 +64,7 @@ describe("resolveAudience", () => {
     expect(recipientIdsByWorkspace.get(WS)).toContain("fired-vika");
   });
 
-  it("погоджувачі — власник і SEO, і обидва позначені привілейованими", () => {
+  it("погоджувачі — власник і CEO, і обидва позначені привілейованими", () => {
     const { approverIdsByWorkspace, ownerIdsByWorkspace, privilegedByKey } = resolveAudience(
       memberships,
       knownProfiles
@@ -76,7 +76,7 @@ describe("resolveAudience", () => {
     expect(privilegedByKey.has(`${WS}:pm-tanya`)).toBe(false);
   });
 
-  it("звільнений SEO не лишається погоджувачем заявок", () => {
+  it("звільнений CEO не лишається погоджувачем заявок", () => {
     const withFiredSeo = [...memberships, { workspace_id: WS, user_id: "fired-seo", access_role: "member", job_role: "seo" }];
     const withFiredSeoProfile = [...knownProfiles, { workspace_id: WS, user_id: "fired-seo", employment_status: "inactive" }];
 

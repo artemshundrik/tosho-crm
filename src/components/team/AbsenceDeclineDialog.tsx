@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 /**
  * Відмова по заявці з причиною.
  *
- * Причину бачить лише заявник і owner/SEO — колонку `decision_comment` знято
+ * Причину бачить лише заявник і owner/CEO — колонку `decision_comment` знято
  * з загального select, тож текст не «витікає» решті команди
  * (scripts/team-absences-selfservice.sql).
  */

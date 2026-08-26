@@ -169,7 +169,7 @@ Checklist:
 - keep sample stock separate from catalog products used for quote configuration
 - preserve `team_id` scoping and RLS on item and movement rows
 - prefer movement RPC changes for quantity/reserve adjustments so the audit log stays complete
-- keep route access aligned with the dedicated `stock` module key; its default access is enabled for Super Admin and SEO, disabled for other roles unless explicitly toggled
+- keep route access aligned with the dedicated `stock` module key; its default access is enabled for Super Admin and CEO, disabled for other roles unless explicitly toggled
 
 ## 8. Permissions / Membership / Module Access Change
 

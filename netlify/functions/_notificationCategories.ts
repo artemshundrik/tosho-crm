@@ -66,7 +66,7 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
       return isPrivileged;
     case "design":
       return isQuoteWorker || isDesigner;
-    // Нові прорахунки: власник, адміністратор, SEO і PM
+    // Нові прорахунки: власник, адміністратор, CEO і PM
     // (див. src/lib/notificationCategories.ts — тримати синхронно).
     case "quote_created":
       return isPrivileged || job === "pm";

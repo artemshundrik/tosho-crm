@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Зробити безпечним додавання Telegram-бота в робочу групу й дати Артему та СЕО працюючу дошку запитів `/dev-requests`, де картку можна завести руками.
+**Goal:** Зробити безпечним додавання Telegram-бота в робочу групу й дати Артему та CEO працюючу дошку запитів `/dev-requests`, де картку можна завести руками.
 
-**Architecture:** Частина А чинить Telegram-вебхук так, щоб груповий чат не отримував нічого й не псував персональних зв'язок, і вводить `telegram_user_id` як справжній ключ людини (сьогодні ключ — `chat_id`, який у групі не збігається з `from.id`). Частина Б додає таблицю `tosho.dev_requests` із власною нумерацією поверх наявного `document_counters`, RLS із приватними картками для owner/SEO, і сторінку-канбан за патерном `/releases` (гейт у сторінці, без ключа модуля — `hasModuleAccess` вважає незаписаний ключ дозволеним).
+**Architecture:** Частина А чинить Telegram-вебхук так, щоб груповий чат не отримував нічого й не псував персональних зв'язок, і вводить `telegram_user_id` як справжній ключ людини (сьогодні ключ — `chat_id`, який у групі не збігається з `from.id`). Частина Б додає таблицю `tosho.dev_requests` із власною нумерацією поверх наявного `document_counters`, RLS із приватними картками для owner/CEO, і сторінку-канбан за патерном `/releases` (гейт у сторінці, без ключа модуля — `hasModuleAccess` вважає незаписаний ключ дозволеним).
 
 **Tech Stack:** TypeScript, Netlify Functions, Supabase (схема `tosho`), React + React Query, Tailwind v4, vitest.
 
@@ -62,7 +62,7 @@
 | `src/features/devRequests/queries.ts` | React Query: ключі, читання дошки, мутації створення й зміни статусу. |
 | `src/features/devRequests/DevRequestBoard.tsx` | Канбан: колонки, DnD, картка. |
 | `src/features/devRequests/NewDevRequestDialog.tsx` | Вікно «Новий запит». |
-| `src/pages/DevRequestsPage.tsx` | Сторінка: гейт owner/SEO, тулбар, монтування дошки. |
+| `src/pages/DevRequestsPage.tsx` | Сторінка: гейт owner/CEO, тулбар, монтування дошки. |
 
 **Змінюємо:**
 
@@ -616,7 +616,7 @@ git commit -m "feat(telegram): бот уміє відповідати в нит�
 
 begin;
 
--- Спільний предикат «власник або SEO».
+-- Спільний предикат «власник або CEO».
 --
 -- Де-факто цю роль уже грає tosho.can_read_all_feature_adoption() — її навіть
 -- переюзали в product-updates-schema.sql. Але назва бреше про призначення,
@@ -661,7 +661,7 @@ create table if not exists tosho.dev_requests (
   body           text,
   kind           text        not null default 'friction',
   status         text        not null default 'triage',
-  /** Приватна картка: видно лише власнику й SEO. */
+  /** Приватна картка: видно лише власнику й CEO. */
   is_private     boolean     not null default false,
   /** Автор у CRM. null — автор написав із Telegram і бота ще не підключив. */
   author_user_id uuid,
@@ -732,7 +732,7 @@ drop policy if exists dev_requests_privileged_read on tosho.dev_requests;
 create policy dev_requests_privileged_read on tosho.dev_requests
   for select using (tosho.is_owner_or_seo());
 
--- Заводити картку може будь-хто зі своєї команди; приватну — лише owner/SEO.
+-- Заводити картку може будь-хто зі своєї команди; приватну — лише owner/CEO.
 drop policy if exists dev_requests_insert on tosho.dev_requests;
 create policy dev_requests_insert on tosho.dev_requests
   for insert with check (
@@ -740,7 +740,7 @@ create policy dev_requests_insert on tosho.dev_requests
     and (not is_private or tosho.is_owner_or_seo())
   );
 
--- Рухати картку по дошці — лише owner/SEO: це рішення про чергу робіт.
+-- Рухати картку по дошці — лише owner/CEO: це рішення про чергу робіт.
 drop policy if exists dev_requests_update on tosho.dev_requests;
 create policy dev_requests_update on tosho.dev_requests
   for update using (tosho.is_owner_or_seo())
@@ -1478,7 +1478,7 @@ export function NewDevRequestDialog({
             <div>
               <p className="text-sm font-medium">Закрита картка</p>
               <p className="text-xs text-muted-foreground">
-                Видно лише власнику й СЕО. Для задумів, про які команді знати зарано.
+                Видно лише власнику й CEO. Для задумів, про які команді знати зарано.
               </p>
             </div>
             <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
@@ -1721,7 +1721,7 @@ const DevRequestsPage = lazy(() => import("./pages/DevRequestsPage"));
 
 **`moduleKey` тут навмисно немає.** Реєстр доступів для приватного розділу — пастка: `hasModuleAccess` вважає незаписаний ключ дозволеним, тож у людей зі старим JSON пункт відкрився б сам. Видимість натомість задаємо явною гілкою фільтра — наступний крок.
 
-- [ ] **Step 4: Показувати пункт лише власнику й СЕО**
+- [ ] **Step 4: Показувати пункт лише власнику й CEO**
 
 Пункт без `moduleKey` фільтр пропускає ВСІМ (`if (!link.moduleKey) return true;`, рядок ~826) — тобто без цього кроку «Запити» побачать усі 17 людей. Додати гілку одразу після перевірки `observability` (рядок ~825), за тим самим зразком:
 
@@ -2292,11 +2292,11 @@ git log --oneline @{u}..HEAD | cat
 
 ## Definition of Done цього раунду
 
-- `/dev-requests` відкривається у власника й СЕО, менеджера редиректить на `/whats-new`.
+- `/dev-requests` відкривається у власника й CEO, менеджера редиректить на `/whats-new`.
 - **Можна натиснути «Розказати голосом», надиктувати задачу своїми словами — і отримати заповнені назву, опис і тип.** Якщо схоже на наявну картку, вікно про це попереджає.
 - Якщо розбір надиктованого впав — текст не губиться, він лягає в опис як є.
 - Картку можна створити з дошки, вона отримує номер `REQ-N`, її можна перетягнути між колонками.
-- Закриту картку не видно нікому, крім власника й СЕО — доведено запитом від імені менеджера.
+- Закриту картку не видно нікому, крім власника й CEO — доведено запитом від імені менеджера.
 - Панель обговорення працює і в дизайн-задачі (не зламали), і в картці запиту.
 
 **Не входить у цей раунд:** Telegram (задачі 1–5). Бота в групу поки не додаємо.

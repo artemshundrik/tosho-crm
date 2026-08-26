@@ -18,7 +18,7 @@ import { DEFAULT_ABSENCE_QUOTAS } from "@/lib/teamAbsenceCalendar";
 import { listAbsenceQuotas, saveAbsenceQuota } from "@/lib/teamAbsenceQuotas";
 
 /**
- * Редактор річних квот. Owner/SEO only — RLS на team_absence_quotas все одно
+ * Редактор річних квот. Owner/CEO only — RLS на team_absence_quotas все одно
  * відхилить чужий запис, але кнопку показуємо лише тим, хто має право.
  *
  * Рядка в БД може не бути: тоді людина на дефолтах 18/6/10, і ми пишемо рядок

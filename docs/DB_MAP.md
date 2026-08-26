@@ -179,21 +179,21 @@ Practical implication:
     і для календаря, і для норм дизайнерів**. Норму й квоту ріжуть ЛИШЕ `approved`
     (`src/lib/designerPayroll.ts` фільтрує явно; знімеш фільтр — pending почне
     тихо зменшувати зарплатні нормо-дні)
-  - RLS: читає будь-який учасник воркспейсу, пише owner/SEO
+  - RLS: читає будь-який учасник воркспейсу, пише owner/CEO
   - «хто зараз відсутній» на `/team` виводиться звідси, а не з
     `team_member_profiles.availability_status`
 
 - `team_absence_quotas`
   - річні ліміти на людину в РОБОЧИХ днях; рядка може не бути — тоді діють
     дефолти 18 / 6 / 10 (`src/lib/teamAbsenceCalendar.ts`)
-  - RLS: свій рядок бачить кожен, усі — лише owner/SEO; пише owner/SEO
+  - RLS: свій рядок бачить кожен, усі — лише owner/CEO; пише owner/CEO
 
 - `team_absence_events`
   - слід рішень по відсутностях; пише лише service-role функція
 
 - RPC `team_absence_balances(p_year int)`
   - `security definer`; повертає квоту/використано по трьох типах
-  - **гейт приватності залишків**: не-owner/SEO отримує рівно один рядок — свій
+  - **гейт приватності залишків**: не-owner/CEO отримує рівно один рядок — свій
   - «використано» = унікальні робочі дні approved-записів за рік, з урахуванням
     `ua_workday_exceptions`
 
@@ -285,7 +285,7 @@ Practical implication:
     `stack-versions`), read by Dev → Стек and by the nightly system digest
   - installed versions are NOT here — they live in the committed snapshot
     `src/data/stackSnapshot.generated.ts`
-  - RLS: owner/SEO only, via `tosho.can_read_all_feature_adoption()`
+  - RLS: owner/CEO only, via `tosho.can_read_all_feature_adoption()`
   - tracked schema in [scripts/stack-schema.sql](/Users/artem/Projects/tosho-crm/scripts/stack-schema.sql)
 
 ## Trigger-Filled Columns (types gotcha)
@@ -318,7 +318,7 @@ generator refuses the marker if the table has no `BEFORE INSERT` trigger at all.
 - `tosho.get_stack_platform()`
   - Postgres version, `tosho` table/function counts, active cron count, database
     and storage size for the Dev → Стек footnote; SECURITY DEFINER because the
-    numbers live in system catalogs, gated by the owner/SEO predicate inside
+    numbers live in system catalogs, gated by the owner/CEO predicate inside
 
 - `public.assert_quote_lock_from_quote_id()`
   - quote lock helper

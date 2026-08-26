@@ -553,7 +553,7 @@ export function NewDevRequestDialog({
             <div className="min-w-0">
               <div className="text-sm font-medium text-foreground">Закрита картка</div>
               <div className="text-xs text-muted-foreground">
-                Видно лише власнику й СЕО. Для задумів, про які команді знати зарано.
+                Видно лише власнику й CEO. Для задумів, про які команді знати зарано.
               </div>
             </div>
             <Switch

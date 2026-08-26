@@ -172,7 +172,7 @@ export function buildCardMeta(request: DevRequest, options: CardMetaOptions = {}
       key: "private",
       label: "закрита",
       weight: "normal",
-      hint: "Видно лише власнику й СЕО",
+      hint: "Видно лише власнику й CEO",
     });
   }
 

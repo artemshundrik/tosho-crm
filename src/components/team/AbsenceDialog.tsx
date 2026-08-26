@@ -142,7 +142,7 @@ export function AbsenceDialog({
   holidayNames?: Map<string, string>;
   saving?: boolean;
   editing?: boolean;
-  /** `request` — співробітник просить за себе; `manage` — owner/SEO вносить факт. */
+  /** `request` — співробітник просить за себе; `manage` — owner/CEO вносить факт. */
   mode?: "manage" | "request";
   approverLabel?: string;
   todayKey?: string;
@@ -198,7 +198,7 @@ export function AbsenceDialog({
 
   const isRequest = mode === "request";
   // «Інше» — керований тип (відрядження, форс-мажор), його вносить лише
-  // owner/SEO, тож у режимі заявки він зі списку зникає.
+  // owner/CEO, тож у режимі заявки він зі списку зникає.
   const kindOptions = isRequest
     ? TEAM_ABSENCE_KIND_OPTIONS.filter((option) => option.value !== "other")
     : TEAM_ABSENCE_KIND_OPTIONS;

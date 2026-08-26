@@ -11,7 +11,7 @@ Radically redesign the team-access page so that:
 
 1. The tall decorative header ("the things at the top") is gone — replaced by a single working toolbar.
 2. Every existing feature survives (hard requirement — see acceptance checklist).
-3. New activity/time analytics ("Пульс команди") live **inside this page as a tab**, visible only to owner + SEO — NOT in `/admin/observability` (that stays the developer's technical space).
+3. New activity/time analytics ("Пульс команди") live **inside this page as a tab**, visible only to owner + CEO — NOT in `/admin/observability` (that stays the developer's technical space).
 4. A real per-user **change history** (audit trail) is captured at the DB level and surfaced on each person's card.
 
 ## Non-goals
@@ -26,7 +26,7 @@ Two distinct spaces, not two doors to one page:
 
 - **`/admin/observability`** — unchanged. `isSuperAdmin || isAdmin`. Developer/technical: backups, storage, AI cost.
 - **`/settings/members`** — the team page. Opening it: unchanged (`canEditMemberRoles || moduleAccess.team`).
-  - **New "Пульс" tab** visibility = `isSuperAdmin || job_role === "seo"` (owner + SEO only; plain admins do not see it).
+  - **New "Пульс" tab** visibility = `isSuperAdmin || job_role === "seo"` (owner + CEO only; plain admins do not see it).
   - New module key **`pulse`** added alongside `finance`/`marketing` in `normalizeModuleAccess` + defaults (`hasDefaultPulseAccess` = owner/seo). Lets the CEO grant the Пульс tab to one more person later without code.
   - Backend RPC `get_team_pulse_summary` re-checks owner/seo server-side (frontend gate is decoration otherwise), mirroring `get_ai_usage_summary`'s owner/admin check.
 
@@ -103,7 +103,7 @@ Members: 7-col table data, presence dot, quick availability change (with vacatio
 Profile card: personal data, manager % (SEO-editable), manager linkage, start date, probation end + "+1 month", 12 module checkboxes, forced/disabled module rules, probation decisions, employment deactivate/reactivate, read-only mode for non-managers.
 Invites: create (email+access+job, 7-day link), list with statuses, copy link, revoke.
 Activity: 24h/7d/30d ranges over `activity_log` (kept as the event-feed block inside Пульс/Активність).
-Permissions: owner=all; admin=all except editing owner/self-guards; SEO=view + manager % + probation decisions (+ new: Пульс tab); team-module member=view.
+Permissions: owner=all; admin=all except editing owner/self-guards; CEO=view + manager % + probation decisions (+ new: Пульс tab); team-module member=view.
 Plumbing: `?member=` deep link, `?tab=`, page cache, mobile card layouts, all Netlify-function fallbacks (`create-workspace-invite` update modes, `team-member-probation`, `team-member-employment`).
 Sibling: `settings/nova-poshta` untouched, same route gate.
 

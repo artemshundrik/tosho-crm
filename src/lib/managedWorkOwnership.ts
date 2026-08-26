@@ -11,7 +11,7 @@ type ManagedWorkProbeArgs = {
  *
  * Both surfaces (QuotesPage, DesignPage) default their manager filter to «себе»
  * when this is true. It deliberately spans BOTH entities: someone who manages
- * only designs (typical for SEO) must still land on «себе» in прорахунки, and
+ * only designs (typical for CEO) must still land on «себе» in прорахунки, and
  * vice versa. Probing a single entity per page is what kept regressing.
  *
  * Uses `head: true` COUNT probes so the answer is pagination-proof — scanning the

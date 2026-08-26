@@ -1,6 +1,6 @@
 -- Аудит змін бажаного заробітку в тиражах прорахунку.
 --
--- СЕО 19.08 просив, серед іншого, бачити «хто щось змінював по заробітку».
+-- CEO 19.08 просив, серед іншого, бачити «хто щось змінював по заробітку».
 -- Це поле визначає ВСЮ націнку: з нього виводяться і прибуток, і постійні
 -- витрати, і податковий резерв. Тобто одна правка тут міняє ціну для клієнта,
 -- а сліду не лишалось.
@@ -88,7 +88,7 @@ create trigger quote_item_runs_income_audit
 
 alter table tosho.quote_run_income_changes enable row level security;
 
--- Читають ті, кому СЕО відкрив економіку: власник, СЕО, бухгалтери. Менеджер
+-- Читають ті, кому CEO відкрив економіку: власник, CEO, бухгалтери. Менеджер
 -- вкладки «Економіка» не бачить, тож і аудиту заробітку бачити не має.
 drop policy if exists quote_run_income_changes_select on tosho.quote_run_income_changes;
 create policy quote_run_income_changes_select on tosho.quote_run_income_changes

@@ -136,7 +136,7 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(500, { error: actorMembershipError.message });
   }
   if (!canReviewProbation(actorMembership)) {
-    return jsonResponse(403, { error: "Only owner, admin or SEO can review probation" });
+    return jsonResponse(403, { error: "Only owner, admin or CEO can review probation" });
   }
 
   const { data: targetProfile, error: targetProfileError } = await adminClient

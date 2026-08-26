@@ -44,7 +44,7 @@
 - **`metadata->>'quote_id'` не завжди uuid**: у самостійних задач воно має вигляд `standalone-<uuid>`. Ключ нитки будуємо як текст **без приведення до uuid** — інакше `::uuid` кине помилку.
 - **Realtime уже піднято** в [AppLayout.tsx:1499](../src/layout/AppLayout.tsx) на `public.notifications` і `public.activity_log` (фільтр за `team_id`), з тумблером `realtimeDisabled`. Патерн перевірений — переюзуємо.
 - **`src/components/ui/sheet.tsx`** уже є — примітив шторки не пишемо з нуля.
-- **`tosho.has_finance_access(_team_id uuid)`** — [scripts/finances-access-rls.sql:11](../scripts/finances-access-rls.sql), `security definer`, доступ мають owner / SEO / бухгалтери. Це готовий гейт для «внутрішніх».
+- **`tosho.has_finance_access(_team_id uuid)`** — [scripts/finances-access-rls.sql:11](../scripts/finances-access-rls.sql), `security definer`, доступ мають owner / CEO / бухгалтери. Це готовий гейт для «внутрішніх».
 - **Ключ модуля доступу — `finance`** ([src/lib/moduleAccess.ts:98](../src/lib/moduleAccess.ts)).
 - **Вбудувати живий Telegram у CRM неможливо**: `web.telegram.org` віддає `x-frame-options: deny`, `t.me` дозволяє `frame-ancestors` лише самому Телеграму. Зафіксовано, щоб не переобговорювати. Єдина легальна альтернатива — власне вікно поверх мосту (фази B–D) або Mini App (фаза E).
 

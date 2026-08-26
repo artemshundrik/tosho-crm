@@ -152,7 +152,7 @@ export function ChecklistPanel({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-1.5">
                       {/* Знак питання лише поза групами. Усередині «Чекаємо на
-                          СЕО» він дублює заголовок, і дві іконки поспіль
+                          CEO» він дублює заголовок, і дві іконки поспіль
                           зливаються в одну кляксу, з якої не читається жодна. */}
                       {item.kind === "question" && !item.group ? (
                         <QUESTION_ICON className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning-foreground" />
@@ -189,7 +189,7 @@ export function ChecklistPanel({
                           onChange={(event) => patch(item.id, { who: event.target.value || null })}
                           placeholder="на кого"
                           // Ширина рівно по слову. Був мінімум у 7 символів, і
-                          // під «СЕО» тягнувся пунктир удвічі довший за саме
+                          // під «CEO» тягнувся пунктир удвічі довший за саме
                           // слово — саме він і виглядав недоладно.
                           size={Math.max(3, (item.who ?? "на кого").length)}
                           className={cn(

@@ -141,10 +141,10 @@ type AbsencePlannerProps = {
   holidayNames?: Map<string, string>;
   todayKey: string;
   currentUserId?: string | null;
-  /** Може створювати відсутність будь-кому (owner/SEO). Решта — лише собі. */
+  /** Може створювати відсутність будь-кому (owner/CEO). Решта — лише собі. */
   canPickForOthers?: boolean;
   onPickDay?: (userId: string, dateKey: string) => void;
-  /** Клік по бару — відкрити саму відсутність (редагування для owner/SEO). */
+  /** Клік по бару — відкрити саму відсутність (редагування для owner/CEO). */
   onOpenAbsence?: (absence: TeamAbsence) => void;
   emptyLabel?: string;
 };
@@ -369,7 +369,7 @@ function AbsencePlannerImpl({
 
                 // Бар лежить ПОВЕРХ клітинок, тож без власного обробника він
                 // просто з'їдав кліки: людина тицяла в пігулку, а нічого не
-                // відбувалось. Owner/SEO відкриває запис, решта — потрапляє
+                // відбувалось. Owner/CEO відкриває запис, решта — потрапляє
                 // туди ж, куди й клік по вільному дню під баром.
                 const handleClick = onOpenAbsence
                   ? () => onOpenAbsence(segment.absence)

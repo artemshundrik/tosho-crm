@@ -79,7 +79,10 @@ export function KanbanCard({
       className={cn(
         // `.kanban-estimate-card` (index.css) дає плаский фон картки; градієнт
         // із `surface="raised"` лягає поверх як background-image і не конфліктує.
-        "kanban-estimate-card rounded-2xl border border-border/60",
+        // `relative` — точка відліку для позначки «хто зараз у картці»:
+        // вона лежить накладкою в кутку й не бере участі в потоці, тож не може
+        // змінити висоту картки (REQ-164).
+        "kanban-estimate-card relative rounded-2xl border border-border/60",
         // Перелік властивостей поіменно, не `transition-all`: `all` возить і
         // відступи, через що картка «розгортається» після появи (та сама
         // причина, що в CONTROL_BASE). Opacity тут тому, що ним показують

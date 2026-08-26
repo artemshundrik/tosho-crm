@@ -114,7 +114,7 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   const isPrivileged = access === "owner" || access === "admin" || job === "seo";
   const isQuoteWorker = isPrivileged || QUOTE_JOB_ROLES.includes(job);
   const isDesigner = job === "designer" || job === "дизайнер";
-  // Фінанси — власник + SEO + бухгалтери (той самий набір, що має доступ до Фінансів).
+  // Фінанси — власник + CEO + бухгалтери (той самий набір, що має доступ до Фінансів).
   const isFinance = access === "owner" || access === "admin" || ["seo", "accountant", "chief_accountant"].includes(job);
   switch (key) {
     // Універсальні / персональні — бачать усі.
@@ -128,17 +128,17 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     case "finance_month_close":
       return isFinance;
     // Системний дайджест — лише власник. Свідомо вужче за доступ до
-    // Observability: у команді решта «адмінів» — це SEO, і щоденна технічна
+    // Observability: у команді решта «адмінів» — це CEO, і щоденна технічна
     // зведення їм лише шум (бізнес-дайджест вони отримують окремо).
     case "admin_digest":
       return access === "owner";
-    // Бізнес-дайджест — власник/адмін + SEO.
+    // Бізнес-дайджест — власник/адмін + CEO.
     case "business_digest":
       return isPrivileged;
     // Дизайн-задачі — дизайнери + ті, хто з прорахунками/дизайном.
     case "design":
       return isQuoteWorker || isDesigner;
-    // Власник, адміністратор, SEO і проєктний менеджер. Менеджера-автора тут
+    // Власник, адміністратор, CEO і проєктний менеджер. Менеджера-автора тут
     // свідомо немає: він і так знає, що щойно завів прорахунок.
     case "quote_created":
       return isPrivileged || job === "pm";

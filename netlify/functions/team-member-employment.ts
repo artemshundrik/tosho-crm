@@ -106,7 +106,7 @@ export const handler = async (event: HttpEvent) => {
 
   if (actorMembershipError) return jsonResponse(500, { error: actorMembershipError.message });
   if (!canManageEmployment(actorMembership)) {
-    return jsonResponse(403, { error: "Only owner, admin or SEO can update employment status" });
+    return jsonResponse(403, { error: "Only owner, admin or CEO can update employment status" });
   }
 
   const { data: targetProfile, error: targetProfileError } = await adminClient

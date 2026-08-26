@@ -20,7 +20,7 @@ import {
 
 const DESIGNER = { accessRole: "member", jobRole: "designer" };
 const OWNER = { accessRole: "owner", jobRole: "it_specialist" };
-const SEO = { accessRole: "admin", jobRole: "seo" };
+const CEO = { accessRole: "admin", jobRole: "seo" };
 
 describe("успадкування зі старих ключів", () => {
   it("розділені «замовлення» успадковують доступ зі спільного ключа", () => {
@@ -58,9 +58,9 @@ describe("«Команда» вимкненню не підлягає", () => {
 });
 
 describe("«Ролі та доступи» лишаються в тих самих руках", () => {
-  it("дає доступ власнику і SEO, але не рядовому учаснику", () => {
+  it("дає доступ власнику і CEO, але не рядовому учаснику", () => {
     expect(defaultModuleAccess(OWNER).members_access).toBe(true);
-    expect(defaultModuleAccess(SEO).members_access).toBe(true);
+    expect(defaultModuleAccess(CEO).members_access).toBe(true);
     expect(defaultModuleAccess(DESIGNER).members_access).toBe(false);
   });
 
@@ -77,7 +77,7 @@ describe("«Ролі та доступи» лишаються в тих сами
  * потрапила б не на «немає доступу», а на порожній екран.
  */
 describe("обмежені модулі (restrictedTo)", () => {
-  it("дефолтом дає доступ власнику й SEO", () => {
+  it("дефолтом дає доступ власнику й CEO", () => {
     expect(defaultModuleAccess({ accessRole: "owner" }).dev).toBe(true);
     expect(defaultModuleAccess({ accessRole: "member", jobRole: "seo" }).dev).toBe(true);
   });
@@ -235,7 +235,7 @@ describe("цілісність реєстру", () => {
  * хоча на «Ролях і доступах» перемикач стоїть увімкненим і заблокованим.
  */
 describe("доступ до Фінансів за роллю", () => {
-  it("бухгалтер, головбух, SEO і власник мають фінанси за роллю", () => {
+  it("бухгалтер, головбух, CEO і власник мають фінанси за роллю", () => {
     expect(hasDefaultFinanceAccess("member", "accountant")).toBe(true);
     expect(hasDefaultFinanceAccess("member", "chief_accountant")).toBe(true);
     expect(hasDefaultFinanceAccess("admin", "seo")).toBe(true);
@@ -258,11 +258,11 @@ describe("доступ до Фінансів за роллю", () => {
 });
 
 /**
- * Виплати команді — вужчий контур усередині Фінансів: власник і SEO.
+ * Виплати команді — вужчий контур усередині Фінансів: власник і CEO.
  * Дзеркало `tosho.has_payroll_access` і політик `tosho.payroll_entries`.
  */
 describe("доступ до «Виплат команді»", () => {
-  it("власник і SEO — так", () => {
+  it("власник і CEO — так", () => {
     expect(hasPayrollAccess("owner", "it_specialist")).toBe(true);
     expect(hasPayrollAccess("admin", "seo")).toBe(true);
   });
@@ -333,7 +333,7 @@ describe("видимість пункту меню", () => {
 describe("що написано біля перемикача", () => {
   const ACCOUNTANT = { accessRole: "member", jobRole: "accountant" };
   const MANAGER = { accessRole: "member", jobRole: "manager" };
-  const SEO = { accessRole: "admin", jobRole: "seo" };
+  const CEO = { accessRole: "admin", jobRole: "seo" };
   const OWNER = { accessRole: "owner", jobRole: "it_specialist" };
 
   it("«Фінанси» бухгалтеру: увімкнено, заблоковано, і сказано чому", () => {
@@ -353,9 +353,9 @@ describe("що написано біля перемикача", () => {
     expect(lock.reason).toContain("закриті в самій базі");
   });
 
-  it("«Виплати команді» видно окремим рядком і закрито всім, крім власника й SEO", () => {
+  it("«Виплати команді» видно окремим рядком і закрито всім, крім власника й CEO", () => {
     expect(describeModuleLock("payroll", {}, OWNER)).toMatchObject({ checked: true, locked: true });
-    expect(describeModuleLock("payroll", {}, SEO)).toMatchObject({ checked: true, locked: true });
+    expect(describeModuleLock("payroll", {}, CEO)).toMatchObject({ checked: true, locked: true });
     for (const ctx of [
       ACCOUNTANT,
       { accessRole: "member", jobRole: "junior_accountant" },

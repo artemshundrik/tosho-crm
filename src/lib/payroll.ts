@@ -3,7 +3,7 @@ import { pickRateForMonth } from "@/lib/designerPayrollMath";
 
 // Payroll sheet (зарплатна відомість) data access.
 // One entry = one employee's pay for one month: ставка + премія − утримання.
-// Backed by tosho.payroll_entries (see scripts/payroll-entries.sql). Owner/SEO only via RLS.
+// Backed by tosho.payroll_entries (see scripts/payroll-entries.sql). Owner/CEO only via RLS.
 
 export type PayrollEntry = {
   userId: string;

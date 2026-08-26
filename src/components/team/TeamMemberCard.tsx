@@ -22,7 +22,7 @@ import type { AvatarAbsence } from "@/lib/absenceIndicator";
  * KPI зверху рахував одне, список знизу показував інше.
  *
  * Баланси — рольова деталь: `balance` передають лише там, де залишки видно
- * (свої — кожному, чужі — owner/SEO). Компонент сам нічого не вирішує.
+ * (свої — кожному, чужі — owner/CEO). Компонент сам нічого не вирішує.
  */
 
 export type TeamMemberCardPerson = {

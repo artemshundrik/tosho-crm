@@ -91,7 +91,7 @@ export function absenceFactBody(
 type ProfileStatusRow = { user_id?: string | null; employment_status?: string | null };
 
 /**
- * Кому летить сповіщення. `approvers` — лише owner/SEO (заявку на погодженні
+ * Кому летить сповіщення. `approvers` — лише owner/CEO (заявку на погодженні
  * бачить той, хто її закриває), `workspace` — уся команда.
  *
  * Відключених пропускаємо: людина поза грою не має отримувати пуші про чужі
@@ -210,7 +210,7 @@ export type SubmittedAbsenceNotifyResult = {
  * Правила аудиторії:
  *  - лікарняний (status approved) — уся команда: людині сьогодні поставлять
  *    задачу, якщо не сказати, що її немає;
- *  - заявка на погодженні — лише owner/SEO;
+ *  - заявка на погодженні — лише owner/CEO;
  *  - вільний коментар заявника йде ТІЛЬКИ у вузьке коло — команді треба
  *    знати, що людини не буде, а не чому (там може бути медична деталь).
  *
@@ -262,9 +262,9 @@ export async function notifySubmittedAbsence(
           : `team-event:absence-start:${absence.id}:${todayKey}`
         : null;
 
-    // Заявку самого SEO закриває лише власник — тому кнопку «Підтвердити»
+    // Заявку самого CEO закриває лише власник — тому кнопку «Підтвердити»
     // отримує не кожен адресат. Роль заявника видно з того ж списку: у колі
-    // approvers лежать саме owner і SEO.
+    // approvers лежать саме owner і CEO.
     const requesterPrivileged = recipientRows.some((row) => row.userId === absence.user_id);
 
     await deliverNotifications(
@@ -303,7 +303,7 @@ export type AdminAbsenceAction = "record" | "revise" | "revoke";
 /**
  * Керівництво внесло / змінило / прибрало відсутність ЗА людину.
  *
- * Раніше цей шлях мовчав узагалі: SEO ставив Антону відпустку, і Антон
+ * Раніше цей шлях мовчав узагалі: CEO ставив Антону відпустку, і Антон
  * дізнавався про це, лише якщо сам відкривав CRM — хоча записміняє його
  * баланс і ріже норму (а отже бонус). Тепер:
  *  - сама людина отримує сповіщення ЗАВЖДИ (це про неї);
@@ -416,7 +416,7 @@ export function humanizeAbsenceInsertError(
 ): string {
   if (!error?.message) return "Не вдалося зберегти заявку";
   if (error.code === "42501" || /row-level security/i.test(error.message)) {
-    return "Такі дати недоступні для самостійної заявки — попроси SEO внести вручну";
+    return "Такі дати недоступні для самостійної заявки — попроси CEO внести вручну";
   }
   // Гард дубля кидає 23505 із власним текстом, але PostgREST на цей код може
   // підставити службове «duplicate key value violates unique constraint».

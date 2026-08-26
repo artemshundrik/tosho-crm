@@ -8,12 +8,12 @@
 - **Feature dir:** none — the whole module is one page file (no `src/features/marketing/`).
 - **Key files:** `src/pages/MarketingPage.tsx` (all logic + UI), `src/lib/designTaskOutputSync.ts` (`parseStoredDesignOutputFiles`, `StoredDesignOutputKind`), `scripts/marketing-schema.sql` (table + RLS). Reuses `attachmentPreview.ts` (signed URLs), `customerLogo.ts`, `workspaceMemberDirectory.ts`, `StorageObjectImage`/`StackHoverPreview`/`avatar-kit`.
 - **Main table (`tosho`):** `marketing_visuals` — **overlay state only**. The visuals themselves are NOT stored here; they are derived from design-task `activity_log` metadata (see Data flow).
-- **Access / permissions:** module key `"marketing"`; default ON for owner / SEO / marketer (`workspaceMemberDirectory.ts:210` `hasDefaultMarketingAccess`), default OFF otherwise (`DEFAULT_MODULE_ACCESS.marketing = false`, `:152`). Route wrapped in `ModuleRouteGate moduleKey="marketing"` (`App.tsx:1034`).
+- **Access / permissions:** module key `"marketing"`; default ON for owner / CEO / marketer (`workspaceMemberDirectory.ts:210` `hasDefaultMarketingAccess`), default OFF otherwise (`DEFAULT_MODULE_ACCESS.marketing = false`, `:152`). Route wrapped in `ModuleRouteGate moduleKey="marketing"` (`App.tsx:1034`).
 - **Related:** [design.md](design.md) (visuals originate as design-task outputs), [quotes.md](quotes.md) (each card deep-links to `/orders/estimates/:quoteId`), [customers.md](customers.md).
 
 ## Overview
 
-Marketing is a read-mostly **gallery**. Designers upload output files to design tasks; the "visualization"-kind images surface here automatically as a masonry feed. Marketers (owner/SEO/marketer by default) triage each visual — set a shooting status, add tags, fill a photographer checklist, favourite, or hide it — without touching the underlying design task. The intent (page header, `MarketingPage.tsx:1069`) is "which visuals to shoot at production and use in promo".
+Marketing is a read-mostly **gallery**. Designers upload output files to design tasks; the "visualization"-kind images surface here automatically as a masonry feed. Marketers (owner/CEO/marketer by default) triage each visual — set a shooting status, add tags, fill a photographer checklist, favourite, or hide it — without touching the underlying design task. The intent (page header, `MarketingPage.tsx:1069`) is "which visuals to shoot at production and use in promo".
 
 Near-identical visuals from one design task collapse into a single **stack** card (`VisualGroup`, `groupVisuals` `:603`); one design task = one card, never raw files. Opening the detail dialog cycles that task's siblings via arrows/filmstrip.
 
@@ -31,7 +31,7 @@ Near-identical visuals from one design task collapse into a single **stack** car
 
 ## Permissions & access
 
-Module visibility is **frontend-gated** by `ModuleRouteGate` + the member directory's `moduleAccess.marketing` flag (default owner/SEO/marketer). **RLS on `tosho.marketing_visuals` gates on team membership only** — `public.is_team_member(team_id)` for select/insert/update/delete (`scripts/marketing-schema.sql:45-102`); anon is revoked (`:43`). So the DB does **not** enforce the "marketing" module role — any authenticated team member could read/write overlay rows via the API; the owner/SEO/marketer restriction is UI-only. No Netlify function is involved (direct anon-key + RLS client).
+Module visibility is **frontend-gated** by `ModuleRouteGate` + the member directory's `moduleAccess.marketing` flag (default owner/CEO/marketer). **RLS on `tosho.marketing_visuals` gates on team membership only** — `public.is_team_member(team_id)` for select/insert/update/delete (`scripts/marketing-schema.sql:45-102`); anon is revoked (`:43`). So the DB does **not** enforce the "marketing" module role — any authenticated team member could read/write overlay rows via the API; the owner/CEO/marketer restriction is UI-only. No Netlify function is involved (direct anon-key + RLS client).
 
 ## Gotchas / conservative zones
 

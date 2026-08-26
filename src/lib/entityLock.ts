@@ -166,7 +166,7 @@ export async function requestEntityLockRelease(params: {
   };
 }
 
-/** Резервний сценарій для власника й SEO. Роль перевіряє сама функція в базі. */
+/** Резервний сценарій для власника й CEO. Роль перевіряє сама функція в базі. */
 export async function forceReleaseEntityLock(params: {
   teamId: string;
   entityType: EntityLockType;

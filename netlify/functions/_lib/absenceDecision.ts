@@ -18,10 +18,10 @@ import {
  * погоджувати те, що CRM забороняє.
  *
  * Правила (рішення CEO 2026-08-01):
- *  · вирішує SEO або власник;
+ *  · вирішує CEO або власник;
  *  · свою заявку не вирішує ніхто — навіть власник (його власні заявки
  *    лягають approved одразу при поданні, тож на погодженні їх не буває);
- *  · заявку SEO або власника закриває лише власник.
+ *  · заявку CEO або власника закриває лише власник.
  *
  * `actorClient` навмисно окремий від `adminClient`: HTTP-шлях передає сюди
  * user-scoped клієнт, і членство читається під RLS — заблокований співробітник
@@ -82,7 +82,7 @@ export async function decideAbsenceRequest(params: {
   const workspaceId = actorMembership?.workspace_id ?? null;
   if (!workspaceId) return { ok: false, status: 403, error: "Немає доступу до воркспейсу" };
   if (!isOwnerMembership(actorMembership) && !isSeoMembership(actorMembership)) {
-    return { ok: false, status: 403, error: "Рішення по заявках приймає SEO або власник" };
+    return { ok: false, status: 403, error: "Рішення по заявках приймає CEO або власник" };
   }
 
   const { data: absence, error: absenceError } = await adminClient
@@ -109,7 +109,7 @@ export async function decideAbsenceRequest(params: {
       .eq("user_id", absence.user_id)
       .maybeSingle<MembershipRow>();
     if (isSeoMembership(targetMembership) || isOwnerMembership(targetMembership)) {
-      return { ok: false, status: 403, error: "Заявку SEO або власника вирішує власник" };
+      return { ok: false, status: 403, error: "Заявку CEO або власника вирішує власник" };
     }
   }
 

@@ -96,7 +96,7 @@ describe("isDeliverable", () => {
 });
 
 describe("isFinanceRole", () => {
-  it("впускає власника, адміна, SEO і бухгалтерів", () => {
+  it("впускає власника, адміна, CEO і бухгалтерів", () => {
     const byId = new Map(merge().map((m) => [m.userId, m]));
     expect(isFinanceRole(byId.get("u-owner") as TeamMemberRow)).toBe(true);
     expect(isFinanceRole(byId.get("u-seo") as TeamMemberRow)).toBe(true);

@@ -313,7 +313,7 @@ export const handler = async (event: HttpEvent) => {
     if (Array.isArray(collaborators)) collaborators.forEach(addRecipient);
 
     // Плюс ті, хто вже писав у цій нитці: розмову часто веде хтось, кого в
-    // картці немає — СЕО чи інший менеджер, — і лишати його без відповіді
+    // картці немає — CEO чи інший менеджер, — і лишати його без відповіді
     // означало б обірвати саме ту переписку, заради якої це й робиться.
     const { data: participants } = await adminClient
       .schema("tosho")

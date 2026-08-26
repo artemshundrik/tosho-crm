@@ -18,7 +18,7 @@
  * і там: RPC балансів рахує по-своєму.
  */
 
-/** Типи, що мають річну квоту. `other` — без ліміту, вносить лише owner/SEO. */
+/** Типи, що мають річну квоту. `other` — без ліміту, вносить лише owner/CEO. */
 export const QUOTA_ABSENCE_KINDS = ["vacation", "day_off", "sick_leave"] as const;
 export type QuotaAbsenceKind = (typeof QUOTA_ABSENCE_KINDS)[number];
 

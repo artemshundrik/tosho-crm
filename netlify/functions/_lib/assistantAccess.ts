@@ -9,7 +9,7 @@
 // прописати обмеження. Чотири рівні легко перевірити очима.
 
 export type AccessLevel =
-  /** Власник і SEO — бачать усе, включно з грошима компанії та станом системи. */
+  /** Власник і CEO — бачать усе, включно з грошима компанії та станом системи. */
   | "full"
   /** Продажі: свої прорахунки, картки клієнтів, спільні дизайн-задачі. */
   | "sales"
@@ -58,7 +58,7 @@ export function canSeeSystemHealth(level: AccessLevel, isOwner: boolean): boolea
 
 /**
  * Обсяг зробленої роботи: релізи, години, що викотилось. Той самий предикат,
- * що на сторінці «Релізи» — керівництво (owner + SEO мають level "full").
+ * що на сторінці «Релізи» — керівництво (owner + CEO мають level "full").
  */
 export function canSeeReleases(level: AccessLevel): boolean {
   return level === "full";

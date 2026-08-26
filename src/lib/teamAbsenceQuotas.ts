@@ -10,7 +10,7 @@ import { isQuotaAbsenceKind, type TeamAbsence } from "@/lib/teamAbsences";
  * Річні квоти відсутностей і залишки — шар доступу до даних.
  * Чиста математика робочого календаря живе в teamAbsenceCalendar.ts.
  *
- * ПРИВАТНІСТЬ: залишки бачить сама людина + owner/SEO. Гейт стоїть у БД —
+ * ПРИВАТНІСТЬ: залишки бачить сама людина + owner/CEO. Гейт стоїть у БД —
  * RPC `team_absence_balances` не-адміну повертає рівно один рядок (свій),
  * тож фронт голого select по квотах не робить.
  */
@@ -132,7 +132,7 @@ export async function listHolidays(params: {
     }));
 }
 
-/** Додати або перейменувати святковий день. Пише лише owner/admin/SEO (RLS). */
+/** Додати або перейменувати святковий день. Пише лише owner/admin/CEO (RLS). */
 export async function upsertHoliday(params: {
   workspaceId: string;
   dateKey: string;
@@ -201,7 +201,7 @@ export function holidaysInRange(
 
 /**
  * Баланси команди за рік. Скільки рядків повернеться — вирішує БД:
- * звичайний співробітник отримає лише свій, owner/SEO — усі.
+ * звичайний співробітник отримає лише свій, owner/CEO — усі.
  *
  * `pending` рахується на клієнті з переданих записів: у БД квоту списують
  * тільки погоджені, але людині треба бачити, що запит уже «з'їсть» дні.
@@ -281,7 +281,7 @@ export async function listAbsenceQuotas(params: {
   }));
 }
 
-/** Записати квоти людині на рік. Owner/SEO only (гейт — RLS). */
+/** Записати квоти людині на рік. Owner/CEO only (гейт — RLS). */
 export async function saveAbsenceQuota(params: {
   workspaceId: string;
   userId: string;

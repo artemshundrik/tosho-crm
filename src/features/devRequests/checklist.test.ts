@@ -74,7 +74,7 @@ describe("checklistProgress", () => {
         item({ state: "done" }),
         item({ state: "done" }),
         item({ state: "doing" }),
-        item({ state: "waiting", who: "СЕО", since: "2026-08-01" }),
+        item({ state: "waiting", who: "CEO", since: "2026-08-01" }),
         item({ state: "todo" }),
       ],
       now
@@ -86,12 +86,12 @@ describe("checklistProgress", () => {
     const progress = checklistProgress(
       [
         item({ state: "waiting", who: "Марʼяна", since: "2026-08-06" }),
-        item({ state: "waiting", who: "СЕО", since: "2026-07-28" }),
+        item({ state: "waiting", who: "CEO", since: "2026-07-28" }),
       ],
       now
     );
     expect(progress.stuckDays).toBe(12);
-    expect(progress.stuckWho).toBe("СЕО");
+    expect(progress.stuckWho).toBe("CEO");
   });
 
   it("нічого не чекає — нуль днів і нікого", () => {
@@ -103,7 +103,7 @@ describe("checklistProgress", () => {
   it("очікування без дати не рахується як зависання", () => {
     // Дату ставить перехід у стан «чекає». Її відсутність — стара картка, а не
     // привід показати «зависло 20 000 днів».
-    const progress = checklistProgress([item({ state: "waiting", who: "СЕО" })], now);
+    const progress = checklistProgress([item({ state: "waiting", who: "CEO" })], now);
     expect(progress.stuckDays).toBe(0);
   });
 

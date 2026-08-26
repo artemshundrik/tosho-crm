@@ -43,7 +43,7 @@ export function isQueueCommand(command: string | null | undefined): boolean {
 }
 
 /**
- * Хто бачить чергу: власник або SEO.
+ * Хто бачить чергу: власник або CEO.
  *
  * Дзеркало предиката tosho.is_owner_or_seo() з бази — того самого, на якому
  * стоїть політика читання приватних карток (scripts/dev-requests-schema.sql).

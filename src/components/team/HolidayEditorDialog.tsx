@@ -20,7 +20,7 @@ import { toneTextClass } from "@/lib/statusTones";
 import { deleteHoliday, listHolidays, upsertHoliday, type HolidayRow } from "@/lib/teamAbsenceQuotas";
 
 /**
- * Календар свят компанії. Owner/SEO — RLS на ua_workday_exceptions однаково
+ * Календар свят компанії. Owner/CEO — RLS на ua_workday_exceptions однаково
  * відхилить чужий запис, але кнопку показуємо лише тим, хто має право.
  *
  * НАВІЩО ЦЕ В ІНТЕРФЕЙСІ, а не в SQL-скрипті: перехідні свята (Великдень,

@@ -27,7 +27,7 @@ A design task is one `activity_log` row whose `metadata` JSONB carries the whole
 
 ## Permissions & access
 
-Team-scoped RLS on `activity_log` + `design_task_timer_sessions`. Edit gating combines role predicates (`permissions.ts`) with per-task identity: `ensureCanEdit` allows the assignee, collaborators (`isCollaboratorOnTask`), or managers (`canManageAssignments`). Designers can self-assign and drive `new/changes → in_progress → pm_review` only; full status control needs `canManageDesignStatuses`. Brief change-requests editable by super-admin/admin/SEO (`canEditDesignBriefChangeRequests`).
+Team-scoped RLS on `activity_log` + `design_task_timer_sessions`. Edit gating combines role predicates (`permissions.ts`) with per-task identity: `ensureCanEdit` allows the assignee, collaborators (`isCollaboratorOnTask`), or managers (`canManageAssignments`). Designers can self-assign and drive `new/changes → in_progress → pm_review` only; full status control needs `canManageDesignStatuses`. Brief change-requests editable by super-admin/admin/CEO (`canEditDesignBriefChangeRequests`).
 
 ## Gotchas / conservative zones
 
