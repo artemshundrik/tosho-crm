@@ -99,12 +99,20 @@ export function splitQueue(requests: DevRequest[], todayIds: readonly string[]):
   for (const request of requests) {
     if (today.has(request.id)) shelves.today.push(request);
     else if (request.status === "triage") shelves.triage.push(request);
-    // Накопичувач перевіряємо ДО «готово локально» й «заблоковано»: він ніколи
-    // не буває ні готовим, ні заблокованим — у нього просто інше призначення,
-    // і в списку доступного він щодня вдавав би роботу, якої ніхто не бере.
+    // Накопичувач перевіряємо ДО решти: він ніколи не буває ні готовим, ні
+    // заблокованим — у нього просто інше призначення, і в списку доступного він
+    // щодня вдавав би роботу, якої ніхто не бере.
     else if (isPapercutCard(request)) shelves.papercuts.push(request);
-    else if (request.status === "done_local") shelves.shipped.push(request);
+    // БЛОКУВАННЯ СИЛЬНІШЕ ЗА «ГОТОВО ЛОКАЛЬНО» — правило перевернуто 27.08.2026.
+    // Доти картка зі статусом «Готово локально» одразу йшла в «чекає деплою», і
+    // перевірка на блокування до неї не доходила. На проді це давало неправду:
+    // REQ-123 стояла в «чекає деплою», хоч її хвіст чекав на чужий реліз
+    // typescript-eslint — жоден наш пуш його не наближає. Полиця обіцяла, що
+    // досить викотити, і брехала. Тепер спершу питаємо, чи стоїть воно за
+    // людиною: якщо так — це «Стоїть за людьми», хоч би скільки коду вже було
+    // написано.
     else if (isBlockedOnPerson(request)) shelves.blocked.push(request);
+    else if (request.status === "done_local") shelves.shipped.push(request);
     else shelves.free.push(request);
   }
 
@@ -119,9 +127,11 @@ export function splitQueue(requests: DevRequest[], todayIds: readonly string[]):
  * ти й збираєшся вибити ту відповідь.
  */
 export function canTakeToday(request: DevRequest): boolean {
-  // Накопичувач дрібниць «на сьогодні» не беруть: він не закінчується, тож
-  // зайняв би місце в полиці назавжди.
-  if (isPapercutCard(request)) return false;
+  // Накопичувач дрібниць брати МОЖНА — правило змінено 27.08.2026 разом зі
+  // зняттям стелі. Доти воно спиралось рівно на неї: полиця мала три місця, і
+  // список, який не закінчується, зайняв би одне назавжди. Місць більше не
+  // рахують, а «сьогодні розгрібаю дрібниці мови інтерфейсу» — цілком нормальний
+  // намір на день.
   return request.status === "queued" || request.status === "in_progress";
 }
 

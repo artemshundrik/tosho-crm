@@ -92,6 +92,7 @@ import { ToShoAiLauncherButton } from "@/components/app/ToShoAiLauncherButton";
 
 import { DesignerEarningsWidget } from "@/components/design/DesignerEarningsWidget";
 import { ViewAsBar } from "@/components/app/ViewAsBar";
+import { useScrollDirection } from "@/hooks/useScrollDirection";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { NotificationsMenu } from "@/components/app/NotificationsMenu";
 import {
@@ -995,6 +996,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
    * Невідомий макету маршрут (їх у реєстрі немає — 404, службові адреси) і далі
    * поводиться як раніше: смуга є рівно тоді, коли є що в неї покласти.
    */
+  /**
+   * Верхня обв'язка ховається при прокрутці вниз.
+   *
+   * Стан один на шапку й на смугу дій: вони мають їхати разом, інакше смуга
+   * лишалась би висіти під порожнім місцем. Поріг у 120 px — щоб на початку
+   * списку ніщо не зникало від найменшого руху.
+   */
+  const chrome = useScrollDirection();
+
   const toolbarKind: PageToolbarKind = pageSurface
     ? pageSurface.toolbar
     : hasHeaderActions
@@ -2346,8 +2356,19 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             // left їде разом із шириною сайдбара (та сама крива й затримка з
             // var(--sb-w-delay)); кольори лишаються на своїх швидких 200мс.
             "fixed top-[var(--view-as-offset,0px)] right-0 z-20 border-b border-border/40",
-            "[transition:left_280ms_cubic-bezier(0.32,0.72,0,1)_var(--sb-w-delay,0ms),background-color_200ms_linear,backdrop-filter_200ms_linear,border-color_200ms_linear]",
+            "[transition:left_280ms_cubic-bezier(0.32,0.72,0,1)_var(--sb-w-delay,0ms),transform_220ms_cubic-bezier(0.32,0.72,0,1),background-color_200ms_linear,backdrop-filter_200ms_linear,border-color_200ms_linear]",
             "motion-reduce:transition-none",
+            /*
+             * HEADROOM: крутиш униз — шапка їде вгору й звільняє екран, крутиш
+             * угору — миттєво повертається. Замість `sticky`, яка чесно віддає
+             * місце, але забирає його назавжди: на ноутбуці це 57 px, видимих
+             * і тоді, коли вони не потрібні.
+             *
+             * Ховаємо ТРАНСФОРМОМ, а не висотою: висота смикала б розкладку
+             * всієї сторінки на кожній прокрутці. `will-change` не ставимо —
+             * шар і так створює transition.
+             */
+            chrome === "hidden" && "-translate-y-full",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
             sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]",
             "left-0"
@@ -2781,16 +2802,32 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             перемальовувалась сторінка: 24 зайві рендери з 60 на серії з 14
             літер. Тут лишився факт наявності дій, вузол малює слот.
           */}
+          {/*
+            --page-chrome-offset: скільки верху екрана зайнято обв'язкою просто
+            зараз. Читають її липкі шапки таблиць (ui/table.tsx) — щоб стати ПІД
+            смугою дій, а не за нею. Коли обв'язка поїхала вгору, offset нуль, і
+            thead піднімається під верх замість того, щоб висіти під порожнечею.
+          */}
           <PageHeaderToolbarSlot
             surfaceId={surfaceId}
             kind={toolbarKind}
             canvasMode={isCanvasMode}
-            // Липкість вмикає реєстр поверхонь, а не сторінка: смуга живе тут,
-            // і сторінка дотягнутись до її позиціювання не може.
-            sticky={pageSurface?.stickyToolbar ?? false}
+            // Смуга дій їде разом із шапкою: стан один на обох, інакше вона
+            // висіла б під порожнім місцем.
+            chrome={chrome}
           />
 
-          <div className={cn(isCanvasMode ? "" : "px-4 md:px-5 lg:px-6")}>
+          <div
+            className={cn(isCanvasMode ? "" : "px-4 md:px-5 lg:px-6")}
+            style={
+              {
+                "--page-chrome-offset":
+                  chrome === "hidden"
+                    ? "0px"
+                    : "calc(var(--app-header-height) + var(--page-toolbar-height, 0px))",
+              } as React.CSSProperties
+            }
+          >
             <div
               className={cn(
                 isCanvasMode

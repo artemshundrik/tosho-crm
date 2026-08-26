@@ -44,13 +44,13 @@ export function PageHeaderToolbarSlot({
   surfaceId,
   kind,
   canvasMode,
-  sticky = false,
+  chrome = "shown",
 }: {
   surfaceId: string | null;
   kind: PageToolbarKind;
   canvasMode: boolean;
-  /** Липнути під шапкою при прокрутці. Вмикає реєстр поверхонь. */
-  sticky?: boolean;
+  /** Разом із шапкою: `hidden` — з'їхати вгору при прокрутці вниз. */
+  chrome?: "shown" | "hidden";
 }) {
   const actions = usePageHeaderActionsNode(surfaceId);
   const pending = kind !== "none" && !actions;
@@ -75,13 +75,26 @@ export function PageHeaderToolbarSlot({
   React.useLayoutEffect(() => {
     const node = nodeRef.current;
     if (!node || !actions || !surfaceId) return;
-    rememberToolbarHeight(surfaceId, node.offsetHeight);
+    /*
+     * Висота смуги потрібна не лише каркасу, а й ЛИПКИМ ШАПКАМ ТАБЛИЦЬ: тепер
+     * смуга теж липка, і без цієї цифри thead прилипав би рівно під нею й ховався
+     * за нею на чотирьох сторінках (Прорахунки, Замовлення, Склад, Підрядники).
+     * Тримаємо в CSS-змінній на корені, бо читає її зовсім інший компонент.
+     */
+    const publish = (height: number) => {
+      rememberToolbarHeight(surfaceId, height);
+      document.documentElement.style.setProperty("--page-toolbar-height", `${height}px`);
+    };
+    publish(node.offsetHeight);
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
-      rememberToolbarHeight(surfaceId, node.offsetHeight);
+      publish(node.offsetHeight);
     });
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty("--page-toolbar-height");
+    };
   }, [actions, surfaceId]);
   const reservedHeight = recallToolbarHeight(surfaceId);
 
@@ -97,15 +110,24 @@ export function PageHeaderToolbarSlot({
       className={cn(
         "border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] max-md:border-b-0 supports-[backdrop-filter]:backdrop-blur-md",
         /*
+         * СМУГА ЛИПНЕ ПІД ШАПКОЮ — і ховається разом із нею (патерн headroom,
+         * див. useScrollDirection). Крутиш униз — обидві їдуть угору й
+         * звільняють екран; крутиш угору — повертаються, не чекаючи, поки
+         * долистаєш до початку списку.
+         *
          * `--app-header-height` — та сама змінна, на якій стоять липкі шапки
          * таблиць: вона вже враховує смугу «Дивитись як». Своє число тут
          * розійшлося б із нею мовчки.
          *
          * z-20, а не вище: шапка застосунку лишається над смугою, дровери й
-         * модалки — тим паче. Заливка обов'язкова — інакше рядки списку
+         * модалки — тим паче. Заливка обов'язкова: інакше рядки списку
          * просвічують крізь смугу під час прокрутки.
          */
-        sticky && "sticky top-[var(--app-header-height)] z-20"
+        "sticky top-[var(--app-header-height)] z-20",
+        "transition-transform duration-[220ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+        // Їде на власну висоту ПЛЮС висоту шапки: інакше зупинилась би там, де
+        // шапка щойно була, і зависла б смужкою під верхнім краєм.
+        chrome === "hidden" && "-translate-y-[calc(100%+var(--app-header-height))]"
       )}
     >
       <div

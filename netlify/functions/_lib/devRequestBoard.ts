@@ -288,10 +288,20 @@ export type BoardRequest =
   | { ok: true; action: "move"; number: number; status: MovableStatus }
   | { ok: true; action: "commit"; numbers: number[]; sha: string }
   | { ok: true; action: "update"; number: number; patch: BoardCardPatch }
+  | { ok: true; action: "checklist"; number: number; text: string }
   | { ok: false; status: number; error: string };
 
 /** Довші теми на дошці не читаються — вони стають рядком у звіті керівництву. */
 export const TITLE_MAX_LENGTH = 120;
+
+/**
+ * Довжина одного пункту чекліста.
+ *
+ * Пункт — це рядок, який читають у списку з десяти таких. Абзац на 400 знаків
+ * там не читається, а означає, що це насправді окрема картка: якщо думку не
+ * вдалось укласти в рядок, вона більша за дрібницю.
+ */
+export const CHECKLIST_TEXT_MAX = 200;
 
 /** Скільки карток одна дія `commit` бере за раз. Більше — це не коміт, а помилка розбору. */
 export const COMMIT_NUMBERS_LIMIT = 20;
@@ -415,6 +425,25 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
     return { ok: true, action: "move", number: rawNumber, status };
   }
 
+  if (action === "checklist") {
+    const rawNumber = toCardNumber(body.number);
+    if (rawNumber === null) {
+      return { ok: false, status: 400, error: "Потрібен номер картки: { \"number\": 175 }." };
+    }
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (!text) {
+      return { ok: false, status: 400, error: "Немає поля text — нічого дописувати." };
+    }
+    if (text.length > CHECKLIST_TEXT_MAX) {
+      return {
+        ok: false,
+        status: 400,
+        error: `Пункт довший за ${CHECKLIST_TEXT_MAX} символів. Якщо думка не влазить у рядок — це не дрібниця, а окрема картка.`,
+      };
+    }
+    return { ok: true, action: "checklist", number: rawNumber, text };
+  }
+
   if (action === "update") {
     const rawNumber = toCardNumber(body.number);
     if (rawNumber === null) {
@@ -504,11 +533,11 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
   }
 
   const actions =
-    "list — показати чергу, move — пересунути картку, update — змінити текст картки, commit — зафіксувати коміт (кличе git-хук, не людина)";
+    "list — показати чергу, move — пересунути картку, update — змінити текст картки, checklist — дописати пункт, commit — зафіксувати коміт (кличе git-хук, не людина)";
   return {
     ok: false,
     status: 400,
-    error: action ? `Невідома дія «${action}». Є чотири: ${actions}.` : `Немає поля action. Є чотири дії: ${actions}.`,
+    error: action ? `Невідома дія «${action}». Є п'ять: ${actions}.` : `Немає поля action. Є п'ять дій: ${actions}.`,
   };
 }
 
@@ -867,6 +896,134 @@ export async function mergeIntoBoardCard(
   if (!card) return { ok: false, reason: "failed", message: "долучення не повернуло рядок" };
 
   return { ok: true, card, askedByCount };
+}
+
+export type ChecklistAppendResult =
+  | { ok: true; card: BoardCard; total: number; text: string }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "closed"; status: BoardStatus }
+  | { ok: false; reason: "failed"; message: string };
+
+/**
+ * Дописати пункт у чекліст картки — ззовні CRM.
+ *
+ * НАВІЩО. Накопичувачі дрібниць («Дрібниці: <напрям>») задумані так, що туди
+ * лягає рядок замість окремої картки. Але дописати цей рядок скіл не міг:
+ * `update` міняє лише текст картки, і дрібниця осідала в описі, звідки її потім
+ * треба було переносити руками. Тобто найдешевший шлях знову проходив через
+ * заведення картки — рівно те, від чого дрібниці й рятують.
+ *
+ * ЛИШЕ ДОПИСУВАННЯ, І ЛИШЕ В КІНЕЦЬ. Ні зміни, ні видалення, ні перестановки:
+ * усе це робить людина в CRM, де видно контекст. Ззовні доступна одна дія, яку
+ * не можна зіпсувати наосліп.
+ *
+ * ЗАКРИТУ КАРТКУ НЕ ЧІПАЄМО. У «Викочено» новий відкритий пункт означав би, що
+ * справа насправді не доведена — а гейт релізу дивиться саме на чеклісти, і
+ * дошка почала б суперечити розділу «Релізи». У «Не робимо» дописування
+ * тихцем скасовувало б рішення людини.
+ *
+ * Ідентифікатор рахуємо від найбільшого наявного, а не від довжини списку:
+ * після видалення пункту довжина повторила б уже зайнятий id.
+ */
+export async function appendChecklistItem(
+  admin: SupabaseClient,
+  teamId: string,
+  number: number,
+  text: string
+): Promise<ChecklistAppendResult> {
+  const { data: current, error: readError } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .select("status,checklist")
+    .eq("team_id", teamId)
+    .eq("number", number)
+    .maybeSingle();
+  if (readError) return { ok: false, reason: "failed", message: readError.message };
+  if (!current) return { ok: false, reason: "not_found" };
+
+  const row = current as { status?: string | null; checklist?: unknown };
+  const status = (BOARD_STATUSES as readonly string[]).includes(row.status ?? "")
+    ? (row.status as BoardStatus)
+    : "triage";
+  if (status === "released" || status === "wont_do") {
+    return { ok: false, reason: "closed", status };
+  }
+
+  const items = Array.isArray(row.checklist) ? (row.checklist as Array<Record<string, unknown>>) : [];
+  const used = items
+    .map((item) => Number(String(item?.id ?? "").replace(/\D/g, "")))
+    .filter((value) => Number.isFinite(value));
+  const nextId = `p${(used.length > 0 ? Math.max(...used) : 0) + 1}`;
+
+  const next = [
+    ...items,
+    {
+      id: nextId,
+      kind: "task",
+      text,
+      state: "todo",
+      group: null,
+      who: null,
+      since: null,
+      note: null,
+      answer: null,
+    },
+  ];
+
+  const { data, error } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .update({ checklist: next })
+    .eq("team_id", teamId)
+    .eq("number", number)
+    .select(SELECT_COLUMNS)
+    .maybeSingle();
+
+  if (error) return { ok: false, reason: "failed", message: error.message };
+  const card = data ? toBoardCard(data as BoardRow) : null;
+  if (!card) return { ok: false, reason: "failed", message: "дописування не повернуло рядок" };
+
+  return { ok: true, card, total: next.length, text };
+}
+
+export type BoardChecklistResponse = {
+  ok: true;
+  number: string;
+  title: string;
+  total: number;
+  url: string;
+  message: string;
+};
+
+export function buildBoardChecklistResponse(input: {
+  card: BoardCard;
+  total: number;
+  text: string;
+  url: string;
+}): BoardChecklistResponse {
+  const { card, total, text } = input;
+  return {
+    ok: true,
+    number: card.label,
+    title: card.title,
+    total,
+    url: input.url,
+    message: [
+      `➕ ${card.label} — дописав пункт`,
+      card.title,
+      `· ${text}`,
+      `Разом пунктів: ${total}`,
+      input.url,
+    ].join("\n"),
+  };
+}
+
+/** Пункт у закриту картку не дописують — пояснюємо, чому саме. */
+export function checklistClosedMessage(number: number, status: BoardStatus): string {
+  const label = formatRequestNumber(number);
+  return status === "released"
+    ? `${label} уже викочено. Новий пункт означав би, що справа не доведена, — а розділ «Релізи» каже, що доведена. Це нова картка.`
+    : `${label} у «Не робимо». Дописаний пункт тихцем скасував би це рішення — поверни картку в чергу, якщо вона знову потрібна.`;
 }
 
 export type BoardMoveResult =

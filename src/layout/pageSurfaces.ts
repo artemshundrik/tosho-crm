@@ -84,15 +84,6 @@ export type PageSurface = {
    */
   page: string;
   toolbar: PageToolbarKind;
-  /**
-   * Смуга дій липне під шапкою при прокрутці.
-   *
-   * ЗА ЗАМОВЧУВАННЯМ ВИМКНЕНО, і це не обережність заради обережності. Липкі
-   * шапки таблиць (ui/table.tsx) стоять на тому самому `--app-header-height`;
-   * якби смуга липла скрізь, вони зіткнулись би на кожній табличній сторінці.
-   * Тому вмикаємо там, де списки довгі, а таблиць немає.
-   */
-  stickyToolbar?: boolean;
   shape: PageShape;
   /**
    * Режим полотна: контентна колонка йде без бічних відступів і без обмеження
@@ -193,9 +184,7 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "features", path: "/whats-new/features", page: "src/pages/FeaturesPage.tsx", toolbar: "full", shape: "grid" },
   { id: "whats-new", path: "/whats-new", page: "src/pages/WhatsNewPage.tsx", toolbar: "full", shape: "list", maxWidth: 760 },
 
-  // stickyToolbar: у «Черзі» п'ять полиць, у «Щоденнику» сотня рядків — без
-  // липкої смуги перемикач виглядів і пошук лишались десь угорі.
-  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", stickyToolbar: true, shape: "board", canvas: true, board: { columns: boardColumnCount("devRequests"), columnWidth: "300px" } },
+  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: boardColumnCount("devRequests"), columnWidth: "300px" } },
   { id: "dev-releases", path: "/dev/releases", page: "src/pages/ReleasesPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
   { id: "dev-health", path: "/dev/health", page: "src/pages/AdminObservabilityPage.tsx", toolbar: "none", shape: "dashboard" },
   // Смуги дій немає навмисно: вкладки «за шарами / за терміновістю» живуть у

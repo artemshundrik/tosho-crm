@@ -75,6 +75,14 @@ describe("полиці черги", () => {
     expect(shelves.shipped).toHaveLength(1);
     expect(shelves.free).toHaveLength(0);
   });
+
+  it("БЛОКУВАННЯ СИЛЬНІШЕ за «готово локально»", () => {
+    // Заміряно на проді: REQ-123 стояла в «чекає деплою», хоч її хвіст чекав на
+    // чужий реліз typescript-eslint. Полиця обіцяла, що досить викотити.
+    const shelves = splitQueue([make("1", "done_local", [waiting("реліз typescript-eslint")])], []);
+    expect(shelves.blocked).toHaveLength(1);
+    expect(shelves.shipped).toHaveLength(0);
+  });
 });
 
 describe("вибране на сьогодні", () => {
@@ -149,8 +157,16 @@ describe("накопичувачі дрібниць", () => {
     expect(shelves.blocked).toHaveLength(0);
   });
 
-  it("на сьогодні його взяти не можна — він не закінчується", () => {
-    expect(canTakeToday(cut("1", "Дрібниці: мова інтерфейсу"))).toBe(false);
+  it("взятий на сьогодні — лежить у «Сьогодні», а не в дрібницях", () => {
+    const shelves = splitQueue([cut("1", "Дрібниці: стек")], ["1"]);
+    expect(shelves.today).toHaveLength(1);
+    expect(shelves.papercuts).toHaveLength(0);
+  });
+
+  it("на сьогодні його взяти МОЖНА — «сьогодні розгрібаю дрібниці» це намір на день", () => {
+    // Заборона трималась на стелі в три місця: список, який не закінчується,
+    // зайняв би одне назавжди. Стелі немає з 27.08.2026, немає й заборони.
+    expect(canTakeToday(cut("1", "Дрібниці: мова інтерфейсу"))).toBe(true);
   });
 
   it("нерозібране сильніше за накопичувач", () => {

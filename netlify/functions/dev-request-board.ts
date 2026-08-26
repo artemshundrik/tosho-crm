@@ -2,11 +2,14 @@ import { createClient } from "@supabase/supabase-js";
 
 import { buildAppUrl } from "./_lib/appUrl";
 import {
+  appendChecklistItem,
   BOARD_PATH,
+  buildBoardChecklistResponse,
   buildBoardCommitResponse,
   buildBoardListResponse,
   buildBoardMoveResponse,
   cardNotFoundMessage,
+  checklistClosedMessage,
   fetchOpenBoardCards,
   moveBoardCard,
   parseBoardBody,
@@ -123,6 +126,30 @@ export const handler = async (event: HttpEvent) => {
         return json(500, { error: "Не зміг записати коміт у картки. Спробуй ще раз за хвилину." });
       }
       return json(200, buildBoardCommitResponse({ sha: parsed.sha, outcomes, url }));
+    }
+
+    if (parsed.action === "checklist") {
+      const appended = await appendChecklistItem(admin, teamId, parsed.number, parsed.text);
+      if (!appended.ok) {
+        if (appended.reason === "not_found") {
+          return json(404, { error: cardNotFoundMessage(parsed.number) });
+        }
+        // 409, а не 400: із запитом усе гаразд, це стан картки не дозволяє дію.
+        if (appended.reason === "closed") {
+          return json(409, { error: checklistClosedMessage(parsed.number, appended.status) });
+        }
+        console.error("dev-request-board checklist failed:", appended.message);
+        return json(500, { error: "Не зміг дописати пункт. Спробуй ще раз за хвилину." });
+      }
+      return json(
+        200,
+        buildBoardChecklistResponse({
+          card: appended.card,
+          total: appended.total,
+          text: appended.text,
+          url,
+        })
+      );
     }
 
     if (parsed.action === "update") {

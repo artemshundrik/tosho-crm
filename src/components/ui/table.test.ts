@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 const VARIANT_LIST_THEAD_BG = "[&_thead]:bg-muted/45";
 // Те, що додає проп stickyHeader.
 const STICKY_THEAD =
-  "[&_thead]:sticky [&_thead]:top-[var(--app-header-height)] [&_thead]:z-10 [&_thead]:bg-card";
+  "[&_thead]:sticky [&_thead]:top-[var(--page-chrome-offset,var(--app-header-height))] [&_thead]:z-10 [&_thead]:bg-card";
 
 describe("stickyHeader", () => {
   it("непрозорий фон перемагає напівпрозорий фон варіанта", () => {
@@ -25,10 +25,14 @@ describe("stickyHeader", () => {
     expect(merged).not.toContain("[&_thead]:bg-muted/45");
   });
 
-  it("заголовок зупиняється під шапкою застосунку, а не під верхом вікна", () => {
+  it("заголовок зупиняється під усією верхньою обв'язкою, а не під верхом вікна", () => {
     // top-0 означає верх ВІКНА, а він перекритий фіксованою шапкою — заголовок
-    // ховався б за нею саме тоді, коли потрібен.
-    expect(STICKY_THEAD).toContain("[&_thead]:top-[var(--app-header-height)]");
+    // ховався б за нею саме тоді, коли потрібен. З 27.08.2026 смуга дій теж
+    // липка, тож відступ рахує AppLayout у --page-chrome-offset: шапка + смуга,
+    // а коли обв'язка поїхала вгору (headroom) — нуль.
+    expect(STICKY_THEAD).toContain("[&_thead]:top-[var(--page-chrome-offset,var(--app-header-height))]");
     expect(STICKY_THEAD).not.toContain("top-0");
+    // Запасне значення обов'язкове: на сторінках без смуги дій змінної немає.
+    expect(STICKY_THEAD).toContain("var(--app-header-height)");
   });
 });

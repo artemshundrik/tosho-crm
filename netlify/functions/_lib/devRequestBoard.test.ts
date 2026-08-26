@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 
 import {
+  appendChecklistItem,
   BOARD_LIST_LIMIT,
   buildBoardCommitResponse,
   buildBoardListResponse,
@@ -9,6 +10,7 @@ import {
   boardCardMeta,
   buildMergedBody,
   cardNotFoundMessage,
+  CHECKLIST_TEXT_MAX,
   COMMIT_NUMBERS_LIMIT,
   findCardByLabel,
   formatMergeDate,
@@ -1035,5 +1037,76 @@ describe("mergeIntoBoardCard", () => {
     expect(result.ok).toBe(false);
     expect(state.updates).toEqual([]);
     expect(state.row).toMatchObject({ body: "Опис" });
+  });
+});
+
+describe("дописування пункту чекліста", () => {
+  it("розбирає запит і ріже краї тексту", () => {
+    expect(parseBoardBody(JSON.stringify({ action: "checklist", number: 175, text: "  сірий текст  " }))).toEqual({
+      ok: true,
+      action: "checklist",
+      number: 175,
+      text: "сірий текст",
+    });
+  });
+
+  it("без номера й без тексту не працює", () => {
+    const noNumber = parseBoardBody(JSON.stringify({ action: "checklist", text: "щось" }));
+    expect(noNumber.ok).toBe(false);
+    const noText = parseBoardBody(JSON.stringify({ action: "checklist", number: 175, text: "   " }));
+    expect(noText.ok).toBe(false);
+    expect(noText.ok === false && noText.error).toContain("нічого дописувати");
+  });
+
+  it("довгий пункт відхиляється з поясненням, що це вже картка", () => {
+    const long = parseBoardBody(
+      JSON.stringify({ action: "checklist", number: 175, text: "х".repeat(CHECKLIST_TEXT_MAX + 1) })
+    );
+    expect(long.ok).toBe(false);
+    expect(long.ok === false && long.error).toContain("окрема картка");
+  });
+
+  it("невідома дія перелічує п'ять доступних, включно з checklist", () => {
+    const unknown = parseBoardBody(JSON.stringify({ action: "видалити" }));
+    expect(unknown.ok).toBe(false);
+    expect(unknown.ok === false && unknown.error).toContain("checklist");
+  });
+
+  it("дописує в кінець і рахує id від найбільшого, а не від довжини", async () => {
+    // Після видалення пункту довжина повторила б уже зайнятий id — і два
+    // пункти з однаковим ключем зламали б галочки в CRM.
+    const { admin, state } = fakeAdmin(
+      row({ number: 175, status: "queued", checklist: [{ id: "p1" }, { id: "p7" }] })
+    );
+    const result = await appendChecklistItem(admin, "team-1", 175, "нова дрібниця");
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.total).toBe(3);
+    const written = state.updates[0]?.checklist as Array<Record<string, unknown>>;
+    expect(written).toHaveLength(3);
+    expect(written[2]).toMatchObject({ id: "p8", text: "нова дрібниця", state: "todo", kind: "task" });
+  });
+
+  it("у викочену картку не дописуємо — це суперечило б розділу «Релізи»", async () => {
+    const { admin, state } = fakeAdmin(row({ number: 51, status: "released", checklist: [] }));
+    const result = await appendChecklistItem(admin, "team-1", 51, "щось");
+    expect(result).toEqual({ ok: false, reason: "closed", status: "released" });
+    expect(state.updates).toEqual([]);
+  });
+
+  it("у «Не робимо» теж не дописуємо — це тихе скасування рішення людини", async () => {
+    const { admin, state } = fakeAdmin(row({ number: 29, status: "wont_do", checklist: [] }));
+    const result = await appendChecklistItem(admin, "team-1", 29, "щось");
+    expect(result.ok).toBe(false);
+    expect(state.updates).toEqual([]);
+  });
+
+  it("картки немає — нічого не пишемо", async () => {
+    const { admin, state } = fakeAdmin(null);
+    expect(await appendChecklistItem(admin, "team-1", 999, "щось")).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+    expect(state.updates).toEqual([]);
   });
 });

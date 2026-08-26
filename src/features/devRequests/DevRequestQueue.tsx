@@ -191,6 +191,7 @@ export function DevRequestQueue({
                 request={request}
                 onSelect={onSelect}
                 onChecklist={onChecklist}
+                onAddToday={addToday}
                 saving={savingChecklistId === request.id}
               />
             ))}
@@ -484,11 +485,14 @@ function PapercutCard({
   request,
   onSelect,
   onChecklist,
+  onAddToday,
   saving,
 }: {
   request: DevRequest;
   onSelect: (request: DevRequest) => void;
   onChecklist?: (request: DevRequest, items: ChecklistItem[]) => void;
+  /** Взяти накопичувач на сьогодні: «сьогодні розгрібаю дрібниці». */
+  onAddToday?: (request: DevRequest) => void;
   saving: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -562,13 +566,27 @@ function PapercutCard({
             {left > 0 ? `лишилось ${left}` : "усе закрито"}
           </span>
         ) : null}
+        {onAddToday && canTakeToday(request) ? (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => onAddToday(request)}
+            aria-label={`Взяти на сьогодні: дрібниці «${papercutLabel(request)}»`}
+            className="shrink-0 gap-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Сьогодні</span>
+          </Button>
+        ) : null}
         <ChecklistMeter progress={progress} />
-        <HoverCopyText
-          value={request.label}
-          textClassName="hidden font-mono text-2xs font-semibold text-muted-foreground sm:inline"
-          successMessage="Номер запиту скопійовано"
-          copyLabel="Скопіювати номер запиту"
-        />
+        {/*
+          НОМЕРА ТУТ НЕМАЄ НАВМИСНО. Накопичувач — звичайна картка, тож номер у
+          нього є (REQ-175 і далі), але посилатись на нього нікому: у коміті
+          згадують справу, а не список дрібниць, і в розмові кажуть «дрібниці
+          мови інтерфейсу», а не «сто сімдесят п'ята». На чотирьох рядках поспіль
+          він читався як ще один стовпчик чисел ні про що. Сам номер нікуди не
+          подівся — він є в картці, якщо колись знадобиться.
+        */}
       </div>
 
       {open ? (

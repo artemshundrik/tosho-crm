@@ -63,7 +63,12 @@ const Table = React.forwardRef<
   // напівпрозорий фон варіанта переможе за специфічністю (див. проп).
   const stickyClasses = stickyHeader
     ? [
-        "[&_thead]:sticky [&_thead]:top-[var(--app-header-height)] [&_thead]:z-10",
+        // `--page-chrome-offset` рахує AppLayout: коли шапка й смуга дій на
+        // місці — це їхня сумарна висота, коли поїхали вгору (headroom) — нуль,
+        // і thead піднімається під самий верх замість того, щоб висіти під
+        // порожнечею. Запасне значення — для сторінок без смуги дій.
+        "[&_thead]:sticky [&_thead]:top-[var(--page-chrome-offset,var(--app-header-height))] [&_thead]:z-10",
+        "[&_thead]:transition-[top] [&_thead]:duration-[220ms] [&_thead]:ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:[&_thead]:transition-none",
         "[&_thead]:bg-card",
       ].join(" ")
     : "";
