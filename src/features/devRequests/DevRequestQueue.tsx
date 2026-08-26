@@ -561,11 +561,32 @@ function PapercutCard({
           <span className="truncate text-sm font-medium">{papercutLabel(request)}</span>
         </button>
 
-        {progress.total > 0 ? (
-          <span className="shrink-0 text-2xs text-muted-foreground">
-            {left > 0 ? `лишилось ${left}` : "усе закрито"}
-          </span>
-        ) : null}
+        {/*
+          ПОРЯДОК І ШИРИНА ТУТ НЕ ВИПАДКОВІ. Кнопка «Сьогодні» стоїть ОСТАННЬОЮ
+          в ряду, а підпис і смуга мають сталу ширину — інакше кнопка їздила б
+          уздовж рядка залежно від того, чи є в накопичувача пункти, і чотири
+          однакові рядки виглядали б як чотири різні.
+        */}
+        {/*
+          ЧИСЛО, А НЕ ФРАЗА. Спершу тут стояло «лишилось 10» / «порожньо», і на
+          78 px ці слова з'їдали стільки, що назва напряму обрізалась уже на
+          «гроші замовлен…». Назва важливіша: по ній накопичувач і впізнають.
+          Ціле пояснення лишилось у підказці на наведення й у мітці для
+          зчитувача екрана.
+        */}
+        <span
+          className="w-6 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground"
+          title={
+            progress.total === 0
+              ? "Дрібниць поки немає"
+              : left > 0
+                ? `Лишилось ${left} з ${progress.total}`
+                : "Усе закрито"
+          }
+        >
+          {left}
+        </span>
+        <ChecklistMeter progress={progress} />
         {onAddToday && canTakeToday(request) ? (
           <Button
             variant="outline"
@@ -578,7 +599,6 @@ function PapercutCard({
             <span className="hidden sm:inline">Сьогодні</span>
           </Button>
         ) : null}
-        <ChecklistMeter progress={progress} />
         {/*
           НОМЕРА ТУТ НЕМАЄ НАВМИСНО. Накопичувач — звичайна картка, тож номер у
           нього є (REQ-175 і далі), але посилатись на нього нікому: у коміті
@@ -641,15 +661,28 @@ function PapercutCard({
   );
 }
 
-/** Смужка готовності пунктів. Той самий поділ, що й у ChecklistBar на дошці. */
+/**
+ * Смужка готовності пунктів. Той самий поділ, що й у ChecklistBar на дошці.
+ *
+ * ПОРОЖНІЙ НАКОПИЧУВАЧ теж малює доріжку, лише тьмянішу. Прибрати її означало б
+ * зсунути все, що стоїть правіше, — і кнопки в сусідніх рядках перестали б
+ * збігатися по вертикалі.
+ */
 function ChecklistMeter({ progress }: { progress: ReturnType<typeof checklistProgress> }) {
-  if (progress.total === 0) return null;
-  const share = (count: number) => `${(count / progress.total) * 100}%`;
+  const share = (count: number) =>
+    progress.total === 0 ? "0%" : `${(count / progress.total) * 100}%`;
   return (
     <span
-      className="inline-flex h-1.5 w-[70px] shrink-0 overflow-hidden rounded-full bg-border"
+      className={cn(
+        "inline-flex h-1.5 w-[70px] shrink-0 overflow-hidden rounded-full bg-border",
+        progress.total === 0 && "opacity-40"
+      )}
       role="img"
-      aria-label={`Пунктів: ${progress.done} з ${progress.total} готово`}
+      aria-label={
+        progress.total === 0
+          ? "Пунктів поки немає"
+          : `Пунктів: ${progress.done} з ${progress.total} готово`
+      }
     >
       <i className="block h-full bg-success-solid" style={{ width: share(progress.done) }} />
       <i className="block h-full bg-warning-solid" style={{ width: share(progress.waiting) }} />

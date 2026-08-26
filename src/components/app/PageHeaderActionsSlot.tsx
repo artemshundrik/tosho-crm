@@ -72,30 +72,55 @@ export function PageHeaderToolbarSlot({
    * справді займає на цій сторінці й при цій ширині вікна.
    */
   const nodeRef = React.useRef<HTMLDivElement | null>(null);
+  /**
+   * Зовнішня смуга — САМЕ ВОНА липка, і саме її висоту мають знати липкі шапки
+   * таблиць.
+   *
+   * Спершу висоту брали з внутрішнього вузла (`nodeRef`) — того, що тримає
+   * відступи, — і виходило 96 px замість справжніх 121: поза заміром лишались
+   * власні поля смуги й нижня межа. Заголовок таблиці прилипав на 25 px вище,
+   * ніж треба, і заїжджав під смугу. Тепер міряємо те, що справді займає місце.
+   *
+   * Каркас (`rememberToolbarHeight`) і далі рахує внутрішній вузол: він резервує
+   * місце під ВМІСТ, і межа з відступами йому не потрібна.
+   */
+  const bandRef = React.useRef<HTMLDivElement | null>(null);
+
   React.useLayoutEffect(() => {
     const node = nodeRef.current;
     if (!node || !actions || !surfaceId) return;
-    /*
-     * Висота смуги потрібна не лише каркасу, а й ЛИПКИМ ШАПКАМ ТАБЛИЦЬ: тепер
-     * смуга теж липка, і без цієї цифри thead прилипав би рівно під нею й ховався
-     * за нею на чотирьох сторінках (Прорахунки, Замовлення, Склад, Підрядники).
-     * Тримаємо в CSS-змінній на корені, бо читає її зовсім інший компонент.
-     */
-    const publish = (height: number) => {
-      rememberToolbarHeight(surfaceId, height);
-      document.documentElement.style.setProperty("--page-toolbar-height", `${height}px`);
-    };
-    publish(node.offsetHeight);
+    rememberToolbarHeight(surfaceId, node.offsetHeight);
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
-      publish(node.offsetHeight);
+      rememberToolbarHeight(surfaceId, node.offsetHeight);
     });
     observer.observe(node);
+    return () => observer.disconnect();
+  }, [actions, surfaceId]);
+
+  React.useLayoutEffect(() => {
+    const band = bandRef.current;
+    if (!band) return;
+    /*
+     * Висота смуги потрібна липким шапкам таблиць: без цієї цифри thead
+     * прилипав би під шапкою застосунку й ховався за смугою на чотирьох
+     * сторінках (Прорахунки, Замовлення, Склад, Підрядники). Тримаємо в
+     * CSS-змінній на корені, бо читає її зовсім інший компонент.
+     */
+    const publish = () => {
+      document.documentElement.style.setProperty("--page-toolbar-height", `${band.offsetHeight}px`);
+    };
+    publish();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(publish);
+    observer.observe(band);
     return () => {
       observer.disconnect();
+      // Прибираємо за собою: на сторінці без смуги стара цифра відсунула б
+      // заголовок таблиці вниз на висоту тулбара, якого там немає.
       document.documentElement.style.removeProperty("--page-toolbar-height");
     };
-  }, [actions, surfaceId]);
+  });
   const reservedHeight = recallToolbarHeight(surfaceId);
 
   if (kind === "none" || (abandoned && !actions)) return null;
@@ -107,6 +132,7 @@ export function PageHeaderToolbarSlot({
     // ряд порожнечі над списком коштував екранного місця ні за що
     // (картка 146). Десктоп лишається як був.
     <div
+      ref={bandRef}
       className={cn(
         "border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] max-md:border-b-0 supports-[backdrop-filter]:backdrop-blur-md",
         /*
