@@ -24,7 +24,7 @@ select cron.schedule(
        timeout_milliseconds := 30000) $$
 );
 
--- Бізнес-звіт «що сьогодні»: 08:15 Київ (літо) — CEO + суперадмін.
+-- Бізнес-звіт «що сьогодні»: 08:15 Київ (літо) — СЕО + суперадмін.
 select cron.schedule(
   'digest-business-morning',
   '15 5 * * *',
@@ -34,7 +34,7 @@ select cron.schedule(
        timeout_milliseconds := 30000) $$
 );
 
--- Бізнес-звіт «що сталося»: 19:00 Київ (літо) — CEO + суперадмін.
+-- Бізнес-звіт «що сталося»: 19:00 Київ (літо) — СЕО + суперадмін.
 select cron.schedule(
   'digest-business-evening',
   '0 16 * * *',
