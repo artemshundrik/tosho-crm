@@ -46,6 +46,17 @@ export function getSupabaseClient(): AnySupabaseClient {
        */
       fetch: fetchWithReadTimeout(),
     },
+    /**
+     * Стеля частоти broadcast — записана явно, хоч це і типове значення.
+     *
+     * Без неї легко поставити курсорам крок у 50 мс, побачити рівний рух у себе
+     * на екрані й не помітити, що supabase-js половину повідомлень притримав:
+     * зовні це виглядає не економією, а чужим курсором, який підвисає. Число
+     * тут — МЕЖА, під яку має лізти LiveCursorsLayer, а не мета.
+     */
+    realtime: {
+      params: { eventsPerSecond: 10 },
+    },
   });
   return cachedSupabase;
 }

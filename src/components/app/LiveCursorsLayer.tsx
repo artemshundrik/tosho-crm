@@ -30,17 +30,44 @@ import { supabase } from "@/lib/supabaseClient";
  * запасний, приблизний шлях.
  */
 
-/** Як часто відправник шле координати, поки миша рухається. */
-const SEND_EVERY_MS = 90;
+/**
+ * СКІЛЬКИ ЦЕ КОШТУЄ — І ЧОМУ КРОК ЗАЛЕЖИТЬ ВІД КІЛЬКОСТІ ЛЮДЕЙ.
+ *
+ * Supabase рахує КОЖНЕ повідомлення в обидва боки: одне надіслане плюс стільки
+ * отриманих, скільки на каналі слухачів. Тобто N людей, що водять мишами,
+ * коштують не N повідомлень за крок, а N × N — вартість росте квадратом, і на
+ * шістьох вона вже вдев'ятеро більша, ніж на двох. Це єдина річ у застосунку,
+ * яка вміє з'їсти місячну квоту Realtime за кілька годин.
+ *
+ * Тому крок не сталий: він розтягується разом із натовпом рівно так, щоб
+ * загальна витрата росла ЛІНІЙНО, а не квадратом. Двоє — 150 мс, четверо —
+ * 300, шестеро — 450. На око різниці майже немає, бо проміжок домальовує
+ * приймач переходом (live-cursors.tsx), а рахунок відрізняється в рази.
+ *
+ * Стеля клієнта — 10 повідомлень за секунду (`eventsPerSecond` у
+ * supabaseClient.ts). Крок дрібніший за 100 мс supabase-js мовчки притримає, і
+ * чужий курсор почне не пришвидшуватись, а підвисати. 150 мс лишає запас.
+ */
+const SEND_EVERY_MS = 150;
+
+/** Крок відправки для натовпу в `crowd` людей — разом із собою. */
+function sendIntervalFor(crowd: number) {
+  return Math.round((SEND_EVERY_MS * Math.max(2, crowd)) / 2);
+}
+
+/**
+ * Більше людей на сторінці — курсорів не показуємо взагалі.
+ *
+ * Це запобіжник, а не смак: сім стрілок на одній дошці — то вже не «видно, хто
+ * де», а мигтіння, і платити за нього квадратом немає за що.
+ */
+const MAX_CURSOR_CROWD = 6;
 
 /** Менший зсув не шлемо: тремтіння руки — не новина. */
 const MIN_MOVE_PX = 3;
 
 /** Не чули від людини стільки — прибираємо її курсор. */
 const PEER_TIMEOUT_MS = 8000;
-
-/** Миша стоїть довше — вважаємо, що людина читає, і замовкаємо. */
-const IDLE_AFTER_MS = 1500;
 
 type CursorPayload = {
   id: string;
@@ -88,8 +115,16 @@ export function LiveCursorsLayer({ pageKey, demo = false }: LiveCursorsLayerProp
   const demoCursors = useDemoCursors(demo);
 
   const others = presence.activeHereEntries.filter((entry) => !entry.isSelf);
-  const hasCompany = others.length > 0;
+  const crowd = others.length + 1;
+  const hasCompany = others.length > 0 && crowd <= MAX_CURSOR_CROWD;
   const enabled = !demo && Boolean(teamId) && Boolean(userId) && hasCompany;
+
+  // Натовп читаємо з рефа, а не із замикання ефекту: інакше кожен прихід і
+  // вихід людини перепідписував би канал — найдорожча дія з усіх можливих.
+  const crowdRef = useRef(crowd);
+  useEffect(() => {
+    crowdRef.current = crowd;
+  }, [crowd]);
 
   const [cursors, setCursors] = useState<LiveCursor[]>([]);
   const peers = useRef(new Map<string, Peer>());
@@ -97,8 +132,12 @@ export function LiveCursorsLayer({ pageKey, demo = false }: LiveCursorsLayerProp
   const self = presence.activeHereEntries.find((entry) => entry.isSelf);
   const selfName = self?.displayName ?? "Колега";
   const selfAvatar = self?.avatarUrl ?? null;
+  // Ім'я та аватарка — у рефі, щоб зміна профілю не перезапускала підписку.
+  // Присвоєння в ефекті, а не в рендері: рендер має лишатись чистим.
   const selfRef = useRef({ name: selfName, avatarUrl: selfAvatar });
-  selfRef.current = { name: selfName, avatarUrl: selfAvatar };
+  useEffect(() => {
+    selfRef.current = { name: selfName, avatarUrl: selfAvatar };
+  }, [selfName, selfAvatar]);
 
   useEffect(() => {
     if (!enabled || !teamId || !userId) {
@@ -180,8 +219,7 @@ export function LiveCursorsLayer({ pageKey, demo = false }: LiveCursorsLayerProp
     let lastSentAt = 0;
     let lastX = -9999;
     let lastY = -9999;
-    let idleTimer: number | null = null;
-    let sentSinceIdle = false;
+    let sentAnything = false;
 
     const send = (x: number, y: number) => {
       // Картку під курсором шукаємо від елемента під точкою, а не від події:
@@ -210,7 +248,7 @@ export function LiveCursorsLayer({ pageKey, demo = false }: LiveCursorsLayerProp
         };
       }
       bumpStat("sent");
-      sentSinceIdle = true;
+      sentAnything = true;
       void channel.send({ type: "broadcast", event: "cursor", payload });
     };
 
@@ -219,26 +257,22 @@ export function LiveCursorsLayer({ pageKey, demo = false }: LiveCursorsLayerProp
       if (Math.abs(event.clientX - lastX) < MIN_MOVE_PX && Math.abs(event.clientY - lastY) < MIN_MOVE_PX) {
         return;
       }
-      if (now - lastSentAt < SEND_EVERY_MS) return;
+      if (now - lastSentAt < sendIntervalFor(crowdRef.current)) return;
       lastSentAt = now;
       lastX = event.clientX;
       lastY = event.clientY;
       send(event.clientX, event.clientY);
-
-      // Миша спинилась — замовкаємо. Саме тут і живе основна економія: людина
-      // читає значно довше, ніж возить рукою.
-      if (idleTimer) window.clearTimeout(idleTimer);
-      idleTimer = window.setTimeout(() => {
-        idleTimer = null;
-      }, IDLE_AFTER_MS);
     };
 
     const handleLeave = () => {
-      if (!sentSinceIdle) return;
+      if (!sentAnything) return;
       void channel.send({ type: "broadcast", event: "cursor-left", payload: { id: userId } });
-      sentSinceIdle = false;
+      sentAnything = false;
     };
 
+    // Основна економія тут безкоштовна: миша стоїть — подій немає — нічого не
+    // летить, а дошку читають значно довше, ніж возять по ній рукою. Окремий
+    // «таймер простою» тут стояв і не робив нічого; його прибрано.
     window.addEventListener("pointermove", handleMove, { passive: true });
     // Прокрутка й зміна розміру не шлють нічого — вони лише переставляють ЧУЖІ
     // курсори, бо картки під ними поїхали.
@@ -253,7 +287,6 @@ export function LiveCursorsLayer({ pageKey, demo = false }: LiveCursorsLayerProp
       window.removeEventListener("scroll", redraw, true);
       window.removeEventListener("resize", redraw);
       window.removeEventListener("blur", handleLeave);
-      if (idleTimer) window.clearTimeout(idleTimer);
       window.clearInterval(prune);
       handleLeave();
       void supabase.removeChannel(channel);
@@ -262,5 +295,13 @@ export function LiveCursorsLayer({ pageKey, demo = false }: LiveCursorsLayerProp
     };
   }, [enabled, pageKey, teamId, userId]);
 
-  return <LiveCursors cursors={demo ? demoCursors : cursors} />;
+  return (
+    <LiveCursors
+      cursors={demo ? demoCursors : cursors}
+      // Перехід мусить перекривати крок відправки, інакше стрілка доїжджає,
+      // спиняється й смикається далі. Обидві сторони рахують крок із того
+      // самого натовпу, тож збігаються без домовлянь по мережі.
+      transitionMs={Math.round(sendIntervalFor(crowd) * 1.2)}
+    />
+  );
 }
