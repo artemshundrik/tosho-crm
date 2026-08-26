@@ -14,6 +14,8 @@
  * «Сповіщення» свідомо НЕ модуль: вони потрібні всім і перемикача не мають.
  */
 
+import { formatJobRole } from "./jobRoles";
+
 export type ModuleKey =
   | "overview"
   | "customers"
@@ -26,6 +28,7 @@ export type ModuleKey =
   | "contractors"
   | "stock"
   | "finance"
+  | "payroll"
   | "vchasno"
   | "vchasno_send"
   | "marketing"
@@ -77,6 +80,23 @@ export type ModuleDefinition = {
    */
   restrictedTo?: (ctx: RoleContext) => boolean;
   /**
+   * Роль вирішує ПОВНІСТЮ: перемикач заблокований в обидва боки, збережене
+   * значення не читається взагалі.
+   *
+   * Це не те саме, що `restrictedTo`. Там роль лише не дає ВВІМКНУТИ, а
+   * всередині дозволених ролей галочка ще щось означає. Тут вона не означає
+   * нічого: доступ ріже сама база, і будь-яке інше показання інтерфейсу —
+   * обіцянка, якої ніхто не виконає. Саме через таку обіцянку 26.08.2026
+   * бухгалтерка не бачила «Фінансів» при ввімкненому й заблокованому
+   * перемикачі.
+   */
+  roleDecides?: (ctx: RoleContext) => boolean;
+  /**
+   * Роль дає доступ ЗАВЖДИ — зняти не можна, але решті людей перемикач
+   * лишається звичайним. Проміжний випадок між `alwaysOn` і `roleDecides`.
+   */
+  forcedFor?: (ctx: RoleContext) => boolean;
+  /**
    * Ключ, від якого успадкувати значення для старих записів, де цього ключа
    * ще не існувало. Без цього розділення одного модуля на кілька мовчки
    * забрало б доступ у всіх, хто його мав.
@@ -97,11 +117,35 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: "catalog", label: "Каталог", group: "operations" },
   { key: "logistics", label: "Логістика", group: "operations" },
   { key: "design", label: "Дизайн", group: "operations" },
-  { key: "contractors", label: "Підрядники та постачальники", group: "operations" },
-  { key: "stock", label: "Склад", group: "operations" },
+  {
+    key: "contractors",
+    label: "Підрядники та постачальники",
+    group: "operations",
+    // Було зашито в TeamMembersPage окремим `if`. Тепер тут — щоб сторінка
+    // доступів і меню читали одне й те саме.
+    forcedFor: isOwner,
+  },
+  { key: "stock", label: "Склад", group: "operations", forcedFor: ownerOrSeo },
   { key: "marketing", label: "Маркетинг", group: "operations" },
 
-  { key: "finance", label: "Фінанси", group: "finance" },
+  {
+    key: "finance",
+    label: "Фінанси",
+    group: "finance",
+    // Дзеркало `tosho.has_finance_access`: власник, SEO і три бухгалтерські
+    // посади. Галочка тут не важить нічого — вирішує посада.
+    roleDecides: (ctx) => hasDefaultFinanceAccess(ctx.accessRole, ctx.jobRole),
+  },
+  {
+    key: "payroll",
+    label: "Виплати команді",
+    group: "finance",
+    hint: "Зарплати, ставки й статус виплат — вкладка всередині «Фінансів»",
+    // Вужче за «Фінанси» навмисно: бухгалтер веде рахунки й витрати, але не
+    // бачить, хто скільки отримує (рішення CEO 26.08.2026). Дзеркало
+    // `tosho.has_payroll_access` і політик `tosho.payroll_entries`.
+    roleDecides: (ctx) => hasPayrollAccess(ctx.accessRole, ctx.jobRole),
+  },
   { key: "vchasno", label: "Вчасно — завантаження", group: "finance" },
   {
     key: "vchasno_send",
@@ -220,9 +264,9 @@ const ROLE_MENUS: Record<string, ModuleKey[]> = {
   logistics: ["overview", "customers", "quotes", "orders", "shipping", "catalog", "logistics"],
 
   // — Бухгалтерія —
-  // Молодший бухгалтер без «Фінансів»: їх ріже RLS (has_finance_access), і
-  // галочка привела б його на порожній екран замість даних.
-  junior_accountant: ACCOUNTING_MENU,
+  // Усі три бухгалтерські посади мають «Фінанси» (рішення CEO 26.08.2026), але
+  // жодна не має «Виплат команді»: зарплати колег — це власник і SEO.
+  junior_accountant: [...ACCOUNTING_MENU, "finance"],
   accountant: [...ACCOUNTING_MENU, "finance"],
   chief_accountant: [...ACCOUNTING_MENU, "finance", "vchasno_send"],
 
@@ -318,10 +362,12 @@ export function defaultModuleAccess(ctx: RoleContext = {}): ModuleAccess {
  *
  * Порядок рішень для кожного модуля:
  *  1. `alwaysOn` — завжди true, збережене значення ігнорується;
- *  2. `restrictedTo` не пускає роль — завжди false, збережене ігнорується;
- *  3. явно записаний boolean;
- *  4. значення ключа-попередника (`inheritsFrom`) для старих записів;
- *  5. дефолт за роллю.
+ *  2. `roleDecides` — відповідь дає роль, збережене не читається взагалі;
+ *  3. `restrictedTo` не пускає роль — завжди false, збережене ігнорується;
+ *  4. `forcedFor` дає роль — завжди true, зняти не можна;
+ *  5. явно записаний boolean;
+ *  6. значення ключа-попередника (`inheritsFrom`) для старих записів;
+ *  7. дефолт за роллю.
  */
 export function normalizeModuleAccess(
   value: unknown,
@@ -338,9 +384,18 @@ export function normalizeModuleAccess(
       result[item.key] = true;
       return;
     }
+    // Роль вирішує повністю — і «так», і «ні».
+    if (item.roleDecides) {
+      result[item.key] = item.roleDecides(ctx);
+      return;
+    }
     // Роль поза списком уповноважених — збережене значення не має значення.
     if (item.restrictedTo && !item.restrictedTo(ctx)) {
       result[item.key] = false;
+      return;
+    }
+    if (item.forcedFor && item.forcedFor(ctx)) {
+      result[item.key] = true;
       return;
     }
     const stored = input[item.key];
@@ -397,6 +452,74 @@ export function hasPayrollAccess(accessRole?: string | null, jobRole?: string | 
 }
 
 /**
+ * Що показати біля перемикача модуля в «Ролях і доступах».
+ *
+ * НАВІЩО ОКРЕМА ФУНКЦІЯ. Сторінка доступів роками показувала перемикачі, які
+ * нічого не вмикали: у «Фінансах» галочка не важила (вирішувала посада), у
+ * «Складі» й «Підрядниках» вона стояла заблокованою без жодного пояснення, а
+ * «Виплат команді» в списку не було взагалі — хоча це найвужчий доступ у CRM.
+ * Людина бачила галочку й розумно вважала, що та керує. Тепер кожен рядок
+ * каже правду: або перемикач справді керує, або він заблокований і поруч
+ * написано ЧОМУ.
+ *
+ * Одна функція на всі модулі навмисно: доти ці правила лежали трьома
+ * локальними `if`-ами в TeamMembersPage — і саме тому розійшлися з меню.
+ */
+export type ModuleLock = {
+  /** Значення, яке справді діє (не те, що лежить у профілі). */
+  checked: boolean;
+  /** Перемикач заблокований — його рішення ухвалене не тут. */
+  locked: boolean;
+  /** Чому саме так, людською мовою. null — перемикач вільний. */
+  reason: string | null;
+};
+
+/** «Власник» / «Посада «Бухгалтер»» — підмет для пояснення. */
+function roleSubject(ctx: RoleContext): string {
+  if (isOwner(ctx)) return "Власник";
+  const label = formatJobRole(ctx.jobRole);
+  return label ? `Посада «${label}»` : "Ця посада";
+}
+
+export function describeModuleLock(
+  key: ModuleKey,
+  access: Partial<ModuleAccess> | null | undefined,
+  ctx: RoleContext
+): ModuleLock {
+  const definition = DEFINITION_BY_KEY.get(key);
+  if (!definition) return { checked: false, locked: true, reason: null };
+
+  if (definition.alwaysOn) {
+    return { checked: true, locked: true, reason: "Доступний усім — вимкнути не можна" };
+  }
+
+  if (definition.roleDecides) {
+    const allowed = definition.roleDecides(ctx);
+    return {
+      checked: allowed,
+      locked: true,
+      reason: allowed
+        ? `${roleSubject(ctx)} має цей доступ завжди — вимкнути не можна`
+        : `${roleSubject(ctx)} цього не має — дані закриті в самій базі`,
+    };
+  }
+
+  if (definition.restrictedTo && !definition.restrictedTo(ctx)) {
+    return {
+      checked: false,
+      locked: true,
+      reason: `${roleSubject(ctx)} цього не має — дані закриті в самій базі`,
+    };
+  }
+
+  if (definition.forcedFor && definition.forcedFor(ctx)) {
+    return { checked: true, locked: true, reason: `${roleSubject(ctx)} — вимкнути не можна` };
+  }
+
+  return { checked: hasModuleAccess(access, key), locked: false, reason: null };
+}
+
+/**
  * Чи показувати пункт модуля в меню.
  *
  * Винесено з AppLayout, бо тут це можна перевірити тестом, а в тілі гіганта —
@@ -409,6 +532,17 @@ export function isModuleVisibleInMenu(
   ctx: { accessRole?: string | null; jobRole?: string | null; isSuperAdmin: boolean }
 ): boolean {
   const definition = DEFINITION_BY_KEY.get(key);
+  /**
+   * Роль вирішує повністю — галочку не питаємо взагалі.
+   *
+   * Саме тут і був розрив: сторінка доступів показувала перемикач «Фінансів»
+   * увімкненим і заблокованим, гейт маршруту пускав за посадою, а меню
+   * шанувало давнє `false` у профілі — і пункт зникав у людини, яка доступ
+   * мала (26.08.2026).
+   */
+  if (definition?.roleDecides) {
+    return definition.roleDecides({ accessRole: ctx.accessRole, jobRole: ctx.jobRole });
+  }
   /**
    * Обмежений модуль («Dev») — рішення лише за нормалізованим доступом.
    *
@@ -425,21 +559,6 @@ export function isModuleVisibleInMenu(
    * змінюється) — ховається саме пункт меню.
    */
   const hiddenExplicitly = access?.[key] === false;
-
-  /**
-   * Фінанси вирішує РОЛЬ, а не галочка.
-   *
-   * Доступ до фінансових таблиць ріже RLS-функція `tosho.has_finance_access`,
-   * тож збережене значення тут нічого не додає й нічого не знімає. Сторінка
-   * «Ролі та доступи» показує цей перемикач увімкненим і ЗАБЛОКОВАНИМ для
-   * уповноважених ролей (`isForcedModuleAccess`), а гейт маршруту пускає їх
-   * незалежно від нього — і тільки меню шанувало давнє `false`. Наслідок бачили
-   * 26.08.2026: у бухгалтерки розділ працював за прямою адресою, але пункт меню
-   * був схований, і виглядало це як відібраний доступ.
-   */
-  if (key === "finance") {
-    return hasDefaultFinanceAccess(ctx.accessRole, ctx.jobRole);
-  }
 
   if (ctx.isSuperAdmin) return !hiddenExplicitly;
   return hasModuleAccess(access, key);

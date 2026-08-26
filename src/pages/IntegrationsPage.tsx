@@ -49,7 +49,9 @@ export default function IntegrationsPage() {
   // Доступ до фінансів вирішує, чи прочитається стан «Вчасно». Рахуємо тим
   // самим правилом, що й гейт маршруту, — інакше картка казала б «немає
   // доступу» людині, яка спокійно відкриває розділ Фінансів.
-  const canFinance = hasDefaultFinanceAccess(accessRole, jobRole) || hasModuleAccess(moduleAccess, "finance");
+  // Тільки посада: галочка «Фінанси» тепер повністю похідна від неї (реєстр,
+  // `roleDecides`), тож `|| hasModuleAccess(...)` був зайвою копією того самого.
+  const canFinance = hasDefaultFinanceAccess(accessRole, jobRole);
   const canSeeInfra = hasModuleAccess(moduleAccess, "dev");
 
   const load = useCallback(async () => {

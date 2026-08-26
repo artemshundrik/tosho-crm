@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { JOB_ROLE_NAMES } from "./jobRoles";
 import {
   defaultModuleAccess,
+  describeModuleLock,
   hasDefaultFinanceAccess,
   hasModuleAccess,
   hasPayrollAccess,
@@ -136,11 +137,18 @@ describe("стартове меню посади", () => {
     expect(access.customers).toBe(false);
   });
 
-  it("бухгалтерія: «Фінанси» лише тим, кого пускає RLS", () => {
-    expect(defaultModuleAccess({ accessRole: "member", jobRole: "junior_accountant" }).finance).toBe(false);
+  it("бухгалтерія: «Фінанси» всім трьом посадам, «Виплати команді» — жодній", () => {
+    // Молодшому бухгалтеру фінанси відкрили 26.08.2026 (і в RLS теж).
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "junior_accountant" }).finance).toBe(true);
     expect(defaultModuleAccess({ accessRole: "member", jobRole: "junior_accountant" }).vchasno).toBe(true);
     expect(defaultModuleAccess({ accessRole: "member", jobRole: "accountant" }).finance).toBe(true);
     expect(defaultModuleAccess({ accessRole: "member", jobRole: "chief_accountant" }).vchasno_send).toBe(true);
+    // А зарплати колег — ні в кого з них, включно з головбухом.
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "junior_accountant" }).payroll).toBe(false);
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "accountant" }).payroll).toBe(false);
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "chief_accountant" }).payroll).toBe(false);
+    expect(defaultModuleAccess({ accessRole: "admin", jobRole: "seo" }).payroll).toBe(true);
+    expect(defaultModuleAccess({ accessRole: "owner", jobRole: "it_specialist" }).payroll).toBe(true);
   });
 
   it("логіст бачить відвантаження, а менеджер — ні", () => {
@@ -314,5 +322,81 @@ describe("видимість пункту меню", () => {
   it("обмежений модуль («Dev») вимагає явного true", () => {
     expect(isModuleVisibleInMenu("dev", {}, { accessRole: "owner", isSuperAdmin: true })).toBe(false);
     expect(isModuleVisibleInMenu("dev", { dev: true }, { accessRole: "owner", isSuperAdmin: true })).toBe(true);
+  });
+});
+
+/**
+ * Кожен рядок «Ролей і доступів» має або справді керувати, або пояснювати, хто
+ * вирішив за нього. Доти сторінка показувала заблоковані галочки без жодного
+ * слова — і бухгалтерка резонно вважала, що доступ у неї є, коли його не було.
+ */
+describe("що написано біля перемикача", () => {
+  const ACCOUNTANT = { accessRole: "member", jobRole: "accountant" };
+  const MANAGER = { accessRole: "member", jobRole: "manager" };
+  const SEO = { accessRole: "admin", jobRole: "seo" };
+  const OWNER = { accessRole: "owner", jobRole: "it_specialist" };
+
+  it("«Фінанси» бухгалтеру: увімкнено, заблоковано, і сказано чому", () => {
+    const lock = describeModuleLock("finance", { finance: false }, ACCOUNTANT);
+    expect(lock.checked).toBe(true);
+    expect(lock.locked).toBe(true);
+    // Збережене false не має впливати НІ на галочку, НІ на пояснення.
+    expect(lock.reason).toContain("Бухгалтер");
+    expect(lock.reason).toContain("має цей доступ завжди — вимкнути не можна");
+  });
+
+  it("«Фінанси» менеджеру: вимкнено, заблоковано, названо причину", () => {
+    const lock = describeModuleLock("finance", { finance: true }, MANAGER);
+    expect(lock.checked).toBe(false);
+    expect(lock.locked).toBe(true);
+    expect(lock.reason).toContain("Менеджер");
+    expect(lock.reason).toContain("закриті в самій базі");
+  });
+
+  it("«Виплати команді» видно окремим рядком і закрито всім, крім власника й SEO", () => {
+    expect(describeModuleLock("payroll", {}, OWNER)).toMatchObject({ checked: true, locked: true });
+    expect(describeModuleLock("payroll", {}, SEO)).toMatchObject({ checked: true, locked: true });
+    for (const ctx of [
+      ACCOUNTANT,
+      { accessRole: "member", jobRole: "junior_accountant" },
+      { accessRole: "member", jobRole: "chief_accountant" },
+      MANAGER,
+    ]) {
+      const lock = describeModuleLock("payroll", { payroll: true }, ctx);
+      expect(lock.checked).toBe(false);
+      expect(lock.locked).toBe(true);
+      expect(lock.reason).toContain("закриті в самій базі");
+    }
+  });
+
+  it("«Склад» власнику заблокований увімкненим, менеджеру — вільний", () => {
+    expect(describeModuleLock("stock", {}, OWNER)).toMatchObject({ checked: true, locked: true });
+    const manager = describeModuleLock("stock", { stock: true }, MANAGER);
+    expect(manager).toMatchObject({ checked: true, locked: false, reason: null });
+  });
+
+  it("звичайний модуль лишається звичайним перемикачем", () => {
+    expect(describeModuleLock("design", { design: true }, MANAGER)).toMatchObject({
+      checked: true,
+      locked: false,
+      reason: null,
+    });
+    expect(describeModuleLock("design", { design: false }, MANAGER)).toMatchObject({
+      checked: false,
+      locked: false,
+    });
+  });
+
+  it("«Команда» — доступна всім і вимкнути не можна", () => {
+    expect(describeModuleLock("team", { team: false }, MANAGER)).toMatchObject({
+      checked: true,
+      locked: true,
+    });
+  });
+
+  it("«Dev» менеджеру заблокований вимкненим із поясненням", () => {
+    const lock = describeModuleLock("dev", { dev: true }, MANAGER);
+    expect(lock).toMatchObject({ checked: false, locked: true });
+    expect(lock.reason).toContain("Менеджер");
   });
 });

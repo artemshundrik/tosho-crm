@@ -117,12 +117,10 @@ import {
 } from "@/lib/teamAvailability";
 import {
   defaultModuleAccess,
-  getModuleDefinition,
-  hasDefaultFinanceAccess,
+  describeModuleLock,
   MODULE_GROUPS,
   normalizeModuleAccess,
   type ModuleAccess,
-  type ModuleKey,
 } from "@/lib/moduleAccess";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { getCurrentUser, getCurrentUserId } from "@/lib/currentUser";
@@ -325,31 +323,20 @@ function supportsManagerRate(role: string | null) {
   return ["manager", "sales_manager", "junior_sales_manager", "top_manager"].includes((role ?? "").toLowerCase());
 }
 
-function hasDefaultStockAccess(accessRole?: string | null, jobRole?: string | null) {
-  return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
-}
-
-function isForcedModuleAccess(key: ModuleKey, accessRole?: string | null, jobRole?: string | null) {
-  // Модуль, позначений alwaysOn у реєстрі (наприклад «Команда»), вимкнути не можна.
-  if (getModuleDefinition(key)?.alwaysOn) return true;
-  if (key === "contractors" && (accessRole ?? "").trim().toLowerCase() === "owner") return true;
-  if (key === "stock" && hasDefaultStockAccess(accessRole, jobRole)) return true;
-  if (key === "finance" && hasDefaultFinanceAccess(accessRole, jobRole)) return true;
-  return false;
-}
-
+/**
+ * Значення доступів, зведене з роллю.
+ *
+ * Раніше тут стояли три локальні `if`-и (owner→підрядники, owner/SEO→склад,
+ * фінансові посади→фінанси) — копії правил, які живуть у реєстрі модулів. Вони
+ * й розійшлися з меню: сторінка показувала «Фінанси» ввімкненими, а сайдбар
+ * ховав пункт. Тепер рішення одне на всіх — `normalizeModuleAccess`.
+ */
 function normalizeMemberModuleAccessForRole(
   moduleAccess: MemberProfileMeta["moduleAccess"],
   accessRole: string | null | undefined,
   jobRole: string | null | undefined
 ): MemberProfileMeta["moduleAccess"] {
-  const normalizedAccessRole = (accessRole ?? "").trim().toLowerCase();
-  return {
-    ...moduleAccess,
-    contractors: normalizedAccessRole === "owner" ? true : moduleAccess.contractors,
-    stock: hasDefaultStockAccess(accessRole, jobRole) ? true : moduleAccess.stock,
-    finance: hasDefaultFinanceAccess(accessRole, jobRole) ? true : moduleAccess.finance,
-  };
+  return normalizeModuleAccess(moduleAccess, accessRole, jobRole);
 }
 
 function getProbationBadgeClass(status: "upcoming" | "active" | "completed") {
@@ -3140,40 +3127,31 @@ export function TeamMembersPage() {
                             </div>
                             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                               {section.modules.map((module) => {
-                                const forced = isForcedModuleAccess(
-                                  module.key,
-                                  editProfileMember?.access_role ?? null,
-                                  editProfileMember?.job_role ?? null
-                                );
                                 /**
-                                 * Дзеркало forced: модуль, який цій ролі не
-                                 * можна ВВІМКНУТИ.
+                                 * Стан перемикача бере реєстр, а не сторінка.
                                  *
-                                 * У решти модулів галочка = доступ. У «Dev»
-                                 * дані ріже сама база, і галочка лише показує
-                                 * пункт меню — увімкнена не тій людині, вона
-                                 * привела б її на порожній екран, тобто на
-                                 * «зламану CRM», а не на «немає доступу».
+                                 * Тут раніше стояли власні `forced`/`restricted`, і
+                                 * заблокована галочка не пояснювала себе ніяк: людина
+                                 * бачила ввімкнений сірий квадратик і не знала ні хто
+                                 * це вирішив, ні чи можна змінити. Тепер поруч завжди
+                                 * написано, чия це відповідь.
                                  */
-                                const restricted = Boolean(
-                                  module.restrictedTo &&
-                                    !module.restrictedTo({
-                                      accessRole: editProfileMember?.access_role ?? null,
-                                      jobRole: editProfileMember?.job_role ?? null,
-                                    })
-                                );
+                                const lock = describeModuleLock(module.key, editProfileModuleAccess, {
+                                  accessRole: editProfileMember?.access_role ?? null,
+                                  jobRole: editProfileMember?.job_role ?? null,
+                                });
                                 return (
                                   <label
                                     key={module.key}
                                     className={cn(
                                       "flex items-start gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2",
-                                      restricted && "opacity-60"
+                                      lock.locked && !lock.checked && "opacity-60"
                                     )}
                                   >
                                     <Checkbox
                                       className="mt-0.5"
-                                      checked={restricted ? false : forced ? true : editProfileModuleAccess[module.key]}
-                                      disabled={!canManage || forced || restricted}
+                                      checked={lock.checked}
+                                      disabled={!canManage || lock.locked}
                                       onCheckedChange={(checked) =>
                                         setEditProfileModuleAccess((prev) => ({
                                           ...prev,
@@ -3183,10 +3161,8 @@ export function TeamMembersPage() {
                                     />
                                     <span className="min-w-0">
                                       <span className="block text-sm text-foreground">{module.label}</span>
-                                      {restricted ? (
-                                        <span className="block text-2xs text-muted-foreground">
-                                          Недоступно для цієї ролі — розділ закритий у самій базі
-                                        </span>
+                                      {lock.reason ? (
+                                        <span className="block text-2xs text-muted-foreground">{lock.reason}</span>
                                       ) : module.hint ? (
                                         <span className="block text-2xs text-muted-foreground">{module.hint}</span>
                                       ) : null}
