@@ -346,6 +346,8 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
     numbers?: unknown;
     status?: unknown;
     sha?: unknown;
+    /** Дія `checklist`: текст пункту. Не плутати з `body` — описом картки. */
+    text?: unknown;
     title?: unknown;
     body?: unknown;
     kind?: unknown;

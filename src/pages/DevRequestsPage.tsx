@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Archive, CheckCheck, KanbanSquare, Lightbulb, ListChecks, PlusCircle, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -274,23 +274,22 @@ export default function DevRequestsPage() {
 
   /** Лічильники на перемикачі — по всій дошці, а не по знайденому. */
   /**
-   * Полиця «Сьогодні» чиститься сама.
+   * Полиця «Сьогодні» чиститься сама — але ОБЧИСЛЕННЯМ, а не ефектом.
    *
-   * Картку, яку за день викотили або відхилили, тримати в переліку не можна:
-   * місць там рівно три, і за тиждень полиця перетворилась би на список
-   * позавчорашніх намірів. Чистимо на кожну зміну даних дошки, а не за
-   * таймером: рівно тоді, коли статус і міг змінитись.
+   * Картку, яку за день викотили чи відхилили, тримати в переліку не можна:
+   * за тиждень полиця стала б списком позавчорашніх намірів. Перша версія
+   * робила це ефектом із setState — і компілятор React справедливо лічив це
+   * боргом: стан, який завжди виводиться з інших даних, не має жити другим
+   * джерелом правди й ганяти зайвий рендер.
+   *
+   * Тепер чистка — похідне значення. У сховищі може лишитись id викоченої
+   * картки, і це нікому не шкодить: на екран він не потрапляє, а перший же
+   * дотик до полиці перезапише перелік уже чистим (handleToday нижче).
    */
-  useEffect(() => {
-    const all = board.data;
-    if (!all) return;
-    setTodayIds((current) => {
-      const pruned = pruneToday(current, all);
-      if (pruned.length === current.length) return current;
-      writeTodayIds(pruned);
-      return pruned;
-    });
-  }, [board.data]);
+  const visibleTodayIds = useMemo(
+    () => pruneToday(todayIds, board.data ?? []),
+    [todayIds, board.data]
+  );
 
   const counts = useMemo(() => {
     const all = board.data ?? [];
@@ -683,7 +682,7 @@ export default function DevRequestsPage() {
         ) : view === "queue" ? (
           <DevRequestQueue
             requests={requests}
-            todayIds={todayIds}
+            todayIds={visibleTodayIds}
             onToday={handleToday}
             onSelect={setSelected}
             onOpenTriage={() => setView("board")}
