@@ -175,7 +175,10 @@ export function PageHeaderToolbarSlot({
           "min-w-0",
           canvasMode
             ? "px-4 py-3 max-md:py-2 md:px-5 lg:px-6"
-            : "mx-auto w-full max-w-[1600px] px-4 pb-4 max-md:pb-2 md:px-5 lg:px-6"
+            // pt-5 — те саме повітря над смугою, яке раніше давав відступ
+            // <main> (76px = 57 під шапку + 19). Тепер воно всередині смуги й
+            // їде разом із нею, тож при прилипанні нічого не підстрибує.
+            : "mx-auto w-full max-w-[1600px] px-4 pb-4 pt-5 max-md:pb-2 max-md:pt-3 md:px-5 lg:px-6"
         )}
       >
         {actions ? (
