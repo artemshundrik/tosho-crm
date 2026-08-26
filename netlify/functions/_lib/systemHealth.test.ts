@@ -61,6 +61,33 @@ describe("сигнали cron", () => {
     expect(signals.some((signal) => signal.tone === "warning")).toBe(true);
   });
 
+  it("місячний джоб, який відпрацював вчасно, не рахується протухлим", () => {
+    // 26.08.2026 о 12:58 власнику прилетів ЧЕРВОНИЙ алерт «Cron
+    // finance-month-close-soft: не запускався 27 год». Джоб відпрацював
+    // 25-го о 06:00 і повернув «1 row» — тобто зробив рівно те, що мав.
+    // Для місячного розкладу доба без запуску — норма 29 днів із 30, а стеля
+    // в 24 години світила б червоним ЩОМІСЯЦЯ по шість днів поспіль, доки
+    // запуск не випаде з семиденного вікна пошуку.
+    const ranOnTime = { ...MONTH_CLOSE_SOFT, runs: 1, hours_since_last_run: 28.5 };
+    const signals = cronSignals([ranOnTime], 0, 0, new Date("2026-08-26T10:30:00Z"));
+    expect(texts(signals)).not.toContain("не запускався");
+    expect(signals.every((signal) => signal.tone === "good")).toBe(true);
+  });
+
+  it("щоденний джоб протухає як і раніше — стеля доби нікуди не зникла", () => {
+    const stale = { ...DIGEST_TECH, hours_since_last_run: 28.5 };
+    const signals = cronSignals([stale], 0, 0, new Date("2026-08-26T10:30:00Z"));
+    expect(texts(signals)).toContain("не запускався");
+  });
+
+  it("місячний джоб, який ПРОПУСТИВ свій день, лишається протухлим", () => {
+    // Запуск є, але він старіший за останнє спрацювання за розкладом:
+    // 25-те минуло, а джоб востаннє бігав 24-го.
+    const missed = { ...MONTH_CLOSE_SOFT, runs: 1, hours_since_last_run: 60 };
+    const signals = cronSignals([missed], 0, 0, new Date("2026-08-26T10:30:00Z"));
+    expect(texts(signals)).toContain("не запускався");
+  });
+
   it("поодинокі таймаути мовчать, регулярні — ні", () => {
     const quiet = cronSignals([DIGEST_TECH], 0, 3, new Date("2026-08-11T04:45:00Z"));
     expect(texts(quiet)).not.toContain("30 с");

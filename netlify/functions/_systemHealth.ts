@@ -155,26 +155,55 @@ export function isRareSchedule(schedule: string | null | undefined): boolean {
   return fields[2] !== "*" || fields[3] !== "*";
 }
 
-export function missedRareRun(schedule: string | null | undefined, now: Date): boolean {
+/**
+ * Коли рідкісний джоб мав відпрацювати востаннє (мс UTC), або null.
+ *
+ * Розбираємо лише просту форму «хв год ЧИСЛО * *» — саме такі в нас місячні.
+ * Складніші вирази (списки, кроки) сюди не доходять: краще змовчати, ніж
+ * вигадати розклад.
+ */
+function lastRareOccurrence(schedule: string | null | undefined, now: Date): number | null {
   const fields = (schedule ?? "").trim().split(/\s+/);
-  if (fields.length < 5) return false;
+  if (fields.length < 5) return null;
   const [minuteField, hourField, domField, monthField] = fields;
-  // Розбираємо лише просту форму «хв год ЧИСЛО * *» — саме такі в нас місячні.
-  // Складніші вирази (списки, кроки) до цієї гілки не доходять: краще змовчати,
-  // ніж вигадати розклад.
-  if (monthField !== "*" || !/^\d+$/.test(domField)) return false;
+  if (monthField !== "*" || !/^\d+$/.test(domField)) return null;
   const minute = Number(minuteField);
   const hour = Number(hourField);
   const day = Number(domField);
-  if (!Number.isFinite(minute) || !Number.isFinite(hour)) return false;
+  if (!Number.isFinite(minute) || !Number.isFinite(hour)) return null;
 
   const previous = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day, hour, minute);
-  const occurrence =
-    previous <= now.getTime()
-      ? previous
-      : Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, day, hour, minute);
+  return previous <= now.getTime()
+    ? previous
+    : Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, day, hour, minute);
+}
+
+export function missedRareRun(schedule: string | null | undefined, now: Date): boolean {
+  const occurrence = lastRareOccurrence(schedule, now);
+  if (occurrence === null) return false;
   const hoursSinceOccurrence = (now.getTime() - occurrence) / 3_600_000;
   return hoursSinceOccurrence <= MISSED_RUN_WINDOW_HOURS;
+}
+
+/**
+ * Чи встиг рідкісний джоб відпрацювати ПІСЛЯ свого останнього спрацювання за
+ * розкладом.
+ *
+ * Стеля «доба без запуску» описує щоденні джоби. Для місячного вона бреше:
+ * 26.08.2026 власнику прилетів червоний алерт «finance-month-close-soft: не
+ * запускався 27 год» — а джоб відпрацював 25-го о 06:00 рівно за розкладом і
+ * повернув «1 row». Так виглядав би КОЖЕН місяць: шість днів червоного, доки
+ * успішний запуск не випаде із семиденного вікна пошуку й гілка «жодного
+ * запуску» не візьме своє.
+ */
+export function ranSinceLastRareOccurrence(
+  schedule: string | null | undefined,
+  now: Date,
+  hoursSinceLastRun: number
+): boolean {
+  const occurrence = lastRareOccurrence(schedule, now);
+  if (occurrence === null) return false;
+  return now.getTime() - hoursSinceLastRun * 3_600_000 >= occurrence;
 }
 
 /**
@@ -258,6 +287,13 @@ export function cronSignals(
           ? `, останній ${when}`
           : "";
       signals.push({ tone, code: "cron_failures", text: `Cron ${name}: ${failures} збоїв за добу${tail}` });
+      continue;
+    }
+    // Рідкісний розклад міряємо його ж розкладом, а не добою: джоб, який
+    // відпрацював після останнього спрацювання за розкладом, здоровий, хай і
+    // «мовчить» третій тиждень поспіль.
+    if (isRareSchedule(job.schedule) && ranSinceLastRareOccurrence(job.schedule, now, hoursSince)) {
+      healthy += 1;
       continue;
     }
     signals.push({ tone, code: "cron_stale", text: `Cron ${name}: не запускався ${Math.round(hoursSince)} год` });
