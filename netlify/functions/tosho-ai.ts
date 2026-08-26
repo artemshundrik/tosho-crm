@@ -39,7 +39,7 @@ type ToShoAiDomain =
  * Стелі на списки й вкладення не косметичні: кожне вкладення читається й
  * потрапляє в промпт, а теги з ключовими словами йдуть у базу знань.
  */
-const requestSchema = z
+export const requestSchema = z
   .object({
     action: z
       .enum([
@@ -52,7 +52,13 @@ const requestSchema = z
         "mention_suggestions",
       ])
       .optional(),
-    requestId: z.string().optional(),
+    /**
+     * `nullish`, а не `optional`: у JSON немає `undefined`, і консоль шле
+     * `requestId: null` щоразу, коли нитка ще не вибрана — зокрема в
+     * найпершому `bootstrap`. `optional()` таке тіло відхиляв, і помічник
+     * не відкривався взагалі (24–26.08.2026).
+     */
+    requestId: z.string().nullish(),
     messageId: z.string().optional(),
     message: z.string().optional(),
     mode: z.enum(["ask", "fix", "route", "resolve"]).optional(),

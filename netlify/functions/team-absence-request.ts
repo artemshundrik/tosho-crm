@@ -29,7 +29,7 @@ import {
  */
 
 /** Форма запиту — і перевірка, і тип (REQ-137). */
-const requestSchema = z
+export const requestSchema = z
   .object({
     /**
      * `submit` — подати власну заявку;
@@ -39,7 +39,12 @@ const requestSchema = z
     action: z.enum(["submit", "decide", "record", "revise", "revoke"]).optional(),
     absenceId: z.string().min(1).optional(),
     decision: z.enum(["approved", "declined"]).optional(),
-    comment: z.string().optional(),
+    /**
+     * `nullish`: усі чотири виклики з `src/lib/teamAbsences.ts` типізовані
+     * як `string | null` і шлють `null`, коли коментар не заповнили.
+     * Далі по коду `null` і `undefined` однакові (`comment?.trim() || null`).
+     */
+    comment: z.string().nullish(),
     kind: z.string().optional(),
     startDate: z.string().optional(),
     endDate: z.string().optional(),

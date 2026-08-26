@@ -16,7 +16,7 @@ import crypto from "crypto";
  * спроба підсунути щось зайве. І те, і те краще відхилити з поясненням, ніж
  * мовчки зігнорувати.
  */
-const inviteRequestSchema = z
+export const inviteRequestSchema = z
   .object({
     mode: z
       .enum([
@@ -44,8 +44,12 @@ const inviteRequestSchema = z
       .enum(["available", "vacation", "sick_leave", "offline"])
       .nullable()
       .optional(),
+    /** Вікно відсутності: форма шле обидві дати разом зі статусом. */
+    availabilityStartDate: z.string().nullable().optional(),
+    availabilityEndDate: z.string().nullable().optional(),
     startDate: z.string().nullable().optional(),
     probationEndDate: z.string().nullable().optional(),
+    employmentStatus: z.string().nullable().optional(),
     managerUserId: z.string().nullable().optional(),
     // Ключі модулів не перелічуємо: реєстр живе у src/lib/moduleAccess.ts, а тут
     // ми лише пересилаємо те, що надіслав клієнт, нічого не втрачаючи.
@@ -777,6 +781,16 @@ export const handler = async (event: HttpEvent) => {
       payload.availabilityStatus === "offline"
         ? payload.availabilityStatus
         : "available";
+    // Вікно відсутності має сенс лише для неробочого статусу — так само, як на
+    // формі: обрали «доступна» і дати ховаються, тож і зберігати їх нема чого.
+    const availabilityWindowApplies = availabilityStatus !== "available";
+    const availabilityStartDate = availabilityWindowApplies
+      ? (payload.availabilityStartDate ?? "").toString().trim()
+      : "";
+    const availabilityEndDate = availabilityWindowApplies
+      ? (payload.availabilityEndDate ?? "").toString().trim()
+      : "";
+    const employmentStatus = (payload.employmentStatus ?? "").toString().trim();
     const startDate = (payload.startDate ?? "").toString().trim();
     const probationEndDate = (payload.probationEndDate ?? "").toString().trim();
     const managerUserId = (payload.managerUserId ?? "").toString().trim();
@@ -813,6 +827,9 @@ export const handler = async (event: HttpEvent) => {
       birth_date: birthDate || null,
       phone: phone || null,
       availability_status: availabilityStatus,
+      availability_start_date: availabilityStartDate || null,
+      availability_end_date: availabilityEndDate || null,
+      employment_status: employmentStatus || null,
       start_date: startDate || null,
       probation_end_date: probationEndDate || null,
       manager_user_id: managerUserId || null,
@@ -837,6 +854,9 @@ export const handler = async (event: HttpEvent) => {
         birthDate,
         phone,
         availabilityStatus,
+        availabilityStartDate,
+        availabilityEndDate,
+        employmentStatus,
         startDate,
         probationEndDate,
         managerUserId,
