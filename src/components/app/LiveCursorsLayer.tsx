@@ -129,8 +129,22 @@ export function LiveCursorsLayer({ pageKey, demo = false }: LiveCursorsLayerProp
   const [cursors, setCursors] = useState<LiveCursor[]>([]);
   const peers = useRef(new Map<string, Peer>());
 
-  const self = presence.activeHereEntries.find((entry) => entry.isSelf);
-  const selfName = self?.displayName ?? "Колега";
+  /**
+   * СЕБЕ ШУКАЄМО В ПОВНОМУ СПИСКУ, А НЕ СЕРЕД «АКТИВНИХ ТУТ».
+   *
+   * `activeHereEntries` — це ті, чий записаний шлях збігається з поточним. Свій
+   * власний шлях доїжджає туди не миттєво: у базу він пишеться раз на кілька
+   * хвилин, а через realtime — щойно канал підключиться. Тобто в перші секунди
+   * після відкриття сторінки СЕБЕ там ще немає, і саме тоді людина вже возить
+   * мишею.
+   *
+   * Раніше на цей випадок стояло запасне ім'я «Колега», і воно поїхало в прод:
+   * Артем побачив на дизайні курсор із написом «КО» — це дві перші літери того
+   * слова, показані замість аватарки. Тепер ім'я береться з повного списку
+   * присутності, де себе видно завжди, незалежно від шляху.
+   */
+  const self = presence.entries.find((entry) => entry.isSelf);
+  const selfName = self?.displayName?.trim() ?? "";
   const selfAvatar = self?.avatarUrl ?? null;
   // Ім'я та аватарка — у рефі, щоб зміна профілю не перезапускала підписку.
   // Присвоєння в ефекті, а не в рендері: рендер має лишатись чистим.
@@ -222,6 +236,11 @@ export function LiveCursorsLayer({ pageKey, demo = false }: LiveCursorsLayerProp
     let sentAnything = false;
 
     const send = (x: number, y: number) => {
+      // Імені ще немає — мовчимо. Другий захисток після пошуку себе в повному
+      // списку: у чужому браузері краще не показати курсор зовсім, ніж показати
+      // його підписаним вигаданим словом. Присутність приїде за секунду, і
+      // курсор з'явиться вже з правильним обличчям.
+      if (!selfRef.current.name) return;
       // Картку під курсором шукаємо від елемента під точкою, а не від події:
       // так це працює і тоді, коли миша над вкладеною кнопкою чи аватаркою.
       const target = document.elementFromPoint(x, y);
