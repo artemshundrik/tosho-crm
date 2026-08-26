@@ -2355,20 +2355,19 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             // два класи позиції сперечались би).
             // left їде разом із шириною сайдбара (та сама крива й затримка з
             // var(--sb-w-delay)); кольори лишаються на своїх швидких 200мс.
-            "fixed top-[var(--view-as-offset,0px)] right-0 z-20 border-b border-border/40",
-            "[transition:left_280ms_cubic-bezier(0.32,0.72,0,1)_var(--sb-w-delay,0ms),transform_220ms_cubic-bezier(0.32,0.72,0,1),background-color_200ms_linear,backdrop-filter_200ms_linear,border-color_200ms_linear]",
-            "motion-reduce:transition-none",
             /*
-             * HEADROOM: крутиш униз — шапка їде вгору й звільняє екран, крутиш
-             * угору — миттєво повертається. Замість `sticky`, яка чесно віддає
-             * місце, але забирає його назавжди: на ноутбуці це 57 px, видимих
-             * і тоді, коли вони не потрібні.
+             * ШАПКА НЕ ХОВАЄТЬСЯ. Перша версія headroom забирала й її, і це було
+             * зайве: у шапці живуть пошук, курси валют і сповіщення — речі, по
+             * які тягнешся посеред читання, а не після повернення на початок.
+             * Ховається лише смуга дій (PageHeaderActionsSlot), і саме вона
+             * з'їдає більшу частину висоти.
              *
-             * Ховаємо ТРАНСФОРМОМ, а не висотою: висота смикала б розкладку
-             * всієї сторінки на кожній прокрутці. `will-change` не ставимо —
-             * шар і так створює transition.
+             * z-30, а не z-20: смуга дій з'їжджає ПІД шапку, і на рівних шарах
+             * вона накрила б її — у розмітці вона йде пізніше.
              */
-            chrome === "hidden" && "-translate-y-full",
+            "fixed top-[var(--view-as-offset,0px)] right-0 z-30 border-b border-border/40",
+            "[transition:left_280ms_cubic-bezier(0.32,0.72,0,1),background-color_200ms_linear,backdrop-filter_200ms_linear,border-color_200ms_linear]",
+            "motion-reduce:transition-none",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
             sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]",
             "left-0"
@@ -2821,9 +2820,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             className={cn(isCanvasMode ? "" : "px-4 md:px-5 lg:px-6")}
             style={
               {
+                /*
+                 * Коли смуга поїхала — під нею лишається ШАПКА, а не порожнеча.
+                 * Спершу тут стояв нуль, і на табличних сторінках заголовок
+                 * таблиці підлазив рівно під фіксовану шапку й ховався за нею:
+                 * саме це й було видно як «хедер таблиці погано показується».
+                 */
                 "--page-chrome-offset":
                   chrome === "hidden"
-                    ? "0px"
+                    ? "var(--app-header-height)"
                     : "calc(var(--app-header-height) + var(--page-toolbar-height, 0px))",
               } as React.CSSProperties
             }

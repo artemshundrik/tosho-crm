@@ -124,10 +124,24 @@ export function PageHeaderToolbarSlot({
          * просвічують крізь смугу під час прокрутки.
          */
         "sticky top-[var(--app-header-height)] z-20",
-        "transition-transform duration-[220ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
-        // Їде на власну висоту ПЛЮС висоту шапки: інакше зупинилась би там, де
-        // шапка щойно була, і зависла б смужкою під верхнім краєм.
-        chrome === "hidden" && "-translate-y-[calc(100%+var(--app-header-height))]"
+        /*
+         * ЇДЕ РІВНО НА ВЛАСНУ ВИСОТУ й ховається під шапкою (та лишається на
+         * місці, z-30). Перша версія відвозила смугу ще й на висоту шапки —
+         * тобто вдвічі далі, ніж треба, — і рух читався як ривок кудись убік
+         * від екрана.
+         *
+         * Заразом гасимо прозорість. Шапка напівпрозора з розмиттям, тож без
+         * цього крізь неї просвічувала б смуга, що проїжджає, — саме та каша,
+         * яку видно було під час прокрутки. Прозорість згасає швидше за рух,
+         * щоб смуга зникала ДО того, як дійде до шапки.
+         *
+         * `pointer-events-none` у схованому стані: інакше невидима смуга
+         * ловила б кліки по верхніх рядках списку.
+         */
+        "transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none",
+        chrome === "hidden"
+          ? "pointer-events-none -translate-y-full opacity-0 duration-150"
+          : "translate-y-0 opacity-100"
       )}
     >
       <div

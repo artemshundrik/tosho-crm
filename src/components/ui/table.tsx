@@ -68,7 +68,10 @@ const Table = React.forwardRef<
         // і thead піднімається під самий верх замість того, щоб висіти під
         // порожнечею. Запасне значення — для сторінок без смуги дій.
         "[&_thead]:sticky [&_thead]:top-[var(--page-chrome-offset,var(--app-header-height))] [&_thead]:z-10",
-        "[&_thead]:transition-[top] [&_thead]:duration-[220ms] [&_thead]:ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:[&_thead]:transition-none",
+        // Той самий рух, що й у смуги дій: заголовок таблиці підіймається слідом
+        // за нею, а не стрибає в кінці. Тривалість і крива збігаються навмисно —
+        // розсинхрон читався б як два різні рухи в одному кадрі.
+        "[&_thead]:transition-[top] [&_thead]:duration-200 [&_thead]:ease-out motion-reduce:[&_thead]:transition-none",
         "[&_thead]:bg-card",
       ].join(" ")
     : "";
