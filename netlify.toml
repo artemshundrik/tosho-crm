@@ -44,6 +44,19 @@ package = "/plugins/record-release"
 directory = "netlify/functions"
 node_bundler = "esbuild"
 
+# ЛОКАЛЬНИЙ `netlify dev`. Без цього блоку CLI сам вгадує фреймворк і чекає на
+# Vite за типовим портом 5173 — а наш Vite слухає 5199 (`devPort` у
+# vite.config.ts). Наслідок був німий і дорогий: сервер піднімався, віддавав
+# сторінку, а через хвилину помирав із «Timed out waiting for port '5173'», і
+# жодну серверну функцію не можна було перевірити на живому застосунку —
+# рівно те, що docs/CODEX_WORKFLOWS.md §0 велить робити для таких задач.
+# Число тримати синхронно з vite.config.ts.
+[dev]
+command = "npm run dev"
+targetPort = 5199
+port = 8888
+framework = "#custom"
+
 [[redirects]]
 from = "/api/fx-rates"
 to = "/.netlify/functions/fx-rates"
