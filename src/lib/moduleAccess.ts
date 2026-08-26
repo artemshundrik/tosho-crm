@@ -375,7 +375,24 @@ export function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: st
     (accessRole ?? "").trim().toLowerCase() === "owner" ||
     role === "seo" ||
     role === "accountant" ||
-    role === "chief_accountant"
+    role === "chief_accountant" ||
+    role === "junior_accountant"
+  );
+}
+
+/**
+ * Виплати команді — ВУЖЧИЙ контур усередині Фінансів: власник і SEO, більше ніхто.
+ *
+ * Бухгалтер веде рахунки, витрати й податки, але не бачить, хто скільки
+ * отримує. Це не «фінанси суворіше» — це інше питання й інша відповідь, тому й
+ * функція окрема. Дзеркало `tosho.has_payroll_access` і політик
+ * `tosho.payroll_entries`: розійдуться — людина побачить вкладку, у якій кожен
+ * запит поверне порожньо.
+ */
+export function hasPayrollAccess(accessRole?: string | null, jobRole?: string | null) {
+  return (
+    (accessRole ?? "").trim().toLowerCase() === "owner" ||
+    (jobRole ?? "").trim().toLowerCase() === "seo"
   );
 }
 

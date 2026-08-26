@@ -4,6 +4,7 @@ import {
   defaultModuleAccess,
   hasDefaultFinanceAccess,
   hasModuleAccess,
+  hasPayrollAccess,
   isModuleVisibleInMenu,
   MODULE_DEFINITIONS,
   MODULE_GROUPS,
@@ -233,11 +234,42 @@ describe("доступ до Фінансів за роллю", () => {
     expect(hasDefaultFinanceAccess("owner", "it_specialist")).toBe(true);
   });
 
-  it("молодший бухгалтер фінансів за роллю НЕ має — так само, як у RLS", () => {
-    // Якщо це колись зміниться, міняти треба ОБИДВА боки: тут і
-    // tosho.has_finance_access у базі. Інакше людина побачить розділ,
-    // у якому кожен запит поверне порожньо.
-    expect(hasDefaultFinanceAccess("member", "junior_accountant")).toBe(false);
+  it("молодший бухгалтер теж має фінанси — рішення CEO 26.08.2026", () => {
+    // Той самий перелік стоїть у tosho.has_finance_access (scripts/access-lockout.sql
+    // і scripts/finances-access-rls.sql). Міняти можна ЛИШЕ обидва боки разом:
+    // інакше або людина бачить розділ, у якому кожен запит порожній, або має
+    // доступ до даних, а пункту меню не бачить.
+    expect(hasDefaultFinanceAccess("member", "junior_accountant")).toBe(true);
+  });
+
+  it("менеджер і дизайнер фінансів не мають", () => {
+    expect(hasDefaultFinanceAccess("member", "manager")).toBe(false);
+    expect(hasDefaultFinanceAccess("member", "designer")).toBe(false);
+    expect(hasDefaultFinanceAccess("admin", "pm")).toBe(false);
+  });
+});
+
+/**
+ * Виплати команді — вужчий контур усередині Фінансів: власник і SEO.
+ * Дзеркало `tosho.has_payroll_access` і політик `tosho.payroll_entries`.
+ */
+describe("доступ до «Виплат команді»", () => {
+  it("власник і SEO — так", () => {
+    expect(hasPayrollAccess("owner", "it_specialist")).toBe(true);
+    expect(hasPayrollAccess("admin", "seo")).toBe(true);
+  });
+
+  it("бухгалтери — ні, хоч фінанси в них є", () => {
+    // Обидві половини важливі: доступ до Фінансів у них ЄСТЬ, а до зарплат — ні.
+    expect(hasDefaultFinanceAccess("member", "accountant")).toBe(true);
+    expect(hasPayrollAccess("member", "accountant")).toBe(false);
+    expect(hasPayrollAccess("member", "junior_accountant")).toBe(false);
+    expect(hasPayrollAccess("member", "chief_accountant")).toBe(false);
+  });
+
+  it("решта команди — ні", () => {
+    expect(hasPayrollAccess("member", "manager")).toBe(false);
+    expect(hasPayrollAccess("admin", "pm")).toBe(false);
   });
 });
 
@@ -252,10 +284,13 @@ describe("видимість пункту меню", () => {
     ).toBe(true);
   });
 
-  it("молодшому бухгалтеру галочка Фінансів пункт не відкриває", () => {
+  it("молодший бухгалтер бачить Фінанси незалежно від галочки", () => {
     expect(
       isModuleVisibleInMenu("finance", { finance: true }, { jobRole: "junior_accountant", isSuperAdmin: false })
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      isModuleVisibleInMenu("finance", { finance: false }, { jobRole: "junior_accountant", isSuperAdmin: false })
+    ).toBe(true);
   });
 
   it("менеджер без ролі й без галочки Фінансів не бачить", () => {

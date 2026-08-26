@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { normalizeJobRole } from "@/lib/permissions";
+import { hasPayrollAccess } from "@/lib/moduleAccess";
 import { FinanceSettings } from "@/features/finances/FinanceSettings";
 import { FinanceSales } from "@/features/finances/FinanceSales";
 import { FinanceExpenses } from "@/features/finances/FinanceExpenses";
@@ -80,7 +81,7 @@ const isSection = (value: string | null): value is FinanceSectionId =>
   Boolean(value) && (SECTION_IDS as string[]).includes(value!);
 
 export default function FinancesPage() {
-  const { teamId, userId, permissions, jobRole } = useAuth();
+  const { teamId, userId, permissions, accessRole, jobRole } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // CEO (owner) + головбух (chief_accountant) — топ-ролі, бачать чутливі канали й маржу.
@@ -89,14 +90,26 @@ export default function FinancesPage() {
     [permissions.isSuperAdmin, jobRole]
   );
 
+  /**
+   * Виплати команді — власник і SEO, більше ніхто (рішення CEO 26.08.2026).
+   *
+   * Бухгалтери мають Фінанси цілком, але зарплати колег — ні. База тримає той
+   * самий рубіж: політики `tosho.payroll_entries` і `tosho.finance_payout_meta`
+   * питають `tosho.has_payroll_access`. Доти вкладку показували всім фін-ролям,
+   * і бухгалтер відкривав порожню таблицю замість чесного «не для вас».
+   */
+  const canSeePayroll = useMemo(
+    () => hasPayrollAccess(accessRole, jobRole),
+    [accessRole, jobRole]
+  );
+
   // Маржа/собівартість — лише топ-ролі (CEO + головбух).
-  // Виплати команди — доступні всім фін-ролям (SEO/бухгалтери теж бачать).
   const visibleSections = useMemo(
     () =>
-      canSeeSensitive
-        ? FINANCE_SECTIONS
-        : FINANCE_SECTIONS.filter((s) => s.id !== "margin"),
-    [canSeeSensitive]
+      FINANCE_SECTIONS.filter(
+        (s) => (s.id !== "margin" || canSeeSensitive) && (s.id !== "payroll" || canSeePayroll)
+      ),
+    [canSeeSensitive, canSeePayroll]
   );
 
   const activeSection: FinanceSectionId = useMemo(() => {

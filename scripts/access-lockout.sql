@@ -141,7 +141,7 @@ as $$
       where m.user_id = auth.uid()
         and (
           lower(coalesce(m.role::text, '')) = 'owner'
-          or lower(coalesce(m.job_role::text, '')) in ('seo', 'accountant', 'chief_accountant')
+          or lower(coalesce(m.job_role::text, '')) in ('seo', 'accountant', 'chief_accountant', 'junior_accountant')
         )
     )
     and not tosho.is_user_blocked(auth.uid());
