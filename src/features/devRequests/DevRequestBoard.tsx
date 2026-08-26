@@ -213,12 +213,7 @@ export function DevRequestBoard({
         {/* ── Пріоритет, напрямок, автор, «просили N», «закрита» ── */}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {meta.map((item) => (
-            <CardMetaChip
-              key={item.key}
-              item={item}
-              zone={request.zone}
-              autoClassified={request.autoClassified}
-            />
+            <CardMetaChip key={item.key} item={item} />
           ))}
           {/* Дата — не чип, а тихий підпис праворуч: це не властивість картки,
               а відповідь на питання колонки («скільки висить» / «коли поїхало»).

@@ -1,17 +1,41 @@
 import { describe, expect, it } from "vitest";
 
-import { columnDate, columnDateLabel, dateBucket, sortColumn } from "./columnDate";
+import type { ChecklistItem } from "./checklist";
+import { columnDate, columnDateLabel, dateBucket, isBlockedOnPerson, sortColumn } from "./columnDate";
 import type { DevRequest } from "./types";
 
 const NOW = new Date("2026-08-15T12:00:00Z");
 
-function make(number: number, createdAt: string, releasedAt: string | null = null): DevRequest {
+function make(
+  number: number,
+  createdAt: string,
+  releasedAt: string | null = null,
+  checklist: ChecklistItem[] = []
+): DevRequest {
   return {
     number,
     createdAt,
     releasedAt,
     status: "released",
+    // Порожній чекліст, а не пропущене поле: sortColumn питає його на кожній
+    // картці, і фікстура без нього брехала б типом і валила сортування.
+    checklist,
   } as unknown as DevRequest;
+}
+
+/** Пункт «чекає на людину» — рівно те, від чого картка опускається вниз колонки. */
+function waitingOn(who: string, since: string): ChecklistItem {
+  return {
+    id: "w1",
+    kind: "task",
+    text: "Чекаємо відповіді",
+    state: "waiting",
+    group: null,
+    who,
+    since,
+    note: null,
+    answer: null,
+  };
 }
 
 describe("columnDate", () => {
@@ -87,5 +111,27 @@ describe("dateBucket", () => {
     expect(bucket("2026-08-11T06:00:00Z")).toBe("Цього тижня");
     expect(bucket("2026-07-25T06:00:00Z")).toBe("Цього місяця");
     expect(bucket("2026-05-01T06:00:00Z")).toBe("Раніше");
+  });
+});
+
+describe("заблоковане опускається вниз колонки", () => {
+  it("картка, що чекає на людину, стоїть нижче за живу — навіть якщо новіша", () => {
+    // Той самий випадок, що й на дошці: у «В роботі» висіли чотири картки, і
+    // три з них насправді чекали відповіді. Колонка, де ніхто нічого не
+    // робить, вчить не вірити дошці — тож живе вгорі, заблоковане внизу.
+    const blocked = make(15, "2026-08-14T09:00:00Z", null, [waitingOn("СЕО", "2026-07-30")]);
+    const alive = make(16, "2026-08-01T09:00:00Z");
+
+    expect(sortColumn([blocked, alive], "in_progress").map((r) => r.number)).toEqual([16, 15]);
+  });
+
+  it("серед однаково заблокованих порядок звичайний", () => {
+    const a = make(20, "2026-08-14T09:00:00Z", null, [waitingOn("СЕО", "2026-08-01")]);
+    const b = make(21, "2026-08-14T09:00:00Z", null, [waitingOn("СЕО", "2026-08-01")]);
+    expect(sortColumn([a, b], "in_progress").map((r) => r.number)).toEqual([21, 20]);
+  });
+
+  it("порожній чекліст блокуванням не рахується", () => {
+    expect(isBlockedOnPerson(make(1, "2026-08-01T09:00:00Z"))).toBe(false);
   });
 });

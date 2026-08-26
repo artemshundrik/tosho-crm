@@ -186,7 +186,7 @@ export function DevRequestWall({
                 склад мають збігатись за побудовою, а не за домовленістю. */}
             <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2.5">
               {buildCardMeta(request, { viewerId }).map((item) => (
-                <CardMetaChip key={item.key} item={item} zone={request.zone} />
+                <CardMetaChip key={item.key} item={item} />
               ))}
               <span
                 className={cn(
