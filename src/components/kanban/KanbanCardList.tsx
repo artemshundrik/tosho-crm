@@ -86,16 +86,27 @@ const BULK_CHANGE_LIMIT = 4;
  * хореографії. Одноразовий прапорець згасив би лише перший із них.
  */
 const SKIP_WINDOW_MS = 300;
+
 /**
- * −∞, а не 0. З нулем перевірка «зараз ще всередині вікна» (`now <= until`)
- * ставала істинною будь-коли, коли годинник теж показує нуль, — а саме це й
- * робить `vi.useFakeTimers()`. Рух глушився назавжди, і зловили це тести.
+ * Прапорець, а не позначка часу — і це не дрібниця.
+ *
+ * Спершу тут лежав `performance.now() + вікно`, а рендер порівнював його з
+ * поточним часом. Читати годинник під час рендеру — нечисто за визначенням
+ * (той самий рендер двічі дає різний результат), і сторож компілятора це
+ * справедливо ловить. Прапорець із таймером відповідає на те саме питання, не
+ * питаючи котра година.
  */
-let skipChoreographyUntil = Number.NEGATIVE_INFINITY;
+let skipChoreography = false;
+let skipTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Наступну зміну даних не анімувати: рух уже показано (див. SKIP_WINDOW_MS). */
 export function skipNextKanbanChoreography() {
-  skipChoreographyUntil = performance.now() + SKIP_WINDOW_MS;
+  skipChoreography = true;
+  if (skipTimer) clearTimeout(skipTimer);
+  skipTimer = setTimeout(() => {
+    skipChoreography = false;
+    skipTimer = null;
+  }, SKIP_WINDOW_MS);
 }
 
 type LeavingEntry<T> = {
@@ -200,7 +211,7 @@ export function KanbanCardList<T>({
     // Привида не заводимо ні на перебудові списку, ні тоді, коли рух уже
     // показав хтось інший: інакше після перетягування картка ще двісті
     // мілісекунд висіла б у старій колонці, згортаючись удруге.
-    const bulk = gone.length > BULK_CHANGE_LIMIT || performance.now() <= skipChoreographyUntil;
+    const bulk = gone.length > BULK_CHANGE_LIMIT || skipChoreography;
     setSnapshot({ items, keys: liveKeys });
     setLeaving((current) => {
       // Картка, що повернулась у дані (скасування, відкат), більше не прощається.
@@ -318,7 +329,7 @@ function useCardChoreography(containerRef: RefObject<HTMLDivElement | null>, sig
     const animate =
       changed &&
       churn <= BULK_CHANGE_LIMIT &&
-      performance.now() > skipChoreographyUntil &&
+      !skipChoreography &&
       !prefersReducedMotion();
 
     rows.forEach((row) => {

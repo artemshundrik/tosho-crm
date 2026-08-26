@@ -141,8 +141,12 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
   const session = useRef<DragSession | null>(null);
+  // Свіжий обробник у рефі, щоб перетягування не перезапускалось на кожен
+  // рендер дошки. Присвоєння в ефекті: рендер має лишатись чистим.
   const onDropRef = useRef(onDrop);
-  onDropRef.current = onDrop;
+  useEffect(() => {
+    onDropRef.current = onDrop;
+  }, [onDrop]);
 
   /**
    * Розкласти зсуви так, щоб єдина дірка стояла в потрібному місці.
