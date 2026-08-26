@@ -73,6 +73,22 @@ export function DevRequestQueue({
   const canAddMore = todayIds.length < TODAY_LIMIT;
 
   /*
+   * Згорнуті напрями живуть у стані вигляду, а не в localStorage: це рішення
+   * «зараз мені це не цікаво», а не налаштування. Наступного разу сторінка
+   * відкривається розгорнутою — інакше згорнутий колись напрям тихо зникав би
+   * з очей тижнями.
+   */
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (id: string) => {
+    setClosedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  /*
    * ДВІ КОЛОНКИ НА ШИРОКОМУ ЕКРАНІ.
    *
    * Спершу полиці стояли одна під одною, і «Дрібниці» опинялись найнижче — до
@@ -86,22 +102,34 @@ export function DevRequestQueue({
    */
   return (
     <div className="flex flex-col gap-7 xl:grid xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] xl:items-start xl:gap-x-8">
-      {/* ── ліва колонка: те, за що беруться ── */}
-      <div className="flex flex-col gap-7">
-      {/* ── Сьогодні ── */}
-      <Shelf title="Сьогодні" hint={`${todayOrdered.length} з ${TODAY_LIMIT}`}>
-        <div className="flex flex-col gap-2">
+      {/* ── Сьогодні: на всю ширину, над обома колонками ──
+          Це заголовок дня, а не одна з полиць: три справи, заради яких сюди й
+          заходять. У колонці вони ділили б увагу з довідковим. */}
+      <Shelf title="Сьогодні" hint={`${todayOrdered.length} з ${TODAY_LIMIT}`} className="xl:col-span-2">
+        <div className="flex flex-col gap-2 xl:grid xl:grid-cols-3 xl:gap-3">
           {todayOrdered.map((request) => (
             <TodayRow key={request.id} request={request} onSelect={onSelect} onDrop={dropToday} />
           ))}
+          {Array.from({ length: TODAY_LIMIT - todayOrdered.length }, (_, index) => (
+            <p
+              key={`slot-${index}`}
+              className="hidden items-center justify-center rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-2xs text-muted-foreground xl:flex"
+            >
+              {todayOrdered.length === 0 && index === 0
+                ? "Вибери зі списку нижче не більше трьох справ"
+                : "вільне місце"}
+            </p>
+          ))}
           {todayOrdered.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
+            <p className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground xl:hidden">
               Порожньо. Вибери зі списку нижче не більше трьох справ — решта чекатиме, не вимагаючи уваги.
             </p>
           ) : null}
         </div>
       </Shelf>
 
+      {/* ── ліва колонка: те, за що беруться ── */}
+      <div className="flex flex-col gap-7">
       {/* ── Можна брати ── */}
       <Shelf title="Можна брати" hint={String(shelves.free.length)}>
         {shelves.free.length === 0 ? (
@@ -111,9 +139,25 @@ export function DevRequestQueue({
             {freeGroups.map((group) => {
               const look = themeLook(group.label);
               const ThemeIcon = look?.icon;
+              const collapsed = closedGroups.has(group.id);
               return (
                 <div key={group.id}>
-                  <h4 className="mb-1.5 flex items-center gap-2 px-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {/* Заголовок групи — кнопка: клік згортає напрям цілком.
+                      Коли з дванадцяти напрямів сьогодні цікавлять два, решта
+                      має вміти зникнути з очей, а не тільки прокрутитись. */}
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.id)}
+                    aria-expanded={!collapsed}
+                    className="mb-1.5 flex w-full items-center gap-2 rounded px-1 py-0.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ChevronRight
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none",
+                        !collapsed && "rotate-90"
+                      )}
+                      aria-hidden
+                    />
                     {ThemeIcon ? (
                       <ThemeIcon
                         className={cn("h-3.5 w-3.5", look ? toneTextClass[look.tone] : null)}
@@ -124,12 +168,14 @@ export function DevRequestQueue({
                     <span className="font-mono tabular-nums text-muted-foreground/70">
                       {group.items.length}
                     </span>
-                  </h4>
-                  <Rows
-                    requests={group.items}
-                    onSelect={onSelect}
-                    onAddToday={canAddMore ? addToday : undefined}
-                  />
+                  </button>
+                  {collapsed ? null : (
+                    <Rows
+                      requests={group.items}
+                      onSelect={onSelect}
+                      onAddToday={canAddMore ? addToday : undefined}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -161,11 +207,11 @@ export function DevRequestQueue({
       {/* ── Стоїть за людьми ── */}
       {shelves.blocked.length > 0 ? (
         <Shelf title="Стоїть за людьми" hint="не через тебе">
-          <Rows
-            requests={shelves.blocked}
-            onSelect={onSelect}
-            onAddToday={canAddMore ? addToday : undefined}
-          />
+          <div className="flex flex-col gap-2">
+            {shelves.blocked.map((request) => (
+              <BlockedRow key={request.id} request={request} onSelect={onSelect} />
+            ))}
+          </div>
         </Shelf>
       ) : null}
 
@@ -201,13 +247,15 @@ function Shelf({
   title,
   hint,
   children,
+  className,
 }: {
   title: string;
   hint?: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section aria-label={title}>
+    <section aria-label={title} className={className}>
       <div className="mb-2.5 flex items-center gap-2.5">
         <h3 className="text-sm font-semibold">{title}</h3>
         {hint ? <span className="text-2xs text-muted-foreground">{hint}</span> : null}
@@ -223,6 +271,58 @@ function Empty({ text }: { text: string }) {
     <p className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
       {text}
     </p>
+  );
+}
+
+/**
+ * Заблокована картка — двома рядками, і це задум, а не наслідок тісноти.
+ *
+ * Спершу вона малювалась тим самим рядком, що й доступна робота, і в вужчій
+ * правій колонці назва зрізалась до однієї літери: чип «чекає СЕО · 27 дн»
+ * забирав місце. Але тут і питання інше. У доступній картці головне — НАЗВА
+ * (її обирають); у заблокованій головне — КОГО ЧЕКАЄМО І СКІЛЬКИ, бо саме це
+ * підказує, кому нагадати. Тож назва зверху цілком, а очікування — окремим
+ * рядком під нею, де його видно без прищурювання.
+ */
+function BlockedRow({
+  request,
+  onSelect,
+}: {
+  request: DevRequest;
+  onSelect: (request: DevRequest) => void;
+}) {
+  const progress = checklistProgress(request.checklist);
+  const look = themeLook(request.theme);
+  const ThemeIcon = look?.icon;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(request)}
+      className="flex w-full flex-col gap-1.5 rounded-xl border border-border/60 bg-card px-3 py-2.5 text-left transition-colors hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      <span className="flex items-start gap-2">
+        {ThemeIcon ? (
+          <ThemeIcon
+            className={cn("mt-0.5 h-4 w-4 shrink-0", look ? toneTextClass[look.tone] : null)}
+            aria-hidden
+          />
+        ) : null}
+        <span className="text-sm font-medium leading-snug">{request.title}</span>
+      </span>
+
+      <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-6">
+        <WaitChip request={request} />
+        {progress.total > 0 ? (
+          <span className="text-2xs text-muted-foreground">
+            {progress.done} з {progress.total} пунктів
+          </span>
+        ) : null}
+        <span className="ml-auto font-mono text-2xs font-semibold text-muted-foreground">
+          {request.label}
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -412,6 +512,34 @@ function PapercutCard({
     );
   };
 
+  /*
+   * Нова дрібниця дописується в КІНЕЦЬ: список читають зверху вниз, і свіже,
+   * що стрибає нагору, щоразу зсувало б те, на що дивишся. Ідентифікатор —
+   * від найбільшого наявного, а не від довжини списку: інакше після видалення
+   * пункту новий отримав би вже зайнятий id.
+   */
+  const add = (text: string) => {
+    if (!onChecklist) return;
+    const used = request.checklist
+      .map((item) => Number(item.id.replace(/\D/g, "")))
+      .filter((n) => Number.isFinite(n));
+    const next = (used.length > 0 ? Math.max(...used) : 0) + 1;
+    onChecklist(request, [
+      ...request.checklist,
+      {
+        id: `p${next}`,
+        kind: "task",
+        text,
+        state: "todo",
+        group: null,
+        who: null,
+        since: null,
+        note: null,
+        answer: null,
+      },
+    ]);
+  };
+
   return (
     <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
       <div className="flex items-center gap-3 px-3 py-2.5">
@@ -483,13 +611,17 @@ function PapercutCard({
             </li>
           ))}
           <li>
-            <button
-              type="button"
-              onClick={() => onSelect(request)}
-              className="w-full px-3 py-2 text-left text-2xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-            >
-              + додати дрібницю — у картці
-            </button>
+            {onChecklist ? (
+              <AddPapercut disabled={saving} onAdd={add} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSelect(request)}
+                className="w-full px-3 py-2 text-left text-2xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                + додати дрібницю — у картці
+              </button>
+            )}
           </li>
         </ul>
       ) : null}
@@ -510,5 +642,49 @@ function ChecklistMeter({ progress }: { progress: ReturnType<typeof checklistPro
       <i className="block h-full bg-success-solid" style={{ width: share(progress.done) }} />
       <i className="block h-full bg-warning-solid" style={{ width: share(progress.waiting) }} />
     </span>
+  );
+}
+
+/**
+ * Поле «додати дрібницю» просто в списку.
+ *
+ * НАВІЩО ТУТ, А НЕ В КАРТЦІ. Дрібниця з'являється в голові тоді, коли ти на неї
+ * натрапив, — і якщо в цю мить треба відкрити картку, знайти панель пунктів і
+ * закрити картку, вона не запишеться взагалі. Саме через цю відстань дрібниці
+ * й ставали окремими задачами: завести картку було швидше.
+ *
+ * Enter додає й лишає поле відкритим — дрібниці згадуються пачками. Escape
+ * згортає, порожній рядок не додається.
+ */
+function AddPapercut({ disabled, onAdd }: { disabled: boolean; onAdd: (text: string) => void }) {
+  const [text, setText] = useState("");
+
+  const submit = () => {
+    const value = text.trim();
+    if (!value) return;
+    onAdd(value);
+    setText("");
+  };
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5">
+      <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <input
+        value={text}
+        disabled={disabled}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            submit();
+          }
+          if (event.key === "Escape") setText("");
+        }}
+        onBlur={submit}
+        placeholder="додати дрібницю"
+        aria-label="Додати дрібницю"
+        className="min-w-0 flex-1 bg-transparent py-1 text-[13px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+      />
+    </div>
   );
 }

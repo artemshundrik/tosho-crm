@@ -1,11 +1,11 @@
-import { Send } from "lucide-react";
-import { useMemo } from "react";
+import { ChevronRight, Send } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
+import { moduleKeyLabel } from "@/lib/projectMap";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
-import { themeLook } from "./themeRegistry";
 import { KIND_TONE, type DevRequest, type RequestKind } from "./types";
 
 /**
@@ -142,6 +142,22 @@ export function DevRequestLog({
 }) {
   const days = useMemo(() => groupByReleaseDay(requests), [requests]);
 
+  /*
+   * Згорнуті дні — стан вигляду, не налаштування: «сьогодні мене цікавить
+   * лише вівторок» не має переживати перезавантаження. Сотня рядків за
+   * чотирнадцять днів гортається довго, і згорнути прочитане має бути можна
+   * одним кліком по даті.
+   */
+  const [closedDays, setClosedDays] = useState<Set<string>>(() => new Set());
+  const toggleDay = (key: string) => {
+    setClosedDays((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   if (days.length === 0) {
     return (
       <p className="rounded-2xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
@@ -154,7 +170,21 @@ export function DevRequestLog({
     <div className="flex flex-col gap-6">
       {days.map((day) => (
         <section key={day.key} aria-label={`Викочено ${day.label}`}>
-          <h3 className="mb-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+          {/* Заголовок дня — кнопка: клік згортає день. Підсумок при цьому
+              лишається видимим, тож згорнутий день усе одно каже, що в ньому. */}
+          <button
+            type="button"
+            onClick={() => toggleDay(day.key)}
+            aria-expanded={!closedDays.has(day.key)}
+            className="mb-2 flex w-full flex-wrap items-center gap-x-2.5 gap-y-1 rounded px-1 py-0.5 text-2xs font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none",
+                !closedDays.has(day.key) && "rotate-90"
+              )}
+              aria-hidden
+            />
             {day.label}
             <span className="font-mono tabular-nums text-muted-foreground/70">
               {day.requests.length}
@@ -164,12 +194,14 @@ export function DevRequestLog({
             <span className="normal-case tracking-normal text-muted-foreground/70">
               {daySummary(day.requests)}
             </span>
-          </h3>
+          </button>
 
-          <ul className="divide-y divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card">
+          <ul
+            hidden={closedDays.has(day.key)}
+            className="divide-y divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card"
+          >
             {day.requests.map((request) => {
-              const look = themeLook(request.theme);
-              const ThemeIcon = look?.icon;
+              const moduleLabel = moduleKeyLabel(request.moduleKey);
               return (
                 <li key={request.id}>
                   {/*
@@ -182,10 +214,21 @@ export function DevRequestLog({
                       onClick={() => onSelect(request)}
                       className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
                     >
-                      {/* Той самий порядок, що в рядку «Черги»: спершу слово
-                          про роботу, потім назва. Місце під іконку напряму більше
-                          НЕ резервуємо — порожній відступ на сотні рядків читався
-                          як зайве поле, а не як вирівнювання. */}
+                      {/*
+                        МІСЦЯ ПІД ІКОНКУ НАПРЯМУ ТУТ НЕМАЄ, і це зважене рішення.
+                        Тему мають лише 4 викочені картки зі 103: теми з'явились
+                        26.08 і стосуються роботи, яка ще попереду. Резервувати
+                        під них 16 px на кожному з ста рядків означає порожній
+                        відступ, який читається як зайве поле — саме на нього
+                        Артем і показав. Проставити теми заднім числом теж не
+                        можна: це вигадана історія в журналі, який має бути
+                        єдиним місцем, де історія точна.
+
+                        Замість цього праворуч стоїть НАПРЯМОК — він є у 78
+                        картках зі 103 і відповідає на те саме питання «де це
+                        було». Теми з'являтимуться тут самі, у міру того як
+                        картки з ними доїжджатимуть до прода.
+                      */}
                       <span
                         className={cn(
                           "w-[86px] shrink-0 text-2xs font-semibold",
@@ -197,14 +240,10 @@ export function DevRequestLog({
                       <span className="truncate text-sm">{request.title}</span>
                     </button>
 
-                    {ThemeIcon && look ? (
-                      /* Напрям — тихою іконкою праворуч, а не попереду назви:
-                         він потрібен рідше за саму назву, і в потоці ста рядків
-                         його місце — на краю, а не в точці, з якої читають. */
-                      <ThemeIcon
-                        className={cn("hidden h-4 w-4 shrink-0 sm:block", toneTextClass[look.tone])}
-                        aria-label={request.theme ?? undefined}
-                      />
+                    {moduleLabel ? (
+                      <span className="hidden shrink-0 text-2xs text-muted-foreground/70 md:inline">
+                        {moduleLabel}
+                      </span>
                     ) : null}
 
                     <HoverCopyText
