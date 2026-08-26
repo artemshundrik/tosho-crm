@@ -4,6 +4,14 @@ import { chatCostUsd } from "./_aiPricing";
 import { logAiUsage } from "./_aiUsageLog";
 import { buildAppUrl } from "./_lib/appUrl";
 import {
+  fetchMergeCandidates,
+  findCardByLabel,
+  formatMergeDate,
+  mergeIntoBoardCard,
+  type BoardCard,
+} from "./_lib/devRequestBoard";
+import {
+  buildCaptureMergeResponse,
   buildCaptureResponse,
   CAPTURE_BOARD_PATH,
   CAPTURE_DUPLICATE_MESSAGE,
@@ -30,6 +38,12 @@ import { draftDevRequest } from "./_lib/devRequestDraft";
 // Розбір (промпт, карта CRM, валідація напрямку) спільний із вікном створення й
 // Telegram-ботом — _lib/devRequestDraft.ts. Тут лишається те, що властиве цьому
 // входу: гейт по токену, вставка картки та відповідь, придатна до показу власнику.
+//
+// ДВА ВИХОДИ, А НЕ ОДИН. Перед розбором читаємо відкриті картки й віддаємо їхні
+// назви моделі. Назвала наявну — сказане дописується туди, лічильник «скільки
+// разів просили» росте, нової картки не з'являється. Не назвала — усе як
+// раніше. Відповідь у цих випадках різна навмисно: рішення ухвалює модель, і
+// людина має побачити його одразу, а не знайти своє прохання чужим абзацом.
 //
 // CORS свідомо НЕМАЄ: викликає не браузер, а код Cowork. Заголовки доступу лише
 // відкрили б шлях сторінці в чужій вкладці.
@@ -124,10 +138,36 @@ export const handler = async (event: HttpEvent) => {
 
   const model = trimmed(process.env.OPENAI_MODEL) || "gpt-5.6-luna";
 
-  // Список відкритих карток не передаємо — з тієї ж причини, що й у боті: у
-  // Cowork людина не бачить дошки, і підказка «схоже на REQ-17» без можливості
-  // туди глянути лише заплутує. Дублікати зводить людина на дошці.
-  const result = await draftDevRequest({ text, apiKey, model });
+  // Кандидати на дубль. Доти сюди їх не передавали свідомо: вважалось, що в
+  // Cowork людина не бачить дошки, тож підказка «схоже на REQ-17» лише
+  // заплутає, а «дублікати зводить людина на дошці». Замір 26.08.2026 показав,
+  // що обидві половини цього припущення хибні: 165 карток зі 168 прийшли саме
+  // цим входом, а лічильник «скільки разів просили» дорівнював одиниці у ВСІХ
+  // 168 — тобто не склеївся жоден дубль.
+  //
+  // Помилка читання дошки картку не втрачає: список лишається порожнім,
+  // duplicateOf гасне сам собою (draftDevRequest не вірить назвам поза
+  // переліком), і далі все йде як раніше — новою карткою.
+  //
+  // Приватні картки в переліку є, і їхні НАЗВИ їдуть у модель. Це той самий
+  // обмін, що вже діє у вікні створення на дошці, і вхід відкритий рівно тим
+  // людям, яким ці картки видно (docs/DEV_REQUESTS_DESIGN.md §8).
+  let candidates: BoardCard[] = [];
+  try {
+    candidates = await fetchMergeCandidates(admin, teamId);
+  } catch (error) {
+    console.error(
+      "dev-request-capture: merge candidates failed:",
+      error instanceof Error ? error.message : error
+    );
+  }
+
+  const result = await draftDevRequest({
+    text,
+    apiKey,
+    model,
+    openTitles: candidates.map((card) => ({ label: card.label, title: card.title })),
+  });
 
   // Кости логуємо ДО перевірки на успіх: виклик оплачений незалежно від того,
   // чи вдалось розібрати відповідь.
@@ -148,6 +188,7 @@ export const handler = async (event: HttpEvent) => {
         priceKnown: cost.priceKnown,
         chars: result.text.length,
         drafted: result.ok,
+        candidates: candidates.length,
       },
     });
   } else {
@@ -155,6 +196,46 @@ export const handler = async (event: HttpEvent) => {
   }
 
   const draft = result.draft;
+
+  // Долучення до наявної картки замість нової — те, що docs/DEV_REQUESTS_DESIGN.md
+  // §4.2 описує з першого дня («схожий запит не створює другу картку, а додає до
+  // наявної рядок») і чого доти не робило жодне місце в коді.
+  //
+  // Друга перевірка підпису тут не зайва: перша (в draftDevRequest) гасить
+  // вигадані назви, а ця звіряє з тим самим переліком, з якого ми будемо писати
+  // — між ними немає нічого, що могло б розійтись, і саме на цьому рішенні
+  // тримається «нової картки не буде».
+  const mergeTarget = findCardByLabel(candidates, draft.duplicateOf);
+  if (mergeTarget) {
+    const merged = await mergeIntoBoardCard(
+      admin,
+      teamId,
+      mergeTarget.number,
+      // Порожній опис від розбору — дописуємо сказане як є: блок із датою має
+      // містити хоч щось, інакше долучення непомітне.
+      draft.body || result.text,
+      formatMergeDate(new Date())
+    );
+    if (merged.ok) {
+      return json(
+        200,
+        buildCaptureMergeResponse({
+          number: merged.card.number,
+          title: merged.card.title,
+          kind: merged.card.kind,
+          moduleKey: merged.card.moduleKey,
+          askedByCount: merged.askedByCount,
+          url: buildAppUrl(CAPTURE_BOARD_PATH),
+        })
+      );
+    }
+    // Долучити не вийшло — заводимо картку, як робили завжди. Сказане не має
+    // зникати через те, що не вдався запис в іншу картку.
+    console.error(
+      "dev-request-capture: merge failed:",
+      merged.reason === "failed" ? merged.message : merged.reason
+    );
+  }
 
   // Номер видає окрема функція для service_role: наявна next_document_number
   // перевіряє членство через auth.uid(), якого в серверного коду немає (див.

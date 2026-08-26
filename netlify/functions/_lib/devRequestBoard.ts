@@ -2,7 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { isKnownModuleKey, moduleKeyLabel } from "../../../src/lib/projectMap";
 import { formatRequestNumber, KIND_LABELS, PRIORITY_LABELS } from "./devRequestBot";
-import { DRAFT_KINDS, DRAFT_PRIORITIES, type DevRequestKind, type DevRequestPriority } from "./devRequestDraft";
+import {
+  DRAFT_KINDS,
+  DRAFT_PRIORITIES,
+  MAX_OPEN_TITLES,
+  type DevRequestKind,
+  type DevRequestPriority,
+} from "./devRequestDraft";
 
 /**
  * Черга запитів з телефона: що вважається відкритим, у якому порядку читається
@@ -700,6 +706,167 @@ export async function fetchBoardCard(
     .maybeSingle();
   if (error) throw new Error(`dev_requests: ${error.message}`);
   return data ? toBoardCard(data as BoardRow) : null;
+}
+
+/* ------------------------- Долучення до наявної ------------------------ */
+
+/**
+ * Статуси, у картки яких можна ДОЛУЧИТИ нову фразу замість нової картки.
+ *
+ * «Готово локально» тут свідомо немає, хоч воно й відкрите: код такої картки вже
+ * написаний і чекає лише деплою. Дописане в неї не буде зроблено ніколи — воно
+ * поїде в прод разом із карткою, статус стане «Викочено», і прохання зникне з
+ * черги, ніколи не побувавши в роботі. Рівно так тихо загубились хвости REQ-9,
+ * REQ-36 і REQ-56 (docs/DEV_REQUESTS_DESIGN.md §4.5). Для такої картки чесніша
+ * нова.
+ *
+ * «Викочено», «Не робимо» й «Ідеї» не годяться з тієї самої причини, лише
+ * очевидніше: у першу дописувати означає брехати розділу «Релізи», у другу —
+ * скасовувати рішення людини, у третю — ховати прохання в списку «колись».
+ */
+export const MERGEABLE_STATUSES: readonly BoardStatus[] = ["triage", "queued", "in_progress"];
+
+/**
+ * Картки, які модель побачить як кандидатів на дубль.
+ *
+ * Стеля та сама, що й у промпті розбору (MAX_OPEN_TITLES): везти з бази більше,
+ * ніж поїде в модель, немає сенсу, а два різні числа розійшлись би.
+ */
+export async function fetchMergeCandidates(
+  admin: SupabaseClient,
+  teamId: string,
+  limit: number = MAX_OPEN_TITLES
+): Promise<BoardCard[]> {
+  const { data, error } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .select(SELECT_COLUMNS)
+    .eq("team_id", teamId)
+    .in("status", MERGEABLE_STATUSES as string[])
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`dev_requests: ${error.message}`);
+
+  const cards = ((data ?? []) as BoardRow[])
+    .map(toBoardCard)
+    .filter((card): card is BoardCard => card !== null);
+  return sortBoardCards(cards);
+}
+
+/**
+ * Знайти серед кандидатів картку, яку назвала модель.
+ *
+ * Порівнюємо ПІДПИС («REQ-42»), а не номер: у промпті модель бачить саме
+ * підписи, і повертає їх же. Регістр і краї не рахуються — модель то пише
+ * «req-42», то додає пробіл.
+ *
+ * Назви картки, якої в переліку немає, тут не існує: draftDevRequest уже гасить
+ * вигадані підписи, а ця функція — друга, незалежна перевірка перед тим, як
+ * рішення «не заводити нову картку» набуде сили.
+ */
+export function findCardByLabel(cards: BoardCard[], label: string | null): BoardCard | null {
+  const wanted = (label ?? "").trim().toLowerCase();
+  if (!wanted) return null;
+  return cards.find((card) => card.label.toLowerCase() === wanted) ?? null;
+}
+
+/**
+ * Опис картки + дописане знизу.
+ *
+ * ЧОМУ ДОПИСУЄМО, А НЕ ЗЛИВАЄМО РОЗУМНО. Модель бачить лише НАЗВИ відкритих
+ * карток, а не їхні описи, тож «переписати опис з урахуванням нового» вона
+ * зробити не може — тільки вигадати. Дописаний блок із датою нічого не втрачає
+ * й лишає людині рівно одну дію: причесати, якщо захочеться.
+ *
+ * Заголовок капсом — та сама мова, якою вже написані описи на дошці
+ * («ЗАМІР 2026-08-09 — головний висновок», «ЩО ЗРОБЛЕНО»).
+ */
+export function buildMergedBody(currentBody: string, addition: string, on: string): string {
+  const base = (currentBody ?? "").trim();
+  const extra = (addition ?? "").trim();
+  if (!extra) return base;
+
+  const heading = `ДОДАНО ${on} — просили ще раз`;
+  return base ? `${base}\n\n${heading}\n\n${extra}` : `${heading}\n\n${extra}`;
+}
+
+/** Дата для заголовка дописаного блоку: київський настінний день, як на дошці. */
+export function formatMergeDate(now: Date): string {
+  const parts = new Intl.DateTimeFormat("uk-UA", {
+    timeZone: "Europe/Kiev",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("day")}.${get("month")}.${get("year")}`;
+}
+
+export type BoardMergeResult =
+  | { ok: true; card: BoardCard; askedByCount: number }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "failed"; message: string };
+
+/**
+ * Долучити сказане до наявної картки замість того, щоб заводити нову.
+ *
+ * Піднімає лічильник «скільки разів просили» — той самий пріоритетний сигнал,
+ * заради якого його й заводили (docs/DEV_REQUESTS_DESIGN.md §4.2). Станом на
+ * 26.08.2026 він дорівнював одиниці у ВСІХ 168 картках, бо збільшувати його не
+ * вміло жодне місце в коді.
+ *
+ * Читання й запис окремими викликами, без атомарного інкремента в базі: цей
+ * шлях має рівно одного користувача — власника з його токеном, — і двох
+ * одночасних долучень в одну картку тут не буває. Ціна гонки, якби вона
+ * трапилась, — одиниця в лічильнику, а не втрачений текст.
+ */
+export async function mergeIntoBoardCard(
+  admin: SupabaseClient,
+  teamId: string,
+  number: number,
+  addition: string,
+  on: string
+): Promise<BoardMergeResult> {
+  const { data: current, error: readError } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .select("body,asked_by_count")
+    .eq("team_id", teamId)
+    .eq("number", number)
+    .maybeSingle();
+  if (readError) return { ok: false, reason: "failed", message: readError.message };
+  if (!current) return { ok: false, reason: "not_found" };
+
+  const row = current as { body?: string | null; asked_by_count?: number | string | null };
+  const asked = Number(row.asked_by_count);
+  // Зіпсоване чи порожнє значення читаємо як «просили один раз»: цей запис —
+  // другий, тож двійка. Нуль або NaN у лічильнику гірші за приблизну правду.
+  const askedByCount = Number.isFinite(asked) && asked >= 1 ? asked + 1 : 2;
+
+  const { data, error } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .update({
+      body: buildMergedBody(row.body ?? "", addition, on),
+      asked_by_count: askedByCount,
+    })
+    .eq("team_id", teamId)
+    .eq("number", number)
+    // Статус звіряємо ЩЕ РАЗ, уже в самому записі. Кандидатів читали до виклику
+    // моделі, тобто кілька секунд тому, і за цей час картку міг закрити деплой
+    // або рука людини. Умова в UPDATE перетворює цей проміжок на нуль рядків, а
+    // нуль рядків викличний код читає як невдале долучення й заводить нову
+    // картку — тобто найгірший наслідок гонки це зайва картка, а не абзац,
+    // дописаний у щойно викочену справу.
+    .in("status", MERGEABLE_STATUSES as string[])
+    .select(SELECT_COLUMNS)
+    .maybeSingle();
+
+  if (error) return { ok: false, reason: "failed", message: error.message };
+  const card = data ? toBoardCard(data as BoardRow) : null;
+  if (!card) return { ok: false, reason: "failed", message: "долучення не повернуло рядок" };
+
+  return { ok: true, card, askedByCount };
 }
 
 export type BoardMoveResult =

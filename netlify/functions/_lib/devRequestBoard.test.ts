@@ -7,10 +7,15 @@ import {
   buildBoardListResponse,
   buildBoardMoveResponse,
   boardCardMeta,
+  buildMergedBody,
   cardNotFoundMessage,
   COMMIT_NUMBERS_LIMIT,
+  findCardByLabel,
+  formatMergeDate,
   groupBoardCards,
   isMovableStatus,
+  MERGEABLE_STATUSES,
+  mergeIntoBoardCard,
   MOVABLE_STATUSES,
   moveBoardCard,
   OPEN_STATUSES,
@@ -879,5 +884,156 @@ describe("buildBoardUpdateResponse", () => {
     const response = buildBoardUpdateResponse({ card, changed: [], url: "https://tosho.pro/dev/backlog" });
     expect(response.unchanged).toBe(true);
     expect(response.message).toContain("нічого не змінив");
+  });
+});
+
+describe("MERGEABLE_STATUSES", () => {
+  it("«Готово локально» відкрите, але долучати в нього не можна", () => {
+    // Різниця між двома переліками — не дрібниця, а весь сенс MERGEABLE_STATUSES:
+    // код такої картки вже написаний, і дописане в неї поїхало б у прод разом із
+    // нею, жодного разу не побувавши в роботі.
+    expect(OPEN_STATUSES).toContain("done_local");
+    expect(MERGEABLE_STATUSES).not.toContain("done_local");
+  });
+
+  it("закриті стани в кандидатах не з'являються", () => {
+    expect(MERGEABLE_STATUSES).not.toContain("released");
+    expect(MERGEABLE_STATUSES).not.toContain("wont_do");
+    expect(MERGEABLE_STATUSES).not.toContain("someday");
+  });
+});
+
+describe("findCardByLabel", () => {
+  const cards = [card({ number: 42 }), card({ number: 174 })];
+
+  it("знаходить за підписом і не зважає на регістр та краї", () => {
+    expect(findCardByLabel(cards, "REQ-174")?.number).toBe(174);
+    expect(findCardByLabel(cards, "req-174")?.number).toBe(174);
+    expect(findCardByLabel(cards, "  REQ-42 ")?.number).toBe(42);
+  });
+
+  it("вигаданої картки не існує — інакше долучали б у порожнечу", () => {
+    expect(findCardByLabel(cards, "REQ-999")).toBeNull();
+    expect(findCardByLabel(cards, "")).toBeNull();
+    expect(findCardByLabel(cards, null)).toBeNull();
+    expect(findCardByLabel([], "REQ-42")).toBeNull();
+  });
+});
+
+describe("buildMergedBody", () => {
+  it("дописує блок із датою знизу, лишаючи наявний опис недоторканим", () => {
+    const merged = buildMergedBody("ЩО НЕ ТАК\n\nСтарий опис", "Те саме на вкладці Нанесення", "26.08.2026");
+    expect(merged).toBe(
+      "ЩО НЕ ТАК\n\nСтарий опис\n\nДОДАНО 26.08.2026 — просили ще раз\n\nТе саме на вкладці Нанесення"
+    );
+  });
+
+  it("порожній опис не дає порожнього рядка зверху", () => {
+    expect(buildMergedBody("", "Нове прохання", "26.08.2026")).toBe(
+      "ДОДАНО 26.08.2026 — просили ще раз\n\nНове прохання"
+    );
+  });
+
+  it("порожнє доповнення лишає опис як був — заголовок без тексту нічого не каже", () => {
+    expect(buildMergedBody("Старий опис", "   ", "26.08.2026")).toBe("Старий опис");
+  });
+});
+
+describe("formatMergeDate", () => {
+  it("день київський, а не UTC", () => {
+    // 21:30 UTC у серпні — це вже наступна доба в Києві (UTC+3). Дата в описі
+    // має збігатись із тією, що людина побачить на дошці.
+    expect(formatMergeDate(new Date("2026-08-26T21:30:00.000Z"))).toBe("27.08.2026");
+    expect(formatMergeDate(new Date("2026-08-26T10:00:00.000Z"))).toBe("26.08.2026");
+  });
+});
+
+/**
+ * Заглушка під mergeIntoBoardCard: там update іде ДО .in(), тож фільтр статусу
+ * відомий лише на maybeSingle. Тому запис відкладений — інакше стуб не міг би
+ * показати головне: коли статус розійшовся, рядків не оновлюється жодного.
+ */
+type MergeChainStub = {
+  select: () => MergeChainStub;
+  eq: () => MergeChainStub;
+  in: (column: string, values: string[]) => MergeChainStub;
+  update: (patch: Record<string, unknown>) => MergeChainStub;
+  maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: null }>;
+};
+
+function fakeMergeAdmin(initial: Record<string, unknown> | null) {
+  const state = { row: initial, updates: [] as Array<Record<string, unknown>> };
+  let pending: Record<string, unknown> | null = null;
+  let statuses: string[] | null = null;
+
+  const chain: MergeChainStub = {
+    select: () => chain,
+    eq: () => chain,
+    in: (_column, values) => {
+      statuses = values;
+      return chain;
+    },
+    update: (patch) => {
+      pending = patch;
+      return chain;
+    },
+    maybeSingle: async () => {
+      if (!pending) return { data: state.row, error: null };
+      const patch = pending;
+      const wanted = statuses;
+      pending = null;
+      statuses = null;
+
+      const status = String((state.row as { status?: string } | null)?.status ?? "");
+      if (!state.row || (wanted && !wanted.includes(status))) return { data: null, error: null };
+
+      state.updates.push(patch);
+      state.row = { ...state.row, ...patch };
+      return { data: state.row, error: null };
+    },
+  };
+
+  const admin = { schema: () => ({ from: () => chain }) } as unknown as SupabaseClient;
+  return { admin, state };
+}
+
+describe("mergeIntoBoardCard", () => {
+  it("дописує сказане й піднімає лічильник «скільки разів просили»", async () => {
+    const { admin, state } = fakeMergeAdmin(row({ number: 174, body: "Старий опис", asked_by_count: 1 }));
+    const result = await mergeIntoBoardCard(admin, "team-1", 174, "Нове прохання", "26.08.2026");
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.askedByCount).toBe(2);
+    expect(state.updates).toEqual([
+      {
+        body: "Старий опис\n\nДОДАНО 26.08.2026 — просили ще раз\n\nНове прохання",
+        asked_by_count: 2,
+      },
+    ]);
+  });
+
+  it("зіпсований лічильник читається як «просили раз», а не як нуль", async () => {
+    const { admin, state } = fakeMergeAdmin(row({ number: 174, asked_by_count: null }));
+    await mergeIntoBoardCard(admin, "team-1", 174, "Нове", "26.08.2026");
+    expect(state.updates[0]).toMatchObject({ asked_by_count: 2 });
+  });
+
+  it("картки немає — нічого не пишемо", async () => {
+    const { admin, state } = fakeMergeAdmin(null);
+    const result = await mergeIntoBoardCard(admin, "team-1", 999, "Нове", "26.08.2026");
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+    expect(state.updates).toEqual([]);
+  });
+
+  it("картку встигли закрити між читанням і записом — не дописуємо в неї нічого", async () => {
+    // Кандидатів читали до виклику моделі; поки вона думала, деплой перевів
+    // картку у «Викочено». Умова по статусу в самому UPDATE лишає нуль рядків,
+    // і викличний код заведе нову картку замість тихого абзацу в закритій.
+    const { admin, state } = fakeMergeAdmin(row({ number: 174, status: "released", body: "Опис" }));
+    const result = await mergeIntoBoardCard(admin, "team-1", 174, "Нове", "26.08.2026");
+
+    expect(result.ok).toBe(false);
+    expect(state.updates).toEqual([]);
+    expect(state.row).toMatchObject({ body: "Опис" });
   });
 });

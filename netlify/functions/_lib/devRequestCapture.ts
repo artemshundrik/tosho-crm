@@ -190,3 +190,69 @@ export function buildCaptureResponse(input: CaptureResponseInput): CaptureRespon
  * Для людини це не помилка, а факт — те саме, що бачить людина в боті.
  */
 export const CAPTURE_DUPLICATE_MESSAGE = "Цю задачу вже записано ✅";
+
+/** «раз / рази / разів» — лічильник читає людина, і «2 разів» її спиняє. */
+export function timesWord(count: number): string {
+  const tail = Math.abs(count) % 10;
+  const hundred = Math.abs(count) % 100;
+  if (tail === 1 && hundred !== 11) return "раз";
+  if (tail >= 2 && tail <= 4 && (hundred < 12 || hundred > 14)) return "рази";
+  return "разів";
+}
+
+export type CaptureMergeInput = {
+  /** Номер картки, до якої долучили. */
+  number: number;
+  title: string;
+  kind: DevRequestKind;
+  moduleKey: string | null;
+  /** Скільки разів це просили ПІСЛЯ долучення. */
+  askedByCount: number;
+  url: string;
+};
+
+export type CaptureMergeResponse = {
+  ok: true;
+  /** Головна відмінність від звичайної відповіді: нової картки НЕ з'явилось. */
+  merged: true;
+  number: string;
+  title: string;
+  askedByCount: number;
+  url: string;
+  message: string;
+};
+
+/**
+ * Відповідь, коли сказане долучили до наявної картки.
+ *
+ * ЧОМУ ЦЕ ГУЧНО, А НЕ ТИХО. Рішення «нової картки не буде» ухвалює модель, і
+ * помилитись вона може. Тому відповідь називає картку, показує лічильник і
+ * прямо каже, як передумати: людина має побачити вибір ОДРАЗУ, а не знайти
+ * своє прохання чужим абзацом через тиждень.
+ */
+export function buildCaptureMergeResponse(input: CaptureMergeInput): CaptureMergeResponse {
+  const label = formatRequestNumber(input.number);
+  // Рядок збирається тут, а не через buildDevRequestMeta: там пріоритет
+  // обов'язковий, а долучення його не міняє — показати чужий пріоритет як
+  // наслідок цієї дії було б неправдою.
+  const meta = [KIND_LABELS[input.kind], moduleKeyLabel(input.moduleKey)]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+  const lines = [`🔗 ${label} — долучив до наявної картки`, input.title];
+  if (meta) lines.push(meta);
+  lines.push(`Просили вже ${input.askedByCount} ${timesWord(input.askedByCount)}`);
+  lines.push("Не те? Скажи — заведу окремою карткою.");
+  lines.push(input.url);
+
+  return {
+    ok: true,
+    merged: true,
+    number: label,
+    title: input.title,
+    askedByCount: input.askedByCount,
+    url: input.url,
+    message: lines.join("\n"),
+  };
+}

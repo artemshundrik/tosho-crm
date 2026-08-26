@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildCaptureMergeResponse,
   buildCaptureResponse,
   CAPTURE_TOKEN_HEADER,
   isUuid,
   MIN_TEXT_CHARS,
   parseCaptureBody,
   readHeader,
+  timesWord,
   tokenMatches,
 } from "./devRequestCapture";
 
@@ -173,5 +175,52 @@ describe("buildCaptureResponse", () => {
 
   it("розбір спрацював — жодних попереджень у тексті", () => {
     expect(buildCaptureResponse(base).message).not.toContain("Розбір не спрацював");
+  });
+});
+
+describe("timesWord", () => {
+  it("лічильник читає людина, тож «2 разів» не буває", () => {
+    expect(timesWord(1)).toBe("раз");
+    expect(timesWord(2)).toBe("рази");
+    expect(timesWord(4)).toBe("рази");
+    expect(timesWord(5)).toBe("разів");
+    expect(timesWord(11)).toBe("разів");
+    expect(timesWord(12)).toBe("разів");
+    expect(timesWord(21)).toBe("раз");
+    expect(timesWord(22)).toBe("рази");
+  });
+});
+
+describe("buildCaptureMergeResponse", () => {
+  const input = {
+    number: 174,
+    title: "Узгодити середину дизайн-задачі з мовою картки прорахунку",
+    kind: "friction" as const,
+    moduleKey: "design",
+    askedByCount: 2,
+    url: "https://tosho.pro/dev/backlog",
+  };
+
+  it("каже, що картки НЕ з'явилось, і називає ту, до якої долучив", () => {
+    const response = buildCaptureMergeResponse(input);
+
+    expect(response.merged).toBe(true);
+    expect(response.number).toBe("REQ-174");
+    expect(response.askedByCount).toBe(2);
+    expect(response.message).toContain("REQ-174 — долучив до наявної картки");
+    expect(response.message).toContain(input.title);
+    expect(response.message).toContain("Просили вже 2 рази");
+    expect(response.message).toContain(input.url);
+  });
+
+  it("шлях назад видно одразу — рішення ухвалила модель, і воно може бути хибним", () => {
+    expect(buildCaptureMergeResponse(input).message).toContain("заведу окремою карткою");
+  });
+
+  it("пріоритету в рядку немає: долучення його не міняє", () => {
+    const response = buildCaptureMergeResponse(input);
+    expect(response.message).toContain("Незручно");
+    expect(response.message).not.toContain("Звичайний");
+    expect(response.message).not.toContain("Терміново");
   });
 });
