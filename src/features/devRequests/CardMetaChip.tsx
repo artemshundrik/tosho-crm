@@ -1,10 +1,11 @@
-import { Layers, Lock, Users } from "lucide-react";
+import { Lock, Users } from "lucide-react";
 import type { ComponentType } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { toneSubtleClass, toneTextClass } from "@/lib/statusTones";
+import { toneSubtleClass, toneTextClass, type Tone } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import type { CardMeta, CardMetaKey, ChipWeight } from "./cardModel";
+import { themeLook } from "./themeRegistry";
 
 /**
  * Мітка нижнього ряду картки — одна на всі вигляди (дошка, стіна «Ідей»).
@@ -17,11 +18,20 @@ import type { CardMeta, CardMetaKey, ChipWeight } from "./cardModel";
  * увагу й перестають щось означати; одна працює якорем, від якого око читає
  * решту. Донедавна цю роль грала зона — 26.08.2026 зону з картки прибрано
  * (див. buildCardMeta), і якорем стала тема: саме за нею дошку групують.
+ *
+ * У КОЖНОЇ ТЕМИ СВІЙ ВИГЛЯД. Іконка й тон беруться з themeRegistry.ts. Доти
+ * всі дванадцять тем ділили один фіолетовий і одну іконку шарів — тобто мітка
+ * казала «тема існує» замість «котра саме». Іконка унікальна в кожної,
+ * тон повторюється: колір підсилює, але ніколи не є єдиною ознакою.
  */
 
-/** Іконка при мітці — лише там, де вона додає сенсу, а не повторює слово. */
+/**
+ * Іконка при мітці — лише там, де вона додає сенсу, а не повторює слово.
+ *
+ * Теми тут немає: її іконка залежить від значення, а не від ключа мітки, і
+ * приходить із themeRegistry.
+ */
 const META_ICONS: Partial<Record<CardMetaKey, ComponentType<{ className?: string }>>> = {
-  theme: Layers,
   asked: Users,
   private: Lock,
 };
@@ -43,21 +53,18 @@ function weightClassName(weight: ChipWeight): string {
  * тексту додається окремо: сірий на кольоровій заливці читається як бруд, а не
  * як мітка.
  */
-const themeClassName = cn(
-  CHIP_SHAPE,
-  "border-transparent",
-  toneSubtleClass.accent,
-  toneTextClass.accent
-);
+function themeClassName(tone: Tone): string {
+  return cn(CHIP_SHAPE, "border-transparent", toneSubtleClass[tone], toneTextClass[tone]);
+}
 
 export function CardMetaChip({ item }: { item: CardMeta }) {
-  const isTheme = item.key === "theme";
-  const Icon = META_ICONS[item.key];
+  const look = item.key === "theme" ? themeLook(item.label) : null;
+  const Icon = look?.icon ?? META_ICONS[item.key];
 
   return (
     <Badge
       variant="outline"
-      className={cn("gap-1", isTheme ? themeClassName : weightClassName(item.weight))}
+      className={cn("gap-1", look ? themeClassName(look.tone) : weightClassName(item.weight))}
       title={item.hint}
     >
       {Icon ? <Icon className="h-3 w-3" /> : null}
