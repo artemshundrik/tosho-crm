@@ -60,7 +60,6 @@ import {
   withDesignTaskCollaboratorMetadata,
 } from "@/lib/designTaskCollaborators";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { CardViewersBadge } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { useDeferredHeavySurface } from "@/hooks/useDeferredHeavySurface";
 import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
@@ -1277,17 +1276,32 @@ export default function DesignPage() {
     () => new Set(workspacePresence.onlineEntries.map((entry) => entry.userId)),
     [workspacePresence.onlineEntries]
   );
+  /**
+   * ЖИВИЙ ДОВІДНИК ПЕРЕВАЖАЄ ЗНІМОК ІМЕНІ, А НЕ НАВПАКИ.
+   *
+   * У задачі лежить `assigneeLabel` — ім'я, записане в мить призначення. Раніше
+   * воно стояло ПЕРШИМ, і через це та сама людина підписувалась на одній дошці
+   * по-різному: там, де знімок був, показувалось старе ім'я (`a.zhaldak.design`),
+   * а там, де його не було, — нове («Ангеліна Ж.»). Людина перейменувалась, і
+   * половина карток лишилась із учорашнім написом назавжди.
+   *
+   * Тепер порядок такий: сам собі → живий довідник → знімок → короткий id.
+   * Знімок лишається, але як ОСТАННІЙ рубіж: він єдиний, хто пам'ятає ім'я
+   * людини, якої в довіднику вже немає (звільнилась, доступ забрали). Саме для
+   * цього його й записували, а не щоб конкурувати з довідником.
+   *
+   * Те саме правило вже діяло для аватарки нижче — тепер підпис і обличчя
+   * беруться з одного джерела й не можуть розійтись.
+   */
   const getTaskAssigneeLabel = (task: DesignTask) => {
-    if (task.assigneeLabel?.trim()) return task.assigneeLabel.trim();
-    if (
-      task.assigneeUserId &&
-      membersLoading &&
-      !memberById[task.assigneeUserId] &&
-      !(task.assigneeUserId === userId && currentUserDisplayName)
-    ) {
-      return "Завантаження...";
-    }
-    return getMemberLabel(task.assigneeUserId);
+    const id = task.assigneeUserId;
+    const snapshot = task.assigneeLabel?.trim() ?? "";
+    if (!id) return snapshot || "Без виконавця";
+    if (id === userId && currentUserDisplayName) return currentUserDisplayName;
+    const live = memberById[id];
+    if (live) return live;
+    if (membersLoading) return snapshot || "Завантаження...";
+    return snapshot || id.slice(0, 8);
   };
   const getTaskAssigneeAvatar = (task: DesignTask) =>
     getMemberAvatar(task.assigneeUserId) || task.assigneeAvatarUrl?.trim() || null;
@@ -4446,10 +4460,6 @@ export default function DesignPage() {
     );
     const showTakeInWork = Boolean(!task.assigneeUserId && canSelfAssign && userId);
     const hasAssignmentGroup = showSelfAssign || showTakeInWork || canManageAssignments;
-    // Хто ЗАРАЗ відкрив саме цю задачу — див. пояснення в QuotesPage (REQ-163).
-    const cardViewers = workspacePresence
-      .getEntityViewers("design_task", task.id)
-      .filter((viewer) => !viewer.isSelf);
     return (
       <KanbanCard
         {...drag.itemProps(task.id, options?.draggable)}
@@ -4473,7 +4483,6 @@ export default function DesignPage() {
         }}
         surface="raised"
       >
-        <CardViewersBadge viewers={cardViewers} />
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>

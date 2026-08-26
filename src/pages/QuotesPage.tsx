@@ -147,7 +147,6 @@ import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { CardViewersBadge } from "@/components/app/workspace-presence-widgets";
 import {
   DELIVERY_TYPE_OPTIONS,
   KANBAN_COLUMNS,
@@ -5908,13 +5907,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const manager = resolveManagerMember(row.assigned_to);
     const managerLabel = getManagerLabel(row.assigned_to);
     const canOpen = canOpenQuoteRow(row);
-    // Хто ЗАРАЗ відкрив саме цей прорахунок. Це не те саме, що курсор на дошці:
-    // курсор каже «дивиться сюди», а це — «сидить усередині», тобто цілком
-    // може щось там міняти. Знання вже є в присутності, лишалось показати його
-    // там, де воно потрібне, — на самій картці (REQ-163).
-    const cardViewers = workspacePresence
-      .getEntityViewers("quote", row.id)
-      .filter((viewer) => !viewer.isSelf);
 
     return (
       <KanbanCard
@@ -5927,7 +5919,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         interactive={canOpen}
         disabled={!canOpen}
       >
-        <CardViewersBadge viewers={cardViewers} />
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <ColumnStatusIcon

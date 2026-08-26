@@ -121,8 +121,7 @@ import {
   parseDesignOutputVersion,
   resolveDesignOutputVersion,
 } from "@/lib/designOutputVersion";
-import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
+import { LiveCursorsLayer } from "@/components/app/LiveCursorsLayer";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useEntityLock } from "@/hooks/useEntityLock";
@@ -1335,11 +1334,6 @@ export default function DesignTaskPage() {
   // Кеш читається ОДИН раз, а не на кожен рендер: значення потрібні лише для
   // початкових станів нижче. Чому це важливо — див. readInitialDesignPageState.
   const initialCache = useMemo(() => readDesignTaskPageCache(teamId ?? "", id ?? ""), [teamId, id]);
-  const { getEntityViewers } = useWorkspacePresence();
-  const designTaskViewers = useMemo(
-    () => (id ? getEntityViewers("design_task", id) : []),
-    [getEntityViewers, id]
-  );
   const [task, setTask] = useState<DesignTask | null>(() => initialCache?.task ?? null);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(() => initialCache?.task?.title ?? "");
@@ -9636,6 +9630,8 @@ export default function DesignTaskPage() {
 
   return (
     <div ref={layoutRootRef} className="w-full max-w-none space-y-4 pb-20 md:pb-0 xl:space-y-0 xl:pb-0">
+      {/* Курсори колег — див. QuoteDetailsPage. Канал на кожну задачу окремо. */}
+      <LiveCursorsLayer pageKey={`design-task:${id ?? ""}`} />
       <div className="grid grid-cols-1 xl:h-full xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden">
         <div className="min-w-0 space-y-4 xl:min-h-0 xl:h-full xl:overflow-y-auto">
       <EntityHeader
@@ -9698,7 +9694,6 @@ export default function DesignTaskPage() {
           </div>
         }
         subtitle={null}
-        viewers={<EntityViewersBar entries={designTaskViewers} label="Переглядають задачу" />}
         meta={
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Badge className={cn("px-2.5 py-1 text-xs font-semibold", statusColors[task.status])}>

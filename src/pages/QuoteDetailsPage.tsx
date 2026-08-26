@@ -97,7 +97,7 @@ import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
-import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
+import { LiveCursorsLayer } from "@/components/app/LiveCursorsLayer";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
@@ -139,7 +139,6 @@ import {
   ArrowLeft,
   Banknote,
   Copy,
-  Eye,
   FileDown,
   FileText,
   Pencil,
@@ -862,11 +861,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // Кеш читається ОДИН раз, а не на кожен рендер: значення потрібні лише для
   // початкових станів нижче. Чому це важливо — див. readInitialDesignPageState.
   const initialCache = useMemo(() => readQuoteDetailsCache(teamId, quoteId), [teamId, quoteId]);
-  const { getEntityViewers } = useWorkspacePresence();
-  const quoteViewers = useMemo(
-    () => getEntityViewers("quote", quoteId),
-    [getEntityViewers, quoteId]
-  );
 
   const [quote, setQuote] = useState<QuoteSummaryRow | null>(() => initialCache?.quote ?? null);
   const [loading, setLoading] = useState(() => !initialCache?.quote);
@@ -5445,6 +5439,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   return (
     <div ref={layoutRootRef} className="text-foreground">
+      {/* Курсори колег — те саме, що на дошках: якщо в прорахунку є ще хтось,
+          видно, куди він дивиться (REQ-163). Ключ каналу включає id, щоб
+          зустрічались лише ті, хто в ЦЬОМУ прорахунку. */}
+      <LiveCursorsLayer pageKey={`quote:${quoteId}`} />
       {/*
         Дві колонки на всю висоту вікна.
 
@@ -5507,29 +5505,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       ))}
                     </>
                   ) : null}
-                  {quoteViewers.length > 0 ? (
-                    <div className="ml-1 inline-flex items-center gap-1.5 text-muted-foreground">
-                      <Eye className="h-3.5 w-3.5" />
-                      <div className="flex items-center -space-x-1.5">
-                        {quoteViewers.slice(0, 4).map((viewer) => (
-                          <AvatarBase
-                            key={viewer.userId}
-                            src={viewer.avatarUrl}
-                            name={viewer.displayName}
-                            fallback={viewer.displayName.slice(0, 2).toUpperCase()}
-                            size={20}
-                            className="border-2 border-background"
-                            fallbackClassName="text-3xs font-semibold"
-                          />
-                        ))}
-                      </div>
-                      {quoteViewers.length > 4 ? (
-                        <span className="text-2xs font-medium text-muted-foreground">
-                          +{quoteViewers.length - 4}
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
+
               </div>
             </div>
 
