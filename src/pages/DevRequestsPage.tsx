@@ -1,6 +1,6 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Archive, CheckCheck, KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "lucide-react";
+import { Archive, CheckCheck, KanbanSquare, Lightbulb, ListChecks, PlusCircle, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -35,6 +35,8 @@ import { DevRequestWall } from "@/features/devRequests/DevRequestWall";
 import { GroupControl } from "@/features/devRequests/GroupControl";
 import { readGroupKey, writeGroupKey, type GroupKey } from "@/features/devRequests/grouping";
 import { DevRequestLog } from "@/features/devRequests/DevRequestLog";
+import { DevRequestQueue } from "@/features/devRequests/DevRequestQueue";
+import { pruneToday, readTodayIds, writeTodayIds } from "@/features/devRequests/queueShelves";
 import { ReleaseCardDialog } from "@/features/devRequests/ReleaseCardDialog";
 import {
   NewDevRequestDialog,
@@ -64,7 +66,7 @@ const OPEN_TITLES_LIMIT = 50;
  * фільтри дошки й не шоста колонка: чому так, розгорнуто над BOARD_COLUMNS у
  * src/features/devRequests/types.ts.
  */
-type BoardView = "board" | "log" | "someday" | "wont_do" | "archive";
+type BoardView = "queue" | "board" | "log" | "someday" | "wont_do" | "archive";
 
 /**
  * «Запити на доробку» — окремий розділ без ключа модуля, за прецедентом
@@ -80,7 +82,19 @@ export default function DevRequestsPage() {
   // workspace_id потрібен лише при створенні картки й резолвиться в мутації.
   const { accessRole, jobRole, teamId, userId } = useAuth();
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<BoardView>("board");
+  // «Черга» відкривається першою: питання, з яким сюди заходять щодня, — «за що
+  // хвататись», і колонки на нього не відповідають. Дошка лишається сусідньою
+  // вкладкою для того, що справді треба перетягнути.
+  const [view, setView] = useState<BoardView>("queue");
+  // Вибране на сьогодні. Живе в localStorage: це особиста замітка на один день,
+  // а не факт про картку (queueShelves.ts).
+  const [todayIds, setTodayIds] = useState<string[]>(() => readTodayIds());
+
+  const handleToday = useCallback((next: string[]) => {
+    setTodayIds(next);
+    writeTodayIds(next);
+  }, []);
+
   const isNarrowViewport = useIsNarrowViewport();
   const [dialogOpen, setDialogOpen] = useState(false);
   /**
@@ -196,8 +210,11 @@ export default function DevRequestsPage() {
     // «Щоденник» — рівно викочене. Архів не виключаємо: журнал і є історія, і
     // місячна межа архіву тут означала б, що позаминулий тиждень зник.
     if (view === "log") return all.filter((request) => request.status === "released");
+    // «Черга» й «Дошка» показують ОДНЕ І ТЕ САМЕ, по-різному розкладене: два
+    // різні склади карток означали б, що вкладки сперечаються, і довіряти
+    // не можна було б жодній.
     return all.filter((request) =>
-      view === "board"
+      view === "board" || view === "queue"
         ? // Викоченого на дошці більше немає: 103 картки зі 168 не потребують
           // жодного рішення, а місце й увагу забирали щодня. Вони цілі — у
           // «Щоденнику». Картка з живим хвостом сюди не провалюється: гейт
@@ -227,6 +244,25 @@ export default function DevRequestsPage() {
   }, [filters, inView, search]);
 
   /** Лічильники на перемикачі — по всій дошці, а не по знайденому. */
+  /**
+   * Полиця «Сьогодні» чиститься сама.
+   *
+   * Картку, яку за день викотили або відхилили, тримати в переліку не можна:
+   * місць там рівно три, і за тиждень полиця перетворилась би на список
+   * позавчорашніх намірів. Чистимо на кожну зміну даних дошки, а не за
+   * таймером: рівно тоді, коли статус і міг змінитись.
+   */
+  useEffect(() => {
+    const all = board.data;
+    if (!all) return;
+    setTodayIds((current) => {
+      const pruned = pruneToday(current, all);
+      if (pruned.length === current.length) return current;
+      writeTodayIds(pruned);
+      return pruned;
+    });
+  }, [board.data]);
+
   const counts = useMemo(() => {
     const all = board.data ?? [];
     const now = new Date();
@@ -358,6 +394,17 @@ export default function DevRequestsPage() {
         }
         topLeft={
           <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={view === "queue"}
+              onClick={() => setView("queue")}
+              className={cn(SEGMENTED_TRIGGER, "gap-2")}
+            >
+              <ListChecks className="h-4 w-4" />
+              Черга
+              <CountBadge value={counts.board} loading={showBoardSkeleton} />
+            </Button>
             <Button
               variant="segmented"
               size="xs"
@@ -600,6 +647,14 @@ export default function DevRequestsPage() {
               </div>
             ))}
           </div>
+        ) : view === "queue" ? (
+          <DevRequestQueue
+            requests={requests}
+            todayIds={todayIds}
+            onToday={handleToday}
+            onSelect={setSelected}
+            onOpenTriage={() => setView("board")}
+          />
         ) : view === "log" ? (
           <DevRequestLog
             requests={requests}
