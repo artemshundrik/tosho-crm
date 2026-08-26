@@ -158,13 +158,14 @@ describe("підпис напрямку", () => {
 });
 
 describe("колонки дошки", () => {
-  it("порядок від входу до викоченого, «не робимо» окремо", () => {
+  it("порядок від входу до «Готово локально» — далі дошка не веде", () => {
+    // «Викочено» пішло з дошки 27.08.2026 у власний вигляд «Щоденник»: 103
+    // картки зі 168 не потребували жодного рішення, а колонку й увагу займали.
     expect(BOARD_COLUMNS.map((c) => c.status)).toEqual([
       "triage",
       "queued",
       "in_progress",
       "done_local",
-      "released",
     ]);
   });
 
@@ -186,12 +187,15 @@ describe("колонки дошки", () => {
    * зроблю» в ряду з рештою стовпчиків повертає рівно ту ваду, від якої її й
    * відділяли від черги.
    */
-  it("«Ідеї» та «Не робимо» колонками НЕ стають — вони живуть списками", () => {
+  it("«Ідеї», «Не робимо» й «Викочено» колонками НЕ стають — вони живуть списками", () => {
     const columns = BOARD_COLUMNS.map((c) => c.status);
     expect(columns).not.toContain("someday");
     expect(columns).not.toContain("wont_do");
-    expect(columns).toHaveLength(5);
-    expect([...OFF_BOARD_STATUSES]).toEqual(["someday", "wont_do"]);
+    // Сторож проти повернення колонки «Викочено»: дошка має показувати те, що
+    // потребує рішення, а викочене рішень не потребує — воно в «Щоденнику».
+    expect(columns).not.toContain("released");
+    expect(columns).toHaveLength(4);
+    expect([...OFF_BOARD_STATUSES]).toEqual(["someday", "wont_do", "released"]);
   });
 });
 

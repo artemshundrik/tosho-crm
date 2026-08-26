@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Archive, KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "lucide-react";
+import { Archive, CheckCheck, KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -34,6 +34,7 @@ import { DevRequestList } from "@/features/devRequests/DevRequestList";
 import { DevRequestWall } from "@/features/devRequests/DevRequestWall";
 import { GroupControl } from "@/features/devRequests/GroupControl";
 import { readGroupKey, writeGroupKey, type GroupKey } from "@/features/devRequests/grouping";
+import { DevRequestLog } from "@/features/devRequests/DevRequestLog";
 import { ReleaseCardDialog } from "@/features/devRequests/ReleaseCardDialog";
 import {
   NewDevRequestDialog,
@@ -63,7 +64,7 @@ const OPEN_TITLES_LIMIT = 50;
  * фільтри дошки й не шоста колонка: чому так, розгорнуто над BOARD_COLUMNS у
  * src/features/devRequests/types.ts.
  */
-type BoardView = "board" | "someday" | "wont_do" | "archive";
+type BoardView = "board" | "log" | "someday" | "wont_do" | "archive";
 
 /**
  * «Запити на доробку» — окремий розділ без ключа модуля, за прецедентом
@@ -192,9 +193,19 @@ export default function DevRequestsPage() {
     // точність тут нічого не міняє, а Date у кожній ітерації міняла б.
     const now = new Date();
     if (view === "archive") return all.filter((request) => isArchivedRequest(request, now));
+    // «Щоденник» — рівно викочене. Архів не виключаємо: журнал і є історія, і
+    // місячна межа архіву тут означала б, що позаминулий тиждень зник.
+    if (view === "log") return all.filter((request) => request.status === "released");
     return all.filter((request) =>
       view === "board"
-        ? request.status !== "someday" && request.status !== "wont_do" && !isArchivedRequest(request, now)
+        ? // Викоченого на дошці більше немає: 103 картки зі 168 не потребують
+          // жодного рішення, а місце й увагу забирали щодня. Вони цілі — у
+          // «Щоденнику». Картка з живим хвостом сюди не провалюється: гейт
+          // релізу лишає її в «Готово локально» з підписом «частина в проді».
+          request.status !== "released" &&
+          request.status !== "someday" &&
+          request.status !== "wont_do" &&
+          !isArchivedRequest(request, now)
         : request.status === view
     );
   }, [board.data, view]);
@@ -221,8 +232,13 @@ export default function DevRequestsPage() {
     const now = new Date();
     return {
       board: all.filter(
-        (r) => r.status !== "someday" && r.status !== "wont_do" && !isArchivedRequest(r, now)
+        (r) =>
+          r.status !== "released" &&
+          r.status !== "someday" &&
+          r.status !== "wont_do" &&
+          !isArchivedRequest(r, now)
       ).length,
+      log: all.filter((r) => r.status === "released").length,
       someday: all.filter((r) => r.status === "someday").length,
       wont_do: all.filter((r) => r.status === "wont_do").length,
       archive: all.filter((r) => isArchivedRequest(r, now)).length,
@@ -352,6 +368,17 @@ export default function DevRequestsPage() {
               <KanbanSquare className="h-4 w-4" />
               Дошка
               <CountBadge value={counts.board} loading={showBoardSkeleton} />
+            </Button>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={view === "log"}
+              onClick={() => setView("log")}
+              className={cn(SEGMENTED_TRIGGER, "gap-2")}
+            >
+              <CheckCheck className="h-4 w-4" />
+              Щоденник
+              <CountBadge value={counts.log} loading={showBoardSkeleton} />
             </Button>
             <Button
               variant="segmented"
@@ -573,6 +600,12 @@ export default function DevRequestsPage() {
               </div>
             ))}
           </div>
+        ) : view === "log" ? (
+          <DevRequestLog
+            requests={requests}
+            onSelect={setSelected}
+            onCopyCard={canSee ? setReleaseCardFor : undefined}
+          />
         ) : view === "someday" ? (
           /* «Ідеї» — стіною нотаток, а не списком: рядок на всю ширину показує
              чотири поля й лишає порожнечу посередині, бо сканувати тут нема
