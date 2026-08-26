@@ -6,8 +6,6 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
-import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanSkeleton, MobileStatusBoard, MobileStatusChips } from "@/components/kanban";
 import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
@@ -352,7 +350,6 @@ export default function OrdersProductionPage() {
   const navigate = useNavigate();
   const navigationType = useNavigationType();
   const { teamId, session, userId } = useAuth();
-  const workspacePresence = useWorkspacePresence();
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
   // Кеш читається ОДИН раз, а не на кожен рендер: значення потрібні лише для
   // початкових станів нижче. Чому це важливо — див. readInitialDesignPageState.
@@ -840,11 +837,6 @@ export default function OrdersProductionPage() {
             ]}
           />
 
-          {isNarrowViewport ? null : (
-                  /* «Хто на цій сторінці» — десктопна річ: в аркуші фільтрів
-                     на телефоні присутність нічого не фільтрує (картка 146). */
-                  <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
-                )}
         </>
       }
       meta={<ToolbarMeta count={filteredRecords.length} countLabel="знайдено" />}
@@ -862,8 +854,6 @@ export default function OrdersProductionPage() {
     managerFilterOptions,
     selectedSpecificationBlocker,
     selectedSpecificationIds,
-    workspacePresence.activeHereEntries,
-    isNarrowViewport,
   ]);
 
   usePageHeaderActions(headerActions, [headerActions]);

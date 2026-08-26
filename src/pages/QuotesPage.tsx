@@ -147,7 +147,7 @@ import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
+import { PresenceAvatarStack } from "@/components/app/workspace-presence-widgets";
 import {
   DELIVERY_TYPE_OPTIONS,
   KANBAN_COLUMNS,
@@ -5810,11 +5810,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Button>
                   </SegmentedGroup>
                 ) : null}
-                {isNarrowViewport ? null : (
-                  /* «Хто на цій сторінці» — десктопна річ: в аркуші фільтрів
-                     на телефоні присутність нічого не фільтрує (картка 146). */
-                  <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
-                )}
               </>
             ) : (
               <>
@@ -5850,11 +5845,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <CountBadge value={quoteSetSetCount} className="ml-1" />
                   </Button>
                 </SegmentedGroup>
-                {isNarrowViewport ? null : (
-                  /* «Хто на цій сторінці» — десктопна річ: в аркуші фільтрів
-                     на телефоні присутність нічого не фільтрує (картка 146). */
-                  <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
-                )}
               </>
             )}
           </>
@@ -5896,8 +5886,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     status,
     viewMode,
     filteredQuoteSets.length,
-    workspacePresence.activeHereEntries,
-    isNarrowViewport,
   ]);
 
   usePageHeaderActions(estimatesHeaderActions, [estimatesHeaderActions]);
@@ -5920,6 +5908,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const manager = resolveManagerMember(row.assigned_to);
     const managerLabel = getManagerLabel(row.assigned_to);
     const canOpen = canOpenQuoteRow(row);
+    // Хто ЗАРАЗ відкрив саме цей прорахунок. Це не те саме, що курсор на дошці:
+    // курсор каже «дивиться сюди», а це — «сидить усередині», тобто цілком
+    // може щось там міняти. Знання вже є в присутності, лишалось показати його
+    // там, де воно потрібне, — на самій картці (REQ-163).
+    const cardViewers = workspacePresence
+      .getEntityViewers("quote", row.id)
+      .filter((viewer) => !viewer.isSelf);
 
     return (
       <KanbanCard
@@ -5945,6 +5940,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             >
               {row.number ?? "Не вказано"}
             </HoverCopyText>
+            {cardViewers.length > 0 ? (
+              <span
+                className="ml-1 inline-flex shrink-0"
+                title={`Зараз у картці: ${cardViewers.map((viewer) => viewer.displayName).join(", ")}`}
+              >
+                <PresenceAvatarStack entries={cardViewers} max={3} size={18} tight />
+              </span>
+            ) : null}
           </div>
           <div className="flex max-w-[150px] flex-wrap items-center justify-end gap-1.5 shrink-0">
             <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-3xs font-semibold">

@@ -60,7 +60,7 @@ import {
   withDesignTaskCollaboratorMetadata,
 } from "@/lib/designTaskCollaborators";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
+import { PresenceAvatarStack } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { useDeferredHeavySurface } from "@/hooks/useDeferredHeavySurface";
 import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
@@ -4446,6 +4446,10 @@ export default function DesignPage() {
     );
     const showTakeInWork = Boolean(!task.assigneeUserId && canSelfAssign && userId);
     const hasAssignmentGroup = showSelfAssign || showTakeInWork || canManageAssignments;
+    // Хто ЗАРАЗ відкрив саме цю задачу — див. пояснення в QuotesPage (REQ-163).
+    const cardViewers = workspacePresence
+      .getEntityViewers("design_task", task.id)
+      .filter((viewer) => !viewer.isSelf);
     return (
       <KanbanCard
         {...drag.itemProps(task.id, options?.draggable)}
@@ -4471,7 +4475,17 @@ export default function DesignPage() {
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
+            <div className="flex items-center gap-1.5">
+              <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
+              {cardViewers.length > 0 ? (
+                <span
+                  className="inline-flex shrink-0"
+                  title={`Зараз у картці: ${cardViewers.map((viewer) => viewer.displayName).join(", ")}`}
+                >
+                  <PresenceAvatarStack entries={cardViewers} max={3} size={18} tight />
+                </span>
+              ) : null}
+            </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
               {isLinkedQuote ? (
                 <HoverCopyText
@@ -5011,11 +5025,6 @@ export default function DesignPage() {
               />
             )}
 
-            {isNarrowViewport ? null : (
-                  /* «Хто на цій сторінці» — десктопна річ: в аркуші фільтрів
-                     на телефоні присутність нічого не фільтрує (картка 146). */
-                  <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
-                )}
           </>
         }
         meta={
@@ -5055,8 +5064,6 @@ export default function DesignPage() {
       statusFilter,
       userId,
       viewMode,
-      workspacePresence.activeHereEntries,
-    isNarrowViewport,
     ]
   );
 
