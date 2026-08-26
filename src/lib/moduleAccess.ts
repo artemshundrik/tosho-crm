@@ -379,6 +379,55 @@ export function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: st
   );
 }
 
+/**
+ * Чи показувати пункт модуля в меню.
+ *
+ * Винесено з AppLayout, бо тут це можна перевірити тестом, а в тілі гіганта —
+ * ні. Рішення про маршрут (ModuleRouteGate у App.tsx) має спиратись на ті самі
+ * правила: розбіжність між ними означає «розділ працює, але його не знайти».
+ */
+export function isModuleVisibleInMenu(
+  key: ModuleKey,
+  access: Partial<ModuleAccess> | null | undefined,
+  ctx: { accessRole?: string | null; jobRole?: string | null; isSuperAdmin: boolean }
+): boolean {
+  const definition = DEFINITION_BY_KEY.get(key);
+  /**
+   * Обмежений модуль («Dev») — рішення лише за нормалізованим доступом.
+   *
+   * Гілку власника нижче тут проходити НЕ можна: вона повертає true для
+   * будь-якого ключа, і перший же модуль, до якого власника не пускає база,
+   * показав би пункт у меню повз власне обмеження.
+   */
+  if (definition?.restrictedTo) return hasModuleAccess(access, key);
+
+  /**
+   * Явно знята галочка ховає пункт навіть у власника.
+   *
+   * Це не обмеження прав: доступ лишається (роут-гейт пропускає, RLS не
+   * змінюється) — ховається саме пункт меню.
+   */
+  const hiddenExplicitly = access?.[key] === false;
+
+  /**
+   * Фінанси вирішує РОЛЬ, а не галочка.
+   *
+   * Доступ до фінансових таблиць ріже RLS-функція `tosho.has_finance_access`,
+   * тож збережене значення тут нічого не додає й нічого не знімає. Сторінка
+   * «Ролі та доступи» показує цей перемикач увімкненим і ЗАБЛОКОВАНИМ для
+   * уповноважених ролей (`isForcedModuleAccess`), а гейт маршруту пускає їх
+   * незалежно від нього — і тільки меню шанувало давнє `false`. Наслідок бачили
+   * 26.08.2026: у бухгалтерки розділ працював за прямою адресою, але пункт меню
+   * був схований, і виглядало це як відібраний доступ.
+   */
+  if (key === "finance") {
+    return hasDefaultFinanceAccess(ctx.accessRole, ctx.jobRole);
+  }
+
+  if (ctx.isSuperAdmin) return !hiddenExplicitly;
+  return hasModuleAccess(access, key);
+}
+
 /** true, якщо модуль дозволений. Незаписаний ключ трактуємо як «дозволено». */
 export function hasModuleAccess(access: Partial<ModuleAccess> | null | undefined, key: ModuleKey) {
   const definition = DEFINITION_BY_KEY.get(key);

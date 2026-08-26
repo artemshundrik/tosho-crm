@@ -25,7 +25,12 @@ import { RouteFallback } from "@/components/app/page-loading";
 import { AppShell } from "@/components/app/AppShell";
 import { BackendUnavailable } from "@/components/app/BackendUnavailable";
 import { migrateAndPruneSessionCaches } from "@/lib/sessionCache";
-import { getModuleDefinition, hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
+import {
+  getModuleDefinition,
+  hasDefaultFinanceAccess,
+  hasModuleAccess,
+  type ModuleKey,
+} from "@/lib/moduleAccess";
 import { getCurrentUser } from "@/lib/currentUser";
 
 // =======================
@@ -573,10 +578,7 @@ function ModuleRouteGate({ moduleKey, children }: { moduleKey: ModuleKey; childr
   // Фінанси обмежені роллю в самій БД (RLS) — уповноважені ролі проходять
   // незалежно від галочки, інакше UI розійшовся б із базою.
   const roleAllowed =
-    permissions.isSuperAdmin ||
-    (moduleKey === "finance" &&
-      ((accessRole ?? "").trim().toLowerCase() === "owner" ||
-        ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase())));
+    permissions.isSuperAdmin || (moduleKey === "finance" && hasDefaultFinanceAccess(accessRole, jobRole));
 
   // Доступи ще вантажаться — нічого не малюємо, щоб не блимнути екраном
   // «потрібен доступ» на кожному перезавантаженні сторінки.

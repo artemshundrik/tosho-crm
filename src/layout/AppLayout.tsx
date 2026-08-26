@@ -58,7 +58,7 @@ import { SidebarFeaturePlate } from "@/features/features/SidebarFeaturePlate";
 import { ProductUpdateModal } from "@/features/features/ProductUpdateModal";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { getModuleDefinition, hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
+import { isModuleVisibleInMenu, type ModuleKey } from "@/lib/moduleAccess";
 import { DEV_LABELS, DEV_PATHS, DEV_ROOT, resolveDevSurface } from "@/lib/devSection";
 import { readCollapsedGroups, writeCollapsedGroups } from "@/lib/sidebarGroupState";
 import { readPinnedLinks, writePinnedLinks } from "@/lib/sidebarPinnedState";
@@ -957,7 +957,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { userId, teamId, session, permissions, accessRole, jobRole, viewAs, viewUserId, moduleAccess } =
     useAuth();
-  const isFinanceJobRole = ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase());
   const showDesignerTimerWidget = Boolean(permissions.isDesigner && teamId && userId);
   const designerTimerController = useDesignerTimerController({
     teamId,
@@ -1024,45 +1023,22 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         // Доступи ще вантажаться — краще не показати пункт, ніж блимнути ним.
         if (moduleAccess === undefined) return false;
 
-        /**
-         * Явно знята галочка ховає пункт навіть у власника.
-         *
-         * Це не обмеження прав: доступ у нього лишається (роут-гейт пропускає,
-         * RLS не змінюється) — ховається саме пункт меню. Власник має право
-         * прибрати з очей те, чим не користується; ігнорувати його ж свідомий
-         * вибір і показувати пункт назад — просто незручно. Права за
-         * замовчуванням не звужуються: незаписаний ключ і далі означає
-         * «показувати».
-         */
-        const hiddenExplicitly = moduleAccess[link.moduleKey] === false;
-
-        /**
-         * Обмежений модуль («Dev») — рішення лише за нормалізованим доступом.
-         *
-         * Гілку власника нижче тут проходити НЕ можна: вона повертає true для
-         * будь-якого ключа, і перший же модуль, до якого власника не пускає
-         * база, показав би пункт у меню повз власне обмеження. Роль уже
-         * врахована в normalizeModuleAccess, а hasModuleAccess для таких
-         * ключів вимагає явного true — знята галочка ховає пункт тим самим.
-         */
-        if (getModuleDefinition(link.moduleKey)?.restrictedTo) {
-          // «Здоровʼя» додатково закрите access_role — той самий гейт, що
-          // стояв на Observability. SEO має Dev, але не має цієї сторінки, і
-          // показувати пункт, який одразу викине, немає сенсу.
-          if (link.to === DEV_PATHS.health && !(permissions.isSuperAdmin || permissions.isAdmin)) {
-            return false;
-          }
-          return hasModuleAccess(moduleAccess, link.moduleKey);
+        // «Здоровʼя» додатково закрите access_role — той самий гейт, що стояв на
+        // Observability. SEO має Dev, але не має цієї сторінки, і показувати
+        // пункт, який одразу викине, немає сенсу.
+        if (link.to === DEV_PATHS.health && !(permissions.isSuperAdmin || permissions.isAdmin)) {
+          return false;
         }
 
-        // Фінанси обмежені роллю в самій БД (RLS) — тримаємо UI у згоді з нею.
-        if (link.moduleKey === "finance") {
-          return (permissions.isSuperAdmin || isFinanceJobRole) && !hiddenExplicitly;
-        }
-        if (permissions.isSuperAdmin) return !hiddenExplicitly;
-        return hasModuleAccess(moduleAccess, link.moduleKey);
+        // Саме правило живе в реєстрі — там його видно поруч із визначенням
+        // модуля й там на нього є тести (src/lib/moduleAccess.test.ts).
+        return isModuleVisibleInMenu(link.moduleKey, moduleAccess, {
+          accessRole,
+          jobRole,
+          isSuperAdmin: permissions.isSuperAdmin,
+        });
       }),
-    [moduleAccess, isFinanceJobRole, permissions.isAdmin, permissions.isSuperAdmin]
+    [moduleAccess, accessRole, jobRole, permissions.isAdmin, permissions.isSuperAdmin]
   );
   /**
    * Закріплені пункти — маршрути, які людина підняла на верх меню.

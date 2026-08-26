@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { JOB_ROLE_NAMES } from "./jobRoles";
 import {
   defaultModuleAccess,
+  hasDefaultFinanceAccess,
   hasModuleAccess,
+  isModuleVisibleInMenu,
   MODULE_DEFINITIONS,
   MODULE_GROUPS,
   MODULE_KEYS,
@@ -212,5 +214,70 @@ describe("цілісність реєстру", () => {
   it("нормалізація завжди повертає повний набір ключів", () => {
     expect(Object.keys(normalizeModuleAccess(null)).sort()).toEqual([...MODULE_KEYS].sort());
     expect(Object.keys(normalizeModuleAccess("сміття")).sort()).toEqual([...MODULE_KEYS].sort());
+  });
+});
+
+/**
+ * Пункт «Фінанси» вирішує РОЛЬ, а не галочка: доступ до фінансових таблиць
+ * ріже RLS-функція `tosho.has_finance_access`. Правило живе в чотирьох місцях
+ * (реєстр, сайдбар, гейт маршруту, база) — і саме тому розходиться.
+ *
+ * Привід: 26.08.2026 бухгалтерка (job_role = accountant) не бачила розділу,
+ * хоча на «Ролях і доступах» перемикач стоїть увімкненим і заблокованим.
+ */
+describe("доступ до Фінансів за роллю", () => {
+  it("бухгалтер, головбух, SEO і власник мають фінанси за роллю", () => {
+    expect(hasDefaultFinanceAccess("member", "accountant")).toBe(true);
+    expect(hasDefaultFinanceAccess("member", "chief_accountant")).toBe(true);
+    expect(hasDefaultFinanceAccess("admin", "seo")).toBe(true);
+    expect(hasDefaultFinanceAccess("owner", "it_specialist")).toBe(true);
+  });
+
+  it("молодший бухгалтер фінансів за роллю НЕ має — так само, як у RLS", () => {
+    // Якщо це колись зміниться, міняти треба ОБИДВА боки: тут і
+    // tosho.has_finance_access у базі. Інакше людина побачить розділ,
+    // у якому кожен запит поверне порожньо.
+    expect(hasDefaultFinanceAccess("member", "junior_accountant")).toBe(false);
+  });
+});
+
+describe("видимість пункту меню", () => {
+  it("бухгалтер бачить Фінанси навіть зі збереженим finance=false", () => {
+    // Саме цей випадок і був у проді: на сторінці доступів перемикач
+    // ЗАБЛОКОВАНИЙ увімкненим (isForcedModuleAccess), гейт маршруту пускає за
+    // роллю — а меню ховало пункт через давнє false у профілі. Розділ працював,
+    // просто до нього не було як дійти.
+    expect(
+      isModuleVisibleInMenu("finance", { finance: false }, { jobRole: "accountant", isSuperAdmin: false })
+    ).toBe(true);
+  });
+
+  it("молодшому бухгалтеру галочка Фінансів пункт не відкриває", () => {
+    expect(
+      isModuleVisibleInMenu("finance", { finance: true }, { jobRole: "junior_accountant", isSuperAdmin: false })
+    ).toBe(false);
+  });
+
+  it("менеджер без ролі й без галочки Фінансів не бачить", () => {
+    expect(isModuleVisibleInMenu("finance", {}, { jobRole: "manager", isSuperAdmin: false })).toBe(false);
+  });
+
+  it("для решти модулів знята галочка ховає пункт навіть власнику", () => {
+    expect(
+      isModuleVisibleInMenu("catalog", { catalog: false }, { accessRole: "owner", isSuperAdmin: true })
+    ).toBe(false);
+    expect(isModuleVisibleInMenu("catalog", {}, { accessRole: "owner", isSuperAdmin: true })).toBe(true);
+  });
+
+  it("незаписаний ключ звичайного модуля означає «показувати»", () => {
+    expect(isModuleVisibleInMenu("design", {}, { jobRole: "designer", isSuperAdmin: false })).toBe(true);
+    expect(
+      isModuleVisibleInMenu("design", { design: false }, { jobRole: "designer", isSuperAdmin: false })
+    ).toBe(false);
+  });
+
+  it("обмежений модуль («Dev») вимагає явного true", () => {
+    expect(isModuleVisibleInMenu("dev", {}, { accessRole: "owner", isSuperAdmin: true })).toBe(false);
+    expect(isModuleVisibleInMenu("dev", { dev: true }, { accessRole: "owner", isSuperAdmin: true })).toBe(true);
   });
 });
