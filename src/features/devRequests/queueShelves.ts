@@ -11,23 +11,54 @@ import type { DevRequest } from "./types";
  * стовпчики.
  *
  * ПОЛИЦІ ВІДПОВІДАЮТЬ НА РІЗНІ ПИТАННЯ, а не на різні етапи:
- *   `today`   — що я взяв на сьогодні (максимум три, обирає людина);
- *   `free`    — що можна брати просто зараз: нічого не блокує;
- *   `blocked` — що стоїть НЕ через мене: у чекліста є пункт «Чекає»;
- *   `shipped` — зроблено локально, чекає найближчого деплою;
- *   `triage`  — ще не розібрано; згорнуте, бо це робота на раз на тиждень.
+ *   `today`      — що я взяв на сьогодні (максимум три, обирає людина);
+ *   `free`       — що можна брати просто зараз: нічого не блокує;
+ *   `blocked`    — що стоїть НЕ через мене: у чекліста є пункт «Чекає»;
+ *   `papercuts`  — накопичувачі дрібниць: одна картка на напрям, назавжди;
+ *   `shipped`    — зроблено локально, чекає найближчого деплою;
+ *   `triage`     — ще не розібрано; згорнуте, бо це робота на раз на тиждень.
  *
  * ЧОМУ ЦЕ ЧИСТА ФУНКЦІЯ. Полиці — це правила, а не верстка: «заблоковане не
  * може лежати в „можна брати“» має бути перевіряним твердженням, а не
  * випадковим наслідком порядку умов у JSX.
  */
 
-export type QueueShelfId = "today" | "free" | "blocked" | "shipped" | "triage";
+export type QueueShelfId = "today" | "free" | "blocked" | "papercuts" | "shipped" | "triage";
 
 export type QueueShelves = Record<QueueShelfId, DevRequest[]>;
 
 /** Скільки справ дозволено взяти на день. Обмеження — і є сенс полиці. */
 export const TODAY_LIMIT = 3;
+
+/**
+ * Позначка картки-накопичувача дрібниць.
+ *
+ * НАВІЩО ВОНИ ВЗАГАЛІ. Замір 26.08.2026 пояснив, звідки береться приплив у сім
+ * карток на день: 59 викочених карток зі 103 закрились ОДНИМ комітом. Тобто
+ * більшість — це дрібниця, якій картка з темою, типом, зоною, напрямком і
+ * пріоритетом важча за саму роботу. Практика зветься papercuts і давно
+ * відпрацьована в Ubuntu, GitHub і Linear: дрібний баг не заводить окремої
+ * задачі, а стає рядком у постійному списку свого напряму. Такі картки не
+ * закриваються ніколи — їх розгрібають пачкою, коли доходять руки.
+ *
+ * ЧОМУ ЗА НАЗВОЮ, А НЕ ЗА НОВИМ ПОЛЕМ. Прапорець у базі довелось би заводити
+ * міграцією, тримати у формі й пояснювати — заради ознаки, яку людина й так
+ * бачить у назві. Префікс читається однаково і в CRM, і в Telegram, і в списку
+ * запитів, а картка лишається звичайною карткою: її можна фільтрувати,
+ * коментувати й закрити, якщо напрям віджив.
+ */
+export const PAPERCUT_PREFIX = "Дрібниці:";
+
+/** Чи це накопичувач дрібниць. Регістр і зайві пробіли значення не мають. */
+export function isPapercutCard(request: Pick<DevRequest, "title">): boolean {
+  return request.title.trim().toLowerCase().startsWith(PAPERCUT_PREFIX.toLowerCase());
+}
+
+/** Назва напряму з назви картки: «Дрібниці: мова інтерфейсу» → «мова інтерфейсу». */
+export function papercutLabel(request: Pick<DevRequest, "title">): string {
+  const title = request.title.trim();
+  return title.slice(PAPERCUT_PREFIX.length).trim() || title;
+}
 
 /**
  * Розкладка карток по полицях.
@@ -45,11 +76,22 @@ export const TODAY_LIMIT = 3;
  */
 export function splitQueue(requests: DevRequest[], todayIds: readonly string[]): QueueShelves {
   const today = new Set(todayIds);
-  const shelves: QueueShelves = { today: [], free: [], blocked: [], shipped: [], triage: [] };
+  const shelves: QueueShelves = {
+    today: [],
+    free: [],
+    blocked: [],
+    papercuts: [],
+    shipped: [],
+    triage: [],
+  };
 
   for (const request of requests) {
     if (today.has(request.id)) shelves.today.push(request);
     else if (request.status === "triage") shelves.triage.push(request);
+    // Накопичувач перевіряємо ДО «готово локально» й «заблоковано»: він ніколи
+    // не буває ні готовим, ні заблокованим — у нього просто інше призначення,
+    // і в списку доступного він щодня вдавав би роботу, якої ніхто не бере.
+    else if (isPapercutCard(request)) shelves.papercuts.push(request);
     else if (request.status === "done_local") shelves.shipped.push(request);
     else if (isBlockedOnPerson(request)) shelves.blocked.push(request);
     else shelves.free.push(request);
@@ -66,6 +108,9 @@ export function splitQueue(requests: DevRequest[], todayIds: readonly string[]):
  * ти й збираєшся вибити ту відповідь.
  */
 export function canTakeToday(request: DevRequest): boolean {
+  // Накопичувач дрібниць «на сьогодні» не беруть: він не закінчується, тож
+  // зайняв би місце в полиці назавжди.
+  if (isPapercutCard(request)) return false;
   return request.status === "queued" || request.status === "in_progress";
 }
 

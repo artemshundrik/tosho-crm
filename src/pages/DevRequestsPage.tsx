@@ -34,6 +34,7 @@ import { DevRequestList } from "@/features/devRequests/DevRequestList";
 import { DevRequestWall } from "@/features/devRequests/DevRequestWall";
 import { GroupControl } from "@/features/devRequests/GroupControl";
 import { readGroupKey, writeGroupKey, type GroupKey } from "@/features/devRequests/grouping";
+import type { ChecklistItem } from "@/features/devRequests/checklist";
 import { DevRequestLog } from "@/features/devRequests/DevRequestLog";
 import { DevRequestQueue } from "@/features/devRequests/DevRequestQueue";
 import { pruneToday, readTodayIds, writeTodayIds } from "@/features/devRequests/queueShelves";
@@ -47,6 +48,7 @@ import {
   useDeleteDevRequest,
   useDevRequestBoard,
   useMoveDevRequest,
+  useUpdateChecklist,
   useUpdateDevRequest,
 } from "@/features/devRequests/queries";
 import {
@@ -89,6 +91,30 @@ export default function DevRequestsPage() {
   // Вибране на сьогодні. Живе в localStorage: це особиста замітка на один день,
   // а не факт про картку (queueShelves.ts).
   const [todayIds, setTodayIds] = useState<string[]>(() => readTodayIds());
+
+  /**
+   * Галочка в дрібниці зберігається одразу, без відкривання картки.
+   *
+   * Пише рівно колонку checklist (useUpdateChecklist) — тією ж мутацією, що й
+   * панель у дровері, тож два входи не можуть розійтись у правилах.
+   */
+  const updateChecklist = useUpdateChecklist(teamId);
+  const [savingChecklistId, setSavingChecklistId] = useState<string | null>(null);
+
+  const handleChecklist = useCallback(
+    (request: DevRequest, items: ChecklistItem[]) => {
+      setSavingChecklistId(request.id);
+      updateChecklist.mutate(
+        { id: request.id, checklist: items },
+        {
+          onError: (error) =>
+            toast.error(error instanceof Error ? error.message : "Не зміг зберегти пункт"),
+          onSettled: () => setSavingChecklistId(null),
+        }
+      );
+    },
+    [updateChecklist]
+  );
 
   const handleToday = useCallback((next: string[]) => {
     setTodayIds(next);
@@ -654,6 +680,8 @@ export default function DevRequestsPage() {
             onToday={handleToday}
             onSelect={setSelected}
             onOpenTriage={() => setView("board")}
+            onChecklist={canSee ? handleChecklist : undefined}
+            savingChecklistId={savingChecklistId}
           />
         ) : view === "log" ? (
           <DevRequestLog

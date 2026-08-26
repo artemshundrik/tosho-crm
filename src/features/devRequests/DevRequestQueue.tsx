@@ -1,14 +1,14 @@
-import { Clock, Inbox, Plus, Rocket, X } from "lucide-react";
-import { useMemo } from "react";
+import { Check, ChevronRight, Clock, Inbox, Plus, Rocket, Scissors, X } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
-import { checklistProgress } from "./checklist";
+import { checklistProgress, type ChecklistItem } from "./checklist";
 import { groupRequests } from "./grouping";
 import { PriorityBars } from "./PriorityBars";
-import { canTakeToday, splitQueue, TODAY_LIMIT } from "./queueShelves";
+import { canTakeToday, papercutLabel, splitQueue, TODAY_LIMIT } from "./queueShelves";
 import { themeLook } from "./themeRegistry";
 import { KIND_LABELS, KIND_TONE, type DevRequest } from "./types";
 
@@ -37,6 +37,9 @@ type QueueProps = {
   onSelect: (request: DevRequest) => void;
   /** Перемкнути сторінку на дошку у «Вхідних» — розбирати зручніше там. */
   onOpenTriage: () => void;
+  /** Зберегти пункти дрібниці. Немає — галочки лише показуються. */
+  onChecklist?: (request: DevRequest, items: ChecklistItem[]) => void;
+  savingChecklistId?: string | null;
 };
 
 export function DevRequestQueue({
@@ -45,6 +48,8 @@ export function DevRequestQueue({
   onToday,
   onSelect,
   onOpenTriage,
+  onChecklist,
+  savingChecklistId,
 }: QueueProps) {
   const shelves = useMemo(() => splitQueue(requests, todayIds), [requests, todayIds]);
 
@@ -126,6 +131,23 @@ export function DevRequestQueue({
             onSelect={onSelect}
             onAddToday={canAddMore ? addToday : undefined}
           />
+        </Shelf>
+      ) : null}
+
+      {/* ── Дрібниці ── */}
+      {shelves.papercuts.length > 0 ? (
+        <Shelf title="Дрібниці" hint="рядками, не картками">
+          <div className="flex flex-col gap-2">
+            {shelves.papercuts.map((request) => (
+              <PapercutCard
+                key={request.id}
+                request={request}
+                onSelect={onSelect}
+                onChecklist={onChecklist}
+                saving={savingChecklistId === request.id}
+              />
+            ))}
+          </div>
         </Shelf>
       ) : null}
 
@@ -317,6 +339,144 @@ function ShippedChip({ request }: { request: DevRequest }) {
     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-tone-soft px-2 py-0.5 text-2xs font-medium text-accent-tone-foreground">
       <Rocket className="h-3 w-3" aria-hidden />
       частина в проді
+    </span>
+  );
+}
+
+/**
+ * Накопичувач дрібниць: назва напряму, смуга готовності й пункти під нею.
+ *
+ * ЧОМУ ГАЛОЧКИ ПРЯМО ТУТ. Сенс дрібниць у тому, що їх розгрібають пачкою: сів,
+ * позакривав п'ять рядків, пішов далі. Якби кожна вимагала відкрити картку,
+ * знайти пункт і закрити картку, накопичувач був би не швидшим за окремі
+ * задачі — тобто не розв'язував би нічого.
+ *
+ * Згорнутий за замовчуванням: на дванадцять напрямів це дванадцять списків, і
+ * розгорнуті вони повернули б ту саму стіну, від якої тікали.
+ */
+function PapercutCard({
+  request,
+  onSelect,
+  onChecklist,
+  saving,
+}: {
+  request: DevRequest;
+  onSelect: (request: DevRequest) => void;
+  onChecklist?: (request: DevRequest, items: ChecklistItem[]) => void;
+  saving: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const look = themeLook(papercutLabel(request));
+  const ThemeIcon = look?.icon ?? Scissors;
+  const progress = checklistProgress(request.checklist);
+  const left = progress.total - progress.done;
+
+  const toggle = (item: ChecklistItem) => {
+    if (!onChecklist) return;
+    const state = item.state === "done" ? "todo" : "done";
+    onChecklist(
+      request,
+      request.checklist.map((entry) => (entry.id === item.id ? { ...entry, state } : entry))
+    );
+  };
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+        >
+          <ChevronRight
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none",
+              open && "rotate-90"
+            )}
+            aria-hidden
+          />
+          <ThemeIcon
+            className={cn("h-4 w-4 shrink-0", look ? toneTextClass[look.tone] : "text-muted-foreground")}
+            aria-hidden
+          />
+          <span className="truncate text-sm font-medium">{papercutLabel(request)}</span>
+        </button>
+
+        {progress.total > 0 ? (
+          <span className="shrink-0 text-2xs text-muted-foreground">
+            {left > 0 ? `лишилось ${left}` : "усе закрито"}
+          </span>
+        ) : null}
+        <ChecklistMeter progress={progress} />
+        <HoverCopyText
+          value={request.label}
+          textClassName="hidden font-mono text-2xs font-semibold text-muted-foreground sm:inline"
+          successMessage="Номер запиту скопійовано"
+          copyLabel="Скопіювати номер запиту"
+        />
+      </div>
+
+      {open ? (
+        <ul className="border-t border-border/50">
+          {request.checklist.map((item) => (
+            <li key={item.id} className="border-b border-border/40 last:border-b-0">
+              <button
+                type="button"
+                onClick={() => toggle(item)}
+                disabled={!onChecklist || saving}
+                aria-pressed={item.state === "done"}
+                className="flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors hover:bg-muted/40 disabled:cursor-default disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                <span
+                  className={cn(
+                    "mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border",
+                    item.state === "done"
+                      ? "border-success-solid bg-success-solid text-background"
+                      : "border-border"
+                  )}
+                  aria-hidden
+                >
+                  {item.state === "done" ? <Check className="h-3 w-3" /> : null}
+                </span>
+                <span
+                  className={cn(
+                    "text-[13px] leading-snug",
+                    item.state === "done" && "text-muted-foreground line-through"
+                  )}
+                >
+                  {item.text}
+                </span>
+              </button>
+            </li>
+          ))}
+          <li>
+            <button
+              type="button"
+              onClick={() => onSelect(request)}
+              className="w-full px-3 py-2 text-left text-2xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              + додати дрібницю — у картці
+            </button>
+          </li>
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/** Смужка готовності пунктів. Той самий поділ, що й у ChecklistBar на дошці. */
+function ChecklistMeter({ progress }: { progress: ReturnType<typeof checklistProgress> }) {
+  if (progress.total === 0) return null;
+  const share = (count: number) => `${(count / progress.total) * 100}%`;
+  return (
+    <span
+      className="inline-flex h-1.5 w-[70px] shrink-0 overflow-hidden rounded-full bg-border"
+      role="img"
+      aria-label={`Пунктів: ${progress.done} з ${progress.total} готово`}
+    >
+      <i className="block h-full bg-success-solid" style={{ width: share(progress.done) }} />
+      <i className="block h-full bg-warning-solid" style={{ width: share(progress.waiting) }} />
     </span>
   );
 }

@@ -1,15 +1,23 @@
 import { describe, expect, it } from "vitest";
 
 import type { ChecklistItem } from "./checklist";
-import { canTakeToday, pruneToday, splitQueue, TODAY_LIMIT } from "./queueShelves";
+import {
+  canTakeToday,
+  isPapercutCard,
+  papercutLabel,
+  pruneToday,
+  splitQueue,
+  TODAY_LIMIT,
+} from "./queueShelves";
 import type { DevRequest, RequestStatus } from "./types";
 
 function make(
   id: string,
   status: RequestStatus,
-  checklist: ChecklistItem[] = []
+  checklist: ChecklistItem[] = [],
+  title = "Звичайна картка"
 ): DevRequest {
-  return { id, number: Number(id), status, checklist } as unknown as DevRequest;
+  return { id, number: Number(id), status, checklist, title } as unknown as DevRequest;
 }
 
 function waiting(who = "СЕО", since = "2026-07-30"): ChecklistItem {
@@ -100,5 +108,51 @@ describe("вибране на сьогодні", () => {
   it("порядок збережених id не переставляється — це порядок, у якому їх клали", () => {
     const requests = [make("1", "queued"), make("2", "queued"), make("3", "queued")];
     expect(pruneToday(["3", "1", "2"], requests)).toEqual(["3", "1", "2"]);
+  });
+});
+
+describe("накопичувачі дрібниць", () => {
+  const cut = (id: string, title: string, status: RequestStatus = "queued") =>
+    make(id, status, [], title);
+
+  it("упізнається за назвою, без огляду на регістр і пробіли", () => {
+    expect(isPapercutCard(cut("1", "Дрібниці: мова інтерфейсу"))).toBe(true);
+    expect(isPapercutCard(cut("2", "  дрібниці: гроші  "))).toBe(true);
+    expect(isPapercutCard(cut("3", "Дрібниця в списку"))).toBe(false);
+    expect(isPapercutCard(cut("4", "Уніфікувати таблиці"))).toBe(false);
+  });
+
+  it("напрям читається з назви", () => {
+    expect(papercutLabel(cut("1", "Дрібниці: мова інтерфейсу"))).toBe("мова інтерфейсу");
+    // Назва без напряму лишається як є — порожнього заголовка бути не має.
+    expect(papercutLabel(cut("2", "Дрібниці:"))).toBe("Дрібниці:");
+  });
+
+  it("лежить на власній полиці, а не в «можна брати»", () => {
+    const shelves = splitQueue([cut("1", "Дрібниці: мова інтерфейсу")], []);
+    expect(shelves.papercuts).toHaveLength(1);
+    expect(shelves.free).toHaveLength(0);
+  });
+
+  it("не потрапляє ні в «готово локально», ні в «стоїть за людьми»", () => {
+    // Накопичувач не буває ні готовим, ні заблокованим: у нього інше
+    // призначення, і в тих полицях він вдавав би роботу, якої ніхто не бере.
+    const done = cut("1", "Дрібниці: стек", "done_local");
+    const blocked = make("2", "in_progress", [waiting()], "Дрібниці: гроші");
+    const shelves = splitQueue([done, blocked], []);
+    expect(shelves.papercuts).toHaveLength(2);
+    expect(shelves.shipped).toHaveLength(0);
+    expect(shelves.blocked).toHaveLength(0);
+  });
+
+  it("на сьогодні його взяти не можна — він не закінчується", () => {
+    expect(canTakeToday(cut("1", "Дрібниці: мова інтерфейсу"))).toBe(false);
+  });
+
+  it("нерозібране сильніше за накопичувач", () => {
+    // Картка, назву якої тільки-но надиктували, спершу має пройти розбір.
+    const shelves = splitQueue([cut("1", "Дрібниці: щось", "triage")], []);
+    expect(shelves.triage).toHaveLength(1);
+    expect(shelves.papercuts).toHaveLength(0);
   });
 });
