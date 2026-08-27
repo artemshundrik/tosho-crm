@@ -66,7 +66,7 @@ else
   echo "[перевірки] ганяю перед пушем — приблизно дві хвилини"
   failed=""
   for check in \
-    "типи застосунку|npx tsc --noEmit" \
+    "типи застосунку|npm run typecheck --silent" \
     "лінт + борг компілятора|node scripts/check-compiler-debt.mjs" \
     "тести|npm run test --silent" \
     "типи функцій|npm run typecheck:functions --silent" \

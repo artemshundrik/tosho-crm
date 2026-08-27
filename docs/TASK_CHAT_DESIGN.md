@@ -239,4 +239,4 @@ alter publication supabase_realtime add table tosho.quote_comments;
 
 ## 13. Перевірка
 
-`npx tsc --noEmit` + `npm run lint` на фронтенді. SQL застосовується через `psql` із `BACKUP_DB_URL` (див. `reference_apply_prod_sql`), окремим кроком, з перевіркою: тригер спрацював на тестовій зміні статусу, підписка realtime приносить нове повідомлення, «внутрішня» нотатка не видно з-під акаунта без доступу до Фінансів.
+`npm run typecheck` + `npm run lint` на фронтенді. SQL застосовується через `psql` із `BACKUP_DB_URL` (див. `reference_apply_prod_sql`), окремим кроком, з перевіркою: тригер спрацював на тестовій зміні статусу, підписка realtime приносить нове повідомлення, «внутрішня» нотатка не видно з-під акаунта без доступу до Фінансів.

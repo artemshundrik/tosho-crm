@@ -24,7 +24,7 @@ git config core.hooksPath
 
 | Перевірка | Команда | ~час |
 |---|---|---|
-| типи застосунку | `npx tsc --noEmit` | 16 с |
+| типи застосунку | `npm run typecheck` (TypeScript 7) | 16 с |
 | лінт + борг компілятора | `node scripts/check-compiler-debt.mjs` | 88 с |
 | тести | `npm run test` | 2.7 с |
 | типи Netlify-функцій | `npm run typecheck:functions` | 1.3 с |

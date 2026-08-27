@@ -87,7 +87,7 @@ the thing. For every function:
 - [ ] New cron function → shared-secret gate + pg_cron job updated.
 - [ ] No new client-side secret; no service-role key reaching the browser/response.
 - [ ] New webhook → fail-closed signature check.
-- [ ] Ran `npx tsc --noEmit` + `npm run lint`.
+- [ ] Ran `npm run typecheck` + `npm run lint`.
 - [ ] `npm run check:db-guards` clean — no NEW table without RLS, `anon` grant, view without
       `security_invoker`, or `SECURITY DEFINER` function with a floating `search_path`.
       Baseline of known debt: `scripts/db-guards-baseline.mjs`; it runs in pre-push and skips

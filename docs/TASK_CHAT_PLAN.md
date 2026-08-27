@@ -10,7 +10,7 @@
 
 **Джерело правди по дизайну:** [TASK_CHAT_DESIGN.md](TASK_CHAT_DESIGN.md). Макет: `scratchpad/task-chat-mockup-b.html`.
 
-**Перевірка (конвенція репозиторію):** `npx tsc --noEmit` + `npm run lint` для фронтенду, `npm test` для чистої логіки. Preview не піднімаємо. **Не пушимо без прямої команди.**
+**Перевірка (конвенція репозиторію):** `npm run typecheck` + `npm run lint` для фронтенду, `npm test` для чистої логіки. Preview не піднімаємо. **Не пушимо без прямої команди.**
 
 ---
 
@@ -658,7 +658,7 @@ export function useMarkThreadRead(threadKey: string | null) {
 
 - [ ] **Крок 2: Перевірити типи**
 
-Запустити: `npx tsc --noEmit`
+Запустити: `npm run typecheck`
 Очікуємо: без помилок.
 
 - [ ] **Крок 3: Коміт**
