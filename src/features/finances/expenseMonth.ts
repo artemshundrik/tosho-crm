@@ -1,5 +1,11 @@
 import { convertToUah, type FxRates } from "@/lib/fxRates";
-import { expenseMonthlyUah, expenseUahAmount, type ExpenseEntry, type FinanceExpense } from "./types";
+import {
+  expectsMonthlyEntry,
+  expenseMonthlyUah,
+  expenseUahAmount,
+  type ExpenseEntry,
+  type FinanceExpense,
+} from "./types";
 
 // Скільки коштує витрата в конкретному місяці — ОДНЕ правило на всі поверхні
 // Фінансів (список «Витрати», bento-підсумок, Звіти, чекліст «закрити місяць»).
@@ -106,7 +112,9 @@ export function expenseMonthCost(
     };
   }
 
-  if (monthKey > currentMonthKey) {
+  // Планом орієнтир стає лише там, де на витрату справді чекають щомісяця.
+  // У «по потребі» майбутнього плану немає: паливо може бути, а може й ні.
+  if (monthKey > currentMonthKey && expectsMonthlyEntry(expense)) {
     return { uah: estimateUah, kind: "plan", estimateUah, entriesCount: 0 };
   }
 

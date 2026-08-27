@@ -6,6 +6,7 @@ import {
   ArchiveRestore,
   BellRing,
   CalendarClock,
+  CalendarOff,
   Check,
   ChevronDown,
   ChevronsUpDown,
@@ -96,6 +97,7 @@ import {
   BILLING_PERIOD_LABELS,
   BILLING_PERIOD_MONTHS,
   BILLING_PERIOD_ORDER,
+  JOURNAL_PERIOD_ORDER,
   billingPeriodOf,
   EXPENSE_CATEGORY_KIND_LABELS,
   expenseUahAmount,
@@ -133,6 +135,9 @@ const PERIOD_UNIT_SHORT: Record<BillingPeriod, string> = {
   quarterly: "квартал",
   semiannual: "півроку",
   yearly: "рік",
+  // Не рендериться: «по потребі» буває лише у витрат із журналом, а вони
+  // показують не «сума / період», а факт своїх записів.
+  as_needed: "раз",
 };
 
 const MONTHS = [
@@ -1073,7 +1078,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
 
   // Скільки з місячної бази — це не-щомісячні підписки (квартальні/піврічні/річні).
   const spreadBaseline = React.useMemo(
-    () => sumMonthly(fixed.filter((e) => billingPeriodOf(e) !== "monthly")),
+    // Лише сталі суми: журнальна витрата нічого не «розбиває» — вона коштує
+    // рівно свої записи, а «по потребі» й поготів.
+    () => sumMonthly(fixed.filter((e) => !e.amountVaries && billingPeriodOf(e) !== "monthly")),
     [fixed, sumMonthly]
   );
 
@@ -1524,7 +1531,10 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         : entriesForMonth(expense.id, selectedMonth);
     const journalOpen = openJournals.has(expense.id);
     const missingEntry = missingEntryIds.has(expense.id);
-    const lastEntry = missingEntry ? lastEntryDate(expense.id) : null;
+    // «Останній запис — 01.06» показуємо в БУДЬ-ЯКОМУ місяці без записів, а не лише
+    // в підсвіченому: для витрати «по потребі» це головна відповідь на питання
+    // «а коли це востаннє було?» (REQ-190).
+    const lastEntry = expense.amountVaries && cost.entriesCount === 0 ? lastEntryDate(expense.id) : null;
 
     return (
       <div
@@ -1570,7 +1580,13 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                     (щоб мати журнал позицій), але «Раз на місяць» на корпоративі — брехня. */}
                 {expense.eventType ? null : (
                   <Badge variant="outline" className="gap-1 text-3xs text-muted-foreground">
-                    {period === "monthly" ? <Pin className="h-3 w-3" /> : <RefreshCw className="h-3 w-3" />}
+                    {period === "as_needed" ? (
+                      <CalendarOff className="h-3 w-3" />
+                    ) : period === "monthly" ? (
+                      <Pin className="h-3 w-3" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" />
+                    )}
                     {BILLING_PERIOD_LABELS[period]}
                   </Badge>
                 )}
@@ -2664,7 +2680,14 @@ function ExpenseDialog({
                 <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border/60 bg-muted/10 p-3 sm:col-span-2">
                   <Checkbox
                     checked={amountVaries}
-                    onCheckedChange={(v) => setAmountVaries(v === true)}
+                    onCheckedChange={(v) => {
+                      const next = v === true;
+                      setAmountVaries(next);
+                      // «По потребі» існує лише в журналі: вимкнули журнал — повертаємо
+                      // місячний графік, інакше в сталої витрати лишився б період,
+                      // якого в її селекті немає.
+                      if (!next && billingPeriod === "as_needed") setBillingPeriod("monthly");
+                    }}
                     className="mt-0.5"
                   />
                   <span className="text-sm">
@@ -2696,18 +2719,27 @@ function ExpenseDialog({
                 <>
                   <div className="grid gap-2">
                     <Label>Періодичність</Label>
+                    {/* Журнальна витрата обирає між «щомісяця» і «по потребі»: паливо,
+                        таксі чи подарунки трапляються, коли трапляються, і вимагати
+                        від них запису за кожен місяць — брехня (REQ-190). Сталій сумі
+                        «по потребі» не буває: там платіж має графік. */}
                     <Select value={billingPeriod} onValueChange={(v) => setBillingPeriod(v as BillingPeriod)}>
                       <SelectTrigger className="h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {BILLING_PERIOD_ORDER.map((p) => (
+                        {(varyingRecurring ? JOURNAL_PERIOD_ORDER : BILLING_PERIOD_ORDER).map((p) => (
                           <SelectItem key={p} value={p}>
                             {BILLING_PERIOD_LABELS[p]}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {varyingRecurring && billingPeriod === "as_needed" ? (
+                      <p className="text-2xs leading-4 text-muted-foreground">
+                        Не нагадуватимемо про неї при закритті місяця — записуй тоді, коли витрата сталась.
+                      </p>
+                    ) : null}
                   </div>
                   {/* Наступне списання — лише для сталої суми: у журналі дати ведуться поштучно. */}
                   {varyingRecurring ? null : (

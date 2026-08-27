@@ -144,6 +144,33 @@ describe("findMissingMonthEntries", () => {
     const party = expense({ eventType: "Корпоратив" });
     expect(findMissingMonthEntries([party], entries([]), "2026-08", NOW).size).toBe(0);
   });
+
+  it("«по потребі» не буває «не внесеним» — воно або сталось, або ні", () => {
+    // Паливо, таксі, Нова Пошта, подарунки, кондиціонери: місяць без запису для
+    // них НОРМА, а не забутий обовʼязок.
+    const asNeeded = expense({ recurrence: "as_needed" });
+    expect(findMissingMonthEntries([asNeeded], entries([]), "2026-08", NOW).size).toBe(0);
+    // А те, що ходить щомісяця (комуналка, вода, прибирання), — світиться.
+    expect(findMissingMonthEntries([expense()], entries([]), "2026-08", NOW).size).toBe(1);
+  });
+});
+
+describe("«по потребі» в підрахунку місяця", () => {
+  it("у майбутньому місяці не показує орієнтир як план", () => {
+    const asNeeded = expense({ recurrence: "as_needed" });
+    const cost = expenseMonthCost(asNeeded, [], "2026-09", RATES, NOW);
+    expect(cost.uah).toBe(0);
+    expect(cost.kind).toBe("empty");
+    // Для щомісячної той самий вересень — план (орієнтир).
+    expect(expenseMonthCost(expense(), [], "2026-09", RATES, NOW).kind).toBe("plan");
+  });
+
+  it("факт рахується так само, як у щомісячної", () => {
+    const asNeeded = expense({ recurrence: "as_needed" });
+    const cost = expenseMonthCost(asNeeded, [entry("2026-08-10", 1440)], "2026-08", RATES, NOW);
+    expect(cost.uah).toBe(1440);
+    expect(cost.kind).toBe("fact");
+  });
 });
 
 describe("expenseRowsForMonths (Звіти)", () => {

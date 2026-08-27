@@ -24,7 +24,8 @@ import {
 // — див. scripts/reminders-cron.sql).
 //
 // Межі беремо від САМОЇ витрати (REQ-190): від місяця «веду облік з» (expense_date)
-// до архівації (archived_at) включно. Правило те саме, що в src/features/finances/
+// до архівації (archived_at) включно, і лише для тих, від кого чекають запис
+// щомісяця (recurrence != 'as_needed'). Правило те саме, що в src/features/finances/
 // monthClose.ts — тримати їх нарізно не можна, бо це один і той самий чекліст.
 //
 // Раніше тут була умова «є запис за три місяці до цільового», щоб давно закинуті
@@ -46,6 +47,7 @@ type ExpenseRow = {
   object_group?: string | null;
   expense_date?: string | null;
   archived_at?: string | null;
+  recurrence?: string | null;
 };
 
 type EntryRow = {
@@ -168,10 +170,14 @@ export const handler = async (event: HttpEvent) => {
     const expensesResult = await adminClient
       .schema("tosho")
       .from("finance_expenses")
-      .select("id,team_id,supplier_name,category_id,object_group,expense_date,archived_at")
+      .select("id,team_id,supplier_name,category_id,object_group,expense_date,archived_at,recurrence")
       .eq("is_recurring", true)
       .eq("amount_varies", true)
       .is("event_type", null)
+      // «По потребі» (паливо, таксі, подарунки) у чекліст не йде: воно або
+      // сталось, або ні — нагадувати про його відсутність нема сенсу.
+      // Через `or` з `is.null`, бо голий neq відкидає ще й рядки з null.
+      .or("recurrence.is.null,recurrence.neq.as_needed")
       .limit(2000);
     if (expensesResult.error) throw expensesResult.error;
     const expenses = (expensesResult.data ?? []) as ExpenseRow[];

@@ -220,14 +220,15 @@ export type FinanceExpenseAllocation = {
   amount: number;
 };
 
-/** Період білінгу сталої витрати / підписки. */
-export type BillingPeriod = "monthly" | "quarterly" | "semiannual" | "yearly";
+/** Період білінгу витрати: як часто платимо («по потребі» — коли трапиться). */
+export type BillingPeriod = "monthly" | "quarterly" | "semiannual" | "yearly" | "as_needed";
 
 export const BILLING_PERIOD_LABELS: Record<BillingPeriod, string> = {
   monthly: "Раз на місяць",
   quarterly: "Раз на квартал",
   semiannual: "Раз на півроку",
   yearly: "Раз на рік",
+  as_needed: "По потребі",
 };
 
 /** На скільки місяців розтягується один платіж — база для розбиття річної оплати. */
@@ -236,13 +237,32 @@ export const BILLING_PERIOD_MONTHS: Record<BillingPeriod, number> = {
   quarterly: 3,
   semiannual: 6,
   yearly: 12,
+  // «По потребі» ніколи не ділить суму: така витрата коштує рівно те, що в її
+  // записах. Одиниця тут — щоб тип був повним, а не тому, що це щомісяця.
+  as_needed: 1,
 };
 
-/** Порядок для селектів (від найчастішого до найрідшого). */
+/** Порядок для селектів сталої суми (від найчастішого до найрідшого). */
 export const BILLING_PERIOD_ORDER: BillingPeriod[] = ["monthly", "quarterly", "semiannual", "yearly"];
 
+/**
+ * Вибір для витрат із журналом. «По потребі» — це відповідь на «як часто?», якої
+ * бракувало: паливо, таксі, Нова Пошта, подарунки й обслуговування кондиціонерів
+ * трапляються, коли трапляються. Поки вибору не було, вони стояли «Раз на місяць»
+ * і щомісяця вимагали запису, якого могло й не бути (REQ-190).
+ */
+export const JOURNAL_PERIOD_ORDER: BillingPeriod[] = ["monthly", "as_needed"];
+
+/** Чи чекаємо запис за КОЖЕН місяць (звідси бейдж «не внесено» й чекліст закриття). */
+export const expectsMonthlyEntry = (expense: { recurrence: string | null }): boolean =>
+  billingPeriodOf(expense) !== "as_needed";
+
 export const isBillingPeriod = (value: unknown): value is BillingPeriod =>
-  value === "monthly" || value === "quarterly" || value === "semiannual" || value === "yearly";
+  value === "monthly" ||
+  value === "quarterly" ||
+  value === "semiannual" ||
+  value === "yearly" ||
+  value === "as_needed";
 
 export const billingPeriodOf = (expense: { recurrence: string | null }): BillingPeriod =>
   isBillingPeriod(expense.recurrence) ? expense.recurrence : "monthly";
