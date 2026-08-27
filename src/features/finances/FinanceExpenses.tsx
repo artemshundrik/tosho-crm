@@ -431,7 +431,7 @@ function EntryEditor({
   initialAmount: string;
   initialVendor: string;
   initialNote: string;
-  /** Постачальники саме цієї витрати (порожньо = поле «звідки» не показуємо). */
+  /** Постачальники саме цієї витрати; порожній список — пікер пропонує ввести першого. */
   vendorOptions: string[];
   /** true = це позиція події: дата спільна (у самої події), поле не показуємо. */
   hideDate?: boolean;
@@ -483,9 +483,11 @@ function EntryEditor({
           className="h-8 w-[150px] rounded-md"
         />
       )}
-      {vendorOptions.length > 0 || vendor ? (
-        <VendorPicker value={vendor} options={vendorOptions} onChange={setVendor} disabled={saving} />
-      ) : null}
+      {/* «Звідки» показуємо ЗАВЖДИ. Раніше поле ховалось, поки в витрати немає
+          жодного постачальника, — і першого не було як вписати. Найгірше саме там,
+          де постачальник щоразу інший: у палива його довелось писати в коментар
+          до картки (REQ-190). Порожній список пікер тримає сам. */}
+      <VendorPicker value={vendor} options={vendorOptions} onChange={setVendor} disabled={saving} />
       <div className="flex items-center gap-1">
         <Input controlSize="sm"
           value={amount}
