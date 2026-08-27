@@ -98,6 +98,60 @@ export const canChangeDesignStatus = (
 ) => getAllowedDesignStatusTransitions(input).includes(input.nextStatus);
 
 /**
+ * Гейт «Повернути на правки»: не можна відправити задачу назад, не сказавши, ЩО
+ * саме міняти.
+ *
+ * ЧОМУ ЦЕ ОКРЕМЕ ПРАВИЛО, А НЕ ПРОСТО «Є ХОЧ ОДНА ПРАВКА». Замір бази
+ * 27.08.2026: 455 правок у проді, і ВСІ 455 у стані `pending` — насправді
+ * статус правки не переводить ніхто й ніколи. Умова «є незакрита правка» після
+ * першого ж раунду пропускала б завжди, тобто гейт був би декорацією.
+ *
+ * Тому питаємо про СВІЖІСТЬ: правка має бути створена після того, як почався
+ * поточний статус. Новий раунд правок потребує нової правки — стара належить
+ * минулому раунду, дизайнер її вже бачив.
+ *
+ * Форма навмисно та сама, що в сусіднього гейту дедлайну на канбані
+ * (`deadline_updated_at` проти `status_changed_at`): люди вже живуть із цим
+ * порівнянням, і друга, несхожа механіка на тому самому переході плутала б.
+ *
+ * Задачі без `status_changed_at` (заведені до появи поля) пропускаємо за
+ * будь-якою правкою — так само, як це робить гейт дедлайну. Заблокувати їх
+ * назавжди було б гірше за пропущений раунд.
+ *
+ * ПРАВИЛО ЖИВЕ ТУТ рівно з тієї ж причини, що й гейт затвердження нижче: його
+ * перевіряють ДВА місця — картка задачі й канбан, де перехід робиться
+ * перетягуванням. Один раз ця граблина вже спрацювала.
+ */
+export const CHANGES_GATE_HINT =
+  "Опишіть правку в самій задачі — дизайнер має побачити, що саме міняти.";
+
+export type ChangesGateInput = {
+  /** `metadata.design_brief_change_requests` як воно лежить у базі. */
+  changeRequests: unknown;
+  /** `metadata.status_changed_at` — коли почався поточний статус. */
+  statusChangedAt: string | null;
+};
+
+/** Чи є правка, створена вже в поточному статусі. */
+export const hasFreshChangeRequest = ({ changeRequests, statusChangedAt }: ChangesGateInput): boolean => {
+  if (!Array.isArray(changeRequests) || changeRequests.length === 0) return false;
+
+  const since = statusChangedAt ? new Date(statusChangedAt).getTime() : null;
+  const sinceUsable = since !== null && Number.isFinite(since);
+
+  return changeRequests.some((entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    const requestedAt = (entry as { requested_at?: unknown }).requested_at;
+    // Без дати правку зарахувати не можемо: інакше сміттєвий запис у метаданих
+    // відчиняв би гейт назавжди.
+    if (typeof requestedAt !== "string") return false;
+    if (!sinceUsable) return true;
+    const at = new Date(requestedAt).getTime();
+    return Number.isFinite(at) && at > (since as number);
+  });
+};
+
+/**
  * Гейт «Позначити як затверджено»: не можна закрити задачу, не сказавши, ЯКИЙ
  * саме варіант замовник обрав.
  *

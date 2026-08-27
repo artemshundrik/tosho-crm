@@ -35,8 +35,10 @@ import { PartyHoverCard } from "@/components/app/PartyHoverCard";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   APPROVAL_GATE_HINT,
+  CHANGES_GATE_HINT,
   canChangeDesignStatus,
   getApprovalBlockers,
+  hasFreshChangeRequest,
   getDesignStatusActionLabel,
   DESIGN_ALL_STATUSES,
   DESIGN_BOARD_COLUMNS,
@@ -3143,6 +3145,22 @@ export default function DesignPage() {
     if (next === "changes" && !deadlineWasUpdatedAfterCurrentStatus) {
       toast.error("Щоб повернути задачу в «Правки», спочатку оновіть дедлайн у самій дизайн-задачі.");
       return;
+    }
+    if (next === "changes") {
+      // Той самий гейт, що й у картці задачі. Без нього задачу можна було
+      // перетягнути в «Правки», не сказавши дизайнеру, що саме міняти, — і він
+      // виявляв це аж тоді, коли брався за роботу.
+      //
+      // Тут ЛИШЕ блокуємо: писати правку з дошки нема куди, тож відправляємо в
+      // саму задачу — так само, як робить сусідній гейт дедлайну вище.
+      const fresh = hasFreshChangeRequest({
+        changeRequests: currentMetadata.design_brief_change_requests,
+        statusChangedAt: statusChangedAt ?? null,
+      });
+      if (!fresh) {
+        toast.error("Без правки повертати нема з чим", { description: CHANGES_GATE_HINT });
+        return;
+      }
     }
     if (next === "approved") {
       // Той самий гейт, що й у картці задачі. Без нього задачу можна було

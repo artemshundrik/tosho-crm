@@ -130,12 +130,14 @@ import { type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   APPROVAL_GATE_HINT,
+  CHANGES_GATE_HINT,
   canChangeDesignStatus,
   DESIGN_ALL_STATUSES,
   DESIGN_STATUS_LABELS,
   getApprovalBlockers,
   getDesignStatusActionLabel,
   getMissingApprovalKind,
+  hasFreshChangeRequest,
   resolveApprovalRequirements,
   resolveDesignTaskActions,
   type DesignStatus,
@@ -5333,11 +5335,25 @@ export default function DesignTaskPage() {
      * Питаємо ПІСЛЯ перевірки прав: нема сенсу пропонувати надіслати правку
      * тому, кому цей перехід і так заборонений.
      */
-    if (nextStatus === "changes" && hasUnsentChangeRequest && !options?.skipUnsentChangeRequestGuard) {
-      setActiveDesignTab("brief");
-      openChangeRequestComposer();
-      setUnsentChangeRequestDialog(true);
-      return;
+    if (nextStatus === "changes" && !options?.skipUnsentChangeRequestGuard) {
+      const fresh = hasFreshChangeRequest({
+        changeRequests: task.metadata?.design_brief_change_requests,
+        statusChangedAt:
+          typeof task.metadata?.status_changed_at === "string" ? task.metadata.status_changed_at : null,
+      });
+      if (!fresh) {
+        // Форму відчиняємо в обох випадках: вона сама підскролюється й ловить
+        // курсор, тож людина одразу там, де від неї чогось хочуть.
+        setActiveDesignTab("brief");
+        openChangeRequestComposer();
+        if (hasUnsentChangeRequest) {
+          // Текст уже набраний — питаємо, чи надіслати саме його.
+          setUnsentChangeRequestDialog(true);
+        } else {
+          toast.error("Без правки повертати нема з чим", { description: CHANGES_GATE_HINT });
+        }
+        return;
+      }
     }
 
     const statusChangedAt = typeof task.metadata?.status_changed_at === "string" ? task.metadata.status_changed_at : null;
