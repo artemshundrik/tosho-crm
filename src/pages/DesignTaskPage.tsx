@@ -1541,6 +1541,22 @@ export default function DesignTaskPage() {
     [id]
   );
   const draftRestoredKeyRef = useRef<string | null>(null);
+  /*
+   * Захист від «повернув задачу, а правку не надіслав».
+   *
+   * Скарга Влада 27.08.2026: пише правку, тисне «На правки», задача йде
+   * дизайнеру — а правка лишається набраним текстом. Дизайнер бачить статус
+   * «Правки» без жодної правки, і помічається це аж коли він за неї береться.
+   *
+   * Дірка в тому, що до одного результату вели ДВОЄ дверей, і одні робили пів
+   * справи: «Надіслати правку» надсилає правку І сама переводить у «Правки»
+   * (shouldAutoMoveToChanges), а кнопка смуги дій міняла лише статус і про
+   * набраний текст не знала. Чернетка при цьому жива в localStorage, тож
+   * втрата виглядала не як втрата — текст на місці, кнопка активна.
+   */
+  const [unsentChangeRequestDialog, setUnsentChangeRequestDialog] = useState(false);
+  const [unsentChangeRequestSending, setUnsentChangeRequestSending] = useState(false);
+
   const [discardDialog, setDiscardDialog] = useState<{
     open: boolean;
     label: string;
@@ -5287,7 +5303,10 @@ export default function DesignTaskPage() {
     }
   };
 
-  const updateTaskStatus = async (nextStatus: DesignStatus, options?: { estimateMinutes?: number }) => {
+  const updateTaskStatus = async (
+    nextStatus: DesignStatus,
+    options?: { estimateMinutes?: number; skipUnsentChangeRequestGuard?: boolean }
+  ) => {
     if (!task || !effectiveTeamId || task.status === nextStatus) return;
     if (!ensureCanEdit()) return;
     if (
@@ -5304,6 +5323,23 @@ export default function DesignTaskPage() {
       toast.error("Ви не можете перевести задачу в цей статус");
       return;
     }
+
+    /*
+     * ЗАХИСТ СТОЇТЬ ТУТ, А НЕ НА КНОПЦІ, — бо дверей у «Правки» троє: вторинна
+     * кнопка смуги дій, меню статусів у «⋮» і гейт естімейту. Захист на одній
+     * кнопці залишив би дві дірки з трьох, причому найтихіші: меню статусів
+     * ніхто не згадає, поки на нього не наступлять удруге.
+     *
+     * Питаємо ПІСЛЯ перевірки прав: нема сенсу пропонувати надіслати правку
+     * тому, кому цей перехід і так заборонений.
+     */
+    if (nextStatus === "changes" && hasUnsentChangeRequest && !options?.skipUnsentChangeRequestGuard) {
+      setActiveDesignTab("brief");
+      openChangeRequestComposer();
+      setUnsentChangeRequestDialog(true);
+      return;
+    }
+
     const statusChangedAt = typeof task.metadata?.status_changed_at === "string" ? task.metadata.status_changed_at : null;
     const deadlineUpdatedAt =
       typeof task.metadata?.deadline_updated_at === "string" ? task.metadata.deadline_updated_at : null;
@@ -5926,13 +5962,22 @@ export default function DesignTaskPage() {
   };
 
 
-  const createBriefChangeRequest = async () => {
-    if (!task || !effectiveTeamId || changeRequestSaving) return;
-    if (!ensureCanEdit()) return;
+  /**
+   * Повертає `true`, лише якщо правка СПРАВДІ поїхала в базу.
+   *
+   * Раніше функція нічого не повертала, і це було нормально, поки її кликала
+   * сама кнопка. Тепер її кличе ще й захист «На правки»: там треба знати, чи
+   * надсилання відбулось, — інакше після мовчазної відмови (порожній текст,
+   * прострочений дедлайн, помилка мережі) ми б перевели статус так само тихо,
+   * як робила стара дірка.
+   */
+  const createBriefChangeRequest = async (): Promise<boolean> => {
+    if (!task || !effectiveTeamId || changeRequestSaving) return false;
+    if (!ensureCanEdit()) return false;
     const requestText = changeRequestDraft.trim();
     if (!requestText) {
       toast.error("Опишіть суть правки");
-      return;
+      return false;
     }
 
     // Правка відкриває НОВИЙ раунд роботи, а раунд «на вчора» не буває: до цього
@@ -5951,7 +5996,7 @@ export default function DesignTaskPage() {
           ? "Дедлайн прострочено — оновіть його, і правка надішлеться"
           : "Спочатку поставте дедлайн для цієї правки"
       );
-      return;
+      return false;
     }
 
     const actorLabel = userId ? getMemberLabel(userId) : "System";
@@ -6096,8 +6141,10 @@ export default function DesignTaskPage() {
         }
       }
       toast.success(shouldAutoMoveToChanges ? "Правку додано, статус оновлено: Правки" : "Правку додано");
+      return true;
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося додати правку"));
+      return false;
     } finally {
       setChangeRequestSaving(false);
       if (shouldAutoMoveToChanges) setStatusSaving(null);
@@ -7629,6 +7676,37 @@ export default function DesignTaskPage() {
       task?.status === "approved" && statusChangedAtRaw ? formatDate(statusChangedAtRaw) : null,
   });
 
+  /** Чи є у формі правки щось, що людина набрала, але не надіслала. */
+  const hasUnsentChangeRequest =
+    changeRequestDraft.trim().length > 0 || changeRequestDraftAttachments.length > 0;
+
+  /**
+   * Надіслати ненадіслану правку замість голої зміни статусу.
+   *
+   * Статус доводимо руками ЛИШЕ там, де надсилання не робить цього саме:
+   * з «На перевірці» й «У замовника» правка сама переводить у «Правки»
+   * (CHANGE_REQUEST_AUTO_CHANGES_STATUSES), а з «В роботі» — ні.
+   */
+  const sendUnsentChangeRequestThenChanges = async () => {
+    if (unsentChangeRequestSending) return;
+    setUnsentChangeRequestSending(true);
+    try {
+      const previousStatus = task?.status ?? null;
+      const sent = await createBriefChangeRequest();
+      // Не надіслалось — статус не чіпаємо взагалі. Інакше захист відтворив би
+      // рівно ту дірку, яку закриває: задача пішла, правка лишилась.
+      if (!sent) return;
+      setUnsentChangeRequestDialog(false);
+      if (previousStatus && !CHANGE_REQUEST_AUTO_CHANGES_STATUSES.has(previousStatus)) {
+        // Прапорець обовʼязковий: без нього захист спіймав би сам себе. Тут
+        // правка вже в базі, а чернетка щойно очищена, тож питати нема про що.
+        await updateTaskStatus("changes", { skipUnsentChangeRequestGuard: true });
+      }
+    } finally {
+      setUnsentChangeRequestSending(false);
+    }
+  };
+
   const runTaskAction = (action: DesignTaskAction | null) => {
     if (!action) return;
     switch (action.id.kind) {
@@ -7640,6 +7718,8 @@ export default function DesignTaskPage() {
         void assignTaskToMe({ alsoStart: action.id.alsoStart });
         break;
       case "status":
+        // Захист від ненадісланої правки живе в самому updateTaskStatus — див.
+        // там: дверей у «Правки» більше, ніж ця кнопка.
         void updateTaskStatus(action.id.next);
         break;
       case "timer":
@@ -12792,6 +12872,25 @@ export default function DesignTaskPage() {
         onConfirm={() => {
           discardDialog.confirm?.();
         }}
+      />
+
+      {/*
+        Підтвердження НЕ руйнівне, тож і кнопка звичайна: тут пропонується
+        зробити те, що людина й мала на увазі, а не погодитись на втрату.
+        «Скасувати» лишає її у формі — правка вже розгорнута під діалогом.
+      */}
+      <ConfirmDialog
+        open={unsentChangeRequestDialog}
+        onOpenChange={(open) => {
+          if (!unsentChangeRequestSending) setUnsentChangeRequestDialog(open);
+        }}
+        title="Правку ще не надіслано"
+        description="У ТЗ лишився набраний текст правки. Якщо повернути задачу зараз, дизайнер побачить статус «Правки» без жодної правки — саме так вона й губилась."
+        confirmLabel="Надіслати правку"
+        cancelLabel="Повернутись до правки"
+        icon={<MessageSquare className="h-5 w-5 text-primary" />}
+        loading={unsentChangeRequestSending}
+        onConfirm={() => void sendUnsentChangeRequestThenChanges()}
       />
 
       <ConfirmDialog
