@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { checklistProgress, withDoneLast, type ChecklistItem } from "./checklist";
 import { groupRequests } from "./grouping";
 import { PriorityBars } from "./PriorityBars";
-import { canTakeToday, papercutLabel, splitQueue } from "./queueShelves";
+import { canTakeToday, isPapercutCard, papercutLabel, splitQueue } from "./queueShelves";
 import { themeLook } from "./themeRegistry";
 import { KIND_LABELS, KIND_TONE, type DevRequest } from "./types";
 
@@ -333,6 +333,16 @@ function TodayRow({
 }) {
   const look = themeLook(request.theme);
   const ThemeIcon = look?.icon;
+  /*
+   * ЛІЧИЛЬНИК ЛИШЕ ДЛЯ НАКОПИЧУВАЧА. У звичайної картки «Сьогодні» означає одну
+   * справу, і число поруч читалось би як її поділ на частини. У накопичувача
+   * навпаки: намір звучить як «сьогодні розгрібаю цей напрям», і скільки там
+   * лишилось — головне, що про нього треба знати. Доти рядок не показував
+   * НІЧОГО, і вичерпаний накопичувач не відрізнявся від повного.
+   */
+  const papercut = isPapercutCard(request);
+  const progress = papercut ? checklistProgress(request.checklist) : null;
+  const left = progress ? progress.total - progress.done : 0;
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 transition-colors hover:border-border">
       <button
@@ -349,6 +359,17 @@ function TodayRow({
         <span className="truncate text-[15px] font-medium">{request.title}</span>
       </button>
       <WaitChip request={request} />
+      {progress ? (
+        <>
+          <span
+            className="w-6 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground"
+            title={progress.total === 0 ? "Дрібниць поки немає" : `Лишилось ${left} з ${progress.total}`}
+          >
+            {left}
+          </span>
+          <ChecklistMeter progress={progress} />
+        </>
+      ) : null}
       <HoverCopyText
         value={request.label}
         textClassName="hidden font-mono text-2xs font-semibold text-muted-foreground sm:inline"
