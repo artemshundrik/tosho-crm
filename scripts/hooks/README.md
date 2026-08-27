@@ -33,6 +33,7 @@ git config core.hooksPath
 | реєстр поверхонь | `npm run check:page-surfaces` | 0.1 с |
 | копії спільних модулів | `npm run check:duplicate-singletons` | 0.1 с |
 | заглушки правил хуків | `node scripts/check-hook-disables.mjs` | 0.1 с |
+| читачі правил | `node scripts/check-rule-readers.mjs` | 0.05 с |
 | розростання файлів | `node scripts/check-file-growth.mjs` | 0.05 с |
 | знімок стеку | `node scripts/check-stack-snapshot.mjs` | 0.03 с |
 | версія Node | `node scripts/check-node-version.mjs` | 0.02 с |

@@ -92,6 +92,7 @@ Checklist:
 - confirm stakeholder notifications
 - confirm quote linkage
 - confirm metadata fields used by downstream readers
+- **when a display rule gets its own module, fix EVERY reader in the same pass** — the design task's product lives in [designTaskQuoteItem.ts](/Users/artem/Projects/tosho-crm/src/lib/designTaskQuoteItem.ts) and has two readers (task page + board); on 27.08.2026 only the page was fixed, shipped, and the board kept showing the first item of the quote. `npm run check:rule-readers` now blocks a raw `quote_items` read in a design-task file, but the habit matters more: grep for who else renders the same data before calling it done
 - confirm display metadata such as `design_task_number`, `quote_number`, `customer_name`, `customer_logo_url`, and assignee avatar/name fallbacks used by overview/notifications/design lists
 - confirm role-based edit restrictions for designers vs managers/admins
 
