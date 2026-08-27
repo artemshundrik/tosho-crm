@@ -13,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~10 154 lines, as of 2026-08-25, після редизайну шапки)
+## src/pages/QuoteDetailsPage.tsx (~9 900 lines, 473 KB, as of 2026-08-27)
 
 Зміщення звірені grep-ом 25.08.2026 (двічі за день: удруге — після редизайну
 шапки й вкладок, який зсунув усе нижче 2300 приблизно на +200 рядків).
