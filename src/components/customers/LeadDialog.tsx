@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { CompanyDuplicateHint } from "./CompanyDuplicateHint";
+import { CompanyDuplicateHintField } from "./CompanyDuplicateHint";
 import { SourceSelect } from "./customerSources";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { useSegmentedSlider } from "@/components/ui/segmented-group";
@@ -729,17 +729,18 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>{isFopOwnership ? "ПІБ" : "Назва компанії"} <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={form.companyName}
-                      onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
-                      placeholder={isFopOwnership ? "Напр. Берновська Ольга Василівна" : "Назва компанії"}
-                      className="h-9"
-                    />
-                    <CompanyDuplicateHint
+                    <CompanyDuplicateHintField
                       teamId={teamId}
                       query={form.companyName}
                       excludeId={duplicateHintExcludeId}
-                    />
+                    >
+                      <Input
+                        value={form.companyName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
+                        placeholder={isFopOwnership ? "Напр. Берновська Ольга Василівна" : "Назва компанії"}
+                        className="h-9 pr-9"
+                      />
+                    </CompanyDuplicateHintField>
                   </div>
                   <div className="grid gap-2">
                     <Label>Джерело <span className="text-destructive">*</span></Label>

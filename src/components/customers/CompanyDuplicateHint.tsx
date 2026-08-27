@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { Users } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -10,28 +11,27 @@ import { pickCompanyHints, type CompanyHintMatch } from "@/lib/companyDuplicateH
 import { cn } from "@/lib/utils";
 
 /**
- * «Така компанія вже є» — під полем назви, поки її друкують.
+ * «Схожа компанія вже є» — поповер під полем назви, поки її набирають.
  *
- * НАВІЩО НЕ НА ЗБЕРЕЖЕННІ. Перевірка на дублі в CRM була й раніше, але
- * спрацьовувала на кнопці «Зберегти». Рішення Артема 27.08.2026: попередження
- * після заповненої форми роботи не economить — «все одно витрачена робота».
- * Людина має побачити збіг на першому ж полі й сама вирішити не заводити.
+ * НАВІЩО НЕ НА ЗБЕРЕЖЕННІ. Перевірка на дублі була й раніше, але спрацьовувала
+ * на кнопці «Зберегти» — тобто коли форму вже заповнено. Рішення Артема
+ * 27.08.2026: попередження після зробленої роботи роботи не економить.
  *
- * ЧОМУ НЕ ТЕЛЕФОН. Телефон — сильніший сигнал дубля, але він у формі НИЖЧЕ:
- * поки до нього дійдеш, усе інше вже набрано. Тому акцент на назві, яку
- * вводять першою.
+ * ЧОМУ САМЕ ПОПОВЕР, А НЕ БЛОК ПІД ПОЛЕМ. Перша версія була вбудованим блоком —
+ * і щоразу, коли підказка зʼявлялась, вона зсувала «Джерело» й усе нижче.
+ * Це класичний content jumping: людина цілиться в поле, а воно тікає. Поповер
+ * лежить НАД формою й нічого не рухає.
  *
- * АВАТАРКА МЕНЕДЖЕРА — не прикраса. Сенс підказки в тому, щоб не задублювати
- * роботу КОЛЕГИ, тож головне питання не «чи є така картка», а «чия вона».
- * Побачивши обличчя, людина знає, до кого підійти.
+ * ЧОМУ ФОРМА РЯДКА ТАКА САМА, ЯК У ПОШУКУ (CommandPalette): логотип зліва,
+ * назва першим рядком, підпис другим. Цей рядок читають десятки разів на день,
+ * і другий, схожий-але-інший вигляд довелося б розпізнавати заново.
  *
- * НІЧОГО НЕ ЗАБОРОНЯЄ. Заборона на схожість була б хибною: у базі законно
- * живуть «Агро Панцир» і «Агропросперіс». Точний збіг назви й далі блокує
- * збереження — це окрема, суворіша перевірка.
+ * ЧОМУ ДРУГИЙ РЯДОК — ОДНА СМУГА «тип · менеджер», а не два бордюрні чипи.
+ * У попередній версії мітка типу стояла після назви на змінній відстані, а
+ * менеджер був окремою пігулкою з власною рамкою: три рамки на рядок, і жодна
+ * колонка не збігалася із сусідньою. Тепер у кожного рядка однакова структура,
+ * тож око читає їх стовпчиком, а не по одному.
  */
-
-/** Той самий ключ, що в CustomerLeadQuickViewDialog: імена в картках пишуть руками. */
-const normalizeMemberKey = (value?: string | null) => (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
 /** Поки друкують, не смикаємо базу на кожну літеру. */
 const DEBOUNCE_MS = 350;
@@ -39,64 +39,32 @@ const DEBOUNCE_MS = 350;
 /** Коротше — надто широко: на двох літерах у списку опиниться пів бази. */
 const MIN_QUERY = 3;
 
-export function CompanyDuplicateHint({
-  teamId,
-  query,
-  /** Картка, яку зараз редагують: сама себе підказувати не має. */
-  excludeId,
-  className,
-}: {
-  teamId: string | null | undefined;
-  query: string;
-  excludeId?: string | null;
-  className?: string;
-}) {
-  const [matches, setMatches] = useState<CompanyHintMatch[]>([]);
-  const [avatarById, setAvatarById] = useState<Record<string, string | null>>({});
-  const [avatarByLabel, setAvatarByLabel] = useState<Record<string, string | null>>({});
-  const requestRef = useRef(0);
+/** Той самий ключ, що в CustomerLeadQuickViewDialog: імена в картках пишуть руками. */
+const normalizeMemberKey = (value?: string | null) => (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
-  // Довідник учасників тягнемо один раз на відкриття форми, а не на кожен
-  // запит: він змінюється раз на місяці, а підказка смикається щокілька літер.
-  // Користувача питаємо самі, а не приймаємо пропом: інакше його довелося б
-  // протягувати через кожну форму, що відкриває цей діалог, — а він потрібен
-  // рівно для того, щоб дістати аватарки колег.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const currentUserId = await getCurrentUserId();
-        if (!currentUserId || cancelled) return;
-        const workspaceId = await resolveWorkspaceId(currentUserId);
-        if (!workspaceId || cancelled) return;
-        const rows = await listWorkspaceMembersForDisplay(workspaceId);
-        if (cancelled) return;
-        const byId: Record<string, string | null> = {};
-        const byLabel: Record<string, string | null> = {};
-        for (const row of rows) {
-          const avatar = row.avatarDisplayUrl ?? row.avatarUrl ?? null;
-          byId[row.userId] = avatar;
-          const key = normalizeMemberKey(row.label);
-          if (key) byLabel[key] = avatar;
-        }
-        setAvatarById(byId);
-        setAvatarByLabel(byLabel);
-      } catch {
-        // Без аватарок підказка лишається корисною — імена в ній усе одно є.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+type HintState = { matches: CompanyHintMatch[]; loading: boolean };
+
+function useCompanyDuplicateHint(
+  teamId: string | null | undefined,
+  query: string,
+  excludeId?: string | null
+): HintState {
+  const [matches, setMatches] = useState<CompanyHintMatch[]>([]);
+  const [loading, setLoading] = useState(false);
+  const requestRef = useRef(0);
 
   useEffect(() => {
     const trimmed = query.trim();
     if (!teamId || trimmed.length < MIN_QUERY) {
+      requestRef.current += 1;
       setMatches([]);
+      setLoading(false);
       return;
     }
     const ticket = ++requestRef.current;
+    // Крутілку вмикаємо ОДРАЗУ, ще до паузи: людина має бачити, що CRM її
+    // почула. Інакше перші 350 мс поле виглядає так, ніби нічого не сталось.
+    setLoading(true);
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
@@ -134,68 +102,162 @@ export function CompanyDuplicateHint({
           );
         } catch {
           if (ticket === requestRef.current) setMatches([]);
+        } finally {
+          if (ticket === requestRef.current) setLoading(false);
         }
       })();
     }, DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [excludeId, query, teamId]);
 
-  if (matches.length === 0) return null;
+  return { matches, loading };
+}
+
+/** Аватарки колег: довідник змінюється раз на місяці, тягнемо один раз. */
+function useMemberAvatars() {
+  const [byId, setById] = useState<Record<string, string | null>>({});
+  const [byLabel, setByLabel] = useState<Record<string, string | null>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const currentUserId = await getCurrentUserId();
+        if (!currentUserId || cancelled) return;
+        const workspaceId = await resolveWorkspaceId(currentUserId);
+        if (!workspaceId || cancelled) return;
+        const rows = await listWorkspaceMembersForDisplay(workspaceId);
+        if (cancelled) return;
+        const nextById: Record<string, string | null> = {};
+        const nextByLabel: Record<string, string | null> = {};
+        for (const row of rows) {
+          const avatar = row.avatarDisplayUrl ?? row.avatarUrl ?? null;
+          nextById[row.userId] = avatar;
+          const key = normalizeMemberKey(row.label);
+          if (key) nextByLabel[key] = avatar;
+        }
+        setById(nextById);
+        setByLabel(nextByLabel);
+      } catch {
+        // Без аватарок підказка лишається корисною — імена в ній усе одно є.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { byId, byLabel };
+}
+
+/**
+ * Обгортка навколо поля назви: тримає якір поповера й крутілку.
+ *
+ * Поле лишається за викликачем — у замовника й ліда різні плейсхолдери,
+ * розміри й валідація, і забирати його сюди означало б зліпити два різні
+ * контроли в один «майже однаковий».
+ */
+export function CompanyDuplicateHintField({
+  teamId,
+  query,
+  excludeId,
+  children,
+  className,
+}: {
+  teamId: string | null | undefined;
+  query: string;
+  /** Картка, яку зараз редагують: сама себе підказувати не має. */
+  excludeId?: string | null;
+  children: ReactNode;
+  className?: string;
+}) {
+  const { matches, loading } = useCompanyDuplicateHint(teamId, query, excludeId);
+  const { byId, byLabel } = useMemberAvatars();
 
   return (
-    <div className={cn("rounded-lg border border-border/60 bg-card px-2.5 py-2", className)}>
-      <div className="mb-1.5 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
-        <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        Схожа компанія вже є
-      </div>
-      {/*
-        ФОРМА РЯДКА — та сама, що в пошуку по застосунку (CommandPalette):
-        логотип зліва, назва з міткою, менеджер чипом під назвою. Люди вже
-        читають цей рядок десятки разів на день, і другий, власний його вигляд
-        довелося б розпізнавати заново.
-        Логотип НАВМИСНО більший за пошуковий (32 проти 28): у пошуку поруч є
-        назва запиту й підсвітка збігу, а тут єдине питання — «це та сама
-        компанія?», і відповідає на нього саме він.
-      */}
-      <ul className="space-y-1.5">
-        {matches.map((match) => {
-          const manager = match.manager?.trim() || "";
-          const avatar =
-            (match.managerUserId ? avatarById[match.managerUserId] : null) ??
-            (manager ? avatarByLabel[normalizeMemberKey(manager)] ?? null : null);
-          return (
-            <li key={`${match.kind}-${match.id}`} className="flex items-center gap-2.5">
-              <EntityAvatar
-                src={match.logoUrl ?? null}
-                name={match.name}
-                fallback={match.name.slice(0, 2).toUpperCase()}
-                size={32}
-                fallbackClassName="text-2xs font-semibold"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium text-foreground">{match.name}</span>
-                  <span className="shrink-0 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {match.kind}
-                  </span>
+    <Popover open={matches.length > 0}>
+      <PopoverAnchor asChild>
+        <div className={cn("relative", className)}>
+          {children}
+          {/*
+            Крутілка НЕ перехоплює вказівник: вона стоїть над полем, і без
+            pointer-events-none клік у правий край поля не ставив би курсор.
+          */}
+          {loading ? (
+            <span
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              role="status"
+              aria-label="Шукаю схожі компанії"
+            >
+              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+            </span>
+          ) : null}
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        sideOffset={6}
+        // ШИРИНА ПОЛЯ: підказка має читатись як продовження саме цього поля, а
+        // не як окрема панель, що прилетіла збоку.
+        //
+        // ФОН НЕПРОЗОРИЙ, на відміну від решти поповерів. Базовий `bg-popover/95`
+        // з розмиттям добре виглядає в меню, яке накриває порожнє місце; тут
+        // панель лягає просто на сусідні поля форми, і крізь неї читалось
+        // «Джерело» під назвами компаній. Підказку про дубль треба прочитати з
+        // першого разу, а не розбирати крізь чужий текст.
+        className="w-[var(--radix-popover-trigger-width)] border-border/60 bg-popover p-1.5 backdrop-blur-none"
+        // Фокус лишається в полі: людина продовжує друкувати, а поповер лише
+        // показує. Без цього перше ж спрацювання виривало б курсор із поля.
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => event.preventDefault()}
+      >
+        <div className="px-1.5 pb-1 pt-0.5 text-2xs font-medium text-muted-foreground">
+          Схожа компанія вже є
+        </div>
+        <ul className="space-y-0.5">
+          {matches.map((match) => {
+            const manager = match.manager?.trim() || "";
+            const avatar =
+              (match.managerUserId ? byId[match.managerUserId] : null) ??
+              (manager ? byLabel[normalizeMemberKey(manager)] ?? null : null);
+            return (
+              <li
+                key={`${match.kind}-${match.id}`}
+                className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5"
+              >
+                <EntityAvatar
+                  src={match.logoUrl ?? null}
+                  name={match.name}
+                  fallback={match.name.slice(0, 2).toUpperCase()}
+                  size={34}
+                  fallbackClassName="text-2xs font-semibold"
+                />
+                <div className="min-w-0 flex-1 leading-tight">
+                  <div className="truncate text-sm font-medium text-foreground">{match.name}</div>
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="shrink-0">{match.kind}</span>
+                    {manager ? (
+                      <>
+                        <span className="shrink-0 text-muted-foreground/50" aria-hidden>
+                          ·
+                        </span>
+                        <AvatarBase
+                          src={avatar}
+                          name={manager}
+                          size={16}
+                          className="shrink-0 border-border/60"
+                          fallbackClassName="text-[8px] font-semibold"
+                        />
+                        <span className="truncate">{manager}</span>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
-                {manager ? (
-                  <span className="mt-0.5 inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-border/60 px-1.5 py-0.5 text-xs text-muted-foreground">
-                    <AvatarBase
-                      src={avatar}
-                      name={manager}
-                      size={16}
-                      className="shrink-0 border-border/60"
-                      fallbackClassName="text-[8px] font-semibold"
-                    />
-                    <span className="truncate">{manager}</span>
-                  </span>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+              </li>
+            );
+          })}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
