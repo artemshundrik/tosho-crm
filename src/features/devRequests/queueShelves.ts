@@ -151,34 +151,15 @@ export function pruneToday(ids: readonly string[], requests: DevRequest[]): stri
   });
 }
 
-/**
- * Вибране на сьогодні переживає перезавантаження сторінки.
+/*
+ * ЗБЕРІГАННЯ ВИБРАНОГО ПЕРЕЇХАЛО В БАЗУ (27.08.2026).
  *
- * localStorage, а не база, і це свідомо: «сьогодні» — особиста замітка однієї
- * людини на один день, а не факт про картку. У базі вона стала б полем, яке
- * хтось має вчасно чистити, і ще одним станом, який може розійтися зі статусом.
- * Той самий підхід, що й у перемикача групування (grouping.ts).
+ * Тут стояли readTodayIds/writeTodayIds на localStorage з поясненням, що
+ * «сьогодні» — особиста замітка на один день, а не факт про картку. Міркування
+ * не витримало першого ж робочого дня: справи позначались за компʼютером, а на
+ * телефоні полиця була порожня, і це читалось як зникнення задач.
+ *
+ * Тепер це колонки `today_by` й `today_at` самої картки
+ * (scripts/dev-requests-today.sql), а `pruneToday` лишився чистою функцією для
+ * тестів і для правила «взяти можна лише те, про що рішення вже є».
  */
-const TODAY_STORAGE_KEY = "devRequests.today";
-
-export function readTodayIds(): string[] {
-  try {
-    const raw = localStorage.getItem(TODAY_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    // Чуже або зіпсоване значення читаємо як порожній список: втратити три
-    // особисті замітки дешевше, ніж упасти на рендері дошки.
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-export function writeTodayIds(ids: readonly string[]) {
-  try {
-    localStorage.setItem(TODAY_STORAGE_KEY, JSON.stringify(ids));
-  } catch {
-    // Приватний режим або переповнене сховище — полиця просто не переживе
-    // перезавантаження. Мовчки: ламати роботу через замітку не варто.
-  }
-}

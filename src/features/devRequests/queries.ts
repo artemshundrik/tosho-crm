@@ -15,7 +15,7 @@ import {
 } from "./types";
 
 const SELECT_COLUMNS =
-  "id,number,team_id,title,body,kind,status,module_key,priority,zone,theme,checklist,released_at,auto_classified,is_private,author_user_id,tg_username,display_name,asked_by_count,commit_shas,created_at";
+  "id,number,team_id,title,body,kind,status,module_key,priority,zone,theme,checklist,released_at,auto_classified,is_private,author_user_id,tg_username,display_name,asked_by_count,commit_shas,today_by,today_at,created_at";
 
 export const devRequestKeys = {
   /** teamId у ключі обов'язково — інакше кеш протікає між тенантами. */
@@ -275,6 +275,48 @@ export function useUpdateChecklist(teamId: string | null) {
       if (error) throw error;
       // Той самий привід, що й у переміщенні: 0 рядків від RLS приходить без
       // помилки, і без перевірки «зберегли» показало б успіх на нічому.
+      if (!data) throw new Error("Немає прав змінювати цю картку");
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: devRequestKeys.board(teamId) });
+    },
+  });
+}
+
+/**
+ * Взяти картку на сьогодні або зняти позначку.
+ *
+ * ЧОМУ В БАЗІ, А НЕ В localStorage. Спершу полиця жила в браузері — «особиста
+ * замітка на один день». Міркування не витримало першого ж робочого дня: Артем
+ * позначає справи за компʼютером, відкриває беклог із телефона — і полиця
+ * порожня. Виглядало як зникнення задач, хоч у базі не бракувало жодної картки.
+ *
+ * Пише рівно дві колонки, як і решта точкових мутацій цього модуля: разом із
+ * назвою й класифікацією це щоразу ризикувало б затерти те, що поруч правив
+ * хтось інший.
+ */
+export function useSetToday(teamId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, taken, userId }: { id: string; taken: boolean; userId: string | null }) => {
+      // Хто бере — приходить зі сторінки, а не з auth.getUser(): вона вже знає
+      // це, і зайвий мережевий крок на кожну позначку тут ні до чого.
+      if (taken && !userId) throw new Error("Не можу визначити, хто бере картку");
+
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("dev_requests")
+        .update(
+          taken
+            ? { today_by: userId, today_at: new Date().toISOString() }
+            : { today_by: null, today_at: null }
+        )
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      // Нуль рядків від RLS приходить без помилки — без перевірки показали б
+      // успіх на нічому.
       if (!data) throw new Error("Немає прав змінювати цю картку");
     },
     onSuccess: () => {

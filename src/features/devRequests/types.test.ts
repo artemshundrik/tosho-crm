@@ -42,6 +42,8 @@ describe("мапер рядка", () => {
       display_name: null,
       asked_by_count: 3,
       commit_shas: ["e098ca1"],
+      today_by: null,
+      today_at: null,
       created_at: "2026-08-08T10:00:00Z",
     };
 
@@ -67,6 +69,8 @@ describe("мапер рядка", () => {
       displayName: null,
       askedByCount: 3,
       commitShas: ["e098ca1"],
+      todayBy: null,
+      todayAt: null,
       createdAt: "2026-08-08T10:00:00Z",
     });
   });
@@ -92,6 +96,8 @@ describe("мапер рядка", () => {
       tg_username: null,
       display_name: null,
       asked_by_count: 1,
+      today_by: null,
+      today_at: null,
       created_at: "2026-08-08T10:00:00Z",
     };
     expect(toDevRequest(row).status).toBe("triage");
@@ -125,6 +131,8 @@ describe("напрямок і пріоритет", () => {
       tg_username: null,
       display_name: null,
       asked_by_count: 1,
+      today_by: null,
+      today_at: null,
       created_at: "2026-08-08T10:00:00Z",
       ...overrides,
     };

@@ -101,6 +101,10 @@ export type DevRequest = {
   /** Ім'я автора з Telegram: username там необов'язковий. */
   displayName: string | null;
   askedByCount: number;
+  /** Хто взяв картку на сьогодні. null — ніхто. */
+  todayBy: string | null;
+  /** Коли взяли — задає порядок у полиці «Сьогодні». */
+  todayAt: string | null;
   /**
    * Короткі sha комітів, якими картку закрили (7 символів, як у гаку).
    * У `tosho.commits` вони по 8 — звіряти доводиться початком рядка.
@@ -421,6 +425,8 @@ type DevRequestRow = {
   tg_username: string | null;
   display_name: string | null;
   asked_by_count: number;
+  today_by: string | null;
+  today_at: string | null;
   /**
    * Коміти, якими картку закрили. Поле необов'язкове: старіші виклики
    * `toDevRequest` (і тести) обходяться без нього, а мапер усе одно звіряє тип.
@@ -488,6 +494,8 @@ export function toDevRequest(row: DevRequestRow): DevRequest {
     displayName: row.display_name,
     askedByCount: row.asked_by_count,
     commitShas: Array.isArray(row.commit_shas) ? row.commit_shas : [],
+    todayBy: row.today_by ?? null,
+    todayAt: row.today_at ?? null,
     createdAt: row.created_at,
   };
 }

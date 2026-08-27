@@ -1608,6 +1608,8 @@ export type Database = {
           tg_username: string | null
           theme: string | null
           title: string
+          today_at: string | null
+          today_by: string | null
           updated_at: string
           workspace_id: string | null
           zone: string | null
@@ -1638,6 +1640,8 @@ export type Database = {
           tg_username?: string | null
           theme?: string | null
           title: string
+          today_at?: string | null
+          today_by?: string | null
           updated_at?: string
           workspace_id?: string | null
           zone?: string | null
@@ -1668,6 +1672,8 @@ export type Database = {
           tg_username?: string | null
           theme?: string | null
           title?: string
+          today_at?: string | null
+          today_by?: string | null
           updated_at?: string
           workspace_id?: string | null
           zone?: string | null

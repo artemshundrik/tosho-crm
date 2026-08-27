@@ -37,7 +37,7 @@ import { readGroupKey, writeGroupKey, type GroupKey } from "@/features/devReques
 import type { ChecklistItem } from "@/features/devRequests/checklist";
 import { DevRequestLog } from "@/features/devRequests/DevRequestLog";
 import { DevRequestQueue } from "@/features/devRequests/DevRequestQueue";
-import { pruneToday, readTodayIds, writeTodayIds } from "@/features/devRequests/queueShelves";
+import { canTakeToday } from "@/features/devRequests/queueShelves";
 import { ReleaseCardDialog } from "@/features/devRequests/ReleaseCardDialog";
 import {
   NewDevRequestDialog,
@@ -48,6 +48,7 @@ import {
   useDeleteDevRequest,
   useDevRequestBoard,
   useMoveDevRequest,
+  useSetToday,
   useUpdateChecklist,
   useUpdateDevRequest,
 } from "@/features/devRequests/queries";
@@ -88,9 +89,6 @@ export default function DevRequestsPage() {
   // хвататись», і колонки на нього не відповідають. Дошка лишається сусідньою
   // вкладкою для того, що справді треба перетягнути.
   const [view, setView] = useState<BoardView>("queue");
-  // Вибране на сьогодні. Живе в localStorage: це особиста замітка на один день,
-  // а не факт про картку (queueShelves.ts).
-  const [todayIds, setTodayIds] = useState<string[]>(() => readTodayIds());
 
   /**
    * Галочка в дрібниці зберігається одразу, без відкривання картки.
@@ -116,10 +114,6 @@ export default function DevRequestsPage() {
     [updateChecklist]
   );
 
-  const handleToday = useCallback((next: string[]) => {
-    setTodayIds(next);
-    writeTodayIds(next);
-  }, []);
 
   const isNarrowViewport = useIsNarrowViewport();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -274,21 +268,54 @@ export default function DevRequestsPage() {
 
   /** Лічильники на перемикачі — по всій дошці, а не по знайденому. */
   /**
-   * Полиця «Сьогодні» чиститься сама — але ОБЧИСЛЕННЯМ, а не ефектом.
+   * Полиця «Сьогодні» читається з КАРТОК, а не з браузера.
    *
-   * Картку, яку за день викотили чи відхилили, тримати в переліку не можна:
-   * за тиждень полиця стала б списком позавчорашніх намірів. Перша версія
-   * робила це ефектом із setState — і компілятор React справедливо лічив це
-   * боргом: стан, який завжди виводиться з інших даних, не має жити другим
-   * джерелом правди й ганяти зайвий рендер.
+   * Спершу перелік лежав у localStorage — «особиста замітка на один день, а не
+   * факт про картку». Міркування не витримало першого ж робочого дня: справи
+   * позначались за компʼютером, а на телефоні полиця була порожня, і це
+   * читалось як зникнення задач, хоч у базі не бракувало жодної картки.
    *
-   * Тепер чистка — похідне значення. У сховищі може лишитись id викоченої
-   * картки, і це нікому не шкодить: на екран він не потрапляє, а перший же
-   * дотик до полиці перезапише перелік уже чистим (handleToday нижче).
+   * Замітка справді особиста — тому й фільтр по `todayBy`: кожен бачить свої.
+   * Але «особиста» не означає «прив'язана до браузера».
+   *
+   * Чистка тепер безкоштовна: картка, яку викотили чи відхилили, не проходить
+   * `canTakeToday` і зникає з полиці сама — без окремого сховища, без ефекту й
+   * без другого джерела правди.
    */
-  const visibleTodayIds = useMemo(
-    () => pruneToday(todayIds, board.data ?? []),
-    [todayIds, board.data]
+  const todayIds = useMemo(() => {
+    const mine = (board.data ?? []).filter(
+      (request) => request.todayBy !== null && request.todayBy === userId && canTakeToday(request)
+    );
+    // Порядок — той, у якому картки туди клали.
+    mine.sort((a, b) => (a.todayAt ?? "").localeCompare(b.todayAt ?? ""));
+    return mine.map((request) => request.id);
+  }, [board.data, userId]);
+
+  const setToday = useSetToday(teamId);
+
+  /**
+   * Пишемо лише РІЗНИЦЮ між тим, що було, і тим, що просять.
+   *
+   * Полиця міняється по одній картці, а повний перезапис зачепив би й ті,
+   * яких людина не торкалась — і затер би позначку, поставлену з іншого
+   * пристрою хвилину тому.
+   */
+  const handleToday = useCallback(
+    (next: string[]) => {
+      const before = new Set(todayIds);
+      const after = new Set(next);
+      const changes = [
+        ...next.filter((id) => !before.has(id)).map((id) => ({ id, taken: true, userId })),
+        ...todayIds.filter((id) => !after.has(id)).map((id) => ({ id, taken: false, userId })),
+      ];
+      changes.forEach((change) =>
+        setToday.mutate(change, {
+          onError: (error) =>
+            toast.error(error instanceof Error ? error.message : "Не зміг оновити «Сьогодні»"),
+        })
+      );
+    },
+    [setToday, todayIds, userId]
   );
 
   const counts = useMemo(() => {
@@ -682,7 +709,7 @@ export default function DevRequestsPage() {
         ) : view === "queue" ? (
           <DevRequestQueue
             requests={requests}
-            todayIds={visibleTodayIds}
+            todayIds={todayIds}
             onToday={handleToday}
             onSelect={setSelected}
             onOpenTriage={() => setView("board")}

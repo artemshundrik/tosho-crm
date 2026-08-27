@@ -26,6 +26,8 @@ function request(overrides: Partial<DevRequest> = {}): DevRequest {
     displayName: null,
     askedByCount: 1,
     commitShas: [],
+    todayBy: null,
+    todayAt: null,
     createdAt: "2026-08-09T10:00:00Z",
     ...overrides,
   };
