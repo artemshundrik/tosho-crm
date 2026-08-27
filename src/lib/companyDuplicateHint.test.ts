@@ -77,6 +77,21 @@ describe("pickCompanyHints", () => {
     expect(hints[0]).toMatchObject({ name: "KMZ Industries - КМЗ", manager: "Дмитро М.", kind: "лід" });
   });
 
+  it("логотип компанії їде разом із нею — це перша відповідь на «та сама?»", () => {
+    const hints = pickCompanyHints(
+      "KMZ",
+      [{ id: "l1", name: "KMZ Industries - КМЗ", manager: "Дмитро М.", logoUrl: "https://cdn/kmz.png" }],
+      []
+    );
+    expect(hints[0].logoUrl).toBe("https://cdn/kmz.png");
+  });
+
+  it("картка без логотипа не ламає підказку", () => {
+    const hints = pickCompanyHints("KMZ", [{ id: "l1", name: "KMZ Industries - КМЗ" }], []);
+    expect(hints).toHaveLength(1);
+    expect(hints[0].logoUrl).toBeUndefined();
+  });
+
   it("юридична назва — теж привід для збігу", () => {
     const hints = pickCompanyHints("Землероб", [], [{ id: "c1", name: "ТОВ Аграрій", legalName: "ЗЕМЛЕРОБ КОМПАНІЯ" }]);
     expect(hints).toHaveLength(1);

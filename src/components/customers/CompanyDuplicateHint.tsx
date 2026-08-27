@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Users } from "lucide-react";
 
-import { AvatarBase } from "@/components/app/avatar-kit";
+import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -118,6 +118,7 @@ export function CompanyDuplicateHint({
                   legalName: row.legal_name ?? null,
                   manager: row.manager ?? null,
                   managerUserId: row.manager_user_id ?? null,
+                  logoUrl: row.logo_url ?? null,
                 })),
               customers
                 .filter((row) => row.id !== excludeId)
@@ -127,6 +128,7 @@ export function CompanyDuplicateHint({
                   legalName: row.legal_name ?? null,
                   manager: row.manager ?? null,
                   managerUserId: row.manager_user_id ?? null,
+                  logoUrl: row.logo_url ?? null,
                 }))
             )
           );
@@ -141,39 +143,55 @@ export function CompanyDuplicateHint({
   if (matches.length === 0) return null;
 
   return (
-    <div
-      className={cn(
-        "rounded-lg border border-warning-soft-border bg-warning-soft px-2.5 py-2 text-xs",
-        className
-      )}
-    >
-      <div className="mb-1.5 flex items-center gap-1.5 font-medium text-warning-foreground">
+    <div className={cn("rounded-lg border border-border/60 bg-card px-2.5 py-2", className)}>
+      <div className="mb-1.5 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
         <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
         Схожа компанія вже є
       </div>
-      <ul className="space-y-1">
+      {/*
+        ФОРМА РЯДКА — та сама, що в пошуку по застосунку (CommandPalette):
+        логотип зліва, назва з міткою, менеджер чипом під назвою. Люди вже
+        читають цей рядок десятки разів на день, і другий, власний його вигляд
+        довелося б розпізнавати заново.
+        Логотип НАВМИСНО більший за пошуковий (32 проти 28): у пошуку поруч є
+        назва запиту й підсвітка збігу, а тут єдине питання — «це та сама
+        компанія?», і відповідає на нього саме він.
+      */}
+      <ul className="space-y-1.5">
         {matches.map((match) => {
           const manager = match.manager?.trim() || "";
           const avatar =
             (match.managerUserId ? avatarById[match.managerUserId] : null) ??
             (manager ? avatarByLabel[normalizeMemberKey(manager)] ?? null : null);
           return (
-            <li key={`${match.kind}-${match.id}`} className="flex items-center gap-2">
-              {manager ? (
-                <AvatarBase
-                  src={avatar}
-                  name={manager}
-                  fallback={manager.slice(0, 2).toUpperCase()}
-                  size={18}
-                  className="shrink-0 border-border/60"
-                  fallbackClassName="text-3xs font-semibold"
-                />
-              ) : null}
-              <span className="min-w-0 truncate font-medium text-foreground">{match.name}</span>
-              <span className="shrink-0 text-muted-foreground">
-                {match.kind}
-                {manager ? ` · ${manager}` : ""}
-              </span>
+            <li key={`${match.kind}-${match.id}`} className="flex items-center gap-2.5">
+              <EntityAvatar
+                src={match.logoUrl ?? null}
+                name={match.name}
+                fallback={match.name.slice(0, 2).toUpperCase()}
+                size={32}
+                fallbackClassName="text-2xs font-semibold"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-foreground">{match.name}</span>
+                  <span className="shrink-0 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {match.kind}
+                  </span>
+                </div>
+                {manager ? (
+                  <span className="mt-0.5 inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-border/60 px-1.5 py-0.5 text-xs text-muted-foreground">
+                    <AvatarBase
+                      src={avatar}
+                      name={manager}
+                      size={16}
+                      className="shrink-0 border-border/60"
+                      fallbackClassName="text-[8px] font-semibold"
+                    />
+                    <span className="truncate">{manager}</span>
+                  </span>
+                ) : null}
+              </div>
             </li>
           );
         })}
