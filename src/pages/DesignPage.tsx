@@ -99,6 +99,7 @@ import { hasOwnManagedWork } from "@/lib/managedWorkOwnership";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { formatDesignTaskNumber, getDesignTaskMonthCode, getNextDesignTaskNumber } from "@/lib/designTaskNumber";
+import { pickTaskQuoteItem } from "@/lib/designTaskQuoteItem";
 import {
   DESIGN_TASK_TYPE_ICONS,
   DESIGN_TASK_TYPE_LABELS,
@@ -1950,17 +1951,10 @@ export default function DesignPage() {
             .map((task) => task.quoteId)
         )
       );
+      // Живцем для КОЖНОЇ задачі з прорахунком, а не лише для тих, кому бракує
+      // знімка: позицію могли перейменувати вже після заведення задачі.
       const quoteIdsNeedingFirstItemLookup = Array.from(
-        new Set(
-          parsedRaw
-            .filter(
-              (task) =>
-                !!task.quoteId &&
-                isUuid(task.quoteId) &&
-                (!task.productName || !task.productImageUrl || !(task as { productQtyLabel?: string | null }).productQtyLabel)
-            )
-            .map((task) => task.quoteId)
-        )
+        new Set(parsedRaw.filter((task) => !!task.quoteId && isUuid(task.quoteId)).map((task) => task.quoteId))
       );
       const quoteIds = Array.from(
         new Set(
@@ -1976,10 +1970,12 @@ export default function DesignPage() {
       }>();
       const customerMap = new Map<string, { name: string | null; logoUrl: string | null }>();
       const leadMap = new Map<string, { name: string | null; logoUrl: string | null }>();
-      const productNameByQuoteId = new Map<string, string | null>();
-      const productImageByQuoteId = new Map<string, string | null>();
-      const productQtyByQuoteId = new Map<string, string | null>();
-      const productZoomImageByQuoteId = new Map<string, string | null>();
+      // Ключ — ЗАДАЧА, а не прорахунок: інакше в прорахунку на три куртки всі
+      // три задачі показують один товар (див. pickTaskQuoteItem).
+      const productNameByTaskId = new Map<string, string | null>();
+      const productImageByTaskId = new Map<string, string | null>();
+      const productQtyByTaskId = new Map<string, string | null>();
+      const productZoomImageByTaskId = new Map<string, string | null>();
       if (quoteIds.length > 0) {
         const { data: quoteRows, error: quoteError } = await supabase
           .schema("tosho")
@@ -2072,45 +2068,57 @@ export default function DesignPage() {
           ])
         );
 
-        const firstItemByQuoteId = new Map<
-          string,
-          {
-            quote_id: string | null;
-            name?: string | null;
-            qty?: number | null;
-            unit?: string | null;
-            attachment?: unknown;
-            catalog_model_id?: string | null;
-          }
-        >();
+        type BoardQuoteItem = {
+          id?: string | null;
+          quote_id: string | null;
+          name?: string | null;
+          qty?: number | null;
+          unit?: string | null;
+          attachment?: unknown;
+          catalog_model_id?: string | null;
+        };
+        const itemsByQuoteId = new Map<string, BoardQuoteItem[]>();
+        const itemByTaskId = new Map<string, BoardQuoteItem>();
         if (quoteIdsNeedingFirstItemLookup.length > 0) {
           const { data: quoteItems, error: quoteItemsError } = await supabase
             .schema("tosho")
             .from("quote_items")
-            .select("quote_id, position, name, qty, unit, attachment, catalog_model_id")
+            .select("id, quote_id, position, name, qty, unit, attachment, catalog_model_id")
             .in("quote_id", quoteIdsNeedingFirstItemLookup)
             .order("position", { ascending: true });
           if (quoteItemsError) throw quoteItemsError;
 
+          // Порядок `position` тут важливий: перша позиція — запасний варіант
+          // для задач, заведених до появи вибору товару.
           (quoteItems ?? []).forEach((item) => {
             const quoteId = typeof item.quote_id === "string" ? item.quote_id : null;
-            if (!quoteId || productNameByQuoteId.has(quoteId)) return;
-            const name = typeof item.name === "string" ? item.name.trim() : "";
-            productNameByQuoteId.set(quoteId, name || null);
-            productQtyByQuoteId.set(
-              quoteId,
-              formatQtyLabel(
-                typeof item.qty === "number" ? item.qty : item.qty ? Number(item.qty) : null,
-                typeof item.unit === "string" ? item.unit : null
-              )
-            );
-            firstItemByQuoteId.set(quoteId, item);
+            if (!quoteId) return;
+            const list = itemsByQuoteId.get(quoteId);
+            if (list) list.push(item);
+            else itemsByQuoteId.set(quoteId, [item]);
           });
         }
 
+        // ТУ САМУ позицію, на яку заводили задачу (правило — designTaskQuoteItem.ts).
+        parsedRaw.forEach((task) => {
+          if (!task.quoteId || !isUuid(task.quoteId)) return;
+          const item = pickTaskQuoteItem(itemsByQuoteId.get(task.quoteId) ?? [], task.metadata);
+          if (!item) return;
+          itemByTaskId.set(task.id, item);
+          const name = typeof item.name === "string" ? item.name.trim() : "";
+          productNameByTaskId.set(task.id, name || null);
+          productQtyByTaskId.set(
+            task.id,
+            formatQtyLabel(
+              typeof item.qty === "number" ? item.qty : item.qty ? Number(item.qty) : null,
+              typeof item.unit === "string" ? item.unit : null
+            )
+          );
+        });
+
         const modelIds = Array.from(
           new Set(
-            Array.from(firstItemByQuoteId.values())
+            Array.from(itemByTaskId.values())
               .map((item) =>
                 typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()
                   ? item.catalog_model_id.trim()
@@ -2130,7 +2138,7 @@ export default function DesignPage() {
           });
         }
 
-        firstItemByQuoteId.forEach((item, quoteId) => {
+        itemByTaskId.forEach((item, taskId) => {
           const attachmentImage =
             item.attachment &&
             typeof item.attachment === "object" &&
@@ -2141,9 +2149,9 @@ export default function DesignPage() {
             typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()
               ? modelImageById.get(item.catalog_model_id.trim()) ?? null
               : null;
-          productImageByQuoteId.set(quoteId, attachmentImage || catalogImage?.imageUrl || null);
-          productZoomImageByQuoteId.set(
-            quoteId,
+          productImageByTaskId.set(taskId, attachmentImage || catalogImage?.imageUrl || null);
+          productZoomImageByTaskId.set(
+            taskId,
             attachmentImage || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null
           );
         });
@@ -2187,10 +2195,13 @@ export default function DesignPage() {
           quoteMap.get(t.quoteId)?.partyType ??
           null,
         quoteManagerUserId: t.quoteManagerUserId ?? quoteMap.get(t.quoteId)?.managerUserId ?? null,
-        productName: t.productName ?? productNameByQuoteId.get(t.quoteId) ?? null,
-        productImageUrl: sanitizeImageReference(productImageByQuoteId.get(t.quoteId) ?? t.productImageUrl ?? null),
-        productZoomImageUrl: sanitizeImageReference(productZoomImageByQuoteId.get(t.quoteId) ?? t.productZoomImageUrl ?? null),
-        productQtyLabel: productQtyByQuoteId.get(t.quoteId) ?? null,
+        // Живе значення ПЕРЕД знімком: у metadata лежить назва на момент заведення.
+        productName: productNameByTaskId.get(t.id) ?? t.productName ?? null,
+        productImageUrl: sanitizeImageReference(productImageByTaskId.get(t.id) ?? t.productImageUrl ?? null),
+        productZoomImageUrl: sanitizeImageReference(
+          productZoomImageByTaskId.get(t.id) ?? t.productZoomImageUrl ?? null
+        ),
+        productQtyLabel: productQtyByTaskId.get(t.id) ?? null,
         assigneeLabel:
           t.assigneeLabel ??
           (t.assigneeUserId

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { fetchDesignTaskQuoteItem, resolveTaskQuoteItemId } from "./designTaskQuoteItem";
+import { fetchDesignTaskQuoteItem, pickTaskQuoteItem, resolveTaskQuoteItemId } from "./designTaskQuoteItem";
 
 const ITEM_A = "11111111-1111-4111-8111-111111111111";
 const QUOTE = "22222222-2222-4222-8222-222222222222";
@@ -96,5 +96,33 @@ describe("регресія", () => {
     const { supabase } = fakeSupabase();
     await expect(fetchDesignTaskQuoteItem(supabase, QUOTE, undefined)).resolves.not.toBeUndefined();
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("pickTaskQuoteItem (дошка «Дизайн»)", () => {
+  const items = [
+    { id: "aaaaaaaa-1111-4111-8111-111111111111", name: "Куртка «NARVIK» чоловіча" },
+    { id: ITEM_A, name: "Куртка софтшел «ALPINA» чоловіча" },
+    { id: "cccccccc-3333-4333-8333-333333333333", name: "Куртка софтшел чоловіча" },
+  ];
+
+  it("бере ТУ позицію, на яку заводили задачу, а не першу", () => {
+    // Реальний випадок 27.08.2026: три задачі одного прорахунку показували на
+    // дошці той самий «NARVIK», бо читач брав першу позицію за position.
+    expect(pickTaskQuoteItem(items, { quote_item_id: ITEM_A })?.name).toBe("Куртка софтшел «ALPINA» чоловіча");
+  });
+
+  it("без вибраної позиції лишається перша — задачі, заведені до появи вибору", () => {
+    expect(pickTaskQuoteItem(items, {})?.name).toBe("Куртка «NARVIK» чоловіча");
+    expect(pickTaskQuoteItem(items, null)?.name).toBe("Куртка «NARVIK» чоловіча");
+  });
+
+  it("позицію прибрали з прорахунку — товару немає взагалі, а не сусідній", () => {
+    expect(pickTaskQuoteItem(items, { quote_item_id: "dddddddd-4444-4444-8444-444444444444" })).toBeNull();
+  });
+
+  it("порожній прорахунок не вигадує товару", () => {
+    expect(pickTaskQuoteItem([], { quote_item_id: ITEM_A })).toBeNull();
+    expect(pickTaskQuoteItem([], {})).toBeNull();
   });
 });

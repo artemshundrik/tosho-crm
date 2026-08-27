@@ -439,6 +439,8 @@ type QuotesPageCachePayload = {
   attachmentCounts: Record<string, number>;
   quoteMembershipEntries?: Array<[string, QuoteSetMembershipInfo]>;
   kanbanProductEntries?: Array<[string, KanbanProductPreview]>;
+  /** Версія прорахунку (`updated_at`), з якою зібрано його прев'ю товарів. */
+  kanbanProductVersions?: Record<string, string>;
   cachedAt: number;
 };
 
@@ -486,6 +488,10 @@ function readQuotesPageCache(teamId: string): QuotesPageCachePayload | null {
               entry[1] !== null
           )
         : [],
+      kanbanProductVersions:
+        parsed.kanbanProductVersions && typeof parsed.kanbanProductVersions === "object"
+          ? parsed.kanbanProductVersions
+          : {},
       cachedAt: Number(parsed.cachedAt ?? Date.now()),
     };
   } catch {
@@ -798,6 +804,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    * на кожній картці знову «Завантаження товару…», хоч дані вже були (REQ-19).
    */
   const kanbanProductByQuoteIdRef = useRef<Record<string, KanbanProductPreview>>({});
+  /**
+   * Версія прорахунку, з якою зібрано його прев'ю товарів (`updated_at`).
+   *
+   * Без неї прев'ю збиралось РАЗ на прорахунок і жило в sessionStorage, поки
+   * картка не зникне зі списку: перейменували позицію — на канбані лишалась
+   * стара назва й старе фото, і «оновити сторінку» не допомагало. Тепер запис
+   * прорахунку (а зміна позиції торкає його через перерахунок сум) міняє
+   * `updated_at`, і прев'ю збирається заново саме для нього.
+   */
+  const kanbanPreviewVersionByQuoteIdRef = useRef<Record<string, string>>(
+    initialCache?.kanbanProductVersions ?? {}
+  );
   const inflightKanbanPreviewQuoteIdsRef = useRef<Set<string>>(new Set());
   const cacheKey = `quotes-page-cache:${teamId}`;
 
@@ -1623,6 +1641,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             attachmentCounts: {},
             quoteMembershipEntries: Array.from(nextMembershipByQuoteId.entries()),
             kanbanProductEntries: survivingPreviewEntries,
+            kanbanProductVersions: { ...kanbanPreviewVersionByQuoteIdRef.current },
             cachedAt: Date.now(),
           })
         );
@@ -1704,6 +1723,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setAttachmentCounts(cached.attachmentCounts ?? {});
       setQuoteMembershipByQuoteId(new Map(cached.quoteMembershipEntries ?? []));
       setKanbanProductByQuoteId(Object.fromEntries(cached.kanbanProductEntries ?? []));
+      // Разом із прев'ю відновлюємо і версії, з якими їх зібрано: інакше кожен
+      // вхід у розділ вважав би їх застарілими й збирав усе заново.
+      kanbanPreviewVersionByQuoteIdRef.current = { ...(cached.kanbanProductVersions ?? {}) };
       setLoading(false);
       rowsRef.current = cached.rows;
       return;
@@ -3592,9 +3614,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     fetchedKanbanPreviewQuoteIdsRef.current = new Set(
       Array.from(fetchedKanbanPreviewQuoteIdsRef.current).filter((quoteId) => quoteIdSet.has(quoteId))
     );
+    // Версія прорахунку в списку: змінилась — прев'ю застаріле, збираємо заново.
+    const versionByQuoteId = new Map<string, string>();
+    filteredAndSortedRows.forEach((row) => {
+      if (row.id) versionByQuoteId.set(row.id, String(row.updated_at ?? ""));
+    });
     const missingQuoteIds = quoteIds.filter(
       (quoteId) =>
-        !fetchedKanbanPreviewQuoteIdsRef.current.has(quoteId) &&
+        (!fetchedKanbanPreviewQuoteIdsRef.current.has(quoteId) ||
+          kanbanPreviewVersionByQuoteIdRef.current[quoteId] !== versionByQuoteId.get(quoteId)) &&
         !inflightKanbanPreviewQuoteIdsRef.current.has(quoteId)
     );
     if (missingQuoteIds.length === 0) {
@@ -3758,7 +3786,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         });
 
         if (!cancelled) {
-          missingQuoteIds.forEach((quoteId) => fetchedKanbanPreviewQuoteIdsRef.current.add(quoteId));
+          missingQuoteIds.forEach((quoteId) => {
+            fetchedKanbanPreviewQuoteIdsRef.current.add(quoteId);
+            kanbanPreviewVersionByQuoteIdRef.current[quoteId] = versionByQuoteId.get(quoteId) ?? "";
+          });
           setKanbanProductByQuoteId((current) => {
             const mergedMap = {
               ...Object.fromEntries(Object.entries(current).filter(([quoteId]) => quoteIdSet.has(quoteId))),
@@ -3772,6 +3803,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   attachmentCounts,
                   quoteMembershipEntries: Array.from(quoteMembershipByQuoteId.entries()),
                   kanbanProductEntries: Object.entries(mergedMap),
+                  kanbanProductVersions: { ...kanbanPreviewVersionByQuoteIdRef.current },
                   cachedAt: Date.now(),
                 })
               );
