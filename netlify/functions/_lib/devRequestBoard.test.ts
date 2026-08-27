@@ -516,6 +516,15 @@ describe("розбір дії commit", () => {
     ).toEqual({ ok: true, action: "commit", numbers: [], items: [{ number: 180, item: "p1" }], sha: "74ab615" });
   });
 
+  it("літера в адресі не тільки «p» — на дошці є пункти на «t»", () => {
+    // REQ-123 має пункти t1…t3. Поки схема приймала рівно `pN`, коміт із чесною
+    // згадкою REQ-123#t3 отримував 400, а пункт лишався відкритим при зробленій
+    // роботі (знайдено 27.08.2026).
+    expect(
+      parseBoardBody(JSON.stringify({ action: "commit", numbers: [], items: [{ number: 123, item: "t3" }], sha: "8fd0e7f" }))
+    ).toEqual({ ok: true, action: "commit", numbers: [], items: [{ number: 123, item: "t3" }], sha: "8fd0e7f" });
+  });
+
   it("самих пунктів досить — номери картки може й не бути", () => {
     const result = parseBoardBody(
       JSON.stringify({ action: "commit", items: [{ number: 180, item: "p1" }], sha: "74ab615" })
