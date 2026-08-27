@@ -59,10 +59,27 @@ const RULES = [
     },
     fix: "Показуєш товар дизайн-задачі — клич pickTaskQuoteItem / fetchDesignTaskQuoteItem із @/lib/designTaskQuoteItem. Читаєш позиції для чогось іншого — додай файл у allow цього правила з поясненням.",
   },
+  {
+    name: "погоджений тираж",
+    module: "quoteRuns",
+    /** Прапорець «цей тираж погодив клієнт» — від нього залежить ціна замовлення. */
+    raw: /\bis_approved\b/,
+    scope: /quote_item_runs|quoteRuns|тираж/i,
+    allow: {
+      "src/lib/quoteRuns.ts": "сам модуль правила",
+    },
+    fix: "Погоджений тираж один на прорахунок, і перенесення позначки має йти через applyApprovedRunToggle із @/lib/quoteRuns — інакше на прорахунку опиняється два погоджених тиражі або жодного, а замовлення бере не ту ціну.",
+  },
 ];
 
 const SCAN_DIRS = ["src", "netlify"];
 const EXTENSIONS = [".ts", ".tsx"];
+
+/**
+ * Згенероване не читає правил — воно описує базу. `database.types.ts` пише
+ * `supabase gen types`, і в ньому згадані геть усі колонки, зокрема `is_approved`.
+ */
+const GENERATED = /database\.types\.ts$|\.generated\.ts$/;
 
 function walk(dir, out = []) {
   let entries;
@@ -76,7 +93,9 @@ function walk(dir, out = []) {
     const full = join(dir, entry);
     const stat = statSync(full);
     if (stat.isDirectory()) walk(full, out);
-    else if (EXTENSIONS.some((ext) => entry.endsWith(ext)) && !entry.includes(".test.")) out.push(full);
+    else if (EXTENSIONS.some((ext) => entry.endsWith(ext)) && !entry.includes(".test.") && !GENERATED.test(full)) {
+      out.push(full);
+    }
   }
   return out;
 }

@@ -35,7 +35,7 @@
  * привчило б обходити перевірку. Тому зменшення лише нагадує про себе в
  * консолі, а зупиняє пуш тільки зростання.
  */
-import { readdirSync, statSync, readFileSync } from "node:fs";
+import { readdirSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** З якого розміру файл вважається великим і потрапляє під нагляд. */
@@ -235,9 +235,27 @@ for (const file of collectSourceFiles("src")) {
   else if (ceiling - lines >= NOTABLE_SHRINK) shrunk.push({ file, lines, ceiling });
 }
 
+// --fix (він же `npm run docs:sync`) опускає стелю сам. Це похідне число, і поки
+// його вписували руками, воно давало окремі коміти «стеля підтягнута під…» —
+// чотири таких за чотири дні (замір 27.08.2026). Опускати можна автоматом:
+// ратчет від цього лише міцніє. ПІДІЙМАТИ — ніколи, це рішення людини.
+const ЛАГОДИМО = process.argv.includes("--fix");
+
+if (ЛАГОДИМО && shrunk.length > 0) {
+  const self = new URL(import.meta.url).pathname;
+  let source = readFileSync(self, "utf8");
+  for (const { file, lines, ceiling } of shrunk) {
+    const рядок = new RegExp(`("${file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}":\\s*)${ceiling}`);
+    source = source.replace(рядок, `$1${lines}`);
+    console.log(`[розмір] стеля опущена: ${file} ${ceiling} → ${lines}`);
+  }
+  writeFileSync(self, source, "utf8");
+}
+
 for (const { file, lines, ceiling } of shrunk) {
+  if (ЛАГОДИМО) continue;
   console.log(
-    `[розмір] ${file} схуднув: ${lines} замість ${ceiling}. Опусти стелю в scripts/check-file-growth.mjs.`
+    `[розмір] ${file} схуднув: ${lines} замість ${ceiling}. Опусти стелю: npm run docs:sync.`
   );
 }
 

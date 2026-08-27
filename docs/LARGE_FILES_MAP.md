@@ -48,7 +48,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | ~8380–8420 | вкладка «Економіка» — заглушка «скоро» |
 | ~10039 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 801 lines, 579 KB, as of 2026-08-24)
+## src/pages/DesignTaskPage.tsx (~12 864 lines, 583 KB, as of 2026-08-27)
 
 | Range | Content |
 |---|---|
@@ -56,7 +56,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 164–1148 | types + Dropbox export helpers (`collectDesignTaskStorageFiles`, `buildDropboxClientFolderPath`, `buildDropboxBrandFolderPath`, `formatDropboxDate`, `buildDropboxExportFileName`, brief-format helpers) |
 | **1149** | `export default function DesignTaskPage()` — main component starts |
 
-## src/pages/QuotesPage.tsx (~8 252 lines, 357 KB, as of 2026-08-24)
+## src/pages/QuotesPage.tsx (~8 380 lines, 360 KB, as of 2026-08-27)
 
 | Range | Content |
 |---|---|
@@ -64,7 +64,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 158–465 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
 | **466** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 902 lines, 252 KB, as of 2026-08-24)
+## src/pages/DesignPage.tsx (~6 010 lines, 260 KB, as of 2026-08-27)
 
 | Range | Content |
 |---|---|

@@ -68,3 +68,6 @@ deno.lock
 playwright-report/
 test-results/
 blob-report/
+
+# Аркуш станів лейауту — знімки для ока, не для репозиторію
+e2e/__screens__/
