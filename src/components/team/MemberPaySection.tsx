@@ -9,6 +9,7 @@ import { DateInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 
 /**
  * Вкладка «Оплата» в картці співробітника (тільки owner/CEO).
@@ -21,6 +22,10 @@ import { CONTROL_BASE } from "@/components/ui/controlStyles";
  *    поточний місяць уже частково відпрацьований). Тому форма не «зберігає
  *    зміни», а «призначає нову ставку з дати».
  *  · Історія лишається видимою — видно, коли і на що змінювали.
+ *  · Заплановану ставку (дата в майбутньому) МОЖНА скасувати, минулу й чинну —
+ *    ні. Заплановане ще нікого не стосується: воно не лягло в жодну виплату й
+ *    існує лише як намір, тож помилку в намірі треба вміти прибрати. Минуле й
+ *    чинне вже пораховані у виплатах, і видалення переписало б історію грошей.
  *  · Дизайнер-специфічні поля (норма візуалів, ставка понад норму) показуємо
  *    лише дизайнерам: для менеджера вони порожні й лише плутали б.
  */
@@ -62,6 +67,8 @@ export function MemberPaySection({
   const [visualOverRate, setVisualOverRate] = useState("");
   const [layoutOverRate, setLayoutOverRate] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(nextMonthFirstDay);
+  const [pendingCancel, setPendingCancel] = useState<DesignerPayRate | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const reload = useCallback(async () => {
     if (!workspaceId) return;
@@ -138,6 +145,52 @@ export function MemberPaySection({
     }
   };
 
+  /**
+   * Скасувати заплановану ставку.
+   *
+   * ЧОМУ ЦЕ НЕ «ВИДАЛЕННЯ ІСТОРІЇ». Прибрати можна лише рядок із датою в
+   * майбутньому — той, що ще не набрав чинності. Без цього помилка спрацьовувала
+   * сама: помилкові 30 000 ₴ з 1 вересня не було чим скасувати, і за п'ять днів
+   * людині мовчки зрізало б зарплату. Дата в минулому чи сьогоднішня вже
+   * порахована у виплатах — там єдиний правильний шлях лишається той самий:
+   * нова ставка з новою датою.
+   */
+  const cancelScheduled = async (rate: DesignerPayRate) => {
+    if (!workspaceId || !canEdit) return;
+    // Захист на випадок, якщо вкладка провисіла до дати набрання чинності.
+    if (rate.effectiveFrom <= todayIso) {
+      setError("Ця ставка вже набрала чинності — її не скасувати, признач нову з новою датою.");
+      setPendingCancel(null);
+      return;
+    }
+    setCancelling(true);
+    setError(null);
+    try {
+      // .select() тут не заради даних, а заради доказу: delete без нього мовчить
+      // однаково і коли рядок зник, і коли його не пустила RLS.
+      const { data: removed, error: deleteError } = await supabase
+        .schema("tosho")
+        .from("employee_pay_rates" as never)
+        .delete()
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", userId)
+        .eq("effective_from", rate.effectiveFrom)
+        .select("effective_from");
+      if (deleteError) throw deleteError;
+      if (!removed || removed.length === 0) {
+        setError("Ставку не скасовано — схоже, бракує прав. Онови сторінку й спробуй ще раз.");
+        return;
+      }
+      setPendingCancel(null);
+      await reload();
+    } catch (cancelError) {
+      console.warn("Failed to cancel scheduled pay rate", cancelError);
+      setError("Не вдалося скасувати заплановану ставку. Перевірте права доступу.");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 rounded-[var(--radius)] border border-border bg-background/70 p-4 text-sm text-muted-foreground">
@@ -185,6 +238,15 @@ export function MemberPaySection({
                 <span>
                   Заплановано {formatUah(rate.baseMonthRate)} з {formatDate(rate.effectiveFrom)}
                 </span>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => setPendingCancel(rate)}
+                    className="ml-auto shrink-0 font-medium text-info-foreground underline decoration-info-foreground/40 underline-offset-2 hover:decoration-info-foreground"
+                  >
+                    Скасувати
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -196,6 +258,7 @@ export function MemberPaySection({
           <div className="mb-1 text-sm font-semibold text-foreground">Призначити нову ставку</div>
           <p className="mb-4 text-xs text-muted-foreground">
             Ставка не змінюється заднім числом: нова діє з обраної дати, стара лишається в історії.
+            Якщо обрати дату, на яку ставка вже є, вона перезапишеться.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -298,12 +361,36 @@ export function MemberPaySection({
                   <span className="ml-auto rounded-full border border-success-soft-border bg-success-soft px-2 py-0.5 text-3xs font-semibold text-success-foreground">
                     чинна
                   </span>
+                ) : rate.effectiveFrom > todayIso ? (
+                  <span className="ml-auto rounded-full border border-info-soft-border bg-info-soft px-2 py-0.5 text-3xs font-semibold text-info-foreground">
+                    заплановано
+                  </span>
                 ) : null}
               </div>
             ))}
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={pendingCancel !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingCancel(null);
+        }}
+        title="Скасувати заплановану ставку?"
+        description={
+          pendingCancel
+            ? `${formatUah(pendingCancel.baseMonthRate)} з ${formatDate(pendingCancel.effectiveFrom)} для ${memberName} не набере чинності. Чинна ставка не зміниться.`
+            : null
+        }
+        confirmLabel="Скасувати ставку"
+        cancelLabel="Залишити"
+        loading={cancelling}
+        onConfirm={() => {
+          if (pendingCancel) void cancelScheduled(pendingCancel);
+        }}
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+      />
     </div>
   );
 }
