@@ -198,6 +198,7 @@ import { DesignTaskProductCard } from "@/components/design/DesignTaskProductCard
 import { CreativePayControl } from "@/components/design/CreativePayControl";
 import { loadPayDefaults } from "@/lib/designerPayroll";
 import { designTaskTypeShowsProduct, parseDesignTaskProduct } from "@/lib/designTaskProduct";
+import { fetchDesignTaskQuoteItem, type DesignTaskQuoteItem } from "@/lib/designTaskQuoteItem";
 import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { formatTelegramHandle } from "@/lib/telegramContact";
 import {
@@ -255,16 +256,7 @@ type DesignTaskClientContact = {
 
 
 
-type QuoteItemRow = {
-  id?: string;
-  name: string | null;
-  qty: number | null;
-  unit: string | null;
-  methods: unknown;
-  attachment?: unknown;
-  catalog_model_id?: string | null;
-  catalog_kind_id?: string | null;
-};
+type QuoteItemRow = DesignTaskQuoteItem;
 
 type AttachmentRow = {
   id: string;
@@ -2279,17 +2271,9 @@ export default function DesignTaskPage() {
             normalizeLogoUrl(quote?.customer_logo_url ?? null);
         }
 
-        // first quote item (only for quote-linked tasks)
-        const { data: item } = isUuid(quoteId)
-          ? await supabase
-              .schema("tosho")
-              .from("quote_items")
-              .select("name, qty, unit, methods, attachment, catalog_model_id, catalog_kind_id")
-              .eq("quote_id", quoteId)
-              .order("position", { ascending: true })
-              .limit(1)
-              .maybeSingle()
-          : { data: null };
+        // Яку саме позицію показує задача — вирішує designTaskQuoteItem:
+        // помилка тут узгоджено бреше в чотирьох полях одразу.
+        const item = isUuid(quoteId) ? await fetchDesignTaskQuoteItem(supabase, quoteId, meta) : null;
 
         let itemPreviewUrl: string | null = null;
         let itemZoomPreviewUrl: string | null = null;
