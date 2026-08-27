@@ -199,6 +199,7 @@ import { CreativePayControl } from "@/components/design/CreativePayControl";
 import { loadPayDefaults } from "@/lib/designerPayroll";
 import { designTaskTypeShowsProduct, parseDesignTaskProduct } from "@/lib/designTaskProduct";
 import { fetchDesignTaskQuoteItem, type DesignTaskQuoteItem } from "@/lib/designTaskQuoteItem";
+import { findParty } from "@/lib/partyNameMatch";
 import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { formatTelegramHandle } from "@/lib/telegramContact";
 import {
@@ -2249,17 +2250,23 @@ export default function DesignTaskPage() {
             const matchedEntry =
               entryByLabel.get(normalizedLookup) ??
               entryByCompactLabel.get(compactLookup) ??
-              logoDirectory.find((entry) => {
-                const label = normalizePartyLabel(entry.label);
-                const legalName = normalizePartyLabel(entry.legalName);
-                return (
-                  (!!normalizedLookup && !!label && label.includes(normalizedLookup)) ||
-                  (!!normalizedLookup && !!legalName && legalName.includes(normalizedLookup))
-                );
-              }) ??
+              // Тут стояв пошук ПІДРЯДКОМ — та сама міна, що вибухнула у швидкому
+              // перегляді; чому це небезпечно, написано в lib/partyNameMatch.
+              findParty(
+                logoDirectory.map((entry) => ({
+                  entry,
+                  name: entry.label ?? "",
+                  legalName: entry.legalName ?? null,
+                })),
+                lookupName
+              )?.entry ??
               null;
             if (matchedEntry) {
-              customerName = customerName ?? matchedEntry.label ?? matchedEntry.legalName ?? null;
+              // СВІЖА НАЗВА ПЕРЕМАГАЄ ЗАМОРОЖЕНУ — як логотип рядком нижче й як у
+              // двох гілках вище. Доти тут стояло `customerName ?? ...`, тобто
+              // навпаки, і після перейменування ліда логотип оновлювався, а назва
+              // лишалась старою (REQ-191).
+              customerName = matchedEntry.label || matchedEntry.legalName || customerName;
               customerLogoUrl = matchedEntry.logoUrl ?? customerLogoUrl;
             }
           }

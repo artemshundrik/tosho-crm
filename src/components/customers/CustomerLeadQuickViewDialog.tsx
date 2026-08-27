@@ -14,10 +14,10 @@ import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { supabase } from "@/lib/supabaseClient";
 import { listCustomerQuotes, listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
+import { findParty, normalizePartyMatch } from "@/lib/partyNameMatch";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { areCompanyNamesEquivalent } from "@/lib/companyNameSearch";
 import {
   parseCustomerLegalEntities,
   formatCustomerLegalEntitySummary,
@@ -174,12 +174,6 @@ const getFallbackLeadColumnsVariant = (variant: LeadColumnsVariant, message: str
   return null;
 };
 
-const normalizePartyMatch = (value?: string | null) =>
-  (value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[«»"'`]/g, "");
 
 const normalizeMemberKey = (value?: string | null) =>
   (value ?? "")
@@ -189,25 +183,24 @@ const normalizeMemberKey = (value?: string | null) =>
 
 const escapePostgrestTerm = (value: string) => value.replace(/[%_]/g, (char) => `\\${char}`);
 
-const pickBestLeadMatch = (rows: LeadRow[], name: string) => {
-  const normalizedName = normalizePartyMatch(name);
-  return (
-    rows.find((row) =>
-      [row.company_name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedName)
-    ) ??
-    rows.find((row) =>
-      [row.company_name ?? "", row.legal_name ?? ""].some((value) => areCompanyNamesEquivalent(value, name))
-    ) ??
-    rows.find((row) =>
-      [row.company_name ?? "", row.legal_name ?? ""].some((value) => {
-        const normalizedValue = normalizePartyMatch(value);
-        return Boolean(normalizedName && normalizedValue && (normalizedValue.includes(normalizedName) || normalizedName.includes(normalizedValue)));
-      })
-    ) ??
-    rows[0] ??
-    null
-  );
-};
+/**
+ * Картка за назвою — або нічого.
+ *
+ * Було чотири щаблі, і два останні не мали порога: третій приймав будь-яку
+ * компанію, чия назва є ПІДРЯДКОМ запиту, а четвертий просто повертав
+ * `rows[0]`. Через це 27.08.2026 клік по «Замовник: masseeds» у дизайн-задачі
+ * відкрив картку ЗОВСІМ ІНШОГО ліда — «EDS», бо «masseeds» містить «eds», а
+ * ліди відсортовані за назвою. Для назв, яких у базі немає взагалі, четвертий
+ * щабель відкривав перший лід за абеткою — у нас це записи «.» і «..».
+ *
+ * Тепер правило спільне (`lib/partyNameMatch`, з тестами) і не вгадує: показати
+ * чужу компанію з чужим телефоном гірше, ніж сказати «не знайшли».
+ */
+const pickBestLeadMatch = (rows: LeadRow[], name: string) =>
+  findParty(
+    rows.map((row) => ({ row, name: row.company_name ?? "", legalName: row.legal_name ?? null })),
+    name
+  )?.row ?? null;
 
 const getInitials = (value?: string | null) => {
   const parts = (value ?? "").trim().split(/\s+/).filter(Boolean);
@@ -441,20 +434,24 @@ export function CustomerLeadQuickViewDialog({
                 listCustomersBySearch(teamId, customerName ?? ""),
               ]);
 
+          // Без `?? leadMatches[0]`: пошук повертає до 20 рядків за схожістю, і
+          // брати перший означало б показати випадкову компанію під чужим імʼям.
           const matchedLead = nextLead
             ? null
-            : leadMatches.find((row) =>
-                [row.company_name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedName)
-              ) ?? leadMatches[0] ?? null;
+            : findParty(
+                leadMatches.map((row) => ({ row, name: row.company_name ?? "", legalName: row.legal_name ?? null })),
+                customerName ?? ""
+              )?.row ?? null;
           if (!nextLead && matchedLead?.id) {
             nextLead = await loadLeadById(matchedLead.id);
           }
 
           if (!nextLead) {
             const matchedCustomer =
-              customerMatches.find((row) =>
-                [row.name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedName)
-              ) ?? customerMatches[0] ?? null;
+              findParty(
+                customerMatches.map((row) => ({ row, name: row.name ?? "", legalName: row.legal_name ?? null })),
+                customerName ?? ""
+              )?.row ?? null;
             if (matchedCustomer?.id) {
               nextCustomer = await loadCustomerById(matchedCustomer.id);
             }
