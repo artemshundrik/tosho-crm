@@ -30,6 +30,8 @@ function waitingOn(who: string, since: string): ChecklistItem {
     kind: "task",
     text: "Чекаємо відповіді",
     state: "waiting",
+    closed: null,
+    sha: null,
     group: null,
     who,
     since,

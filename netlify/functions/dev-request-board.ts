@@ -16,6 +16,9 @@ import {
   updateBoardCard,
   buildBoardUpdateResponse,
   recordCommitOnCards,
+  closeChecklistItemsOnCommit,
+  fetchBoardCardWithItems,
+  buildBoardCardResponse,
   releasedCardMessage,
 } from "./_lib/devRequestBoard";
 import { CAPTURE_TOKEN_HEADER, isUuid, readHeader, tokenMatches } from "./_lib/devRequestCapture";
@@ -23,7 +26,8 @@ import { CAPTURE_TOKEN_HEADER, isUuid, readHeader, tokenMatches } from "./_lib/d
 // Черга запитів ззовні CRM: `POST { "action": "list" }` — подивитись, що
 // відкрито; `POST { "action": "move", "number": 3, "status": "in_progress" }` —
 // пересунути картку; `POST { "action": "update", "number": 3, "body": "…" }` —
-// виправити текст картки; `POST { "action": "commit", "numbers": [4], "sha": "…" }`
+// виправити текст картки; `POST { "action": "card", "number": 180 }` — картка
+// з адресами пунктів; `POST { "action": "commit", "numbers": [4], "sha": "…" }`
 // — зафіксувати коміт (кличе git-хук scripts/hooks/post-commit, не людина).
 //
 // НАВІЩО ОКРЕМА ФУНКЦІЯ, А НЕ РЕЖИМ У dev-request-capture. У захоплення рівно
@@ -114,18 +118,42 @@ export const handler = async (event: HttpEvent) => {
       return json(200, buildBoardListResponse({ cards, hasMore, url }));
     }
 
+    if (parsed.action === "card") {
+      const found = await fetchBoardCardWithItems(admin, teamId, parsed.number);
+      if (!found.ok) {
+        if (found.reason === "not_found") {
+          return json(404, { error: cardNotFoundMessage(parsed.number) });
+        }
+        console.error("dev-request-board card failed:", found.message);
+        return json(500, { error: "Не зміг прочитати картку. Спробуй ще раз за хвилину." });
+      }
+      return json(200, buildBoardCardResponse({ card: found.card, items: found.items, url }));
+    }
+
     if (parsed.action === "commit") {
       const outcomes = await recordCommitOnCards(admin, teamId, parsed.numbers, parsed.sha);
+      // Пункти закриваємо ПІСЛЯ карток: якщо перше впало, друге вже не має
+      // сенсу, а порядок рядків у підсумку читається зверху вниз як розповідь.
+      const checklist = await closeChecklistItemsOnCommit(admin, teamId, parsed.items, parsed.sha);
       // Провалились геть усі записи — це вже не «часткова правда в message», а
       // поламана база: хай хук побачить помилку й скаже про неї вголос.
-      if (outcomes.length > 0 && outcomes.every((outcome) => outcome.result === "failed")) {
+      // Рахуємо СПРОБИ, а не самі картки: коміт міг назвати лише пункти
+      // (`REQ-180#p1`), і тоді outcomes порожній. Умова на `outcomes.length`
+      // означала б, що такий запит не вміє провалитись, — а `every` на
+      // порожньому масиві дає true й тихо ховав би поламану базу.
+      const attempted = outcomes.length + checklist.length;
+      if (
+        attempted > 0 &&
+        outcomes.every((outcome) => outcome.result === "failed") &&
+        checklist.every((outcome) => outcome.result === "failed")
+      ) {
         console.error(
           "dev-request-board commit failed:",
           outcomes.map((outcome) => `${outcome.label}: ${outcome.message ?? ""}`).join("; ")
         );
         return json(500, { error: "Не зміг записати коміт у картки. Спробуй ще раз за хвилину." });
       }
-      return json(200, buildBoardCommitResponse({ sha: parsed.sha, outcomes, url }));
+      return json(200, buildBoardCommitResponse({ sha: parsed.sha, outcomes, checklist, url }));
     }
 
     if (parsed.action === "checklist") {
@@ -147,6 +175,7 @@ export const handler = async (event: HttpEvent) => {
           card: appended.card,
           total: appended.total,
           text: appended.text,
+          item: appended.item,
           url,
         })
       );

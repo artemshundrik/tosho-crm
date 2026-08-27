@@ -23,6 +23,8 @@ import {
   OPEN_STATUSES,
   parseBoardBody,
   recordCommitOnCards,
+  closeChecklistItemsOnCommit,
+  kyivDay,
   releasedCardMessage,
   shaMatches,
   sortBoardCards,
@@ -503,8 +505,36 @@ describe("розбір дії commit", () => {
       ok: true,
       action: "commit",
       numbers: [4, 7],
+      items: [],
       sha: "dfe481f",
     });
+  });
+
+  it("адресовані пункти розбираються окремим кошиком", () => {
+    expect(
+      parseBoardBody(JSON.stringify({ action: "commit", numbers: [], items: [{ number: 180, item: "P1" }], sha: "74ab615" }))
+    ).toEqual({ ok: true, action: "commit", numbers: [], items: [{ number: 180, item: "p1" }], sha: "74ab615" });
+  });
+
+  it("самих пунктів досить — номери картки може й не бути", () => {
+    const result = parseBoardBody(
+      JSON.stringify({ action: "commit", items: [{ number: 180, item: "p1" }], sha: "74ab615" })
+    );
+    expect(result).toMatchObject({ ok: true, action: "commit" });
+  });
+
+  it("зіпсоване поле items — 400 з поясненням, а не тиха тиша", () => {
+    // Мовчазне ігнорування означало б «коміт зафіксовано» на роботі, якої
+    // ніхто не записав, — саме та брехня, від якої весь механізм і будували.
+    for (const items of [[{ number: 180 }], [{ number: 180, item: "перший" }], [{ item: "p1" }], "p1", [null]]) {
+      const result = parseBoardBody(JSON.stringify({ action: "commit", numbers: [4], items, sha: "dfe481f" }));
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it("ні номерів, ні пунктів — фіксувати нічого", () => {
+    const result = parseBoardBody(JSON.stringify({ action: "commit", numbers: [], items: [], sha: "dfe481f" }));
+    expect(result.ok).toBe(false);
   });
 
   it("sha зводимо до нижнього регістру — інакше той самий коміт запишеться двічі", () => {
@@ -556,7 +586,7 @@ describe("розбір дії commit", () => {
     const result = parseBoardBody(
       JSON.stringify({ action: "commit", numbers: [4], sha: "dfe481f", status: "released" })
     );
-    expect(result).toEqual({ ok: true, action: "commit", numbers: [4], sha: "dfe481f" });
+    expect(result).toEqual({ ok: true, action: "commit", numbers: [4], items: [], sha: "dfe481f" });
   });
 });
 
@@ -1108,5 +1138,244 @@ describe("дописування пункту чекліста", () => {
       reason: "not_found",
     });
     expect(state.updates).toEqual([]);
+  });
+});
+
+
+/**
+ * Заглушка під closeChecklistItemsOnCommit: читання ОДНІЄЇ картки, запис
+ * одного `checklist`. Журнал записів тут — головний свідок: він доводить, що в
+ * картку не поїхало нічого зайвого (ні статусу, ні `commit_shas`).
+ */
+function fakeChecklistAdmin(initial: Array<Record<string, unknown>>) {
+  const state = {
+    rows: initial.map((entry) => ({ ...entry })),
+    updates: [] as Array<{ number: number; patch: Record<string, unknown> }>,
+    readFails: false,
+    updateFails: false,
+  };
+
+  function chain() {
+    let patch: Record<string, unknown> | null = null;
+    let target: number | null = null;
+
+    const stub = {
+      select: () => stub,
+      eq: (column: string, value: unknown) => {
+        if (column === "number") target = Number(value);
+        return stub;
+      },
+      update: (next: Record<string, unknown>) => {
+        patch = next;
+        return stub;
+      },
+      maybeSingle: async () => {
+        const found = state.rows.find((entry) => Number(entry.number) === target);
+        if (patch) {
+          if (state.updateFails) return { data: null, error: { message: "запис не пройшов" } };
+          if (!found) return { data: null, error: null };
+          state.updates.push({ number: target as number, patch });
+          Object.assign(found, patch);
+          return { data: { number: target }, error: null };
+        }
+        if (state.readFails) return { data: null, error: { message: "читання не пройшло" } };
+        return { data: found ? { ...found } : null, error: null };
+      },
+    };
+    return stub;
+  }
+
+  const admin = { schema: () => ({ from: () => chain() }) } as unknown as SupabaseClient;
+  return { admin, state };
+}
+
+const NOW = new Date("2026-08-27T10:20:00.000Z");
+
+const papercutRow = (overrides: Record<string, unknown> = {}) =>
+  commitRow({ number: 180, title: "Дрібниці: картка прорахунку", status: "queued", ...overrides });
+
+/**
+ * НАЙДОРОЖЧЕ МІСЦЕ ВСЬОГО МЕХАНІЗМУ.
+ *
+ * Накопичувач дрібниць — це полиця напряму, а не задача. Один запис статусу
+ * сюди запускає ланцюг: «Готово локально» → деплой бачить sha → «Викочено» →
+ * картку не зрушити (409) → з черги зникає ВЕСЬ напрям разом із невирішеними
+ * дрібницями. Тому тест дивиться не на текст відповіді, а на журнал записів:
+ * доводити треба, що в базу не поїхало нічого.
+ */
+describe("накопичувач дрібниць і коміт", () => {
+  it("статусу й sha накопичувачу не пишемо — у базу не йде НІЧОГО", async () => {
+    const { admin, state } = fakeCommitAdmin([papercutRow()]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [180], "74ab615");
+
+    expect(outcomes[0]).toMatchObject({ number: 180, result: "papercut", status: "queued" });
+    expect(state.updates).toEqual([]);
+    expect(state.rows[0].status).toBe("queued");
+    expect(state.rows[0].commit_shas).toEqual([]);
+  });
+
+  it("у підсумку — підказка з правильною адресою, а не мовчазна тиша", () => {
+    const response = buildBoardCommitResponse({
+      sha: "74ab615",
+      outcomes: [
+        {
+          number: 180,
+          label: "REQ-180",
+          title: "Дрібниці: картка прорахунку",
+          result: "papercut",
+          status: "queued",
+          previousStatus: "queued",
+          shaKnown: false,
+        },
+      ],
+      url: "https://tosho.pro/dev/backlog",
+    });
+    expect(response.message).toContain("REQ-180#p1");
+    expect(response.message).toContain("накопичувач");
+  });
+
+  it("регістр і пробіли в назві не рятують від гвардії", async () => {
+    const { admin, state } = fakeCommitAdmin([papercutRow({ title: "  дрібниці: гроші замовлення" })]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [180], "74ab615");
+    expect(outcomes[0].result).toBe("papercut");
+    expect(state.updates).toEqual([]);
+  });
+
+  it("звичайну картку гвардія не чіпає — вона й далі їде в «Готово локально»", async () => {
+    const { admin, state } = fakeCommitAdmin([commitRow({ number: 4, status: "queued" })]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [4], "dfe481f");
+    expect(outcomes[0].result).toBe("moved");
+    expect(state.updates).toHaveLength(1);
+  });
+});
+
+describe("closeChecklistItemsOnCommit", () => {
+  const items = (...entries: Array<Record<string, unknown>>) => entries;
+
+  it("закриває названий пункт і лишає слід коміта", async () => {
+    const { admin, state } = fakeChecklistAdmin([
+      papercutRow({ checklist: items({ id: "p1", text: "Причина скасування", state: "todo" }) }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 180, item: "p1" }], "74ab615", NOW);
+
+    expect(outcomes[0]).toMatchObject({ result: "closed", item: "p1", text: "Причина скасування" });
+    expect(state.updates).toHaveLength(1);
+    expect(state.updates[0].patch.checklist).toEqual([
+      { id: "p1", text: "Причина скасування", state: "done", closed: "2026-08-27", sha: "74ab615" },
+    ]);
+  });
+
+  it("у картку не пишеться НІ статусу, НІ commit_shas — тільки чекліст", async () => {
+    // Саме це не дає деплою викотити накопичувач: плагін релізів шукає збіг
+    // за commit_shas, і якщо їх немає, збігу не буде ніколи.
+    const { admin, state } = fakeChecklistAdmin([
+      papercutRow({ checklist: items({ id: "p1", text: "щось", state: "todo" }) }),
+    ]);
+    await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 180, item: "p1" }], "74ab615", NOW);
+    expect(Object.keys(state.updates[0].patch)).toEqual(["checklist"]);
+  });
+
+  it("сусідні пункти лишаються недоторканими", async () => {
+    const { admin, state } = fakeChecklistAdmin([
+      papercutRow({
+        checklist: items(
+          { id: "p1", text: "перший", state: "todo" },
+          { id: "p2", text: "другий", state: "doing", who: "СЕО" }
+        ),
+      }),
+    ]);
+    await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 180, item: "p1" }], "74ab615", NOW);
+    const written = state.updates[0].patch.checklist as Array<Record<string, unknown>>;
+    expect(written[1]).toEqual({ id: "p2", text: "другий", state: "doing", who: "СЕО" });
+  });
+
+  it("два пункти однієї картки закриваються ОДНИМ записом", async () => {
+    // Два записи означали б, що другий читає стан ДО першого й затирає його.
+    const { admin, state } = fakeChecklistAdmin([
+      papercutRow({
+        checklist: items({ id: "p1", text: "перший", state: "todo" }, { id: "p2", text: "другий", state: "todo" }),
+      }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(
+      admin,
+      "team-1",
+      [
+        { number: 180, item: "p1" },
+        { number: 180, item: "p2" },
+      ],
+      "74ab615",
+      NOW
+    );
+    expect(outcomes.map((entry) => entry.result)).toEqual(["closed", "closed"]);
+    expect(state.updates).toHaveLength(1);
+    const written = state.updates[0].patch.checklist as Array<Record<string, unknown>>;
+    expect(written.every((entry) => entry.state === "done")).toBe(true);
+  });
+
+  it("уже закритий пункт не переписується — і запису немає взагалі", async () => {
+    const { admin, state } = fakeChecklistAdmin([
+      papercutRow({ checklist: items({ id: "p1", text: "щось", state: "done", closed: "2026-08-20", sha: "aaaaaaa" }) }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 180, item: "p1" }], "74ab615", NOW);
+    expect(outcomes[0].result).toBe("already");
+    expect(state.updates).toEqual([]);
+  });
+
+  it("неіснуюча адреса — зрозуміла відповідь, а не тихий успіх", async () => {
+    const { admin, state } = fakeChecklistAdmin([
+      papercutRow({ checklist: items({ id: "p1", text: "щось", state: "todo" }) }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 180, item: "p9" }], "74ab615", NOW);
+    expect(outcomes[0].result).toBe("no_item");
+    expect(state.updates).toEqual([]);
+  });
+
+  it("картки немає — кажемо про це, а не падаємо", async () => {
+    const { admin } = fakeChecklistAdmin([]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 999, item: "p1" }], "74ab615", NOW);
+    expect(outcomes[0]).toMatchObject({ result: "missing", label: "REQ-999" });
+  });
+
+  it("чекліст викоченої картки не чіпаємо", async () => {
+    const { admin, state } = fakeChecklistAdmin([
+      commitRow({ number: 15, status: "released", checklist: items({ id: "p1", text: "щось", state: "todo" }) }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 15, item: "p1" }], "74ab615", NOW);
+    expect(outcomes[0].result).toBe("closed_card");
+    expect(state.updates).toEqual([]);
+  });
+
+  it("адреса працює й на звичайній картці — у великої задачі та сама дірка", async () => {
+    const { admin, state } = fakeChecklistAdmin([
+      commitRow({ number: 15, status: "in_progress", checklist: items({ id: "p3", text: "Рахунок", state: "todo" }) }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 15, item: "p3" }], "dfe481f", NOW);
+    expect(outcomes[0].result).toBe("closed");
+    expect(state.updates).toHaveLength(1);
+  });
+
+  it("провал запису не вдає, що пункт закрито", async () => {
+    const { admin, state } = fakeChecklistAdmin([
+      papercutRow({ checklist: items({ id: "p1", text: "щось", state: "todo" }) }),
+    ]);
+    state.updateFails = true;
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 180, item: "p1" }], "74ab615", NOW);
+    expect(outcomes[0].result).toBe("failed");
+  });
+
+  it("порожній перелік — жодного запиту в базу", async () => {
+    const { admin, state } = fakeChecklistAdmin([papercutRow()]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [], "74ab615", NOW);
+    expect(outcomes).toEqual([]);
+    expect(state.updates).toEqual([]);
+  });
+});
+
+describe("kyivDay", () => {
+  it("дата закриття — київський настінний день, а не UTC", () => {
+    // 21:30 UTC — це вже наступна доба в Києві. Записати сюди UTC-день
+    // означало б, що вечірній коміт лягає вчорашнім числом.
+    expect(kyivDay(new Date("2026-08-27T21:30:00.000Z"))).toBe("2026-08-28");
+    expect(kyivDay(new Date("2026-08-27T10:20:00.000Z"))).toBe("2026-08-27");
   });
 });

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isPapercutCard } from "../../../src/features/devRequests/papercuts";
 import { isKnownModuleKey, moduleKeyLabel } from "../../../src/lib/projectMap";
 import { formatRequestNumber, KIND_LABELS, PRIORITY_LABELS } from "./devRequestBot";
 import {
@@ -283,10 +284,14 @@ export type BoardCardPatch = {
   isPrivate?: boolean;
 };
 
+/** Адресована згадка з коміта: «закрито пункт `item` картки `number`». */
+export type ChecklistMention = { number: number; item: string };
+
 export type BoardRequest =
   | { ok: true; action: "list" }
+  | { ok: true; action: "card"; number: number }
   | { ok: true; action: "move"; number: number; status: MovableStatus }
-  | { ok: true; action: "commit"; numbers: number[]; sha: string }
+  | { ok: true; action: "commit"; numbers: number[]; items: ChecklistMention[]; sha: string }
   | { ok: true; action: "update"; number: number; patch: BoardCardPatch }
   | { ok: true; action: "checklist"; number: number; text: string }
   | { ok: false; status: number; error: string };
@@ -313,6 +318,35 @@ function toCardNumber(value: unknown): number | null {
   const raw = typeof value === "string" ? Number(value.trim()) : value;
   if (typeof raw !== "number" || !Number.isInteger(raw) || raw <= 0) return null;
   return raw;
+}
+
+/** Адреса пункта чекліста: `p1`, `p12`. Той самий вигляд, що й у базі. */
+const ITEM_ID_PATTERN = /^p\d{1,4}$/;
+
+/**
+ * Розбір поля `items` дії `commit`.
+ *
+ * `null` — поле є, але зіпсоване: краще 400 із поясненням, ніж мовчазна тиша.
+ * Порожній масив і відсутнє поле — це нормально: коміт міг не згадати жодного
+ * пункта, і старий хук цього поля не шле взагалі.
+ */
+function parseChecklistMentions(value: unknown): ChecklistMention[] | null {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) return null;
+  if (value.length > COMMIT_NUMBERS_LIMIT) return null;
+
+  const mentions: ChecklistMention[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") return null;
+    const entry = raw as { number?: unknown; item?: unknown };
+    const number = toCardNumber(entry.number);
+    const item = typeof entry.item === "string" ? entry.item.trim().toLowerCase() : "";
+    if (number === null || !ITEM_ID_PATTERN.test(item)) return null;
+    // Той самий пункт двічі в одному коміті — шум, а не помилка.
+    if (mentions.some((seen) => seen.number === number && seen.item === item)) continue;
+    mentions.push({ number, item });
+  }
+  return mentions;
 }
 
 /**
@@ -344,6 +378,8 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
     action?: unknown;
     number?: unknown;
     numbers?: unknown;
+    /** Дія `commit`: адресовані згадки виду `[{ number: 180, item: "p1" }]`. */
+    items?: unknown;
     status?: unknown;
     sha?: unknown;
     /** Дія `checklist`: текст пункту. Не плутати з `body` — описом картки. */
@@ -359,6 +395,14 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
 
   if (action === "list") return { ok: true, action: "list" };
 
+  if (action === "card") {
+    const number = toCardNumber(body.number);
+    if (number === null) {
+      return { ok: false, status: 400, error: "Потрібен номер картки: { \"number\": 180 }." };
+    }
+    return { ok: true, action: "card", number };
+  }
+
   if (action === "commit") {
     const source = Array.isArray(body.numbers)
       ? body.numbers
@@ -367,11 +411,20 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
         : body.number !== undefined
           ? [body.number]
           : [];
-    if (source.length === 0) {
+    const items = parseChecklistMentions(body.items);
+    if (items === null) {
       return {
         ok: false,
         status: 400,
-        error: "Потрібні номери карток: { \"numbers\": [4, 7] }.",
+        error:
+          "Поле items — це [{ \"number\": 180, \"item\": \"p1\" }]: номер картки й адреса пункта виду pN.",
+      };
+    }
+    if (source.length === 0 && items.length === 0) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Потрібні номери карток: { \"numbers\": [4, 7] } або пункти { \"items\": [...] }.",
       };
     }
     if (source.length > COMMIT_NUMBERS_LIMIT) {
@@ -406,7 +459,7 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
       };
     }
 
-    return { ok: true, action: "commit", numbers, sha };
+    return { ok: true, action: "commit", numbers, items, sha };
   }
 
   if (action === "move") {
@@ -900,8 +953,123 @@ export async function mergeIntoBoardCard(
   return { ok: true, card, askedByCount };
 }
 
+/* ---------------------------- Одна картка ------------------------------ */
+
+export type BoardCardItem = {
+  id: string;
+  /** Готова адреса для коміта: `REQ-180#p1`. */
+  address: string;
+  text: string;
+  state: string;
+  closed: string | null;
+  sha: string | null;
+};
+
+export type BoardCardResult =
+  | { ok: true; card: BoardCard; items: BoardCardItem[] }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "failed"; message: string };
+
+/**
+ * Одна картка з пунктами та їхніми адресами.
+ *
+ * НАВІЩО ОКРЕМА ДІЯ, КОЛИ Є `list`. Список відповідає на «що відкрито» і
+ * пунктів не показує взагалі — на п'ятдесяти картках це була б стіна. Але
+ * закрити пункт комітом можна лише знаючи його адресу, а взяти її нізвідки:
+ * `id` пунктів не було видно за межами CRM. Без цієї дії весь механізм
+ * `REQ-180#p1` лишається теорією.
+ */
+export async function fetchBoardCardWithItems(
+  admin: SupabaseClient,
+  teamId: string,
+  number: number
+): Promise<BoardCardResult> {
+  const { data, error } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .select(`${SELECT_COLUMNS},checklist`)
+    .eq("team_id", teamId)
+    .eq("number", number)
+    .maybeSingle();
+
+  if (error) return { ok: false, reason: "failed", message: error.message };
+  if (!data) return { ok: false, reason: "not_found" };
+
+  const card = toBoardCard(data as BoardRow);
+  if (!card) return { ok: false, reason: "failed", message: "картка не читається" };
+
+  const raw = (data as { checklist?: unknown }).checklist;
+  const items: BoardCardItem[] = (Array.isArray(raw) ? (raw as Array<Record<string, unknown>>) : [])
+    .map((entry, index) => {
+      const id = String(entry?.id ?? "") || `p${index + 1}`;
+      const text = typeof entry?.text === "string" ? entry.text.trim() : "";
+      return {
+        id,
+        address: `${card.label}#${id}`,
+        text,
+        state: typeof entry?.state === "string" ? entry.state : "todo",
+        closed: typeof entry?.closed === "string" ? entry.closed : null,
+        sha: typeof entry?.sha === "string" ? entry.sha : null,
+      };
+    })
+    .filter((item) => item.text !== "");
+
+  return { ok: true, card, items };
+}
+
+export type BoardCardResponse = {
+  ok: true;
+  number: string;
+  title: string;
+  status: BoardStatus;
+  statusLabel: string;
+  isPapercut: boolean;
+  items: BoardCardItem[];
+  url: string;
+  message: string;
+};
+
+export function buildBoardCardResponse(input: {
+  card: BoardCard;
+  items: BoardCardItem[];
+  url: string;
+}): BoardCardResponse {
+  const { card, items } = input;
+  const papercut = isPapercutCard(card);
+  const open = items.filter((item) => item.state !== "done");
+
+  const lines = [
+    `${card.label} — ${card.title}`,
+    papercut ? "Накопичувач дрібниць · статусу не ставимо, закриваємо пункти" : STATUS_LABELS[card.status],
+  ];
+
+  if (items.length === 0) {
+    lines.push("Пунктів немає.");
+  } else {
+    lines.push(`Пунктів: ${items.length}, відкритих ${open.length}`);
+    for (const item of items) {
+      const mark = item.state === "done" ? "☑️" : "▫️";
+      const trail = item.closed ? ` (${item.closed}${item.sha ? ` · ${item.sha}` : ""})` : "";
+      lines.push(`${mark} ${item.address} — ${item.text}${trail}`);
+    }
+  }
+  lines.push(input.url);
+
+  return {
+    ok: true,
+    number: card.label,
+    title: card.title,
+    status: card.status,
+    statusLabel: STATUS_LABELS[card.status],
+    isPapercut: papercut,
+    items,
+    url: input.url,
+    message: lines.join("\n"),
+  };
+}
+
 export type ChecklistAppendResult =
-  | { ok: true; card: BoardCard; total: number; text: string }
+  | { ok: true; card: BoardCard; total: number; text: string; item: string }
   | { ok: false; reason: "not_found" }
   | { ok: false; reason: "closed"; status: BoardStatus }
   | { ok: false; reason: "failed"; message: string };
@@ -969,6 +1137,10 @@ export async function appendChecklistItem(
       since: null,
       note: null,
       answer: null,
+      // Слід коміта. Порожній тут навмисно: пункт, дописаний ззовні, ще ніхто
+      // не закривав, а вигадана дата була б брехнею про факт.
+      closed: null,
+      sha: null,
     },
   ];
 
@@ -985,7 +1157,7 @@ export async function appendChecklistItem(
   const card = data ? toBoardCard(data as BoardRow) : null;
   if (!card) return { ok: false, reason: "failed", message: "дописування не повернуло рядок" };
 
-  return { ok: true, card, total: next.length, text };
+  return { ok: true, card, total: next.length, text, item: nextId };
 }
 
 export type BoardChecklistResponse = {
@@ -993,27 +1165,43 @@ export type BoardChecklistResponse = {
   number: string;
   title: string;
   total: number;
+  /** Адреса щойно доданого пункта — та сама, що пишеться в коміт. */
+  item: string;
+  address: string;
   url: string;
   message: string;
 };
 
+/**
+ * Відповідь на «допиши пункт».
+ *
+ * АДРЕСА В ВІДПОВІДІ — не подробиця, а те, без чого механізм мертвий. Пункт
+ * закривається згадкою `REQ-180#p1` у коміті, а `id` пунктів ніде назовні не
+ * було видно: дописав рядок — і взяти адресу нема звідки. Тому вона
+ * повертається одразу, готовою до вставки.
+ */
 export function buildBoardChecklistResponse(input: {
   card: BoardCard;
   total: number;
   text: string;
+  item: string;
   url: string;
 }): BoardChecklistResponse {
-  const { card, total, text } = input;
+  const { card, total, text, item } = input;
+  const address = `${card.label}#${item}`;
   return {
     ok: true,
     number: card.label,
     title: card.title,
     total,
+    item,
+    address,
     url: input.url,
     message: [
       `➕ ${card.label} — дописав пункт`,
       card.title,
       `· ${text}`,
+      `Адреса для коміта: ${address}`,
       `Разом пунктів: ${total}`,
       input.url,
     ].join("\n"),
@@ -1265,6 +1453,8 @@ export type CommitOutcomeResult =
   | "wont_do"
   /** Картки з таким номером у команді немає. */
   | "missing"
+  /** Накопичувач дрібниць: статусу й sha не пишемо взагалі — потрібна адреса пункта. */
+  | "papercut"
   /** Запис не вдався — деталі в message. */
   | "failed";
 
@@ -1283,7 +1473,9 @@ export type CommitOutcome = {
 
 /** true — картку варто подивитись очима: коміт є, а статус його не приймає. */
 export function isSuspiciousOutcome(outcome: CommitOutcome): boolean {
-  return outcome.result === "wont_do" || outcome.result === "released";
+  return (
+    outcome.result === "wont_do" || outcome.result === "released" || outcome.result === "papercut"
+  );
 }
 
 const COMMIT_SELECT_COLUMNS = `${SELECT_COLUMNS},commit_shas`;
@@ -1337,6 +1529,37 @@ export async function recordCommitOnCards(
         result: "missing",
         status: null,
         previousStatus: null,
+        shaKnown: false,
+      });
+      continue;
+    }
+
+    /*
+     * НАКОПИЧУВАЧ ДРІБНИЦЬ НЕ ПРИЙМАЄ КОМІТА ВЗАГАЛІ — ні статусу, ні sha.
+     *
+     * Це не суворість заради суворості, а єдина точка, де тримається вся
+     * гвардія. Плагін релізів шукає картки ЗА SHA (§9): немає sha на картці —
+     * немає збігу — деплой фізично не може поставити їй «Викочено». А
+     * «Викочено» на накопичувачі означало б смерть цілого напряму: викочену
+     * картку не зрушити (409), і разом із нею з черги зникли б усі невирішені
+     * дрібниці цього напряму.
+     *
+     * Тому знання про префікс живе тільки тут, у TS. У `.mjs`-плагіні релізів
+     * дублювати нічого не треба — і не можна, бо другий перелік розійшовся б
+     * із першим мовчки.
+     *
+     * Робота на накопичувачі фіксується адресою пункта (`REQ-180#p1`), і sha
+     * лягає на сам пункт. Тому це не «нічого не сталось», а підказка з
+     * правильною адресою — див. commitOutcomeLine.
+     */
+    if (isPapercutCard(card)) {
+      outcomes.push({
+        number,
+        label: card.label,
+        title: card.title,
+        result: "papercut",
+        status: card.status,
+        previousStatus: card.status,
         shaKnown: false,
       });
       continue;
@@ -1399,6 +1622,188 @@ export async function recordCommitOnCards(
   return outcomes;
 }
 
+/* ------------------- Закривання пункта чекліста комітом ------------------ */
+
+export type ChecklistCloseResult =
+  /** Пункт закрито: стан, дата й sha записані. */
+  | "closed"
+  /** Пункт уже був закритий — нічого не міняли. */
+  | "already"
+  /** Картки з таким номером немає. */
+  | "missing"
+  /** Картка є, пункта з такою адресою в ній немає. */
+  | "no_item"
+  /** Картка у «Викочено» або «Не робимо»: чеклист закритої картки не чіпаємо. */
+  | "closed_card"
+  /** Запис не вдався — деталі в message. */
+  | "failed";
+
+export type ChecklistOutcome = {
+  number: number;
+  label: string;
+  title: string;
+  item: string;
+  /** Текст пункта — щоб у підсумку було видно, ЩО саме закрилось. */
+  text: string;
+  result: ChecklistCloseResult;
+  message?: string;
+};
+
+/** Дата закриття пункта — київський настінний день, як усі дедлайни в CRM. */
+export function kyivDay(now: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Kyiv",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+/**
+ * Закрити пункти чекліста, названі в коміті адресою `REQ-180#p1`.
+ *
+ * НАВІЩО ЦЕ ОКРЕМО ВІД recordCommitOnCards. Та дія відповідає на питання «що
+ * сталося з КАРТКОЮ», ця — «що сталося з ПУНКТОМ». Змішати їх означало б, що
+ * згадка пункта тягне за собою статус картки: для накопичувача це смерть
+ * напряму, для великої задачі — передчасне «Готово локально» на першому ж
+ * шматку роботи.
+ *
+ * ОДНОСТОРОННЬО. Коміт уміє тільки закрити. Відкрити назад може лише людина в
+ * CRM: автоматика, яка скасовує рішення людини, дорожча за незручність.
+ *
+ * SHA ЛЯГАЄ НА ПУНКТ, а не в `commit_shas` картки. Це і є та річ, що не дає
+ * деплою викотити накопичувач, — плагін релізів шукає збіг саме в
+ * `commit_shas` (§9 docs/DEV_REQUESTS_DESIGN.md).
+ *
+ * Читання-зміна-запис по одній картці: масив `checklist` у кожної свій. Гонки
+ * тут практично немає — хук викликається послідовно, один коміт за раз.
+ */
+export async function closeChecklistItemsOnCommit(
+  admin: SupabaseClient,
+  teamId: string,
+  mentions: ChecklistMention[],
+  sha: string,
+  now: Date = new Date()
+): Promise<ChecklistOutcome[]> {
+  const outcomes: ChecklistOutcome[] = [];
+  const day = kyivDay(now);
+
+  // Кілька пунктів однієї картки закриваємо одним записом: інакше другий запис
+  // читав би стан ДО першого й затирав його.
+  const byCard = new Map<number, string[]>();
+  for (const mention of mentions) {
+    const list = byCard.get(mention.number) ?? [];
+    list.push(mention.item);
+    byCard.set(mention.number, list);
+  }
+
+  for (const [number, itemIds] of byCard) {
+    const label = formatRequestNumber(number);
+    const { data: current, error: readError } = await admin
+      .schema("tosho")
+      .from("dev_requests")
+      .select("title,status,checklist")
+      .eq("team_id", teamId)
+      .eq("number", number)
+      .maybeSingle();
+
+    if (readError) {
+      for (const item of itemIds) {
+        outcomes.push({ number, label, title: "", item, text: "", result: "failed", message: readError.message });
+      }
+      continue;
+    }
+    if (!current) {
+      for (const item of itemIds) {
+        outcomes.push({ number, label, title: "", item, text: "", result: "missing" });
+      }
+      continue;
+    }
+
+    const row = current as { title?: string | null; status?: string | null; checklist?: unknown };
+    const title = (row.title ?? "").trim();
+    const status = (BOARD_STATUSES as readonly string[]).includes(row.status ?? "")
+      ? (row.status as BoardStatus)
+      : "triage";
+    if (status === "released" || status === "wont_do") {
+      for (const item of itemIds) {
+        outcomes.push({ number, label, title, item, text: "", result: "closed_card" });
+      }
+      continue;
+    }
+
+    const items = Array.isArray(row.checklist) ? (row.checklist as Array<Record<string, unknown>>) : [];
+    const pending: ChecklistOutcome[] = [];
+    let changed = false;
+    const next = items.map((entry) => ({ ...entry }));
+
+    for (const item of itemIds) {
+      const index = next.findIndex((entry) => String(entry?.id ?? "") === item);
+      if (index === -1) {
+        pending.push({ number, label, title, item, text: "", result: "no_item" });
+        continue;
+      }
+      const text = typeof next[index].text === "string" ? (next[index].text as string) : "";
+      if (next[index].state === "done") {
+        pending.push({ number, label, title, item, text, result: "already" });
+        continue;
+      }
+      next[index] = { ...next[index], state: "done", closed: day, sha };
+      changed = true;
+      pending.push({ number, label, title, item, text, result: "closed" });
+    }
+
+    if (!changed) {
+      outcomes.push(...pending);
+      continue;
+    }
+
+    const { data: updated, error: updateError } = await admin
+      .schema("tosho")
+      .from("dev_requests")
+      .update({ checklist: next })
+      .eq("team_id", teamId)
+      .eq("number", number)
+      .select("number")
+      .maybeSingle();
+
+    // `.select()` не для даних, а щоб побачити нуль оновлених рядків: без нього
+    // supabase-js мовчить, і «нічого не записалось» виглядає успіхом.
+    if (updateError || !updated) {
+      const message = updateError?.message ?? "оновлення не повернуло рядок";
+      outcomes.push(
+        ...pending.map((outcome) =>
+          outcome.result === "closed" ? { ...outcome, result: "failed" as const, message } : outcome
+        )
+      );
+      continue;
+    }
+
+    outcomes.push(...pending);
+  }
+
+  return outcomes;
+}
+
+function checklistOutcomeLine(outcome: ChecklistOutcome): string {
+  const text = outcome.text ? ` · ${outcome.text}` : "";
+  const address = `${outcome.label}#${outcome.item}`;
+  switch (outcome.result) {
+    case "closed":
+      return `☑️ ${address} — пункт закрито${text}`;
+    case "already":
+      return `${address} і так закритий${text}`;
+    case "missing":
+      return `❓ ${address} — такої картки немає. Перевір номер.`;
+    case "no_item":
+      return `❓ ${address} — у картці «${outcome.title}» такого пункта немає. Перевір адресу.`;
+    case "closed_card":
+      return `⚠️ ${address} — картка вже закрита, чекліст не чіпав.`;
+    case "failed":
+      return `⚠️ ${address} — запис не вдався, пункт лишився як був.`;
+  }
+}
+
 export type BoardCommitResponse = {
   ok: true;
   sha: string;
@@ -1407,6 +1812,8 @@ export type BoardCommitResponse = {
   /** Картки, чий статус коміт свідомо не змінив, — і чому. */
   skipped: Array<{ number: number; label: string; result: CommitOutcomeResult }>;
   outcomes: CommitOutcome[];
+  /** Пункти чекліста, названі адресою `REQ-180#p1`. */
+  checklist: ChecklistOutcome[];
   url: string;
   message: string;
 };
@@ -1424,6 +1831,8 @@ function commitOutcomeLine(outcome: CommitOutcome): string {
       return `⚠️ ${outcome.label} у «${STATUS_LABELS.wont_do}» — статус не чіпав. Якщо картку таки робили, поверни її на дошку руками.`;
     case "missing":
       return `❓ ${outcome.label} — такої картки немає. Перевір номер у темі коміта.`;
+    case "papercut":
+      return `⚠️ ${outcome.label} — це накопичувач дрібниць, статусу йому не ставлю. Закривати треба пункт: ${outcome.label}#p1.`;
     case "failed":
       return `⚠️ ${outcome.label} — запис не вдався, картка лишилась як була.`;
   }
@@ -1439,15 +1848,20 @@ function commitOutcomeLine(outcome: CommitOutcome): string {
 export function buildBoardCommitResponse(input: {
   sha: string;
   outcomes: CommitOutcome[];
+  checklist?: ChecklistOutcome[];
   url: string;
 }): BoardCommitResponse {
   const { sha, outcomes } = input;
+  const checklist = input.checklist ?? [];
   const moved = outcomes.filter((outcome) => outcome.result === "moved");
-  const touched = outcomes.some((outcome) => outcome.result === "moved" || outcome.result === "already");
+  const touched =
+    outcomes.some((outcome) => outcome.result === "moved" || outcome.result === "already") ||
+    checklist.some((outcome) => outcome.result === "closed");
 
   const lines = [
     touched ? `✅ Коміт ${sha} зафіксовано` : `⚠️ Коміт ${sha} — жодної картки не зрушив`,
     ...outcomes.map(commitOutcomeLine),
+    ...checklist.map(checklistOutcomeLine),
     input.url,
   ];
 
@@ -1459,6 +1873,7 @@ export function buildBoardCommitResponse(input: {
       .filter((outcome) => outcome.result !== "moved" && outcome.result !== "already")
       .map((outcome) => ({ number: outcome.number, label: outcome.label, result: outcome.result })),
     outcomes,
+    checklist,
     url: input.url,
     message: lines.join("\n"),
   };

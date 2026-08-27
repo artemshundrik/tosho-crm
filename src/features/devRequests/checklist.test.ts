@@ -7,6 +7,7 @@ import {
   groupChecklist,
   nextState,
   parseChecklist,
+  withDoneLast,
   type ChecklistItem,
 } from "./checklist";
 
@@ -20,6 +21,8 @@ const item = (overrides: Partial<ChecklistItem> = {}): ChecklistItem => ({
   since: null,
   note: null,
   answer: null,
+  closed: null,
+  sha: null,
   ...overrides,
 });
 
@@ -48,6 +51,54 @@ describe("parseChecklist", () => {
   it("тип пункту: усе, крім question, — звичайна робота", () => {
     expect(parseChecklist([{ text: "a", kind: "question" }])[0].kind).toBe("question");
     expect(parseChecklist([{ text: "a", kind: "вигадка" }])[0].kind).toBe("task");
+  });
+
+  it("слід коміта переживає читання", () => {
+    // Розбір збирає пункт ПОЛЕ ЗА ПОЛЕМ, тож усе, чого тут не перелічено, тихо
+    // згорає при першому ж читанні картки. Саме так нове поле й зникає
+    // безслідно: у базі воно є, в застосунку його немає, і ніхто не винен.
+    const parsed = parseChecklist([{ text: "щось", state: "done", closed: "2026-08-27", sha: "74ab615" }]);
+    expect(parsed[0].closed).toBe("2026-08-27");
+    expect(parsed[0].sha).toBe("74ab615");
+  });
+
+  it("пункт, закритий рукою, лишається без дати й sha", () => {
+    const parsed = parseChecklist([{ text: "щось", state: "done" }]);
+    expect(parsed[0].closed).toBeNull();
+    expect(parsed[0].sha).toBeNull();
+  });
+});
+
+describe("withDoneLast", () => {
+  it("закриті тонуть під відкриті", () => {
+    const sorted = withDoneLast([
+      item({ id: "p1", state: "done", closed: "2026-08-20" }),
+      item({ id: "p2", state: "todo" }),
+      item({ id: "p3", state: "done", closed: "2026-08-27" }),
+      item({ id: "p4", state: "doing" }),
+    ]);
+    expect(sorted.map((entry) => entry.id)).toEqual(["p2", "p4", "p3", "p1"]);
+  });
+
+  it("порядок відкритих не чіпається — він з бази", () => {
+    const sorted = withDoneLast([item({ id: "p9" }), item({ id: "p3" }), item({ id: "p5" })]);
+    expect(sorted.map((entry) => entry.id)).toEqual(["p9", "p3", "p5"]);
+  });
+
+  it("закритий рукою йде після датованих, а не поперед них", () => {
+    const sorted = withDoneLast([
+      item({ id: "p1", state: "done" }),
+      item({ id: "p2", state: "done", closed: "2026-08-27" }),
+    ]);
+    expect(sorted.map((entry) => entry.id)).toEqual(["p2", "p1"]);
+  });
+
+  it("однакова дата — лишається порядок бази", () => {
+    const sorted = withDoneLast([
+      item({ id: "p1", state: "done", closed: "2026-08-27" }),
+      item({ id: "p2", state: "done", closed: "2026-08-27" }),
+    ]);
+    expect(sorted.map((entry) => entry.id)).toEqual(["p1", "p2"]);
   });
 });
 

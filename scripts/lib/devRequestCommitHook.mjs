@@ -39,30 +39,73 @@ const TIMEOUT_MS = 6000;
  * якої весь цей механізм і будували.
  *
  * Регістр не важливий: `REQ-4`, `req-4`, `Req-4` — та сама картка.
+ *
+ * ХВІСТ `#p1` — АДРЕСА ПУНКТА ЧЕКЛІСТА, а не картки. `REQ-180` каже «ця робота
+ * стосується картки 180», `REQ-180#p1` — «закрито пункт p1». Різниця не
+ * косметична: накопичувачу дрібниць («Дрібниці: <напрям>») статус ставити не
+ * можна взагалі — він полиця, а не задача, і «Викочено» вбило б цілий напрям
+ * без вороття (§4.5 docs/DEV_REQUESTS_DESIGN.md).
+ *
+ * `#` СТОЇТЬ І В ЗАБОРОНІ ПІСЛЯ. Без нього «REQ-180#p1abc» відкотився б до
+ * голого «REQ-180»: необов'язкова група не збіглась би, а решта підійшла. Тобто
+ * ОДРУК В АДРЕСІ мовчки перетворювався б на згадку картки — рівно найгірший з
+ * можливих наслідків. Тепер зіпсована адреса не збігається взагалі й проходить
+ * повз, як звичайний текст.
  */
-const MENTION = /(?<![\p{L}\p{N}_])REQ-(\d{1,6})(?![\p{L}\p{N}])/giu;
+const MENTION = /(?<![\p{L}\p{N}_])REQ-(\d{1,6})(?:#(p\d{1,4}))?(?![\p{L}\p{N}#])/giu;
 
 /** Стеля на одну тему. Двадцять карток в одному коміті — це вже не коміт, а помилка розбору. */
 export const MAX_NUMBERS = 20;
 
 /**
- * Усі згадки `REQ-<число>` з повідомлення коміта — у порядку появи, без дублів.
+ * Усі згадки з повідомлення коміта — у порядку появи, без дублів.
+ *
+ * Повертає `[{ number, item }]`, де `item` — адреса пункта (`"p1"`) або `null`
+ * для згадки самої картки.
  *
  * Порядок появи, а не за зростанням: перша названа картка — головна в цьому
  * коміті, і в підсумку хука вона має стояти першою.
+ *
+ * Дублем вважається пара «номер + адреса», а не самий номер: `REQ-180#p1` і
+ * `REQ-180#p2` в одному коміті — це два різні закриті пункти, і схлопнути їх в
+ * один означало б тихо загубити роботу.
  */
-export function extractRequestNumbers(message) {
+export function extractMentions(message) {
   if (typeof message !== "string" || message === "") return [];
 
-  const numbers = [];
+  const mentions = [];
+  const seen = new Set();
   for (const match of message.matchAll(MENTION)) {
     const number = Number(match[1]);
     if (!Number.isInteger(number) || number <= 0) continue;
-    if (numbers.includes(number)) continue;
-    numbers.push(number);
-    if (numbers.length >= MAX_NUMBERS) break;
+    const item = match[2] ? match[2].toLowerCase() : null;
+    const key = `${number}#${item ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    mentions.push({ number, item });
+    if (mentions.length >= MAX_NUMBERS) break;
   }
-  return numbers;
+  return mentions;
+}
+
+/**
+ * Номери карток без адреси пункта.
+ *
+ * АДРЕСОВАНІ СЮДИ НЕ ПОТРАПЛЯЮТЬ, і це головна страховка всього механізму.
+ * Поки нова функція не в проді, старий сервер просто не побачить незнайомого
+ * поля `items` і не зробить нічого. Якби номер лежав ще й тут, той самий старий
+ * сервер поставив би накопичувачу «Готово локально» — тобто механізм убив би
+ * напрям рівно в ті кілька комітів, поки будує сам себе.
+ */
+export function extractRequestNumbers(message) {
+  return extractMentions(message)
+    .filter((mention) => mention.item === null)
+    .map((mention) => mention.number);
+}
+
+/** Адресовані згадки: `[{ number, item }]`, готові до поля `items` запиту. */
+export function extractChecklistMentions(message) {
+  return extractMentions(message).filter((mention) => mention.item !== null);
 }
 
 /**
@@ -103,8 +146,11 @@ function git(args) {
 
 async function main() {
   // Тіло коміта теж читаємо: номер картки могли дописати рядком нижче теми.
-  const numbers = extractRequestNumbers(git(["log", "-1", "--pretty=%B"]));
-  if (numbers.length === 0) return;
+  // Адреса пункта (`REQ-180#p1`) там і живе — тема пишеться для керівництва.
+  const message = git(["log", "-1", "--pretty=%B"]);
+  const numbers = extractRequestNumbers(message);
+  const items = extractChecklistMentions(message);
+  if (numbers.length === 0 && items.length === 0) return;
 
   const token = readToken();
   if (!token) {
@@ -120,7 +166,7 @@ async function main() {
   const response = await fetch(BOARD_URL, {
     method: "POST",
     headers: { "content-type": "application/json", "x-capture-token": token },
-    body: JSON.stringify({ action: "commit", numbers, sha }),
+    body: JSON.stringify({ action: "commit", numbers, items, sha }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
 

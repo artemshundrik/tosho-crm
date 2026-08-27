@@ -32,6 +32,16 @@ export type ChecklistItem = {
   note: string | null;
   /** Для питання — що відповіли. Заповнена відповідь закриває питання. */
   answer: string | null;
+  /**
+   * День, коли пункт закрив КОМІТ, YYYY-MM-DD. Закритий рукою в CRM — `null`.
+   *
+   * Порожнє тут не означає «невідомо коли»: воно означає «закрила людина», і
+   * саме тому дата в списку показується лише коли вона є. Приписати сьогоднішнє
+   * число галочці, яку тицьнули, було б вигадкою про факт.
+   */
+  closed: string | null;
+  /** Короткий sha коміта, що закрив пункт. Закритий рукою — `null`. */
+  sha: string | null;
 };
 
 /**
@@ -109,6 +119,8 @@ export function parseChecklist(value: unknown): ChecklistItem[] {
       since: asNullable(row.since),
       note: asNullable(row.note),
       answer: asNullable(row.answer),
+      closed: asNullable(row.closed),
+      sha: asNullable(row.sha),
     });
   });
   return items;
@@ -219,4 +231,44 @@ export function isPartlyShipped(
 /** Сьогодні в YYYY-MM-DD — для позначки, відколи чекаємо. */
 export function today(now = new Date()): string {
   return now.toISOString().slice(0, 10);
+}
+
+/**
+ * Показ накопичувача: закриті тонуть під відкриті.
+ *
+ * НАВІЩО СОРТУВАТИ ЛИШЕ ПОКАЗ. Порядок у базі має сенс сам по собі: нова
+ * дрібниця дописується в кінець, бо список читають зверху вниз, і свіже, що
+ * стрибає нагору, щоразу зсувало б те, на що дивишся. Переставляти пункти в
+ * `checklist` після закриття означало б переписувати історію напряму заради
+ * вигляду.
+ *
+ * А от у показі порядок бази працює проти себе: накопичувач живе вічно, і за
+ * місяць відкриті пункти перемішаються із закритими. Полиця «Дрібниці»
+ * відповідає на «за що хвататись», тож зверху має бути те, що ще треба
+ * зробити.
+ *
+ * СВІЖОЗАКРИТІ ПЕРШИМИ серед закритих: коли дивишся, що поїхало в реліз,
+ * цікавить учорашнє, а не позаторішнє. Пункт без дати (закрила людина) іде
+ * після датованих — не тому, що він менш важливий, а тому, що поставити його
+ * в шкалу часу нема за чим.
+ *
+ * Сортування СТАБІЛЬНЕ: рівні між собою пункти лишаються у порядку бази.
+ */
+export function withDoneLast(items: ChecklistItem[]): ChecklistItem[] {
+  const open = items.filter((item) => item.state !== "done");
+  const done = items
+    .map((item, index) => ({ item, index }))
+    .filter((entry) => entry.item.state === "done")
+    .sort((a, b) => {
+      const left = a.item.closed;
+      const right = b.item.closed;
+      if (left !== right) {
+        if (!left) return 1;
+        if (!right) return -1;
+        return right.localeCompare(left);
+      }
+      return a.index - b.index;
+    })
+    .map((entry) => entry.item);
+  return [...open, ...done];
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { extractRequestNumbers, MAX_NUMBERS, readEnvValue } from "./devRequestCommitHook.mjs";
+import {
+  extractChecklistMentions,
+  extractMentions,
+  extractRequestNumbers,
+  MAX_NUMBERS,
+  readEnvValue,
+} from "./devRequestCommitHook.mjs";
 
 /**
  * Ціна помилки тут несиметрична.
@@ -94,5 +100,58 @@ describe("токен із файла скіла", () => {
 
   it("ключ, який лише починається так само, за токен не сходить", () => {
     expect(readEnvValue("TOSHO_CAPTURE_TOKEN_OLD=abc", "TOSHO_CAPTURE_TOKEN")).toBe(null);
+  });
+});
+
+
+/**
+ * Адреса пункта — місце, де ціна помилки НАЙВИЩА за весь хук.
+ *
+ * Голий «REQ-180» на накопичувачі дрібниць ставить йому «Готово локально», а
+ * наступний деплой — «Викочено». Викочену картку зрушити не можна (409), тож
+ * зникає не задача, а ЦІЛА ПОЛИЦЯ НАПРЯМУ з усіма невирішеними дрібницями.
+ * Тому одрук в адресі має провалюватись у «нічого не збіглось», а не
+ * відкочуватись до згадки картки.
+ */
+describe("адреса пункта чекліста", () => {
+  it("хвіст #p1 читається як пункт, а не як картка", () => {
+    expect(extractMentions("fix: причина скасування REQ-180#p1")).toEqual([{ number: 180, item: "p1" }]);
+    expect(extractRequestNumbers("fix: причина скасування REQ-180#p1")).toEqual([]);
+  });
+
+  it("без хвоста — як було: картка", () => {
+    expect(extractMentions("fix: REQ-180")).toEqual([{ number: 180, item: null }]);
+    expect(extractChecklistMentions("fix: REQ-180")).toEqual([]);
+  });
+
+  it("зіпсована адреса не відкочується до згадки картки", () => {
+    // Найнебезпечніший випадок усього хука: одрук в адресі НЕ має ставати
+    // згадкою накопичувача. Краще не спрацювати зовсім.
+    expect(extractMentions("fix: REQ-180#p1abc")).toEqual([]);
+    expect(extractMentions("fix: REQ-180#шось")).toEqual([]);
+    expect(extractMentions("fix: REQ-180#")).toEqual([]);
+  });
+
+  it("два пункти однієї картки — це дві різні роботи, не дубль", () => {
+    expect(extractMentions("fix: REQ-180#p1 і REQ-180#p2")).toEqual([
+      { number: 180, item: "p1" },
+      { number: 180, item: "p2" },
+    ]);
+  });
+
+  it("той самий пункт двічі — один раз", () => {
+    expect(extractMentions("fix: REQ-180#p1\n\nЗакриває REQ-180#p1.")).toEqual([
+      { number: 180, item: "p1" },
+    ]);
+  });
+
+  it("картка й пункт в одному коміті розходяться по різних кошиках", () => {
+    const message = "feat: документи замовлення REQ-15\n\nПопутно REQ-180#p1.";
+    expect(extractRequestNumbers(message)).toEqual([15]);
+    expect(extractChecklistMentions(message)).toEqual([{ number: 180, item: "p1" }]);
+  });
+
+  it("регістр адреси не має значення", () => {
+    expect(extractMentions("fix: req-180#P1")).toEqual([{ number: 180, item: "p1" }]);
   });
 });

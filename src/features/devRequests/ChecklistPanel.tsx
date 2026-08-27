@@ -59,6 +59,11 @@ export function ChecklistPanel({
       // «зависло 12 днів» лишалось би на пункті, який давно зробили.
       since: state === "waiting" ? item.since ?? today() : null,
       who: state === "waiting" ? item.who : null,
+      // Слід коміта живе рівно доти, доки пункт закритий. Відкрили назад —
+      // дата й sha йдуть разом із ним: «зроблено 27.08» на пункті, який знову
+      // в роботі, — це та сама брехня, лише в профіль.
+      closed: state === "done" ? item.closed : null,
+      sha: state === "done" ? item.sha : null,
     });
   };
 
@@ -78,6 +83,8 @@ export function ChecklistPanel({
         who: null,
         since: null,
         note: null,
+        closed: null,
+        sha: null,
         answer: null,
       },
     ]);

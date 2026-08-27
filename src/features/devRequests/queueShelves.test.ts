@@ -23,6 +23,8 @@ function waiting(who = "СЕО", since = "2026-07-30"): ChecklistItem {
   return {
     id: "w",
     kind: "task",
+    closed: null,
+    sha: null,
     text: "Чекаємо відповіді",
     state: "waiting",
     group: null,

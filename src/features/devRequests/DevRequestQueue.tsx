@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
-import { checklistProgress, type ChecklistItem } from "./checklist";
+import { checklistProgress, withDoneLast, type ChecklistItem } from "./checklist";
 import { groupRequests } from "./grouping";
 import { PriorityBars } from "./PriorityBars";
 import { canTakeToday, papercutLabel, splitQueue } from "./queueShelves";
@@ -481,6 +481,19 @@ function ShippedChip({ request }: { request: DevRequest }) {
  * Згорнутий за замовчуванням: на дванадцять напрямів це дванадцять списків, і
  * розгорнуті вони повернули б ту саму стіну, від якої тікали.
  */
+/**
+ * `2026-08-27` → `27.08`.
+ *
+ * Свій розбір рядка, а не `new Date(...)`: дата закриття — НАСТІННИЙ київський
+ * день, який записав сервер. Проганяти його через `Date` означало б прочитати
+ * як UTC-північ і показати вчорашнє число тому, хто дивиться з іншого боку
+ * глобуса. Рік не показуємо: у списку, який читають щотижня, він шум.
+ */
+function shortDay(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${match[3]}.${match[2]}` : value;
+}
+
 function PapercutCard({
   request,
   onSelect,
@@ -506,7 +519,19 @@ function PapercutCard({
     const state = item.state === "done" ? "todo" : "done";
     onChecklist(
       request,
-      request.checklist.map((entry) => (entry.id === item.id ? { ...entry, state } : entry))
+      request.checklist.map((entry) =>
+        entry.id === item.id
+          ? {
+              ...entry,
+              state,
+              // Відкрили пункт назад — слід коміта йде разом із ним. Дата
+              // «зроблено 27.08» на пункті, який знову в роботі, бреше не
+              // менше, ніж закрита картка без коду.
+              closed: state === "done" ? entry.closed : null,
+              sha: state === "done" ? entry.sha : null,
+            }
+          : entry
+      )
     );
   };
 
@@ -534,6 +559,8 @@ function PapercutCard({
         since: null,
         note: null,
         answer: null,
+        closed: null,
+        sha: null,
       },
     ]);
   };
@@ -611,7 +638,12 @@ function PapercutCard({
 
       {open ? (
         <ul className="border-t border-border/50">
-          {request.checklist.map((item) => (
+          {/*
+            СОРТУЄМО ЛИШЕ ПОКАЗ, не базу: у базі новий пункт дописується в
+            кінець, і переставляти його після закриття означало б переписувати
+            історію напряму заради вигляду. Пояснення — у withDoneLast.
+          */}
+          {withDoneLast(request.checklist).map((item) => (
             <li key={item.id} className="border-b border-border/40 last:border-b-0">
               <button
                 type="button"
@@ -639,6 +671,19 @@ function PapercutCard({
                 >
                   {item.text}
                 </span>
+                {/*
+                  СЛІД КОМІТА показуємо лише тоді, коли він є: порожньо тут
+                  означає «закрила людина», а не «невідомо коли». Приписати
+                  такому пункту сьогоднішнє число було б вигадкою про факт.
+                  `ms-auto` тримає слід біля правого краю, тож рядки читаються
+                  однією колонкою, а не сходами за довжиною тексту.
+                */}
+                {item.closed ? (
+                  <span className="ms-auto shrink-0 pt-0.5 font-mono text-2xs tabular-nums text-muted-foreground">
+                    {shortDay(item.closed)}
+                    {item.sha ? ` · ${item.sha}` : ""}
+                  </span>
+                ) : null}
               </button>
             </li>
           ))}
