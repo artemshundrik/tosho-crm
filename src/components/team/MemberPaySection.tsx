@@ -41,6 +41,34 @@ const formatDate = (iso: string) =>
 
 const formatUah = (value: number) => `${Math.round(value).toLocaleString("uk-UA")} ₴`;
 
+/**
+ * Ставка діє строго з 1 числа місяця.
+ *
+ * Це не побажання інтерфейсу, а CHECK у базі (employee_pay_rates_first_of_month):
+ * зарплата рахується помісячно, і дата всередині місяця розірвала б розрахунок.
+ * Раніше форма дозволяла обрати будь-який день — база відбивала запис, а
+ * користувач бачив «Перевірте права доступу» й ішов шукати неіснуючу проблему
+ * з доступами. Тепер день підтягується до 1 числа обраного місяця.
+ */
+/**
+ * Людське пояснення відмови бази.
+ *
+ * НАВІЩО. Раніше будь-який збій — порушення CHECK, обрив мережі, справжня
+ * відмова RLS — ставав одним рядком «Перевірте права доступу». Саме він
+ * відправив СЕО шукати неіснуючу проблему з доступами, хоча база відбивала
+ * запис через дату всередині місяця. Повідомлення, яке ВГАДУЄ причину, гірше
+ * за те, яке чесно каже, чого не знає.
+ */
+const describeWriteError = (error: unknown, fallback: string) => {
+  const code = (error as { code?: string } | null)?.code;
+  // 23514 — check_violation, 42501 — RLS не пустила.
+  if (code === "23514") return "База відхилила ставку: діяти вона може лише з 1 числа місяця.";
+  if (code === "42501") return "Бракує прав на зміну ставок — це може робити власник або СЕО.";
+  return fallback;
+};
+
+const firstOfMonth = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(0, 7)}-01` : iso);
+
 export function MemberPaySection({
   workspaceId,
   userId,
@@ -119,7 +147,7 @@ export function MemberPaySection({
         workspace_id: workspaceId,
         user_id: userId,
         base_month_rate: base,
-        effective_from: effectiveFrom,
+        effective_from: firstOfMonth(effectiveFrom),
         created_by: currentUserId,
         visual_norm_per_day: override(visualNormPerDay),
         layout_norm_per_day: override(layoutNormPerDay),
@@ -139,7 +167,7 @@ export function MemberPaySection({
       await reload();
     } catch (saveError) {
       console.warn("Failed to save pay rate", saveError);
-      setError("Не вдалося зберегти ставку. Перевірте права доступу.");
+      setError(describeWriteError(saveError, "Не вдалося зберегти ставку. Спробуйте ще раз."));
     } finally {
       setSaving(false);
     }
@@ -185,7 +213,7 @@ export function MemberPaySection({
       await reload();
     } catch (cancelError) {
       console.warn("Failed to cancel scheduled pay rate", cancelError);
-      setError("Не вдалося скасувати заплановану ставку. Перевірте права доступу.");
+      setError(describeWriteError(cancelError, "Не вдалося скасувати заплановану ставку. Спробуйте ще раз."));
     } finally {
       setCancelling(false);
     }
@@ -275,11 +303,12 @@ export function MemberPaySection({
               <Label className="text-sm font-medium text-foreground">Діє з</Label>
               <DateInput
                 value={effectiveFrom}
-                onChange={(event) => setEffectiveFrom(event.target.value)}
+                onChange={(event) => setEffectiveFrom(firstOfMonth(event.target.value))}
                 className={cn(CONTROL_BASE, "h-11")}
               />
               <p className="text-2xs text-muted-foreground">
-                Зазвичай — 1 число наступного місяця (поточний уже частково відпрацьовано).
+                Тільки 1 число місяця — будь-який інший день підтягнеться до нього. Зазвичай беруть
+                наступний місяць: поточний уже частково відпрацьовано.
               </p>
             </div>
 
