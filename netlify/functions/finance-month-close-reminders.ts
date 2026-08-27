@@ -23,9 +23,14 @@ import {
 // Netlify параметрів не передає (і в цьому репозиторії все одно не використовується
 // — див. scripts/reminders-cron.sql).
 //
-// У чекліст іде лише те, що СПРАВДІ ведуть: витрата має мати хоча б один запис за
-// три місяці до цільового. Інакше давно закинуті статті («Кондиціонери» з нулем
-// записів за весь час) висіли б у списку щомісяця й привчили б його ігнорувати.
+// Межі беремо від САМОЇ витрати (REQ-190): від місяця «веду облік з» (expense_date)
+// до архівації (archived_at) включно. Правило те саме, що в src/features/finances/
+// monthClose.ts — тримати їх нарізно не можна, бо це один і той самий чекліст.
+//
+// Раніше тут була умова «є запис за три місяці до цільового», щоб давно закинуті
+// статті («Кондиціонери» з нулем записів за весь час) не висіли щомісяця. Вона ж
+// глушила найгучніше: НОВУ витрату з нулем записів, чий орієнтир щойно підставився
+// в кожен місяць. Тепер «більше не ведемо» каже архів — рішення людини.
 
 type HttpEvent = {
   httpMethod?: string;
@@ -39,6 +44,8 @@ type ExpenseRow = {
   supplier_name?: string | null;
   category_id?: string | null;
   object_group?: string | null;
+  expense_date?: string | null;
+  archived_at?: string | null;
 };
 
 type EntryRow = {
@@ -55,8 +62,6 @@ type PendingNotificationRow = {
 };
 
 const TIME_ZONE = "Europe/Kiev";
-/** Скільки місяців перед цільовим дивимось, щоб зрозуміти «цю витрату ведуть». */
-const HISTORY_MONTHS = 3;
 const UNTAGGED_GROUP = "Інші";
 
 const MONTHS_NOMINATIVE = [
@@ -103,6 +108,19 @@ function lastDayOf(monthKey: string): string {
   return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
 }
 
+/**
+ * Чи існувала витрата в цьому місяці: від «веду облік з» до архівації включно.
+ * Копія правила з src/features/finances/expenseMonth.ts — імпортувати з src у
+ * функції не можна, тож збіг тримається цим коментарем і тестами обох сторін.
+ */
+function isExpenseInMonth(expense: ExpenseRow, monthKey: string): boolean {
+  const start = (expense.expense_date ?? "").slice(0, 7);
+  if (start && monthKey < start) return false;
+  const archived = expense.archived_at ? expense.archived_at.slice(0, 7) : null;
+  if (archived && monthKey > archived) return false;
+  return true;
+}
+
 function monthLabel(monthKey: string, form: "nominative" | "genitive"): string {
   const idx = Number(monthKey.slice(5, 7)) - 1;
   const table = form === "nominative" ? MONTHS_NOMINATIVE : MONTHS_GENITIVE;
@@ -142,7 +160,7 @@ export const handler = async (event: HttpEvent) => {
     const today = todayKeyInKiev(new Date());
     const currentMonth = today.slice(0, 7);
     const targetMonth = stage === "soft" ? currentMonth : shiftMonthKey(currentMonth, -1);
-    const historyFrom = firstDayOf(shiftMonthKey(targetMonth, -HISTORY_MONTHS));
+    const targetFrom = firstDayOf(targetMonth);
     const targetTo = lastDayOf(targetMonth);
 
     // Кандидати: журнальні регулярні витрати. Події виключені — вони разові за
@@ -150,7 +168,7 @@ export const handler = async (event: HttpEvent) => {
     const expensesResult = await adminClient
       .schema("tosho")
       .from("finance_expenses")
-      .select("id,team_id,supplier_name,category_id,object_group")
+      .select("id,team_id,supplier_name,category_id,object_group,expense_date,archived_at")
       .eq("is_recurring", true)
       .eq("amount_varies", true)
       .is("event_type", null)
@@ -166,13 +184,13 @@ export const handler = async (event: HttpEvent) => {
     const categoryIds = Array.from(new Set(expenses.map((e) => e.category_id).filter(Boolean))) as string[];
 
     const [entriesResult, membershipsResult, profilesResult, teamLinksResult, categoriesResult] = await Promise.all([
-      // Один запит на весь діапазон «історія + цільовий місяць»: далі ділимо в памʼяті.
+      // Потрібен лише цільовий місяць: історія більше ні на що не впливає.
       adminClient
         .schema("tosho")
         .from("finance_expense_monthly_amounts")
         .select("expense_id,entry_date")
         .in("expense_id", expenseIds)
-        .gte("entry_date", historyFrom)
+        .gte("entry_date", targetFrom)
         .lte("entry_date", targetTo)
         .limit(10000),
       adminClient
@@ -213,14 +231,14 @@ export const handler = async (event: HttpEvent) => {
     }
 
     const inTargetMonth = new Set<string>();
-    const hasHistory = new Set<string>();
     for (const row of (entriesResult.data ?? []) as EntryRow[]) {
       if (row.entry_date.slice(0, 7) === targetMonth) inTargetMonth.add(row.expense_id);
-      else hasHistory.add(row.expense_id);
     }
 
-    // Порожні за цільовий місяць, але з історією — тобто те, що зазвичай ведуть.
-    const missing = expenses.filter((e) => !inTargetMonth.has(e.id) && hasHistory.has(e.id));
+    // Порожні за цільовий місяць — з тих, що в цьому місяці взагалі існували.
+    const missing = expenses.filter(
+      (e) => !inTargetMonth.has(e.id) && isExpenseInMonth(e, targetMonth)
+    );
 
     if (missing.length === 0) {
       return jsonResponse(200, {

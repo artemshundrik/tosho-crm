@@ -274,6 +274,8 @@ export type FinanceExpense = {
   nextChargeDate: string | null;
   vendorKey: string | null;
   logoUrl: string | null;
+  /** Здана в архів: у місяцях ПІСЛЯ цієї дати витрати немає ні в списку, ні в підсумках. */
+  archivedAt: string | null;
   notes: string | null;
   file: string | null;
   enteredBy: string | null;

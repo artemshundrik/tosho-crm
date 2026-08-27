@@ -5,16 +5,21 @@ import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { useFxRates } from "@/lib/fxRates";
 import { FinanceStickyBar } from "./FinanceMonthBar";
+import { expenseRowsForMonths } from "./expenseMonth";
+import { shiftMonthKey } from "./monthClose";
 import {
   useFinanceAccounts,
   useFinanceExpenseCategories,
+  useFinanceExpenseEntries,
   useFinanceExpenses,
   useFinanceInvoices,
   useFinanceLegalEntities,
   useFinancePayments,
   useFinanceTaxes,
 } from "./queries";
+import type { ExpenseEntry } from "./types";
 import {
   invoiceIsReceivable,
   formatLegalEntityLabel,
@@ -53,6 +58,7 @@ const EMPTY_TAXES: FinanceTax[] = [];
 const EMPTY_ACCOUNTS: FinanceAccount[] = [];
 const EMPTY_ENTITIES: FinanceLegalEntity[] = [];
 const EMPTY_CATEGORIES: FinanceExpenseCategory[] = [];
+const EMPTY_ENTRIES = new Map<string, ExpenseEntry[]>();
 
 export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps) {
   const [range, setRange] = React.useState<RangeKey>("month");
@@ -65,6 +71,9 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
   const accountsQuery = useFinanceAccounts(teamId);
   const entitiesQuery = useFinanceLegalEntities(teamId);
   const categoriesQuery = useFinanceExpenseCategories(teamId);
+  const entriesQuery = useFinanceExpenseEntries(teamId);
+  // Курс той самий, що в шапці: без нього валютні підписки рахувались як гривневі.
+  const rates = useFxRates();
 
   const payments = paymentsQuery.data ?? EMPTY_PAYMENTS;
   const invoices = invoicesQuery.data ?? EMPTY_INVOICES;
@@ -73,6 +82,7 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
   const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
   const entities = entitiesQuery.data ?? EMPTY_ENTITIES;
   const categories = categoriesQuery.data ?? EMPTY_CATEGORIES;
+  const entriesByExpense = entriesQuery.data ?? EMPTY_ENTRIES;
   const loading =
     paymentsQuery.isPending ||
     invoicesQuery.isPending ||
@@ -80,7 +90,8 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
     taxesQuery.isPending ||
     accountsQuery.isPending ||
     entitiesQuery.isPending ||
-    categoriesQuery.isPending;
+    categoriesQuery.isPending ||
+    entriesQuery.isPending;
 
   const loadError =
     paymentsQuery.error ??
@@ -105,14 +116,37 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
     return inRange.filter((p) => !(p.accountId && accountById.get(p.accountId)?.isSensitive));
   }, [payments, start, canSeeSensitive, accountById]);
 
+  // Витрати в звіті рахуємо тим самим правилом, що й у розділі «Витрати»
+  // (./expenseMonth): регулярна — щомісяця, поки її ведуть, журнальна — фактом
+  // своїх записів, разова — у місяці своєї дати. До REQ-190 тут була власна
+  // арифметика («усе з датою в діапазоні»), і два екрани показували різні суми.
+  const currentMonth = React.useMemo(() => new Date().toISOString().slice(0, 7), []);
   const visibleExpenses = React.useMemo(() => {
-    const inRange = expenses.filter((e) => e.expenseDate >= start);
-    if (canSeeSensitive) return inRange;
-    return inRange.filter((e) => !(e.accountId && accountById.get(e.accountId)?.isSensitive));
-  }, [expenses, start, canSeeSensitive, accountById]);
+    if (canSeeSensitive) return expenses;
+    return expenses.filter((e) => !(e.accountId && accountById.get(e.accountId)?.isSensitive));
+  }, [expenses, canSeeSensitive, accountById]);
+
+  const monthKeys = React.useMemo(() => {
+    const earliest = visibleExpenses.reduce(
+      (min, e) => {
+        const key = (e.expenseDate ?? "").slice(0, 7);
+        return key && key < min ? key : min;
+      },
+      currentMonth
+    );
+    const from = range === "all" ? earliest : start.slice(0, 7);
+    const keys: string[] = [];
+    for (let key = from; key <= currentMonth; key = shiftMonthKey(key, 1)) keys.push(key);
+    return keys;
+  }, [visibleExpenses, range, start, currentMonth]);
+
+  const expenseRows = React.useMemo(
+    () => expenseRowsForMonths(visibleExpenses, entriesByExpense, monthKeys, rates, currentMonth),
+    [visibleExpenses, entriesByExpense, monthKeys, rates, currentMonth]
+  );
 
   const received = React.useMemo(() => visiblePayments.reduce((s, p) => s + paymentUahValue(p), 0), [visiblePayments]);
-  const spent = React.useMemo(() => visibleExpenses.reduce((s, e) => s + e.amount, 0), [visibleExpenses]);
+  const spent = React.useMemo(() => expenseRows.reduce((s, row) => s + row.uah, 0), [expenseRows]);
   const profit = received - spent;
 
   const receivable = React.useMemo(() => {
@@ -144,12 +178,13 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
 
   const expensesByCategory = React.useMemo(() => {
     const map = new Map<string, number>();
-    for (const e of visibleExpenses) {
-      const key = e.categoryId ?? "none";
-      map.set(key, (map.get(key) ?? 0) + e.amount);
+    for (const row of expenseRows) {
+      if (row.uah === 0) continue;
+      const key = row.expense.categoryId ?? "none";
+      map.set(key, (map.get(key) ?? 0) + row.uah);
     }
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
-  }, [visibleExpenses]);
+  }, [expenseRows]);
 
   const taxSummary = React.useMemo(() => {
     const inRange = taxes.filter((t) => t.period >= start || range === "all");

@@ -672,7 +672,7 @@ export async function deleteExpenseCategory(teamId: string, id: string): Promise
 // ---------------------------------------------------------------------------
 
 const EXPENSE_COLUMNS =
-  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,object_group,reminder_lead_days,vendor_options,event_type,next_charge_date,vendor_key,logo_url,notes,file,entered_by,created_at,updated_at";
+  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,object_group,reminder_lead_days,vendor_options,event_type,next_charge_date,vendor_key,logo_url,archived_at,notes,file,entered_by,created_at,updated_at";
 
 type ExpenseRow = {
   id: string;
@@ -696,6 +696,7 @@ type ExpenseRow = {
   next_charge_date: string | null;
   vendor_key: string | null;
   logo_url: string | null;
+  archived_at: string | null;
   notes: string | null;
   file: string | null;
   entered_by: string | null;
@@ -739,6 +740,7 @@ const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation
   nextChargeDate: row.next_charge_date ?? null,
   vendorKey: row.vendor_key ?? null,
   logoUrl: row.logo_url ?? null,
+  archivedAt: row.archived_at ?? null,
   notes: row.notes ?? null,
   file: row.file ?? null,
   enteredBy: row.entered_by ?? null,
@@ -882,6 +884,22 @@ export async function updateExpense(teamId: string, id: string, input: ExpenseIn
     .eq("id", id);
   if (error) throw error;
   await replaceAllocations(teamId, id, input.allocations);
+}
+
+/**
+ * Здати витрату в архів (або повернути). Архів — це ДАТА, а не видалення:
+ * місяці до неї лишаються як були, разом із записами журналу; зникає витрата
+ * лише з наступних місяців. Саме тому «Кондиціонери» прибирають звідси, а не
+ * кнопкою «Видалити», яка забрала б і історію (REQ-190).
+ */
+export async function setExpenseArchived(teamId: string, id: string, archived: boolean): Promise<void> {
+  const { error } = await supabase
+    .schema("tosho")
+    .from("finance_expenses")
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq("team_id", teamId)
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export async function deleteExpense(teamId: string, id: string): Promise<void> {

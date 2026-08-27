@@ -181,7 +181,7 @@ export default function FinancesPage() {
     // Завжди про ПОТОЧНИЙ місяць, а не про той, що відкритий у Витратах: мітка в
     // навігації відповідає на «що не зроблено зараз», а не «що в місяці, який гортаю».
     const monthKey = new Date().toISOString().slice(0, 7);
-    return findMissingMonthEntries(visible, entriesQuery.data ?? new Map(), monthKey).size;
+    return findMissingMonthEntries(visible, entriesQuery.data ?? new Map(), monthKey, monthKey).size;
   }, [expensesQuery.data, entriesQuery.data, accountsQuery.data, canSeeSensitive]);
   // На самій вкладці Витрат мітку не дублюємо — там уже бейдж на кожному рядку
   // і лічильник у заголовку секції. Два сигнали про один факт читаються як шум.

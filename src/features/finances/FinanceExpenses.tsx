@@ -2,6 +2,8 @@ import * as React from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  Archive,
+  ArchiveRestore,
   BellRing,
   CalendarClock,
   Check,
@@ -21,7 +23,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { EditIconButton, DeleteIconButton } from "./financeRowActions";
+import { ActionButton, EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/picker-input";
@@ -60,6 +62,12 @@ import {
 } from "@/lib/fxRates";
 import { BENTO_COLORS, FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { findMissingMonthEntries, shiftMonthKey } from "./monthClose";
+import {
+  expenseMonthCost,
+  isExpenseArchived,
+  isRecurringExpenseInMonth,
+  type MonthCost,
+} from "./expenseMonth";
 import { FinanceMonthBar } from "./FinanceMonthBar";
 import { OrderPickerInline } from "./OrderPickerInline";
 import {
@@ -69,6 +77,7 @@ import {
   createExpenseEntry,
   deleteExpense,
   deleteExpenseEntry,
+  setExpenseArchived,
   updateExpense,
   updateExpenseEntry,
   type ExpenseAllocationInput,
@@ -89,7 +98,6 @@ import {
   BILLING_PERIOD_ORDER,
   billingPeriodOf,
   EXPENSE_CATEGORY_KIND_LABELS,
-  expenseMonthlyUah,
   expenseUahAmount,
   formatLegalEntityLabel,
   type BillingPeriod,
@@ -188,6 +196,15 @@ const parseAmountInput = (raw: string): number | null => {
 // Сума як число для розрахунків (невалідне/порожнє → 0).
 const amountNumber = (raw: string): number => parseAmountInput(raw) ?? 0;
 
+// Назва, у якій немає жодної літери, — це майже завжди вписана не в те поле сума.
+// Реальний випадок (REQ-190): у «Постачальник» для палива вписали «40 302,65», і
+// в списку витрата так і називалась — числом, з тим самим числом справа.
+const looksLikeAmount = (raw: string): boolean => {
+  const value = raw.trim();
+  if (!value) return false;
+  return !/\p{L}/u.test(value) && /\d/.test(value);
+};
+
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 // Пресети «за скільки днів до платежу» нагадувати + людські підписи.
@@ -253,6 +270,15 @@ const pluralEntries = (n: number) => {
   if (mod10 === 1 && mod100 !== 11) return "запис";
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "записи";
   return "записів";
+};
+
+// Підпис під сумою журнальної витрати. Орієнтир тут — саме ПІДКАЗКА: у число
+// місяця він більше не входить, бо орієнтир — це не витрачені гроші (REQ-190).
+const journalCaption = (cost: MonthCost): string => {
+  if (cost.entriesCount > 0) return `${cost.entriesCount} ${pluralEntries(cost.entriesCount)} · факт`;
+  const estimate = cost.estimateUah && cost.estimateUah > 0 ? formatOrderMoney(cost.estimateUah, "UAH") : null;
+  if (cost.kind === "plan") return estimate ? `план · орієнтир ${estimate}` : "план · орієнтира немає";
+  return estimate ? `немає записів · орієнтир ${estimate}` : "немає записів";
 };
 
 // «05.07» — короткий день+місяць запису (рік зрозумілий із заголовка місяця).
@@ -896,8 +922,8 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   // «Не внесено за місяць» — правило спільне з підпунктом «Витрати» й крон-функцією
   // finance-month-close-reminders, тому живе в ./monthClose, а не тут.
   const missingEntryIds = React.useMemo(
-    () => findMissingMonthEntries(visibleExpenses, entriesByExpense, selectedMonth),
-    [visibleExpenses, entriesByExpense, selectedMonth]
+    () => findMissingMonthEntries(visibleExpenses, entriesByExpense, selectedMonth, currentKey),
+    [visibleExpenses, entriesByExpense, selectedMonth, currentKey]
   );
 
   // Дата останнього запису — підказка «останній запис — 13.07» під назвою.
@@ -912,40 +938,65 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     [entriesByExpense]
   );
 
-  // Місячна гривнева вартість регулярного платежу ДЛЯ конкретного місяця:
-  // стала — та сама щомісяця; змінна — сума записів журналу за місяць
-  // (або стартовий орієнтир, якщо записів ще немає).
+  // Скільки витрата коштує в конкретному місяці. Саме правило живе в
+  // ./expenseMonth — його ділять список, bento-підсумок, Звіти й чекліст
+  // «закрити місяць». Тут лише подаємо йому записи потрібного місяця.
+  //
+  // Подія бере ВСІ свої позиції, а не позиції вибраного місяця: вона привʼязана
+  // до власної дати й показується тільки в своєму місяці.
+  const costFor = React.useCallback(
+    (e: FinanceExpense, monthKey: string): MonthCost =>
+      expenseMonthCost(
+        e,
+        !e.amountVaries ? [] : e.eventType ? entriesByExpense.get(e.id) ?? [] : entriesForMonth(e.id, monthKey),
+        monthKey,
+        rates,
+        currentKey
+      ),
+    [rates, entriesForMonth, entriesByExpense, currentKey]
+  );
+  const costForSelected = React.useCallback(
+    (e: FinanceExpense): MonthCost => costFor(e, selectedMonth),
+    [costFor, selectedMonth]
+  );
   const monthlyFor = React.useCallback(
-    (e: FinanceExpense, monthKey: string): number | null => {
-      if (!e.amountVaries) return expenseMonthlyUah(e, rates);
-      const monthEntries = entriesForMonth(e.id, monthKey);
-      const amt = monthEntries.length > 0 ? monthEntries.reduce((s, en) => s + en.amount, 0) : e.amount;
-      return convertToUah(amt, e.currency, rates, e.fxRate);
-    },
-    [rates, entriesForMonth]
+    (e: FinanceExpense, monthKey: string): number | null => costFor(e, monthKey).uah,
+    [costFor]
   );
   const monthlyForSelected = React.useCallback(
-    (e: FinanceExpense): number | null => monthlyFor(e, selectedMonth),
-    [monthlyFor, selectedMonth]
+    (e: FinanceExpense): number | null => costForSelected(e).uah,
+    [costForSelected]
   );
 
   // Три кошики, а не два. Подія (корпоратив, ДР) технічно is_recurring — це те, що
   // дає їй журнал позицій, — але за природою вона РАЗОВА. Тримати її в `fixed`
   // означало завищувати «регулярну базу / міс» на суму корпоративу в тому місяці,
   // коли він стався. Тому ділимо тут, у джерелі, а не в секціях нижче.
-  const { fixed, allEvents, variable } = React.useMemo(() => {
+  const { fixed, allEvents, variable, archived } = React.useMemo(() => {
     const fixedList: FinanceExpense[] = [];
     const eventList: FinanceExpense[] = [];
     const variableList: FinanceExpense[] = [];
+    const archivedList: FinanceExpense[] = [];
     for (const expense of visibleExpenses) {
+      if (isExpenseArchived(expense)) archivedList.push(expense);
+      // Регулярної витрати не існує до місяця «веду облік з» і після архівації:
+      // оренда, заведена в липні, показувалась у червні (REQ-190).
+      // Записи місяця перебивають межу: справжній факт видно завжди.
+      if (
+        expense.isRecurring &&
+        !isRecurringExpenseInMonth(expense, selectedMonth, entriesForMonth(expense.id, selectedMonth).length > 0)
+      ) {
+        continue;
+      }
       if (expense.eventType) eventList.push(expense);
       else if (expense.isRecurring) fixedList.push(expense);
       else variableList.push(expense);
     }
     // Найдорожче на місяць — зверху, щоб одразу було видно, що з'їдає бюджет.
     fixedList.sort((a, b) => (monthlyForSelected(b) ?? 0) - (monthlyForSelected(a) ?? 0));
-    return { fixed: fixedList, allEvents: eventList, variable: variableList };
-  }, [visibleExpenses, monthlyForSelected]);
+    archivedList.sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
+    return { fixed: fixedList, allEvents: eventList, variable: variableList, archived: archivedList };
+  }, [visibleExpenses, monthlyForSelected, selectedMonth, entriesForMonth]);
 
   // Регулярна місячна база — тільки справжні зобовʼязання: оренда, підписки,
   // комуналка. Подій тут немає за побудовою `fixed` вище.
@@ -1065,16 +1116,26 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   // регулярні — місячною вартістю (змінні — фактом того місяця), плюс події того
   // місяця й змінні витрати. Структура мусить збігатись, інакше Δ% бреше.
   const prevMonthTotal = React.useMemo(() => {
-    const regular = fixed.reduce((sum, e) => sum + (monthlyFor(e, prevMonthKey) ?? 0), 0);
-    const eventsPrev = allEvents
-      .filter((e) => (e.expenseDate ?? "").slice(0, 7) === prevMonthKey)
-      .reduce((sum, e) => sum + (monthlyFor(e, prevMonthKey) ?? 0), 0);
+    // Рахуємо від ПОВНОГО списку, а не від кошиків вибраного місяця: кошики вже
+    // відфільтровані «веду облік з»/архівом саме під вибраний місяць, і в
+    // попередньому склад витрат інший — інакше Δ% порівнював би різні набори.
+    let regular = 0;
+    let eventsPrev = 0;
+    for (const e of visibleExpenses) {
+      if (!e.isRecurring) continue;
+      if (!isRecurringExpenseInMonth(e, prevMonthKey, entriesForMonth(e.id, prevMonthKey).length > 0)) continue;
+      if (e.eventType) {
+        if ((e.expenseDate ?? "").slice(0, 7) === prevMonthKey) eventsPrev += monthlyFor(e, prevMonthKey) ?? 0;
+      } else {
+        regular += monthlyFor(e, prevMonthKey) ?? 0;
+      }
+    }
     const variablePrev = (variableByMonth.get(prevMonthKey) ?? []).reduce(
       (sum, e) => sum + (expenseUahAmount(e, rates) ?? 0),
       0
     );
     return regular + eventsPrev + variablePrev;
-  }, [fixed, allEvents, monthlyFor, prevMonthKey, variableByMonth, rates]);
+  }, [visibleExpenses, monthlyFor, prevMonthKey, variableByMonth, rates, entriesForMonth]);
 
   // Δ% до попереднього місяця; null — якщо порівнювати нема з чим.
   const monthDeltaPct = prevMonthTotal > 0 ? ((monthTotal - prevMonthTotal) / prevMonthTotal) * 100 : null;
@@ -1181,6 +1242,26 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     setDialogOpen(true);
   }, []);
 
+  // Архів замість видалення: закинуту статтю треба чимось прибрати зі списку, а
+  // «Видалити» забрало б і журнал разом із фактами минулих місяців (REQ-190).
+  const toggleArchive = async (expense: FinanceExpense) => {
+    if (!teamId) return;
+    const wasArchived = isExpenseArchived(expense);
+    try {
+      await setExpenseArchived(teamId, expense.id, !wasArchived);
+      await reload();
+      toast.success(wasArchived ? "Витрату повернуто з архіву" : "Витрату здано в архів", {
+        description: wasArchived
+          ? "Знову рахується з поточного місяця."
+          : "Минулі місяці й записи лишились як були — зникає з наступних.",
+      });
+    } catch (error) {
+      toast.error(wasArchived ? "Не вдалося повернути витрату" : "Не вдалося здати в архів", {
+        description: getErrorMessage(error, "Спробуйте ще раз."),
+      });
+    }
+  };
+
   const remove = async (expense: FinanceExpense) => {
     if (!teamId) return;
     if (!window.confirm("Видалити цю витрату?")) return;
@@ -1192,6 +1273,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       toast.error("Не вдалося видалити витрату", { description: getErrorMessage(error, "Спробуйте ще раз.") });
     }
   };
+
+  // Полиця «Архів» у кінці сторінки — згорнута за замовчуванням.
+  const [archiveOpen, setArchiveOpen] = React.useState(false);
 
   // Які журнали розгорнуті (за expenseId).
   const [openJournals, setOpenJournals] = React.useState<Set<string>>(() => new Set());
@@ -1348,6 +1432,13 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
 
   const rowActions = (expense: FinanceExpense) => (
     <div className="flex shrink-0 items-center gap-1.5">
+      {expense.isRecurring ? (
+        <ActionButton
+          onClick={() => void toggleArchive(expense)}
+          title={isExpenseArchived(expense) ? "Повернути з архіву" : "Здати в архів"}
+          icon={isExpenseArchived(expense) ? <ArchiveRestore /> : <Archive />}
+        />
+      ) : null}
       <EditIconButton
         onClick={() => {
           setEditing(expense);
@@ -1415,7 +1506,12 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     // беремо бренд, далі статтю витрат, і тільки в найгіршому разі — «Без назви».
     const title = expense.supplierName?.trim() || brand?.label || category?.name || "Без назви";
     const logo = resolveSubscriptionLogo(expense);
-    const monthly = monthlyForSelected(expense);
+    const cost = costForSelected(expense);
+    const monthly = cost.uah;
+    // Місяць без жодного запису — рядок «спить»: нуль у підсумку й приглушений
+    // вигляд, щоб орієнтир не читався як факт (REQ-190).
+    const dormant = cost.kind === "empty";
+    const archivedRow = isExpenseArchived(expense);
     const overdue = expense.nextChargeDate ? daysUntil(expense.nextChargeDate) < 0 : false;
     // Подія показує ВСІ свої позиції (вона прив'язана до власної дати, а не до
     // вибраного місяця); звичайний журнал — лише записи вибраного місяця.
@@ -1424,7 +1520,6 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       : expense.eventType
         ? entriesByExpense.get(expense.id) ?? []
         : entriesForMonth(expense.id, selectedMonth);
-    const hasEntries = monthEntries.length > 0;
     const journalOpen = openJournals.has(expense.id);
     const missingEntry = missingEntryIds.has(expense.id);
     const lastEntry = missingEntry ? lastEntryDate(expense.id) : null;
@@ -1434,6 +1529,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         key={expense.id}
         className={cn(
           "overflow-hidden rounded-xl border border-border/40 bg-card",
+          // Порожній місяць — приглушено, але клікабельно: журнал відкривається,
+          // і запис додається просто звідси.
+          dormant && "border-dashed bg-muted/20",
           // Перехід зі сповіщення «закрити місяць» підсвічує саме ті рядки,
           // про які написали — інакше в довгому списку їх ще треба знайти.
           missingEntry && highlightMissing && "border-warning/60 ring-1 ring-warning/25"
@@ -1453,7 +1551,19 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
             />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="truncate text-sm font-semibold text-foreground">{title}</span>
+                <span
+                  className={cn(
+                    "truncate text-sm font-semibold",
+                    dormant ? "text-muted-foreground" : "text-foreground"
+                  )}
+                >
+                  {title}
+                </span>
+                {archivedRow ? (
+                  <Badge variant="outline" className="gap-1 text-3xs text-muted-foreground">
+                    <Archive className="h-3 w-3" /> архів
+                  </Badge>
+                ) : null}
                 {/* Періодичність — лише у справді регулярних. Подія технічно monthly
                     (щоб мати журнал позицій), але «Раз на місяць» на корпоративі — брехня. */}
                 {expense.eventType ? null : (
@@ -1517,11 +1627,16 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                 className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-muted/50"
               >
                 <div className="text-right">
-                  <div className="text-sm font-semibold tabular-nums text-foreground">
+                  <div
+                    className={cn(
+                      "text-sm font-semibold tabular-nums",
+                      dormant ? "text-muted-foreground" : "text-foreground"
+                    )}
+                  >
                     {monthly === null ? "—" : formatOrderMoney(monthly, "UAH")}
                   </div>
                   <div className="text-3xs text-muted-foreground">
-                    {hasEntries ? `${monthEntries.length} ${pluralEntries(monthEntries.length)} · факт` : "орієнтир — додай"}
+                    {journalCaption(cost)}
                   </div>
                 </div>
                 <ChevronDown
@@ -1653,6 +1768,23 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
               </ExpenseSection>
             ))}
           </div>
+
+          {/* Архів — окремою полицею в кінці: звідси витрату повертають у роботу.
+              У місяцях до архівації вона й далі видно в своїй секції з бейджем «архів». */}
+          {archived.length > 0 ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setArchiveOpen((v) => !v)}
+                className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/40"
+              >
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !archiveOpen && "-rotate-90")} />
+                <Archive className="h-3.5 w-3.5" />
+                Архів ({archived.length})
+              </button>
+              {archiveOpen ? <div className="mt-2 grid gap-2">{archived.map(renderSubscriptionRow)}</div> : null}
+            </div>
+          ) : null}
 
           {/* Variable expenses without a date — surfaced so they aren't lost */}
           {undatedItems.length > 0 ? (
@@ -2028,6 +2160,14 @@ function ExpenseDialog({
       toast.error("Вкажіть коректну суму витрати.");
       return;
     }
+    // Назва-число означає, що суму вписали не в те поле: у списку така витрата
+    // так і зветься числом, і зрозуміти, за що платили, вже неможливо.
+    if (looksLikeAmount(supplierName)) {
+      toast.error("Назва не може бути сумою", {
+        description: `«${supplierName.trim()}» — це число. Напишіть, за що платимо: «Паливо», «Прибирання офісу».`,
+      });
+      return;
+    }
     // Розподіл на замовлення існує лише для разових. Гейтимо і валідацію, і payload
     // за типом — інакше приховані алокації (лишені після перемикання типу) поїхали б
     // у сервіс/підписку й тихо зіпсували маржу.
@@ -2123,6 +2263,13 @@ function ExpenseDialog({
     if (missingAmount.length > 0) {
       toast.error("Вкажіть суму для кожного платежу", {
         description: "Рядок без суми не збережеться. Додайте суму або приберіть зайвий рядок.",
+      });
+      return;
+    }
+    const numericName = touched.find((r) => looksLikeAmount(r.name));
+    if (numericName) {
+      toast.error("Назва не може бути сумою", {
+        description: `«${numericName.name.trim()}» — це число. Напишіть, за що платимо: «Паливо», «Вода».`,
       });
       return;
     }
@@ -2620,7 +2767,18 @@ function ExpenseDialog({
               ) : null}
 
               <div className="grid gap-2">
-                <Label>{isEvent ? "Назва події" : expenseKind === "service" ? "Сервіс" : "Постачальник"}</Label>
+                {/* У журнальної витрати постачальник щоразу інший — він живе в записах
+                    журналу, а зверху стоїть назва статті («Паливо»). Поле «Постачальник»
+                    тут питало не те, і в назву вписували суму (REQ-190). */}
+                <Label>
+                  {isEvent
+                    ? "Назва події"
+                    : expenseKind === "service"
+                      ? "Сервіс"
+                      : varyingRecurring
+                        ? "Назва витрати"
+                        : "Постачальник"}
+                </Label>
                 <Input
                   value={supplierName}
                   onChange={(e) => setSupplierName(e.target.value)}
@@ -2629,10 +2787,18 @@ function ExpenseDialog({
                       ? "Корпоратив Q3, День народження Ані…"
                       : expenseKind === "service"
                         ? "Dropbox або dropbox.com"
-                        : "Назва постачальника"
+                        : varyingRecurring
+                          ? "Паливо, прибирання офісу, вода…"
+                          : "Назва постачальника"
                   }
                   className="h-10"
                 />
+                {varyingRecurring && !isEvent ? (
+                  <p className="text-2xs leading-4 text-muted-foreground">
+                    Постачальника вписуватимеш у кожному записі журналу — тут потрібна назва
+                    статті, за що платимо.
+                  </p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label>Стаття витрат</Label>

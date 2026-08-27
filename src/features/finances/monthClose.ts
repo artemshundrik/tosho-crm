@@ -1,12 +1,10 @@
+import { isRecurringExpenseInMonth } from "./expenseMonth";
 import type { ExpenseEntry, FinanceExpense } from "./types";
 
 // Правило «місяць не закритий» — ОДНЕ на всі поверхні: бейдж на рядку витрати,
 // лічильник у заголовку секції, мітка на підпункті «Витрати» і крон-функція
 // netlify/functions/finance-month-close-reminders.ts. Тримати їх синхронно
 // коментарями не вийшло б — тому логіка живе тут, а не копіюється.
-
-/** Скільки місяців перед цільовим дивимось, щоб зрозуміти «цю витрату ведуть». */
-export const MONTH_CLOSE_HISTORY_MONTHS = 3;
 
 /** «YYYY-MM» ± місяців. */
 export function shiftMonthKey(key: string, delta: number): string {
@@ -16,27 +14,32 @@ export function shiftMonthKey(key: string, delta: number): string {
 }
 
 /**
- * Журнальні витрати, за якими у `monthKey` немає жодного запису, АЛЕ є історія
- * за попередні місяці.
+ * Журнальні витрати, за якими у `monthKey` немає жодного запису.
  *
- * Умова про історію обовʼязкова: без неї давно закинуті статті («Кондиціонери»
- * з нулем записів за весь час) світилися б у списку вічно й привчили б його
- * ігнорувати. Події (`eventType`) виключені — вони разові за природою.
+ * Межі рахуємо від САМОЇ витрати, а не від її історії (REQ-190): від місяця
+ * «веду облік з» до архівації включно, і не далі поточного місяця — майбутній
+ * місяць не буває «не внесеним». Події (`eventType`) виключені: вони разові.
+ *
+ * До REQ-190 тут була умова «є хоч один запис за 3 попередні місяці» — щоб
+ * закинуті статті («Кондиціонери» з нулем записів за весь час) не світились
+ * вічно. Вона ж і глушила найгучніший випадок: НОВУ витрату з нулем записів,
+ * яка щойно підставила свій орієнтир у кожен місяць. Роль «більше не ведемо»
+ * тепер грає архів — рішення людини, а не здогад за історією.
  */
 export function findMissingMonthEntries(
   expenses: FinanceExpense[],
   entriesByExpense: Map<string, ExpenseEntry[]>,
-  monthKey: string
+  monthKey: string,
+  currentMonthKey: string
 ): Set<string> {
-  const historyMonths = Array.from({ length: MONTH_CLOSE_HISTORY_MONTHS }, (_, i) =>
-    shiftMonthKey(monthKey, -(i + 1))
-  );
   const ids = new Set<string>();
+  if (monthKey > currentMonthKey) return ids;
   for (const expense of expenses) {
     if (!expense.isRecurring || !expense.amountVaries || expense.eventType) continue;
+    if (!isRecurringExpenseInMonth(expense, monthKey)) continue;
     const entries = entriesByExpense.get(expense.id) ?? [];
     if (entries.some((en) => en.entryDate.slice(0, 7) === monthKey)) continue;
-    if (entries.some((en) => historyMonths.includes(en.entryDate.slice(0, 7)))) ids.add(expense.id);
+    ids.add(expense.id);
   }
   return ids;
 }
