@@ -49,22 +49,26 @@ function useCompanyDuplicateHint(
   query: string,
   excludeId?: string | null
 ): HintState {
-  const [matches, setMatches] = useState<CompanyHintMatch[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Стан — ОДИН і з міткою запиту, на який він відповідає. «Крутиться» й
+  // «нічого не знайшли» звідси виводяться, а не тримаються окремими прапорцями:
+  // будь-який setState у тілі ефекту — це зайвий прохід рендеру на кожну літеру
+  // (ратчет react-hooks/set-state-in-effect, scripts/check-compiler-debt.mjs).
+  const [result, setResult] = useState<{ query: string; matches: CompanyHintMatch[] }>({
+    query: "",
+    matches: [],
+  });
   const requestRef = useRef(0);
 
+  const trimmed = query.trim();
+  const active = Boolean(teamId) && trimmed.length >= MIN_QUERY;
+
   useEffect(() => {
-    const trimmed = query.trim();
-    if (!teamId || trimmed.length < MIN_QUERY) {
+    if (!active || !teamId) {
+      // Скасовуємо політ у відповідь, але стану не чіпаємо — його вже не видно.
       requestRef.current += 1;
-      setMatches([]);
-      setLoading(false);
       return;
     }
     const ticket = ++requestRef.current;
-    // Крутілку вмикаємо ОДРАЗУ, ще до паузи: людина має бачити, що CRM її
-    // почула. Інакше перші 350 мс поле виглядає так, ніби нічого не сталось.
-    setLoading(true);
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
@@ -75,8 +79,9 @@ function useCompanyDuplicateHint(
           // Пізня відповідь на старий запит не має перебивати свіжу: людина
           // друкує далі, і список під полем стрибав би назад.
           if (ticket !== requestRef.current) return;
-          setMatches(
-            pickCompanyHints(
+          setResult({
+            query: trimmed,
+            matches: pickCompanyHints(
               trimmed,
               leads
                 .filter((row) => row.id !== excludeId)
@@ -98,19 +103,20 @@ function useCompanyDuplicateHint(
                   managerUserId: row.manager_user_id ?? null,
                   logoUrl: row.logo_url ?? null,
                 }))
-            )
-          );
+            ),
+          });
         } catch {
-          if (ticket === requestRef.current) setMatches([]);
-        } finally {
-          if (ticket === requestRef.current) setLoading(false);
+          if (ticket === requestRef.current) setResult({ query: trimmed, matches: [] });
         }
       })();
     }, DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [excludeId, query, teamId]);
+  }, [active, excludeId, trimmed, teamId]);
 
-  return { matches, loading };
+  // Крутілка — поки відповідь не наздогнала те, що вже набрано: видно ОДРАЗУ,
+  // ще до паузи, інакше перші 350 мс поле виглядає так, ніби нічого не сталось.
+  // Старий список тим часом лишається на екрані — як і було, щоб не блимав.
+  return { matches: active ? result.matches : [], loading: active && result.query !== trimmed };
 }
 
 /** Аватарки колег: довідник змінюється раз на місяці, тягнемо один раз. */

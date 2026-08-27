@@ -185,7 +185,7 @@ const CEILINGS = {
   "src/pages/TeamMembersPage.tsx": 3992,
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,
-  "src/features/finances/FinanceExpenses.tsx": 2858,
+  "src/features/finances/FinanceExpenses.tsx": 2439,
   "src/layout/AppLayout.tsx": 3240,
   "src/components/quotes/NewQuoteDialog.tsx": 2732,
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
