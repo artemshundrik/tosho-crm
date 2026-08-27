@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { CompanyDuplicateHint } from "./CompanyDuplicateHint";
 import { SourceSelect } from "./customerSources";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { useSegmentedSlider } from "@/components/ui/segmented-group";
@@ -82,6 +83,13 @@ export type LeadLinkedItem = {
 export type LeadDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Команда — лише для підказки про схожі компанії під назвою. Необовʼязкова:
+   * там, де її не передали, підказки просто немає, і форма працює як раніше.
+   */
+  teamId?: string | null;
+  /** Картка, яку редагують: сама себе в підказці показувати не має. */
+  duplicateHintExcludeId?: string | null;
   form: LeadFormState;
   setForm: React.Dispatch<React.SetStateAction<LeadFormState>>;
   ownershipOptions?: Array<{
@@ -172,6 +180,8 @@ const orderStatusLabels: Record<string, string> = {
 export const LeadDialog: React.FC<LeadDialogProps> = ({
   open,
   onOpenChange,
+  teamId,
+  duplicateHintExcludeId,
   form,
   setForm,
   ownershipOptions = [],
@@ -724,6 +734,11 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
                       placeholder={isFopOwnership ? "Напр. Берновська Ольга Василівна" : "Назва компанії"}
                       className="h-9"
+                    />
+                    <CompanyDuplicateHint
+                      teamId={teamId}
+                      query={form.companyName}
+                      excludeId={duplicateHintExcludeId}
                     />
                   </div>
                   <div className="grid gap-2">

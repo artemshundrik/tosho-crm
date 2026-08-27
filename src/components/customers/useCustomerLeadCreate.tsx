@@ -581,6 +581,7 @@ export const useCustomerLeadCreate = ({
   const dialogs = (
     <>
       <CustomerDialog
+        teamId={teamId}
         open={customerOpen}
         onOpenChange={(open) => {
           setCustomerOpen(open);
@@ -599,6 +600,7 @@ export const useCustomerLeadCreate = ({
         onSubmit={() => void handleCreateCustomer()}
       />
       <LeadDialog
+        teamId={teamId}
         open={leadOpen}
         onOpenChange={(open) => {
           setLeadOpen(open);

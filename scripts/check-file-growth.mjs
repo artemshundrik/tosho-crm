@@ -165,6 +165,13 @@ const GIANT_THRESHOLD = 2000;
  * `updateTaskStatus` (це шов, через який проходять три двері з чотирьох),
  * `createBriefChangeRequest`, яка тепер повертає «надіслалось?», і монтування
  * діалогу. Виносити з них нема чого — воно вже винесене.
+ *
+ * ПІДНЯТО 27.08.2026 для OrdersCustomersPage (+4) — підказка про схожі компанії
+ * під полем назви (REQ-189). Приріст рівно в тому, що це: два пропси на два
+ * діалоги. Сама підказка живе окремо (`components/customers/CompanyDuplicateHint`),
+ * правило схожості — теж (`lib/companyDuplicateHint` з тестами на справжніх
+ * назвах із бази). У сторінці лишилось передавання `teamId` і id картки, яку
+ * редагують, — виносити тут нічого.
  */
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12874,
@@ -174,7 +181,7 @@ const CEILINGS = {
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
   // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
-  "src/pages/OrdersCustomersPage.tsx": 4273,
+  "src/pages/OrdersCustomersPage.tsx": 4277,
   "src/pages/TeamMembersPage.tsx": 3992,
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,

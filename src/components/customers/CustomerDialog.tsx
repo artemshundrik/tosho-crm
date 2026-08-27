@@ -19,6 +19,7 @@ import type { CustomerFieldErrors } from "./customerValidation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { CompanyDuplicateHint } from "./CompanyDuplicateHint";
 import { SourceSelect } from "./customerSources";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { useSegmentedSlider } from "@/components/ui/segmented-group";
@@ -139,6 +140,13 @@ export type CustomerLinkedItem = {
 export type CustomerDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Команда — лише для підказки про схожі компанії під назвою. Необовʼязкова:
+   * без неї форма поводиться як раніше.
+   */
+  teamId?: string | null;
+  /** Картка, яку редагують: сама себе в підказці показувати не має. */
+  duplicateHintExcludeId?: string | null;
   form: CustomerFormState;
   setForm: React.Dispatch<React.SetStateAction<CustomerFormState>>;
   ownershipOptions: OwnershipOption[];
@@ -258,6 +266,8 @@ const orderStatusLabels: Record<string, string> = {
 export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   open,
   onOpenChange,
+  teamId,
+  duplicateHintExcludeId,
   form,
   setForm,
   ownershipOptions,
@@ -878,18 +888,25 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <div className="space-y-5">
               <SectionCard title="Компанія">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <FormField
-                    label={isFopOwnership ? "ПІБ" : "Назва компанії"}
-                    required
-                    error={fieldErrors?.name}
-                  >
-                    <Input
-                      value={form.name}
-                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
-                      className="h-9"
+                  <div className="space-y-2">
+                    <FormField
+                      label={isFopOwnership ? "ПІБ" : "Назва компанії"}
+                      required
+                      error={fieldErrors?.name}
+                    >
+                      <Input
+                        value={form.name}
+                        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
+                        className="h-9"
+                      />
+                    </FormField>
+                    <CompanyDuplicateHint
+                      teamId={teamId}
+                      query={form.name}
+                      excludeId={duplicateHintExcludeId}
                     />
-                  </FormField>
+                  </div>
                   <FormField label={isFopOwnership ? "Instagram" : "Сайт"}>
                     <Input
                       value={form.website}
@@ -1002,18 +1019,25 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <TabsContent value="basic" className="space-y-4 mt-3">
               <SectionCard title="Компанія">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <FormField
-                    label={isFopOwnership ? "ПІБ" : "Назва компанії"}
-                    required
-                    error={fieldErrors?.name}
-                  >
-                    <Input
-                      value={form.name}
-                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
-                      className="h-9"
+                  <div className="space-y-2">
+                    <FormField
+                      label={isFopOwnership ? "ПІБ" : "Назва компанії"}
+                      required
+                      error={fieldErrors?.name}
+                    >
+                      <Input
+                        value={form.name}
+                        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
+                        className="h-9"
+                      />
+                    </FormField>
+                    <CompanyDuplicateHint
+                      teamId={teamId}
+                      query={form.name}
+                      excludeId={duplicateHintExcludeId}
                     />
-                  </FormField>
+                  </div>
                   <FormField label={isFopOwnership ? "Instagram" : "Сайт"}>
                     <Input
                       value={form.website}

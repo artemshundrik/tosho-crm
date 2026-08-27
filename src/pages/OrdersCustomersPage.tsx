@@ -4037,6 +4037,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       </Tabs>
 
       <CustomerDialog
+        teamId={teamId}
+        duplicateHintExcludeId={editingId}
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
@@ -4159,6 +4161,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       </Dialog>
 
       <LeadDialog
+        teamId={teamId}
+        duplicateHintExcludeId={leadEditingId}
         open={leadDialogOpen}
         onOpenChange={(open) => {
           setLeadDialogOpen(open);
