@@ -59,6 +59,7 @@ import { ProductUpdateModal } from "@/features/features/ProductUpdateModal";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { isModuleVisibleInMenu, type ModuleKey } from "@/lib/moduleAccess";
+import { useNewModules } from "@/features/features/useNewModules";
 import { DEV_LABELS, DEV_PATHS } from "@/lib/devSection";
 import { ROUTES } from "./routes";
 import { getHeaderConfig } from "./headerConfig";
@@ -933,6 +934,28 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }, [pinnedRoutes]);
 
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
+
+  /**
+   * Розділи, яких людина ще не бачила: мітка «Нове» біля пункту (REQ-199).
+   *
+   * Ключі беремо з ТОГО САМОГО списку, який рендериться, — інакше мітка
+   * могла б загорітись на пункті, якого в меню немає.
+   */
+  const availableModuleKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          visibleSidebarLinks
+            .map((link) => link.moduleKey)
+            .filter((key): key is ModuleKey => Boolean(key))
+        )
+      ),
+    [visibleSidebarLinks]
+  );
+  const { newKeys: newModuleKeys, markSeen: markModuleSeen } = useNewModules({
+    userId: viewUserId,
+    availableKeys: availableModuleKeys,
+  });
   const shouldReveal = useMemo(() => {
     return sidebarRoutes.some((route) => {
       if (location.pathname === route) return true;
@@ -1966,6 +1989,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   notificationsUnreadCount={unreadCount}
                   collapsed={sidebarCollapsed}
                   stagger={sidebarStagger.pinned}
+                  newModuleKeys={newModuleKeys}
+                  onModuleSeen={markModuleSeen}
                   pinnedRoutes={pinnedSet}
                   onTogglePin={togglePin}
                 />
@@ -1979,6 +2004,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.overview}
+                newModuleKeys={newModuleKeys}
+                onModuleSeen={markModuleSeen}
                 pinnedRoutes={pinnedSet}
                 onTogglePin={togglePin}
                 hideLabel
@@ -1992,6 +2019,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.orders}
+                newModuleKeys={newModuleKeys}
+                onModuleSeen={markModuleSeen}
                 pinnedRoutes={pinnedSet}
                 onTogglePin={togglePin}
                 groupCollapsed={collapsedGroups.orders}
@@ -2006,6 +2035,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.operations}
+                newModuleKeys={newModuleKeys}
+                onModuleSeen={markModuleSeen}
                 pinnedRoutes={pinnedSet}
                 onTogglePin={togglePin}
                 groupCollapsed={collapsedGroups.operations}
@@ -2020,6 +2051,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.account}
+                newModuleKeys={newModuleKeys}
+                onModuleSeen={markModuleSeen}
                 pinnedRoutes={pinnedSet}
                 onTogglePin={togglePin}
                 groupCollapsed={collapsedGroups.account}
@@ -2037,6 +2070,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.dev}
+                newModuleKeys={newModuleKeys}
+                onModuleSeen={markModuleSeen}
                 pinnedRoutes={pinnedSet}
                 onTogglePin={togglePin}
                 groupCollapsed={collapsedGroups.dev}
@@ -2723,12 +2758,18 @@ function SidebarGroup({
   stagger = 0,
   pinnedRoutes,
   onTogglePin,
+  newModuleKeys,
+  onModuleSeen,
 }: {
   label: string;
   links: SidebarLink[];
   currentPath: string;
   onNavigate?: () => void;
   notificationsUnreadCount?: number;
+  /** Розділи, яких людина ще не бачила: у них горить мітка «Нове» (REQ-199). */
+  newModuleKeys?: Set<ModuleKey>;
+  /** Зайшли в розділ — мітка гасне. */
+  onModuleSeen?: (moduleKey: ModuleKey) => void;
   collapsed?: boolean;
   hideLabel?: boolean;
   /** Секцію згорнуто людиною. Діє лише там, де є заголовок. */
@@ -2861,6 +2902,17 @@ function SidebarGroup({
           const active = isActivePath(currentPath, link.to);
           const Icon = link.icon;
           const showNotificationsBadge = link.to === ROUTES.notifications && notificationsUnreadCount > 0;
+          /*
+           * «Нове» — розділ, якого людина ще не бачила: або він щойно з'явився
+           * у CRM, або їй щойно відкрили доступ. З її погляду це одне й те саме
+           * («у мене новий розділ»), тож і сигнал один.
+           *
+           * Не показуємо разом зі значком сповіщень: два бейджі на одному
+           * рядку сперечаються, а «Сповіщення» — не той пункт, куди ходять по
+           * новинки.
+           */
+          const isNewModule =
+            Boolean(link.moduleKey) && !showNotificationsBadge && Boolean(newModuleKeys?.has(link.moduleKey as ModuleKey));
           const pinned = pinnedRoutes?.has(link.to) ?? false;
           const showPin = Boolean(onTogglePin) && !collapsed && !isMobileDrawer;
 
@@ -2869,6 +2921,10 @@ function SidebarGroup({
               to={link.to}
               data-nav-route={link.to}
               onClick={() => {
+                // Гасимо за фактом відвідування, а не за кліком по самій мітці:
+                // інакше позначки накопичуються в людини, яка просто ходить по
+                // CRM, і за тиждень перестають щось означати.
+                if (link.moduleKey) onModuleSeen?.(link.moduleKey);
                 onNavigate?.();
               }}
               onMouseEnter={() => preloadRoute(link.to)}
@@ -2938,6 +2994,23 @@ function SidebarGroup({
               >
                 {link.label}
               </span>
+              {isNewModule ? (
+                collapsed ? (
+                  /* У рейці підпису немає — лишається значок. Заповнена крапка
+                     проти обведеної в анонсів: форма, а не колір, бо колір тут
+                     не прочитає ні дальтонік, ні око збоку. */
+                  <span className="tone-dot-accent pointer-events-none absolute right-1.5 top-1.5 inline-flex h-2 w-2 rounded-full" />
+                ) : (
+                  <span
+                    // Тон береться з дизайн-системи (tone-accent), а не з
+                    // власних кольорів: інакше мітка розійдеться з рештою
+                    // акцентних поверхонь при першій же зміні палітри.
+                    className="tone-accent ml-auto shrink-0 rounded-full border px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide"
+                  >
+                    Нове
+                  </span>
+                )
+              ) : null}
               {showNotificationsBadge ? (
                 collapsed ? (
                   <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
