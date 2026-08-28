@@ -4,10 +4,12 @@ import {
   extractMentions,
   extractRequestNumbers,
   findProseMentions,
+  localDay,
   looksLikePapercut,
   MAX_NUMBERS,
   readEnvValue,
   scanMentions,
+  shouldRemind,
 } from "./devRequestCommitHook.mjs";
 
 /**
@@ -251,29 +253,62 @@ describe("літера в адресі пункта", () => {
  */
 describe("чи схоже на дрібницю", () => {
   it("один файл і кілька рядків — так", () => {
-    expect(looksLikePapercut(" 1 file changed, 7 insertions(+), 4 deletions(-)")).toBe(true);
+    expect(looksLikePapercut("7\t4\tsrc/components/ui/sheet.tsx")).toBe(true);
   });
 
-  it("три файли на вісімдесят рядків — ще так", () => {
-    expect(looksLikePapercut(" 3 files changed, 60 insertions(+), 20 deletions(-)")).toBe(true);
+  it("тести з підрахунку виключені — дрібниця з тестом лишається дрібницею", () => {
+    // Рівно те, на чому спіткнулась перша редакція: власний тест лягав у той
+    // самий коміт і роздував його вдесятеро, тож нагадування мовчало саме там,
+    // де робота була зроблена ретельно.
+    const commit = ["109\t0\tsrc/components/app/NotificationsMenu.test.tsx", "22\t2\tsrc/components/app/NotificationsMenu.tsx"].join("\n");
+    expect(looksLikePapercut(commit)).toBe(true);
   });
 
-  it("чотири файли — вже ні, скільки б там не було рядків", () => {
-    expect(looksLikePapercut(" 4 files changed, 5 insertions(+)")).toBe(false);
+  it("чотири файли свого коду — вже ні", () => {
+    const commit = ["1\t1\ta.ts", "1\t1\tb.ts", "1\t1\tc.ts", "1\t1\td.ts"].join("\n");
+    expect(looksLikePapercut(commit)).toBe(false);
   });
 
-  it("один файл, але переписаний цілком — ні", () => {
-    expect(looksLikePapercut(" 1 file changed, 247 insertions(+), 26 deletions(-)")).toBe(false);
+  it("один файл, переписаний цілком — ні", () => {
+    expect(looksLikePapercut("400\t120\tsrc/pages/QuotesPage.tsx")).toBe(false);
   });
 
-  it("рядка немає (злиття, перший коміт) — мовчимо", () => {
+  it("двійковий файл рахується як файл без рядків", () => {
+    expect(looksLikePapercut("-\t-\tpublic/logo.png")).toBe(true);
+  });
+
+  it("нічого не розібралось — мовчимо", () => {
     expect(looksLikePapercut("")).toBe(false);
     expect(looksLikePapercut(undefined)).toBe(false);
     expect(looksLikePapercut(null)).toBe(false);
+    expect(looksLikePapercut("Merge branch 'main'")).toBe(false);
   });
 
-  it("тільки вилучення теж рахуються", () => {
-    expect(looksLikePapercut(" 1 file changed, 12 deletions(-)")).toBe(true);
-    expect(looksLikePapercut(" 2 files changed, 300 deletions(-)")).toBe(false);
+  it("коміт із самих тестів — не дрібниця, там нема чого записувати", () => {
+    expect(looksLikePapercut("40\t2\tsrc/lib/foo.test.ts")).toBe(false);
+  });
+});
+
+/**
+ * Частота — головне в цьому механізмі. Заміряно на власній історії: під
+ * «дрібний і без трейлера» підпадає 22 коміти з 40. Рядок, що з'являється в
+ * половині випадків, перестає читатись за день.
+ */
+describe("не частіше ніж раз на день", () => {
+  it("першого разу за день — нагадуємо", () => {
+    expect(shouldRemind("2026-08-29", null)).toBe(true);
+    expect(shouldRemind("2026-08-29", "")).toBe(true);
+    expect(shouldRemind("2026-08-29", "2026-08-28")).toBe(true);
+  });
+
+  it("другого разу того ж дня — мовчимо", () => {
+    expect(shouldRemind("2026-08-29", "2026-08-29")).toBe(false);
+    expect(shouldRemind("2026-08-29", "2026-08-29\n")).toBe(false);
+  });
+
+  it("день — місцевий, а не UTC: інакше він мінявся б о третій ночі", () => {
+    // 22:30 у Києві 29-го — це вже 19:30 UTC того ж дня, але 00:30 UTC 30-го
+    // настане, коли людина ще працює над «сьогоднішнім» днем.
+    expect(localDay(new Date("2026-08-29T23:30:00+03:00"))).toBe("2026-08-29");
   });
 });

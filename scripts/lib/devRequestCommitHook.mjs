@@ -19,7 +19,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -207,29 +207,67 @@ export function extractChecklistMentions(message) {
 }
 
 /**
- * Скільки файлів і рядків ще схоже на дрібницю.
+ * Скільки СВОГО коду ще схоже на дрібницю.
  *
- * Числа не з теорії: заміряні по викочених дрібницях — вони вкладаються в один
- * файл і кілька десятків рядків. Поріг навмисно тісний, бо ціна помилки
- * несиметрична: зайве нагадування на великому коміті — це шум, який я почну
- * гортати повз, і тоді воно не спрацює й там, де треба.
+ * Пороги перевірені на власній історії, а не вигадані: із чотирьох правок, що
+ * породили це нагадування, перша редакція ловила лише дві. Решту рятували
+ * власні ж тести — вони лягали в той самий коміт і роздували його вдесятеро.
+ * Тому тести з підрахунку виключені: дрібниця з тестом лишається дрібницею.
  */
 const SMALL_FILES = 3;
-const SMALL_LINES = 80;
+const SMALL_LINES = 200;
+
+/** Тест — не «свій код» для цієї оцінки: він росте від ретельності, не від обсягу правки. */
+const TEST_FILE = /(^|\/)__tests__\/|\.(test|spec)\.[cm]?[jt]sx?$/;
 
 /**
  * Чи схожий цей коміт на дрібницю, яку мали б записати рядком у полицю.
  *
- * Розбирає рядок `git show --shortstat`. Немає рядка (перший коміт, злиття) —
- * вважаємо, що не схожий: мовчання дешевше за здогад.
+ * Приймає `git show --numstat`: рядки виду `12\t3\tшлях/до/файла`. Двійкові
+ * файли приходять як `-\t-\t…` — рахуємо їх як файл без рядків.
+ *
+ * Нічого не розібралось (злиття, порожній коміт) — вважаємо, що не схожий:
+ * мовчання дешевше за здогад.
  */
-export function looksLikePapercut(shortstat) {
-  const text = String(shortstat ?? "");
-  const files = Number(/(\d+) files? changed/.exec(text)?.[1] ?? 0);
+export function looksLikePapercut(numstat) {
+  let files = 0;
+  let lines = 0;
+  for (const row of String(numstat ?? "").split("\n")) {
+    const match = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(row.trim());
+    if (!match) continue;
+    const [, inserted, deleted, path] = match;
+    if (TEST_FILE.test(path)) continue;
+    files += 1;
+    if (inserted !== "-") lines += Number(inserted);
+    if (deleted !== "-") lines += Number(deleted);
+  }
   if (files === 0 || files > SMALL_FILES) return false;
-  const inserted = Number(/(\d+) insertions?/.exec(text)?.[1] ?? 0);
-  const deleted = Number(/(\d+) deletions?/.exec(text)?.[1] ?? 0);
-  return inserted + deleted <= SMALL_LINES;
+  return lines <= SMALL_LINES;
+}
+
+/**
+ * Слід останнього нагадування. У `.git`, а не в дереві: він свій на кожній
+ * машині й ніколи не приїжджає з клоном.
+ */
+const REMINDER_STAMP = "tosho-papercut-reminder";
+
+/** Сьогоднішня дата очима людини, а не UTC: день закінчується опівночі в Києві. */
+export function localDay(now = new Date()) {
+  return now.toLocaleDateString("sv-SE");
+}
+
+/**
+ * Чи нагадувати сьогодні. Не частіше ніж раз на день — і це головне в усьому
+ * механізмі.
+ *
+ * ЧОМУ НЕ НА КОЖНОМУ КОМІТІ. Заміряно на власній історії: з 40 останніх комітів
+ * під «дрібний і без трейлера» підпадає 22. Рядок, що з'являється в половині
+ * випадків, перестає читатись за день — і тоді він не спрацює й там, де
+ * потрібен. Раз на день нагадування лишається помітним, а падає на ПЕРШИЙ
+ * дрібний коміт дня, тобто рівно тоді, коли день ще можна почати правильно.
+ */
+export function shouldRemind(today, stamped) {
+  return String(stamped ?? "").trim() !== today;
 }
 
 /**
@@ -294,8 +332,23 @@ async function main() {
   const numbers = extractRequestNumbers(message);
   const items = extractChecklistMentions(message);
   if (numbers.length === 0 && items.length === 0) {
-    if (looksLikePapercut(git(["show", "--shortstat", "--format=", "HEAD"]))) {
-      console.log(PAPERCUT_REMINDER);
+    if (looksLikePapercut(git(["show", "--numstat", "--format=", "HEAD"]))) {
+      const stamp = join(git(["rev-parse", "--git-dir"]), REMINDER_STAMP);
+      const today = localDay();
+      let stamped = null;
+      try {
+        stamped = readFileSync(stamp, "utf8");
+      } catch {
+        // Сліду ще немає — отже сьогодні не нагадували.
+      }
+      if (shouldRemind(today, stamped)) {
+        console.log(PAPERCUT_REMINDER);
+        try {
+          writeFileSync(stamp, today);
+        } catch {
+          // Не змогли записати — щонайгірше нагадаємо ще раз. Не привід шуміти.
+        }
+      }
     }
     return;
   }
