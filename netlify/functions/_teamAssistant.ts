@@ -10,6 +10,7 @@ import { ABSENCE_KIND_LABELS, formatAbsenceShort } from "./_lib/absenceSubmit";
 import { formatJobRole } from "../../src/lib/jobRoles";
 import { formatLastSeenAgo } from "../../src/lib/lastSeen";
 import { CLOCK_SKEW_TOLERANCE_MS } from "../../src/lib/presenceWindow";
+import { loadWorkSchedules, scheduleRowsForDates } from "./_lib/workSchedules";
 // Людські підписи дій — той самий довідник, що показує вкладка «Пульс».
 // Без нього у відповідь летіли сирі ключі на кшталт design_task_brief_change_request.
 import { actionLabel, isNoiseActivity } from "../../src/components/team/activityCategories";
@@ -456,7 +457,7 @@ export async function renderWhoIsAbsent(params: {
   const todayKey = kyivDateKey(now);
   const tomorrowKey = kyivDateKey(now, 1);
 
-  const [currentResult, pendingResult, holidayResult] = await Promise.all([
+  const [currentResult, pendingResult, holidayResult, workSchedules] = await Promise.all([
     admin
       .schema("tosho")
       .from("team_absences")
@@ -486,6 +487,7 @@ export async function renderWhoIsAbsent(params: {
       .select("day,note,is_workday")
       .eq("workspace_id", workspaceId)
       .in("day", [todayKey, tomorrowKey]),
+    loadWorkSchedules(admin, [workspaceId]),
   ]);
   if (currentResult.error) throw new Error(`team_absences: ${currentResult.error.message}`);
 
@@ -498,9 +500,32 @@ export async function renderWhoIsAbsent(params: {
   const emojiOf = (row: AbsenceJournalRow) => ABSENCE_EMOJI[kindOf(row)] ?? "📌";
   const kindLabel = (row: AbsenceJournalRow) => ABSENCE_KIND_LABELS[kindOf(row)] ?? "Відсутність";
 
-  const rows = ((currentResult.data ?? []) as AbsenceJournalRow[]).filter(
+  const journalRows = ((currentResult.data ?? []) as AbsenceJournalRow[]).filter(
     (row) => row.start_date && row.end_date && label(row.user_id)
   );
+
+  const holidays = new Map(
+    ((holidayResult.data ?? []) as Array<{ day?: string | null; note?: string | null; is_workday?: boolean | null }>)
+      .filter((row) => row.day && (row.note ?? "").trim())
+      .map((row) => [
+        row.day as string,
+        { name: (row.note ?? "").trim(), isWorkday: row.is_workday === true },
+      ])
+  );
+
+  /*
+   * Постійний графік — теж «з дому», просто без рядка в журналі: він живе
+   * патерном у team_work_schedules (REQ-166). Без цього бот на питання «хто
+   * сьогодні з дому» відповідав лише про разові записи.
+   */
+  const scheduleRows = scheduleRowsForDates({
+    schedules: workSchedules,
+    dateKeys: [todayKey],
+    absences: journalRows,
+    exceptions: new Map(Array.from(holidays.entries()).map(([day, holiday]) => [day, holiday.isWorkday])),
+  }).filter((row) => label(row.user_id));
+
+  const rows: AbsenceJournalRow[] = [...journalRows, ...scheduleRows];
 
   // «З дому» — присутність, а не відсутність: окрема секція, не в лічильнику.
   const isWfh = (row: AbsenceJournalRow) => kindOf(row) === "wfh";
@@ -511,15 +536,6 @@ export async function renderWhoIsAbsent(params: {
     .sort((a, b) => (a.end_date! < b.end_date! ? -1 : 1));
   const startTomorrow = rows.filter((row) => !isWfh(row) && row.start_date === tomorrowKey);
   const backTomorrow = today.filter((row) => row.end_date === todayKey);
-
-  const holidays = new Map(
-    ((holidayResult.data ?? []) as Array<{ day?: string | null; note?: string | null; is_workday?: boolean | null }>)
-      .filter((row) => row.day && (row.note ?? "").trim())
-      .map((row) => [
-        row.day as string,
-        { name: (row.note ?? "").trim(), isWorkday: row.is_workday === true },
-      ])
-  );
 
   const lines: string[] = [];
 

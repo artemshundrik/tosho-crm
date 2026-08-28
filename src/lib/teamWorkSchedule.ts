@@ -16,8 +16,10 @@
  * teamAbsenceCalendar.
  */
 
-import { eachDateKey, isBusinessDay } from "@/lib/teamAbsenceCalendar";
-import type { TeamAbsence } from "@/lib/teamAbsences";
+import { eachDateKey, isBusinessDay } from "./teamAbsenceCalendar";
+// Лише ТИП — імпорт стирається при компіляції, тож серверний бандл не тягне
+// сюди supabase-клієнт із teamAbsences.ts (цей модуль читають і Netlify-функції).
+import type { TeamAbsence } from "./teamAbsences";
 
 export const WORK_MODES = ["office", "remote"] as const;
 export type WorkMode = (typeof WORK_MODES)[number];

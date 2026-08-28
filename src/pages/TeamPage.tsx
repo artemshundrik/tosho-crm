@@ -594,16 +594,23 @@ export function TeamPage() {
     ];
   }, [absences, exceptions, workSchedules, year]);
 
-  /** Хто відсутній сьогодні — з журналу, а не з поля профілю. */
+  /**
+   * Де людина сьогодні — з журналу й графіка, а не з поля профілю.
+   *
+   * Джерело саме `liveAbsences`, бо постійний графік рядків у журналі не
+   * створює: без нього чип на картці бухгалтерки у вівторок казав «На місці»,
+   * хоч планер поруч малював «з дому». «Відсутніх» це не чіпає — там і далі
+   * стоїть isPresenceKind, а «з дому» присутністю бути не перестало.
+   */
   const absenceTodayByUser = useMemo(() => {
     const map = new Map<string, TeamAbsence>();
-    (absences ?? []).forEach((absence) => {
+    liveAbsences.forEach((absence) => {
       if (absence.status !== "approved") return;
       if (absence.startDate > todayKey || absence.endDate < todayKey) return;
       map.set(absence.userId, absence);
     });
     return map;
-  }, [absences, todayKey]);
+  }, [liveAbsences, todayKey]);
 
   /** Найближчий запит на погодженні по людині. */
   const pendingByUser = useMemo(() => {

@@ -4,6 +4,9 @@ import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } f
 import { getCanonicalAvatarReference, getImmediateAvatarDisplayUrl, sanitizeAvatarReference } from "@/lib/avatarUrl";
 import { normalizeEmploymentStatus, type EmploymentStatus } from "@/lib/employment";
 import { defaultModuleAccess, normalizeModuleAccess, type ModuleAccess } from "@/lib/moduleAccess";
+import { expandSchedulesToAbsences } from "@/lib/teamWorkSchedule";
+import { listTeamWorkSchedules } from "@/lib/teamWorkScheduleQueries";
+import type { TeamAbsenceKind } from "@/lib/teamAbsences";
 import { getCurrentUser } from "./currentUser";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
@@ -605,6 +608,65 @@ async function loadTodayAbsenceStatuses(workspaceId: string): Promise<Map<string
     // Журнал недоступний — краще показати «доступний», ніж зламати весь довідник.
     console.warn("[directory] today absences unavailable", error);
   }
+
+  /*
+   * Постійний графік теж має відповідати на «де людина сьогодні» (REQ-166).
+   * Рядка в журналі він не створює, тож без цього підказка про бухгалтерку у
+   * вівторок мовчала б, хоч у планері поруч стоїть «з дому».
+   *
+   * Ті, у кого запис уже є, лишаються як є: журнал сильніший за графік.
+   */
+  try {
+    const [schedules, exceptionRows] = await Promise.all([
+      listTeamWorkSchedules({ workspaceId, from: todayKey, to: todayKey }),
+      supabase
+        .schema("tosho")
+        .from("ua_workday_exceptions")
+        .select("day,is_workday")
+        .eq("workspace_id", workspaceId)
+        .eq("day", todayKey),
+    ]);
+    if (schedules.length > 0) {
+      const exceptions = new Map(
+        ((exceptionRows.data ?? []) as Array<{ day?: string | null; is_workday?: boolean | null }>)
+          .filter((row) => row.day)
+          .map((row) => [row.day as string, row.is_workday === true])
+      );
+      const known = Array.from(byUser.entries()).map(([userId, absence]) => ({
+        id: "",
+        userId,
+        startDate: absence.startDate ?? todayKey,
+        endDate: absence.endDate ?? todayKey,
+        kind: (absence.kind ?? "other") as TeamAbsenceKind,
+        status: "approved" as const,
+        comment: null,
+        requestedBy: null,
+        decidedBy: null,
+        decidedAt: null,
+        createdAt: null,
+      }));
+      expandSchedulesToAbsences({
+        schedules,
+        from: todayKey,
+        to: todayKey,
+        exceptions,
+        absences: known,
+      }).forEach((row) => {
+        byUser.set(row.userId, {
+          // Статус для wfh нікуди не йде: applyTodayAbsence бачить вид у
+          // AVAILABLE_ABSENCE_KINDS і лишає людину доступною. Кладемо те саме
+          // значення, що й журнал для «з дому», щоб гілки не розійшлись.
+          status: ABSENCE_KIND_TO_AVAILABILITY.wfh ?? "offline",
+          kind: "wfh",
+          startDate: row.startDate,
+          endDate: row.endDate,
+        });
+      });
+    }
+  } catch (error) {
+    console.warn("[directory] work schedules unavailable", error);
+  }
+
   return byUser;
 }
 

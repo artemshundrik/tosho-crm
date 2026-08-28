@@ -16,6 +16,7 @@ import {
   weeklyReleaseLine,
 } from "./_lib/releasesDigest";
 import { fetchTriageCreatedAt, inboxLine, summarizeInbox } from "./_lib/devRequestsDigest";
+import { loadWorkSchedules, scheduleRowsForDates } from "./_lib/workSchedules";
 import {
   TONE_EMOJI,
   collectSystemSignals,
@@ -693,7 +694,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
         .map((m) => [m.userId, shortName((m.fullName ?? "").trim())])
     );
 
-    const [currentAbs, pendingAbs, holidayRows] = await Promise.all([
+    const [currentAbs, pendingAbs, holidayRows, workSchedules] = await Promise.all([
       admin
         .schema("tosho")
         .from("team_absences")
@@ -719,6 +720,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
         .select("day,note,is_workday")
         .in("workspace_id", workspaceIds)
         .in("day", [todayKey, tomorrowKey]),
+      loadWorkSchedules(admin, workspaceIds),
     ]);
 
     const holidayByDay = new Map(
@@ -734,9 +736,28 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
     const absKindLabel = (row: AbsRow) =>
       (ABSENCE_KIND_LABELS[(row.kind ?? "other").trim()] ?? "Відсутність").toLowerCase();
 
-    const rows = ((currentAbs.data ?? []) as AbsRow[]).filter(
+    const journalRows = ((currentAbs.data ?? []) as AbsRow[]).filter(
       (r) => r.user_id && r.start_date && r.end_date && nameByUser.has(r.user_id)
     );
+
+    /*
+     * Постійний графік теж «з дому», просто без рядка в журналі. Без цього
+     * звіт казав «🏠 З дому: —» у день, коли півкоманди працює вдома за
+     * графіком (REQ-166).
+     *
+     * Свято сильніше за графік: у неробочий день з календаря дні не
+     * розгортаються взагалі, тож 24 серпня ніхто «з дому» не працює.
+     */
+    const scheduleRows = scheduleRowsForDates({
+      schedules: workSchedules,
+      dateKeys: [todayKey],
+      absences: journalRows,
+      exceptions: new Map(
+        Array.from(holidayByDay.entries()).map(([day, holiday]) => [day, holiday.isWorkday])
+      ),
+    }).filter((row) => nameByUser.has(row.user_id));
+
+    const rows = [...journalRows, ...scheduleRows];
     // «З дому» — присутність: у списку відсутніх їй не місце, окремий рядок.
     const wfhToday = rows.filter((r) => (r.kind ?? "") === "wfh" && r.start_date! <= todayKey);
     const outToday = rows.filter((r) => (r.kind ?? "") !== "wfh" && r.start_date! <= todayKey);
