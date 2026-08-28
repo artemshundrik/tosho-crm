@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-25T15:47:03.600Z",
+  "generatedAt": "2026-08-28T07:39:56.160Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -248,7 +248,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 86,
+      "usedIn": 88,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -323,7 +323,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 5,
+      "usedIn": 7,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -679,7 +679,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
       "homepage": "https://lucide.dev",
-      "usedIn": 186,
+      "usedIn": 196,
       "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
     },
     {
@@ -724,7 +724,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 260,
+      "usedIn": 274,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -846,7 +846,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Спливні повідомлення в кутку: «Збережено», «Не вийшло».",
       "homepage": "https://sonner.emilkowal.ski/",
-      "usedIn": 54,
+      "usedIn": 56,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
     },
     {
@@ -896,16 +896,31 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": null
     },
     {
+      "name": "tsc7",
+      "version": "7.0.2",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": "2026-08-27T23:47:47+03:00",
+      "bumpCommit": {
+        "sha": "8fd0e7f",
+        "subject": "Перевірка типів стала за секунду замість шістнадцяти"
+      },
+      "description": "Той самий TypeScript, версія 7: перевірка типів за 1,4 с замість 16. Стоїть аліасом, тому в скриптах його кличуть повним шляхом.",
+      "homepage": "https://www.typescriptlang.org/",
+      "usedIn": 0,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=www.typescriptlang.org&sz=128"
+    },
+    {
       "name": "typescript",
       "version": "6.0.3",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-25T18:48:42+03:00",
       "bumpCommit": {
-        "sha": "414eedf",
-        "subject": "Initial commit"
+        "sha": "5519d3f",
+        "subject": "Проєкт переїхав на TypeScript 6 — місток перед стрибком на сімку"
       },
-      "description": "Перевіряє типи: ловить помилки до запуску, а не в проді.",
+      "description": "Перевіряє типи: ловить помилки до запуску, а не в проді. Лишається заради лінту — typescript-eslint ще не пускає сімку.",
       "homepage": "https://www.typescriptlang.org/",
       "usedIn": 0,
       "peerRequired": true,
@@ -954,7 +969,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 92,
+      "usedIn": 102,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1041,6 +1056,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "group": "registry"
     },
     {
+      "name": "читачі правил",
+      "note": null,
+      "group": "registry"
+    },
+    {
       "name": "заглушки правил хуків",
       "note": "Рахує місця, де правила React-хуків вимкнені коментарем. Кожна така заглушка вимикає React Compiler для ЦІЛОГО файлу — тобто одна прихована помилка коштує всієї сторінки. Число може лише зменшуватись.",
       "group": "registry"
@@ -1076,12 +1096,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "group": "db"
     }
   ],
-  "tests": 1321,
-  "testFiles": 91,
+  "tests": 1521,
+  "testFiles": 101,
   "lintStubs": 30,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 240473,
+  "sourceLines": 249679,
   "automation": {
     "workflows": [
       {
