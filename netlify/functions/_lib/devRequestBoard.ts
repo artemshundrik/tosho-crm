@@ -1968,9 +1968,9 @@ function commitOutcomeLine(outcome: CommitOutcome): string {
     case "wont_do":
       return `⚠️ ${outcome.label} у «${STATUS_LABELS.wont_do}» — статус не чіпав. Якщо картку таки робили, поверни її на дошку руками.`;
     case "missing":
-      return `❓ ${outcome.label} — такої картки немає. Перевір номер у темі коміта.`;
+      return `❓ ${outcome.label} — такої картки немає. Перевір номер у трейлері «Закриває:».`;
     case "papercut":
-      return `⚠️ ${outcome.label} — це накопичувач дрібниць, статусу йому не ставлю. Закривати треба пункт: ${outcome.label}#p1.`;
+      return `⚠️ ${outcome.label} — це накопичувач дрібниць, статусу йому не ставлю. Закривати треба пункт: «Закриває: ${outcome.label}#p1».`;
     case "failed":
       return `⚠️ ${outcome.label} — запис не вдався, картка лишилась як була.`;
   }

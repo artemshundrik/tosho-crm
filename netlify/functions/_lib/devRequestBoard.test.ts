@@ -588,7 +588,7 @@ describe("розбір дії commit", () => {
     expect(result).toMatchObject({ ok: true, sha: "dfe481f" });
   });
 
-  it("повторений номер у темі коміта — не помилка, просто шум", () => {
+  it("повторений номер у трейлері — не помилка, просто шум", () => {
     expect(parseBoardBody(JSON.stringify({ action: "commit", numbers: [4, 4, "7"], sha: "dfe481f" }))).toMatchObject({
       numbers: [4, 7],
     });
