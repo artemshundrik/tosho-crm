@@ -42,6 +42,7 @@ import { MemberPaySection } from "@/components/team/MemberPaySection";
 import { MODULE_ICONS, MODULES_WITHOUT_MENU_ITEM } from "@/components/team/moduleIcons";
 import { PersonActivityHeatmap } from "@/components/team/PersonActivityHeatmap";
 import { PersonAccessHistorySection, PersonActivitySection } from "@/components/team/PersonDetailSections";
+import { WorkScheduleCard } from "@/components/team/WorkScheduleCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -531,6 +532,17 @@ export default function PersonProfilePage() {
                       {getEmploymentStatusLabel(employment)}
                     </Badge>
                   }
+                />
+                {/*
+                  Графік — в «Огляді», а не в HR: питання «де вона у вівторок»
+                  стосується всієї команди, а не самих керівників. Редагувати
+                  його все одно можуть лише вони.
+                */}
+                <WorkScheduleCard
+                  workspaceId={workspaceId}
+                  userId={person.userId}
+                  actorUserId={viewerUserId ?? null}
+                  canManage={canManage}
                 />
               </div>
             </SectionCard>

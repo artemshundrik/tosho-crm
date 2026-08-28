@@ -117,6 +117,8 @@ import {
   type AbsenceOverlap,
 } from "@/components/team/AbsenceDialog";
 import { AbsencePlanner, type PlannerMark, type PlannerPerson } from "@/components/team/AbsencePlanner";
+import { expandSchedulesToAbsences, type TeamWorkSchedule } from "@/lib/teamWorkSchedule";
+import { listTeamWorkSchedules } from "@/lib/teamWorkScheduleQueries";
 import { AbsenceYearReportDialog } from "@/components/team/AbsenceYearReportDialog";
 import { HolidayEditorDialog } from "@/components/team/HolidayEditorDialog";
 import { QuotaEditorDialog } from "@/components/team/QuotaEditorDialog";
@@ -391,6 +393,11 @@ export function TeamPage() {
   const [pendingAllState, setPendingAll] = useState<TeamAbsence[] | null>(null);
   const pendingAll = pendingAllState ?? absenceCache?.pendingAll ?? null;
   const [absencesLoading, setAbsencesLoading] = useState(false);
+  /**
+   * Постійні графіки роботи. Живуть окремо від журналу: це патерн («вівторок і
+   * п'ятниця — вдома»), а не діапазон дат, і в team_absences його не покласти.
+   */
+  const [workSchedules, setWorkSchedules] = useState<TeamWorkSchedule[]>([]);
   const [balancesState, setBalances] = useState<Map<string, AbsenceBalance> | null>(null);
   const balances = balancesState ?? absenceCache?.balances ?? EMPTY_BALANCES;
   const [exceptionsState, setExceptions] = useState<Map<string, boolean> | null>(null);
@@ -440,7 +447,7 @@ export function TeamPage() {
     try {
       const from = `${year}-01-01`;
       const to = `${year + 1}-01-01`;
-      const [rows, calendar, pendingRows] = await Promise.all([
+      const [rows, calendar, pendingRows, schedules] = await Promise.all([
         listTeamAbsencesInRange({
           workspaceId,
           from,
@@ -452,8 +459,16 @@ export function TeamPage() {
         // мусить бути видна вже в грудні (REQ-22). Помилку тут НЕ ковтаємо:
         // тихо порожня черга погоджень — рівно та біда, від якої ця картка.
         listPendingTeamAbsences({ workspaceId }),
+        // Графіки не ковтаємо помилкою разом із рештою: без них планер просто
+        // не покаже постійні «домашні» дні, і це має бути видно в консолі, а не
+        // виглядати як «у людини немає графіка».
+        listTeamWorkSchedules({ workspaceId, from, to }).catch((error) => {
+          console.error("[team] work schedules load failed", error);
+          return [] as TeamWorkSchedule[];
+        }),
       ]);
       setAbsences(rows);
+      setWorkSchedules(schedules);
       setPendingAll(pendingRows);
       setExceptions(calendar.exceptions);
       setHolidayNames(calendar.holidayNames);
@@ -553,10 +568,31 @@ export function TeamPage() {
     return byUser;
   }, [absences, exceptions, year]);
 
-  const liveAbsences = useMemo(
-    () => (absences ?? []).filter((absence) => absence.status === "approved" || absence.status === "pending"),
-    [absences]
-  );
+  /**
+   * Те, що планер малює як «є»: погоджене, подане на погодження — і постійний
+   * графік, розгорнутий у ті самі дні.
+   *
+   * Графік приходить сюди ЗВИЧАЙНИМИ записами «з дому», тому планер, підказки й
+   * підписи працюють із ним тим самим кодом, яким малюють разове «з дому» —
+   * жодної окремої гілки рендера. Свята й погоджені відсутності перекривають
+   * графік усередині розгортання.
+   */
+  const liveAbsences = useMemo(() => {
+    const live = (absences ?? []).filter(
+      (absence) => absence.status === "approved" || absence.status === "pending"
+    );
+    if (workSchedules.length === 0) return live;
+    return [
+      ...live,
+      ...expandSchedulesToAbsences({
+        schedules: workSchedules,
+        from: `${year}-01-01`,
+        to: `${year}-12-31`,
+        exceptions,
+        absences: live,
+      }),
+    ];
+  }, [absences, exceptions, workSchedules, year]);
 
   /** Хто відсутній сьогодні — з журналу, а не з поля профілю. */
   const absenceTodayByUser = useMemo(() => {
