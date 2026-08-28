@@ -95,6 +95,7 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { TeamPulsePanel, type PulsePerson } from "@/components/team/TeamPulsePanel";
+import { normalizeJobRoleInput, savePersonRoles } from "@/features/team/personRoles";
 import { useAuth } from "@/auth/AuthProvider";
 import { useTeamLastSeen } from "@/hooks/useTeamLastSeen";
 import type { PulseRange } from "@/components/team/pulsePeriod";
@@ -317,10 +318,6 @@ function getJobRoleLabel(role: string | null) {
   return formatJobRole(role) || "Без ролі";
 }
 
-function normalizeJobRoleInput(role: string | null) {
-  return !role || role === "none" ? null : role;
-}
-
 function getAccessBadgeClass(role: string | null) {
   if (role === "owner") return "tone-accent";
   if (role === "admin") return "bg-info-soft text-info-foreground border-info-soft-border";
@@ -408,19 +405,6 @@ function getErrorMessage(error: unknown, fallback = "Unknown error") {
   return fallback;
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function isRecoverableRoleUpdateError(message: string) {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("does not exist") ||
-    normalized.includes("relation") ||
-    normalized.includes("column") ||
-    normalized.includes("cannot update view") ||
-    normalized.includes("could not find the table")
-  );
-}
-
 function isRecoverableMemberDeleteError(message: string) {
   const normalized = message.toLowerCase();
   return (
@@ -430,11 +414,6 @@ function isRecoverableMemberDeleteError(message: string) {
     normalized.includes("could not find the table") ||
     normalized.includes("schema cache")
   );
-}
-
-function normalizeRoleForCompare(value: string | null | undefined) {
-  if (!value || value === "member") return null;
-  return value;
 }
 
 function isRecoverableTeamProfileError(message: string) {
@@ -1889,6 +1868,12 @@ export function TeamMembersPage() {
     await saveMemberProfile();
   };
 
+  /**
+   * Тонка обгортка над спільним `savePersonRoles`: сам каскад запису живе в
+   * `src/features/team/personRoles.ts`, бо ним користується ще й картка людини.
+   * Тут лишається те, що належить сторінці, — перевірки прав актора, тости й
+   * оновлення списку.
+   */
   const saveMemberRoles = async () => {
     if (!editMember || !workspaceId || !canManage) return;
     if (!isSuperAdmin && (editMember.access_role ?? null) === "owner") {
@@ -1899,267 +1884,28 @@ export function TeamMembersPage() {
       toast.error("Admin не може призначати Super Admin");
       return;
     }
-    const nextAccessRole = editAccessRole;
-    const nextJobRole = editJobRole;
-    const normalizedAccessRole = nextAccessRole === "member" ? null : nextAccessRole;
-    const normalizedJobRole = normalizeJobRoleInput(nextJobRole);
-    const accessRoleChanged = (editMember.access_role ?? "member") !== nextAccessRole;
-    const jobRoleChanged = (editMember.job_role ?? "none") !== nextJobRole;
-    const roleDidChange =
-      accessRoleChanged || jobRoleChanged;
-    if (!roleDidChange) {
-      return;
-    }
-
-    const verifyRoles = async () => {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("memberships_view")
-        .select("access_role,job_role")
-        .eq("workspace_id", workspaceId)
-        .eq("user_id", editMember.user_id)
-        .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
-
-      if (error) throw new Error(error.message);
-      if (!data) return false;
-
-      const currentAccessRole = normalizeRoleForCompare(data.access_role ?? null);
-      const currentJobRole = normalizeRoleForCompare(data.job_role ?? null);
-      return (
-        currentAccessRole === normalizeRoleForCompare(normalizedAccessRole) &&
-        currentJobRole === normalizeRoleForCompare(normalizedJobRole)
-      );
-    };
-
-    const verifyRolesEventually = async (attempts = 5, delayMs = 120) => {
-      for (let i = 0; i < attempts; i += 1) {
-        const ok = await verifyRoles();
-        if (ok) return true;
-        if (i < attempts - 1) {
-          await sleep(delayMs);
-        }
-      }
-      return false;
-    };
 
     setEditBusy(true);
     try {
-      const fallbackUpdateRolesDirectly = async () => {
-        const membershipUpdateSchemas = ["tosho", "public"] as const;
-        const { data: membershipTarget, error: membershipTargetError } = await supabase
-          .schema("tosho")
-          .from("memberships_view")
-          .select("id")
-          .eq("workspace_id", workspaceId)
-          .eq("user_id", editMember.user_id)
-          .maybeSingle<{ id?: string | null }>();
-
-        if (membershipTargetError) throw new Error(membershipTargetError.message);
-        const membershipId = membershipTarget?.id ?? null;
-
-        const attempts: Array<{
-          tableName: string;
-          payload: Record<string, string | null>;
-          scopes: Array<"workspace_user" | "membership_id" | "team_user">;
-        }> = [
-          {
-            tableName: "memberships",
-            payload: {
-              ...(accessRoleChanged ? { access_role: normalizedAccessRole } : {}),
-              ...(jobRoleChanged ? { job_role: normalizedJobRole } : {}),
-            },
-            scopes: ["workspace_user", "membership_id"] as Array<"workspace_user" | "membership_id" | "team_user">,
-          },
-          {
-            tableName: "memberships",
-            payload: {
-              ...(accessRoleChanged ? { role: normalizedAccessRole ?? "member" } : {}),
-              ...(jobRoleChanged ? { job_role: normalizedJobRole } : {}),
-            },
-            scopes: ["workspace_user", "membership_id"] as Array<"workspace_user" | "membership_id" | "team_user">,
-          },
-          {
-            tableName: "workspace_members",
-            payload: {
-              ...(accessRoleChanged ? { access_role: normalizedAccessRole } : {}),
-              ...(jobRoleChanged ? { job_role: normalizedJobRole } : {}),
-            },
-            scopes: ["workspace_user", "membership_id"] as Array<"workspace_user" | "membership_id" | "team_user">,
-          },
-          {
-            tableName: "workspace_members",
-            payload: {
-              ...(accessRoleChanged ? { role: normalizedAccessRole ?? "member" } : {}),
-              ...(jobRoleChanged ? { job_role: normalizedJobRole } : {}),
-            },
-            scopes: ["workspace_user", "membership_id"] as Array<"workspace_user" | "membership_id" | "team_user">,
-          },
-          {
-            tableName: "workspace_memberships",
-            payload: {
-              ...(accessRoleChanged ? { access_role: normalizedAccessRole } : {}),
-              ...(jobRoleChanged ? { job_role: normalizedJobRole } : {}),
-            },
-            scopes: ["workspace_user", "membership_id"] as Array<"workspace_user" | "membership_id" | "team_user">,
-          },
-          {
-            tableName: "workspace_memberships",
-            payload: {
-              ...(accessRoleChanged ? { role: normalizedAccessRole ?? "member" } : {}),
-              ...(jobRoleChanged ? { job_role: normalizedJobRole } : {}),
-            },
-            scopes: ["workspace_user", "membership_id"] as Array<"workspace_user" | "membership_id" | "team_user">,
-          },
-          {
-            tableName: "team_members",
-            payload: {
-              ...(accessRoleChanged ? { access_role: normalizedAccessRole } : {}),
-              ...(jobRoleChanged ? { job_role: normalizedJobRole } : {}),
-            },
-            scopes: ["membership_id", "team_user"] as Array<"workspace_user" | "membership_id" | "team_user">,
-          },
-          {
-            tableName: "team_members",
-            payload: {
-              ...(accessRoleChanged ? { role: normalizedAccessRole ?? "member" } : {}),
-              ...(jobRoleChanged ? { job_role: normalizedJobRole } : {}),
-            },
-            scopes: ["membership_id", "team_user"] as Array<"workspace_user" | "membership_id" | "team_user">,
-          },
-        ].filter((attempt) => Object.keys(attempt.payload).length > 0);
-
-        let lastRecoverableError = "Не вдалося оновити ролі напряму";
-        let wroteData = false;
-        for (const attempt of attempts) {
-          for (const scope of attempt.scopes) {
-            for (const schemaName of membershipUpdateSchemas) {
-              if (scope === "membership_id" && !membershipId) {
-                continue;
-              }
-
-              const { error } =
-                scope === "workspace_user"
-                  ? await supabase
-                      .schema(schemaName)
-                      .from(attempt.tableName as never)
-                      .update(attempt.payload as never)
-                      .eq("workspace_id", workspaceId)
-                      .eq("user_id", editMember.user_id)
-                  : scope === "membership_id"
-                    ? await supabase
-                        .schema(schemaName)
-                        .from(attempt.tableName as never)
-                        .update(attempt.payload as never)
-                        .eq("id", membershipId as string)
-                    : await supabase
-                        .schema(schemaName)
-                        .from(attempt.tableName as never)
-                        .update(attempt.payload as never)
-                        // team_id, не workspaceId — інакше оновлення ролей у
-                        // public.team_members мовчки не торкалось жодного рядка
-                        // (саме тому там досі «сміття» замість ролей).
-                        .eq("team_id", teamId ?? "")
-                        .eq("user_id", editMember.user_id);
-
-              if (error) {
-                if (!isRecoverableRoleUpdateError(error.message)) {
-                  throw new Error(error.message);
-                }
-                lastRecoverableError = `${schemaName}.${attempt.tableName}[${scope}]: ${error.message}`;
-                continue;
-              }
-
-              wroteData = true;
-              const updated = await verifyRolesEventually();
-              if (updated) return;
-
-              // If write succeeded in one schema, do not continue
-              // trying the same attempt in another schema just to avoid
-              // false-negative recoverable errors.
-              break;
-            }
-          }
-        }
-
-        if (wroteData) {
-          const eventuallyUpdated = await verifyRolesEventually(8, 150);
-          if (eventuallyUpdated) return;
-          // DB write likely succeeded but membership view can lag.
-          // Do not raise a blocking error in this case.
-          return;
-        }
-
-        throw new Error(lastRecoverableError);
-      };
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) {
-        throw new Error("Не вдалося підтвердити авторизацію");
-      }
-
-      const response = await fetch("/.netlify/functions/create-workspace-invite", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          mode: "update_member_roles",
-          userId: editMember.user_id,
-          accessRole: nextAccessRole,
-          jobRole: nextJobRole,
-        }),
+      const result = await savePersonRoles({
+        workspaceId,
+        teamId,
+        userId: editMember.user_id,
+        currentAccessRole: editMember.access_role ?? null,
+        currentJobRole: editMember.job_role ?? null,
+        nextAccessRole: editAccessRole,
+        nextJobRole: editJobRole,
       });
+      if (!result.changed) return;
 
-      const payload = await parseJsonSafe<{
-        error?: string;
-        accessRole?: string | null;
-        jobRole?: string | null;
-      }>(response);
-
-      let appliedByRecoverableServerError = false;
-      if (!response.ok) {
-        if (response.status === 404) {
-          await fallbackUpdateRolesDirectly();
-        } else {
-          const message = payload?.error || `Не вдалося оновити ролі (HTTP ${response.status})`;
-          if (isRecoverableRoleUpdateError(message)) {
-            const updated = await verifyRolesEventually(8, 150);
-            if (!updated) throw new Error(message);
-            appliedByRecoverableServerError = true;
-          } else {
-            throw new Error(message);
-          }
-        }
-      }
-
-      if (response.ok || appliedByRecoverableServerError) {
-        const savedAccessRole: string | null = payload?.accessRole ?? normalizedAccessRole;
-        const savedJobRole: string | null = payload?.jobRole ?? normalizedJobRole;
-
-        setMembers((prev) =>
-          prev.map((member) =>
-            member.user_id === editMember.user_id
-              ? { ...member, access_role: savedAccessRole, job_role: savedJobRole }
-              : member
-          )
-        );
-      } else {
-        setMembers((prev) =>
-          prev.map((member) =>
-            member.user_id === editMember.user_id
-              ? { ...member, access_role: normalizedAccessRole, job_role: normalizedJobRole }
-              : member
-          )
-        );
-      }
-
-      if (!response.ok && response.status === 404) {
-        toast.success("Права учасника оновлено (fallback)");
-      } else {
-        toast.success("Права учасника оновлено");
-      }
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.user_id === editMember.user_id
+            ? { ...member, access_role: result.accessRole, job_role: result.jobRole }
+            : member
+        )
+      );
+      toast.success(result.viaFallback ? "Права учасника оновлено (fallback)" : "Права учасника оновлено");
     } catch (error: unknown) {
       toast.error("Не вдалося змінити ролі", { description: getErrorMessage(error) });
     } finally {
