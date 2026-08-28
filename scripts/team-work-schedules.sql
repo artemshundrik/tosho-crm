@@ -16,8 +16,6 @@
 --
 -- Безпечно застосовувати повторно.
 
-begin;
-
 create table if not exists tosho.team_work_schedules (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null,
@@ -42,17 +40,32 @@ alter table tosho.team_work_schedules
 
 -- Значення днів звіряємо в БАЗІ теж. Той самий урок, що з видами відсутностей:
 -- значення, якого не знає жоден бік, мовчки перетворюється на сміття.
+--
+-- Через функцію, а не прямим підзапитом: check-констрейнт підзапитів не
+-- приймає взагалі («cannot use subquery in check constraint»), а обійтись
+-- самими операторами jsonb не вийшло — ключі відсіює `-`, а от значення без
+-- обходу пар не перевірити.
+create or replace function tosho.is_valid_work_schedule_days(days jsonb)
+returns boolean
+language sql
+immutable
+as $$
+  select days is null
+    or (
+      -- жодного ключа поза днями тижня…
+      days - array['1', '2', '3', '4', '5', '6', '7'] = '{}'::jsonb
+      -- …і жодного значення поза двома режимами
+      and not exists (
+        select 1 from jsonb_each_text(days) as entry(key, value)
+        where entry.value not in ('office', 'remote')
+      )
+    );
+$$;
+
 alter table tosho.team_work_schedules drop constraint if exists team_work_schedules_days_chk;
 alter table tosho.team_work_schedules
   add constraint team_work_schedules_days_chk
-  check (
-    days is null
-    or not exists (
-      select 1
-      from jsonb_each_text(days) as entry(key, value)
-      where entry.key !~ '^[1-7]$' or entry.value not in ('office', 'remote')
-    )
-  );
+  check (tosho.is_valid_work_schedule_days(days));
 
 create index if not exists team_work_schedules_workspace_user_idx
   on tosho.team_work_schedules (workspace_id, user_id, effective_from desc);
@@ -157,7 +170,5 @@ using (
 -- anon не дає нічого: графік — це персональні дані про режим роботи людини.
 revoke all on tosho.team_work_schedules from anon;
 grant select, insert, update, delete on tosho.team_work_schedules to authenticated;
-
-commit;
 
 notify pgrst, 'reload schema';
