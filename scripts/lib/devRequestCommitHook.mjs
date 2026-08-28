@@ -207,6 +207,51 @@ export function extractChecklistMentions(message) {
 }
 
 /**
+ * Скільки файлів і рядків ще схоже на дрібницю.
+ *
+ * Числа не з теорії: заміряні по викочених дрібницях — вони вкладаються в один
+ * файл і кілька десятків рядків. Поріг навмисно тісний, бо ціна помилки
+ * несиметрична: зайве нагадування на великому коміті — це шум, який я почну
+ * гортати повз, і тоді воно не спрацює й там, де треба.
+ */
+const SMALL_FILES = 3;
+const SMALL_LINES = 80;
+
+/**
+ * Чи схожий цей коміт на дрібницю, яку мали б записати рядком у полицю.
+ *
+ * Розбирає рядок `git show --shortstat`. Немає рядка (перший коміт, злиття) —
+ * вважаємо, що не схожий: мовчання дешевше за здогад.
+ */
+export function looksLikePapercut(shortstat) {
+  const text = String(shortstat ?? "");
+  const files = Number(/(\d+) files? changed/.exec(text)?.[1] ?? 0);
+  if (files === 0 || files > SMALL_FILES) return false;
+  const inserted = Number(/(\d+) insertions?/.exec(text)?.[1] ?? 0);
+  const deleted = Number(/(\d+) deletions?/.exec(text)?.[1] ?? 0);
+  return inserted + deleted <= SMALL_LINES;
+}
+
+/**
+ * Нагадування на дрібному коміті без трейлера.
+ *
+ * НАВІЩО. 29.08.2026 я зробив чотири правки інтерфейсу, яких Артем попросив у
+ * сесії, і не записав жодної: правило «просить зробити — це робота, а не
+ * картка» стосувалось повної картки, а я поширив його на полицю дрібниць. День
+ * із чотирма правками виглядав на дошці як день без жодної.
+ *
+ * ЧОМУ НАГАДУВАННЯ, А НЕ ГЕЙТ. Коміт без трейлера — законний стан: шматок
+ * великої картки, документація, налагодження. Блокувати означало б навчити
+ * обходити. А от ДРІБНИЙ коміт без трейлера — майже завжди та сама помилка,
+ * тож поріг тісний, і рядок з'являється рівно тоді, коли адресу ще не пізно
+ * поставити.
+ */
+const PAPERCUT_REMINDER =
+  "[запити] коміт дрібний і нічого не закриває.\n" +
+  "           Якщо це дрібниця — запиши її рядком у полицю «Дрібниці: <напрям>»\n" +
+  "           і закрий трейлером «Закриває: REQ-N#pM». Записати Й зробити, не «або».";
+
+/**
  * Значення з файла виду KEY=value.
  *
  * Свій розбір, а не залежність: хук мусить працювати з голим node, ще до
@@ -248,7 +293,12 @@ async function main() {
   const message = git(["log", "-1", "--pretty=%B"]);
   const numbers = extractRequestNumbers(message);
   const items = extractChecklistMentions(message);
-  if (numbers.length === 0 && items.length === 0) return;
+  if (numbers.length === 0 && items.length === 0) {
+    if (looksLikePapercut(git(["show", "--shortstat", "--format=", "HEAD"]))) {
+      console.log(PAPERCUT_REMINDER);
+    }
+    return;
+  }
 
   const token = readToken();
   if (!token) {

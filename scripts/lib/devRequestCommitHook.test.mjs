@@ -4,6 +4,7 @@ import {
   extractMentions,
   extractRequestNumbers,
   findProseMentions,
+  looksLikePapercut,
   MAX_NUMBERS,
   readEnvValue,
   scanMentions,
@@ -239,5 +240,40 @@ describe("літера в адресі пункта", () => {
     const message = "Перевірка типів пришвидшилась\n\nЗакриває: REQ-123#t3";
     expect(extractMentions(message)).toEqual([{ number: 123, item: "t3" }]);
     expect(extractRequestNumbers(message)).toEqual([]);
+  });
+});
+
+
+/**
+ * Нагадування про полицю дрібниць. Пороги тісні навмисно: зайвий рядок на
+ * великому коміті — це шум, який починаєш гортати повз, і тоді нагадування не
+ * спрацює й там, де воно потрібне.
+ */
+describe("чи схоже на дрібницю", () => {
+  it("один файл і кілька рядків — так", () => {
+    expect(looksLikePapercut(" 1 file changed, 7 insertions(+), 4 deletions(-)")).toBe(true);
+  });
+
+  it("три файли на вісімдесят рядків — ще так", () => {
+    expect(looksLikePapercut(" 3 files changed, 60 insertions(+), 20 deletions(-)")).toBe(true);
+  });
+
+  it("чотири файли — вже ні, скільки б там не було рядків", () => {
+    expect(looksLikePapercut(" 4 files changed, 5 insertions(+)")).toBe(false);
+  });
+
+  it("один файл, але переписаний цілком — ні", () => {
+    expect(looksLikePapercut(" 1 file changed, 247 insertions(+), 26 deletions(-)")).toBe(false);
+  });
+
+  it("рядка немає (злиття, перший коміт) — мовчимо", () => {
+    expect(looksLikePapercut("")).toBe(false);
+    expect(looksLikePapercut(undefined)).toBe(false);
+    expect(looksLikePapercut(null)).toBe(false);
+  });
+
+  it("тільки вилучення теж рахуються", () => {
+    expect(looksLikePapercut(" 1 file changed, 12 deletions(-)")).toBe(true);
+    expect(looksLikePapercut(" 2 files changed, 300 deletions(-)")).toBe(false);
   });
 });
