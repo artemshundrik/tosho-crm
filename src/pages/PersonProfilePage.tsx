@@ -32,7 +32,6 @@ import { PersonAccessHistorySection, PersonActivitySection } from "@/components/
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { Switch } from "@/components/ui/switch";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { getCurrentUserId } from "@/lib/currentUser";
@@ -79,6 +78,14 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   hr: "HR",
 };
 
+/**
+ * Приглушене число біля назви вкладки — як у картці прорахунку.
+ * Показує обсяг, не змушуючи відкривати: скільки модулів, скільки дій.
+ */
+const SECTION_BADGES: Partial<Record<SectionKey, string>> = {
+  access: `${MODULE_GROUPS.reduce((sum, group) => sum + group.modules.length, 0)} модулів`,
+};
+
 const JOB_ROLE_OPTIONS = [
   { value: "none", label: "Без посади" },
   ...Object.entries(JOB_ROLE_NAMES).map(([value, label]) => ({ value, label })),
@@ -99,6 +106,19 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 border-b border-border/40 py-2 last:border-b-0">
       <span className={cn(CAP, "w-[9.5rem] shrink-0")}>{label}</span>
       <span className="min-w-0 flex-1 text-sm font-medium text-foreground">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Компактний рядок рейки. Вужчий за `Row` у змісті: у 19 rem підпис на 9.5 rem
+ * не лишає значенню місця, а обрізана пошта в рейці — це рейка без сенсу.
+ */
+function RailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline gap-3 border-b border-border/40 py-1.5 last:border-b-0">
+      <span className="w-[5.5rem] shrink-0 text-2xs text-muted-foreground">{label}</span>
+      <span className="min-w-0 flex-1 text-[13px] font-medium text-foreground">{value}</span>
     </div>
   );
 }
@@ -316,8 +336,15 @@ export default function PersonProfilePage() {
         Команда
       </Link>
 
-      {/* Шапка — блок особистості: аватар великий, решта підпорядкована йому. */}
+      {/*
+        Шапка — блок особистості: аватар великий, решта підпорядкована йому.
+        Аватар і імʼя звʼязані в одну групу навмисно: коли вони були трьома
+        рівноправними елементами `flex-wrap`, на телефоні кнопки ставали поруч
+        з аватаром, блок імені стискався до нуля — і `truncate` ховав імʼя
+        цілком. Тепер група займає весь рядок, а кнопки переносяться під неї.
+      */}
       <header className="flex flex-wrap items-start gap-x-5 gap-y-4">
+        <div className="flex w-full min-w-0 items-start gap-4 sm:w-auto sm:flex-1">
         <AvatarBase
           /**
            * ОБИДВА джерела. У частини людей заповнений `avatarUrl`, у частини —
@@ -367,6 +394,7 @@ export default function PersonProfilePage() {
             ) : null}
           </div>
         </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {person.phone ? (
             <Button variant="outline" size="sm" asChild>
@@ -387,111 +415,105 @@ export default function PersonProfilePage() {
         </div>
       </header>
 
-      {/* Вкладки горизонталлю — той самий примітив, що на решті сторінок. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 pb-2.5">
-        <SegmentedGroup className="h-auto flex-wrap">
-          {visibleSections.map((key) => (
-            <Button
-              key={key}
-              type="button"
-              variant="segmented"
-              size="xs"
-              aria-pressed={section === key}
-              onClick={() => setSection(key)}
-            >
-              {SECTION_LABELS[key]}
-              {key !== "overview" ? <Lock className="ml-1 h-3 w-3 opacity-60" /> : null}
-            </Button>
-          ))}
-        </SegmentedGroup>
-        {canOpenProfileCard ? (
-          <span className="text-2xs text-muted-foreground">
-            Розділи із замком бачать керівники — у власному профілі людина їх не бачить.
-          </span>
-        ) : null}
+      {/*
+        Вкладки — підкресленням, як у картці прорахунку.
+        Рамкові пігулки давали другу сітку поверх шапки: пʼять коробок у ряд
+        читались як пʼять кнопок дії, і активна губилась серед них. Тут активна
+        тримається вагою тексту й тонкою рискою знизу.
+      */}
+      <div className="-mx-1 border-b border-border/60 px-1">
+        <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {visibleSections.map((key) => {
+            const active = section === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSection(key)}
+                aria-pressed={active}
+                className={cn(
+                  "relative inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                  "after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors",
+                  active
+                    ? "font-semibold text-foreground after:bg-primary"
+                    : "font-medium text-muted-foreground after:bg-transparent hover:text-foreground"
+                )}
+              >
+                <span>{SECTION_LABELS[key]}</span>
+                {SECTION_BADGES[key] ? (
+                  <span
+                    className={cn(
+                      "text-2xs tabular-nums",
+                      active ? "text-muted-foreground" : "text-muted-foreground/75"
+                    )}
+                  >
+                    {SECTION_BADGES[key]}
+                  </span>
+                ) : null}
+                {key !== "overview" ? <Lock className="h-3 w-3 text-muted-foreground/60" /> : null}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
+      {/*
+        Зміст ліворуч, стала рейка праворуч — каркас картки прорахунку.
+        Контакти й «коли був» потрібні на БУДЬ-ЯКІЙ вкладці: керівник відкриває
+        «Доступи», а тоді хоче подзвонити — і раніше мусив вертатись на «Огляд».
+      */}
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]">
       <div className="flex min-w-0 flex-col gap-4">
           {section === "overview" ? (
             <SectionCard title="Огляд" audience="бачить уся команда">
-              {/* Посада й пошта вже стоять у шапці — тут їх немає навмисно:
-                  повторене двічі на одному екрані читається як помилка. */}
-              <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
-                <Group title="Контакти">
-                  <Row
-                    label="Телефон"
-                    value={
-                      person.phone ? (
-                        <a
-                          href={`tel:${person.phone.replace(/\s/g, "")}`}
-                          className="tabular-nums underline-offset-4 hover:underline"
-                        >
-                          {person.phone}
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground">Не вказано</span>
-                      )
-                    }
-                  />
-                  <Row
-                    label="Пошта"
-                    value={
-                      person.email ? (
-                        <a href={`mailto:${person.email}`} className="break-all underline-offset-4 hover:underline">
-                          {person.email}
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground">Не вказано</span>
-                      )
-                    }
-                  />
-                </Group>
-
-                <Group title="У компанії">
-                  <Row
-                    label="У команді з"
-                    value={
-                      person.startDate ? (
-                        <span className="flex flex-wrap items-baseline gap-x-2">
-                          <span className="tabular-nums">{formatEmploymentDate(person.startDate)}</span>
-                          <span className="text-2xs font-normal text-muted-foreground">
-                            {formatEmploymentDuration(person.startDate)}
-                          </span>
+              {/*
+                Контакти переїхали в рейку — вони потрібні на кожній вкладці, а
+                не лише тут. У «Огляді» лишилось те, що описує людину в компанії:
+                скільки вона тут, коли в неї свято, у якому вона стані.
+              */}
+              <Group title="У компанії">
+                <Row
+                  label="У команді з"
+                  value={
+                    person.startDate ? (
+                      <span className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="tabular-nums">{formatEmploymentDate(person.startDate)}</span>
+                        <span className="text-2xs font-normal text-muted-foreground">
+                          {formatEmploymentDuration(person.startDate)}
                         </span>
-                      ) : (
-                        <span className="text-muted-foreground">Не вказано</span>
-                      )
-                    }
-                  />
-                  <Row
-                    label="День народження"
-                    value={
-                      birthday ? (
-                        // Спершу дата, і лише потім «через скільки»: у довіднику
-                        // питання «коли в неї день народження», а не «скільки чекати».
-                        <span className="flex flex-wrap items-baseline gap-x-2">
-                          <span className="tabular-nums">{birthday.dateLabel}</span>
-                          <span className="text-2xs font-normal text-muted-foreground">
-                            {birthday.daysUntil === 0 ? "сьогодні" : birthday.label.toLowerCase()}
-                          </span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Не вказано</span>
+                    )
+                  }
+                />
+                <Row
+                  label="День народження"
+                  value={
+                    birthday ? (
+                      // Спершу дата, і лише потім «через скільки»: у довіднику
+                      // питання «коли в неї день народження», а не «скільки чекати».
+                      <span className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="tabular-nums">{birthday.dateLabel}</span>
+                        <span className="text-2xs font-normal text-muted-foreground">
+                          {birthday.daysUntil === 0 ? "сьогодні" : birthday.label.toLowerCase()}
                         </span>
-                      ) : (
-                        <span className="text-muted-foreground">Не вказано</span>
-                      )
-                    }
-                  />
-                  <Row
-                    label="Присутність"
-                    value={
-                      person.absenceToday
-                        ? "Відсутній сьогодні"
-                        : inactive
-                          ? "Співпрацю завершено"
-                          : "На місці"
-                    }
-                  />
-                </Group>
-              </div>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Не вказано</span>
+                    )
+                  }
+                />
+                <Row label="Посада" value={formatJobRole(person.jobRole) || "Без посади"} />
+                <Row
+                  label="Статус співпраці"
+                  value={
+                    <Badge tone={employmentStatusTone(employment)} size="sm">
+                      {getEmploymentStatusLabel(employment)}
+                    </Badge>
+                  }
+                />
+              </Group>
             </SectionCard>
           ) : null}
 
@@ -573,6 +595,71 @@ export default function PersonProfilePage() {
             </SectionCard>
           ) : null}
         </div>
+
+        {/*
+          Рейка — сталий контекст людини: як до неї достукатись і коли вона
+          була. Ці три речі потрібні незалежно від того, яку вкладку відкрито,
+          тож вони не належать жодній із них.
+        */}
+        <aside className="flex flex-col gap-3 lg:sticky lg:top-2">
+          <section className={cn(CARD, "flex flex-col gap-1 p-4")}>
+            <span className={cn(CAP, "pb-1")}>Як звʼязатись</span>
+            <RailRow
+              label="Телефон"
+              value={
+                person.phone ? (
+                  <a href={`tel:${person.phone.replace(/\s/g, "")}`} className="tabular-nums underline-offset-4 hover:underline">
+                    {person.phone}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )
+              }
+            />
+            <RailRow
+              label="Пошта"
+              value={
+                person.email ? (
+                  <a href={`mailto:${person.email}`} className="block truncate underline-offset-4 hover:underline">
+                    {person.email}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )
+              }
+            />
+            <RailRow
+              label="Присутність"
+              value={
+                person.absenceToday ? (
+                  <span className="text-warning-foreground">Відсутній сьогодні</span>
+                ) : inactive ? (
+                  <span className="text-muted-foreground">Співпрацю завершено</span>
+                ) : (
+                  <span className="tone-text-success">На місці</span>
+                )
+              }
+            />
+          </section>
+
+          {canOpenProfileCard ? (
+            <section className={cn(CARD, "flex flex-col gap-1 p-4")}>
+              <span className={cn(CAP, "pb-1")}>Доступи</span>
+              <RailRow label="Рівень" value={accessLevelLabel(person.accessRole)} />
+              <RailRow label="Посада" value={formatJobRole(person.jobRole) || "Без посади"} />
+              {section !== "access" ? (
+                <button
+                  type="button"
+                  onClick={() => setSection("access")}
+                  className="mt-1.5 w-fit cursor-pointer text-2xs font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                >
+                  Змінити доступи →
+                </button>
+              ) : null}
+            </section>
+          ) : null}
+        </aside>
+      </div>
 
       <ConfirmDialog
         open={employmentDecision !== null}
@@ -791,9 +878,14 @@ function PersonAccessSection({
           </div>
         }
       >
-        {/* Дві колонки на широкому: двадцять модулів у стовпчик тягнули сторінку
-            на два екрани, а перемикач опинявся за пів метра від свого підпису. */}
-        <div className="grid gap-x-10 gap-y-5 xl:grid-cols-2">
+        {/*
+          Кількість колонок вирішує НАЯВНА ширина, а не розмір екрана.
+          Брейкпойнт `xl` тут брехав: поруч зʼявилась рейка на 19 rem, і на
+          широкому моніторі колонка змісту виявлялась вужчою за поріг — двадцять
+          модулів знову ставали стовпчиком на два екрани. `auto-fit` рахує те,
+          що є насправді: два стовпці від 40 rem вільного місця, інакше один.
+        */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(19rem,1fr))] gap-x-10 gap-y-5">
           {MODULE_GROUPS.map((group) => (
             <div key={group.group} className="flex flex-col gap-1">
               <div className={cn(CAP, "pb-1 text-muted-foreground/70")}>{group.label}</div>
