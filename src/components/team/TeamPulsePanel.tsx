@@ -461,7 +461,15 @@ export function TeamPulsePanel({
   return (
     <div className="flex flex-col">
       {/* Range + KPIs */}
-      <div className="flex w-full flex-col gap-5 px-4 pb-8 pt-4 md:px-5 lg:px-6">
+      {/*
+        Та сама міра, що в «Огляді» й у картці людини.
+        Пульс — це список на 11–22 рядки з шістьма колонками, а не широкі дані:
+        на повній ширині 27" смуга частки розтягувалась на 600 px, не додаючи
+        жодного біта, а між іменем і числами зʼявлялась прірва, у якій око
+        губило пару. Матриця лишається на всю ширину навмисно — там ширина
+        несе зміст: колонка = людина.
+      */}
+      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5 px-4 pb-8 pt-4 md:px-5 lg:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "self-start")}>
             {RANGE_OPTIONS.map((option) => (
