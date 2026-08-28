@@ -127,13 +127,10 @@ export function TeamMemberCard({
         "group relative flex h-full flex-col overflow-hidden rounded-inner border border-border/50 bg-card",
         // Ховер той самий, що в «Інтеграціях», — фон і межа, без тіні: система
         // свідомо пласка, тінь лишилась тільки тому, що спливає над сторінкою.
-        // Підйом на піксель дає відчуття «взяв у руки», не заводячи глибини.
-        // Саме `translate`, а не `transform`: у Tailwind v4 утиліта
-        // `-translate-y-px` пише окрему властивість `translate` (перевірено
-        // getComputedStyle — `transform` лишається none), і перехід, навішений
-        // на transform, анімував порожнечу — картка сіпалась без плавності.
-        "transition-[background-color,border-color,translate] duration-base ease-out motion-reduce:transition-none",
-        person.profileHref && "cursor-pointer hover:-translate-y-px hover:border-border hover:bg-muted/30"
+        // Підйому теж немає: пробували на піксель, Артем відхилив 28.08.2026 —
+        // на щільній сітці карток рух під курсором помітніший за саму реакцію.
+        "transition-[background-color,border-color] duration-base ease-out motion-reduce:transition-none",
+        person.profileHref && "cursor-pointer hover:border-border hover:bg-muted/30"
       )}
     >
       <div className="flex items-start gap-3 p-4 pb-0">
