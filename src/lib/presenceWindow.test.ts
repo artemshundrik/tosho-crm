@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { derivePresence, IDLE_WINDOW_MS, ONLINE_WINDOW_MS } from "./presenceWindow";
+import {
+  CLOCK_SKEW_TOLERANCE_MS,
+  derivePresence,
+  IDLE_WINDOW_MS,
+  ONLINE_WINDOW_MS,
+} from "./presenceWindow";
 
 const MINUTE = 60_000;
 
@@ -35,5 +40,29 @@ describe("derivePresence", () => {
       online: false,
       idle: false,
     });
+  });
+
+  it("позначка з майбутнього НЕ робить людину онлайн назавжди", () => {
+    // REQ-184: last_seen_at пише клієнт своїм годинником. Годинник, що спішить
+    // на три години, кладе в базу час на три години вперед — і всі інші бачать
+    // людину онлайн доти, доки реальний час його не наздожене. Вік позначки
+    // при цьому від'ємний, а «менше за вікно» від'ємне число проходить завжди.
+    const state = derivePresence({ hasRealtime: false, ageMs: -3 * 60 * MINUTE, isSelf: false });
+    expect(state).toEqual({ online: false, idle: false });
+  });
+
+  it("дрібний розбіг годинників — це свіжа позначка, а не збій", () => {
+    // Кілька секунд уперед набігає на будь-якій машині без NTP. Гасити через це
+    // присутність означало б лікувати здорових.
+    expect(derivePresence({ hasRealtime: false, ageMs: -20_000, isSelf: false }).online).toBe(true);
+    expect(CLOCK_SKEW_TOLERANCE_MS).toBeGreaterThanOrEqual(60_000);
+  });
+
+  it("живий канал і власна вкладка сильніші за будь-який годинник", () => {
+    // Обидва не спираються на час у базі: realtime — це відкрите з'єднання,
+    // а себе людина бачить онлайн, поки дивиться на екран.
+    const skew = { ageMs: -5 * 60 * MINUTE };
+    expect(derivePresence({ ...skew, hasRealtime: true, isSelf: false }).online).toBe(true);
+    expect(derivePresence({ ...skew, hasRealtime: false, isSelf: true }).online).toBe(true);
   });
 });

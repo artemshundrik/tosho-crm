@@ -9,6 +9,7 @@ import { escapeTelegramHtml } from "./_telegram";
 import { ABSENCE_KIND_LABELS, formatAbsenceShort } from "./_lib/absenceSubmit";
 import { formatJobRole } from "../../src/lib/jobRoles";
 import { formatLastSeenAgo } from "../../src/lib/lastSeen";
+import { CLOCK_SKEW_TOLERANCE_MS } from "../../src/lib/presenceWindow";
 // Людські підписи дій — той самий довідник, що показує вкладка «Пульс».
 // Без нього у відповідь летіли сирі ключі на кшталт design_task_brief_change_request.
 import { actionLabel, isNoiseActivity } from "../../src/components/team/activityCategories";
@@ -101,15 +102,27 @@ export async function loadPresence(admin: SupabaseClient): Promise<Map<string, P
  */
 export function formatLastSeen(lastSeenAt: string | null, now: Date): string {
   if (!lastSeenAt) return "не заходив";
-  const minutes = Math.floor((now.getTime() - new Date(lastSeenAt).getTime()) / 60_000);
-  if (minutes < 3) return "зараз онлайн";
+  const ageMs = now.getTime() - new Date(lastSeenAt).getTime();
+  // Позначка з майбутнього поза допуском — несправний годинник, а не присутність
+  // (REQ-184). Форматер нижче про це знає й віддасть дату замість «щойно».
+  if (ageMs < -CLOCK_SKEW_TOLERANCE_MS) return formatLastSeenAgo(lastSeenAt, now);
+  if (Math.floor(Math.max(0, ageMs) / 60_000) < 3) return "зараз онлайн";
   return formatLastSeenAgo(lastSeenAt, now);
 }
 
-/** Онлайн вважаємо тих, хто пінгував протягом 5 хвилин. */
+/**
+ * Онлайн вважаємо тих, хто пінгував протягом 5 хвилин.
+ *
+ * Верхня межа тут не менш важлива за нижню: `last_seen_at` пише клієнт своїм
+ * годинником, і позначка з майбутнього проходила перевірку «менше за 5 хвилин»
+ * завжди — асистент звітував «зараз онлайн» про людину, яка пішла ще вчора
+ * (REQ-184). Той самий допуск, що в CRM, щоб бот і застосунок не сперечались.
+ */
 export function isOnline(lastSeenAt: string | null, now: Date): boolean {
   if (!lastSeenAt) return false;
-  return now.getTime() - new Date(lastSeenAt).getTime() < 5 * 60_000;
+  const ageMs = now.getTime() - new Date(lastSeenAt).getTime();
+  if (ageMs < -CLOCK_SKEW_TOLERANCE_MS) return false;
+  return Math.max(0, ageMs) < 5 * 60_000;
 }
 
 export type TeamMember = {

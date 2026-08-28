@@ -16,6 +16,8 @@
  * немає), тож усі формулювання навколо цього форматера — іменникові.
  */
 
+import { CLOCK_SKEW_TOLERANCE_MS } from "./presenceWindow";
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -77,27 +79,43 @@ const days_ = (n: number) => pluralUk(n, "день", "дні", "днів");
 const hours_ = (n: number) => `${n} год`;
 const minutes_ = (n: number) => `${n} хв`;
 
+/** Дата замість відносного часу — коли «скільки минуло» не має сенсу. */
+function formatSeenDate(seenMs: number): string {
+  return new Intl.DateTimeFormat("uk-UA", {
+    timeZone: "Europe/Kiev",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(seenMs));
+}
+
 export function formatLastSeenAgo(lastSeenAt: string | null | undefined, now = new Date()): string {
   // Без роду: «не заходив» для половини команди було просто неправильним.
   if (!lastSeenAt) return "візитів не було";
   const seen = new Date(lastSeenAt).getTime();
   if (Number.isNaN(seen)) return "візитів не було";
 
-  const diff = Math.max(0, now.getTime() - seen);
+  const diff = now.getTime() - seen;
+
+  /*
+   * Позначка з майбутнього далі за допуск розбігу — годинник того, хто її
+   * писав, несправний (REQ-184). «Щойно» тут було б неправдою, яка повторюється
+   * щодня, поки реальний час не наздожене той годинник: при збої на добу підпис
+   * казав би «щойно» цілу добу відсутності. Показуємо конкретну дату — те саме,
+   * що для дуже старих позначок: коли відносний час не має сенсу, його місце
+   * займає момент.
+   */
+  if (diff < -CLOCK_SKEW_TOLERANCE_MS) return formatSeenDate(seen);
+
   if (diff < MINUTE) return "щойно";
 
-  const days = Math.floor(diff / DAY);
-  const hours = Math.floor((diff % DAY) / HOUR);
-  const minutes = Math.floor((diff % HOUR) / MINUTE);
+  // Дрібний дрейф уперед уже пройшов гейт вище — тут він читається як нуль.
+  const elapsed = Math.max(0, diff);
+  const days = Math.floor(elapsed / DAY);
+  const hours = Math.floor((elapsed % DAY) / HOUR);
+  const minutes = Math.floor((elapsed % HOUR) / MINUTE);
 
-  if (days >= RELATIVE_LIMIT_DAYS) {
-    return new Intl.DateTimeFormat("uk-UA", {
-      timeZone: "Europe/Kiev",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).format(new Date(seen));
-  }
+  if (days >= RELATIVE_LIMIT_DAYS) return formatSeenDate(seen);
   if (days > 0) return hours > 0 ? `${days_(days)} ${hours_(hours)} тому` : `${days_(days)} тому`;
   if (hours > 0) {
     const minutesMatter = minutes > 0 && hours < MINUTES_DETAIL_LIMIT_HOURS;
