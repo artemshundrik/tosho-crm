@@ -1751,6 +1751,8 @@ export type ChecklistOutcome = {
   text: string;
   result: ChecklistCloseResult;
   message?: string;
+  /** true — цим пунктом закрився останній, і картка поїхала в «Готово локально». */
+  cardMoved?: boolean;
 };
 
 /** Дата закриття пункта — київський настінний день, як усі дедлайни в CRM. */
@@ -1862,10 +1864,33 @@ export async function closeChecklistItemsOnCommit(
       continue;
     }
 
+    /*
+     * ЗАКРИЛИ ОСТАННІЙ ПУНКТ — КАРТКА ЇДЕ В «ГОТОВО ЛОКАЛЬНО».
+     *
+     * Дірка, знайдена на REQ-166 (28.08.2026): усі п'ять пунктів закрились
+     * комітами, а картка лишилась «В роботі», бо голої згадки `REQ-166` у тілі
+     * не було — і не мало бути, поки пункти відкриті. Виходило, що велику
+     * картку неможливо закрити правильним способом: або рухаєш її передчасно
+     * однією згадкою, або не рухаєш ніколи.
+     *
+     * Накопичувач сюди не потрапляє НІКОЛИ — та сама гвардія, що в
+     * recordCommitOnCards: порожній накопичувач не зроблена задача, а прибрана
+     * полиця, і «Готово локально» повело б його через деплой у «Викочено», де
+     * напрям уже не дістати (409).
+     *
+     * «Чекає» рахуємо відкритим: пункт, що стоїть за людиною, не каже «код
+     * написаний», а саме це означає «Готово локально».
+     */
+    const stillOpen = next.some((entry) => String(entry?.state ?? "todo") !== "done");
+    const finishesCard =
+      !stillOpen &&
+      !isPapercutCard({ title }) &&
+      (status === "triage" || status === "queued" || status === "in_progress");
+
     const { data: updated, error: updateError } = await admin
       .schema("tosho")
       .from("dev_requests")
-      .update({ checklist: next })
+      .update(finishesCard ? { checklist: next, status: "done_local" } : { checklist: next })
       .eq("team_id", teamId)
       .eq("number", number)
       .select("number")
@@ -1883,7 +1908,11 @@ export async function closeChecklistItemsOnCommit(
       continue;
     }
 
-    outcomes.push(...pending);
+    outcomes.push(
+      ...pending.map((outcome) =>
+        finishesCard && outcome.result === "closed" ? { ...outcome, cardMoved: true } : outcome
+      )
+    );
   }
 
   return outcomes;
@@ -1894,7 +1923,9 @@ function checklistOutcomeLine(outcome: ChecklistOutcome): string {
   const address = `${outcome.label}#${outcome.item}`;
   switch (outcome.result) {
     case "closed":
-      return `☑️ ${address} — пункт закрито${text}`;
+      return outcome.cardMoved
+        ? `☑️ ${address} — пункт закрито${text}\n${outcome.label} → ${STATUS_LABELS.done_local}: закрито останній пункт`
+        : `☑️ ${address} — пункт закрито${text}`;
     case "already":
       return `${address} і так закритий${text}`;
     case "missing":

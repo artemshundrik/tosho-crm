@@ -1358,6 +1358,77 @@ describe("closeChecklistItemsOnCommit", () => {
     expect(written.every((entry) => entry.state === "done")).toBe(true);
   });
 
+  it("закритий ОСТАННІЙ пункт звичайної картки веде її в «Готово локально»", async () => {
+    /*
+     * Дірка, знайдена на REQ-166: усі п'ять пунктів закриті комітами, а картка
+     * місяць висіла б у «В роботі». Голої згадки REQ-166 у комітах не було
+     * навмисно — саме щоб не закрити картку, поки пункти відкриті, — і закривати
+     * її не лишалось кому. Полиця «В роботі» від цього бреше рівно так само, як
+     * бреха­ло б передчасне «Готово».
+     */
+    const { admin, state } = fakeChecklistAdmin([
+      commitRow({
+        number: 166,
+        title: "Додати індивідуальний графік роботи",
+        status: "in_progress",
+        checklist: items(
+          { id: "p1", text: "перший", state: "done", closed: "2026-08-26", sha: "aaaaaaa" },
+          { id: "p2", text: "другий", state: "todo" }
+        ),
+      }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 166, item: "p2" }], "74ab615", NOW);
+
+    expect(outcomes[0]).toMatchObject({ result: "closed", cardMoved: true });
+    expect(state.updates[0].patch.status).toBe("done_local");
+  });
+
+  it("поки лишається відкритий пункт — статус не чіпаємо", async () => {
+    const { admin, state } = fakeChecklistAdmin([
+      commitRow({
+        number: 166,
+        status: "in_progress",
+        checklist: items({ id: "p1", text: "перший", state: "todo" }, { id: "p2", text: "другий", state: "todo" }),
+      }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 166, item: "p1" }], "74ab615", NOW);
+    expect(outcomes[0].cardMoved).toBeUndefined();
+    expect(Object.keys(state.updates[0].patch)).toEqual(["checklist"]);
+  });
+
+  it("пункт у стані «чекає» — теж відкритий: картка не готова", async () => {
+    // «Готово локально» означає «код написаний». Пункт, що стоїть за людиною,
+    // цього не каже — він каже, що чекають відповіді.
+    const { admin, state } = fakeChecklistAdmin([
+      commitRow({
+        number: 166,
+        status: "in_progress",
+        checklist: items(
+          { id: "p1", text: "перший", state: "todo" },
+          { id: "p2", text: "консультація", state: "waiting", who: "СЕО" }
+        ),
+      }),
+    ]);
+    await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 166, item: "p1" }], "74ab615", NOW);
+    expect(Object.keys(state.updates[0].patch)).toEqual(["checklist"]);
+  });
+
+  it("НАКОПИЧУВАЧ не їде в «Готово локально», навіть коли розгребли все", async () => {
+    /*
+     * Та сама гвардія, що й у recordCommitOnCards, і найдорожча в механізмі:
+     * «Готово локально» → деплой → «Викочено» → 409, і напрям зникає з черги
+     * разом з усіма майбутніми дрібницями. Порожній накопичувач — це не
+     * зроблена задача, а прибрана полиця, яка завтра наповниться знову.
+     */
+    const { admin, state } = fakeChecklistAdmin([
+      papercutRow({ checklist: items({ id: "p1", text: "остання дрібниця", state: "todo" }) }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 180, item: "p1" }], "74ab615", NOW);
+    expect(outcomes[0].cardMoved).toBeUndefined();
+    expect(Object.keys(state.updates[0].patch)).toEqual(["checklist"]);
+    expect(state.rows[0].status).toBe("queued");
+  });
+
   it("уже закритий пункт не переписується — і запису немає взагалі", async () => {
     const { admin, state } = fakeChecklistAdmin([
       papercutRow({ checklist: items({ id: "p1", text: "щось", state: "done", closed: "2026-08-20", sha: "aaaaaaa" }) }),
