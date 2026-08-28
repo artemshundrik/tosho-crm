@@ -17,9 +17,36 @@
  */
 
 import { eachDateKey, isBusinessDay } from "./teamAbsenceCalendar";
-// Лише ТИП — імпорт стирається при компіляції, тож серверний бандл не тягне
-// сюди supabase-клієнт із teamAbsences.ts (цей модуль читають і Netlify-функції).
-import type { TeamAbsence } from "./teamAbsences";
+/**
+ * Мінімальна форма запису журналу — рівно те, що потрібне розгортанню.
+ *
+ * НЕ імпортуємо TeamAbsence: цей модуль читають Netlify-функції, а вони
+ * перевіряються власним tsconfig без аліаса `@/`. Через ланцюг
+ * teamAbsences → supabaseClient перевірка типів функцій падала (спіймано
+ * гейтом перед пушем). Структурна типізація дозволяє передавати сюди
+ * справжні TeamAbsence без жодного каста.
+ */
+type ScheduleAbsence = {
+  userId: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+};
+
+/** Запис, який розгортання ВІДДАЄ: та сама форма, що в журналі відсутностей. */
+export type ScheduleWfhRow = {
+  id: string;
+  userId: string;
+  startDate: string;
+  endDate: string;
+  kind: "wfh";
+  status: "approved";
+  comment: string | null;
+  requestedBy: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  createdAt: string | null;
+};
 
 export const WORK_MODES = ["office", "remote"] as const;
 export type WorkMode = (typeof WORK_MODES)[number];
@@ -104,7 +131,7 @@ export function scheduleForDate(
 }
 
 /** Записи, які перекривають графік: людини в цей день немає взагалі. */
-function occupiedDates(absences: readonly TeamAbsence[]): Map<string, Set<string>> {
+function occupiedDates(absences: readonly ScheduleAbsence[]): Map<string, Set<string>> {
   const byUser = new Map<string, Set<string>>();
   for (const absence of absences) {
     // Заявка на погодженні ще нічого не означає — вона не скасовує графік.
@@ -136,8 +163,8 @@ export function expandSchedulesToAbsences(input: {
   /** Винятки робочого календаря: свята й перенесені дні. */
   exceptions?: Map<string, boolean>;
   /** Уже наявні записи журналу — щоб не дублювати й не сперечатись із ними. */
-  absences?: readonly TeamAbsence[];
-}): TeamAbsence[] {
+  absences?: readonly ScheduleAbsence[];
+}): ScheduleWfhRow[] {
   const byUser = new Map<string, TeamWorkSchedule[]>();
   for (const schedule of input.schedules) {
     const list = byUser.get(schedule.userId) ?? [];
@@ -146,7 +173,7 @@ export function expandSchedulesToAbsences(input: {
   }
 
   const occupied = occupiedDates(input.absences ?? []);
-  const rows: TeamAbsence[] = [];
+  const rows: ScheduleWfhRow[] = [];
 
   for (const [userId, schedules] of byUser) {
     const taken = occupied.get(userId);
@@ -178,7 +205,7 @@ export function expandSchedulesToAbsences(input: {
 }
 
 /** Чи це синтетичний запис із графіка, а не рядок журналу. */
-export function isScheduleAbsence(absence: Pick<TeamAbsence, "id">): boolean {
+export function isScheduleAbsence(absence: { id: string }): boolean {
   return absence.id.startsWith("schedule:");
 }
 

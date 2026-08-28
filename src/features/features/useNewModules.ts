@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { resolveWorkspaceId } from "@/lib/workspace";
 import type { ModuleKey } from "@/lib/moduleAccess";
@@ -12,6 +13,13 @@ import { newModuleKeys } from "@/features/features/newModules";
  * позначки накопичуються в людини, яка просто ходить по CRM, і за тиждень
  * перестають означати будь-що.
  *
+ * ЧОМУ ЗАПИТ, А НЕ ЕФЕКТ ЗІ СТАНОМ. Перша редакція тримала множину в useState і
+ * заповнювала її з useEffect — тобто ще одне `setState` в ефекті (правило
+ * react-hooks/set-state-in-effect) і `eslint-disable` на залежностях, бо масив
+ * ключів щорендеру новий. Обидві заглушки зупинив ратчет перед пушем, і
+ * правильно: те саме робить useQuery, у якого ключ — рядок ключів, а гасіння —
+ * звичайна мутація з оптимістичним оновленням кешу.
+ *
  * Помилки тут мовчазні. Меню — не те місце, де можна впасти: без цієї пам'яті
  * сайдбар просто не показує міток, і це нікому не заважає.
  */
@@ -21,50 +29,58 @@ export function useNewModules(params: {
   availableKeys: ModuleKey[];
 }) {
   const { userId, availableKeys } = params;
-  const [newKeys, setNewKeys] = useState<Set<ModuleKey>>(() => new Set());
-  const contextRef = useRef<{ workspaceId: string; userId: string } | null>(null);
-  // Список пунктів міняється щорендер (новий масив), тож у залежності йде
-  // рядок: інакше ефект ходив би в мережу без кінця.
-  const availableSignature = availableKeys.join(",");
+  const queryClient = useQueryClient();
+  // Масив щорендеру новий, тож ключем запиту йде рядок — інакше кожен рендер
+  // читався б як нові дані.
+  const signature = availableKeys.join(",");
 
-  useEffect(() => {
-    if (!userId || availableKeys.length === 0) return;
-    let cancelled = false;
+  const seen = useQuery({
+    queryKey: ["seen-modules", userId, signature],
+    enabled: Boolean(userId) && availableKeys.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const workspaceId = await resolveWorkspaceId(userId as string);
+      if (!workspaceId) return { workspaceId: null, keys: new Set<string>(), seeded: true };
+      const result = await loadSeenModules({
+        workspaceId,
+        userId: userId as string,
+        availableKeys,
+      });
+      return { workspaceId, keys: result.keys, seeded: result.seeded };
+    },
+  });
 
-    void (async () => {
-      try {
-        const workspaceId = await resolveWorkspaceId(userId);
-        if (!workspaceId || cancelled) return;
-        contextRef.current = { workspaceId, userId };
-        const seen = await loadSeenModules({ workspaceId, userId, availableKeys });
-        if (cancelled) return;
-        // Перший вхід: пам'ять щойно засіяна, нового немає за визначенням.
-        setNewKeys(seen.seeded ? new Set() : new Set(newModuleKeys(availableKeys, seen.keys)));
-      } catch (error) {
-        console.warn("[sidebar] seen modules unavailable", error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, availableSignature]);
-
-  /** Людина відкрила розділ — мітка гасне одразу, запис іде слідом. */
-  const markSeen = useCallback((moduleKey: ModuleKey) => {
-    setNewKeys((prev) => {
-      if (!prev.has(moduleKey)) return prev;
-      const next = new Set(prev);
-      next.delete(moduleKey);
-      return next;
-    });
-    const context = contextRef.current;
-    if (!context) return;
-    void markModulesSeen({ ...context, moduleKeys: [moduleKey] }).catch((error) => {
+  const markSeen = useMutation({
+    mutationFn: async (moduleKey: ModuleKey) => {
+      const workspaceId = seen.data?.workspaceId;
+      if (!workspaceId || !userId) return;
+      await markModulesSeen({ workspaceId, userId, moduleKeys: [moduleKey] });
+    },
+    onMutate: (moduleKey) => {
+      // Мітка гасне одразу, не чекаючи мережі: людина вже пішла в розділ.
+      queryClient.setQueryData(
+        ["seen-modules", userId, signature],
+        (current: { workspaceId: string | null; keys: Set<string>; seeded: boolean } | undefined) =>
+          current ? { ...current, keys: new Set(current.keys).add(moduleKey) } : current
+      );
+    },
+    onError: (error) => {
       console.warn("[sidebar] failed to remember visited module", error);
-    });
-  }, []);
+    },
+  });
 
-  return { newKeys, markSeen };
+  const newKeys = useMemo(() => {
+    // Перший вхід: пам'ять щойно засіяна, нового немає за визначенням.
+    if (!seen.data || seen.data.seeded) return new Set<ModuleKey>();
+    // Розбираємо той самий рядок, що йде ключем запиту, — так у залежностях
+    // немає масиву, який щорендеру новий, і заглушка на правила хуків не
+    // потрібна.
+    const keys = signature ? (signature.split(",") as ModuleKey[]) : [];
+    return new Set(newModuleKeys(keys, seen.data.keys));
+  }, [seen.data, signature]);
+
+  return {
+    newKeys,
+    markSeen: useCallback((moduleKey: ModuleKey) => markSeen.mutate(moduleKey), [markSeen]),
+  };
 }

@@ -5,7 +5,6 @@ import {
   parseScheduleDays,
   type TeamWorkSchedule,
 } from "../../../src/lib/teamWorkSchedule";
-import type { TeamAbsence } from "../../../src/lib/teamAbsences";
 
 /**
  * Постійні графіки роботи для серверних поверхонь: ранкового звіту й бота.
@@ -80,22 +79,15 @@ export function scheduleRowsForDates(input: {
 }): SyntheticAbsenceRow[] {
   if (input.schedules.length === 0 || input.dateKeys.length === 0) return [];
 
-  const known: TeamAbsence[] = input.absences
+  const known = input.absences
     .filter((row) => row.user_id && row.start_date && row.end_date)
     .map((row) => ({
-      id: "",
       userId: row.user_id as string,
       startDate: row.start_date as string,
       endDate: row.end_date as string,
-      kind: (row.kind ?? "other") as TeamAbsence["kind"],
       // Журнал звіту вже відфільтрований до чинних записів, тож усе, що сюди
       // доїхало, для розгортання є погодженим.
-      status: (row.status ?? "approved") as TeamAbsence["status"],
-      comment: null,
-      requestedBy: null,
-      decidedBy: null,
-      decidedAt: null,
-      createdAt: null,
+      status: (row.status ?? "approved") as string,
     }));
 
   const sorted = [...input.dateKeys].sort();

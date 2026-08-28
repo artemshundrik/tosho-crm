@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ACCESS_LEVELS, accessLevelLabel, normalizeJobRoleInput } from "@/features/team/personRoles";
 import { supabase } from "@/lib/supabaseClient";
-import { formatJobRole } from "@/lib/jobRoles";
 import { toast } from "sonner";
 import {
   ShieldAlert,
@@ -111,6 +110,12 @@ import {
 } from "@/lib/moduleAccess";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { AccessMatrix, type MatrixPerson } from "@/components/team/AccessMatrix";
+import {
+  getAccessBadgeClass,
+  getJobBadgeClass,
+  getJobRoleLabel,
+  getProbationBadgeClass,
+} from "@/features/team/memberBadges";
 import { AccessOverview } from "@/components/team/AccessOverview";
 import { getCurrentUser, getCurrentUserId } from "@/lib/currentUser";
 
@@ -282,27 +287,6 @@ const getAccessRoleLabel = accessLevelLabel;
 // Делегує канонічному довіднику (src/lib/jobRoles.ts) — раніше тут була власна
 // копія списку посад, яка розходилась із джерелом істини (нові посади показувались
 // сирим ключем англійською: «it specialist» замість «IT-спеціаліст»).
-function getJobRoleLabel(role: string | null) {
-  return formatJobRole(role) || "Без ролі";
-}
-
-function getAccessBadgeClass(role: string | null) {
-  if (role === "owner") return "tone-accent";
-  if (role === "admin") return "bg-info-soft text-info-foreground border-info-soft-border";
-  return "bg-muted/50 border-border text-muted-foreground";
-}
-
-function getJobBadgeClass(role: string | null) {
-  if (!role) return "bg-muted/50 border-border text-muted-foreground";
-  return "bg-muted/30 border-border text-muted-foreground";
-}
-
-function getProbationBadgeClass(status: "upcoming" | "active" | "completed") {
-  if (status === "completed") return "bg-success-soft text-success-foreground border-success-soft-border";
-  if (status === "active") return "bg-warning-soft text-warning-foreground border-warning-soft-border";
-  return "bg-muted text-muted-foreground border-border";
-}
-
 // Probation was removed from this page. Legacy rows may still carry
 // employment_status = 'probation'; show them as working so nobody is stranded
 // with a badge that has no action behind it any more.
@@ -622,13 +606,8 @@ export function TeamMembersPage() {
     };
   }, []);
 
-  /**
-   * Лічильник ручних перечитувань довідника.
-   *
-   * Матриця вміє змінити доступи одразу кільком людям, і без цього наступна її
-   * дія рахувала б наслідки за списком, застарілим на одну зміну — тобто
-   * показувала б «не зачепить» там, де насправді зачепить.
-   */
+  // Лічильник ручних перечитувань довідника: матриця міняє доступи одразу
+  // кільком людям (пояснення — в AccessMatrix, onPeopleChanged).
   const [membersReloadToken, setMembersReloadToken] = useState(0);
 
   useEffect(() => {
@@ -2307,9 +2286,7 @@ export function TeamMembersPage() {
           <AccessMatrix
             people={matrixPeople}
             workspaceId={workspaceId}
-            // Стартові набори посад міняють ті самі, хто редагує доступи людей:
-            // власник і СЕО. RLS відхилить чужий запис і без цього, але кнопку,
-            // яка не спрацює, показувати немає сенсу.
+            // Набори посад міняють ті самі, хто редагує доступи людей.
             canEditRoles={isSuperAdmin || isSeo}
             actorUserId={currentUserId}
             onPeopleChanged={() => setMembersReloadToken((token) => token + 1)}

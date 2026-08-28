@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { isPapercutCard } from "../../../src/features/devRequests/papercuts";
-import { hasOpenChecklistItems } from "../../../src/features/devRequests/checklist";
+import { hasOpenChecklistItems } from "../../../src/features/devRequests/checklistState";
 import { isKnownModuleKey, moduleKeyLabel } from "../../../src/lib/projectMap";
 import { formatRequestNumber, KIND_LABELS, PRIORITY_LABELS } from "./devRequestBot";
 import {

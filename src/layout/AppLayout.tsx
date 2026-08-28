@@ -60,6 +60,13 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { isModuleVisibleInMenu, type ModuleKey } from "@/lib/moduleAccess";
 import { useNewModules } from "@/features/features/useNewModules";
+import { SidebarCountBadge, SidebarNewBadge } from "@/features/features/SidebarNewBadge";
+import {
+  getNotificationActionLabel,
+  shouldSuppressInAppNotificationToast,
+  trimNotificationDescription,
+} from "@/layout/notificationLinks";
+import { moduleKeysOf } from "@/features/features/moduleKeysOf";
 import { DEV_LABELS, DEV_PATHS } from "@/lib/devSection";
 import { ROUTES } from "./routes";
 import { getHeaderConfig } from "./headerConfig";
@@ -478,57 +485,6 @@ function renderInAppToastContent({
   );
 }
 
-function normalizeNotificationHref(href?: string) {
-  if (!href) return "";
-  const trimmed = href.trim();
-  if (!trimmed) return "";
-  try {
-    const parsed = new URL(trimmed, window.location.origin);
-    return `${parsed.pathname}${parsed.search}`;
-  } catch {
-    return trimmed;
-  }
-}
-
-function trimNotificationDescription(text?: string, limit = 160) {
-  const normalized = (text ?? "").trim().replace(/\s+/g, " ");
-  if (normalized.length <= limit) return normalized;
-  return `${normalized.slice(0, limit - 1).trimEnd()}…`;
-}
-
-function shouldSuppressInAppNotificationToast(currentPath: string, href?: string) {
-  const normalizedHref = normalizeNotificationHref(href);
-  if (!normalizedHref) return false;
-  if (normalizedHref === currentPath) return true;
-
-  const currentPathname = currentPath.split("?")[0] ?? currentPath;
-  const hrefPathname = normalizedHref.split("?")[0] ?? normalizedHref;
-
-  if (hrefPathname === currentPathname) return true;
-
-  const entityRoutes = [
-    ROUTES.ordersEstimates,
-    ROUTES.ordersCustomers,
-    ROUTES.ordersProduction,
-    ROUTES.design,
-    ROUTES.contractors,
-    ROUTES.sampleStock,
-  ];
-  return entityRoutes.some((route) => currentPathname.startsWith(`${route}/`) && hrefPathname === currentPathname);
-}
-
-function getNotificationActionLabel(href?: string) {
-  const normalizedHref = normalizeNotificationHref(href);
-  if (!normalizedHref) return "Відкрити";
-  if (normalizedHref.startsWith(ROUTES.design)) return "До задачі";
-  if (normalizedHref.startsWith(ROUTES.ordersEstimates)) return "До прорахунку";
-  if (normalizedHref.startsWith(ROUTES.ordersCustomers)) return "До замовника";
-  if (normalizedHref.startsWith(ROUTES.ordersProduction)) return "До замовлення";
-  if (normalizedHref.startsWith(ROUTES.sampleStock)) return "До складу";
-  if (normalizedHref.startsWith(ROUTES.notifications)) return "До сповіщень";
-  return "Відкрити";
-}
-
 // --- Sidebar Config ---
 
 /**
@@ -935,26 +891,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
 
-  /**
-   * Розділи, яких людина ще не бачила: мітка «Нове» біля пункту (REQ-199).
-   *
-   * Ключі беремо з ТОГО САМОГО списку, який рендериться, — інакше мітка
-   * могла б загорітись на пункті, якого в меню немає.
-   */
-  const availableModuleKeys = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          visibleSidebarLinks
-            .map((link) => link.moduleKey)
-            .filter((key): key is ModuleKey => Boolean(key))
-        )
-      ),
-    [visibleSidebarLinks]
-  );
+  // Мітка «Нове» біля пункту (REQ-199). Ключі — з ТОГО САМОГО списку, який
+  // рендериться: інакше мітка могла б загорітись на пункті, якого в меню немає.
   const { newKeys: newModuleKeys, markSeen: markModuleSeen } = useNewModules({
     userId: viewUserId,
-    availableKeys: availableModuleKeys,
+    availableKeys: useMemo(() => moduleKeysOf(visibleSidebarLinks), [visibleSidebarLinks]),
   });
   const shouldReveal = useMemo(() => {
     return sidebarRoutes.some((route) => {
@@ -2902,15 +2843,10 @@ function SidebarGroup({
           const active = isActivePath(currentPath, link.to);
           const Icon = link.icon;
           const showNotificationsBadge = link.to === ROUTES.notifications && notificationsUnreadCount > 0;
-          /*
-           * «Нове» — розділ, якого людина ще не бачила: або він щойно з'явився
-           * у CRM, або їй щойно відкрили доступ. З її погляду це одне й те саме
-           * («у мене новий розділ»), тож і сигнал один.
-           *
-           * Не показуємо разом зі значком сповіщень: два бейджі на одному
-           * рядку сперечаються, а «Сповіщення» — не той пункт, куди ходять по
-           * новинки.
-           */
+          // «Нове» — розділ, якого людина ще не бачила: щойно з'явився в CRM
+          // або їй щойно відкрили доступ (з її погляду це одне й те саме).
+          // Разом зі значком сповіщень не показуємо: два бейджі на рядку
+          // сперечаються, а по новинки в «Сповіщення» не ходять.
           const isNewModule =
             Boolean(link.moduleKey) && !showNotificationsBadge && Boolean(newModuleKeys?.has(link.moduleKey as ModuleKey));
           const pinned = pinnedRoutes?.has(link.to) ?? false;
@@ -2994,36 +2930,13 @@ function SidebarGroup({
               >
                 {link.label}
               </span>
-              {isNewModule ? (
-                collapsed ? (
-                  /* У рейці підпису немає — лишається значок. Заповнена крапка
-                     проти обведеної в анонсів: форма, а не колір, бо колір тут
-                     не прочитає ні дальтонік, ні око збоку. */
-                  <span className="tone-dot-accent pointer-events-none absolute right-1.5 top-1.5 inline-flex h-2 w-2 rounded-full" />
-                ) : (
-                  <span
-                    // Тон береться з дизайн-системи (tone-accent), а не з
-                    // власних кольорів: інакше мітка розійдеться з рештою
-                    // акцентних поверхонь при першій же зміні палітри.
-                    className="tone-accent ml-auto shrink-0 rounded-full border px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide"
-                  >
-                    Нове
-                  </span>
-                )
-              ) : null}
+              {isNewModule ? <SidebarNewBadge collapsed={collapsed} /> : null}
               {showNotificationsBadge ? (
-                collapsed ? (
-                  <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
-                ) : (
-                  <span
-                    className={cn(
-                      "ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-2xs font-semibold leading-none text-primary-foreground",
-                      isMobileDrawer ? "h-6 px-1.5" : "h-5"
-                    )}
-                  >
-                    {notificationsUnreadCount > 99 ? "99+" : notificationsUnreadCount}
-                  </span>
-                )
+                <SidebarCountBadge
+                  count={notificationsUnreadCount}
+                  collapsed={collapsed}
+                  roomy={isMobileDrawer}
+                />
               ) : null}
             </Link>
           );

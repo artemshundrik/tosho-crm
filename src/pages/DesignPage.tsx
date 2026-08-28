@@ -135,6 +135,13 @@ import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { Clock3, ExternalLink, LayoutGrid, ListFilter, PencilLine, Users } from "lucide-react";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { MAX_BRIEF_FILES, planBriefFiles } from "@/features/design/briefFiles";
+import {
+  createFileFromDroppedUrl,
+  extractImageUrlsFromDropText,
+  getDroppedString,
+  getTransferData,
+} from "@/features/design/dropFiles";
 
 type DesignTask = {
   id: string;
@@ -403,13 +410,6 @@ const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
 
-/**
- * Стільки ж, скільки в решті зон вкладень CRM: `MAX_ATTACHMENTS` у прорахунку
- * і `MAX_QUOTE_ATTACHMENTS` у картці — обидві по 20. Доти тут стояло 5, і форма
- * мовчки відрізала зайве: людина з шістьма файлами бачила п'ять, а шостий
- * доносила дизайнерові в Telegram — повз CRM (REQ-197).
- */
-const MAX_BRIEF_FILES = 20;
 const formatEstimateMinutes = (minutes?: number | null) => {
   if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "Не вказано";
   const value = Math.round(minutes);
@@ -3533,122 +3533,26 @@ export default function DesignPage() {
     setTaskToDelete(task);
   };
 
-  // Скільки лишилось місця — рахуємо з дзеркала в ref, а НЕ всередині
-  // оновлювача: React виконує оновлювач під час рендера, тож усе, що там
-  // нарахуєш, за його межами вже недоступне — на цьому тост мовчки не з'являвся
-  // (перевірено живцем). Замикання тут не годиться з іншої причини: цю функцію
-  // кличе й слухач paste із deps [createDialogOpen], де createFiles застаріле.
-  // Сам запис усе одно функціональний і перераховує місце з prev, тож навіть
-  // розсинхрон дзеркала не дасть перебрати ліміт.
+  // Місце рахуємо з дзеркала в ref, а НЕ всередині оновлювача: React виконує
+  // оновлювач під час рендера, тож зібраний там тост нікуди не долітав
+  // (перевірено живцем). Саме правило — у features/design/briefFiles.ts.
   const addFilesToCreate = (incoming: FileList | File[] | null | undefined) => {
     if (!incoming) return;
     const next = Array.from(incoming);
     if (next.length === 0) return;
-    const room = Math.max(0, MAX_BRIEF_FILES - createFilesRef.current.length);
-    if (room === 0) {
+    const plan = planBriefFiles(createFilesRef.current, next);
+    if (plan.full) {
       toast.error("Досягнуто ліміт файлів", {
         description: `Можна додати не більше ${MAX_BRIEF_FILES} файлів.`,
       });
       return;
     }
-    if (next.length > room) {
-      toast.warning(`Додано ${room} із ${next.length} файлів`, {
-        description: `Лишалось місце на ${room}.`,
+    if (plan.rejected > 0) {
+      toast.warning(`Додано ${plan.accepted.length} із ${next.length} файлів`, {
+        description: `Лишалось місце на ${plan.accepted.length}.`,
       });
     }
-    setCreateFiles((prev) => [...prev, ...next.slice(0, Math.max(0, MAX_BRIEF_FILES - prev.length))]);
-  };
-
-  const getDroppedString = (item: DataTransferItem) =>
-    new Promise<string>((resolve) => {
-      item.getAsString((value) => resolve(value ?? ""));
-    });
-
-  const getExtensionFromMime = (mimeType: string) => {
-    if (mimeType.includes("png")) return "png";
-    if (mimeType.includes("webp")) return "webp";
-    if (mimeType.includes("gif")) return "gif";
-    if (mimeType.includes("svg")) return "svg";
-    if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return "jpg";
-    return "bin";
-  };
-
-  const extractImageUrlsFromDropText = (value: string, mimeType: string) => {
-    const urls = new Set<string>();
-    if (!value.trim()) return [];
-
-    if (mimeType === "text/html") {
-      const doc = new DOMParser().parseFromString(value, "text/html");
-      doc.querySelectorAll("img, a, source").forEach((node) => {
-        ["src", "href", "data-src", "data-original", "data-url"].forEach((attribute) => {
-          const raw = node.getAttribute(attribute);
-          if (raw) urls.add(raw);
-        });
-        const srcset = node.getAttribute("srcset");
-        if (srcset) {
-          srcset.split(",").forEach((entry) => {
-            const raw = entry.trim().split(/\s+/)[0];
-            if (raw) urls.add(raw);
-          });
-        }
-      });
-      doc.querySelectorAll<HTMLElement>("[style]").forEach((node) => {
-        const style = node.getAttribute("style") ?? "";
-        Array.from(style.matchAll(/url\((["']?)(.*?)\1\)/gi)).forEach((match) => {
-          if (match[2]) urls.add(match[2]);
-        });
-      });
-    }
-
-    if (mimeType === "DownloadURL") {
-      const match = value.match(/(?:https?:\/\/|blob:|data:image\/).+$/i);
-      if (match?.[0]) urls.add(match[0]);
-    }
-
-    value
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .forEach((line) => {
-        Array.from(line.matchAll(/(?:https?:\/\/|blob:|data:image\/)[^\s"'<>\\)]+/gi)).forEach((match) => {
-          if (match[0]) urls.add(match[0]);
-        });
-      });
-
-    return Array.from(urls).map((url) => url.replace(/&amp;/g, "&"));
-  };
-
-  const createFileFromDroppedUrl = async (url: string, index: number) => {
-    if (!/^(https?:\/\/|blob:|data:image\/)/i.test(url)) return null;
-    try {
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const blob = await response.blob();
-      if (!blob.size) return null;
-      const mimeType = blob.type || response.headers.get("content-type") || "application/octet-stream";
-      if (!mimeType.startsWith("image/")) return null;
-      let baseName = `dropped-image-${index + 1}`;
-      try {
-        const parsed = new URL(url);
-        const lastPathPart = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "");
-        if (lastPathPart) baseName = lastPathPart.replace(/[^\p{L}\p{N}._-]+/gu, "-");
-      } catch {
-        // Data URLs do not have a useful path.
-      }
-      const hasExtension = /\.[a-z0-9]{2,5}$/i.test(baseName);
-      const fileName = hasExtension ? baseName : `${baseName}.${getExtensionFromMime(mimeType)}`;
-      return new File([blob], fileName, { type: mimeType });
-    } catch {
-      return null;
-    }
-  };
-
-  const getTransferData = (dataTransfer: DataTransfer, type: string) => {
-    try {
-      return dataTransfer.getData(type);
-    } catch {
-      return "";
-    }
+    setCreateFiles((prev) => [...prev, ...planBriefFiles(prev, next).accepted]);
   };
 
   const collectCreateFilesFromDrop = async (dataTransfer: DataTransfer) => {
