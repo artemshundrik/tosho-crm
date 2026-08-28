@@ -17,7 +17,7 @@ import { CardActionsMenu } from "./CardActionsMenu";
 import { CARD_MENU_ATTR, buildCardMeta, isUrgentCard } from "./cardModel";
 import { CardMetaChip } from "./CardMetaChip";
 import { ChecklistBar } from "./ChecklistBar";
-import { isEmptyPapercut, isPapercutCard } from "./papercuts";
+import { isIdlePapercut, isPapercutCard } from "./papercuts";
 import { isPartlyShipped } from "./checklist";
 import { GroupHeading } from "./GroupHeading";
 import {
@@ -77,15 +77,13 @@ export function DevRequestBoard({
     for (const column of BOARD_COLUMNS) map.set(column.status, []);
     for (const request of requests) {
       /*
-       * ПОРОЖНІЙ НАКОПИЧУВАЧ НА ДОШКУ НЕ ПОТРАПЛЯЄ (рішення Артема 28.08.2026).
+       * НАКОПИЧУВАЧ БЕЗ РОБОТИ НА ДОШКУ НЕ ПОТРАПЛЯЄ (рішення Артема 28.08.2026).
        *
-       * Полиця, у яку ще нічого не поклали, не є ні задачею, ні роботою: вона
-       * лише займає місце в колонці серед справжніх карток. Наповнюють її не
-       * тут, а у «Черзі», на полиці «Дрібниці», — звідки вона нікуди не
-       * зникає. Щойно в накопичувачі з'явиться перша дрібниця, картка
-       * повернеться на дошку сама.
+       * Ні порожня полиця, ні та, де всі дрібниці вже закриті: розгрібати
+       * нічого, а місце в колонці серед справжніх карток воно займає.
+       * Наповнюють полицю не тут, а у «Черзі», — звідки вона нікуди не зникає.
        */
-      if (isEmptyPapercut(request)) continue;
+      if (isIdlePapercut(request)) continue;
 
       // Колонок лише п'ять: «Не робимо» і «Ідеї» на дошку свідомо не
       // потрапляють, для них є списки за перемиканням (див. BOARD_COLUMNS).

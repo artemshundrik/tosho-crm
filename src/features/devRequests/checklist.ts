@@ -106,16 +106,12 @@ export function nextState(state: CheckState): CheckState {
 /**
  * Пункти, які ще тримають картку в роботі.
  *
- * Скасоване не тримає нічого — у цьому вся суть стану. Одна функція на клієнт
- * і на гак коміта: розійдись вони, картка їхала б у «Готово локально» в
- * одному шляху й зависала в іншому.
+ * Саме правило живе в листковому checklistState.ts — його імпортують і гак
+ * коміта, і впізнавання накопичувачів, а цей модуль для них заважкий (тягне
+ * іконки). Тут лише ре-експорт, щоб решта коду й далі брала все про чекліст з
+ * одного місця.
  */
-export function hasOpenChecklistItems(items: Array<{ state?: string | null }>): boolean {
-  return items.some((item) => {
-    const state = (item?.state ?? "todo").trim();
-    return state !== "done" && state !== "dropped";
-  });
-}
+export { hasOpenChecklistItems } from "./checklistState";
 
 const asString = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 const asNullable = (value: unknown): string | null => asString(value) || null;

@@ -470,12 +470,15 @@ function Rows({
                 <div
                   className={cn(
                     "flex shrink-0 justify-end overflow-hidden",
-                    "max-w-0 opacity-0 transition-[max-width,opacity] duration-200 ease-out",
-                    "group-hover:max-w-32 group-hover:opacity-100",
-                    "group-focus-within:max-w-32 group-focus-within:opacity-100",
+                    // -ml-2 знімає проміжок ряду, поки кнопка схлопнута: інакше
+                    // рядки з кнопкою і без неї мають різний правий край.
+                    "-ml-2 max-w-0 opacity-0",
+                    "transition-[max-width,opacity,margin] duration-200 ease-out",
+                    "group-hover:ml-0 group-hover:max-w-32 group-hover:opacity-100",
+                    "group-focus-within:ml-0 group-focus-within:max-w-32 group-focus-within:opacity-100",
                     "motion-reduce:transition-none",
                     // На вузькому екрані ховера немає — там кнопка стоїть завжди.
-                    "max-sm:max-w-32 max-sm:opacity-100"
+                    "max-sm:ml-0 max-sm:max-w-32 max-sm:opacity-100"
                   )}
                 >
                   <Button
@@ -676,11 +679,16 @@ function PapercutCard({
           <div
             className={cn(
               "flex shrink-0 justify-end overflow-hidden",
-              "max-w-0 opacity-0 transition-[max-width,opacity] duration-200 ease-out",
-              "group-hover/papercut:max-w-32 group-hover/papercut:opacity-100",
-              "group-focus-within/papercut:max-w-32 group-focus-within/papercut:opacity-100",
+              // -mr-3 з'їдає gap-3 контейнера, поки кнопка схлопнута. Без цього
+              // рядок із кнопкою (а вона є лише там, де є що розгрібати) стояв
+              // на 12 px вужче за сусідів — і смуга «мови інтерфейсу» не
+              // збігалася з рештою навіть у спокої (помічено Артемом).
+              "-mr-3 max-w-0 opacity-0",
+              "transition-[max-width,opacity,margin] duration-200 ease-out",
+              "group-hover/papercut:mr-0 group-hover/papercut:max-w-32 group-hover/papercut:opacity-100",
+              "group-focus-within/papercut:mr-0 group-focus-within/papercut:max-w-32 group-focus-within/papercut:opacity-100",
               "motion-reduce:transition-none",
-              "max-sm:max-w-32 max-sm:opacity-100"
+              "max-sm:mr-0 max-sm:max-w-32 max-sm:opacity-100"
             )}
           >
           <Button

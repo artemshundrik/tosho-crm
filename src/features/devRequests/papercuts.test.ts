@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { isEmptyPapercut, isPapercutCard, papercutLabel } from "./papercuts";
+import { isIdlePapercut, isPapercutCard, papercutLabel } from "./papercuts";
 
-const card = (title: string, items = 0) => ({ title, checklist: Array.from({ length: items }, () => ({})) });
+const card = (title: string, states: string[] = []) => ({
+  title,
+  checklist: states.map((state) => ({ state })),
+});
 
 describe("накопичувач дрібниць", () => {
   it("впізнається за префіксом, байдуже до регістру й пробілів", () => {
@@ -15,16 +18,27 @@ describe("накопичувач дрібниць", () => {
     expect(papercutLabel({ title: "Дрібниці: картка прорахунку" })).toBe("картка прорахунку");
   });
 
-  it("порожня полиця — накопичувач без жодної дрібниці", () => {
-    // Саме її не показують на дошці: вона не задача й не робота, а місце, куди
-    // складатимуть. Наповнюють її у «Черзі», звідки вона не зникає.
-    expect(isEmptyPapercut(card("Дрібниці: гроші замовлення"))).toBe(true);
-    expect(isEmptyPapercut(card("Дрібниці: гроші замовлення", 3))).toBe(false);
+  it("полиця без роботи — і порожня, і повністю розгребена", () => {
+    // Саме таку не показують на дошці. Друга половина правила знайшлась не
+    // одразу: спершу ховали лише порожні, і на дошці лишалась картка з єдиною
+    // ЗАКРИТОЮ дрібницею — з галочкою й зеленою смугою, тобто «робота», якої
+    // насправді немає.
+    expect(isIdlePapercut(card("Дрібниці: гроші замовлення"))).toBe(true);
+    expect(isIdlePapercut(card("Дрібниці: картка прорахунку", ["done"]))).toBe(true);
+    expect(isIdlePapercut(card("Дрібниці: мова інтерфейсу", ["done", "todo"]))).toBe(false);
   });
 
-  it("звичайна картка без пунктів порожньою полицею НЕ є", () => {
+  it("скасовані дрібниці роботою не рахуються", () => {
+    expect(isIdlePapercut(card("Дрібниці: довіра до релізу", ["done", "dropped"]))).toBe(true);
+  });
+
+  it("пункт, що чекає на людину, — це робота: полиця лишається на дошці", () => {
+    expect(isIdlePapercut(card("Дрібниці: стек", ["waiting"]))).toBe(false);
+  });
+
+  it("звичайна картка без пунктів полицею НЕ є", () => {
     // Інакше з дошки зникла б половина беклогу: у більшості карток чекліста
     // немає взагалі.
-    expect(isEmptyPapercut(card("Перебудувати процес створення прорахунку"))).toBe(false);
+    expect(isIdlePapercut(card("Перебудувати процес створення прорахунку"))).toBe(false);
   });
 });
