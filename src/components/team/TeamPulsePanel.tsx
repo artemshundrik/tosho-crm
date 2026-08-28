@@ -86,6 +86,8 @@ type PulseGroup = {
   lastActiveAt: string;
   byCategory: { key: string; label: string; color: string; count: number }[];
   events: PulseEvent[];
+  /** Скільки дій припало на кожен відрізок періоду — ритм людини. */
+  rhythm: { label: string; count: number }[];
 };
 
 const RANGE_OPTIONS: { value: PulseRange; label: string }[] = [
@@ -311,12 +313,28 @@ export function TeamPulsePanel({
       else byUser.set(userId, [event]);
     }
 
+    const isHourBucket = bucket === "hour";
+    /**
+     * Підпис відрізка — той самий, що й у графіку тренду нижче. Різні ключі
+     * означали б, що рядок людини й крива над ним рахують по-різному.
+     */
+    const bucketKey = (iso: string) => {
+      const date = new Date(iso);
+      return isHourBucket
+        ? `${date.getHours().toString().padStart(2, "0")}:00`
+        : bucket === "month"
+          ? date.toLocaleDateString("uk-UA", { month: "short" })
+          : date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" });
+    };
+
     const nextGroups: PulseGroup[] = [];
     for (const [userId, events] of byUser) {
       const counts = new Map<string, number>();
+      const perBucket = new Map<string, number>();
       let lastActiveAt = "";
       for (const event of events) {
         counts.set(event.categoryKey, (counts.get(event.categoryKey) ?? 0) + 1);
+        if (event.createdAt) perBucket.set(bucketKey(event.createdAt), (perBucket.get(bucketKey(event.createdAt)) ?? 0) + 1);
         if (!lastActiveAt || event.createdAt > lastActiveAt) lastActiveAt = event.createdAt;
       }
       const byCategory = Array.from(counts.entries())
@@ -327,7 +345,10 @@ export function TeamPulsePanel({
           count,
         }))
         .sort((a, b) => b.count - a.count);
-      nextGroups.push({ userId, total: events.length, lastActiveAt, byCategory, events });
+      const rhythm = Array.from(perBucket.entries())
+        .map(([label, count]) => ({ label, count }))
+        .reverse();
+      nextGroups.push({ userId, total: events.length, lastActiveAt, byCategory, events, rhythm });
     }
     nextGroups.sort((a, b) => b.total - a.total);
 
@@ -369,6 +390,7 @@ export function TeamPulsePanel({
         minutes: number;
         lastActiveAt: string;
         byCategory: PulseGroup["byCategory"];
+        rhythm: PulseGroup["rhythm"];
       }
     >();
     for (const group of groups) {
@@ -378,11 +400,12 @@ export function TeamPulsePanel({
         minutes: minutesByUser.get(group.userId) ?? 0,
         lastActiveAt: group.lastActiveAt,
         byCategory: group.byCategory,
+        rhythm: group.rhythm,
       });
     }
     for (const [userId, minutes] of minutesByUser) {
       if (minutes <= 0 || byId.has(userId) || !memberIds.has(userId)) continue;
-      byId.set(userId, { userId, actions: 0, minutes, lastActiveAt: "", byCategory: [] });
+      byId.set(userId, { userId, actions: 0, minutes, lastActiveAt: "", byCategory: [], rhythm: [] });
     }
     // Заходив, але не набрав ані дії, ані хвилини — усе одно в списку.
     // Присутність рахуємо за period, а не «сьогодні»: остання позначка одна, і
@@ -399,6 +422,7 @@ export function TeamPulsePanel({
         minutes: 0,
         lastActiveAt: person.lastSeenAt ?? "",
         byCategory: [],
+        rhythm: [],
       });
     }
     return Array.from(byId.values()).sort(
@@ -592,6 +616,7 @@ export function TeamPulsePanel({
                     </span>
                   </div>
                 </div>
+                <PersonRhythm rhythm={entry.rhythm} />
                 <CategoryBreakdown byCategory={entry.byCategory} total={entry.actions} maxTotal={maxGroupTotal} />
                 <div className="ml-1 flex shrink-0 flex-col items-end gap-0.5 text-right">
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">
@@ -639,6 +664,39 @@ function KpiTile({
         {value}
       </div>
       {hint ? <div className="mt-0.5 text-2xs text-muted-foreground">{hint}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * Ритм людини за період — по квадратику на відрізок.
+ *
+ * НАВІЩО. Рядок казав лише «остання дія 14 хв тому» — це момент, а не
+ * картина. З моменту не видно, чи людина працювала рівно весь тиждень, чи
+ * зникала на три дні й надолужила в останній. Відрізки тут ті самі, що в
+ * графіку над списком, тож рядок і крива не можуть розійтись.
+ *
+ * Насиченість, а не висота: у рядку заввишки 38 px стовпчики вийшли б по
+ * два пікселі й не читались би взагалі.
+ */
+function PersonRhythm({ rhythm }: { rhythm: { label: string; count: number }[] }) {
+  if (!rhythm.length) return null;
+  const max = Math.max(...rhythm.map((slot) => slot.count), 1);
+  return (
+    <div className="hidden shrink-0 items-center gap-[3px] md:flex" aria-hidden="true">
+      {rhythm.slice(-14).map((slot) => {
+        const share = slot.count / max;
+        return (
+          <span
+            key={slot.label}
+            title={`${slot.label} — ${slot.count}`}
+            className={cn(
+              "h-[11px] w-[11px] rounded-[2px]",
+              share > 0.66 ? "bg-primary" : share > 0.33 ? "bg-primary/60" : "bg-primary/30"
+            )}
+          />
+        );
+      })}
     </div>
   );
 }
