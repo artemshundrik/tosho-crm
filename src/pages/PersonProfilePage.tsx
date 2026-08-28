@@ -20,12 +20,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Eye, KeyRound, Loader2, Lock, Phone, RotateCcw, ShieldAlert } from "lucide-react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { AlertTriangle, ArrowLeft, Eye, KeyRound, Loader2, Lock, Phone, RotateCcw, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { MemberPaySection } from "@/components/team/MemberPaySection";
 import { PersonAccessHistorySection, PersonActivitySection } from "@/components/team/PersonDetailSections";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { Switch } from "@/components/ui/switch";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { getCurrentUserId } from "@/lib/currentUser";
+import { supabase } from "@/lib/supabaseClient";
 import {
   displayEmploymentStatus,
   employmentStatusTone,
@@ -42,6 +44,7 @@ import {
   getBirthdayInsight,
   getEmploymentStatusLabel,
   isInactiveEmployment,
+  normalizeEmploymentStatus,
 } from "@/lib/employment";
 import { formatJobRole, JOB_ROLE_NAMES } from "@/lib/jobRoles";
 import { pluralUk } from "@/lib/lastSeen";
@@ -61,7 +64,7 @@ import {
   upsertWorkspaceMemberProfile,
   type WorkspaceMemberDirectoryRow,
 } from "@/lib/workspaceMemberDirectory";
-import { savePersonRoles } from "@/features/team/personRoles";
+import { ACCESS_LEVELS, accessLevelLabel, savePersonRoles } from "@/features/team/personRoles";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -75,28 +78,10 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   hr: "HR",
 };
 
-/**
- * Рівень доступу підписаний українською.
- *
- * «Super Admin / Admin / Member» стояли посеред україномовного інтерфейсу й
- * нічого не пояснювали: з двох слів не видно, що перший — це власник компанії,
- * а другий може роздавати права іншим. Ключі в базі лишаються ті самі.
- */
-const ACCESS_LEVELS: { value: string; label: string; hint: string }[] = [
-  { value: "member", label: "Учасник", hint: "Працює в межах своїх модулів" },
-  { value: "admin", label: "Адміністратор", hint: "Керує людьми й доступами" },
-  { value: "owner", label: "Власник", hint: "Повний доступ до всього" },
-];
-
 const JOB_ROLE_OPTIONS = [
   { value: "none", label: "Без посади" },
   ...Object.entries(JOB_ROLE_NAMES).map(([value, label]) => ({ value, label })),
 ];
-
-function accessLevelLabel(role: string | null | undefined) {
-  const normalized = (role ?? "member").trim().toLowerCase();
-  return ACCESS_LEVELS.find((level) => level.value === normalized)?.label ?? "Учасник";
-}
 
 /** Підпис-мікрозаголовок у мові «Релізів» і «Стеку». */
 const CAP = "text-3xs font-semibold uppercase tracking-widest text-muted-foreground";
@@ -137,6 +122,7 @@ function SectionCard({
 
 export default function PersonProfilePage() {
   const { userId: routeUserId } = useParams<{ userId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { accessRole, jobRole, teamId, userId: viewerUserId } = useAuth();
 
@@ -145,6 +131,13 @@ export default function PersonProfilePage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [section, setSection] = useState<SectionKey>("overview");
+  /**
+   * Завершення співпраці переїхало сюди з адмін-центру: там воно жило в панелі
+   * людини, а панель замінила ця сторінка. Рішення про людину має бути в її
+   * картці, а не в списку — з нього не видно, кого саме звільняють.
+   */
+  const [employmentDecision, setEmploymentDecision] = useState<"inactive" | "reactivate" | null>(null);
+  const [employmentBusy, setEmploymentBusy] = useState(false);
 
   const isOwner = (accessRole ?? "").trim().toLowerCase() === "owner";
   const isAdmin = (accessRole ?? "").trim().toLowerCase() === "admin";
@@ -187,6 +180,45 @@ export default function PersonProfilePage() {
     [rows, routeUserId]
   );
 
+  const applyEmploymentDecision = useCallback(
+    async (decision: "inactive" | "reactivate") => {
+      if (!person || !workspaceId) return;
+      setEmploymentBusy(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
+
+        const response = await fetch("/.netlify/functions/team-member-employment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ userId: person.userId, decision }),
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string; profile?: { employmentStatus?: string | null } }
+          | null;
+        if (!response.ok) {
+          throw new Error(payload?.error || `Не вдалося оновити статус співпраці (HTTP ${response.status})`);
+        }
+
+        const nextStatus = normalizeEmploymentStatus(payload?.profile?.employmentStatus, null);
+        setRows((prev) =>
+          prev.map((row) => (row.userId === person.userId ? { ...row, employmentStatus: nextStatus } : row))
+        );
+        invalidateWorkspaceMemberDirectory(workspaceId);
+        toast.success(decision === "inactive" ? "Співпрацю завершено" : "Співробітника повернуто в штат");
+        setEmploymentDecision(null);
+      } catch (error: unknown) {
+        toast.error("Не вдалося оновити статус співпраці", {
+          description: error instanceof Error ? error.message : undefined,
+        });
+      } finally {
+        setEmploymentBusy(false);
+      }
+    },
+    [person, workspaceId]
+  );
+
   /** Хто саме змінив доступ — імена беремо з довідника, а не з журналу. */
   const resolveActorName = useCallback(
     (actorUserId: string | null, fallback: string | null) =>
@@ -207,6 +239,15 @@ export default function PersonProfilePage() {
     if (canOpenProfileCard) keys.push("hr");
     return keys;
   }, [canOpenProfileCard, canSeePay, isSelf]);
+
+  /**
+   * `?section=access` — щоб «Змінити доступи» з адмін-центру відкривало одразу
+   * потрібний розділ, а не «Огляд», з якого треба ще раз клікати.
+   */
+  useEffect(() => {
+    const wanted = searchParams.get("section") as SectionKey | null;
+    if (wanted && visibleSections.includes(wanted)) setSection(wanted);
+  }, [searchParams, visibleSections]);
 
   useEffect(() => {
     if (!visibleSections.includes(section)) setSection("overview");
@@ -398,13 +439,52 @@ export default function PersonProfilePage() {
                 />
                 <Fact label="Статус співпраці" value={getEmploymentStatusLabel(employment)} />
               </div>
-              <p className="text-2xs text-muted-foreground">
-                Завершення співпраці, відпустки й дати — в адмін-центрі: рішення про людину не має ховатись у вкладці.
-              </p>
+              {canManage && !isSelf ? (
+                <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
+                  <p className="min-w-0 flex-1 text-2xs leading-relaxed text-muted-foreground">
+                    {employment === "inactive"
+                      ? "Співпрацю завершено. За потреби людину можна повернути в штат."
+                      : "Людина працює у штаті. Якщо вона пішла або її звільнили, тут можна завершити співпрацю."}
+                  </p>
+                  <Button
+                    variant={employment === "inactive" ? "secondary" : "destructive"}
+                    size="sm"
+                    disabled={employmentBusy}
+                    onClick={() => setEmploymentDecision(employment === "inactive" ? "reactivate" : "inactive")}
+                  >
+                    {employmentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {employment === "inactive" ? "Повернути в штат" : "Завершити співпрацю"}
+                  </Button>
+                </div>
+              ) : null}
             </SectionCard>
           ) : null}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={employmentDecision !== null}
+        onOpenChange={(open) => {
+          if (!open && !employmentBusy) setEmploymentDecision(null);
+        }}
+        title={employmentDecision === "reactivate" ? "Повернути в штат?" : "Завершити співпрацю?"}
+        description={
+          employmentDecision === "reactivate"
+            ? `${person.displayName} знову вважатиметься чинним співробітником.`
+            : `Для ${person.displayName} буде зафіксовано, що співпрацю завершено. Доступи при цьому не знімаються — це окрема дія.`
+        }
+        icon={<AlertTriangle className="h-5 w-5 text-danger-foreground" />}
+        confirmLabel={employmentDecision === "reactivate" ? "Так, повернути" : "Так, завершити"}
+        confirmClassName={
+          employmentDecision === "reactivate"
+            ? undefined
+            : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        }
+        loading={employmentBusy}
+        onConfirm={() => {
+          if (employmentDecision) void applyEmploymentDecision(employmentDecision);
+        }}
+      />
     </div>
   );
 }

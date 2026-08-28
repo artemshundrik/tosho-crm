@@ -16,6 +16,25 @@
 
 import { supabase } from "@/lib/supabaseClient";
 
+/**
+ * Рівні доступу українською — один реєстр на застосунок.
+ *
+ * «Super Admin / Admin / Member» стояли посеред україномовного інтерфейсу й
+ * нічого не пояснювали: з підпису не видно, що перший — це власник компанії, а
+ * другий може роздавати права іншим. Ключі в базі лишаються ті самі (`owner`,
+ * `admin`, `member`) — міняється лише те, що читає людина.
+ */
+export const ACCESS_LEVELS: { value: string; label: string; hint: string }[] = [
+  { value: "member", label: "Учасник", hint: "Працює в межах своїх модулів" },
+  { value: "admin", label: "Адміністратор", hint: "Керує людьми й доступами" },
+  { value: "owner", label: "Власник", hint: "Повний доступ до всього" },
+];
+
+export function accessLevelLabel(role: string | null | undefined) {
+  const normalized = (role ?? "member").trim().toLowerCase();
+  return ACCESS_LEVELS.find((level) => level.value === normalized)?.label ?? "Учасник";
+}
+
 /** «Без ролі» в селекті означає порожню посаду в базі, а не рядок "none". */
 export function normalizeJobRoleInput(role: string | null) {
   return !role || role === "none" ? null : role;

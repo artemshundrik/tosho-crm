@@ -163,7 +163,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   },
   {
     key: "members_access",
-    label: "Ролі та доступи",
+    label: "Люди та доступи",
     group: "account",
     hint: "Керування правами інших людей",
   },

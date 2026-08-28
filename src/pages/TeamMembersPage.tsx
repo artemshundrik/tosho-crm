@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ACCESS_LEVELS, accessLevelLabel, normalizeJobRoleInput } from "@/features/team/personRoles";
 import { supabase } from "@/lib/supabaseClient";
 import { formatJobRole } from "@/lib/jobRoles";
 import { toast } from "sonner";
 import {
   ShieldAlert,
   MoreHorizontal,
-  Columns2,
-  Rows3,
   Calendar,
   Link as LinkIcon,
   Clock,
@@ -18,7 +17,6 @@ import {
   AlertTriangle,
   Activity,
   Gift,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,7 +24,6 @@ import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DateInput } from "@/components/ui/picker-input";
 import {
   Table,
   TableBody,
@@ -56,10 +53,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   PersonActivitySection,
-  PersonAccessHistorySection,
   PersonTimeInCrm,
 } from "@/components/team/PersonDetailSections";
-import { MemberPaySection } from "@/components/team/MemberPaySection";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -70,33 +65,25 @@ import {
 import {
   CONTROL_BASE,
   SEGMENTED_GROUP,
-  SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER,
-  SEGMENTED_TRIGGER_SM,
   TOOLBAR_ACTION_BUTTON,
 } from "@/components/ui/controlStyles";
-import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
 import { formatLastSeenAgo } from "@/lib/lastSeen";
 import {
-  getEmploymentStatusLabel,
   formatEmploymentDate,
   formatEmploymentDuration,
   getEmploymentDurationDays,
   isInactiveEmployment,
-  normalizeEmploymentStatus,
   getProbationSummary,
   type EmploymentStatus,
-  displayEmploymentStatus,
 } from "@/lib/employment";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { TeamPulsePanel, type PulsePerson } from "@/components/team/TeamPulsePanel";
-import { normalizeJobRoleInput, savePersonRoles } from "@/features/team/personRoles";
 import { useAuth } from "@/auth/AuthProvider";
 import { useTeamLastSeen } from "@/hooks/useTeamLastSeen";
 import type { PulseRange } from "@/components/team/pulsePeriod";
@@ -119,12 +106,11 @@ import {
 } from "@/lib/teamAvailability";
 import {
   defaultModuleAccess,
-  describeModuleLock,
-  MODULE_GROUPS,
   normalizeModuleAccess,
   type ModuleAccess,
 } from "@/lib/moduleAccess";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { AccessMatrix } from "@/components/team/AccessMatrix";
 import { getCurrentUser, getCurrentUserId } from "@/lib/currentUser";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
@@ -216,21 +202,8 @@ type JobRoleOption = {
   value: string;
 };
 
-const ACCESS_ROLE_LABELS: Record<string, string> = {
-  owner: "Super Admin",
-  admin: "Admin",
-  member: "Member",
-};
-
-const ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
-  { value: "member", label: "Member" },
-  { value: "admin", label: "Admin" },
-  { value: "owner", label: "Super Admin" },
-];
-
-const MEMBER_ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
-  ...ACCESS_ROLE_OPTIONS,
-];
+/** Підписи рівнів — зі спільного реєстру, щоб таблиця й картка казали те саме. */
+const ACCESS_ROLE_OPTIONS: AccessRoleOption[] = ACCESS_LEVELS.map(({ value, label }) => ({ value, label }));
 
 const JOB_ROLE_OPTIONS: JobRoleOption[] = [
   { value: "none", label: "Без ролі" },
@@ -278,11 +251,6 @@ const JOB_ROLE_OPTIONS: JobRoleOption[] = [
  * Ярлики й тони для ВІДОБРАЖЕННЯ беремо з канонічного teamAvailability.ts —
  * журнал і далі присилає vacation/sick_leave.
  */
-const AVAILABILITY_OPTIONS = [
-  { value: "available", label: "Доступний" },
-  { value: "offline", label: "Поза офісом" },
-] as const;
-
 
 /** Підписи, порядок і дефолти модулів — у реєстрі src/lib/moduleAccess.ts. */
 const DEFAULT_MODULE_ACCESS = defaultModuleAccess();
@@ -308,9 +276,7 @@ const DEFAULT_MEMBER_META: MemberProfileMeta = {
   moduleAccess: DEFAULT_MODULE_ACCESS,
 };
 
-function getAccessRoleLabel(role: string | null) {
-  return ACCESS_ROLE_LABELS[role ?? ""] ?? "Member";
-}
+const getAccessRoleLabel = accessLevelLabel;
 
 // Делегує канонічному довіднику (src/lib/jobRoles.ts) — раніше тут була власна
 // копія списку посад, яка розходилась із джерелом істини (нові посади показувались
@@ -328,26 +294,6 @@ function getAccessBadgeClass(role: string | null) {
 function getJobBadgeClass(role: string | null) {
   if (!role) return "bg-muted/50 border-border text-muted-foreground";
   return "bg-muted/30 border-border text-muted-foreground";
-}
-
-function supportsManagerRate(role: string | null) {
-  return ["manager", "sales_manager", "junior_sales_manager", "top_manager"].includes((role ?? "").toLowerCase());
-}
-
-/**
- * Значення доступів, зведене з роллю.
- *
- * Раніше тут стояли три локальні `if`-и (owner→підрядники, owner/CEO→склад,
- * фінансові посади→фінанси) — копії правил, які живуть у реєстрі модулів. Вони
- * й розійшлися з меню: сторінка показувала «Фінанси» ввімкненими, а сайдбар
- * ховав пункт. Тепер рішення одне на всіх — `normalizeModuleAccess`.
- */
-function normalizeMemberModuleAccessForRole(
-  moduleAccess: MemberProfileMeta["moduleAccess"],
-  accessRole: string | null | undefined,
-  jobRole: string | null | undefined
-): MemberProfileMeta["moduleAccess"] {
-  return normalizeModuleAccess(moduleAccess, accessRole, jobRole);
 }
 
 function getProbationBadgeClass(status: "upcoming" | "active" | "completed") {
@@ -373,13 +319,6 @@ function sortMembersForList(
     const bName = (b.full_name ?? b.email ?? "").toLowerCase();
     return aName.localeCompare(bName, "uk");
   });
-}
-
-function getEmploymentStatusBadgeClass(status: EmploymentStatus) {
-  if (status === "rejected") return "bg-danger-soft text-danger-foreground border-danger-soft-border";
-  if (status === "inactive") return "bg-muted text-muted-foreground border-border";
-  if (status === "probation") return "bg-warning-soft text-warning-foreground border-warning-soft-border";
-  return "bg-success-soft text-success-foreground border-success-soft-border";
 }
 
 async function parseJsonSafe<T>(response: Response): Promise<T | null> {
@@ -425,15 +364,20 @@ function isRecoverableTeamProfileError(message: string) {
 
 // Sections of a person's card. One surface per person: the card owns every
 // per-person view and edit, so there is no separate edit drawer or roles dialog.
-type PersonSection = "overview" | "profile" | "access" | "pay" | "activity" | "hr";
 
-const PERSON_SECTIONS: { key: PersonSection; label: string }[] = [
-  { key: "overview", label: "Огляд" },
-  { key: "profile", label: "Профіль" },
-  { key: "access", label: "Доступи" },
-  { key: "pay", label: "Оплата" },
-  { key: "activity", label: "Активність" },
-  { key: "hr", label: "HR" },
+/** Вкладки адмін-центру «Люди та доступи». */
+type AdminTab = "people" | "matrix" | "pulse" | "invites";
+
+/**
+ * Окремої вкладки «Посади» немає навмисно: стартові набори посад лежать у коді
+ * (`ROLE_MENUS` у src/lib/moduleAccess.ts), а не в базі, — редагувати їх з
+ * інтерфейсу нічого. Погляд «що дає посада» живе віссю «Посади» в матриці.
+ */
+const ADMIN_TABS: { key: AdminTab; label: string }[] = [
+  { key: "people", label: "Люди" },
+  { key: "matrix", label: "Матриця" },
+  { key: "pulse", label: "Пульс" },
+  { key: "invites", label: "Запрошення" },
 ];
 
 type MemberFilterKey = "attention" | "birthday" | "startDate" | "absence";
@@ -476,7 +420,17 @@ function FilterChip({
 
 export function TeamMembersPage() {
   const [params, setParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<"members" | "invites">("members");
+  const navigate = useNavigate();
+  /**
+   * Вкладки адмін-центру.
+   *
+   * До 28.08.2026 тут були дві вкладки («Учасники» / «Запрошення») і окремий
+   * перемикач вигляду (панель / рядки / Пульс) — тобто два ряди контролів, які
+   * керували тим самим. Пульс при цьому був «виглядом списку людей», хоча це
+   * не вигляд, а окреме питання керівника. Тепер усе — рівноправні вкладки, а
+   * картка людини живе окремим маршрутом (`/team/:userId`).
+   */
+  const [activeTab, setActiveTab] = useState<AdminTab>("people");
   const { entries } = useWorkspacePresence();
   const { teamId } = useAuth();
   /**
@@ -562,28 +516,12 @@ export function TeamMembersPage() {
   const [invitesError, setInvitesError] = useState<string | null>(null);
 
   const [activeFilter, setActiveFilter] = useState<MemberFilterKey | null>(null);
-  const [activeSection, setActiveSection] = useState<PersonSection>("overview");
   const [pulseRange, setPulseRange] = useState<PulseRange>("day");
   const [pulsePeriodOffset, setPulsePeriodOffset] = useState(0);
   // Drilling into somebody from Пульс opens a peek beside the dashboard instead
   // of navigating away, so the compare loop (глянула одного → другого) keeps its
   // ranked list and period on screen.
   const [pulsePeekUserId, setPulsePeekUserId] = useState<string | null>(null);
-  // Two ways to look at the team: "panel" (master-detail card) for working with
-  // one person, "rows" (comparison table) for scanning everyone side by side.
-  const [viewMode, setViewMode] = useState<"panel" | "rows" | "pulse">(() => {
-    if (typeof window === "undefined") return "panel";
-    const stored = window.localStorage.getItem("team-members-view");
-    return stored === "rows" || stored === "pulse" ? stored : "panel";
-  });
-  useEffect(() => {
-    window.localStorage.setItem("team-members-view", viewMode);
-  }, [viewMode]);
-  // The two-pane columns fill the exact space below the toolbar/chips instead of
-  // a hardcoded max-h calc (which drifted and clipped the list bottom).
-  const twoPaneRef = useRef<HTMLDivElement | null>(null);
-  const [twoPaneTop, setTwoPaneTop] = useState<number | null>(null);
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -595,40 +533,22 @@ export function TeamMembersPage() {
 
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
-  const [editMember, setEditMember] = useState<Member | null>(null);
-  const [editAccessRole, setEditAccessRole] = useState("member");
-  const [editJobRole, setEditJobRole] = useState("none");
-  const [editBusy, setEditBusy] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [memberDeleteBusy, setMemberDeleteBusy] = useState(false);
-  const [editProfileMember, setEditProfileMember] = useState<Member | null>(null);
-  const [editProfileFirstName, setEditProfileFirstName] = useState("");
-  const [editProfileLastName, setEditProfileLastName] = useState("");
-  const [editProfileBirthDate, setEditProfileBirthDate] = useState("");
-  const [editProfilePhone, setEditProfilePhone] = useState("");
-  const [editProfileManagerRate, setEditProfileManagerRate] = useState(String(DEFAULT_MANAGER_RATE));
-  const [editProfileAvailabilityStatus, setEditProfileAvailabilityStatus] =
-    useState<MemberProfileMeta["availabilityStatus"]>("available");
-  const [editProfileAvailabilityStartDate, setEditProfileAvailabilityStartDate] = useState("");
-  const [editProfileAvailabilityEndDate, setEditProfileAvailabilityEndDate] = useState("");
-  const [editProfileStartDate, setEditProfileStartDate] = useState("");
-  const [editProfileProbationEndDate, setEditProfileProbationEndDate] = useState("");
-  const [editProfileManagerUserId, setEditProfileManagerUserId] = useState("");
-  const [editProfileModuleAccess, setEditProfileModuleAccess] =
-    useState<MemberProfileMeta["moduleAccess"]>(DEFAULT_MODULE_ACCESS);
-  const [editProfileBusy, setEditProfileBusy] = useState(false);
-  const [employmentActionBusy, setEmploymentActionBusy] = useState<"inactive" | "reactivate" | null>(null);
-  const [pendingEmploymentDecision, setPendingEmploymentDecision] = useState<"inactive" | null>(null);
   const [, setWorkspaceFunctionAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     const tab = params.get("tab");
-    if (tab === "invites" || tab === "members") {
+    if (tab === "matrix" || tab === "pulse" || tab === "invites") {
       setActiveTab(tab);
-    } else if (tab === "activity" || tab === "pulse") {
-      // Пульс used to be a tab; it is a view of Учасники now.
-      setActiveTab("members");
-      setViewMode("pulse");
+    } else if (tab === "roles") {
+      // «Посади» були окремою вкладкою лише в чернетці — це вісь матриці.
+      setActiveTab("matrix");
+    } else if (tab === "members" || tab === "people") {
+      setActiveTab("people");
+    } else if (tab === "activity") {
+      // Легасі-адреса: Пульс був вкладкою, потім виглядом списку, тепер знову вкладка.
+      setActiveTab("pulse");
     }
   }, [params]);
 
@@ -645,43 +565,13 @@ export function TeamMembersPage() {
   // "Пульс" (team activity analytics) is owner/CEO only — the CEO surface.
   const canPulse = isSuperAdmin || isSeo;
 
-  const openEditProfileDialog = useCallback((member: Member) => {
-    const meta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
-    setEditProfileMember(member);
-    setEditProfileFirstName(meta?.firstName ?? "");
-    setEditProfileLastName(meta?.lastName ?? "");
-    setEditProfileBirthDate(meta?.birthDate ?? "");
-    setEditProfilePhone(meta?.phone ?? "");
-    setEditProfileManagerRate(String(meta?.managerRate ?? DEFAULT_MANAGER_RATE));
-    // ЛИШЕ ручний статус: журнальні vacation/sick_leave сюди не потрапляють,
-    // інакше в селекті стояло б значення, якого немає у списку, і будь-яке
-    // збереження профілю писало б його назад у team_member_profiles.
-    setEditProfileAvailabilityStatus(meta?.availabilityStatus === "offline" ? "offline" : "available");
-    setEditProfileAvailabilityStartDate(meta?.availabilityStartDate ?? "");
-    setEditProfileAvailabilityEndDate(meta?.availabilityEndDate ?? "");
-    setEditProfileStartDate(meta?.startDate ?? "");
-    setEditProfileProbationEndDate(meta?.probationEndDate ?? "");
-    setEditProfileManagerUserId(meta?.managerUserId ?? "");
-    setEditProfileModuleAccess(
-      // Дефолт беремо за ПОСАДОЮ людини, а не безрольовий: інакше картка того,
-      // кого ще немає в довіднику, показувала б чужий мінімум із трьох пунктів.
-      normalizeMemberModuleAccessForRole(
-        meta?.moduleAccess ?? defaultModuleAccess({ accessRole: member.access_role, jobRole: member.job_role }),
-        member.access_role,
-        member.job_role
-      )
-    );
-  }, [memberMetaByUserId]);
-
   useEffect(() => {
     const memberId = params.get("member")?.trim();
-    if (!memberId || !canOpenProfileCard || members.length === 0) return;
-    if (editProfileMember?.user_id === memberId) return;
-    const member = members.find((entry) => entry.user_id === memberId);
-    if (!member) return;
-    setActiveTab("members");
-    openEditProfileDialog(member);
-  }, [canOpenProfileCard, editProfileMember?.user_id, members, openEditProfileDialog, params]);
+    if (!memberId) return;
+    // Легасі-адреса ?member=… вела в панель поруч зі списком. Панелі більше
+    // немає — картка людини живе окремим маршрутом, тож просто перекидаємо.
+    navigate(`/team/${memberId}`, { replace: true });
+  }, [navigate, params]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1203,15 +1093,6 @@ export function TeamMembersPage() {
     [members, resolvePulsePerson]
   );
 
-  const resolveActorName = useCallback(
-    (actorUserId: string | null, fallback: string | null) => {
-      if (!actorUserId) return fallback || "Система";
-      const member = members.find((candidate) => candidate.user_id === actorUserId);
-      return member ? getMemberDisplayName(member) : fallback || "Користувач";
-    },
-    [members, getMemberDisplayName]
-  );
-
   // Row-action menu items, shared by the desktop master list and (potentially)
   // other member surfaces. Mirrors the previous inline table row menu.
   const getMemberRowMenuItems = (m: Member, availability: string) => [
@@ -1220,23 +1101,15 @@ export function TeamMembersPage() {
     canOpenProfileCard
       ? (canManage ? memberProfileStorageAvailable : true)
         ? {
-            label: canManage ? "Редагувати профіль" : "Відсоток менеджера",
-            onSelect: () => {
-              setSelectedMemberId(m.user_id);
-              openEditProfileDialog(m);
-              setActiveSection("profile");
-            },
+            label: canManage ? "Відкрити картку" : "Відсоток менеджера",
+            onSelect: () => navigate(`/team/${m.user_id}`),
           }
         : { label: "Профіль (read-only)", disabled: true, muted: true }
       : { label: "Тільки перегляд", disabled: true, muted: true },
     canManage && (isSuperAdmin || (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
       ? {
             label: "Змінити доступи",
-            onSelect: () => {
-              setSelectedMemberId(m.user_id);
-              openEditRolesDialog(m);
-              setActiveSection("access");
-            },
+            onSelect: () => navigate(`/team/${m.user_id}?section=access`),
           }
       : {
           label: !isSuperAdmin && m.user_id === currentUserId ? "Admin не може змінити себе" : "Тільки перегляд",
@@ -1261,351 +1134,26 @@ export function TeamMembersPage() {
         },
   ];
 
-  const panelMember =
-    (selectedMemberId ? members.find((m) => m.user_id === selectedMemberId) : null) ??
-    filteredMembers[0] ??
-    null;
-  // "pulse" is owner/SEO-only; anyone else falls back to the panel view (the
-  // preference may linger in localStorage from another account on this machine).
-  const effectiveViewMode = viewMode === "pulse" && !canPulse ? "panel" : viewMode;
-
-  // Mirrors the row-menu guard: an Admin may not edit their own roles nor an owner's.
-  const canEditPanelRoles =
-    canManage &&
-    !!panelMember &&
-    (isSuperAdmin || (panelMember.user_id !== currentUserId && (panelMember.access_role ?? null) !== "owner"));
-  const visiblePersonSections = PERSON_SECTIONS.filter((section) => {
-    // Оплата — це зарплати: показуємо лише owner/CEO, як і RLS у базі.
-    if (section.key === "pay") return isSuperAdmin || isSeo;
-    if (section.key === "access" || section.key === "hr") return canOpenProfileCard;
-    if (section.key === "profile") return canOpenProfileCard;
-    return true;
-  });
-  const panelProfile = panelMember ? memberProfilesByUserId[panelMember.user_id] : null;
-  const panelMeta = panelMember ? memberMetaByUserId[panelMember.user_id] : undefined;
-
-  // One surface per person: whoever is selected in the list is also the person
-  // the Профіль/Доступи sections edit, so the edit state follows the selection.
-  const panelUserId = panelMember?.user_id ?? null;
-  useEffect(() => {
-    if (!panelMember || !canOpenProfileCard) return;
-    if (editProfileMember?.user_id === panelUserId) return;
-    openEditProfileDialog(panelMember);
-    setEditMember(panelMember);
-    setEditAccessRole(panelMember.access_role ?? "member");
-    setEditJobRole(panelMember.job_role ?? "none");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelUserId, canOpenProfileCard]);
-  const panelDisplayName = panelMember ? getMemberDisplayName(panelMember) : "";
-  const panelInitials = panelMember ? getInitialsFromName(panelDisplayName, panelMember.email ?? null) : "";
-  const panelSeniority = formatEmploymentDuration(panelMeta?.startDate) || "—";
-  const panelStartedOn = panelMeta?.startDate ? formatEmploymentDate(panelMeta.startDate) : "";
-
   const localProfileFallbackHint =
     "Локально fallback-функція недоступна. Запусти через `netlify dev` або застосуй SQL зі scripts/team-member-profiles.sql.";
-  const selectedEmploymentDuration = formatEmploymentDuration(editProfileStartDate);
-  const selectedEmploymentDays = getEmploymentDurationDays(editProfileStartDate);
-  const selectedEmploymentStatus = displayEmploymentStatus(
-    memberMetaByUserId[editProfileMember?.user_id ?? ""]?.employmentStatus
-  );
-  const shouldShowManagerRateField =
-    canManageManagerRates && supportsManagerRate(editProfileMember?.job_role ?? null);
-  const shouldShowProbationSection =
-    selectedEmploymentStatus === "probation" || selectedEmploymentStatus === "rejected";
-  const selectedAvailabilityRange = formatAvailabilityRange(
-    editProfileAvailabilityStatus,
-    editProfileAvailabilityStartDate,
-    editProfileAvailabilityEndDate
-  );
-  const canDeactivateEmployment = selectedEmploymentStatus === "active";
-  const canReactivateEmployment = selectedEmploymentStatus === "inactive";
 
   const isExpired = (dateStr: string) => new Date(dateStr) < new Date();
 
-  const handleTabChange = (next: "members" | "invites") => {
+  const handleTabChange = (next: AdminTab) => {
     setActiveTab(next);
-    setParams(next === "members" ? {} : { tab: next });
+    setParams(next === "people" ? {} : { tab: next });
   };
 
-  // Пульс drill-down: jump to the person's card in Учасники. Clears the active
-  // filter/search first, otherwise the target could be filtered out of the list
-  // and the panel would fall back to someone else.
-  const openPersonCard = (userId: string, section: PersonSection = "overview") => {
-    setActiveFilter(null);
-    setSelectedMemberId(userId);
-    setActiveTab("members");
-    setViewMode("panel");
-    setActiveSection(section);
+  /**
+   * Провалитись із Пульсу в людину — тепер це перехід у її картку.
+   *
+   * Раніше треба було спершу зняти фільтр і перемкнути вигляд, інакше панель
+   * показувала когось іншого: людина, яку шукали, могла не пройти фільтр
+   * списку. Окремий маршрут знімає цю залежність повністю.
+   */
+  const openPersonCard = (userId: string) => {
     setPulsePeekUserId(null);
-    setParams({ member: userId });
-  };
-
-  const closeEditProfileDialog = () => {
-    setEditProfileMember(null);
-    const nextParams = new URLSearchParams(params);
-    nextParams.delete("member");
-    nextParams.delete("review");
-    setParams(nextParams);
-  };
-
-  const saveMemberProfile = async () => {
-    if (!editProfileMember || !workspaceId || !canOpenProfileCard) return;
-
-    setEditProfileBusy(true);
-    try {
-      const currentMeta = memberMetaByUserId[editProfileMember.user_id] ?? DEFAULT_MEMBER_META;
-      const firstName = editProfileFirstName.trim();
-      const lastName = editProfileLastName.trim();
-      const fullName = `${firstName} ${lastName}`.trim();
-      const birthDate = editProfileBirthDate.trim();
-      const phone = editProfilePhone.trim();
-      const managerRate = Math.max(0, Number(editProfileManagerRate) || 0);
-      const availabilityStatus = editProfileAvailabilityStatus;
-      const availabilityStartDate = availabilityStatus === "available" ? "" : editProfileAvailabilityStartDate.trim();
-      const availabilityEndDate = availabilityStatus === "available" ? "" : editProfileAvailabilityEndDate.trim();
-      const startDate = editProfileStartDate.trim();
-      const probationEndDate = editProfileProbationEndDate.trim();
-      const managerUserId = editProfileManagerUserId.trim();
-      const moduleAccess = normalizeMemberModuleAccessForRole(
-        editProfileModuleAccess,
-        editProfileMember.access_role,
-        editProfileMember.job_role
-      );
-      const currentEmploymentStatus = normalizeEmploymentStatus(currentMeta.employmentStatus, currentMeta.probationEndDate);
-      const probationDatesChanged = currentMeta.probationEndDate !== probationEndDate;
-      /**
-       * Статус зайнятості при збереженні картки.
-       *
-       * ГОЧА: раніше тут стояло просто `probationEndDate ? "probation" : "active"`,
-       * тобто статус виводився ЛИШЕ з дати. Дата випробувального лишається в
-       * картці і після переведення в штат (це історія), тож будь-яке наступне
-       * збереження — навіть просто зміна доступів — мовчки повертало людину на
-       * випробувальний. Гілка "active" була недосяжною, і рішення, ухвалене
-       * через team-member-probation, не трималося.
-       *
-       * Тепер уже підтверджений штат зберігається; на випробувальний повертаємо
-       * лише коли дату справді змінили — тобто розпочали новий термін.
-       */
-      const nextEmploymentStatus =
-        currentEmploymentStatus === "rejected" || currentEmploymentStatus === "inactive"
-          ? currentEmploymentStatus
-          : currentEmploymentStatus === "active" && !probationDatesChanged
-          ? "active"
-          : probationEndDate
-          ? "probation"
-          : "active";
-      const probationReviewNotifiedAt =
-        nextEmploymentStatus === "probation" && probationDatesChanged ? "" : currentMeta.probationReviewNotifiedAt;
-      const probationReviewedAt =
-        nextEmploymentStatus === "probation" && probationDatesChanged ? "" : currentMeta.probationReviewedAt;
-      const probationReviewedBy =
-        nextEmploymentStatus === "probation" && probationDatesChanged ? "" : currentMeta.probationReviewedBy;
-      const probationExtensionCount = currentMeta.probationExtensionCount ?? 0;
-
-      if (
-        availabilityStartDate &&
-        availabilityEndDate &&
-        new Date(`${availabilityEndDate}T12:00:00`).getTime() < new Date(`${availabilityStartDate}T12:00:00`).getTime()
-      ) {
-        throw new Error("Кінець відсутності не може бути раніше дати початку");
-      }
-
-      if (startDate && probationEndDate && new Date(`${probationEndDate}T12:00:00`).getTime() < new Date(`${startDate}T12:00:00`).getTime()) {
-        throw new Error("Кінець випробувального не може бути раніше дати старту");
-      }
-
-      if (canManage) {
-        try {
-          await upsertWorkspaceMemberProfile({
-            workspaceId,
-            userId: editProfileMember.user_id,
-            firstName,
-            lastName,
-            fullName,
-            // Аватарку СВІДОМО не передаємо: ця картка її не редагує, а раніше
-            // пересилала назад значення з кешу директорії. Якщо людина завантажила
-            // аватарку після того, як сторінка прочитала директорію, збереження
-            // ролей затирало її на null — саме так зникла аватарка 27.07.2026.
-            // Поля, яких немає в payload, upsert не чіпає.
-            birthDate,
-            phone,
-            availabilityStatus,
-            availabilityStartDate,
-            availabilityEndDate,
-            startDate,
-            probationEndDate,
-            employmentStatus: nextEmploymentStatus,
-            probationReviewNotifiedAt,
-            probationReviewedAt,
-            probationReviewedBy,
-            probationExtensionCount,
-            managerUserId,
-            moduleAccess,
-            updatedBy: currentUserId ?? null,
-          });
-        } catch (error: unknown) {
-          if (!isRecoverableTeamProfileError(getErrorMessage(error))) {
-            throw error;
-          }
-          setMemberProfileStorageAvailable(false);
-
-          const { data: sessionData } = await supabase.auth.getSession();
-          const accessToken = sessionData.session?.access_token;
-          if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію", { cause: error });
-          const response = await fetch("/.netlify/functions/create-workspace-invite", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({
-              mode: "update_member_profile",
-              userId: editProfileMember.user_id,
-              firstName,
-              lastName,
-              birthDate,
-              phone,
-              availabilityStatus,
-              availabilityStartDate,
-              availabilityEndDate,
-              startDate,
-              probationEndDate,
-              employmentStatus: nextEmploymentStatus,
-              managerUserId,
-              moduleAccess,
-            }),
-          });
-          if (response.status === 404) {
-            setWorkspaceFunctionAvailable(false);
-            throw new Error(localProfileFallbackHint, { cause: error });
-          }
-          setWorkspaceFunctionAvailable(true);
-          const payload = await parseJsonSafe<{ error?: string }>(response);
-          if (!response.ok) {
-            throw new Error(payload?.error || `Не вдалося оновити профіль (HTTP ${response.status})`, { cause: error });
-          }
-        }
-      }
-
-      if (canManageManagerRates) {
-        const { error: managerRateError } = await supabase
-          .schema("tosho")
-          .from("team_member_manager_rates")
-          .upsert(
-            {
-              workspace_id: workspaceId,
-              user_id: editProfileMember.user_id,
-              manager_rate: managerRate,
-              updated_by: currentUserId ?? null,
-            },
-            { onConflict: "workspace_id,user_id" }
-          );
-
-        if (managerRateError && !/does not exist|relation|schema cache|could not find the table/i.test(managerRateError.message ?? "")) {
-          throw managerRateError;
-        }
-      }
-
-      setMemberMetaByUserId((prev) => ({
-        ...prev,
-        [editProfileMember.user_id]: {
-          firstName,
-          lastName,
-          fullName,
-          birthDate,
-          phone,
-          managerRate,
-          availabilityStatus,
-          availabilityStartDate,
-          availabilityEndDate,
-          startDate,
-          probationEndDate,
-          employmentStatus: nextEmploymentStatus,
-          probationReviewNotifiedAt,
-          probationReviewedAt,
-          probationReviewedBy,
-          probationExtensionCount,
-          managerUserId,
-          moduleAccess,
-        },
-      }));
-      setMembers((prev) =>
-        prev.map((member) =>
-          member.user_id === editProfileMember.user_id
-            ? {
-                ...member,
-                full_name: fullName || member.full_name,
-              }
-            : member
-        )
-      );
-
-      toast.success(canManage ? "Профіль учасника оновлено" : "Відсоток менеджера оновлено");
-      closeEditProfileDialog();
-    } catch (error: unknown) {
-      toast.error("Не вдалося оновити профіль", { description: getErrorMessage(error) });
-    } finally {
-      setEditProfileBusy(false);
-    }
-  };
-
-
-  const applyEmploymentDecision = async (decision: "inactive" | "reactivate") => {
-    if (!editProfileMember || !workspaceId) return;
-
-    setEmploymentActionBusy(decision);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
-
-      const response = await fetch("/.netlify/functions/team-member-employment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          userId: editProfileMember.user_id,
-          decision,
-        }),
-      });
-
-      const payload = await parseJsonSafe<{
-        error?: string;
-        profile?: Partial<MemberProfileMeta>;
-      }>(response);
-
-      if (!response.ok) {
-        throw new Error(payload?.error || `Не вдалося оновити статус співпраці (HTTP ${response.status})`);
-      }
-
-      const current = memberMetaByUserId[editProfileMember.user_id] ?? DEFAULT_MEMBER_META;
-      const nextMeta: MemberProfileMeta = {
-        ...current,
-        ...payload?.profile,
-        employmentStatus: normalizeEmploymentStatus(payload?.profile?.employmentStatus, payload?.profile?.probationEndDate),
-        probationReviewNotifiedAt: payload?.profile?.probationReviewNotifiedAt ?? current.probationReviewNotifiedAt,
-        probationReviewedAt: payload?.profile?.probationReviewedAt ?? current.probationReviewedAt,
-        probationReviewedBy: payload?.profile?.probationReviewedBy ?? current.probationReviewedBy,
-        probationExtensionCount: payload?.profile?.probationExtensionCount ?? current.probationExtensionCount,
-      };
-
-      setMemberMetaByUserId((prev) => ({
-        ...prev,
-        [editProfileMember.user_id]: nextMeta,
-      }));
-      setEditProfileProbationEndDate(nextMeta.probationEndDate);
-
-      toast.success(
-        decision === "inactive" ? "Співпрацю завершено" : "Співробітника повернуто в штат"
-      );
-      setPendingEmploymentDecision(null);
-    } catch (error: unknown) {
-      toast.error("Не вдалося оновити статус співпраці", { description: getErrorMessage(error) });
-    } finally {
-      setEmploymentActionBusy(null);
-    }
+    navigate(`/team/${userId}`);
   };
 
   const sendPasswordReset = async (member: Member) => {
@@ -1844,71 +1392,6 @@ export function TeamMembersPage() {
     }
   };
 
-  const openEditRolesDialog = (member: Member) => {
-    setEditMember(member);
-    setEditAccessRole(member.access_role ?? "member");
-    setEditJobRole(member.job_role ?? "none");
-  };
-
-  // The Доступи section owns both halves of "access": roles live in memberships
-  // (Netlify fn) and module toggles live in the profile row, so saving the
-  // section persists roles first, then the profile.
-  const saveAccessSection = async () => {
-    if (!panelMember) return;
-    const rolesChanged =
-      (panelMember.access_role ?? "member") !== editAccessRole ||
-      (panelMember.job_role ?? "none") !== editJobRole;
-    if (rolesChanged && canEditPanelRoles) {
-      await saveMemberRoles();
-    }
-    await saveMemberProfile();
-  };
-
-  /**
-   * Тонка обгортка над спільним `savePersonRoles`: сам каскад запису живе в
-   * `src/features/team/personRoles.ts`, бо ним користується ще й картка людини.
-   * Тут лишається те, що належить сторінці, — перевірки прав актора, тости й
-   * оновлення списку.
-   */
-  const saveMemberRoles = async () => {
-    if (!editMember || !workspaceId || !canManage) return;
-    if (!isSuperAdmin && (editMember.access_role ?? null) === "owner") {
-      toast.error("Admin не може редагувати Super Admin");
-      return;
-    }
-    if (!isSuperAdmin && editAccessRole === "owner") {
-      toast.error("Admin не може призначати Super Admin");
-      return;
-    }
-
-    setEditBusy(true);
-    try {
-      const result = await savePersonRoles({
-        workspaceId,
-        teamId,
-        userId: editMember.user_id,
-        currentAccessRole: editMember.access_role ?? null,
-        currentJobRole: editMember.job_role ?? null,
-        nextAccessRole: editAccessRole,
-        nextJobRole: editJobRole,
-      });
-      if (!result.changed) return;
-
-      setMembers((prev) =>
-        prev.map((member) =>
-          member.user_id === editMember.user_id
-            ? { ...member, access_role: result.accessRole, job_role: result.jobRole }
-            : member
-        )
-      );
-      toast.success(result.viaFallback ? "Права учасника оновлено (fallback)" : "Права учасника оновлено");
-    } catch (error: unknown) {
-      toast.error("Не вдалося змінити ролі", { description: getErrorMessage(error) });
-    } finally {
-      setEditBusy(false);
-    }
-  };
-
   const callInviteFunction = async (body: Record<string, unknown>) => {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
@@ -2060,37 +1543,10 @@ export function TeamMembersPage() {
       (canOpenProfileCard && memberMetaLoading) ||
       (activeTab === "invites" && invitesLoading)
   );
-  useEffect(() => {
-    const el = twoPaneRef.current;
-    if (!el || activeTab !== "members" || effectiveViewMode !== "panel") return;
-    const update = () => setTwoPaneTop(Math.round(el.getBoundingClientRect().top));
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [activeTab, effectiveViewMode, activeFilter, showSkeleton]);
-
   const inviteAccessRoleOptions = isSuperAdmin
     ? ACCESS_ROLE_OPTIONS
     : ACCESS_ROLE_OPTIONS.filter((option) => option.value !== "owner");
-  const memberAccessRoleOptions = isSuperAdmin
-    ? MEMBER_ACCESS_ROLE_OPTIONS
-    : MEMBER_ACCESS_ROLE_OPTIONS.filter((option) => option.value !== "owner");
   const activeInvitesCount = invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length;
-  const managerOptions = members.map((member) => {
-    const profile = memberProfilesByUserId[member.user_id];
-    const label =
-      formatUserShortName({
-        fullName: member.full_name ?? profile?.label ?? null,
-        email: member.email ?? null,
-        fallback: member.email ?? member.user_id,
-      }) || "Користувач";
-    return {
-      id: member.user_id,
-      label,
-    };
-  });
-  const selectedManagerLabel =
-    managerOptions.find((option) => option.id === editProfileManagerUserId)?.label ?? "Не обрано";
   const needsAttentionCount = useMemo(() => {
     return members.filter((member) => {
       const meta = memberMetaByUserId[member.user_id];
@@ -2117,79 +1573,34 @@ export function TeamMembersPage() {
         topLeft={
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
             <div className="flex items-center gap-2.5">
-              <h1 className="text-lg font-semibold tracking-tight text-foreground">Ролі та доступи</h1>
+              <h1 className="text-lg font-semibold tracking-tight text-foreground">Люди та доступи</h1>
               <CountBadge value={members.length} />
             </div>
-            <SegmentedGroup className={SEGMENTED_GROUP}>
-                <Button
-                  type="button"
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={activeTab === "members"}
-                  onClick={() => handleTabChange("members")}
-                  className={SEGMENTED_TRIGGER}
-                >
-                  Учасники ({members.length})
-                </Button>
-                {canManage ? (
+            <SegmentedGroup className={cn(SEGMENTED_GROUP, "h-auto flex-wrap")}>
+              {ADMIN_TABS.filter((tab) => (tab.key === "pulse" ? canPulse : tab.key === "invites" ? canManage : true)).map(
+                (tab) => (
                   <Button
+                    key={tab.key}
                     type="button"
                     variant="segmented"
                     size="xs"
-                    aria-pressed={activeTab === "invites"}
-                    onClick={() => handleTabChange("invites")}
+                    aria-pressed={activeTab === tab.key}
+                    onClick={() => handleTabChange(tab.key)}
                     className={SEGMENTED_TRIGGER}
                   >
-                    Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
+                    {tab.label}
+                    {tab.key === "people" ? ` (${members.length})` : null}
+                    {tab.key === "invites"
+                      ? ` (${invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})`
+                      : null}
                   </Button>
-                ) : null}
-              </SegmentedGroup>
+                )
+              )}
+            </SegmentedGroup>
           </div>
         }
         topRight={
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end lg:ml-auto">
-            {activeTab === "members" ? (
-              <SegmentedGroup className={SEGMENTED_GROUP}>
-                <Button
-                  type="button"
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={effectiveViewMode === "panel"}
-                  onClick={() => setViewMode("panel")}
-                  className={cn(SEGMENTED_TRIGGER, "px-3")}
-                  aria-label="Вигляд: панель"
-                  title="Панель: список + картка людини"
-                >
-                  <Columns2 className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={effectiveViewMode === "rows"}
-                  onClick={() => setViewMode("rows")}
-                  className={cn(SEGMENTED_TRIGGER, "px-3")}
-                  aria-label="Вигляд: таблиця для порівняння"
-                  title="Рядки: таблиця для порівняння"
-                >
-                  <Rows3 className="h-4 w-4" />
-                </Button>
-                {canPulse ? (
-                  <Button
-                    type="button"
-                    variant="segmented"
-                    size="xs"
-                    aria-pressed={effectiveViewMode === "pulse"}
-                    onClick={() => setViewMode("pulse")}
-                    className={cn(SEGMENTED_TRIGGER, "gap-1.5 px-3")}
-                    title="Пульс: аналітика активності команди"
-                  >
-                    <Activity className="h-4 w-4" />
-                    Пульс
-                  </Button>
-                ) : null}
-              </SegmentedGroup>
-            ) : null}
             {canManage ? (
               <Button variant="primary" size="lg" className={cn(TOOLBAR_ACTION_BUTTON, "md:px-5")} onClick={openInviteDialog}>
                 Інвайт
@@ -2198,7 +1609,7 @@ export function TeamMembersPage() {
           </div>
         }
         filters={
-          activeTab === "members" && effectiveViewMode !== "pulse" ? (
+          activeTab === "people" ? (
             <div className="flex flex-wrap items-center gap-1.5">
             <FilterChip
               label="Всі"
@@ -2263,7 +1674,6 @@ export function TeamMembersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       activeTab,
-      effectiveViewMode,
       members.length,
       invites,
       canManage,
@@ -2301,7 +1711,7 @@ export function TeamMembersPage() {
   return (
     <div className="flex w-full flex-col pb-20 md:pb-0">
       <div className="overflow-hidden flex flex-col">
-        {activeTab === "members" && effectiveViewMode !== "pulse" ? (
+        {activeTab === "people" ? (
           <>
           <div className="space-y-3 px-4 lg:hidden">
             {membersError ? (
@@ -2329,7 +1739,7 @@ export function TeamMembersPage() {
                   <Card
                     key={m.user_id}
                     className={cn("border-border/60 p-4", canOpenProfileCard && "cursor-pointer")}
-                    onClick={canOpenProfileCard ? () => setSelectedMemberId(m.user_id) : undefined}
+                    onClick={() => navigate(`/team/${m.user_id}`)}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
@@ -2378,12 +1788,8 @@ export function TeamMembersPage() {
                           canOpenProfileCard
                             ? (canManage ? memberProfileStorageAvailable : true)
                               ? {
-                                  label: canManage ? "Редагувати профіль" : "Відсоток менеджера",
-                                  onSelect: () => {
-                                    setSelectedMemberId(m.user_id);
-                                    openEditProfileDialog(m);
-                                    setActiveSection("profile");
-                                  },
+                                  label: canManage ? "Відкрити картку" : "Відсоток менеджера",
+                                  onSelect: () => navigate(`/team/${m.user_id}`),
                                 }
                               : {
                                   label: "Профіль (read-only)",
@@ -2399,7 +1805,7 @@ export function TeamMembersPage() {
                           (isSuperAdmin || (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
                             ? {
                                 label: "Змінити доступи",
-                                onSelect: () => openEditRolesDialog(m),
+                                onSelect: () => navigate(`/team/${m.user_id}?section=access`),
                               }
                             : {
                                 label:
@@ -2518,522 +1924,10 @@ export function TeamMembersPage() {
               })
             )}
           </div>
-          <div
-            ref={twoPaneRef}
-            className={cn(
-              "border-t border-border/60 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]",
-              selectedMemberId ? "block" : "hidden",
-              effectiveViewMode === "panel" ? "lg:grid" : "lg:hidden"
-            )}
-            style={twoPaneTop != null ? { ["--team-panes-h" as string]: `calc(100dvh - ${twoPaneTop}px)` } : undefined}
-          >
-            <div className="hidden border-r border-border/60 lg:block lg:h-[var(--team-panes-h,auto)] lg:overflow-y-auto">
-              {membersError ? (
-                <div className="p-4 text-sm text-destructive">Помилка завантаження: {membersError}</div>
-              ) : filteredMembers.length === 0 ? (
-                <div className="p-6 text-sm text-muted-foreground">Нема учасників за фільтром.</div>
-              ) : (
-                <ul className="flex flex-col">
-                  {filteredMembers.map((m) => {
-                    const listProfile = memberProfilesByUserId[m.user_id];
-                    const listMeta = memberMetaByUserId[m.user_id];
-                    const listAvailability = listMeta?.availabilityStatus ?? "available";
-                    const listPresence = memberPresenceByUserId[m.user_id];
-                    const listInactive = isInactiveEmployment(listMeta?.employmentStatus);
-                    const listName = getMemberDisplayName(m);
-                    const listInitials = getInitialsFromName(listName, m.email ?? null);
-                    const isSelected = panelMember?.user_id === m.user_id;
-                    return (
-                      <li
-                        key={m.user_id}
-                        className={cn(
-                          "group flex items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors",
-                          isSelected ? "bg-primary/[0.07]" : "hover:bg-muted/40"
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setSelectedMemberId(m.user_id)}
-                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
-                        >
-                          <AvatarBase
-                            src={getMemberAvatarSource(listProfile, m)}
-                            name={listName}
-                            fallback={listInitials}
-                            assetVariant="xs"
-                            size={36}
-                            shape="circle"
-                            className="border-border bg-muted/50"
-                            fallbackClassName="text-3xs font-bold"
-                            availability={listAvailability}
-                            presence={listPresence?.online ? "online" : "offline"}
-                            inactive={listInactive}
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className={cn("block truncate text-sm font-medium text-foreground", listInactive && "text-muted-foreground line-through")}>
-                              {listName}
-                            </span>
-                            <span className="block truncate text-xs text-muted-foreground">{getJobRoleLabel(m.job_role ?? null)}</span>
-                          </span>
-                        </button>
-                        <AppDropdown
-                          align="end"
-                          contentClassName="w-48"
-                          trigger={
-                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          }
-                          items={getMemberRowMenuItems(m, listAvailability)}
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-            <div className="lg:h-[var(--team-panes-h,auto)] lg:overflow-y-auto">
-              {panelMember ? (
-                <div className="flex flex-col gap-4 p-5">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-2 w-fit lg:hidden"
-                    onClick={() => setSelectedMemberId(null)}
-                  >
-                    ← До списку
-                  </Button>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <AvatarBase
-                        src={getMemberAvatarSource(panelProfile, panelMember)}
-                        name={panelDisplayName}
-                        fallback={panelInitials}
-                        size={56}
-                        shape="circle"
-                        className="border-border bg-muted/50"
-                        fallbackClassName="text-sm font-bold"
-                      />
-                      <div className="min-w-0">
-                        <div className="truncate text-lg font-semibold text-foreground">{panelDisplayName}</div>
-                        <div className="truncate text-sm text-muted-foreground">{panelMember.email ?? "Не вказано"}</div>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", getAccessBadgeClass(panelMember.access_role ?? null))}>
-                            {getAccessRoleLabel(panelMember.access_role ?? null)}
-                          </Badge>
-                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", getJobBadgeClass(panelMember.job_role ?? null))}>
-                            {getJobRoleLabel(panelMember.job_role ?? null)}
-                          </Badge>
-                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", getEmploymentStatusBadgeClass(displayEmploymentStatus(panelMeta?.employmentStatus)))}>
-                            {getEmploymentStatusLabel(displayEmploymentStatus(panelMeta?.employmentStatus))}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
 
-                  <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "h-auto flex-wrap")}>
-                    {visiblePersonSections.map((section) => (
-                      <Button key={section.key} type="button" variant="segmented" size="xs"
-                        aria-pressed={activeSection === section.key}
-                        onClick={() => setActiveSection(section.key)}
-                        className={SEGMENTED_TRIGGER_SM}>
-                        {section.label}
-                      </Button>
-                    ))}
-                  </SegmentedGroup>
-
-                  {activeSection === "overview" ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
-                          <div className="text-xs uppercase tracking-wide text-muted-foreground">День народження</div>
-                          <div className="mt-1 text-sm font-medium text-foreground">{formatBirthDate(panelMeta?.birthDate)}</div>
-                        </div>
-                        <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
-                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Стаж</div>
-                          <div className="mt-1 text-sm font-medium text-foreground">{panelSeniority}</div>
-                          {panelStartedOn ? (
-                            <div className="mt-0.5 text-xs text-muted-foreground">з {panelStartedOn}</div>
-                          ) : null}
-                        </div>
-                        <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
-                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Доступність</div>
-                          <div className="mt-1 text-sm font-medium text-foreground">{getTeamAvailabilityLabel(panelMeta?.availabilityStatus ?? "available")}</div>
-                        </div>
-                        <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
-                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Телефон</div>
-                          <div className="mt-1 text-sm font-medium text-foreground">{panelMeta?.phone || "—"}</div>
-                        </div>
-                      </div>
-                      {canPulse ? <PersonTimeInCrm userId={panelMember.user_id} /> : null}
-                    </>
-                  ) : null}
-
-                  {activeSection === "profile" ? (
-                    <div className="flex flex-col gap-4">
-                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">Email</Label>
-                        <Input value={editProfileMember?.email ?? "Не вказано"} disabled className="h-11" />
-                      </div>
-                    </div>
-                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
-                      <div className="mb-4 text-sm font-semibold text-foreground">Особисті дані</div>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Імʼя</Label>
-                          <Input
-                            value={editProfileFirstName}
-                            onChange={(event) => setEditProfileFirstName(event.target.value)}
-                            className="h-11"
-                            placeholder="Імʼя"
-                            disabled={!canManage}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Прізвище</Label>
-                          <Input
-                            value={editProfileLastName}
-                            onChange={(event) => setEditProfileLastName(event.target.value)}
-                            className="h-11"
-                            placeholder="Прізвище"
-                            disabled={!canManage}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Дата народження</Label>
-                          <DateInput
-                            value={editProfileBirthDate}
-                            onChange={(event) => setEditProfileBirthDate(event.target.value)}
-                            className="h-11"
-                            disabled={!canManage}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Телефон</Label>
-                          <Input
-                            value={editProfilePhone}
-                            onChange={(event) => setEditProfilePhone(event.target.value)}
-                            className="h-11"
-                            placeholder="+380..."
-                            disabled={!canManage}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
-                      <div className="mb-4 text-sm font-semibold text-foreground">Робочі параметри</div>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        {shouldShowManagerRateField ? (
-                          <div className="space-y-2 sm:col-span-2">
-                            <Label className="text-sm font-medium text-foreground">% менеджера</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={editProfileManagerRate}
-                              onChange={(event) => setEditProfileManagerRate(event.target.value)}
-                              className="h-11"
-                              placeholder={String(DEFAULT_MANAGER_RATE)}
-                            />
-                          </div>
-                        ) : null}
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Статус доступності</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Відпустки й лікарняні — на сторінці «Команда»: бейдж береться з журналу
-                            відсутностей. Тут лишається тільки «поза офісом».
-                          </p>
-                          <Select
-                            value={editProfileAvailabilityStatus}
-                            onValueChange={(value) => setEditProfileAvailabilityStatus(value as MemberProfileMeta["availabilityStatus"])}
-                            disabled={!canManage}
-                          >
-                            <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
-                              {getTeamAvailabilityLabel(editProfileAvailabilityStatus)}
-                            </SelectTrigger>
-                            <SelectContent>
-                              {AVAILABILITY_OPTIONS.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {editProfileAvailabilityStatus !== "available" ? (
-                          <>
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium text-foreground">Початок відсутності</Label>
-                              <DateInput
-                                value={editProfileAvailabilityStartDate}
-                                onChange={(event) => setEditProfileAvailabilityStartDate(event.target.value)}
-                                className="h-11"
-                                disabled={!canManage}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium text-foreground">Кінець відсутності</Label>
-                              <DateInput
-                                value={editProfileAvailabilityEndDate}
-                                onChange={(event) => setEditProfileAvailabilityEndDate(event.target.value)}
-                                className="h-11"
-                                disabled={!canManage}
-                              />
-                              <div className="text-xs text-muted-foreground">
-                                {selectedAvailabilityRange || "Можна залишити порожнім, якщо дата повернення невідома"}
-                              </div>
-                            </div>
-                          </>
-                        ) : null}
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Менеджер</Label>
-                          <Select
-                            value={editProfileManagerUserId || "__none__"}
-                            onValueChange={(value) => setEditProfileManagerUserId(value === "__none__" ? "" : value)}
-                            disabled={!canManage}
-                          >
-                            <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{selectedManagerLabel}</SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">Не обрано</SelectItem>
-                              {managerOptions
-                                .filter((option) => option.id !== editProfileMember?.user_id)
-                                .map((option) => (
-                                  <SelectItem key={option.id} value={option.id}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Дата старту</Label>
-                          <DateInput
-                            value={editProfileStartDate}
-                            onChange={(event) => setEditProfileStartDate(event.target.value)}
-                            className="h-11"
-                            disabled={!canManage}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    {canOpenProfileCard ? (
-                      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                        <Button variant="outline" className="h-10 sm:min-w-[140px]" onClick={() => openEditProfileDialog(panelMember)} disabled={editProfileBusy}>
-                          Скинути
-                        </Button>
-                        <Button className="h-10 sm:min-w-[180px]" onClick={saveMemberProfile} disabled={editProfileBusy}>
-                          {editProfileBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : canManage ? "Зберегти профіль" : "Зберегти %"}
-                        </Button>
-                      </div>
-                    ) : null}
-                    </div>
-                  ) : null}
-
-                  {activeSection === "access" ? (
-                    <div className="flex flex-col gap-4">
-                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
-                      <div className="mb-4 text-sm font-semibold text-foreground">Ролі</div>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Рівень доступу</Label>
-                          <Select value={editAccessRole} onValueChange={setEditAccessRole} disabled={!canEditPanelRoles}>
-                            <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
-                              {memberAccessRoleOptions.find((o) => o.value === editAccessRole)?.label}
-                            </SelectTrigger>
-                            <SelectContent>
-                              {memberAccessRoleOptions.map((role) => (
-                                <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Роль у команді</Label>
-                          <Select value={editJobRole} onValueChange={setEditJobRole} disabled={!canEditPanelRoles}>
-                            <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
-                              {JOB_ROLE_OPTIONS.find((o) => o.value === editJobRole)?.label}
-                            </SelectTrigger>
-                            <SelectContent>
-                              {JOB_ROLE_OPTIONS.map((role) => (
-                                <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      {!canEditPanelRoles ? (
-                        <div className="mt-3 text-xs text-muted-foreground">
-                          {!isSuperAdmin && panelMember.user_id === currentUserId
-                            ? "Admin не може змінювати власні доступи"
-                            : "Редагування доступів недоступне"}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
-                      <div className="mb-4 text-sm font-semibold text-foreground">Доступ до модулів</div>
-                      {/* Порядок і групування — з реєстру модулів, щоб список
-                          не розходився з тим, що реально є в меню. */}
-                      <div className="flex flex-col gap-4">
-                        {MODULE_GROUPS.map((section) => (
-                          <div key={section.group}>
-                            <div className="mb-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">
-                              {section.label}
-                            </div>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                              {section.modules.map((module) => {
-                                /**
-                                 * Стан перемикача бере реєстр, а не сторінка.
-                                 *
-                                 * Тут раніше стояли власні `forced`/`restricted`, і
-                                 * заблокована галочка не пояснювала себе ніяк: людина
-                                 * бачила ввімкнений сірий квадратик і не знала ні хто
-                                 * це вирішив, ні чи можна змінити. Тепер поруч завжди
-                                 * написано, чия це відповідь.
-                                 */
-                                const lock = describeModuleLock(module.key, editProfileModuleAccess, {
-                                  accessRole: editProfileMember?.access_role ?? null,
-                                  jobRole: editProfileMember?.job_role ?? null,
-                                });
-                                return (
-                                  <label
-                                    key={module.key}
-                                    className={cn(
-                                      "flex items-start gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2",
-                                      lock.locked && !lock.checked && "opacity-60"
-                                    )}
-                                  >
-                                    <Checkbox
-                                      className="mt-0.5"
-                                      checked={lock.checked}
-                                      disabled={!canManage || lock.locked}
-                                      onCheckedChange={(checked) =>
-                                        setEditProfileModuleAccess((prev) => ({
-                                          ...prev,
-                                          [module.key]: checked === true,
-                                        }))
-                                      }
-                                    />
-                                    <span className="min-w-0">
-                                      <span className="block text-sm text-foreground">{module.label}</span>
-                                      {lock.reason ? (
-                                        <span className="block text-2xs text-muted-foreground">{lock.reason}</span>
-                                      ) : module.hint ? (
-                                        <span className="block text-2xs text-muted-foreground">{module.hint}</span>
-                                      ) : null}
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="mt-3 text-2xs text-muted-foreground">
-                        Сповіщення доступні всім і окремого дозволу не потребують.
-                      </p>
-                    </div>
-                    {canManage ? (
-                      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                        <Button className="h-10 sm:min-w-[180px]" onClick={saveAccessSection} disabled={editBusy || editProfileBusy}>
-                          {editBusy || editProfileBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Зберегти доступи"}
-                        </Button>
-                      </div>
-                    ) : null}
-                      {canManage ? (
-                        <PersonAccessHistorySection workspaceId={workspaceId} userId={panelMember.user_id} resolveActorName={resolveActorName} />
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {activeSection === "pay" ? (
-                    <MemberPaySection
-                      workspaceId={workspaceId}
-                      userId={panelMember.user_id}
-                      memberName={getMemberDisplayName(panelMember)}
-                      isDesigner={(panelMember.job_role ?? "").toLowerCase() === "designer"}
-                      canEdit={isSuperAdmin || isSeo}
-                    />
-                  ) : null}
-
-                  {activeSection === "activity" ? <PersonActivitySection userId={panelMember.user_id} /> : null}
-
-                  {activeSection === "hr" ? (
-                <div className="min-w-0 space-y-4">
-                  <div className={cn("grid gap-4", shouldShowProbationSection ? "sm:grid-cols-2 xl:grid-cols-1" : "grid-cols-1")}>
-                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <Activity className="h-4 w-4 text-muted-foreground" />
-                        Стаж роботи
-                      </div>
-                      <div className="mt-2 text-lg font-semibold text-foreground">
-                        {selectedEmploymentDuration || "Ще не задано"}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {editProfileStartDate
-                          ? `${formatEmploymentDate(editProfileStartDate)}${selectedEmploymentDays !== null && selectedEmploymentDays >= 0 ? `, ${selectedEmploymentDays} днів у компанії` : ""}`
-                          : "Вкажи дату старту, щоб побачити стаж"}
-                      </div>
-                    </div>
-                  </div>
-                  {selectedEmploymentStatus === "active" || selectedEmploymentStatus === "inactive" ? (
-                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                      <div className="flex flex-col gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-foreground">Статус співпраці</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {selectedEmploymentStatus === "active"
-                              ? "Співробітник працює у штаті. Якщо людина пішла або її звільнили, тут можна завершити співпрацю."
-                              : "Співпрацю вже завершено. За потреби співробітника можна повернути в штат."}
-                          </div>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "w-fit px-2.5 py-1 rounded-full",
-                            getEmploymentStatusBadgeClass(selectedEmploymentStatus)
-                          )}
-                        >
-                          {getEmploymentStatusLabel(selectedEmploymentStatus)}
-                        </Badge>
-                        {selectedEmploymentStatus === "active" ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-10 w-full border-danger-soft-border text-danger-foreground"
-                            onClick={() => setPendingEmploymentDecision("inactive")}
-                            disabled={employmentActionBusy !== null || !canDeactivateEmployment}
-                          >
-                            {employmentActionBusy === "inactive" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            Завершити співпрацю
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            className="h-10 w-full"
-                            onClick={() => void applyEmploymentDecision("reactivate")}
-                            disabled={employmentActionBusy !== null || !canReactivateEmployment}
-                          >
-                            {employmentActionBusy === "reactivate" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            Повернути в штат
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-2 p-10 text-center">
-                  <Users className="h-6 w-6 text-muted-foreground/60" />
-                  <div className="text-sm text-muted-foreground">Оберіть людину зі списку</div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {effectiveViewMode === "rows" ? (
+          {/* Порівняльна таблиця — десктопний вигляд вкладки «Люди».
+              Клік по рядку веде в картку людини (/team/:userId), а не
+              розкриває панель поруч: картка тепер одна на застосунок. */}
             <div className="hidden border-t border-border/60 pb-8 lg:block">
               <Table variant="list" size="md" className="[&_td]:px-4 [&_th]:px-4">
                 <TableHeader>
@@ -3066,11 +1960,7 @@ export function TeamMembersPage() {
                         <TableRow
                           key={m.user_id}
                           className="cursor-pointer transition-colors hover:bg-muted/40"
-                          onClick={() => {
-                            setSelectedMemberId(m.user_id);
-                            setViewMode("panel");
-                            setActiveSection("overview");
-                          }}
+                          onClick={() => navigate(`/team/${m.user_id}`)}
                         >
                           <TableCell className="pl-6">
                             <div className="flex items-center gap-2.5">
@@ -3159,7 +2049,6 @@ export function TeamMembersPage() {
                 </TableBody>
               </Table>
             </div>
-          ) : null}
           </>
         ) : null}
 
@@ -3380,7 +2269,25 @@ export function TeamMembersPage() {
           </>
         ) : null}
 
-        {activeTab === "members" && effectiveViewMode === "pulse" && canPulse ? (
+        {activeTab === "matrix" ? (
+          <AccessMatrix
+            people={members.map((m) => {
+              const profile = memberProfilesByUserId[m.user_id];
+              const name = getMemberDisplayName(m);
+              return {
+                userId: m.user_id,
+                name,
+                initials: getInitialsFromName(name, m.email ?? null),
+                avatarUrl: getMemberAvatarSource(profile, m),
+                accessRole: m.access_role ?? null,
+                jobRole: m.job_role ?? null,
+                moduleAccess: memberMetaByUserId[m.user_id]?.moduleAccess ?? null,
+              };
+            })}
+          />
+        ) : null}
+
+        {activeTab === "pulse" && canPulse ? (
           <TeamPulsePanel
             workspaceId={workspaceId}
             people={pulsePeople}
@@ -3445,7 +2352,7 @@ export function TeamMembersPage() {
                   <Button
                     variant="outline"
                     className="h-10 w-full"
-                    onClick={() => openPersonCard(pulsePeekUserId, "activity")}
+                    onClick={() => openPersonCard(pulsePeekUserId)}
                   >
                     Відкрити картку учасника
                   </Button>
@@ -3698,25 +2605,6 @@ export function TeamMembersPage() {
       </Dialog>
 
 
-      <ConfirmDialog
-        open={pendingEmploymentDecision === "inactive"}
-        onOpenChange={(open) => {
-          if (!open && employmentActionBusy !== "inactive") setPendingEmploymentDecision(null);
-        }}
-        title="Завершити співпрацю?"
-        description={
-          editProfileMember
-            ? `Для ${getMemberDisplayName(editProfileMember)} буде зафіксовано, що співпрацю завершено. Це не те саме, що не пройти випробувальний термін.`
-            : undefined
-        }
-        icon={<AlertTriangle className="h-5 w-5 text-danger-foreground" />}
-        confirmLabel="Так, завершити"
-        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-        loading={employmentActionBusy === "inactive"}
-        onConfirm={() => {
-          void applyEmploymentDecision("inactive");
-        }}
-      />
     </div>
   );
 }

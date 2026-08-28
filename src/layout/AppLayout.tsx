@@ -655,7 +655,10 @@ const baseSidebarLinks: SidebarLink[] = [
   // щоденна робота з людьми — і ходять туди з того ж місця, що й до складу
   // команди. Маршрути ніде не чіпалися — рухались лише пункти навігації.
   { label: "Команда", to: ROUTES.team, group: "account", icon: Users, moduleKey: "team" },
-  { label: "Ролі та доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "members_access" },
+  // «Люди та доступи», а не «Ролі та доступи»: за пунктом стоїть увесь
+  // адмін-центр — люди, матриця, посади, Пульс і запрошення, — а не лише
+  // роздача прав. Картка людини живе окремо, на /team/:userId.
+  { label: "Люди та доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "members_access" },
   // «Інтеграції» — окремий розділ, а не рядок у меню акаунта: зовнішніх
   // сервісів уже кілька (Нова Пошта, Вчасно, Telegram, Dropbox), і кожен новий
   // додавав би ще один рядок туди, де його ніхто не шукає. Поки що всередині
@@ -837,9 +840,9 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
     };
   if (pathname.startsWith(ROUTES.membersAccess))
     return {
-      title: "Ролі та доступи",
-      subtitle: "Учасники, ролі, доступи та керування профілями команди.",
-      breadcrumbLabel: "Ролі та доступи",
+      title: "Люди та доступи",
+      subtitle: "Люди, матриця доступів, посади, Пульс і запрошення.",
+      breadcrumbLabel: "Люди та доступи",
       breadcrumbTo: ROUTES.membersAccess,
       showPageHeader: false,
     };
