@@ -1755,6 +1755,7 @@ export function TeamPage() {
                     : formatPresenceText(member.lastSeenAt, member.online),
                   presenceExact: member.inactive ? null : formatLastSeenExact(member.lastSeenAt),
                   absence: toAvatarAbsence(member.absenceToday),
+                  profileHref: `/team/${member.userId}`,
                 };
                 // Приватність: свій баланс бачить кожен, чужі — лише owner/CEO.
                 const showBalance = canManageAbsences || member.userId === userId;

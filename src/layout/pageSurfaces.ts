@@ -152,6 +152,9 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "notifications", path: "/notifications", page: "src/pages/NotificationsPage.tsx", toolbar: "compact", shape: "list", canvas: true },
   { id: "activity", path: "/activity", page: "src/pages/ActivityPage.tsx", toolbar: "full", shape: "feed" },
   { id: "overview", path: "/overview", page: "src/pages/OverviewPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
+  // Перед «/team»: збіг нежорсткий, тож без власного запису картка людини
+  // отримала б каркас дашборда команди — з фільтрами й плитками, яких там нема.
+  { id: "person", path: "/team/:userId", page: "src/pages/PersonProfilePage.tsx", toolbar: "none", shape: "detail", maxWidth: 1180 },
   { id: "team", path: "/team", page: "src/pages/TeamPage.tsx", toolbar: "full", shape: "dashboard" },
 
   { id: "customers", path: "/orders/customers", page: "src/pages/OrdersCustomersPage.tsx", toolbar: "full", shape: "table", canvas: true },

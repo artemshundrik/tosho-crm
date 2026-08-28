@@ -825,6 +825,16 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       showPageHeader: false,
     };
   }
+  // Картка людини — перед загальною гілкою «Команди», інакше startsWith забере
+  // підмаршрут собі й крихта скаже «Команда» там, де відкрито конкретну людину.
+  if (pathname.startsWith(`${ROUTES.team}/`))
+    return {
+      title: "Картка людини",
+      subtitle: "Профіль, доступи, оплата й активність співробітника.",
+      breadcrumbLabel: "Команда",
+      breadcrumbTo: ROUTES.team,
+      showPageHeader: false,
+    };
   if (pathname.startsWith(ROUTES.membersAccess))
     return {
       title: "Ролі та доступи",

@@ -68,6 +68,7 @@ const HandbookPage = lazyWithRetry(() => import("./pages/HandbookPage"));
 const TeamPage = lazyWithRetry(() =>
   import("./pages/TeamPage").then((module) => ({ default: module.TeamPage }))
 );
+const PersonProfilePage = lazyWithRetry(() => import("./pages/PersonProfilePage"));
 const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
 const WhatsNewPage = lazyWithRetry(() => import("./pages/WhatsNewPage"));
 const ReleasesPage = lazyWithRetry(() => import("./pages/ReleasesPage"));
@@ -985,6 +986,19 @@ function AppRoutes() {
             <RouteSuspense shell>
               <TeamPage />
             </RouteSuspense>
+          }
+        />
+        {/* Картка людини — одна поверхня на два входи: «Команда» і адмін-центр.
+            Гейт тут `team` (він alwaysOn), а не `members_access`: профіль колеги
+            має відкриватись усім, а що саме видно — вирішують розділи всередині. */}
+        <Route
+          path="team/:userId"
+          element={
+            <ModuleRouteGate moduleKey="team">
+              <RouteSuspense shell>
+                <PersonProfilePage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route

@@ -1,4 +1,5 @@
 import { Cake, Mail, Phone, type LucideIcon } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +45,14 @@ export type TeamMemberCardPerson = {
   presenceLabel: string;
   /** Точний момент останнього пінгу — тултип до відносного підпису. */
   presenceExact?: string | null;
+  /**
+   * Куди веде ім'я — картка людини.
+   *
+   * Посилання саме на імені, а не на всій картці: усередині вже є пошта й
+   * телефон власними посиланнями, і вкладена в них обгортка ламала б і клік,
+   * і обхід із клавіатури.
+   */
+  profileHref?: string | null;
 };
 
 function ContactRow({ icon: Icon, value, successMessage }: { icon: LucideIcon; value: string; successMessage: string }) {
@@ -135,14 +144,26 @@ export function TeamMemberCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
-              <div
-                className={cn(
-                  "truncate text-sm font-semibold text-foreground",
-                  person.inactive && "text-muted-foreground line-through"
-                )}
-              >
-                {person.name}
-              </div>
+              {person.profileHref ? (
+                <Link
+                  to={person.profileHref}
+                  className={cn(
+                    "block truncate text-sm font-semibold text-foreground underline-offset-4 hover:underline",
+                    person.inactive && "text-muted-foreground line-through"
+                  )}
+                >
+                  {person.name}
+                </Link>
+              ) : (
+                <div
+                  className={cn(
+                    "truncate text-sm font-semibold text-foreground",
+                    person.inactive && "text-muted-foreground line-through"
+                  )}
+                >
+                  {person.name}
+                </div>
+              )}
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="truncate text-xs text-muted-foreground">{person.roleLabel}</span>
                 {person.probation ? (

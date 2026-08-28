@@ -1,3 +1,5 @@
+import type { Tone } from "./statusTones";
+
 function parseDateParts(value?: string | null) {
   if (!value) return null;
   const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -252,6 +254,28 @@ export function getEmploymentStatusLabel(status: EmploymentStatus) {
   if (status === "inactive") return "Співпрацю завершено";
   if (status === "probation") return "Випробувальний";
   return "Працює";
+}
+
+/**
+ * Статус для ПОКАЗУ людині.
+ *
+ * Випробувальний прибрано з інтерфейсу 21.07.2026: п'ятеро висіли в ньому з
+ * простроченою датою просто тому, що ніхто не натиснув «Взяти на роботу», і
+ * розділ «Потребують уваги» перетворився на шум. Легасі-значення в базі
+ * лишились, тож згортаємо їх у «Працює» тут, в одному місці, — інакше кожна
+ * нова поверхня показувала б статус, якого в інтерфейсі більше немає.
+ */
+export function displayEmploymentStatus(value?: string | null): EmploymentStatus {
+  const status = normalizeEmploymentStatus(value, null);
+  return status === "probation" ? "active" : status;
+}
+
+/** Тон бейджа статусу — через реєстр тонів, без рукописних класів кольору. */
+export function employmentStatusTone(status: EmploymentStatus): Tone {
+  if (status === "rejected") return "danger";
+  if (status === "inactive") return "neutral";
+  if (status === "probation") return "warning";
+  return "success";
 }
 
 export function isProbationReviewDue(

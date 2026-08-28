@@ -88,6 +88,7 @@ import {
   normalizeEmploymentStatus,
   getProbationSummary,
   type EmploymentStatus,
+  displayEmploymentStatus,
 } from "@/lib/employment";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
@@ -372,11 +373,6 @@ function sortMembersForList(
     const bName = (b.full_name ?? b.email ?? "").toLowerCase();
     return aName.localeCompare(bName, "uk");
   });
-}
-
-function displayEmploymentStatus(value?: string | null): EmploymentStatus {
-  const status = normalizeEmploymentStatus(value, null);
-  return status === "probation" ? "active" : status;
 }
 
 function getEmploymentStatusBadgeClass(status: EmploymentStatus) {
