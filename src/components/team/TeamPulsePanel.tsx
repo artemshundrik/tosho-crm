@@ -443,6 +443,20 @@ export function TeamPulsePanel({
 
   const maxGroupTotal = rankedPeople[0]?.actions ?? 0;
 
+  /**
+   * Ширина колонки ритму — спільна для всіх рядків.
+   *
+   * Квадратиків у різних людей різна кількість (у когось період порожній), а в
+   * тих, хто не зробив жодної дії, їх немає взагалі. Через це смуга частки
+   * починалась у кожного рядка на своєму місці, і колонки не вишиковувались —
+   * порівняти двох людей поглядом було неможливо. Тепер колонка одна на всіх:
+   * 11 px квадратик + 3 px проміжок.
+   */
+  const rhythmWidth = useMemo(() => {
+    const slots = rankedPeople.reduce((max, entry) => Math.max(max, entry.rhythm.length), 0);
+    return slots > 0 ? slots * 14 - 3 : 0;
+  }, [rankedPeople]);
+
 
   return (
     <div className="flex flex-col">
@@ -577,7 +591,7 @@ export function TeamPulsePanel({
                   вишиковувались, і порівняти їх поглядом було неможливо.
                   Тепер кожна метрика має свою колонку й читається по вертикалі.
                 */}
-                <div className="w-[13.5rem] min-w-0 shrink-0">
+                <div className="w-[16rem] min-w-0 shrink-0">
                   <div className="flex items-center gap-1.5">
                     <span className="truncate text-sm font-semibold text-foreground">{person.displayName}</span>
                     {person.online ? (
@@ -594,7 +608,15 @@ export function TeamPulsePanel({
                     })}
                   </div>
                 </div>
-                <PersonRhythm rhythm={entry.rhythm} />
+                {rhythmWidth > 0 ? (
+                  <span
+                    className="hidden shrink-0 md:block"
+                    style={{ width: rhythmWidth }}
+                    aria-hidden={entry.rhythm.length === 0}
+                  >
+                    <PersonRhythm rhythm={entry.rhythm} />
+                  </span>
+                ) : null}
                 {/* Одна смуга частки замість стосу кольорових сегментів: у рядку
                     заввишки 38 px легенда з чипів читалась як другий список. */}
                 <span className="hidden h-1.5 min-w-[3rem] flex-1 overflow-hidden rounded-full bg-muted sm:block">
@@ -700,10 +722,12 @@ function PulseFact({ label, value }: { label: string; value: string }) {
  * два пікселі й не читались би взагалі.
  */
 function PersonRhythm({ rhythm }: { rhythm: { label: string; count: number }[] }) {
+  // Порожній ритм малює порожню колонку, а не зникає: інакше рядок стає вужчим
+  // за сусідні й смуга частки з'їжджає ліворуч.
   if (!rhythm.length) return null;
   const max = Math.max(...rhythm.map((slot) => slot.count), 1);
   return (
-    <div className="hidden shrink-0 items-center gap-[3px] md:flex" aria-hidden="true">
+    <span className="flex items-center gap-[3px]" aria-hidden="true">
       {rhythm.map((slot) => {
         const share = slot.count / max;
         return (
@@ -717,6 +741,6 @@ function PersonRhythm({ rhythm }: { rhythm: { label: string; count: number }[] }
           />
         );
       })}
-    </div>
+    </span>
   );
 }
