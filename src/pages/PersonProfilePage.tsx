@@ -28,6 +28,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { MemberPaySection } from "@/components/team/MemberPaySection";
+import { PersonActivityHeatmap } from "@/components/team/PersonActivityHeatmap";
 import { PersonAccessHistorySection, PersonActivitySection } from "@/components/team/PersonDetailSections";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,16 +97,34 @@ const CAP = "text-3xs font-semibold uppercase tracking-widest text-muted-foregro
 const CARD = "rounded-2xl border border-border/60 bg-card";
 
 /**
- * Рядок «підпис → значення».
+ * Рядок «підпис → значення» з трьома рівнями ваги.
  *
- * Було шість однакових коробок у сітці: на широкому екрані вони розтягувались,
- * і око губило пару. Список читається згори вниз і не залежить від ширини.
+ * ЧОМУ САМЕ ТАК. Спершу підпис був великими літерами того ж кеглю, що й
+ * значення, — око не знало, куди дивитись, і рядок читався як суцільна сіра
+ * смуга. Тепер ваги три: підпис дрібний і приглушений, значення на 15 px
+ * напівжирним, а `hint` — уточнення просто за ним («266 днів» після дати).
+ * `meta` притискається праворуч: третій за важливістю факт, який не має
+ * розривати пару підпис→значення.
  */
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({
+  label,
+  value,
+  hint,
+  meta,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  meta?: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 border-b border-border/40 py-2 last:border-b-0">
-      <span className={cn(CAP, "w-[9.5rem] shrink-0")}>{label}</span>
-      <span className="min-w-0 flex-1 text-sm font-medium text-foreground">{value}</span>
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 border-t border-border/40 py-2 first:border-t-0">
+      <span className="w-[8.5rem] shrink-0 text-2xs leading-5 text-muted-foreground">{label}</span>
+      <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-foreground">
+        {value}
+        {hint ? <span className="ml-1.5 text-2xs font-normal text-muted-foreground">{hint}</span> : null}
+      </span>
+      {meta ? <span className="text-2xs text-muted-foreground">{meta}</span> : null}
     </div>
   );
 }
@@ -119,16 +138,6 @@ function RailRow({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex items-baseline gap-3 border-b border-border/40 py-1.5 last:border-b-0">
       <span className="w-[5.5rem] shrink-0 text-2xs text-muted-foreground">{label}</span>
       <span className="min-w-0 flex-1 text-[13px] font-medium text-foreground">{value}</span>
-    </div>
-  );
-}
-
-/** Підзаголовок групи всередині секції. */
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col">
-      <span className={cn(CAP, "pb-1.5 text-muted-foreground/70")}>{title}</span>
-      {children}
     </div>
   );
 }
@@ -471,37 +480,35 @@ export default function PersonProfilePage() {
                 не лише тут. У «Огляді» лишилось те, що описує людину в компанії:
                 скільки вона тут, коли в неї свято, у якому вона стані.
               */}
-              <Group title="У компанії">
+              <div className="flex flex-col">
                 <Row
                   label="У команді з"
                   value={
                     person.startDate ? (
-                      <span className="flex flex-wrap items-baseline gap-x-2">
-                        <span className="tabular-nums">{formatEmploymentDate(person.startDate)}</span>
-                        <span className="text-2xs font-normal text-muted-foreground">
-                          {formatEmploymentDuration(person.startDate)}
-                        </span>
-                      </span>
+                      <span className="tabular-nums">{formatEmploymentDate(person.startDate)}</span>
                     ) : (
-                      <span className="text-muted-foreground">Не вказано</span>
+                      <span className="font-normal text-muted-foreground">Не вказано</span>
                     )
                   }
+                  hint={person.startDate ? formatEmploymentDuration(person.startDate) : undefined}
                 />
                 <Row
                   label="День народження"
+                  // Спершу дата, і лише потім «через скільки»: у довіднику
+                  // питання «коли в неї день народження», а не «скільки чекати».
                   value={
                     birthday ? (
-                      // Спершу дата, і лише потім «через скільки»: у довіднику
-                      // питання «коли в неї день народження», а не «скільки чекати».
-                      <span className="flex flex-wrap items-baseline gap-x-2">
-                        <span className="tabular-nums">{birthday.dateLabel}</span>
-                        <span className="text-2xs font-normal text-muted-foreground">
-                          {birthday.daysUntil === 0 ? "сьогодні" : birthday.label.toLowerCase()}
-                        </span>
-                      </span>
+                      <span className="tabular-nums">{birthday.dateLabel}</span>
                     ) : (
-                      <span className="text-muted-foreground">Не вказано</span>
+                      <span className="font-normal text-muted-foreground">Не вказано</span>
                     )
+                  }
+                  hint={
+                    birthday
+                      ? birthday.daysUntil === 0
+                        ? "сьогодні"
+                        : birthday.label.toLowerCase()
+                      : undefined
                   }
                 />
                 <Row label="Посада" value={formatJobRole(person.jobRole) || "Без посади"} />
@@ -513,7 +520,7 @@ export default function PersonProfilePage() {
                     </Badge>
                   }
                 />
-              </Group>
+              </div>
             </SectionCard>
           ) : null}
 
@@ -554,16 +561,17 @@ export default function PersonProfilePage() {
 
           {section === "hr" ? (
             <SectionCard title="HR" audience="бачать керівники">
-              <Group title="Працевлаштування">
+              <div className="flex flex-col">
                 <Row
                   label="Стаж"
                   value={
                     person.startDate ? (
                       formatEmploymentDuration(person.startDate)
                     ) : (
-                      <span className="text-muted-foreground">Дата старту не вказана</span>
+                      <span className="font-normal text-muted-foreground">Дата старту не вказана</span>
                     )
                   }
+                  hint={person.startDate ? `з ${formatEmploymentDate(person.startDate)}` : undefined}
                 />
                 <Row
                   label="Статус співпраці"
@@ -573,7 +581,18 @@ export default function PersonProfilePage() {
                     </Badge>
                   }
                 />
-              </Group>
+                <Row
+                  label="Відсутність"
+                  value={
+                    person.absenceToday ? (
+                      "Відсутній сьогодні"
+                    ) : (
+                      <span className="font-normal text-muted-foreground">Немає чинної</span>
+                    )
+                  }
+                  meta="залишки відпусток — на сторінці «Команда»"
+                />
+              </div>
               {canManage && !isSelf ? (
                 <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
                   <p className="min-w-0 flex-1 text-2xs leading-relaxed text-muted-foreground">
@@ -641,6 +660,17 @@ export default function PersonProfilePage() {
               }
             />
           </section>
+
+          {/*
+            Ритм за квартал — під контактами, бо це друге питання про людину
+            після «як достукатись»: чи вона взагалі зараз у роботі.
+          */}
+          {canOpenProfileCard || isSelf ? (
+            <section className={cn(CARD, "flex flex-col gap-2 p-4")}>
+              <span className={cn(CAP, "pb-0.5")}>Ритм роботи</span>
+              <PersonActivityHeatmap userId={person.userId} />
+            </section>
+          ) : null}
 
           {canOpenProfileCard ? (
             <section className={cn(CARD, "flex flex-col gap-1 p-4")}>

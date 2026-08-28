@@ -18,7 +18,7 @@ import { History, Loader2, ShieldAlert } from "lucide-react";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
 import { formatJobRole } from "@/lib/jobRoles";
-import { pluralUk } from "@/lib/lastSeen";
+import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import {
   defaultModuleAccess,
   describeModuleLock,
@@ -235,7 +235,7 @@ export function AccessOverview({
         <ShareTile
           cap="У команді"
           value={people.length}
-          unit={pluralUk(people.length, "людина", "людини", "людей").split(" ")[1]}
+          unit={pluralWordUk(people.length, "людина", "людини", "людей")}
           parts={[
             { label: "працюють зараз", count: people.length, color: "bg-chart-3" },
             { label: "чекають на запрошення", count: pendingInvites, color: "bg-chart-1" },
