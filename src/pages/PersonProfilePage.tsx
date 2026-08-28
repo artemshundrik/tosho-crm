@@ -21,19 +21,30 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, KeyRound, Loader2, Lock, Mail, Phone, RotateCcw, ShieldAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  KeyRound,
+  Loader2,
+  Lock,
+  Mail,
+  Phone,
+  RotateCcw,
+  ShieldAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { MemberPaySection } from "@/components/team/MemberPaySection";
+import { MODULE_ICONS, MODULES_WITHOUT_MENU_ITEM } from "@/components/team/moduleIcons";
 import { PersonActivityHeatmap } from "@/components/team/PersonActivityHeatmap";
 import { PersonAccessHistorySection, PersonActivitySection } from "@/components/team/PersonDetailSections";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { getCurrentUserId } from "@/lib/currentUser";
 import { supabase } from "@/lib/supabaseClient";
@@ -53,6 +64,7 @@ import {
   describeModuleLock,
   defaultModuleAccess,
   MODULE_GROUPS,
+  MODULE_KEYS,
   normalizeModuleAccess,
   type ModuleAccess,
   type ModuleKey,
@@ -801,6 +813,17 @@ function PersonAccessSection({
   const modulesDirty = (Object.keys(modules) as ModuleKey[]).some((key) => modules[key] !== savedAccess[key]);
   const dirty = (canEditRoles && rolesDirty) || (canEditModules && modulesDirty);
 
+  /** Скільки пунктів меню людина справді побачить — з урахуванням замків. */
+  const openCount = useMemo(
+    () =>
+      MODULE_KEYS.filter(
+        (key) =>
+          describeModuleLock(key, modules, { accessRole: person.accessRole, jobRole: person.jobRole })
+            .checked
+      ).length,
+    [modules, person.accessRole, person.jobRole]
+  );
+
   const resetToRole = useCallback(() => setModules(roleDefaults), [roleDefaults]);
 
   const save = async () => {
@@ -887,14 +910,17 @@ function PersonAccessSection({
       </SectionCard>
 
       <SectionCard
-        title="Доступ до модулів"
+        title={`Що ${person.firstName || "людина"} бачить у меню`}
         audience="бачать керівники"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="neutral">
+              {openCount} із {MODULE_KEYS.length}
+            </Badge>
             {deviations.length ? (
               <Badge tone="warning">
                 <ShieldAlert className="h-3 w-3" />
-                {pluralUk(deviations.length, "відхилення", "відхилення", "відхилень")} від посади
+                {pluralUk(deviations.length, "вручну", "вручну", "вручну")}
               </Badge>
             ) : (
               <Badge tone="success">повністю за посадою</Badge>
@@ -909,56 +935,70 @@ function PersonAccessSection({
         }
       >
         {/*
-          Кількість колонок вирішує НАЯВНА ширина, а не розмір екрана.
-          Брейкпойнт `xl` тут брехав: поруч зʼявилась рейка на 19 rem, і на
-          широкому моніторі колонка змісту виявлялась вужчою за поріг — двадцять
-          модулів знову ставали стовпчиком на два екрани. `auto-fit` рахує те,
-          що є насправді: два стовпці від 40 rem вільного місця, інакше один.
+          Не список перемикачів, а САМЕ МЕНЮ, яке людина побачить.
+          Двадцять галочок нічого не пояснювали: з них 4 заблоковані (рішення
+          ухвалює не тут), 15 просто збігаються з посадою, і лише 1 несе
+          інформацію. Тут наслідок видно без уяви — той самий фон сайдбара,
+          ті самі групи, той самий порядок і ті самі іконки.
         */}
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(19rem,1fr))] gap-x-10 gap-y-5">
+        <div className="flex flex-col gap-0.5 rounded-xl border border-border/50 bg-[hsl(var(--sidebar-surface-bg))] p-2">
           {MODULE_GROUPS.map((group) => (
-            <div key={group.group} className="flex flex-col gap-1">
-              <div className={cn(CAP, "pb-1 text-muted-foreground/70")}>{group.label}</div>
+            <div key={group.group} className="flex flex-col gap-0.5">
+              <div className={cn(CAP, "px-2.5 pb-1 pt-3 first:pt-1")}>{group.label}</div>
               {group.modules.map((module) => {
                 const lock = describeModuleLock(module.key, modules, {
                   accessRole: person.accessRole,
                   jobRole: person.jobRole,
                 });
                 const deviates = !lock.locked && modules[module.key] !== roleDefaults[module.key];
+                const Icon = MODULE_ICONS[module.key];
+                const interactive = canEditModules && !lock.locked;
                 return (
-                  <div
+                  <button
                     key={module.key}
-                    className="flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors duration-base hover:bg-muted/50 motion-reduce:transition-none"
+                    type="button"
+                    disabled={!interactive}
+                    aria-pressed={lock.checked}
+                    onClick={() =>
+                      setModules((prev) => ({ ...prev, [module.key]: !lock.checked }))
+                    }
+                    title={lock.reason ?? undefined}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors duration-base motion-reduce:transition-none",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+                      lock.checked
+                        ? "bg-card text-foreground shadow-[inset_0_0_0_1px_hsl(var(--border)/0.55)]"
+                        : "text-muted-foreground",
+                      interactive && "cursor-pointer",
+                      interactive && !lock.checked && "hover:bg-muted/60 hover:text-foreground",
+                      interactive && lock.checked && "hover:bg-card/80",
+                      !interactive && "cursor-not-allowed"
+                    )}
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground">
-                        {module.label}
-                        {deviates ? <Badge tone="warning">вручну</Badge> : null}
-                      </div>
-                      {lock.reason ? (
-                        <p className="flex items-center gap-1 text-2xs text-muted-foreground">
-                          <Lock className="h-3 w-3" />
-                          {lock.reason}
-                        </p>
-                      ) : module.hint ? (
-                        <p className="text-2xs text-muted-foreground">{module.hint}</p>
-                      ) : null}
-                    </div>
-                    <Switch
-                      checked={lock.checked}
-                      disabled={!canEditModules || lock.locked}
-                      /**
-                       * `sm`, а не типовий `md`: у списку з двадцяти рядків
-                       * перемикач 28×48 важив більше за назву модуля, якою
-                       * керує, і рядок читався як «кнопка з підписом».
-                       */
-                      size="sm"
-                      label={module.label}
-                      onCheckedChange={(next) =>
-                        setModules((prev) => ({ ...prev, [module.key]: next === true }))
-                      }
-                    />
-                  </div>
+                    {/* Квадратик, а не перемикач: у меню перемикачів не буває,
+                        але без жодного маркера рядок не читається як керований. */}
+                    <span
+                      className={cn(
+                        "grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[4px] border transition-colors duration-base",
+                        lock.checked ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                        lock.locked && "opacity-45"
+                      )}
+                      aria-hidden
+                    >
+                      {lock.checked ? <Check className="h-2.5 w-2.5" strokeWidth={3.2} /> : null}
+                    </span>
+                    <Icon className={cn("h-3.5 w-3.5 shrink-0", lock.checked ? "text-primary" : "opacity-70")} />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{module.label}</span>
+                    {deviates ? <Badge tone="warning">вручну</Badge> : null}
+                    {lock.locked ? (
+                      <span className="flex shrink-0 items-center gap-1 text-3xs text-muted-foreground/80">
+                        <Lock className="h-3 w-3" />
+                        керує роль
+                      </span>
+                    ) : MODULES_WITHOUT_MENU_ITEM.has(module.key) ? (
+                      <span className="shrink-0 text-3xs text-muted-foreground/70">не пункт меню</span>
+                    ) : null}
+                  </button>
                 );
               })}
             </div>
