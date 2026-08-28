@@ -51,8 +51,6 @@ import { usePageData } from "@/hooks/usePageData";
 import { useTeamLastSeen } from "@/hooks/useTeamLastSeen";
 import { cn } from "@/lib/utils";
 import {
-  formatEmploymentDuration,
-  formatEmploymentDate,
   getBirthdayInsight,
   getEmploymentDurationDays,
   getWorkAnniversaryInsight,
@@ -99,7 +97,7 @@ import {
   type AbsenceBalance,
 } from "@/lib/teamAbsenceQuotas";
 import { TEAM_EVENT_TONE, toneBadgeClass, toneTextClass } from "@/lib/statusTones";
-import { formatLastSeenAgo, formatLastSeenExact } from "@/lib/lastSeen";
+import { formatLastSeenAgo } from "@/lib/lastSeen";
 import { getInitialsFromName } from "@/lib/userName";
 import {
   invalidateWorkspaceMemberDirectory,
@@ -123,7 +121,8 @@ import { AbsenceYearReportDialog } from "@/components/team/AbsenceYearReportDial
 import { HolidayEditorDialog } from "@/components/team/HolidayEditorDialog";
 import { QuotaEditorDialog } from "@/components/team/QuotaEditorDialog";
 import { TeamBalancesTable } from "@/components/team/TeamBalancesTable";
-import { TeamMemberCard, type TeamMemberCardPerson } from "@/components/team/TeamMemberCard";
+import { TeamMemberCard } from "@/components/team/TeamMemberCard";
+import { toTeamMemberCardPerson } from "@/features/team/teamMemberCardPerson";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 /**
@@ -1735,28 +1734,7 @@ export function TeamPage() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
               {filteredMembers.map((member) => {
-                const cardPerson: TeamMemberCardPerson = {
-                  userId: member.userId,
-                  name: member.label,
-                  roleLabel: formatRoleLabel(member.jobRole),
-                  avatarUrl: member.avatarDisplayUrl,
-                  initials: getInitialsFromName(member.label, member.email),
-                  email: member.email,
-                  phone: member.phone,
-                  online: member.online,
-                  inactive: member.inactive,
-                  probation: member.employmentStatus === "probation",
-                  tenureLabel: formatEmploymentDuration(member.startDate),
-                  startDateLabel: member.startDate ? formatEmploymentDate(member.startDate) : "",
-                  birthdayLabel: member.birthdayInsight?.dateLabel ?? null,
-                  birthdayDaysUntil: member.birthdayInsight?.daysUntil ?? null,
-                  presenceLabel: member.inactive
-                    ? "Співпрацю завершено"
-                    : formatPresenceText(member.lastSeenAt, member.online),
-                  presenceExact: member.inactive ? null : formatLastSeenExact(member.lastSeenAt),
-                  absence: toAvatarAbsence(member.absenceToday),
-                  profileHref: `/team/${member.userId}`,
-                };
+                const cardPerson = toTeamMemberCardPerson(member);
                 // Приватність: свій баланс бачить кожен, чужі — лише owner/CEO.
                 const showBalance = canManageAbsences || member.userId === userId;
                 return (

@@ -182,11 +182,11 @@ const CEILINGS = {
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
   // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
   "src/pages/OrdersCustomersPage.tsx": 4277,
-  "src/pages/TeamMembersPage.tsx": 3992,
+  "src/pages/TeamMembersPage.tsx": 2633,
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,
   "src/features/finances/FinanceExpenses.tsx": 2439,
-  "src/layout/AppLayout.tsx": 3240,
+  "src/layout/AppLayout.tsx": 3000,
   "src/components/quotes/NewQuoteDialog.tsx": 2732,
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
   "src/components/design/DesignersDashboard.tsx": 2702,
