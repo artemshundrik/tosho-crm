@@ -9,7 +9,7 @@ import { checklistProgress, withDoneLast, type ChecklistItem } from "./checklist
 import { groupRequests } from "./grouping";
 import { PriorityBars } from "./PriorityBars";
 import { canTakeToday, isPapercutCard, papercutLabel, splitQueue } from "./queueShelves";
-import { themeLook } from "./themeRegistry";
+import { THEME_FALLBACK, themeLook } from "./themeRegistry";
 import { KIND_LABELS, KIND_TONE, type DevRequest } from "./types";
 
 /**
@@ -132,7 +132,10 @@ export function DevRequestQueue({
           <div className="flex flex-col gap-4">
             {freeGroups.map((group) => {
               const look = themeLook(group.label);
-              const ThemeIcon = look?.icon;
+              // Група «Без теми» іконки не мала, і в стовпчику заголовків із
+              // іконками її рядок читався як зламаний. Фолбек із реєстру —
+              // навмисно найзагальніша іконка: «тема без свого обличчя».
+              const ThemeIcon = look?.icon ?? THEME_FALLBACK.icon;
               const collapsed = closedGroups.has(group.id);
               return (
                 <div key={group.id}>
@@ -152,12 +155,10 @@ export function DevRequestQueue({
                       )}
                       aria-hidden
                     />
-                    {ThemeIcon ? (
-                      <ThemeIcon
-                        className={cn("h-3.5 w-3.5", look ? toneTextClass[look.tone] : null)}
-                        aria-hidden
-                      />
-                    ) : null}
+                    <ThemeIcon
+                      className={cn("h-3.5 w-3.5", toneTextClass[look?.tone ?? "neutral"])}
+                      aria-hidden
+                    />
                     {group.label || "без напряму"}
                     <span className="font-mono tabular-nums text-muted-foreground/70">
                       {group.items.length}
@@ -332,7 +333,12 @@ function TodayRow({
   onDrop: (request: DevRequest) => void;
 }) {
   const look = themeLook(request.theme);
-  const ThemeIcon = look?.icon;
+  /*
+   * Іконка є ЗАВЖДИ — навіть у картки без теми. Полиця «Сьогодні» це кілька
+   * рядків поруч, і рядок без іконки серед рядків з іконками читається як
+   * зламаний, а не як «тема не вказана» (рішення Артема 28.08.2026).
+   */
+  const ThemeIcon = look?.icon ?? THEME_FALLBACK.icon;
   /*
    * ЛІЧИЛЬНИК ЛИШЕ ДЛЯ НАКОПИЧУВАЧА. У звичайної картки «Сьогодні» означає одну
    * справу, і число поруч читалось би як її поділ на частини. У накопичувача
@@ -344,19 +350,30 @@ function TodayRow({
   const progress = papercut ? checklistProgress(request.checklist) : null;
   const left = progress ? progress.total - progress.done : 0;
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 transition-colors hover:border-border hover:bg-muted/30">
+    <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 transition-colors hover:border-border hover:bg-muted/30">
       <button
         type="button"
         onClick={() => onSelect(request)}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+        className="flex min-w-0 flex-1 flex-col gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
       >
-        {ThemeIcon ? (
+        <span className="flex min-w-0 items-center gap-3">
           <ThemeIcon
-            className={cn("h-5 w-5 shrink-0", look ? toneTextClass[look.tone] : null)}
+            className={cn("h-5 w-5 shrink-0", toneTextClass[look?.tone ?? "neutral"])}
             aria-hidden
           />
+          <span className="truncate text-[15px] font-medium">{request.title}</span>
+        </span>
+        {/*
+         * Опис під назвою — рішення Артема 28.08.2026. «Сьогодні» це не список
+         * номерів, а те, за що людина сідає: без пари рядків про суть картку
+         * доводиться відкривати, щоб згадати, про що вона. Два рядки, не
+         * чотири, як в «Ідеях»: полиця має лишатись коротшою за беклог.
+         */}
+        {request.body.trim() ? (
+          <span className="line-clamp-2 pl-8 text-2xs leading-relaxed text-muted-foreground">
+            {request.body.replace(/\n{2,}/g, "\n")}
+          </span>
         ) : null}
-        <span className="truncate text-[15px] font-medium">{request.title}</span>
       </button>
       <WaitChip request={request} />
       {progress ? (
@@ -441,19 +458,37 @@ function Rows({
 
               {onAddToday && canTakeToday(request) ? (
               /*
-               * Кнопка завжди в розмітці, лише тихіша до наведення: на телефоні
-               * наведення не існує, а з клавіатури до прихованої не дійти.
+               * Кнопка розкривається з наведенням, а номер їде вліво — рішення
+               * Артема 28.08.2026: «Сьогодні» на кожному з двадцяти рядків
+               * перетворює список на шеренгу кнопок, і головне в рядку (назва)
+               * тоне серед них.
+               *
+               * Розмітку НЕ демонтуємо: на телефоні наведення не існує, а з
+               * клавіатури до неї не дійти. Тому анімуємо ширину й прозорість,
+               * а focus-visible розкриває так само, як ховер.
                */
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => onAddToday(request)}
-                  aria-label={`Взяти на сьогодні: ${request.title}`}
-                  className="shrink-0 gap-1 opacity-70 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                <div
+                  className={cn(
+                    "flex shrink-0 justify-end overflow-hidden",
+                    "max-w-0 opacity-0 transition-[max-width,opacity] duration-200 ease-out",
+                    "group-hover:max-w-32 group-hover:opacity-100",
+                    "group-focus-within:max-w-32 group-focus-within:opacity-100",
+                    "motion-reduce:transition-none",
+                    // На вузькому екрані ховера немає — там кнопка стоїть завжди.
+                    "max-sm:max-w-32 max-sm:opacity-100"
+                  )}
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Сьогодні</span>
-                </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => onAddToday(request)}
+                    aria-label={`Взяти на сьогодні: ${request.title}`}
+                    className="shrink-0 gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Сьогодні</span>
+                  </Button>
+                </div>
               ) : null}
             </div>
           </div>
@@ -588,7 +623,7 @@ function PapercutCard({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
-      <div className="flex items-center gap-3 px-3 py-2.5">
+      <div className="group/papercut flex items-center gap-3 px-3 py-2.5">
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -636,16 +671,29 @@ function PapercutCard({
         </span>
         <ChecklistMeter progress={progress} />
         {onAddToday && canTakeToday(request) ? (
+          // Та сама поведінка, що в рядках «Можна брати»: кнопка розкривається
+          // з наведенням, число й смуга від цього їдуть уліво.
+          <div
+            className={cn(
+              "flex shrink-0 justify-end overflow-hidden",
+              "max-w-0 opacity-0 transition-[max-width,opacity] duration-200 ease-out",
+              "group-hover/papercut:max-w-32 group-hover/papercut:opacity-100",
+              "group-focus-within/papercut:max-w-32 group-focus-within/papercut:opacity-100",
+              "motion-reduce:transition-none",
+              "max-sm:max-w-32 max-sm:opacity-100"
+            )}
+          >
           <Button
             variant="outline"
             size="xs"
             onClick={() => onAddToday(request)}
             aria-label={`Взяти на сьогодні: дрібниці «${papercutLabel(request)}»`}
-            className="shrink-0 gap-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+            className="shrink-0 gap-1"
           >
             <Plus className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Сьогодні</span>
           </Button>
+          </div>
         ) : null}
         {/*
           НОМЕРА ТУТ НЕМАЄ НАВМИСНО. Накопичувач — звичайна картка, тож номер у
