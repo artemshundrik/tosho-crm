@@ -5,18 +5,8 @@ import {
   ChevronRight,
   Clock,
   Radio,
-  TrendingUp,
   Users,
 } from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageCache } from "@/hooks/usePageCache";
 import { useAuth } from "@/auth/AuthProvider";
@@ -290,7 +280,7 @@ export function TeamPulsePanel({
     };
   }, [workspaceId, teamId, period.start, period.end]);
 
-  const { groups, totalActions, trend } = useMemo(() => {
+  const { groups, totalActions } = useMemo(() => {
     const scoped = rows.filter(
       (row) =>
         (row.user_id ?? "") &&
@@ -352,27 +342,9 @@ export function TeamPulsePanel({
     }
     nextGroups.sort((a, b) => b.total - a.total);
 
-    // Time buckets for the trend chart.
-    const buckets = new Map<string, number>();
-    const isHour = bucket === "hour";
-    for (const row of scoped) {
-      if (!row.created_at) continue;
-      const date = new Date(row.created_at);
-      const key = isHour
-        ? `${date.getHours().toString().padStart(2, "0")}:00`
-        : bucket === "month"
-        ? date.toLocaleDateString("uk-UA", { month: "short" })
-        : date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" });
-      buckets.set(key, (buckets.get(key) ?? 0) + 1);
-    }
-    const trendData = Array.from(buckets.entries())
-      .map(([label, count]) => ({ label, count }))
-      .reverse();
-
     return {
       groups: nextGroups,
       totalActions: scoped.length,
-      trend: trendData,
     };
   }, [rows, bucket, memberIds]);
 
@@ -494,49 +466,10 @@ export function TeamPulsePanel({
           <KpiTile icon={Activity} label="Всього дій" value={totalActions} hint={periodLabel.toLowerCase()} />
         </div>
 
-        {trend.length > 1 ? (
-          <Card className="border-border/60 p-4">
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              <TrendingUp className="h-3.5 w-3.5" />
-              Динаміка дій
-            </div>
-            <div className="h-[140px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trend} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="pulseTrend" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--brand-h) var(--brand-s) var(--brand-l))" stopOpacity={0.28} />
-                      <stop offset="100%" stopColor="hsl(var(--brand-h) var(--brand-s) var(--brand-l))" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} minTickGap={16} />
-                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} width={40} />
-                  <Tooltip
-                    cursor={{ stroke: "hsl(var(--border))" }}
-                    contentStyle={{
-                      background: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "var(--radius)",
-                      fontSize: 12,
-                      color: "hsl(var(--popover-foreground))",
-                    }}
-                    labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-                    separator=""
-                    formatter={(value) => [`${value} дій`, ""]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="count"
-                    stroke="hsl(var(--brand-h) var(--brand-s) var(--brand-l))"
-                    strokeWidth={2}
-                    fill="url(#pulseTrend)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-        ) : null}
+        {/* Графік «Динаміка дій» прибрано 28.08.2026 на прохання Артема.
+            Крива сумарних дій команди відповідала на питання, якого ніхто не
+            ставив: рішення ухвалюють по КОНКРЕТНІЙ людині, а не по сумі. Ритм
+            кожного тепер стоїть у його ж рядку — там, де ним і користуються. */}
 
       {/* People — same card rhythm as the chart above, so the right-aligned
           metrics keep their inset instead of running into the viewport edge. */}

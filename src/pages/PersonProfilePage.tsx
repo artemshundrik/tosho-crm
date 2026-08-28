@@ -21,7 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, Eye, KeyRound, Loader2, Lock, Phone, RotateCcw, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowLeft, KeyRound, Loader2, Lock, Mail, Phone, RotateCcw, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -32,6 +32,7 @@ import { PersonAccessHistorySection, PersonActivitySection } from "@/components/
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { Switch } from "@/components/ui/switch";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { getCurrentUserId } from "@/lib/currentUser";
@@ -87,11 +88,27 @@ const JOB_ROLE_OPTIONS = [
 const CAP = "text-3xs font-semibold uppercase tracking-widest text-muted-foreground";
 const CARD = "rounded-2xl border border-border/60 bg-card";
 
-function Fact({ label, value }: { label: string; value: React.ReactNode }) {
+/**
+ * Рядок «підпис → значення».
+ *
+ * Було шість однакових коробок у сітці: на широкому екрані вони розтягувались,
+ * і око губило пару. Список читається згори вниз і не залежить від ширини.
+ */
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border/50 px-3 py-2.5">
-      <div className={CAP}>{label}</div>
-      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 border-b border-border/40 py-2 last:border-b-0">
+      <span className={cn(CAP, "w-[9.5rem] shrink-0")}>{label}</span>
+      <span className="min-w-0 flex-1 text-sm font-medium text-foreground">{value}</span>
+    </div>
+  );
+}
+
+/** Підзаголовок групи всередині секції. */
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col">
+      <span className={cn(CAP, "pb-1.5 text-muted-foreground/70")}>{title}</span>
+      {children}
     </div>
   );
 }
@@ -283,115 +300,197 @@ export default function PersonProfilePage() {
   const birthday = getBirthdayInsight(person.birthDate);
 
   return (
-    <div className="flex flex-col gap-4 pb-10">
+    /**
+     * Вужче за повну ширину — як «Релізи».
+     *
+     * Це картка ОДНІЄЇ людини, а не реєстр: на 27" рядок «Пошта» розтягувався
+     * через пів екрана, і око не знаходило пару підпис→значення. 1180 px —
+     * та сама межа, що в «Релізах», щоб сторінки не сперечались між собою.
+     */
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5 pb-12">
       <Link
         to="/team"
-        className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="inline-flex w-fit items-center gap-1.5 text-2xs font-medium uppercase tracking-widest text-muted-foreground transition-colors duration-base hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft className="h-3.5 w-3.5" />
         Команда
       </Link>
 
-      <header className={cn(CARD, "flex flex-wrap items-center gap-4 p-4")}>
+      {/* Шапка — блок особистості: аватар великий, решта підпорядкована йому. */}
+      <header className="flex flex-wrap items-start gap-x-5 gap-y-4">
         <AvatarBase
-          src={getCanonicalAvatarReference({ avatarUrl: person.avatarUrl }, AVATAR_BUCKET)}
+          /**
+           * ОБИДВА джерела. У частини людей заповнений `avatarUrl`, у частини —
+           * лише `avatarPath` (шлях у сховищі): передавши одне, ми показували
+           * ініціали замість фото рівно половині команди.
+           */
+          src={getCanonicalAvatarReference(
+            { avatarUrl: person.avatarUrl, avatarPath: person.avatarPath },
+            AVATAR_BUCKET
+          )}
           name={person.displayName}
           fallback={person.initials}
-          size={56}
+          assetVariant="md"
+          size={72}
           shape="circle"
           className="border-border bg-muted/50"
-          fallbackClassName="text-sm font-bold"
+          fallbackClassName="text-lg font-bold"
           availability={person.availabilityStatus}
           inactive={inactive}
         />
         <div className="min-w-0 flex-1">
-          <div className={cn("truncate text-lg font-semibold text-foreground", inactive && "line-through")}>
+          <h1
+            className={cn(
+              "truncate text-[22px] font-semibold leading-tight tracking-tight text-foreground",
+              inactive && "text-muted-foreground line-through"
+            )}
+          >
             {person.displayName}
-          </div>
-          <div className="truncate text-sm text-muted-foreground">{person.email ?? "Пошта не вказана"}</div>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Badge tone="neutral">{formatJobRole(person.jobRole) || "Без посади"}</Badge>
+          </h1>
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            {formatJobRole(person.jobRole) || "Без посади"}
+            {person.email ? <span className="text-muted-foreground/60"> · {person.email}</span> : null}
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <Badge tone={employmentStatusTone(employment)} size="sm">
+              {getEmploymentStatusLabel(employment)}
+            </Badge>
             {(person.accessRole ?? "member") !== "member" ? (
-              <Badge tone="accent">{accessLevelLabel(person.accessRole)}</Badge>
+              <Badge tone="accent" size="sm">
+                {accessLevelLabel(person.accessRole)}
+              </Badge>
             ) : null}
-            <Badge tone={employmentStatusTone(employment)}>{getEmploymentStatusLabel(employment)}</Badge>
+            {person.absenceToday ? (
+              <Badge tone="warning" size="sm">
+                Відсутній сьогодні
+              </Badge>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {person.phone ? (
-            <Button variant="secondary" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild>
               <a href={`tel:${person.phone.replace(/\s/g, "")}`}>
                 <Phone className="h-4 w-4" />
                 Подзвонити
               </a>
             </Button>
           ) : null}
-          {canOpenProfileCard && !isSelf ? (
-            <Button variant="secondary" size="sm" asChild>
-              <Link to={`/settings/members?member=${person.userId}`}>
-                <Eye className="h-4 w-4" />
-                В адмін-центрі
-              </Link>
+          {person.email ? (
+            <Button variant="outline" size="sm" asChild>
+              <a href={`mailto:${person.email}`}>
+                <Mail className="h-4 w-4" />
+                Написати
+              </a>
             </Button>
           ) : null}
         </div>
       </header>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,11.5rem)_minmax(0,1fr)]">
-        <nav className="flex flex-wrap gap-1 lg:sticky lg:top-2 lg:flex-col">
+      {/* Вкладки горизонталлю — той самий примітив, що на решті сторінок. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 pb-2.5">
+        <SegmentedGroup className="h-auto flex-wrap">
           {visibleSections.map((key) => (
-            <button
+            <Button
               key={key}
               type="button"
+              variant="segmented"
+              size="xs"
+              aria-pressed={section === key}
               onClick={() => setSection(key)}
-              aria-current={section === key}
-              className={cn(
-                "flex cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm font-medium transition-colors",
-                section === key
-                  ? "bg-card text-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))]"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              )}
             >
               {SECTION_LABELS[key]}
-              {key !== "overview" ? <Lock className="ml-auto h-3 w-3 text-muted-foreground/70" /> : null}
-            </button>
+              {key !== "overview" ? <Lock className="ml-1 h-3 w-3 opacity-60" /> : null}
+            </Button>
           ))}
-          {canOpenProfileCard ? (
-            <p className="mt-2 px-3 text-2xs leading-relaxed text-muted-foreground">
-              Розділи із замком бачать керівники. У власному профілі людина бачить «Огляд» і свою активність.
-            </p>
-          ) : null}
-        </nav>
+        </SegmentedGroup>
+        {canOpenProfileCard ? (
+          <span className="text-2xs text-muted-foreground">
+            Розділи із замком бачать керівники — у власному профілі людина їх не бачить.
+          </span>
+        ) : null}
+      </div>
 
-        <div className="flex min-w-0 flex-col gap-4">
+      <div className="flex min-w-0 flex-col gap-4">
           {section === "overview" ? (
             <SectionCard title="Огляд" audience="бачить уся команда">
-              <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                <Fact label="У команді з" value={person.startDate ? formatEmploymentDate(person.startDate) : "Не вказано"} />
-                <Fact
-                  label="День народження"
-                  value={
-                    birthday ? (
-                      // Спершу дата, і лише потім «через скільки»: у довіднику
-                      // питання «коли в неї день народження», а не «скільки чекати».
-                      <span className="flex flex-wrap items-baseline gap-x-1.5">
-                        <span className="tabular-nums">{birthday.dateLabel}</span>
-                        <span className="text-2xs font-normal text-muted-foreground">
-                          {birthday.daysUntil === 0 ? "сьогодні" : birthday.label.toLowerCase()}
+              {/* Посада й пошта вже стоять у шапці — тут їх немає навмисно:
+                  повторене двічі на одному екрані читається як помилка. */}
+              <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
+                <Group title="Контакти">
+                  <Row
+                    label="Телефон"
+                    value={
+                      person.phone ? (
+                        <a
+                          href={`tel:${person.phone.replace(/\s/g, "")}`}
+                          className="tabular-nums underline-offset-4 hover:underline"
+                        >
+                          {person.phone}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">Не вказано</span>
+                      )
+                    }
+                  />
+                  <Row
+                    label="Пошта"
+                    value={
+                      person.email ? (
+                        <a href={`mailto:${person.email}`} className="break-all underline-offset-4 hover:underline">
+                          {person.email}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">Не вказано</span>
+                      )
+                    }
+                  />
+                </Group>
+
+                <Group title="У компанії">
+                  <Row
+                    label="У команді з"
+                    value={
+                      person.startDate ? (
+                        <span className="flex flex-wrap items-baseline gap-x-2">
+                          <span className="tabular-nums">{formatEmploymentDate(person.startDate)}</span>
+                          <span className="text-2xs font-normal text-muted-foreground">
+                            {formatEmploymentDuration(person.startDate)}
+                          </span>
                         </span>
-                      </span>
-                    ) : (
-                      "Не вказано"
-                    )
-                  }
-                />
-                <Fact label="Телефон" value={person.phone ? <span className="tabular-nums">{person.phone}</span> : "Не вказано"} />
-                <Fact label="Пошта" value={person.email ?? "Не вказано"} />
-                <Fact label="Посада" value={formatJobRole(person.jobRole) || "Без посади"} />
-                <Fact
-                  label="Присутність"
-                  value={person.absenceToday ? "Відсутній сьогодні" : inactive ? "Співпрацю завершено" : "На місці"}
-                />
+                      ) : (
+                        <span className="text-muted-foreground">Не вказано</span>
+                      )
+                    }
+                  />
+                  <Row
+                    label="День народження"
+                    value={
+                      birthday ? (
+                        // Спершу дата, і лише потім «через скільки»: у довіднику
+                        // питання «коли в неї день народження», а не «скільки чекати».
+                        <span className="flex flex-wrap items-baseline gap-x-2">
+                          <span className="tabular-nums">{birthday.dateLabel}</span>
+                          <span className="text-2xs font-normal text-muted-foreground">
+                            {birthday.daysUntil === 0 ? "сьогодні" : birthday.label.toLowerCase()}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Не вказано</span>
+                      )
+                    }
+                  />
+                  <Row
+                    label="Присутність"
+                    value={
+                      person.absenceToday
+                        ? "Відсутній сьогодні"
+                        : inactive
+                          ? "Співпрацю завершено"
+                          : "На місці"
+                    }
+                  />
+                </Group>
               </div>
             </SectionCard>
           ) : null}
@@ -433,13 +532,26 @@ export default function PersonProfilePage() {
 
           {section === "hr" ? (
             <SectionCard title="HR" audience="бачать керівники">
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                <Fact
+              <Group title="Працевлаштування">
+                <Row
                   label="Стаж"
-                  value={person.startDate ? formatEmploymentDuration(person.startDate) : "Дата старту не вказана"}
+                  value={
+                    person.startDate ? (
+                      formatEmploymentDuration(person.startDate)
+                    ) : (
+                      <span className="text-muted-foreground">Дата старту не вказана</span>
+                    )
+                  }
                 />
-                <Fact label="Статус співпраці" value={getEmploymentStatusLabel(employment)} />
-              </div>
+                <Row
+                  label="Статус співпраці"
+                  value={
+                    <Badge tone={employmentStatusTone(employment)} size="sm">
+                      {getEmploymentStatusLabel(employment)}
+                    </Badge>
+                  }
+                />
+              </Group>
               {canManage && !isSelf ? (
                 <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
                   <p className="min-w-0 flex-1 text-2xs leading-relaxed text-muted-foreground">
@@ -461,7 +573,6 @@ export default function PersonProfilePage() {
             </SectionCard>
           ) : null}
         </div>
-      </div>
 
       <ConfirmDialog
         open={employmentDecision !== null}
@@ -680,10 +791,12 @@ function PersonAccessSection({
           </div>
         }
       >
-        <div className="flex flex-col gap-4">
+        {/* Дві колонки на широкому: двадцять модулів у стовпчик тягнули сторінку
+            на два екрани, а перемикач опинявся за пів метра від свого підпису. */}
+        <div className="grid gap-x-10 gap-y-5 xl:grid-cols-2">
           {MODULE_GROUPS.map((group) => (
             <div key={group.group} className="flex flex-col gap-1">
-              <div className={CAP}>{group.label}</div>
+              <div className={cn(CAP, "pb-1 text-muted-foreground/70")}>{group.label}</div>
               {group.modules.map((module) => {
                 const lock = describeModuleLock(module.key, modules, {
                   accessRole: person.accessRole,
@@ -693,7 +806,7 @@ function PersonAccessSection({
                 return (
                   <div
                     key={module.key}
-                    className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50"
+                    className="flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors duration-base hover:bg-muted/50 motion-reduce:transition-none"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground">

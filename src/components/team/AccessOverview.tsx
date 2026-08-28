@@ -221,7 +221,9 @@ export function AccessOverview({
   const payrollHolders = sensitiveRows.find((row) => row.key === "payroll")?.holders.length ?? 0;
 
   return (
-    <div className="flex flex-col gap-4 px-4 pb-10">
+    // Верхній відступ свій: тіло сторінки повнорозмірне, і без нього плитки
+    // впритул торкались смуги вкладок.
+    <div className="flex flex-col gap-4 px-4 pb-10 pt-4">
       <div className="grid gap-3 md:grid-cols-3">
         <ShareTile
           cap="У команді"
