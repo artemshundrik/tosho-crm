@@ -110,7 +110,8 @@ import {
   type ModuleAccess,
 } from "@/lib/moduleAccess";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
-import { AccessMatrix } from "@/components/team/AccessMatrix";
+import { AccessMatrix, type MatrixPerson } from "@/components/team/AccessMatrix";
+import { AccessOverview } from "@/components/team/AccessOverview";
 import { getCurrentUser, getCurrentUserId } from "@/lib/currentUser";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
@@ -366,7 +367,7 @@ function isRecoverableTeamProfileError(message: string) {
 // per-person view and edit, so there is no separate edit drawer or roles dialog.
 
 /** Вкладки адмін-центру «Люди та доступи». */
-type AdminTab = "people" | "matrix" | "pulse" | "invites";
+type AdminTab = "overview" | "people" | "matrix" | "pulse" | "invites";
 
 /**
  * Окремої вкладки «Посади» немає навмисно: стартові набори посад лежать у коді
@@ -374,6 +375,7 @@ type AdminTab = "people" | "matrix" | "pulse" | "invites";
  * інтерфейсу нічого. Погляд «що дає посада» живе віссю «Посади» в матриці.
  */
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
+  { key: "overview", label: "Огляд" },
   { key: "people", label: "Люди" },
   { key: "matrix", label: "Матриця" },
   { key: "pulse", label: "Пульс" },
@@ -430,7 +432,7 @@ export function TeamMembersPage() {
    * не вигляд, а окреме питання керівника. Тепер усе — рівноправні вкладки, а
    * картка людини живе окремим маршрутом (`/team/:userId`).
    */
-  const [activeTab, setActiveTab] = useState<AdminTab>("people");
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const { entries } = useWorkspacePresence();
   const { teamId } = useAuth();
   /**
@@ -539,7 +541,7 @@ export function TeamMembersPage() {
 
   useEffect(() => {
     const tab = params.get("tab");
-    if (tab === "matrix" || tab === "pulse" || tab === "invites") {
+    if (tab === "overview" || tab === "matrix" || tab === "pulse" || tab === "invites") {
       setActiveTab(tab);
     } else if (tab === "roles") {
       // «Посади» були окремою вкладкою лише в чернетці — це вісь матриці.
@@ -1141,7 +1143,7 @@ export function TeamMembersPage() {
 
   const handleTabChange = (next: AdminTab) => {
     setActiveTab(next);
-    setParams(next === "people" ? {} : { tab: next });
+    setParams(next === "overview" ? {} : { tab: next });
   };
 
   /**
@@ -1547,6 +1549,29 @@ export function TeamMembersPage() {
     ? ACCESS_ROLE_OPTIONS
     : ACCESS_ROLE_OPTIONS.filter((option) => option.value !== "owner");
   const activeInvitesCount = invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length;
+
+  /**
+   * Люди для «Огляду» й «Матриці» — один перелік на обидві вкладки.
+   *
+   * Дві копії цього мапінгу розійшлися б рівно так, як свого часу розійшлися
+   * шість списків модулів: одна врахувала б аватарки, друга — ні.
+   */
+  const matrixPeople = useMemo<MatrixPerson[]>(
+    () =>
+      members.map((m) => {
+        const name = getMemberDisplayName(m);
+        return {
+          userId: m.user_id,
+          name,
+          initials: getInitialsFromName(name, m.email ?? null),
+          avatarUrl: getMemberAvatarSource(memberProfilesByUserId[m.user_id], m),
+          accessRole: m.access_role ?? null,
+          jobRole: m.job_role ?? null,
+          moduleAccess: memberMetaByUserId[m.user_id]?.moduleAccess ?? null,
+        };
+      }),
+    [members, memberProfilesByUserId, memberMetaByUserId, getMemberDisplayName]
+  );
   const needsAttentionCount = useMemo(() => {
     return members.filter((member) => {
       const meta = memberMetaByUserId[member.user_id];
@@ -2271,19 +2296,16 @@ export function TeamMembersPage() {
 
         {activeTab === "matrix" ? (
           <AccessMatrix
-            people={members.map((m) => {
-              const profile = memberProfilesByUserId[m.user_id];
-              const name = getMemberDisplayName(m);
-              return {
-                userId: m.user_id,
-                name,
-                initials: getInitialsFromName(name, m.email ?? null),
-                avatarUrl: getMemberAvatarSource(profile, m),
-                accessRole: m.access_role ?? null,
-                jobRole: m.job_role ?? null,
-                moduleAccess: memberMetaByUserId[m.user_id]?.moduleAccess ?? null,
-              };
-            })}
+            people={matrixPeople}
+          />
+        ) : null}
+
+        {activeTab === "overview" ? (
+          <AccessOverview
+            people={matrixPeople}
+            workspaceId={workspaceId}
+            pendingInvites={activeInvitesCount}
+            onOpenMatrix={() => handleTabChange("matrix")}
           />
         ) : null}
 
