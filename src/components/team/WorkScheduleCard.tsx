@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -10,7 +11,6 @@ import {
   WORK_MODE_LABELS,
   type IsoWeekday,
   type ScheduleDays,
-  type TeamWorkSchedule,
   type WorkMode,
 } from "@/lib/teamWorkSchedule";
 import {
@@ -116,35 +116,31 @@ export function WorkScheduleCard({
   actorUserId: string | null;
   canManage: boolean;
 }) {
-  const [schedule, setSchedule] = useState<TeamWorkSchedule | null>(null);
-  const [draft, setDraft] = useState<ScheduleDays>(DEFAULT_DAYS);
-  const [editing, setEditing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  /*
+   * Читання — запитом, а не ефектом зі станом: `setState` в ефекті рахує
+   * ратчет боргу перед пушем, і тут він зайвий. Чернетка редактора лишається
+   * власним станом — це вже не дані, а те, що людина зараз клацає.
+   */
+  const queryClient = useQueryClient();
+  const scheduleKey = ["work-schedule", workspaceId, userId];
+  const { data: schedule = null, isPending: loading } = useQuery({
+    queryKey: scheduleKey,
+    enabled: Boolean(workspaceId),
+    staleTime: 60_000,
+    queryFn: () => loadActiveWorkSchedule({ workspaceId: workspaceId as string, userId }),
+  });
 
-  useEffect(() => {
-    if (!workspaceId) {
-      setLoading(false);
-      return;
-    }
-    let active = true;
-    setLoading(true);
-    void loadActiveWorkSchedule({ workspaceId, userId })
-      .then((row) => {
-        if (!active) return;
-        setSchedule(row);
-        setDraft(row ? { ...DEFAULT_DAYS, ...row.days } : DEFAULT_DAYS);
-      })
-      .catch((error) => {
-        console.error("Failed to load work schedule", error);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [workspaceId, userId]);
+  const [draftDays, setDraftDays] = useState<ScheduleDays | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // Поки редактор не чіпали, чернетка дорівнює збереженому: так вона сама
+  // наздоганяє свіжі дані й не тримає застарілого знімка.
+  const draft: ScheduleDays = draftDays ?? { ...DEFAULT_DAYS, ...(schedule?.days ?? {}) };
+  const setDraft = (next: ScheduleDays | ((prev: ScheduleDays) => ScheduleDays)) =>
+    setDraftDays((prev) => {
+      const base = prev ?? { ...DEFAULT_DAYS, ...(schedule?.days ?? {}) };
+      return typeof next === "function" ? next(base) : next;
+    });
 
   const toggleDay = (day: IsoWeekday) => {
     setDraft((prev) => ({
@@ -162,7 +158,8 @@ export function WorkScheduleCard({
       // інакше картка казала б «графік задано» там, де нічого не задано.
       if (everyDayInOffice && schedule) {
         await clearWorkSchedule({ workspaceId, scheduleId: schedule.id });
-        setSchedule(null);
+        await queryClient.invalidateQueries({ queryKey: scheduleKey });
+        setDraftDays(null);
         setEditing(false);
         toast.success("Графік прибрано");
         return;
@@ -178,9 +175,8 @@ export function WorkScheduleCard({
         actorUserId,
         existingId: schedule?.id ?? null,
       });
-      const saved = await loadActiveWorkSchedule({ workspaceId, userId });
-      setSchedule(saved);
-      setDraft(saved ? { ...DEFAULT_DAYS, ...saved.days } : DEFAULT_DAYS);
+      await queryClient.invalidateQueries({ queryKey: scheduleKey });
+      setDraftDays(null);
       setEditing(false);
       toast.success("Графік збережено", { description: summarize(draft) });
     } catch (error) {
@@ -261,7 +257,7 @@ export function WorkScheduleCard({
               size="sm"
               disabled={saving}
               onClick={() => {
-                setDraft(current);
+                setDraftDays(null);
                 setEditing(false);
               }}
             >

@@ -44,6 +44,7 @@ import { PersonActivityHeatmap } from "@/components/team/PersonActivityHeatmap";
 import { PersonAccessHistorySection, PersonActivitySection } from "@/components/team/PersonDetailSections";
 import { WorkScheduleCard } from "@/components/team/WorkScheduleCard";
 import { Badge } from "@/components/ui/badge";
+import { isPresenceKind, normalizeTeamAbsenceKind } from "@/lib/teamAbsences";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
@@ -339,6 +340,16 @@ export default function PersonProfilePage() {
 
   const employment = displayEmploymentStatus(person.employmentStatus);
   const inactive = isInactiveEmployment(person.employmentStatus);
+  /*
+   * «З дому» — ПРИСУТНІСТЬ, а не відсутність (lib/teamAbsences.ts). Доти
+   * картка питала лише «чи є запис на сьогодні» і на графіковий вівторок
+   * бухгалтерки писала «Відсутня сьогодні» — при тому, що людина працює.
+   */
+  const todayKind = person.absenceToday
+    ? normalizeTeamAbsenceKind(person.absenceToday.kind)
+    : null;
+  const worksFromHomeToday = todayKind !== null && isPresenceKind(todayKind);
+  const awayToday = todayKind !== null && !isPresenceKind(todayKind);
   const birthday = getBirthdayInsight(person.birthDate);
 
   return (
@@ -409,9 +420,14 @@ export default function PersonProfilePage() {
                 {accessLevelLabel(person.accessRole)}
               </Badge>
             ) : null}
-            {person.absenceToday ? (
+            {awayToday ? (
               <Badge tone="warning" size="sm">
                 Відсутній сьогодні
+              </Badge>
+            ) : null}
+            {worksFromHomeToday ? (
+              <Badge tone="success" size="sm">
+                Сьогодні з дому
               </Badge>
             ) : null}
           </div>
@@ -608,7 +624,7 @@ export default function PersonProfilePage() {
                 <Row
                   label="Відсутність"
                   value={
-                    person.absenceToday ? (
+                    awayToday ? (
                       "Відсутній сьогодні"
                     ) : (
                       <span className="font-normal text-muted-foreground">Немає чинної</span>
@@ -674,8 +690,10 @@ export default function PersonProfilePage() {
             <RailRow
               label="Присутність"
               value={
-                person.absenceToday ? (
+                awayToday ? (
                   <span className="text-warning-foreground">Відсутній сьогодні</span>
+                ) : worksFromHomeToday ? (
+                  <span className="tone-text-success">Сьогодні з дому</span>
                 ) : inactive ? (
                   <span className="text-muted-foreground">Співпрацю завершено</span>
                 ) : (
