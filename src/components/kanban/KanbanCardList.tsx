@@ -307,6 +307,20 @@ export function KanbanCardList<T>({
 function useCardChoreography(containerRef: RefObject<HTMLDivElement | null>, signature: string) {
   const rects = useRef(new Map<string, DOMRect>());
   const lastSignature = useRef<string | null>(null);
+  /**
+   * Чи був у попередньому кадрі привид, що прощався.
+   *
+   * ЗАМІРЯНО 28.08.2026, коли Артем поскаржився на «подвійне мигання» при
+   * перенесенні картки. Інструментував Element.animate і побачив таке: спершу
+   * картка згортається (200 мс), а через 339 мс п'ять сусідів окремо їдуть на
+   * 131 px. Тобто рух показувався ДВІЧІ — один раз висотою привида, другий раз
+   * переїздом сусідів уже після його зникнення.
+   *
+   * Причина: позиції для FLIP записуються в кадрі, де привид ще на повну
+   * висоту. Коли він зникає, різниця позицій дорівнює саме тій висоті — і
+   * сусіди «переїжджають» туди, де вже стоять.
+   */
+  const hadGhost = useRef(false);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -326,8 +340,15 @@ function useCardChoreography(containerRef: RefObject<HTMLDivElement | null>, sig
       if (row.dataset.leaving === "true" || !rects.current.has(key)) churn += 1;
     });
 
+    const hasGhost = rows.some((row) => row.dataset.leaving === "true");
+    // Кадр, у якому привид щойно прибрали: сусіди вже на своїх місцях —
+    // згортання висоти привело їх туди плавно. Анімувати тут нічого, лишається
+    // тільки перезаписати позиції.
+    const ghostJustLeft = hadGhost.current && !hasGhost;
+
     const animate =
       changed &&
+      !ghostJustLeft &&
       churn <= BULK_CHANGE_LIMIT &&
       !skipChoreography &&
       !prefersReducedMotion();
@@ -379,5 +400,6 @@ function useCardChoreography(containerRef: RefObject<HTMLDivElement | null>, sig
 
     rects.current = next;
     lastSignature.current = signature;
+    hadGhost.current = hasGhost;
   }, [containerRef, signature]);
 }
