@@ -63,48 +63,16 @@ if [ "${SKIP_CHECKS:-}" = "1" ]; then
 elif [ ! -d node_modules ]; then
   echo "[перевірки] node_modules немає — пропускаю. Постав залежності: npm ci"
 else
-  echo "[перевірки] ганяю перед пушем — приблизно дві хвилини"
-  failed=""
-  for check in \
-    "типи застосунку|npm run typecheck --silent" \
-    "лінт + борг компілятора|node scripts/check-compiler-debt.mjs" \
-    "тести|npm run test --silent" \
-    "типи функцій|npm run typecheck:functions --silent" \
-    "реєстр функцій|npm run check:functions --silent" \
-    "ключі фіч|npm run check:feature-keys --silent" \
-    "реєстр поверхонь|npm run check:page-surfaces --silent" \
-    "копії спільних модулів|npm run check:duplicate-singletons --silent" \
-    "читачі правил|npm run check:rule-readers --silent" \
-    "заглушки правил хуків|node scripts/check-hook-disables.mjs" \
-    "розростання файлів|node scripts/check-file-growth.mjs" \
-    "знімок стеку|node scripts/check-stack-snapshot.mjs" \
-    "версія Node|node scripts/check-node-version.mjs" \
-    "адреси кронів|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-cron-endpoints.mjs" \
-    "захист БД|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-db-guards.mjs" \
-    "SQL-журнал|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-sql-journal.mjs"
-  do
-    name=${check%%|*}
-    cmd=${check#*|}
-    # Без вирівнювання по колонках навмисно: printf рахує БАЙТИ, а не символи,
-    # тож кирилиця в %-18s їде. Рівні стовпчики не варті підрахунку ширини.
-    printf "[перевірки]   %s" "$name"
-    if out=$(eval "$cmd" 2>&1); then
-      echo " → ок"
-    else
-      echo " → ПАДАЄ"
-      failed="$failed $name"
-      echo "$out" | tail -15 | sed 's/^/[перевірки]     /'
-    fi
-  done
-
-  if [ -n "$failed" ]; then
+  # Список перевірок живе в scripts/run-checks.sh — щоб те саме можна було
+  # прогнати руками (`npm run check`), не влаштовуючи пуш заради відповіді
+  # «чи пройде пуш». Два входи, один список.
+  if ! sh scripts/run-checks.sh; then
     echo ""
-    echo "[перевірки] ✖ пуш зупинено. Не пройшли:$failed"
-    echo "[перевірки]   Полагодь і пушни ще раз."
+    echo "[перевірки] ✖ пуш зупинено."
+    echo "[перевірки]   Полагодь і пушни ще раз. Локально те саме: npm run check"
     echo "[перевірки]   Якщо прод лежить і хотфікс треба негайно: SKIP_CHECKS=1 git push"
     exit 1
   fi
-  echo "[перевірки] ✓ усе чисто"
 fi
 
 # ─────────────────────────── робочі години ───────────────────────────
