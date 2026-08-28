@@ -403,7 +403,13 @@ const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
 
-const MAX_BRIEF_FILES = 5;
+/**
+ * Стільки ж, скільки в решті зон вкладень CRM: `MAX_ATTACHMENTS` у прорахунку
+ * і `MAX_QUOTE_ATTACHMENTS` у картці — обидві по 20. Доти тут стояло 5, і форма
+ * мовчки відрізала зайве: людина з шістьма файлами бачила п'ять, а шостий
+ * доносила дизайнерові в Telegram — повз CRM (REQ-197).
+ */
+const MAX_BRIEF_FILES = 20;
 const formatEstimateMinutes = (minutes?: number | null) => {
   if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "Не вказано";
   const value = Math.round(minutes);
@@ -1028,6 +1034,9 @@ export default function DesignPage() {
   const [createCollaboratorIds, setCreateCollaboratorIds] = useState<string[]>([]);
   const [createCollaboratorsPopoverOpen, setCreateCollaboratorsPopoverOpen] = useState(false);
   const [createFiles, setCreateFiles] = useState<File[]>([]);
+  // Дзеркало createFiles для addFilesToCreate: воно має знати поточну кількість
+  // ДО оновлення стану, щоб сказати, скільки з доданого не влізло.
+  const createFilesRef = useRef<File[]>([]);
   const [createFilesDragActive, setCreateFilesDragActive] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
@@ -3524,11 +3533,30 @@ export default function DesignPage() {
     setTaskToDelete(task);
   };
 
+  // Скільки лишилось місця — рахуємо з дзеркала в ref, а НЕ всередині
+  // оновлювача: React виконує оновлювач під час рендера, тож усе, що там
+  // нарахуєш, за його межами вже недоступне — на цьому тост мовчки не з'являвся
+  // (перевірено живцем). Замикання тут не годиться з іншої причини: цю функцію
+  // кличе й слухач paste із deps [createDialogOpen], де createFiles застаріле.
+  // Сам запис усе одно функціональний і перераховує місце з prev, тож навіть
+  // розсинхрон дзеркала не дасть перебрати ліміт.
   const addFilesToCreate = (incoming: FileList | File[] | null | undefined) => {
     if (!incoming) return;
     const next = Array.from(incoming);
     if (next.length === 0) return;
-    setCreateFiles((prev) => [...prev, ...next].slice(0, MAX_BRIEF_FILES));
+    const room = Math.max(0, MAX_BRIEF_FILES - createFilesRef.current.length);
+    if (room === 0) {
+      toast.error("Досягнуто ліміт файлів", {
+        description: `Можна додати не більше ${MAX_BRIEF_FILES} файлів.`,
+      });
+      return;
+    }
+    if (next.length > room) {
+      toast.warning(`Додано ${room} із ${next.length} файлів`, {
+        description: `Лишалось місце на ${room}.`,
+      });
+    }
+    setCreateFiles((prev) => [...prev, ...next.slice(0, Math.max(0, MAX_BRIEF_FILES - prev.length))]);
   };
 
   const getDroppedString = (item: DataTransferItem) =>
@@ -3657,7 +3685,10 @@ export default function DesignPage() {
     const urlFiles = await Promise.all(urls.map((url, index) => createFileFromDroppedUrl(url, index)));
     urlFiles.forEach(addFile);
 
-    return Array.from(files.values()).slice(0, MAX_BRIEF_FILES);
+    // Без обрізання: ліміт і повідомлення про зайве — на addFilesToCreate, який
+    // один знає, скільки місця лишилось. Обрізавши тут, ми б сказали «додано 5
+    // із 5», приховавши решту перетягнутого.
+    return Array.from(files.values());
   };
 
   const handleCreateFilesDrop = async (dataTransfer: DataTransfer) => {
@@ -3710,6 +3741,10 @@ export default function DesignPage() {
   const removeCreateFile = (index: number) => {
     setCreateFiles((prev) => prev.filter((_, i) => i !== index));
   };
+
+  useEffect(() => {
+    createFilesRef.current = createFiles;
+  }, [createFiles]);
 
   const uploadStandaloneBriefFiles = async (params: {
     teamId: string;
@@ -5871,7 +5906,7 @@ export default function DesignPage() {
                 <span className={cn("text-sm", createFilesDragActive ? "text-primary font-medium" : "text-foreground")}>
                   {createFilesDragActive ? "Відпустіть файли тут" : "Перетягніть, вставте або клікніть"}
                 </span>
-                <span className="text-xs text-muted-foreground">· до {MAX_BRIEF_FILES}</span>
+                <span className="text-xs text-muted-foreground">· до {MAX_BRIEF_FILES} файлів</span>
               </div>
               {createFiles.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
