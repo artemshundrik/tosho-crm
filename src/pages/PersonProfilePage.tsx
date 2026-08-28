@@ -404,6 +404,7 @@ export default function PersonProfilePage() {
               teamId={teamId}
               canManage={canManage}
               isOwner={isOwner}
+              isSeo={isSeo}
               isSelf={isSelf}
               resolveActorName={resolveActorName}
               onSaved={(nextAccessRole, nextJobRole) => {
@@ -502,6 +503,7 @@ function PersonAccessSection({
   teamId,
   canManage,
   isOwner,
+  isSeo,
   isSelf,
   resolveActorName,
   onSaved,
@@ -511,6 +513,7 @@ function PersonAccessSection({
   teamId: string | null;
   canManage: boolean;
   isOwner: boolean;
+  isSeo: boolean;
   isSelf: boolean;
   resolveActorName: (actorUserId: string | null, fallback: string | null) => string;
   onSaved: (accessRole: string | null, jobRole: string | null) => void;
@@ -526,10 +529,25 @@ function PersonAccessSection({
   const [busy, setBusy] = useState(false);
 
   /**
-   * Своїх доступів не редагують: адміністратор, який зняв би собі права,
-   * втратив би й можливість повернути їх. Власника не чіпає ніхто, крім нього.
+   * Два різні дозволи, бо їх дають різні сторожі.
+   *
+   * РОЛІ пише серверна функція `create-workspace-invite` — вона пускає owner і
+   * admin (`canManageTeam`), забороняючи міняти себе, призначати власника й
+   * чіпати власника.
+   *
+   * МОДУЛІ лежать на рядку профілю, і його ріже RLS: `team_member_profiles`
+   * дозволяє запис лише самому собі, власнику або CEO. Адміністратор без CEO
+   * туди не пише — тож і перемикач йому показуємо заблокованим. Раніше кнопка
+   * була активна й падала помилкою на збереженні: рівно той випадок, коли
+   * контрол обіцяє те, чого не може.
+   *
+   * Своїх доступів не редагує ніхто: адміністратор, який зняв би собі права,
+   * втратив би й спосіб їх повернути.
    */
-  const canEdit = canManage && !isSelf && (isOwner || (person.accessRole ?? "") !== "owner");
+  const targetIsOwner = (person.accessRole ?? "") === "owner";
+  const canEditRoles = canManage && !isSelf && (isOwner || !targetIsOwner);
+  const canEditModules = (isOwner || isSeo) && !isSelf && (isOwner || !targetIsOwner);
+  const canEdit = canEditRoles || canEditModules;
 
   /** Дефолт ПОСАДИ — щоб було видно, де людина від нього відхилилась. */
   const roleDefaults = useMemo(
@@ -549,10 +567,11 @@ function PersonAccessSection({
     [modules, roleDefaults, person.accessRole, person.jobRole]
   );
 
-  const dirty =
+  const rolesDirty =
     accessLevel !== ((person.accessRole ?? "member").trim().toLowerCase() || "member") ||
-    job !== (person.jobRole || "none") ||
-    (Object.keys(modules) as ModuleKey[]).some((key) => modules[key] !== savedAccess[key]);
+    job !== (person.jobRole || "none");
+  const modulesDirty = (Object.keys(modules) as ModuleKey[]).some((key) => modules[key] !== savedAccess[key]);
+  const dirty = (canEditRoles && rolesDirty) || (canEditModules && modulesDirty);
 
   const resetToRole = useCallback(() => setModules(roleDefaults), [roleDefaults]);
 
@@ -560,21 +579,29 @@ function PersonAccessSection({
     if (!canEdit) return;
     setBusy(true);
     try {
-      const roles = await savePersonRoles({
-        workspaceId,
-        teamId,
-        userId: person.userId,
-        currentAccessRole: person.accessRole,
-        currentJobRole: person.jobRole,
-        nextAccessRole: accessLevel,
-        nextJobRole: job,
-      });
-      // Модулі живуть на рядку профілю, а не в членстві, тож це другий запис.
-      // Шлемо ЛИШЕ moduleAccess: усе інше в цій формі не редагується, і
-      // відправити його означало б затерти чужу правку.
-      await upsertWorkspaceMemberProfile({ workspaceId, userId: person.userId, moduleAccess: modules });
+      /**
+       * Пишемо рівно те, на що цей глядач має право, — інакше запит однаково
+       * впаде на сторожі, але вже після того, як людина натиснула «Зберегти».
+       */
+      const roles = canEditRoles
+        ? await savePersonRoles({
+            workspaceId,
+            teamId,
+            userId: person.userId,
+            currentAccessRole: person.accessRole,
+            currentJobRole: person.jobRole,
+            nextAccessRole: accessLevel,
+            nextJobRole: job,
+          })
+        : null;
+      if (canEditModules) {
+        // Модулі живуть на рядку профілю, а не в членстві, тож це другий запис.
+        // Шлемо ЛИШЕ moduleAccess: усе інше в цій формі не редагується, і
+        // відправити його означало б затерти чужу правку.
+        await upsertWorkspaceMemberProfile({ workspaceId, userId: person.userId, moduleAccess: modules });
+      }
       invalidateWorkspaceMemberDirectory(workspaceId);
-      onSaved(roles.changed ? roles.accessRole : person.accessRole, roles.changed ? roles.jobRole : person.jobRole);
+      onSaved(roles?.changed ? roles.accessRole : person.accessRole, roles?.changed ? roles.jobRole : person.jobRole);
       toast.success("Доступи збережено");
     } catch (error: unknown) {
       toast.error("Не вдалося зберегти доступи", {
@@ -591,7 +618,7 @@ function PersonAccessSection({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className={CAP}>Рівень доступу</span>
-            <Select value={accessLevel} onValueChange={setAccessLevel} disabled={!canEdit}>
+            <Select value={accessLevel} onValueChange={setAccessLevel} disabled={!canEditRoles}>
               <SelectTrigger className="h-10">{accessLevelLabel(accessLevel)}</SelectTrigger>
               <SelectContent>
                 {ACCESS_LEVELS.map((level) => (
@@ -604,7 +631,7 @@ function PersonAccessSection({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className={CAP}>Посада</span>
-            <Select value={job} onValueChange={setJob} disabled={!canEdit}>
+            <Select value={job} onValueChange={setJob} disabled={!canEditRoles}>
               <SelectTrigger className="h-10">
                 {JOB_ROLE_OPTIONS.find((option) => option.value === job)?.label ?? "Без посади"}
               </SelectTrigger>
@@ -618,11 +645,11 @@ function PersonAccessSection({
             </Select>
           </label>
         </div>
-        {!canEdit ? (
+        {!canEditRoles ? (
           <p className="text-2xs text-muted-foreground">
             {isSelf
               ? "Власні доступи змінює хтось інший — інакше можна закрити собі вхід."
-              : "Редагувати доступи цієї людини може лише власник."}
+              : "Роль цієї людини може змінити лише власник."}
           </p>
         ) : (
           <p className="text-2xs text-muted-foreground">
@@ -644,7 +671,7 @@ function PersonAccessSection({
             ) : (
               <Badge tone="success">повністю за посадою</Badge>
             )}
-            {canEdit && deviations.length ? (
+            {canEditModules && deviations.length ? (
               <Button variant="ghost" size="xs" onClick={resetToRole}>
                 <RotateCcw className="h-3.5 w-3.5" />
                 Скинути до посади
@@ -684,7 +711,7 @@ function PersonAccessSection({
                     </div>
                     <Switch
                       checked={lock.checked}
-                      disabled={!canEdit || lock.locked}
+                      disabled={!canEditModules || lock.locked}
                       label={module.label}
                       onCheckedChange={(next) =>
                         setModules((prev) => ({ ...prev, [module.key]: next === true }))

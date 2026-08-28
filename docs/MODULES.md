@@ -25,7 +25,7 @@ canonical guide, not above it. If a module doc disagrees with code, code wins �
 | Sample Stock | `/stock/samples` | SampleStockPage | [sample-stock.md](modules/sample-stock.md) | ✅ |
 | Finances | `/finances` | FinancesPage, features/finances | [finances.md](modules/finances.md) | ✅ |
 | Marketing | `/marketing` | MarketingPage | [marketing.md](modules/marketing.md) | ✅ |
-| Team / HR | `/team`, `/settings/members` | TeamPage, TeamMembersPage | [team-hr.md](modules/team-hr.md) | ✅ |
+| Team / HR | `/team`, `/team/:userId`, `/settings/members` | TeamPage, PersonProfilePage, TeamMembersPage | [team-hr.md](modules/team-hr.md) | ✅ |
 | Profile | `/profile` | ProfilePage | [profile.md](modules/profile.md) | ✅ |
 | Admin Observability | `/admin/observability` | AdminObservabilityPage | [admin-observability.md](modules/admin-observability.md) | ✅ |
 | ToSho AI | (drawer, no route) | netlify/functions/tosho-ai | [tosho-ai.md](modules/tosho-ai.md) | ✅ |

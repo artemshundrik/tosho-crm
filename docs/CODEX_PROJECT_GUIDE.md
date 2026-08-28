@@ -264,7 +264,8 @@ Current UI contract:
 - `/design/:id`
 - `/contractors`
 - `/stock/samples`
-- `/settings/members`
+- `/settings/members` — адмін-центр «Люди та доступи» (Огляд · Люди · Матриця · Пульс · Запрошення)
+- `/team/:userId` — картка людини, спільна для «Команди» й адмін-центру
 - `/profile`
 - `/admin/observability`
 

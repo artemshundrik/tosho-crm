@@ -4,8 +4,8 @@
 
 ## At a glance
 
-- **Routes:** `/team` → `TeamPage` (directory + absences calendar, **ungated** — any member; `src/App.tsx:898`) · `/settings/members` → `TeamMembersPage` (access/role/HR management, gated by `canEditMemberRoles || moduleAccess.team` via `TeamMembersRouteGate`, `src/App.tsx:473,1053`)
-- **Key files:** `src/pages/TeamPage.tsx` (~1,176 lines), `src/pages/TeamMembersPage.tsx` (~4,042), `src/lib/workspaceMemberDirectory.ts` (directory assembly + profile upsert), `src/lib/permissions.ts`, `src/lib/workspace.ts` (workspace/membership resolution), `src/lib/employment.ts`, `src/lib/teamAbsences.ts`; Netlify `create-workspace-invite.ts`, `team-member-employment.ts`, `team-member-probation.ts`, `probation-reminders.ts`
+- **Routes (перебудовано 28.08.2026, «два світи»):** `/team` → `TeamPage` — соціальний хаб для ВСІХ (люди, календар, заявки) · `/team/:userId` → `PersonProfilePage` — картка людини, ОДНА поверхня на два входи, гейт `team` (alwaysOn) · `/settings/members` → `TeamMembersPage` — адмін-центр «Люди та доступи» з вкладками Огляд · Люди · Матриця · Пульс · Запрошення, гейт `members_access`
+- **Key files:** `src/pages/TeamPage.tsx` (~2,426), `src/pages/PersonProfilePage.tsx` (картка людини + редактор доступів), `src/pages/TeamMembersPage.tsx` (~2,595 — панель людини видалена), `src/components/team/AccessMatrix.tsx`, `src/components/team/AccessOverview.tsx`, `src/features/team/personRoles.ts` (запис ролей + підписи рівнів), `src/lib/workspaceMemberDirectory.ts` (directory assembly + profile upsert), `src/lib/permissions.ts`, `src/lib/workspace.ts` (workspace/membership resolution), `src/lib/employment.ts`, `src/lib/teamAbsences.ts`; Netlify `create-workspace-invite.ts`, `team-member-employment.ts`, `team-member-probation.ts`, `probation-reminders.ts`
 - **Main tables (`tosho`):** `memberships` (real `access_role`/`job_role`) read via `memberships_view`; `team_member_profiles` (HR/profile SoT — names, avatar, availability, `start_date`, probation fields, `manager_user_id`, `module_access` jsonb, `employment_status`); `team_absences`; `team_member_employment_events` / `team_member_probation_events` (audit logs); `user_profiles` (name directory); `team_member_manager_rates` (payroll input). `public.team_members` resolves operational `team_id`; `workspace_member_directory` is the unified read view.
 - **Access / permissions:** `permissions.ts:buildPermissions` derives `canManageMembers` (owner/admin/CEO, `:71`) & `canEditMemberRoles` (owner/admin, `:72`). **Module access is a separate dimension** from `access_role` — a per-user jsonb card in `team_member_profiles.module_access`. Access-lockout RLS + auth ban on deactivation.
 - **Workflow:** `CODEX_WORKFLOWS.md` §8 (permissions/membership) + §9 (Netlify functions)
@@ -13,7 +13,15 @@
 
 ## Overview
 
-Two surfaces over one roster. `/team` is a read-mostly directory: member cards with availability, birthday/anniversary insights (`employment.ts`), and an absences calendar (`team_absences`). `/settings/members` is the admin console: invite members, edit access/job roles, edit the profile (incl. per-module access card), and run the HR lifecycle — probation review and employment (offboard/reactivate).
+**Два світи над одним реєстром людей, і ОДНА картка між ними.** `/team` — соціальний хаб для всіх: картки людей, календар відсутностей, заявки; клік по імені веде в картку. `/settings/members` — адмін-центр: огляд стану доступів, список людей, матриця «хто має що», Пульс і запрошення. Обидва ведуть в `/team/:userId`.
+
+**Склад картки визначає ГЛЯДАЧ, а не вхід** (патерн Rippling). «Огляд» бачить уся команда; «Доступи» і «HR» — owner/admin/CEO; «Оплата» — owner/CEO; «Активність» — керівники та сама людина.
+
+**Редактор доступів один на застосунок** — у картці. Матриця це другий ВХІД у ті самі дані (спільний `describeModuleLock`), не друга копія. Два дозволи в ньому розведені, бо їх дають різні сторожі: РОЛІ пише `create-workspace-invite` (owner/admin), МОДУЛІ ріже RLS `team_member_profiles` (self/owner/CEO) — тож адміністратор без CEO бачить перемикачі модулів заблокованими.
+
+Окремої вкладки «Посади» немає навмисно: стартові набори лежать у коді (`ROLE_MENUS` у `src/lib/moduleAccess.ts`), а не в базі. Цей погляд дає вісь «Посади» в матриці.
+
+«Завершити співпрацю» живе в HR-секції картки людини (раніше — у правій панелі адмін-центру).
 
 Two orthogonal role axes drive everything: **`access_role`** (owner/admin/member → `mapAccessRoleToTeamRole`) and **`job_role`** (seo/manager/designer/pm/logistics/accountant…). `buildPermissions` (`permissions.ts:53`) folds both into `AppPermissions`. Module visibility (`overview/orders/design/finance/…`) is a third, independent axis stored per-user; `finance` additionally has a role fallback matching DB RLS (`App.tsx:546`).
 
