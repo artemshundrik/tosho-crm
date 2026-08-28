@@ -92,11 +92,12 @@ export function KanbanCard({
         SURFACE[surface],
         disabled
           ? "cursor-not-allowed opacity-70"
-          // Фон на наведення — та сама реакція, що в «Інтеграціях» і в списку
-          // запитів: одна межа надто тиха, і на дошці з десятком карток не
-          // видно, яка саме зараз під курсором.
-          : interactive &&
-            "cursor-pointer hover:bg-muted/30 hover:border-foreground/24 dark:hover:border-foreground/22",
+          // ТІЛЬКИ МЕЖА, без зміни фону. Спершу тут світлішав ще й фон — за
+          // прецедентом «Інтеграцій» і списку запитів. На дошці це працює
+          // інакше: карток десяток в одній колонці, вони стоять щільно, і
+          // плитка, що міняє колір під курсором, смикає око щоразу, коли ведеш
+          // мишею через колонку. Межа каже те саме тихіше.
+          : interactive && "cursor-pointer hover:border-foreground/24 dark:hover:border-foreground/22",
         className
       )}
       {...props}
