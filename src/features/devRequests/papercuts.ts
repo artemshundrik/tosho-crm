@@ -44,3 +44,15 @@ export function papercutLabel(card: { title: string }): string {
   const title = card.title.trim();
   return title.slice(PAPERCUT_PREFIX.length).trim() || title;
 }
+
+/**
+ * Накопичувач, у який ще нічого не поклали.
+ *
+ * Такий не показують на дошці: полиця без дрібниць не є ні задачею, ні
+ * роботою — вона лише займає місце серед справжніх карток. Наповнюють її у
+ * «Черзі», на полиці «Дрібниці», звідки вона нікуди не зникає (рішення Артема
+ * 28.08.2026).
+ */
+export function isEmptyPapercut(card: { title: string; checklist: unknown[] }): boolean {
+  return isPapercutCard(card) && card.checklist.length === 0;
+}

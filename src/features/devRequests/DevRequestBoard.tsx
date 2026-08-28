@@ -17,7 +17,7 @@ import { CardActionsMenu } from "./CardActionsMenu";
 import { CARD_MENU_ATTR, buildCardMeta, isUrgentCard } from "./cardModel";
 import { CardMetaChip } from "./CardMetaChip";
 import { ChecklistBar } from "./ChecklistBar";
-import { isPapercutCard } from "./papercuts";
+import { isEmptyPapercut, isPapercutCard } from "./papercuts";
 import { isPartlyShipped } from "./checklist";
 import { GroupHeading } from "./GroupHeading";
 import {
@@ -76,6 +76,17 @@ export function DevRequestBoard({
     const map = new Map<RequestStatus, DevRequest[]>();
     for (const column of BOARD_COLUMNS) map.set(column.status, []);
     for (const request of requests) {
+      /*
+       * ПОРОЖНІЙ НАКОПИЧУВАЧ НА ДОШКУ НЕ ПОТРАПЛЯЄ (рішення Артема 28.08.2026).
+       *
+       * Полиця, у яку ще нічого не поклали, не є ні задачею, ні роботою: вона
+       * лише займає місце в колонці серед справжніх карток. Наповнюють її не
+       * тут, а у «Черзі», на полиці «Дрібниці», — звідки вона нікуди не
+       * зникає. Щойно в накопичувачі з'явиться перша дрібниця, картка
+       * повернеться на дошку сама.
+       */
+      if (isEmptyPapercut(request)) continue;
+
       // Колонок лише п'ять: «Не робимо» і «Ідеї» на дошку свідомо не
       // потрапляють, для них є списки за перемиканням (див. BOARD_COLUMNS).
       const bucket = map.get(request.status);

@@ -4,6 +4,7 @@ import {
   Bot,
   Calculator,
   Layers,
+  LayoutPanelTop,
   MessagesSquare,
   Package,
   Palette,
@@ -76,6 +77,10 @@ export const THEME_LOOK: Record<string, ThemeLook> = {
   "мова інтерфейсу": { icon: Palette, tone: "festive" },
   "довіра до релізу": { icon: ShieldCheck, tone: "success" },
   "економіка прорахунку": { icon: Calculator, tone: "info" },
+  // Своя іконка, бо без неї тема падала у фолбек — і «картка прорахунку»
+  // виглядала на полиці так само, як група «Без теми» (обидві шарами).
+  // Ескіз, а не документ: тема про ВИГЛЯД картки, а не про папери в ній.
+  "картка прорахунку": { icon: LayoutPanelTop, tone: "info" },
   // Далі напрями на три картки й менше: тони починають повторюватись, і це
   // нормально — на дошці вони майже ніколи не стоять поруч, а іконка своя.
   "особистий бот": { icon: Bot, tone: "teal" },
