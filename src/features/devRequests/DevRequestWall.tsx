@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { CardActionsMenu } from "./CardActionsMenu";
 import { CARD_MENU_ATTR, buildCardMeta, formatIdleAge, idleDays, isCardMenuTarget } from "./cardModel";
 import { ChecklistBar } from "./ChecklistBar";
+import { isPapercutCard } from "./papercuts";
 import { PriorityBars } from "./PriorityBars";
 import { CardMetaChip } from "./CardMetaChip";
 import { KIND_ICONS, KIND_LABELS, KIND_TONE, type DevRequest, type RequestStatus } from "./types";
@@ -180,7 +181,11 @@ export function DevRequestWall({
             {/* Прогрес пунктів — той самий, що на дошці. Велика ідея з планом
                 усередині має показувати його й тут: інакше «відклали» ховало б
                 те, що половина роботи вже зроблена. */}
-            <ChecklistBar items={request.checklist} className="mt-2.5" />
+            <ChecklistBar
+              items={request.checklist}
+              papercut={isPapercutCard(request)}
+              className="mt-2.5"
+            />
 
             {/* Мітки — той самий buildCardMeta, що й на дошці: колір, порядок і
                 склад мають збігатись за побудовою, а не за домовленістю. */}

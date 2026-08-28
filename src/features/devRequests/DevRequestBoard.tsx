@@ -17,6 +17,7 @@ import { CardActionsMenu } from "./CardActionsMenu";
 import { CARD_MENU_ATTR, buildCardMeta, isUrgentCard } from "./cardModel";
 import { CardMetaChip } from "./CardMetaChip";
 import { ChecklistBar } from "./ChecklistBar";
+import { isPapercutCard } from "./papercuts";
 import { isPartlyShipped } from "./checklist";
 import { GroupHeading } from "./GroupHeading";
 import {
@@ -207,6 +208,7 @@ export function DevRequestBoard({
         <ChecklistBar
           items={request.checklist}
           partlyShipped={isPartlyShipped(request.status, request.checklist, request.commitShas)}
+          papercut={isPapercutCard(request)}
           className="mt-2"
         />
 

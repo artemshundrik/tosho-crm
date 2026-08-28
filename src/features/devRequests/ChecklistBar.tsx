@@ -18,14 +18,29 @@ import { checklistProgress, type ChecklistItem } from "./checklist";
 export function ChecklistBar({
   items,
   partlyShipped = false,
+  papercut = false,
   className,
 }: {
   items: ChecklistItem[];
   /** Код уже поїхав, а хвіст лишився — див. isPartlyShipped. */
   partlyShipped?: boolean;
+  /**
+   * Накопичувач дрібниць. У нього інше питання: не «скільки зроблено», а
+   * «скільки лишилось розгребти» — полиця напряму не буває доробленою.
+   *
+   * Через це дошка й «Черга» показували різні числа про ту саму картку: тут
+   * «1/1», там «0». Обидва були праві й разом читались як суперечність.
+   */
+  papercut?: boolean;
   className?: string;
 }) {
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    // Порожня полиця мовчала, і на дошці накопичувач без дрібниць виглядав як
+    // недороблена задача без прогресу. Тепер він сам каже, що робити нічого.
+    return papercut ? (
+      <span className={cn("inline-flex text-2xs text-muted-foreground/80", className)}>полиця порожня</span>
+    ) : null;
+  }
   const progress = checklistProgress(items);
   const share = (count: number) => `${(count / progress.total) * 100}%`;
 
@@ -52,8 +67,17 @@ export function ChecklistBar({
         <i className="block h-full bg-info-foreground" style={{ width: share(progress.doing) }} />
         <i className="block h-full bg-warning-solid" style={{ width: share(progress.waiting) }} />
       </span>
-      <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
-        {progress.done}/{progress.total}
+      <span
+        className="shrink-0 text-2xs tabular-nums text-muted-foreground"
+        title={
+          papercut
+            ? `Лишилось розгребти: ${progress.total - progress.done} з ${progress.total}`
+            : undefined
+        }
+      >
+        {papercut
+          ? `лишилось ${progress.total - progress.done}`
+          : `${progress.done}/${progress.total}`}
       </span>
       {partlyShipped ? (
         // Пояснює, чому картка стоїть у «Готово локально» замість «Викочено»:
