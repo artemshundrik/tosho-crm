@@ -29,14 +29,24 @@ import { cn } from "@/lib/utils";
  * він означає «щось потребує уваги» (дедлайн горить, таймер на паузі), а це
  * робочий стан, а не аварія.
  */
+/** Спільний ключ тосту: скільки б записів не заблокували, повідомлення одне. */
+const VIEW_ONLY_TOAST = "view-only-blocked";
+
 export function ViewAsBar({ className }: { className?: string }) {
   const { viewAs, viewAsMode } = useAuth();
 
   // Гальмо мовчки нічого не робить — інакше «кнопка не працює» виглядало б як
   // поломка. Кажемо прямо, і одразу — чому.
+  //
+  // ОДИН ТОСТ, А НЕ СТОС. `id` тут не косметика: заблокованих записів за раз
+  // буває кілька (сторінка тягне своє, фонові писарі — своє), і без спільного
+  // ключа sonner складав їх у вежу однакових повідомлень. З ключем повторний
+  // виклик оновлює той самий тост. Другу половину лавини прибрано в
+  // viewOnlyGuard: службова бухгалтерія (присутність, позначки «Нове», журнал
+  // помилок, замки) блокується мовчки — людина її не робила.
   useEffect(() => {
     if (viewAsMode !== "observe") return;
-    const onBlocked = () => toast.info(VIEW_ONLY_MESSAGE);
+    const onBlocked = () => toast.info(VIEW_ONLY_MESSAGE, { id: VIEW_ONLY_TOAST });
     window.addEventListener(VIEW_ONLY_BLOCKED_EVENT, onBlocked);
     return () => window.removeEventListener(VIEW_ONLY_BLOCKED_EVENT, onBlocked);
   }, [viewAsMode]);

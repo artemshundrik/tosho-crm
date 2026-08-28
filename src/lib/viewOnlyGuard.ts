@@ -27,8 +27,33 @@ export function setViewOnlyMode(next: boolean) {
   viewOnly = next;
 }
 
-function announce(what: string) {
+/**
+ * Записи, про які МОВЧИМО, хоч і блокуємо.
+ *
+ * Це службова бухгалтерія застосунку: людина її не робила й пояснення їй не
+ * винна. Заміряно 29.08.2026 просто в браузері: сам лише вхід у режим давав два
+ * тости про `member_seen_modules` (позначка «Нове» в меню), а далі кожен перехід
+ * додавав ще, і кожні кілька секунд стукала присутність — тост про те, що «дії
+ * вимкнені», сипався там, де жодної дії не було.
+ *
+ * Перелік, а не «мовчимо про все»: тост потрібен саме там, де людина натиснула
+ * кнопку й нічого не сталось. Мовчазний список має рости лише свідомо, по
+ * одному запису — інакше режим знову стане німим.
+ */
+const SILENT_WRITES = new Set([
+  "member_seen_modules",
+  "user_presence",
+  "runtime_errors",
+  "acquire_entity_lock",
+  "release_entity_lock",
+  "request_entity_lock_release",
+]);
+
+export const isSilentWrite = (subject: string) => SILENT_WRITES.has(subject);
+
+function announce(what: string, subject: string) {
   if (typeof window === "undefined") return;
+  if (isSilentWrite(subject)) return;
   window.dispatchEvent(new CustomEvent(VIEW_ONLY_BLOCKED_EVENT, { detail: { what } }));
 }
 
@@ -59,8 +84,8 @@ function viewOnlyError(what: string) {
  * Кидати виняток не можна: половина сторінок не має try/catch навколо запису й
  * упала б у порожній екран замість тосту.
  */
-function blockedBuilder(what: string): QueryLike {
-  announce(what);
+function blockedBuilder(what: string, subject: string): QueryLike {
+  announce(what, subject);
   const result = {
     data: null,
     error: viewOnlyError(what),
@@ -133,7 +158,7 @@ export function guardTableBuilder(builder: unknown, table: string): QueryLike {
   return new Proxy(builder as object, {
     get(target, prop, receiver) {
       if (typeof prop === "string" && WRITE_METHODS.has(prop)) {
-        return () => blockedBuilder(`${prop} ${table}`);
+        return () => blockedBuilder(`${prop} ${table}`, table);
       }
       const value = Reflect.get(target, prop, receiver);
       return typeof value === "function" ? value.bind(target) : value;
@@ -181,7 +206,7 @@ export function guardStorageBucket(bucket: unknown, name: string): QueryLike {
     get(target, prop, receiver) {
       if (typeof prop === "string" && STORAGE_WRITE_METHODS.has(prop)) {
         return async () => {
-          announce(`storage.${prop} ${name}`);
+          announce(`storage.${prop} ${name}`, name);
           return { data: null, error: viewOnlyError(`storage.${prop} ${name}`) };
         };
       }
@@ -193,7 +218,7 @@ export function guardStorageBucket(bucket: unknown, name: string): QueryLike {
 
 export const isBlockedRpc = (name: string) => viewOnly && MUTATING_RPCS.has(name);
 
-export const blockedRpc = (name: string) => blockedBuilder(`rpc ${name}`);
+export const blockedRpc = (name: string) => blockedBuilder(`rpc ${name}`, name);
 
 /**
  * Netlify-функції ходять повз клієнт Supabase, звичайним `fetch`, тож їх
@@ -213,7 +238,7 @@ export function installViewOnlyFetchGuard() {
       const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
       if (url.includes("/.netlify/functions/") && method !== "GET" && method !== "HEAD") {
         const name = url.split("/.netlify/functions/")[1]?.split(/[?#]/)[0] ?? "функція";
-        announce(`${method} ${name}`);
+        announce(`${method} ${name}`, name);
         return Promise.resolve(
           new Response(JSON.stringify({ error: VIEW_ONLY_MESSAGE, code: "VIEW_ONLY" }), {
             status: 423,
