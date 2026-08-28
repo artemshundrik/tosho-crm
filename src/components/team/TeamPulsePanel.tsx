@@ -3,8 +3,6 @@ import {
   Activity,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  Radio,
   Users,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -303,18 +301,33 @@ export function TeamPulsePanel({
       else byUser.set(userId, [event]);
     }
 
-    const isHourBucket = bucket === "hour";
     /**
-     * Підпис відрізка — той самий, що й у графіку тренду нижче. Різні ключі
-     * означали б, що рядок людини й крива над ним рахують по-різному.
+     * Одиниця ритму підібрана так, щоб ВЕСЬ період вліз у рядок і нічого не
+     * загубилось.
+     *
+     * Спершу тут стояла та сама одиниця, що в графіку (година / день / місяць),
+     * а зайве відрізалось через `slice(-14)`. На «Місяці» це означало, що
+     * половина днів мовчки зникала: людина бачила чотирнадцять квадратиків і не
+     * знала, що їх мало бути тридцять. Тепер:
+     *   день   → двогодинки (12)
+     *   тиждень → дні (7)
+     *   місяць  → тижні (4–5)
+     *   рік     → місяці (12)
+     * Жоден період не обрізається, і в кожного своя природна одиниця.
      */
     const bucketKey = (iso: string) => {
       const date = new Date(iso);
-      return isHourBucket
-        ? `${date.getHours().toString().padStart(2, "0")}:00`
-        : bucket === "month"
-          ? date.toLocaleDateString("uk-UA", { month: "short" })
-          : date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" });
+      if (bucket === "hour") {
+        const from = Math.floor(date.getHours() / 2) * 2;
+        return `${String(from).padStart(2, "0")}:00–${String(from + 2).padStart(2, "0")}:00`;
+      }
+      if (bucket === "month") return date.toLocaleDateString("uk-UA", { month: "short" });
+      if (range === "month") {
+        // Номер тижня всередині місяця: 1-й тиждень — дні 1–7 і так далі.
+        const week = Math.floor((date.getDate() - 1) / 7) + 1;
+        return `${week}-й тиждень`;
+      }
+      return date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" });
     };
 
     const nextGroups: PulseGroup[] = [];
@@ -338,6 +351,7 @@ export function TeamPulsePanel({
       const rhythm = Array.from(perBucket.entries())
         .map(([label, count]) => ({ label, count }))
         .reverse();
+
       nextGroups.push({ userId, total: events.length, lastActiveAt, byCategory, events, rhythm });
     }
     nextGroups.sort((a, b) => b.total - a.total);
@@ -346,9 +360,34 @@ export function TeamPulsePanel({
       groups: nextGroups,
       totalActions: scoped.length,
     };
-  }, [rows, bucket, memberIds]);
+  }, [rows, bucket, range, memberIds]);
 
-  const onlineNow = people.filter((person) => person.online).length;
+  const onlinePeople = useMemo(() => people.filter((person) => person.online), [people]);
+
+  /**
+   * Імена онлайну — лише поки їх можна прочитати.
+   *
+   * Перелічувати п'ятнадцять через кому означало б абзац замість підказки, тож
+   * після четвертого імені рядок чесно каже, скільки лишилось. Аватарки над ним
+   * і так показують усіх до восьми — імена тут для тих, кого не впізнати за фото.
+   */
+  const onlineNames = useMemo(() => {
+    const names = onlinePeople.map((person) => person.displayName.split(" ")[0]);
+    if (names.length <= 4) return names.join(" · ");
+    return `${names.slice(0, 3).join(" · ")} і ще ${names.length - 3}`;
+  }, [onlinePeople]);
+
+  /** Найчастіша категорія дій за період — одним словом для рейки. */
+  const topCategory = useMemo(() => {
+    const totals = new Map<string, number>();
+    groups.forEach((group) =>
+      group.byCategory.forEach((category) => {
+        totals.set(category.label, (totals.get(category.label) ?? 0) + category.count);
+      })
+    );
+    const best = [...totals.entries()].sort((a, b) => b[1] - a[1])[0];
+    return best ? best[0] : null;
+  }, [groups]);
 
   // Actions come from activity_log, minutes from user_activity_daily. Ranking on
   // actions alone hid anyone who was present but did not trigger an event (they
@@ -459,20 +498,19 @@ export function TeamPulsePanel({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <KpiTile icon={Radio} tone="success" label="Онлайн зараз" value={onlineNow} hint="просто зараз" />
-          <KpiTile icon={Users} label="Активних людей" value={rankedPeople.length} hint={periodLabel.toLowerCase()} />
-          <KpiTile icon={Clock} label="Активні хвилини" value={formatMinutes(totalMinutes)} isText hint={periodLabel.toLowerCase()} />
-          <KpiTile icon={Activity} label="Всього дій" value={totalActions} hint={periodLabel.toLowerCase()} />
-        </div>
-
         {/* Графік «Динаміка дій» прибрано 28.08.2026 на прохання Артема.
             Крива сумарних дій команди відповідала на питання, якого ніхто не
             ставив: рішення ухвалюють по КОНКРЕТНІЙ людині, а не по сумі. Ритм
             кожного тепер стоїть у його ж рядку — там, де ним і користуються. */}
 
-      {/* People — same card rhythm as the chart above, so the right-aligned
-          metrics keep their inset instead of running into the viewport edge. */}
+      {/*
+        Зміст ліворуч, числа праворуч — той самий каркас, що в картці людини
+        й на «Стеку». Чотири плитки зверху забирали 96 px висоти й малювали
+        рамку навколо кожного числа, хоча числа тут — це підпис до списку, а
+        не самостійний показник. Збоку вони не з'їдають висоту взагалі.
+      */}
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,17rem)]">
+      <div className="min-w-0">
       {loading && rows.length === 0 ? (
         // Каркас рядків замість підпису «Завантаження активності…»: далі тут
         // буде саме список людей із метриками (REQ-19).
@@ -525,42 +563,58 @@ export function TeamPulsePanel({
                     name={person.displayName}
                     fallback={person.initials}
                     assetVariant="xs"
-                    size={38}
+                    size={30}
                     shape="circle"
                     className="border-border bg-muted/50"
                     fallbackClassName="text-2xs font-bold"
                     presence={person.online ? "online" : "offline"}
                   />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                {/*
+                  Колонки фіксованої ширини, а не «як вийде».
+                  Раніше імʼя й підпис розпирали рядок, а числа праворуч стояли
+                  стовпчиком одне під одним — через це метрики сусідніх людей не
+                  вишиковувались, і порівняти їх поглядом було неможливо.
+                  Тепер кожна метрика має свою колонку й читається по вертикалі.
+                */}
+                <div className="w-[13.5rem] min-w-0 shrink-0">
+                  <div className="flex items-center gap-1.5">
                     <span className="truncate text-sm font-semibold text-foreground">{person.displayName}</span>
-                    {person.online ? <span className="tone-text-success text-2xs font-medium">онлайн</span> : null}
+                    {person.online ? (
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success-solid" aria-label="онлайн" />
+                    ) : null}
                   </div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">
-                    <span className="truncate">
-                      {formatPulsePresence({
-                        online: person.online,
-                        actions: entry.actions,
-                        minutes: entry.minutes,
-                        lastActiveAt: entry.lastActiveAt,
-                        lastSeenAt: person.lastSeenAt,
-                      })}
-                    </span>
+                  <div className="truncate text-2xs text-muted-foreground">
+                    {formatPulsePresence({
+                      online: person.online,
+                      actions: entry.actions,
+                      minutes: entry.minutes,
+                      lastActiveAt: entry.lastActiveAt,
+                      lastSeenAt: person.lastSeenAt,
+                    })}
                   </div>
                 </div>
                 <PersonRhythm rhythm={entry.rhythm} />
-                <CategoryBreakdown byCategory={entry.byCategory} total={entry.actions} maxTotal={maxGroupTotal} />
-                <div className="ml-1 flex shrink-0 flex-col items-end gap-0.5 text-right">
-                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">
-                    <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                    {entry.actions} дій
-                  </span>
-                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    {formatMinutes(entry.minutes)}
-                  </span>
-                </div>
+                {/* Одна смуга частки замість стосу кольорових сегментів: у рядку
+                    заввишки 38 px легенда з чипів читалась як другий список. */}
+                <span className="hidden h-1.5 min-w-[3rem] flex-1 overflow-hidden rounded-full bg-muted sm:block">
+                  <i
+                    className="block h-full rounded-full bg-primary/80"
+                    style={{ width: `${maxGroupTotal ? Math.round((entry.actions / maxGroupTotal) * 100) : 0}%` }}
+                  />
+                </span>
+                <span className="hidden w-[10rem] shrink-0 truncate text-2xs text-muted-foreground lg:block">
+                  {entry.byCategory
+                    .slice(0, 2)
+                    .map((category) => `${category.label} ${category.count}`)
+                    .join(" · ")}
+                </span>
+                <span className="w-[4.5rem] shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums text-foreground">
+                  {entry.actions} дій
+                </span>
+                <span className="w-[5.5rem] shrink-0 whitespace-nowrap text-right text-2xs tabular-nums text-muted-foreground">
+                  {formatMinutes(entry.minutes)}
+                </span>
               </button>
             );
           })}
@@ -568,35 +622,68 @@ export function TeamPulsePanel({
         </Card>
       )}
       </div>
+
+      <aside className="flex flex-col gap-3">
+        <section className="rounded-section border border-border/60 bg-card p-4">
+          <div className="text-3xs font-semibold uppercase tracking-widest text-muted-foreground">Зараз онлайн</div>
+          {onlinePeople.length === 0 ? (
+            <p className="mt-2 text-2xs text-muted-foreground">Нікого — усі вийшли.</p>
+          ) : (
+            <>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex">
+                  {onlinePeople.slice(0, 8).map((person) => (
+                    <AvatarBase
+                      key={person.userId}
+                      src={person.avatarSrc}
+                      name={person.displayName}
+                      fallback={person.initials}
+                      assetVariant="xs"
+                      size={26}
+                      shape="circle"
+                      className="-ml-1.5 border-border bg-muted/50 ring-2 ring-card first:ml-0"
+                      fallbackClassName="text-3xs font-bold"
+                    />
+                  ))}
+                </div>
+                <span className="text-[15px] font-semibold tabular-nums">{onlinePeople.length}</span>
+              </div>
+              {/*
+                Імена — лише поки їх можна прочитати. Перелічувати п'ятнадцять
+                через кому означало б абзац замість підказки, тож далі рядок
+                чесно каже, скільки лишилось.
+              */}
+              <p className="mt-2 text-2xs leading-relaxed text-muted-foreground">
+                {onlineNames}
+              </p>
+            </>
+          )}
+        </section>
+
+        <section className="rounded-section border border-border/60 bg-card p-4">
+          <div className="text-3xs font-semibold uppercase tracking-widest text-muted-foreground">
+            {periodLabel}
+          </div>
+          <dl className="mt-2 flex flex-col">
+            <PulseFact label="Активних" value={`${rankedPeople.length} із ${people.length}`} />
+            <PulseFact label="Дій" value={String(totalActions)} />
+            <PulseFact label="Активний час" value={formatMinutes(totalMinutes)} />
+            {topCategory ? <PulseFact label="Найбільше" value={topCategory} /> : null}
+          </dl>
+        </section>
+      </aside>
+      </div>
+    </div>
     </div>
   );
 }
 
-function KpiTile({
-  icon: Icon,
-  label,
-  value,
-  tone,
-  isText,
-  hint,
-}: {
-  icon: typeof Activity;
-  label: string;
-  value: number | string;
-  tone?: "success";
-  isText?: boolean;
-  hint?: string;
-}) {
+/** Рядок рейки: підпис дрібний приглушений, значення напівжирним. */
+function PulseFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[var(--radius-lg)] border border-border/70 bg-muted/[0.04] px-4 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-        <Icon className={cn("h-4 w-4", tone === "success" ? "tone-text-success" : "text-muted-foreground/70")} />
-      </div>
-      <div className={cn("mt-2 font-semibold text-foreground", isText ? "truncate text-base" : "text-2xl tabular-nums")}>
-        {value}
-      </div>
-      {hint ? <div className="mt-0.5 text-2xs text-muted-foreground">{hint}</div> : null}
+    <div className="flex items-baseline gap-3 border-t border-border/40 py-1.5 first:border-t-0">
+      <dt className="w-[6.5rem] shrink-0 text-2xs text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 flex-1 text-[13px] font-semibold tabular-nums text-foreground">{value}</dd>
     </div>
   );
 }
@@ -617,7 +704,7 @@ function PersonRhythm({ rhythm }: { rhythm: { label: string; count: number }[] }
   const max = Math.max(...rhythm.map((slot) => slot.count), 1);
   return (
     <div className="hidden shrink-0 items-center gap-[3px] md:flex" aria-hidden="true">
-      {rhythm.slice(-14).map((slot) => {
+      {rhythm.map((slot) => {
         const share = slot.count / max;
         return (
           <span
@@ -630,46 +717,6 @@ function PersonRhythm({ rhythm }: { rhythm: { label: string; count: number }[] }
           />
         );
       })}
-    </div>
-  );
-}
-
-function CategoryBreakdown({
-  byCategory,
-  total,
-  maxTotal,
-}: {
-  byCategory: { key: string; label: string; color: string; count: number }[];
-  total: number;
-  /** Busiest person in the range — the bar length is relative to them, so rows
-   *  are comparable. Scaling each bar to its own total made every row 100%. */
-  maxTotal: number;
-}) {
-  if (total === 0) return null;
-  const fill = maxTotal > 0 ? Math.max((total / maxTotal) * 100, 4) : 0;
-  return (
-    <div className="hidden min-w-0 max-w-[280px] flex-1 flex-col gap-1.5 md:flex">
-      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-      <div className="flex h-full overflow-hidden rounded-full" style={{ width: `${fill}%` }}>
-        {byCategory.map((category) => (
-          <span
-            key={category.key}
-            className="h-full"
-            style={{ width: `${(category.count / total) * 100}%`, background: category.color }}
-            title={`${category.label}: ${category.count}`}
-          />
-        ))}
-      </div>
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-        {byCategory.slice(0, 3).map((category) => (
-          <span key={category.key} className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
-            <span className="h-2 w-2 rounded-full" style={{ background: category.color }} />
-            {category.label}
-            <span className="tabular-nums text-foreground">{category.count}</span>
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
