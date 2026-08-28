@@ -104,7 +104,9 @@ export function AccessMatrix({ people }: { people: MatrixPerson[] }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-col gap-3">
+    // Верхній відступ свій: тіло сторінки повнорозмірне, і без нього перемикач
+    // осі торкався смуги вкладок — так само, як було в «Огляді».
+    <div className="flex min-h-0 flex-col gap-3 pt-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4">
         <SegmentedGroup className="h-8">
           <Button
