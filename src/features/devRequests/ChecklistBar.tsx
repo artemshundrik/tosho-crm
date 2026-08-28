@@ -34,14 +34,18 @@ export function ChecklistBar({
   papercut?: boolean;
   className?: string;
 }) {
-  if (items.length === 0) {
-    // Порожня полиця мовчала, і на дошці накопичувач без дрібниць виглядав як
-    // недороблена задача без прогресу. Тепер він сам каже, що робити нічого.
-    return papercut ? (
-      <span className={cn("inline-flex text-2xs text-muted-foreground/80", className)}>полиця порожня</span>
-    ) : null;
-  }
+  if (items.length === 0) return null;
   const progress = checklistProgress(items);
+
+  /*
+   * Накопичувач, у якому нема чого розгрібати, не показує НІЧОГО.
+   *
+   * Спершу тут стояв підпис «полиця порожня», але він муляв рівно так само, як
+   * і нуль: око чіпляється за напис, а сказати йому нічого — робити тут не
+   * треба. Картка лишається як полиця напряму, мовчазна доти, доки в неї не
+   * покладуть першу дрібницю (рішення Артема 28.08.2026).
+   */
+  if (papercut && progress.total - progress.done === 0) return null;
   const share = (count: number) => `${(count / progress.total) * 100}%`;
 
   const stuckLabel = progress.stuckDays > 0

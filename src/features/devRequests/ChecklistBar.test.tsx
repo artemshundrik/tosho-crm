@@ -34,16 +34,21 @@ describe("смуга пунктів", () => {
     expect(screen.getByText("лишилось 1")).toBeInTheDocument();
   });
 
-  it("розгребений накопичувач показує нуль — те саме, що в «Черзі»", () => {
-    render(<ChecklistBar items={[item("p1", "done")]} papercut />);
-    expect(screen.getByText("лишилось 0")).toBeInTheDocument();
+  it("розгребений накопичувач не показує нічого — нуль тут теж муляє", () => {
+    const { container } = render(<ChecklistBar items={[item("p1", "done")]} papercut />);
+    expect(container).toBeEmptyDOMElement();
   });
 
-  it("порожня полиця так і каже, а не мовчить", () => {
-    // Доти накопичувач без дрібниць рендерив null і на дошці виглядав як
-    // недороблена задача без прогресу.
-    render(<ChecklistBar items={[]} papercut />);
-    expect(screen.getByText("полиця порожня")).toBeInTheDocument();
+  it("порожня полиця мовчить", () => {
+    const { container } = render(<ChecklistBar items={[]} papercut />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("але звичайна картка, де все зроблено, число показує", () => {
+    // «5/5» на великій задачі — це стан роботи, а не шум: він каже, що хвоста
+    // не лишилось. Правило про мовчання стосується САМЕ накопичувачів.
+    render(<ChecklistBar items={[item("p1", "done")]} />);
+    expect(screen.getByText("1/1")).toBeInTheDocument();
   });
 
   it("звичайна картка без пунктів і далі мовчить", () => {
