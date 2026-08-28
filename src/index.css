@@ -95,9 +95,12 @@
        адаптується до теми само. */
     --shadow-success-glow: 0 10px 24px hsl(var(--success-foreground) / 0.22);
     --shadow-warning-glow: 0 10px 24px hsl(var(--warning-foreground) / 0.18);
-    /* Плаваюча інвертована панель (таймер): темна тінь у ОБОХ темах — панель
-       завжди контрастна до полотна, тому тінь не інвертується разом з нею. */
-    --shadow-elevated-panel: 0 28px 90px hsl(0 0% 0% / 0.46);
+    /* Бічна панель (дровер) — єдиний споживач токена; таймер давно перейшов на
+       --shadow-menu. Тінь тут ЛЕДЬ ПОМІТНА і без зсуву: панель заввишки в
+       екран, край її і так тримає рамка, а колишні 90px розмиття при 46%
+       чорного давали широку сіру пляму на пів-екрана. Чорна в обох темах —
+       панель контрастна до полотна, тож тінь не інвертується разом із нею. */
+    --shadow-elevated-panel: 0 0 24px hsl(0 0% 0% / 0.1);
     --shadow-elevated-lg: 0 42px 120px -40px hsl(var(--foreground) / 0.22), 0 22px 54px -34px hsl(var(--foreground) / 0.14);
     --shadow-elevated-preview: 0 18px 40px -14px hsl(var(--foreground) / 0.28);
     /* Двошарова тінь для плаваючих меню (дропдаун/селект/поповер): контактний
@@ -417,7 +420,7 @@
     --shadow-overlay: 0 10px 24px rgba(2, 6, 23, 0.38);
     --shadow-success-glow: 0 10px 24px hsl(var(--success-foreground) / 0.22);
     --shadow-warning-glow: 0 10px 24px hsl(var(--warning-foreground) / 0.18);
-    --shadow-elevated-panel: 0 28px 90px hsl(0 0% 0% / 0.62);
+    --shadow-elevated-panel: 0 0 24px hsl(0 0% 0% / 0.24);
     --shadow-elevated-lg: 0 52px 140px -42px hsl(0 0% 2% / 0.85), 0 26px 60px -36px hsl(0 0% 2% / 0.62);
     --shadow-elevated-preview: 0 18px 40px -14px hsl(0 0% 2% / 0.45);
     /* Плаваючі меню в темній — глибша тінь для контрасту на темному тлі. */
