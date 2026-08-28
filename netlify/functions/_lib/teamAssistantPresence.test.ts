@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatLastSeen, isOnline } from "./_teamAssistant";
+import { formatLastSeen, isOnline } from "../_teamAssistant";
 
 const NOW = new Date("2026-08-28T12:00:00Z");
 const MINUTE = 60_000;
