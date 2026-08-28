@@ -622,6 +622,15 @@ export function TeamMembersPage() {
     };
   }, []);
 
+  /**
+   * Лічильник ручних перечитувань довідника.
+   *
+   * Матриця вміє змінити доступи одразу кільком людям, і без цього наступна її
+   * дія рахувала б наслідки за списком, застарілим на одну зміну — тобто
+   * показувала б «не зачепить» там, де насправді зачепить.
+   */
+  const [membersReloadToken, setMembersReloadToken] = useState(0);
+
   useEffect(() => {
     if (!workspaceId) return;
 
@@ -665,7 +674,7 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId]);
+  }, [workspaceId, membersReloadToken]);
 
   useEffect(() => {
     if (!workspaceId || directoryRows.length === 0) {
@@ -2297,6 +2306,13 @@ export function TeamMembersPage() {
         {activeTab === "matrix" ? (
           <AccessMatrix
             people={matrixPeople}
+            workspaceId={workspaceId}
+            // Стартові набори посад міняють ті самі, хто редагує доступи людей:
+            // власник і СЕО. RLS відхилить чужий запис і без цього, але кнопку,
+            // яка не спрацює, показувати немає сенсу.
+            canEditRoles={isSuperAdmin || isSeo}
+            actorUserId={currentUserId}
+            onPeopleChanged={() => setMembersReloadToken((token) => token + 1)}
           />
         ) : null}
 

@@ -123,6 +123,27 @@ describe("дефолти посади, перекроєні власником",
     expect(patched.payroll).toBe(false);
   });
 
+  it("модуль поза наборами бачать лише власник і СЕО — це і є дефолт для нового", () => {
+    /*
+     * REQ-194 просив: «для нового модуля автоматично створювати дефолт —
+     * увімкнено власнику й CEO, вимкнено решті». Окремої машинерії під це не
+     * треба: модуль, якого немає в жодному ROLE_MENUS, саме так і поводиться,
+     * бо власник і СЕО йдуть повним переліком ключів. Тест фіксує властивість,
+     * щоб її не втратили при наступній зміні наборів.
+     */
+    const fresh = MODULE_KEYS.filter(
+      (key) =>
+        !defaultModuleAccess({ accessRole: "member", jobRole: "designer" })[key] &&
+        !defaultModuleAccess({ accessRole: "member", jobRole: "manager" })[key] &&
+        !defaultModuleAccess({ accessRole: "member", jobRole: "accountant" })[key]
+    );
+    expect(fresh.length).toBeGreaterThan(0);
+    for (const key of fresh) {
+      expect(defaultModuleAccess(OWNER)[key]).toBe(true);
+      expect(defaultModuleAccess(CEO)[key]).toBe(true);
+    }
+  });
+
   it("порожня мапа означає «як у коді»", () => {
     expect(defaultModuleAccess(DESIGNER, new Map() as never)).toEqual(defaultModuleAccess(DESIGNER));
   });

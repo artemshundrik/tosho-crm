@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { invalidateWorkspaceResolution, resolveWorkspaceId, resolveWorkspaceMembership } from '@/lib/workspace';
+import { loadRoleModuleOverrides } from '@/lib/roleModuleDefaults';
 import {
   buildPermissions,
   mapAccessRoleToTeamRole,
@@ -28,6 +29,7 @@ import {
 } from '@/auth/teamContextCache';
 import {
   defaultModuleAccess,
+  type RoleModuleOverrides,
   fullModuleAccess,
   intersectModuleAccess,
   type ModuleAccess,
@@ -600,10 +602,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    /*
+     * Винятки з наборів посад, які власник задав у матриці (REQ-194). Читаються
+     * усередині load() і лягають у це замикання: fallback рахується в кількох
+     * гілках, і тягнути мапу параметром через кожну означало б чотири однакові
+     * зміни. Поки не приїхали — undefined, тобто «як у коді»; помилка читання
+     * теж лишає undefined, бо доступи мають рахуватись навіть без цієї таблиці.
+     */
+    let roleOverrides: RoleModuleOverrides | undefined;
     // Немає запису в довіднику — беремо дефолти за роллю, а не «нічого».
-    const ownFallback = () => defaultModuleAccess({ accessRole, jobRole });
+    const ownFallback = () => defaultModuleAccess({ accessRole, jobRole }, roleOverrides);
     const targetFallback = () =>
-      defaultModuleAccess({ accessRole: effectiveAccessRole, jobRole: effectiveJobRole });
+      defaultModuleAccess(
+        { accessRole: effectiveAccessRole, jobRole: effectiveJobRole },
+        roleOverrides
+      );
     /**
      * СТЕЛЯ можливостей — не те саме, що власне меню.
      *
@@ -641,6 +654,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const load = async () => {
       try {
+        // Винятки читаємо ПЕРШИМИ: на них спирається кожен fallback нижче.
+        // Помилку глушимо свідомо — без таблиці доступи рахуються по коду, а
+        // впасти тут означало б лишити людину без меню взагалі.
+        const overridesWorkspaceId = await resolveWorkspaceId(userId).catch(() => null);
+        if (overridesWorkspaceId) {
+          roleOverrides = await loadRoleModuleOverrides(overridesWorkspaceId).catch((error) => {
+            console.warn('Role module overrides unavailable', error);
+            return undefined;
+          });
+        }
+
         const ownEntry = await getCurrentWorkspaceMemberDirectoryEntry();
         writeCachedModuleAccess(userId, ownEntry?.moduleAccess ?? null);
         const own = ownEntry?.moduleAccess ?? ownFallback();

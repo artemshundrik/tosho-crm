@@ -49,6 +49,34 @@ export async function listRoleModuleOverrides(workspaceId: string): Promise<Role
   return map;
 }
 
+/**
+ * Кеш на вкладку: винятки читають і AuthProvider (на кожен вхід), і матриця.
+ * Мапа міняється рідко — від кліку власника, — а без кешу той самий запит ішов
+ * би з кожної поверхні, яка рахує доступи.
+ */
+const cache = new Map<string, Promise<RoleModuleOverrides>>();
+
+export function invalidateRoleModuleOverrides(workspaceId?: string) {
+  if (workspaceId) cache.delete(workspaceId);
+  else cache.clear();
+}
+
+/**
+ * Винятки з кешу. Помилку НЕ ковтаємо мовчки в порожню мапу назавжди: невдалу
+ * спробу викидаємо з кешу, щоб наступний виклик спробував ще раз — інакше одна
+ * мережева невдача на старті лишала б застосунок без винятків до перезавантаження.
+ */
+export function loadRoleModuleOverrides(workspaceId: string): Promise<RoleModuleOverrides> {
+  const cached = cache.get(workspaceId);
+  if (cached) return cached;
+  const request = listRoleModuleOverrides(workspaceId).catch((error) => {
+    cache.delete(workspaceId);
+    throw error;
+  });
+  cache.set(workspaceId, request);
+  return request;
+}
+
 /** Поставити виняток: посада бачить (або не бачить) модуль усупереч коду. */
 export async function setRoleModuleDefault(params: {
   workspaceId: string;
@@ -68,6 +96,7 @@ export async function setRoleModuleDefault(params: {
     { onConflict: "workspace_id,job_role,module_key" } as never
   );
   if (error) throw error;
+  invalidateRoleModuleOverrides(params.workspaceId);
 }
 
 /**
@@ -87,4 +116,5 @@ export async function clearRoleModuleDefault(params: {
     .eq("job_role", params.jobRole.trim().toLowerCase())
     .eq("module_key", params.moduleKey);
   if (error) throw error;
+  invalidateRoleModuleOverrides(params.workspaceId);
 }
