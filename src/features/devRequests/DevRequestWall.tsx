@@ -111,7 +111,7 @@ export function DevRequestWall({
             // висоти лишало б порожнечу посеред картки замість під текстом.
             className={cn(
               "flex h-full flex-col rounded-2xl border border-border/60 bg-card p-3 text-left",
-              "cursor-pointer transition-colors hover:border-foreground/25",
+              "cursor-pointer transition-colors hover:border-foreground/25 hover:bg-muted/30",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
             )}
           >

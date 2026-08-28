@@ -294,7 +294,7 @@ function BlockedRow({
     <button
       type="button"
       onClick={() => onSelect(request)}
-      className="flex w-full flex-col gap-1.5 rounded-xl border border-border/60 bg-card px-3 py-2.5 text-left transition-colors hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="flex w-full flex-col gap-1.5 rounded-xl border border-border/60 bg-card px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <span className="flex items-start gap-2">
         {ThemeIcon ? (
@@ -344,7 +344,7 @@ function TodayRow({
   const progress = papercut ? checklistProgress(request.checklist) : null;
   const left = progress ? progress.total - progress.done : 0;
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 transition-colors hover:border-border">
+    <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 transition-colors hover:border-border hover:bg-muted/30">
       <button
         type="button"
         onClick={() => onSelect(request)}

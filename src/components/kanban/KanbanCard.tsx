@@ -87,12 +87,16 @@ export function KanbanCard({
         // відступи, через що картка «розгортається» після появи (та сама
         // причина, що в CONTROL_BASE). Opacity тут тому, що ним показують
         // недоступність.
-        "transition-[border-color,opacity] duration-220 ease-out motion-reduce:transition-none",
+        "transition-[background-color,border-color,opacity] duration-220 ease-out motion-reduce:transition-none",
         DENSITY[density],
         SURFACE[surface],
         disabled
           ? "cursor-not-allowed opacity-70"
-          : interactive && "cursor-pointer hover:border-foreground/24 dark:hover:border-foreground/22",
+          // Фон на наведення — та сама реакція, що в «Інтеграціях» і в списку
+          // запитів: одна межа надто тиха, і на дошці з десятком карток не
+          // видно, яка саме зараз під курсором.
+          : interactive &&
+            "cursor-pointer hover:bg-muted/30 hover:border-foreground/24 dark:hover:border-foreground/22",
         className
       )}
       {...props}

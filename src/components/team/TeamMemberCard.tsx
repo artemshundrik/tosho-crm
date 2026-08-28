@@ -12,7 +12,7 @@ import {
   TEAM_ABSENCE_KIND_TONE,
   type TeamAbsence,
 } from "@/lib/teamAbsences";
-import { toneBadgeClass, toneSubtleClass, toneTextClass } from "@/lib/statusTones";
+import { TEAM_EVENT_TONE, toneBadgeClass, toneSubtleClass, toneTextClass } from "@/lib/statusTones";
 import type { AvatarAbsence } from "@/lib/absenceIndicator";
 
 /**
@@ -124,8 +124,16 @@ export function TeamMemberCard({
   return (
     <article
       className={cn(
-        "group flex h-full flex-col overflow-hidden rounded-inner border border-border/50 bg-card",
-        "transition-all duration-200 hover:border-border"
+        "group relative flex h-full flex-col overflow-hidden rounded-inner border border-border/50 bg-card",
+        // Ховер той самий, що в «Інтеграціях», — фон і межа, без тіні: система
+        // свідомо пласка, тінь лишилась тільки тому, що спливає над сторінкою.
+        // Підйом на піксель дає відчуття «взяв у руки», не заводячи глибини.
+        // Саме `translate`, а не `transform`: у Tailwind v4 утиліта
+        // `-translate-y-px` пише окрему властивість `translate` (перевірено
+        // getComputedStyle — `transform` лишається none), і перехід, навішений
+        // на transform, анімував порожнечу — картка сіпалась без плавності.
+        "transition-[background-color,border-color,translate] duration-base ease-out motion-reduce:transition-none",
+        person.profileHref && "cursor-pointer hover:-translate-y-px hover:border-border hover:bg-muted/30"
       )}
     >
       <div className="flex items-start gap-3 p-4 pb-0">
@@ -148,7 +156,13 @@ export function TeamMemberCard({
                 <Link
                   to={person.profileHref}
                   className={cn(
+                    // Розтягнутий клік: псевдоелемент покриває всю картку, тож
+                    // натискається вона цілком. Обгортати картку в <a> не можна
+                    // — усередині живуть кнопки копіювання, а кнопка в
+                    // посиланні невалідна; ті кнопки лежать вище за z і далі
+                    // копіюють, а не ведуть у профіль.
                     "block truncate text-sm font-semibold text-foreground underline-offset-4 hover:underline",
+                    "after:absolute after:inset-0 after:content-['']",
                     person.inactive && "text-muted-foreground line-through"
                   )}
                 >
@@ -195,7 +209,8 @@ export function TeamMemberCard({
       </div>
 
       {email || phone ? (
-        <div className="mt-3 space-y-1 px-4">
+        // relative z-10 — щоб копіювання лишалось копіюванням, а не переходом.
+        <div className="relative z-10 mt-3 space-y-1 px-4">
           {email ? <ContactRow icon={Mail} value={email} successMessage="Email скопійовано" /> : null}
           {phone ? <ContactRow icon={Phone} value={phone} successMessage="Номер скопійовано" /> : null}
         </div>
@@ -204,7 +219,7 @@ export function TeamMemberCard({
       )}
 
       {balance ? (
-        <div className="mt-3 border-t border-border/40 px-4 pt-3">
+        <div className="relative z-10 mt-3 border-t border-border/40 px-4 pt-3">
           <AbsenceBalanceMeters balance={balance} dense entries={balanceEntries} year={year} />
         </div>
       ) : null}
@@ -221,15 +236,18 @@ export function TeamMemberCard({
       </div>
 
       {birthdayToday ? (
-        <div className={cn("flex items-center gap-2 border-t px-4 py-2", toneSubtleClass.warning)}>
-          <Cake className={cn("h-3.5 w-3.5 shrink-0", toneTextClass.warning)} aria-hidden />
+        // Рожевий, а не жовтий: тон події береться з тієї самої мапи, що й у
+        // календарі та «Найближчих подіях» (TEAM_EVENT_TONE). Жовтий тут ще й
+        // сперечався з лікарняним — на сторінці він означає рівно його.
+        <div className={cn("flex items-center gap-2 border-t px-4 py-2", toneSubtleClass[TEAM_EVENT_TONE.birthday])}>
+          <Cake className={cn("h-3.5 w-3.5 shrink-0", toneTextClass[TEAM_EVENT_TONE.birthday])} aria-hidden />
           <span className="min-w-0 flex-1 truncate text-2xs font-medium text-foreground">
             День народження — сьогодні
           </span>
         </div>
       ) : person.birthdayDaysUntil !== null && person.birthdayDaysUntil <= 7 ? (
-        <div className={cn("flex items-center gap-2 border-t px-4 py-2", toneSubtleClass.warning)}>
-          <Cake className={cn("h-3.5 w-3.5 shrink-0", toneTextClass.warning)} aria-hidden />
+        <div className={cn("flex items-center gap-2 border-t px-4 py-2", toneSubtleClass[TEAM_EVENT_TONE.birthday])}>
+          <Cake className={cn("h-3.5 w-3.5 shrink-0", toneTextClass[TEAM_EVENT_TONE.birthday])} aria-hidden />
           <span className="min-w-0 flex-1 truncate text-2xs font-medium text-foreground">
             ДН через {person.birthdayDaysUntil} {pluralDays(person.birthdayDaysUntil)}
           </span>
