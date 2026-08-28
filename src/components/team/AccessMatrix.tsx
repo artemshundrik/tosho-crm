@@ -16,7 +16,8 @@
  * втратити одне з них.
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Check, Loader2, Lock, Minus, Pencil, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -101,6 +102,9 @@ function Cell({
   );
 }
 
+/** Стала порожня мапа — щоб `useQuery` не віддавав щоразу новий об'єкт. */
+const EMPTY_OVERRIDES: RoleModuleOverrides = new Map();
+
 type PendingChange = {
   jobRole: string;
   roleLabel: string;
@@ -133,26 +137,26 @@ export function AccessMatrix({
   onPeopleChanged?: () => void;
 }) {
   const [axis, setAxis] = useState<Axis>("people");
-  const [overrides, setOverrides] = useState<RoleModuleOverrides>(() => new Map());
   const [pending, setPending] = useState<PendingChange | null>(null);
   const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!workspaceId) return;
-    let active = true;
-    void loadRoleModuleOverrides(workspaceId)
-      .then((map) => {
-        if (active) setOverrides(map);
-      })
-      .catch((error) => {
-        // Мовчазний відкат на код: матриця має показувати набори навіть тоді,
-        // коли таблиця винятків недоступна.
+  /*
+   * Запитом, а не ефектом зі станом: `setState` в ефекті рахує ратчет боргу
+   * перед пушем, і тут він ні до чого — це звичайне читання, якому личить кеш.
+   * Помилка мовчазна: матриця має показувати набори навіть тоді, коли таблиця
+   * винятків недоступна, — тоді просто без винятків, як у коді.
+   */
+  const { data: overrides = EMPTY_OVERRIDES } = useQuery({
+    queryKey: ["role-module-overrides", workspaceId],
+    enabled: Boolean(workspaceId),
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      loadRoleModuleOverrides(workspaceId as string).catch((error) => {
         console.warn("[matrix] role overrides unavailable", error);
-      });
-    return () => {
-      active = false;
-    };
-  }, [workspaceId]);
+        return EMPTY_OVERRIDES;
+      }),
+  });
 
   /** Колонки-посади — лише ті, які в команді справді є. */
   const roleColumns = useMemo(() => {
@@ -252,8 +256,7 @@ export function AccessMatrix({
           onPeopleChanged?.();
         }
 
-        const fresh = await loadRoleModuleOverrides(workspaceId);
-        setOverrides(new Map(fresh));
+        await queryClient.invalidateQueries({ queryKey: ["role-module-overrides", workspaceId] });
         toast.success(
           pending.next
             ? `${pending.roleLabel}: ${pending.moduleLabel} відкрито`
@@ -273,7 +276,7 @@ export function AccessMatrix({
         setSaving(false);
       }
     },
-    [actorUserId, onPeopleChanged, pending, workspaceId]
+    [actorUserId, onPeopleChanged, pending, queryClient, workspaceId]
   );
 
   if (!people.length) {
