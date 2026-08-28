@@ -205,7 +205,21 @@ export function NotificationsMenu({
         >
           <Bell className="h-4.5 w-4.5" />
           {unreadCount > 0 ? (
-            <span className="pointer-events-none absolute right-0 top-0 inline-flex h-5 min-w-5 -translate-y-1/3 translate-x-1/3 items-center justify-center rounded-full bg-primary px-1 text-2xs font-semibold leading-none tabular-nums text-primary-foreground">
+            /*
+             * Лічильник кріпиться ФІКСОВАНИМ відступом від кута, а не
+             * відсотковим зсувом. Було `right-0 top-0` плюс
+             * `translate-x-1/3 -translate-y-1/3`, а відсоток у `translate`
+             * рахується від РОЗМІРУ САМОГО бейджа — тобто «1» відскакувала від
+             * кута на 7 px, а «99+» на всі 12, і значок гуляв тим більше, чим
+             * більше сповіщень. Заразом він виліз за межі кнопки: 20 px висоти
+             * на кнопці 40 px — це половина, і поруч із сусідніми кнопками
+             * шапки читалось як збій верстки.
+             *
+             * Тепер 16 px у куті кнопки: бейдж перекриває дзвіночок рівно
+             * настільки, щоб читатись як його позначка, і не залежить від
+             * кількості цифр — праве кріплення відпускає ширину вліво.
+             */
+            <span className="pointer-events-none absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-3xs font-semibold leading-none tabular-nums text-primary-foreground">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           ) : null}
@@ -227,7 +241,13 @@ export function NotificationsMenu({
                 type="button"
                 variant="textMuted"
                 size="xs"
-                onClick={onMarkAllRead}
+                onClick={() => {
+                  onMarkAllRead();
+                  // Закриваємо: після «Прочитати всі» в списку не лишається
+                  // нічого, заради чого його тримали відкритим — порожня
+                  // панель над кнопкою читається як «не спрацювало».
+                  onOpenChange(false);
+                }}
                 className="h-7 shrink-0 gap-1.5 px-2"
               >
                 <CheckCheck className="h-3.5 w-3.5" />
