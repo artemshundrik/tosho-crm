@@ -57,6 +57,77 @@ describe("«Команда» вимкненню не підлягає", () => {
   });
 });
 
+describe("дефолти посади, перекроєні власником", () => {
+  /*
+   * REQ-194: набори модулів для посад лежать у коді, і щоб змінити «що бачить
+   * бухгалтер», досі потрібен був коміт. Тепер поверх коду лягають винятки з
+   * бази — саме винятки, а не повна копія: інакше новий модуль довелось би
+   * вручну дописувати кожній посаді, і два переліки розійшлись би мовчки.
+   */
+  const overrides = (entries: Record<string, Partial<Record<string, boolean>>>) =>
+    new Map(Object.entries(entries).map(([role, modules]) => [role, modules])) as never;
+
+  it("виняток вмикає модуль, якого посада не мала", () => {
+    const base = defaultModuleAccess({ accessRole: "member", jobRole: "designer" });
+    expect(base.contractors).toBe(false);
+    const patched = defaultModuleAccess(
+      { accessRole: "member", jobRole: "designer" },
+      overrides({ designer: { contractors: true } })
+    );
+    expect(patched.contractors).toBe(true);
+  });
+
+  it("виняток вимикає модуль, який посада мала", () => {
+    const base = defaultModuleAccess({ accessRole: "member", jobRole: "pm" });
+    expect(base.stock).toBe(true);
+    const patched = defaultModuleAccess(
+      { accessRole: "member", jobRole: "pm" },
+      overrides({ pm: { stock: false } })
+    );
+    expect(patched.stock).toBe(false);
+  });
+
+  it("«Фінанси» винятком не відібрати — про них відповідає посада, а не матриця", () => {
+    // hasDefaultFinanceAccess — дзеркало правила «Фінанси = посада»: власник,
+    // СЕО і три бухгалтерські посади. Виняток тут мовчки розійшовся б із RLS,
+    // і людина бачила б вкладку, у якій кожен запит повертає порожньо.
+    const patched = defaultModuleAccess(
+      { accessRole: "member", jobRole: "accountant" },
+      overrides({ accountant: { finance: false } })
+    );
+    expect(patched.finance).toBe(true);
+  });
+
+  it("чужа посада не зачеплена", () => {
+    const patched = defaultModuleAccess(
+      { accessRole: "member", jobRole: "designer" },
+      overrides({ accountant: { finance: false } })
+    );
+    expect(patched).toEqual(defaultModuleAccess({ accessRole: "member", jobRole: "designer" }));
+  });
+
+  it("власника винятки не обмежують — Rule 0 сильніший за будь-яку таблицю", () => {
+    // Інакше запис у базі міг би замкнути власника з його ж CRM.
+    const patched = defaultModuleAccess(OWNER, overrides({ it_specialist: { finance: false, dev: false } }));
+    expect(patched.finance).toBe(true);
+    expect(patched.dev).toBe(true);
+  });
+
+  it("замок реєстру сильніший за виняток: «Виплати» посаді не відчинити", () => {
+    // payroll обмежений owner/СЕО у самому реєстрі. Якби виняток це перебивав,
+    // редагування матриці стало б обхідним шляхом до зарплат команди.
+    const patched = defaultModuleAccess(
+      { accessRole: "member", jobRole: "accountant" },
+      overrides({ accountant: { payroll: true } })
+    );
+    expect(patched.payroll).toBe(false);
+  });
+
+  it("порожня мапа означає «як у коді»", () => {
+    expect(defaultModuleAccess(DESIGNER, new Map() as never)).toEqual(defaultModuleAccess(DESIGNER));
+  });
+});
+
 describe("«Ролі та доступи» лишаються в тих самих руках", () => {
   it("дає доступ власнику і CEO, але не рядовому учаснику", () => {
     expect(defaultModuleAccess(OWNER).members_access).toBe(true);

@@ -336,12 +336,32 @@ export function intersectModuleAccess(own: ModuleAccess, target: ModuleAccess): 
 }
 
 /**
+ * Винятки з ROLE_MENUS, збережені власником у базі (tosho.role_module_defaults).
+ *
+ * ЛИШЕ ВИНЯТКИ, А НЕ ПОВНІ НАБОРИ. Повна копія наборів у базі стала б другим
+ * джерелом правди й розійшлася б із кодом при першій зміні ROLE_MENUS; крім
+ * того, кожен НОВИЙ модуль довелось би вручну дописувати кожній посаді.
+ * Виняток же означає рівно те, що сказав власник: «цій посаді — інакше».
+ */
+export type RoleModuleOverrides = Map<string, Partial<Record<ModuleKey, boolean>>>;
+
+/**
  * Доступи «за замовчуванням» для посади — коли в `module_access` порожньо.
  * База і для нормалізації збереженого запису, і для нових запрошень, і для
  * режиму «Приміряти посаду». Набори — у ROLE_MENUS вище.
+ *
+ * `overrides` — те, що власник перекроїв у матриці доступів. Порядок рішень
+ * навмисно лишає їх ПОСЕРЕДИНІ, а не зверху: `alwaysOn` і `restrictedTo`
+ * сильніші, інакше редагування матриці стало б обхідним шляхом до «Виплат»
+ * (їх бачать лише власник і СЕО) і могло б замкнути власника з його ж CRM.
  */
-export function defaultModuleAccess(ctx: RoleContext = {}): ModuleAccess {
+export function defaultModuleAccess(
+  ctx: RoleContext = {},
+  overrides?: RoleModuleOverrides
+): ModuleAccess {
   const menu = new Set(roleMenu(ctx));
+  const owner = isOwner(ctx);
+  const patch = owner ? undefined : overrides?.get(job(ctx));
   const result = {} as ModuleAccess;
   MODULE_DEFINITIONS.forEach((item) => {
     if (item.alwaysOn) {
@@ -352,7 +372,16 @@ export function defaultModuleAccess(ctx: RoleContext = {}): ModuleAccess {
       result[item.key] = false;
       return;
     }
-    result[item.key] = menu.has(item.key);
+    // Модуль, відповідь про який дає РОЛЬ («Фінанси», «Виплати»), винятками не
+    // відчиняється — так само, як не відчиняється збереженою галочкою в
+    // normalizeModuleAccess. Інакше редагування матриці стало б обхідним
+    // шляхом до зарплат команди.
+    if (item.roleDecides) {
+      result[item.key] = item.roleDecides(ctx);
+      return;
+    }
+    const override = patch?.[item.key];
+    result[item.key] = typeof override === "boolean" ? override : menu.has(item.key);
   });
   return result;
 }
