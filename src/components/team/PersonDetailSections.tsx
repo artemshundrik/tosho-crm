@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { callToshoRpc, selectToshoRows } from "@/lib/toshoRpc";
 import { cn } from "@/lib/utils";
+import { getModuleDefinition, type ModuleKey } from "@/lib/moduleAccess";
 import { categoryColor, categoryLabel } from "@/components/team/activityCategories";
 import {
   DESIGN_TASK_TYPE_ICONS,
@@ -312,18 +313,30 @@ type AuditEntry = {
 
 const FIELD_LABELS: Record<string, string> = {
   module_access: "Доступ до модулів",
-  employment_status: "Статус працевлаштування",
-  job_role: "Роль у команді",
+  employment_status: "Статус співпраці",
+  job_role: "Посада",
   access_role: "Рівень доступу",
   availability_status: "Доступність",
+  availability_start_date: "Початок відсутності",
+  availability_end_date: "Кінець відсутності",
   probation_end_date: "Кінець випробувального",
   start_date: "Дата старту",
   manager_user_id: "Керівник",
   first_name: "Ім'я",
   last_name: "Прізвище",
+  full_name: "Ім'я",
   phone: "Телефон",
   birth_date: "Дата народження",
+  avatar_url: "Аватар",
+  avatar_path: "Аватар",
+  manager_rate: "Відсоток менеджера",
 };
+
+/**
+ * Службові поля: змінюються при кожному записі й нічого не кажуть людині.
+ * `updated_by` тим паче зайвий — хто змінив, написано в заголовку рядка.
+ */
+const NOISE_FIELDS = new Set(["updated_by", "updated_at", "created_at", "probation_review_notified_at"]);
 
 function fieldLabel(field: string) {
   return FIELD_LABELS[field] ?? field;
@@ -333,6 +346,46 @@ function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+/**
+ * Поля, значення яких людині нічого не кажуть: шлях у сховищі, чужий UUID.
+ * Для них показуємо ФАКТ зміни, а не саме значення — «Аватар: змінено».
+ */
+const OPAQUE_FIELDS = new Set(["avatar_url", "avatar_path", "manager_user_id"]);
+
+function describeOpaqueChange(from: unknown, to: unknown) {
+  const had = Boolean(from);
+  const has = Boolean(to);
+  if (had && !has) return "прибрано";
+  if (!had && has) return "додано";
+  return "змінено";
+}
+
+/**
+ * Що саме змінилось у доступах — списком модулів, а не двома дампами JSON.
+ *
+ * Раніше рядок історії виглядав так: два рядки по 700 символів
+ * `{"dev":true,"team":true,…}` зі стрічкою закреслення на першому. З них
+ * НЕМОЖЛИВО було прочитати, що саме змінилось, — а це єдине, заради чого
+ * історію відкривають. Тепер рахуємо різницю й називаємо модулі людською
+ * мовою з того ж реєстру, що малює перемикачі.
+ */
+function diffModuleAccess(from: unknown, to: unknown) {
+  const asMap = (value: unknown): Record<string, boolean> =>
+    value && typeof value === "object" ? (value as Record<string, boolean>) : {};
+  const before = asMap(from);
+  const after = asMap(to);
+  const added: string[] = [];
+  const removed: string[] = [];
+  new Set([...Object.keys(before), ...Object.keys(after)]).forEach((key) => {
+    const was = before[key] === true;
+    const now = after[key] === true;
+    if (was === now) return;
+    const label = getModuleDefinition(key as ModuleKey)?.label ?? key;
+    (now ? added : removed).push(label);
+  });
+  return { added: added.sort(), removed: removed.sort() };
 }
 
 export function PersonAccessHistorySection({
@@ -393,7 +446,7 @@ export function PersonAccessHistorySection({
       ) : (
         <ul className="flex flex-col gap-3">
           {entries.map((entry) => {
-            const fields = Object.keys(entry.changed ?? {});
+            const fields = Object.keys(entry.changed ?? {}).filter((field) => !NOISE_FIELDS.has(field));
             return (
               <li key={entry.id} className="border-b border-border/40 pb-3 last:border-0 last:pb-0">
                 <div className="flex items-center justify-between gap-2">
@@ -408,13 +461,45 @@ export function PersonAccessHistorySection({
                       {entry.action === "insert" ? "Створено профіль" : entry.action === "delete" ? "Видалено профіль" : "Оновлено"}
                     </span>
                   ) : (
-                    fields.map((field) => (
-                      <div key={field} className="text-xs text-muted-foreground">
-                        <span className="text-foreground">{fieldLabel(field)}:</span>{" "}
-                        <span className="line-through opacity-70">{formatValue(entry.changed[field]?.from)}</span>{" → "}
-                        <span className="text-foreground">{formatValue(entry.changed[field]?.to)}</span>
-                      </div>
-                    ))
+                    fields.map((field) => {
+                      if (field === "module_access") {
+                        const { added, removed } = diffModuleAccess(
+                          entry.changed[field]?.from,
+                          entry.changed[field]?.to
+                        );
+                        if (!added.length && !removed.length) return null;
+                        return (
+                          <div key={field} className="flex flex-wrap items-center gap-1.5">
+                            {added.map((label) => (
+                              <span key={`+${label}`} className="tone-success rounded-md border px-1.5 py-0.5 text-2xs font-medium">
+                                + {label}
+                              </span>
+                            ))}
+                            {removed.map((label) => (
+                              <span key={`-${label}`} className="tone-danger rounded-md border px-1.5 py-0.5 text-2xs font-medium">
+                                − {label}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      }
+                      if (OPAQUE_FIELDS.has(field)) {
+                        return (
+                          <div key={field} className="text-xs text-muted-foreground">
+                            <span className="text-foreground">{fieldLabel(field)}:</span>{" "}
+                            {describeOpaqueChange(entry.changed[field]?.from, entry.changed[field]?.to)}
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={field} className="text-xs text-muted-foreground">
+                          <span className="text-foreground">{fieldLabel(field)}:</span>{" "}
+                          <span className="line-through opacity-70">{formatValue(entry.changed[field]?.from)}</span>
+                          {" → "}
+                          <span className="text-foreground">{formatValue(entry.changed[field]?.to)}</span>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </li>

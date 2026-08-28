@@ -917,6 +917,12 @@ function PersonAccessSection({
                     <Switch
                       checked={lock.checked}
                       disabled={!canEditModules || lock.locked}
+                      /**
+                       * `sm`, а не типовий `md`: у списку з двадцяти рядків
+                       * перемикач 28×48 важив більше за назву модуля, якою
+                       * керує, і рядок читався як «кнопка з підписом».
+                       */
+                      size="sm"
                       label={module.label}
                       onCheckedChange={(next) =>
                         setModules((prev) => ({ ...prev, [module.key]: next === true }))
