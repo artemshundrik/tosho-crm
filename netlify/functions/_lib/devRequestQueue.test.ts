@@ -36,6 +36,7 @@ function card(overrides: Partial<BoardCard> = {}): BoardCard {
     moduleKey: "quotes",
     priority: "normal",
     isPrivate: false,
+    todayAt: null,
     createdAt: "2026-08-01T10:00:00.000Z",
     ...overrides,
   };
@@ -169,6 +170,29 @@ describe("queueListScreen", () => {
     const screen = queueListScreen({ cards: many });
     expect(screen.keyboard.flat()).toHaveLength(QUEUE_LIST_MAX);
     expect(screen.text).toContain(`…і ще ${20 - QUEUE_LIST_MAX}`);
+  });
+
+  it("взяте на сьогодні — окремою полицею вгорі, зі станом картки", () => {
+    const screen = queueListScreen({
+      cards: [card({ number: 4, status: "in_progress", todayAt: "2026-08-28T08:00:00.000Z" }), card({ number: 9 })],
+    });
+    expect(screen.text).toContain("🎯 <b>Сьогодні</b>");
+    expect(screen.text.indexOf("Сьогодні")).toBeLessThan(screen.text.indexOf("<b>Вхідні</b>"));
+    expect(screen.text).toContain("<i>В роботі</i>");
+    // У колонках його немає: на телефоні дублювати рядок нема куди.
+    expect(screen.text.match(/REQ-4/g)).toHaveLength(1);
+  });
+
+  it("полиця не з'їдає стелю списку — інакше сьогоднішнє витіснило б саме себе", () => {
+    const many = Array.from({ length: 20 }, (_, index) =>
+      card({ number: index + 1, createdAt: `2026-08-${String(index + 1).padStart(2, "0")}T10:00:00.000Z` })
+    );
+    // Найстаріша картка, яка в стелю найсвіжіших не потрапляє ніколи.
+    many[0] = card({ number: 1, createdAt: "2026-08-01T10:00:00.000Z", todayAt: "2026-08-28T08:00:00.000Z" });
+    const screen = queueListScreen({ cards: many });
+    expect(screen.text).toContain("REQ-1 ·");
+    expect(screen.keyboard.flat()).toHaveLength(QUEUE_LIST_MAX + 1);
+    expect(callbacks(screen.keyboard)[0]).toBe("dq:c:1");
   });
 
   it("обрізана вибірка з бази додає «+» до чисел, а не бреше точним числом", () => {

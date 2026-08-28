@@ -16,6 +16,7 @@ import {
   formatMergeDate,
   groupBoardCards,
   isMovableStatus,
+  isTakenToday,
   MERGEABLE_STATUSES,
   mergeIntoBoardCard,
   MOVABLE_STATUSES,
@@ -51,6 +52,7 @@ function card(overrides: Partial<BoardCard> = {}): BoardCard {
     moduleKey: "quotes",
     priority: "normal",
     isPrivate: false,
+    todayAt: null,
     createdAt: "2026-08-01T10:00:00.000Z",
     ...overrides,
   };
@@ -347,6 +349,41 @@ describe("buildBoardListResponse", () => {
     expect(response.hasMore).toBe(true);
     expect(response.message).toContain(String(BOARD_LIST_LIMIT));
     expect(response.message).toContain("2+ відкритих");
+  });
+
+  it("взяте на сьогодні йде окремою полицею — у порядку кладення, а не терміновості", () => {
+    const withToday = [
+      card({ number: 12, status: "in_progress", priority: "high", todayAt: "2026-08-28T09:30:00.000Z" }),
+      card({ number: 9, status: "queued", todayAt: "2026-08-28T08:00:00.000Z" }),
+      card({ number: 5, status: "queued" }),
+    ];
+    const response = buildBoardListResponse({ cards: withToday, hasMore: false, url: URL });
+    expect(response.today.map((entry) => entry.number)).toEqual([9, 12]);
+    expect(response.today.every((entry) => entry.today)).toBe(true);
+    const shelf = response.message.slice(response.message.indexOf("🎯 Сьогодні"));
+    expect(response.message).toContain("🎯 Сьогодні (2)");
+    expect(shelf.indexOf("REQ-9")).toBeLessThan(shelf.indexOf("REQ-12"));
+  });
+
+  it("полиця стоїть ВИЩЕ колонок, а картка лишається і в своїй колонці — з позначкою", () => {
+    const withToday = [card({ number: 9, status: "queued", todayAt: "2026-08-28T08:00:00.000Z" })];
+    const message = buildBoardListResponse({ cards: withToday, hasMore: false, url: URL }).message;
+    expect(message.indexOf("🎯 Сьогодні")).toBeLessThan(message.indexOf("У черзі (1)"));
+    expect(message).toContain("📌 REQ-9");
+  });
+
+  it("нічого не взято — полиці немає взагалі, а не порожній заголовок", () => {
+    const response = buildBoardListResponse({ cards, hasMore: false, url: URL });
+    expect(response.today).toEqual([]);
+    expect(response.message).not.toContain("Сьогодні");
+    expect(response.message).not.toContain("📌");
+  });
+
+  it("поле без значення — це «не брали»: інакше на полицю приїде вся дошка", () => {
+    expect(isTakenToday({ todayAt: null })).toBe(false);
+    expect(isTakenToday({ todayAt: "   " })).toBe(false);
+    expect(isTakenToday({ todayAt: undefined as unknown as string | null })).toBe(false);
+    expect(isTakenToday({ todayAt: "2026-08-28T08:00:00.000Z" })).toBe(true);
   });
 });
 

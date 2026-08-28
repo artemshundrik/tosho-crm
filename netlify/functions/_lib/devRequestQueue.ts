@@ -10,6 +10,7 @@ import {
   sortBoardCards,
   STATUS_EMOJI,
   STATUS_LABELS,
+  todayShelfCards,
   type BoardCard,
   type MovableStatus,
 } from "./devRequestBoard";
@@ -181,11 +182,23 @@ export type QueueScreen = { text: string; keyboard: InlineKeyboard };
  * дивилась дошку, має побачити ту саму картину. Показуємо не більше
  * QUEUE_LIST_MAX — решта згадана рядком, щоб не було відчуття, що черга саме
  * така коротка.
+ *
+ * ВЗЯТЕ НА СЬОГОДНІ ЙДЕ ПЕРШИМ І ЦІЛКОМ — і не займає місць у стелі решти.
+ * Полиця «Сьогодні» відповідає на «за що хвататись зараз», а стеля в вісім
+ * рядків рахує найсвіжіші картки: без цього те, чим людина зайнята сьогодні,
+ * могло взагалі не потрапити на екран. На відміну від ендпоінта, у колонках
+ * нижче ці картки НЕ повторюємо: там рядок коштує половину екрана телефона.
  */
 export function queueListScreen(input: { cards: BoardCard[]; hasMore?: boolean }): QueueScreen {
   const sorted = sortBoardCards(input.cards);
-  const shown = sorted.slice(0, QUEUE_LIST_MAX);
-  const rest = sorted.length - shown.length;
+  const today = todayShelfCards(sorted);
+  const takenToday = new Set(today.map((card) => card.number));
+  const others = sorted.filter((card) => !takenToday.has(card.number));
+  // Стеля рахує ЛИШЕ решту: полиця з чотирьох справ не має з'їдати половину
+  // списку доступного — інакше, набравши день, ти перестаєш бачити чергу.
+  const shownOthers = others.slice(0, QUEUE_LIST_MAX);
+  const shown = [...today, ...shownOthers];
+  const rest = others.length - shownOthers.length;
   const total = `${sorted.length}${input.hasMore ? "+" : ""}`;
 
   if (sorted.length === 0) {
@@ -201,7 +214,17 @@ export function queueListScreen(input: { cards: BoardCard[]; hasMore?: boolean }
   }
 
   const lines = [`📋 <b>Черга запитів</b> · ${total} відкритих`];
-  for (const group of groupBoardCards(shown)) {
+  if (today.length > 0) {
+    lines.push("", `🎯 <b>Сьогодні</b>`);
+    for (const card of today) {
+      lines.push(
+        `${privacyMark(card)}${escapeTelegramHtml(card.label)} · ` +
+          escapeClamped(card.title, QUEUE_TITLE_CHARS) +
+          ` — <i>${escapeTelegramHtml(STATUS_LABELS[card.status])}</i>`
+      );
+    }
+  }
+  for (const group of groupBoardCards(shownOthers)) {
     lines.push("", `<b>${escapeTelegramHtml(group.label)}</b>`);
     for (const card of group.cards) {
       const kindMeta = boardCardMeta(card);

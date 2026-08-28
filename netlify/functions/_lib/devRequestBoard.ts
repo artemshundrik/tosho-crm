@@ -154,6 +154,15 @@ export type BoardCard = {
    * бачити, який саме рядок не для всіх — ДО того, як натисне «поділитись».
    */
   isPrivate: boolean;
+  /**
+   * Коли картку поклали на полицю «Сьогодні» в CRM. null — не брали.
+   *
+   * Ця полиця сильніша за колонку: вона відповідає на «за що хвататись», тоді
+   * як статус каже лише, на якому етапі картка (src/features/devRequests/
+   * queueShelves.ts). Ззовні її доти не було видно взагалі — ні тут, ні в боті,
+   * — і на питання «що сьогодні» обидва входи вивалювали всю чергу.
+   */
+  todayAt: string | null;
   createdAt: string;
 };
 
@@ -166,6 +175,7 @@ type BoardRow = {
   module_key?: string | null;
   priority?: string | null;
   is_private?: boolean | null;
+  today_at?: string | null;
   created_at?: string | null;
 };
 
@@ -200,8 +210,44 @@ export function toBoardCard(row: BoardRow): BoardCard | null {
     // Невідоме значення читаємо як «приватна»: зайвий замок на спільній картці
     // дешевший за відсутній на приватній.
     isPrivate: row.is_private !== false,
+    todayAt: (row.today_at ?? "").trim() || null,
     createdAt: (row.created_at ?? "").trim(),
   };
+}
+
+/**
+ * Полиця «Сьогодні» в тому ж порядку, що на дошці, — у якому картки туди клали.
+ *
+ * Порядок саме за `today_at`, а не за терміновістю: полиця — це намір людини на
+ * день, і переставляти в ній картки за власною шкалою означало б сперечатись із
+ * тим, хто її склав.
+ */
+export function todayShelfCards(cards: BoardCard[]): BoardCard[] {
+  return cards
+    .filter(isTakenToday)
+    .sort((a, b) => (a.todayAt ?? "").localeCompare(b.todayAt ?? ""));
+}
+
+/**
+ * Чи взята картка на сьогодні.
+ *
+ * Питаємо про НАПОВНЕНІСТЬ рядка, а не `!== null`: BoardCard збирають не лише з
+ * рядка бази (там завжди null), і поле, якого в об'єкті просто немає, під
+ * перевіркою на null проходило б як «взято» — на цьому одразу впали тести
+ * черги, де на полицю приїхала вся дошка.
+ */
+export function isTakenToday(card: Pick<BoardCard, "todayAt">): boolean {
+  return typeof card.todayAt === "string" && card.todayAt.trim() !== "";
+}
+
+/**
+ * Позначка «взято на сьогодні» в колонковому рядку.
+ *
+ * Без неї та сама картка виглядає у двох місцях як дві різні справи: угорі в
+ * полиці й нижче в колонці.
+ */
+export function todayMark(card: Pick<BoardCard, "todayAt">): string {
+  return isTakenToday(card) ? "📌 " : "";
 }
 
 /** Замок у рядку списку. Порожньо для спільних карток — позначаємо лише виняток. */
@@ -617,6 +663,8 @@ export type BoardCardJson = {
   urgent: boolean;
   /** true — картку видно лише власнику й CEO. Показуючи її комусь, це варто знати. */
   private: boolean;
+  /** true — картку взяли на сьогодні. Це відповідь на «що робимо зараз». */
+  today: boolean;
 };
 
 function toCardJson(card: BoardCard): BoardCardJson {
@@ -633,6 +681,7 @@ function toCardJson(card: BoardCard): BoardCardJson {
     priority: card.priority ? PRIORITY_LABELS[card.priority] : null,
     urgent: card.priority === "high",
     private: card.isPrivate,
+    today: isTakenToday(card),
   };
 }
 
@@ -641,6 +690,13 @@ export type BoardListResponse = {
   total: number;
   /** true — карток більше, ніж стеля вибірки. */
   hasMore: boolean;
+  /**
+   * Полиця «Сьогодні» — те, що людина сама взяла на день, у порядку кладення.
+   * Ці ж картки лишаються у своїх колонках нижче: полиця каже «за що хвататись»,
+   * колонка — «на якому це етапі», і викидати одну відповідь заради іншої немає
+   * причин.
+   */
+  today: BoardCardJson[];
   groups: Array<{ status: BoardStatus; label: string; cards: BoardCardJson[] }>;
   url: string;
   message: string;
@@ -659,6 +715,7 @@ export function buildBoardListResponse(input: {
   url: string;
 }): BoardListResponse {
   const groups = groupBoardCards(input.cards);
+  const today = todayShelfCards(input.cards);
   const total = input.cards.length;
 
   const lines: string[] = [];
@@ -666,12 +723,22 @@ export function buildBoardListResponse(input: {
     lines.push("📋 Черга запитів порожня — жодної відкритої картки.");
   } else {
     lines.push(`📋 Черга запитів — ${total}${input.hasMore ? "+" : ""} відкритих`);
+    // «Сьогодні» першою: на питання «що зараз» відповідає саме вона, і читач не
+    // має вишукувати ці картки очима по колонках.
+    if (today.length > 0) {
+      lines.push("", `🎯 Сьогодні (${today.length})`);
+      for (const card of today) {
+        lines.push(
+          `${privacyMark(card)}${card.label} — ${card.title} · ${STATUS_LABELS[card.status]}`
+        );
+      }
+    }
     for (const group of groups) {
       lines.push("", `${group.label} (${group.cards.length})`);
       for (const card of group.cards) {
         const meta = boardCardMeta(card);
         lines.push(
-          `${privacyMark(card)}${priorityMark(card.priority)}${card.label} — ${card.title}${
+          `${todayMark(card)}${privacyMark(card)}${priorityMark(card.priority)}${card.label} — ${card.title}${
             meta ? ` · ${meta}` : ""
           }`
         );
@@ -687,6 +754,7 @@ export function buildBoardListResponse(input: {
     ok: true,
     total,
     hasMore: input.hasMore,
+    today: today.map(toCardJson),
     groups: groups.map((group) => ({
       status: group.status,
       label: group.label,
@@ -745,7 +813,8 @@ export function cardNotFoundMessage(number: number): string {
 /* --------------------------------- База -------------------------------- */
 
 // is_private тут не для фільтрації, а для позначки 🔒 — див. BoardCard.isPrivate.
-const SELECT_COLUMNS = "number,title,body,kind,status,module_key,priority,is_private,created_at";
+const SELECT_COLUMNS =
+  "number,title,body,kind,status,module_key,priority,is_private,today_at,created_at";
 
 /**
  * Відкриті картки команди.
@@ -778,6 +847,34 @@ export async function fetchOpenBoardCards(
     .slice(0, limit)
     .map(toBoardCard)
     .filter((card): card is BoardCard => card !== null);
+
+  /*
+   * Взяте на сьогодні добираємо ОКРЕМИМ запитом і завжди.
+   *
+   * Основна вибірка — 50 найсвіжіших, і стара картка, яку людина сьогодні взяла
+   * в роботу, у неї не потрапляє (REQ-17 заведено в травні). Полиця, з якої
+   * зникає саме те, чим ти зараз зайнятий, гірша за її відсутність: вона
+   * стверджує, що на сьогодні взято менше, ніж узято.
+   *
+   * Їх одиниці — це намір на один день, — тож ліміту тут не треба.
+   */
+  const { data: todayData, error: todayError } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .select(SELECT_COLUMNS)
+    .eq("team_id", teamId)
+    .in("status", OPEN_STATUSES as string[])
+    .not("today_at", "is", null);
+  if (todayError) throw new Error(`dev_requests today: ${todayError.message}`);
+
+  const seen = new Set(cards.map((card) => card.number));
+  for (const row of (todayData ?? []) as BoardRow[]) {
+    const card = toBoardCard(row);
+    if (card && !seen.has(card.number)) {
+      seen.add(card.number);
+      cards.push(card);
+    }
+  }
 
   return { cards: sortBoardCards(cards), hasMore };
 }
