@@ -4,7 +4,8 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isKnownModuleKey } from "@/lib/projectMap";
 import { toAuditEntries, type AuditEntry } from "./history";
-import type { ChecklistItem } from "./checklist";
+import { hasOpenChecklistItems, type ChecklistItem } from "./checklist";
+import { isPapercutCard } from "./papercuts";
 import {
   toDevRequest,
   type DevRequest,
@@ -264,11 +265,42 @@ export function useMoveDevRequest(teamId: string | null) {
 export function useUpdateChecklist(teamId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, checklist }: { id: string; checklist: ChecklistItem[] }) => {
+    mutationFn: async ({
+      id,
+      checklist,
+      status,
+      title,
+    }: {
+      id: string;
+      checklist: ChecklistItem[];
+      /** Поточний статус картки — щоб знати, чи є куди її рухати. */
+      status?: RequestStatus;
+      /** Назва — за нею впізнається накопичувач дрібниць. */
+      title?: string;
+    }) => {
+      /*
+       * Закрили останній відкритий пункт — картка їде в «Готово локально».
+       *
+       * Те саме правило стоїть у гаку коміта; тут воно потрібне окремо, бо
+       * пункт закривають і галочкою в CRM. Без цього велика картка зависала в
+       * «В роботі» назавжди: пунктів відкритих немає, а зрушити її нікому
+       * (спіймано на REQ-194).
+       *
+       * Накопичувач дрібниць сюди не потрапляє ніколи: порожня полиця не є
+       * зробленою задачею, а «Готово локально» повело б її через деплой у
+       * «Викочено», звідки напрям уже не дістати.
+       */
+      const finishes =
+        status !== undefined &&
+        (status === "triage" || status === "queued" || status === "in_progress") &&
+        checklist.length > 0 &&
+        !hasOpenChecklistItems(checklist) &&
+        !isPapercutCard({ title: title ?? "" });
+
       const { data, error } = await supabase
         .schema("tosho")
         .from("dev_requests")
-        .update({ checklist })
+        .update(finishes ? { checklist, status: "done_local" } : { checklist })
         .eq("id", id)
         .select("id")
         .maybeSingle();

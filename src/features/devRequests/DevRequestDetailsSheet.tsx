@@ -318,7 +318,10 @@ export function DevRequestDetailsSheet({
                       // пачкою, і пауза на кожній перетворила б це на муку.
                       setShown((current) => (current ? { ...current, checklist: next } : current));
                       updateChecklist.mutate(
-                        { id: shown.id, checklist: next },
+                        // Статус і назву передаємо, щоб мутація знала, чи можна
+                        // закрити картку: закритий останній пункт означає
+                        // «Готово локально», а накопичувач дрібниць — ні.
+                        { id: shown.id, checklist: next, status: shown.status, title: shown.title },
                         {
                           onError: (error) =>
                             toast.error(

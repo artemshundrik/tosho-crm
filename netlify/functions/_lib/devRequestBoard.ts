@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { isPapercutCard } from "../../../src/features/devRequests/papercuts";
+import { hasOpenChecklistItems } from "../../../src/features/devRequests/checklist";
 import { isKnownModuleKey, moduleKeyLabel } from "../../../src/lib/projectMap";
 import { formatRequestNumber, KIND_LABELS, PRIORITY_LABELS } from "./devRequestBot";
 import {
@@ -1881,7 +1882,9 @@ export async function closeChecklistItemsOnCommit(
      * «Чекає» рахуємо відкритим: пункт, що стоїть за людиною, не каже «код
      * написаний», а саме це означає «Готово локально».
      */
-    const stillOpen = next.some((entry) => String(entry?.state ?? "todo") !== "done");
+    // Скасований пункт («не робимо») картку не тримає — те саме правило, що в
+    // CRM: спільна функція, щоб два шляхи не розійшлись.
+    const stillOpen = hasOpenChecklistItems(next as Array<{ state?: string | null }>);
     const finishesCard =
       !stillOpen &&
       !isPapercutCard({ title }) &&

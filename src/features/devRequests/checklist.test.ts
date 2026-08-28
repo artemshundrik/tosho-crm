@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   checklistProgress,
+  hasOpenChecklistItems,
   isPartlyShipped,
   waitingDays,
   groupChecklist,
@@ -234,5 +235,35 @@ describe("isPartlyShipped", () => {
 
   it("картка без пунктів — звичайна, підпису немає", () => {
     expect(isPartlyShipped("done_local", [], shas)).toBe(false);
+  });
+});
+
+describe("скасований пункт", () => {
+  /*
+   * REQ-194 завис саме на цьому: вкладку «Посади» скасували рішенням, а подіти
+   * пункт не було куди — він тримав картку в «В роботі», хоч роботи там не
+   * лишилось. Позначити його «Готово» означало б записати в чекліст неправду.
+   */
+  const item = (state: string, id = "p1") =>
+    ({ id, kind: "task", text: "пункт", state, group: null, who: null, since: null, answer: null, note: null, closed: null, sha: null }) as never;
+
+  it("не тримає картку в роботі", () => {
+    expect(hasOpenChecklistItems([item("done"), item("dropped", "p2")])).toBe(false);
+    expect(hasOpenChecklistItems([item("done"), item("todo", "p2")])).toBe(true);
+    expect(hasOpenChecklistItems([item("waiting")])).toBe(true);
+  });
+
+  it("не рахується в загальній кількості — «12 з 13» було б неправдою", () => {
+    const progress = checklistProgress([item("done"), item("dropped", "p2"), item("todo", "p3")]);
+    expect(progress.total).toBe(2);
+    expect(progress.done).toBe(1);
+    expect(progress.dropped).toBe(1);
+  });
+
+  it("у коло кліків не входить — скасування це рішення, а не наступний крок", () => {
+    expect(nextState("done")).toBe("todo");
+    expect(nextState("todo")).toBe("doing");
+    // Повернення зі скасованого — тим самим кліком, у «не почато».
+    expect(nextState("dropped")).toBe("todo");
   });
 });

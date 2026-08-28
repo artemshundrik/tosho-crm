@@ -103,7 +103,7 @@ export default function DevRequestsPage() {
     (request: DevRequest, items: ChecklistItem[]) => {
       setSavingChecklistId(request.id);
       updateChecklist.mutate(
-        { id: request.id, checklist: items },
+        { id: request.id, checklist: items, status: request.status, title: request.title },
         {
           onError: (error) =>
             toast.error(error instanceof Error ? error.message : "Не зміг зберегти пункт"),

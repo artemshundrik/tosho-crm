@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { CircleSlash, Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -223,16 +223,42 @@ export function ChecklistPanel({
                   </div>
 
                   {canManage ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="iconXs"
-                      title="Прибрати пункт"
-                      className="shrink-0 text-muted-foreground/60 hover:text-destructive"
-                      onClick={() => onChange(items.filter((entry) => entry.id !== item.id))}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <>
+                      {/*
+                        «Не робимо» — не те саме, що «Прибрати». Прибраний пункт
+                        зникає без сліду, і за місяць ніхто не згадає, чому його
+                        не зробили; скасований лишається в списку закресленим і
+                        більше не тримає картку в роботі.
+                      */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="iconXs"
+                        title={item.state === "dropped" ? "Повернути в роботу" : "Не робимо"}
+                        className="shrink-0 text-muted-foreground/60 hover:text-foreground"
+                        onClick={() =>
+                          patch(item.id, {
+                            state: item.state === "dropped" ? "todo" : "dropped",
+                            since: null,
+                            who: null,
+                            closed: null,
+                            sha: null,
+                          })
+                        }
+                      >
+                        <CircleSlash className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="iconXs"
+                        title="Прибрати пункт"
+                        className="shrink-0 text-muted-foreground/60 hover:text-destructive"
+                        onClick={() => onChange(items.filter((entry) => entry.id !== item.id))}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
                   ) : null}
                 </div>
               </div>

@@ -1413,6 +1413,26 @@ describe("closeChecklistItemsOnCommit", () => {
     expect(Object.keys(state.updates[0].patch)).toEqual(["checklist"]);
   });
 
+  it("скасований пункт не тримає картку — закриття сусіднього веде її в «Готово локально»", async () => {
+    // REQ-194: пункт «вкладка Посади» скасували рішенням, а не зробили. Поки
+    // такий пункт рахувався відкритим, картка висіла в «В роботі» назавжди.
+    const { admin, state } = fakeChecklistAdmin([
+      commitRow({
+        number: 194,
+        title: "Переосмислити ролі й доступи",
+        status: "in_progress",
+        checklist: items(
+          { id: "p1", text: "зроблено", state: "done", closed: "2026-08-26", sha: "aaaaaaa" },
+          { id: "p2", text: "скасовано рішенням", state: "dropped" },
+          { id: "p3", text: "останній", state: "todo" }
+        ),
+      }),
+    ]);
+    const outcomes = await closeChecklistItemsOnCommit(admin, "team-1", [{ number: 194, item: "p3" }], "74ab615", NOW);
+    expect(outcomes[0]).toMatchObject({ result: "closed", cardMoved: true });
+    expect(state.updates[0].patch.status).toBe("done_local");
+  });
+
   it("НАКОПИЧУВАЧ не їде в «Готово локально», навіть коли розгребли все", async () => {
     /*
      * Та сама гвардія, що й у recordCommitOnCards, і найдорожча в механізмі:

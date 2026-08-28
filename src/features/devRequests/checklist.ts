@@ -1,4 +1,4 @@
-import { CircleDashed, CircleDot, Clock, CheckCircle2, HelpCircle } from "lucide-react";
+import { CircleDashed, CircleDot, CircleSlash, Clock, CheckCircle2, HelpCircle } from "lucide-react";
 import type { ComponentType } from "react";
 
 import type { Tone } from "@/lib/statusTones";
@@ -11,7 +11,15 @@ import type { Tone } from "@/lib/statusTones";
  * модуль, щоб не завести другий список, який розійдеться з першим.
  */
 
-export const CHECK_STATES = ["todo", "doing", "waiting", "done"] as const;
+/**
+ * `dropped` — «не робимо»: пункт скасовано рішенням, а не зроблено.
+ *
+ * Без нього скасований пункт нікуди подіти: він або висить відкритим і тримає
+ * всю картку в «В роботі», або його позначають «Готово» — і чекліст бреше, що
+ * роботу зробили. Саме так завис REQ-194, де вкладку «Посади» скасували
+ * рішенням в описі картки (28.08.2026).
+ */
+export const CHECK_STATES = ["todo", "doing", "waiting", "done", "dropped"] as const;
 export type CheckState = (typeof CHECK_STATES)[number];
 
 export const CHECK_KINDS = ["task", "question"] as const;
@@ -56,6 +64,7 @@ export const CHECK_STATE_LABELS: Record<CheckState, string> = {
   doing: "В роботі",
   waiting: "Чекає",
   done: "Готово",
+  dropped: "Не робимо",
 };
 
 export const CHECK_STATE_TONE: Record<CheckState, Tone> = {
@@ -63,6 +72,9 @@ export const CHECK_STATE_TONE: Record<CheckState, Tone> = {
   doing: "info",
   waiting: "warning",
   done: "success",
+  // Сірий, як «не почато»: скасоване не є ні успіхом, ні проблемою — воно
+  // просто вибуло з роботи.
+  dropped: "neutral",
 };
 
 export const CHECK_STATE_ICONS: Record<CheckState, ComponentType<{ className?: string }>> = {
@@ -70,15 +82,39 @@ export const CHECK_STATE_ICONS: Record<CheckState, ComponentType<{ className?: s
   doing: CircleDot,
   waiting: Clock,
   done: CheckCircle2,
+  dropped: CircleSlash,
 };
 
 /** Іконка питання — щоб воно читалось як питання ще до тексту. */
 export const QUESTION_ICON = HelpCircle;
 
-/** Клік по стану веде по колу: не почато → в роботі → чекає → готово → ... */
+/**
+ * Клік по стану веде по колу: не почато → в роботі → чекає → готово → ...
+ *
+ * `dropped` у коло НЕ входить: скасування — це рішення, а не наступний крок
+ * роботи, і випадково клацнути в нього не можна. Ставиться окремою дією, а
+ * повертається тим самим кліком — у «не почато».
+ */
+const CYCLE_STATES: CheckState[] = ["todo", "doing", "waiting", "done"];
+
 export function nextState(state: CheckState): CheckState {
-  const index = CHECK_STATES.indexOf(state);
-  return CHECK_STATES[(index + 1) % CHECK_STATES.length];
+  if (state === "dropped") return "todo";
+  const index = CYCLE_STATES.indexOf(state);
+  return CYCLE_STATES[(index + 1) % CYCLE_STATES.length];
+}
+
+/**
+ * Пункти, які ще тримають картку в роботі.
+ *
+ * Скасоване не тримає нічого — у цьому вся суть стану. Одна функція на клієнт
+ * і на гак коміта: розійдись вони, картка їхала б у «Готово локально» в
+ * одному шляху й зависала в іншому.
+ */
+export function hasOpenChecklistItems(items: Array<{ state?: string | null }>): boolean {
+  return items.some((item) => {
+    const state = (item?.state ?? "todo").trim();
+    return state !== "done" && state !== "dropped";
+  });
 }
 
 const asString = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
@@ -127,11 +163,14 @@ export function parseChecklist(value: unknown): ChecklistItem[] {
 }
 
 export type ChecklistProgress = {
+  /** Пункти, що лишились у роботі: скасовані сюди не рахуються. */
   total: number;
   done: number;
   doing: number;
   waiting: number;
   todo: number;
+  /** Скасовані рішенням — окремо, щоб їх було видно, але вони нічого не тримали. */
+  dropped: number;
   /** Скільки днів висить найстаріше очікування. 0 — нічого не чекає. */
   stuckDays: number;
   /** На кого чекаємо найдовше. Для підпису «чекає CEO · 12 дн». */
@@ -147,10 +186,13 @@ export type ChecklistProgress = {
  */
 export function checklistProgress(items: ChecklistItem[], now = new Date()): ChecklistProgress {
   const progress: ChecklistProgress = {
-    total: items.length,
+    // Скасоване не рахуємо в загальну кількість: «12 з 13» там, де тринадцятий
+    // вибув рішенням, читається як недороблена робота.
+    total: items.filter((item) => item.state !== "dropped").length,
     done: 0,
     doing: 0,
     waiting: 0,
+    dropped: 0,
     todo: 0,
     stuckDays: 0,
     stuckWho: null,
