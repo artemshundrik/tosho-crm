@@ -17,15 +17,8 @@ import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useSegmentedSlider } from "@/components/ui/segmented-group";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  switchTabWithTransition,
-  useViewTransitionTabs,
-} from "@/components/ui/tabs";
+import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Command,
@@ -936,9 +929,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [activeQuoteTab, setActiveQuoteTab] = useState<QuotePageTab>("products");
-  // Риска під активною вкладкою переїжджає, а не гасне й засвічується.
-  const { ref: quoteTabsRef, indicator: quoteTabsIndicator } =
-    useSegmentedSlider<HTMLDivElement>("underline");
   /**
    * Згортання підсумку — щоб віддати висоту розмові.
    *
@@ -987,10 +977,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return () => window.removeEventListener("resize", apply);
   });
   const [detailsTab, setDetailsTab] = useState<"comments" | "files" | "activity">("comments");
-  // Вкладки перемикаються під перехресним згасанням (REQ-202), а для цього
-  // значення мусить бути КЕРОВАНИМ — див. коментар до `useViewTransitionTabs`.
-  const briefTabs = useViewTransitionTabs("brief");
-  const partyTabs = useViewTransitionTabs("internal");
   const commentDraftKey = useMemo(() => buildDraftKey("quote-comment", quoteId), [quoteId]);
   const [commentText, setCommentText] = useState(() => readDraft<string>(commentDraftKey)?.value ?? "");
   const [commentSaving, setCommentSaving] = useState(false);
@@ -5639,30 +5625,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             рискою знизу — рядок вкладок перестав сперечатися зі смугою дій.
           */}
           <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:shrink-0 2xl:-mx-8 2xl:px-8">
-            <div
-              ref={quoteTabsRef}
-              className="relative flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {quoteTabsIndicator}
+            <TabBar value={activeQuoteTab}>
               {quotePageTabs.map((tab) => {
                 const isActive = activeQuoteTab === tab.value;
                 return (
-                  <button
+                  <TabBarItem
                     key={tab.value}
-                    type="button"
-                    onClick={() => setActiveQuoteTab(tab.value)}
-                    className={cn(
-                      "relative inline-flex h-11 shrink-0 items-center gap-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                      // Риску малює ОДИН спільний вузол, що переїжджає між
-                      // вкладками (useSegmentedSlider). Псевдоелемент на кожній
-                      // кнопці цього не вміє: він може лише згаснути в одному
-                      // місці й засвітитись в іншому.
-                      isActive
-                        ? "font-semibold text-foreground"
-                        : "font-medium text-muted-foreground hover:text-foreground",
-                      tab.mobileOnly && "xl:hidden"
-                    )}
-                    aria-pressed={isActive}
+                    value={tab.value}
+                    onSelect={(next) => setActiveQuoteTab(next as QuotePageTab)}
+                    className={cn(tab.mobileOnly && "xl:hidden")}
                   >
                     <span>{tab.label}</span>
                     {tab.badge ? (
@@ -5683,10 +5654,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     {tab.attention ? (
                       <span className="h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden />
                     ) : null}
-                  </button>
+                  </TabBarItem>
                 );
               })}
-            </div>
+            </TabBar>
           </div>
           <div className="space-y-6 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pb-8">
             {quoteLockedByOther || quoteLock.releaseRequestedByName || quoteLock.idleSecondsLeft !== null || quoteLock.releasedReason || statusError || quoteRequirements.length > 0 ? (
@@ -7019,7 +6990,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
 
               <div className="space-y-4">
-                <Tabs {...partyTabs} className="w-full">
+                <Tabs defaultValue="internal" className="w-full">
                   <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
                   <TabsList className="grid h-auto w-full grid-cols-1 gap-2 border-0 bg-transparent p-0">
                     <TabsTrigger
@@ -7420,7 +7391,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </div>
 
-              <Tabs {...briefTabs} className="w-full">
+              <Tabs defaultValue="brief" className="w-full">
                 <TabsList variant="underline" className="mb-5">
                   <TabsTrigger value="brief">
                     ТЗ
@@ -7969,9 +7940,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
               <Tabs
                 value={detailsTab}
-                onValueChange={(value) =>
-                  switchTabWithTransition(() => setDetailsTab(value as "comments" | "files" | "activity"))
-                }
+                onValueChange={(value) => setDetailsTab(value as "comments" | "files" | "activity")}
                 className="w-full"
               >
                 <TabsList variant="underline" className="mb-5 w-full">

@@ -1,104 +1,96 @@
 import * as React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger, useViewTransitionTabs } from "@/components/ui/tabs";
+import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /**
- * Перемикання вкладок із переїздом підкреслення (REQ-202).
+ * Смуга вкладок із підкресленням (REQ-202).
  *
- * ЧОМУ ЦЕ ВЗАГАЛІ ТЕСТУЄТЬСЯ, ЯКЩО АНІМАЦІЮ ОКОМ ТУТ НЕ ВИДНО. Саме тому й
- * тестується. Переїзд тримається на двох умовах, і обидві ламаються МОВЧКИ:
- * ім'я переходу мусить бути валідним CSS-ідентифікатором (інакше воно тихо
- * стає `none`) і мусить бути різним у різних смуг вкладок (два однакові імені
- * в кадрі скасовують перехід цілком). Ані типи, ані лінт цього не спіймають, а
- * в браузері це виглядає як «анімації просто немає».
+ * ДВА ВХОДИ, ОДНА МЕХАНІКА. `TabBar` малює саму смугу там, де розділи лежать
+ * поруч і перемикаються класом (картка прорахунку, картка людини), а вкладки
+ * Radix тримають вміст самі. Спільне в них головне: одна риска на смугу, що
+ * ПЕРЕЇЖДЖАЄ, і згасання вмісту. Тест тримає обидва входи разом — саме тому,
+ * що розійтись вони можуть тихо: вигляд лишиться тим самим, а рух зникне в
+ * одному з них.
+ *
+ * Координати тут не перевіряються: jsdom не рахує розкладку, і в браузері це
+ * вже перевірено оком. Тут — те, що ламається логікою.
  */
-
-function Fixture({ label }: { label: string }) {
-  const tabs = useViewTransitionTabs("first");
-  return (
-    <Tabs {...tabs}>
-      <TabsList variant="underline" aria-label={label}>
-        <TabsTrigger value="first">Перша</TabsTrigger>
-        <TabsTrigger value="second">Друга</TabsTrigger>
-      </TabsList>
-      <TabsContent value="first">Вміст першої</TabsContent>
-      <TabsContent value="second">Вміст другої</TabsContent>
-    </Tabs>
-  );
-}
-
-const underlineName = (label: string) =>
-  screen.getByRole("tablist", { name: label }).style.getPropertyValue("--tabs-underline-name");
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("вкладки з підкресленням", () => {
-  it("ім'я переходу — валідний CSS-ідентифікатор", () => {
-    render(<Fixture label="Розділи" />);
-    // `useId` віддає щось на кшталт «r0» У ЛАПКАХ-ЯЛИНКАХ, а такий рядок у CSS
-    // недійсний: `view-transition-name` мовчки стане `none`, і підкреслення
-    // почне зникати-з'являтися замість переїзду.
-    expect(underlineName("Розділи")).toMatch(/^tabs-underline-[A-Za-z0-9_-]+$/);
-  });
-
-  it("дві смуги вкладок отримують різні імена", () => {
+  it("риска одна на смугу, а не по одній на кнопку", () => {
     render(
-      <>
-        <Fixture label="Ліва картка" />
-        <Fixture label="Права картка" />
-      </>
+      <TabBar value="products">
+        <TabBarItem value="products" onSelect={() => {}}>
+          Товари
+        </TabBarItem>
+        <TabBarItem value="design" onSelect={() => {}}>
+          Дизайн
+        </TabBarItem>
+      </TabBar>
     );
-    // Однакові імена в одному кадрі браузер вважає помилкою й скасовує перехід
-    // ЦІЛКОМ — тобто дві відкриті картки лишили б без анімації одна одну.
-    expect(underlineName("Ліва картка")).not.toBe(underlineName("Права картка"));
+    // Саме «одна» й робить рух можливим: підкреслення на кожній кнопці вміло б
+    // лише згаснути в одному місці й засвітитись в іншому.
+    expect(document.querySelectorAll("[data-segmented-indicator]")).toHaveLength(1);
   });
 
-  it("підкреслення живе всередині кожного тригера, а не лише активного", () => {
-    render(<Fixture label="Розділи" />);
-    // Проліт має бути в ОБОХ: ім'я вмикається селектором за `data-state`, тож
-    // елемент мусить існувати заздалегідь — інакше в кадрі «після» його немає,
-    // і переїжджати нема чому.
-    for (const name of ["Перша", "Друга"]) {
-      expect(screen.getByRole("tab", { name }).querySelector(".tabs-underline")).not.toBeNull();
-    }
+  it("активну вкладку видно і риска її знаходить", () => {
+    render(
+      <TabBar value="design">
+        <TabBarItem value="products" onSelect={() => {}}>
+          Товари
+        </TabBarItem>
+        <TabBarItem value="design" onSelect={() => {}}>
+          Дизайн
+        </TabBarItem>
+      </TabBar>
+    );
+    const active = screen.getByRole("tab", { name: "Дизайн" });
+    expect(active).toHaveAttribute("aria-selected", "true");
+    // Риска шукає активну кнопку саме за `aria-pressed` — без нього підсвітка
+    // тихо зникне, хоч на вигляд розмітка лишиться цілою.
+    expect(active).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("вкладка перемикається й там, де переходів немає", async () => {
-    // jsdom не має `document.startViewTransition` — тобто це заразом перевірка
-    // запасного шляху: у браузері без API вкладки мусять працювати як раніше.
-    expect("startViewTransition" in document).toBe(false);
-
-    render(<Fixture label="Розділи" />);
-    await userEvent.click(screen.getByRole("tab", { name: "Друга" }));
-
-    expect(screen.getByRole("tab", { name: "Друга" })).toHaveAttribute("data-state", "active");
-    expect(screen.getByText("Вміст другої")).toBeInTheDocument();
+  it("клік повідомляє нове значення", async () => {
+    const seen: string[] = [];
+    render(
+      <TabBar value="products">
+        <TabBarItem value="design" onSelect={(next) => seen.push(next)}>
+          Дизайн
+        </TabBarItem>
+      </TabBar>
+    );
+    await userEvent.click(screen.getByRole("tab", { name: "Дизайн" }));
+    expect(seen).toEqual(["design"]);
   });
 
-  it("перемикання йде ЧЕРЕЗ перехід, коли браузер його вміє", async () => {
-    // Ключова умова, заради якої вкладки зроблено керованими: значення мусить
-    // мінятись УСЕРЕДИНІ зворотного виклику. Знімок «до» браузер робить перед
-    // ним, тож зміна поза викликом означала б два однакові кадри.
-    let updatedInsideCallback = false;
-    const startViewTransition = vi.fn((update: () => void) => {
-      update();
-      updatedInsideCallback = screen.queryByText("Вміст другої") !== null;
-      return { finished: Promise.resolve(), updateCallbackDone: Promise.resolve() };
-    });
-    vi.stubGlobal("document", Object.assign(document, { startViewTransition }));
+  it("вкладки Radix беруть ту саму риску й згасання вмісту", () => {
+    render(
+      <Tabs defaultValue="brief">
+        <TabsList variant="underline">
+          <TabsTrigger value="brief">ТЗ</TabsTrigger>
+          <TabsTrigger value="visuals">Візуалізації</TabsTrigger>
+        </TabsList>
+        <TabsContent value="brief">ТЗ для дизайнера</TabsContent>
+      </Tabs>
+    );
+    expect(document.querySelectorAll("[data-segmented-indicator]")).toHaveLength(1);
+    // `tab-panel` — той самий клас, яким згасають розділи картки прорахунку.
+    expect(screen.getByText("ТЗ для дизайнера").className).toContain("tab-panel");
+  });
 
-    render(<Fixture label="Розділи" />);
-    await userEvent.click(screen.getByRole("tab", { name: "Друга" }));
-
-    expect(startViewTransition).toHaveBeenCalledTimes(1);
-    expect(updatedInsideCallback).toBe(true);
-
-    // @ts-expect-error — прибираємо підмінений метод, щоб не протік у сусідні тести
-    delete document.startViewTransition;
+  it("звичайні вкладки риски не отримують", () => {
+    render(
+      <Tabs defaultValue="write">
+        <TabsList>
+          <TabsTrigger value="write">Написати</TabsTrigger>
+          <TabsTrigger value="preview">Перегляд</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    );
+    expect(document.querySelectorAll("[data-segmented-indicator]")).toHaveLength(0);
   });
 });

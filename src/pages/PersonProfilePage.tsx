@@ -71,6 +71,7 @@ import {
   type ModuleAccess,
   type ModuleKey,
 } from "@/lib/moduleAccess";
+import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
 import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import {
@@ -168,7 +169,10 @@ function SectionCard({
   action?: React.ReactNode;
 }) {
   return (
-    <section className={cn(CARD, "flex flex-col gap-3.5 p-4")}>
+    // `tab-panel` — те саме згасання, що в розділах картки прорахунку: розділи
+    // тут перемонтовуються при зміні вкладки, тож зміну має бути ВИДНО, а не
+    // лише вгадувати по риску.
+    <section className={cn(CARD, "tab-panel flex flex-col gap-3.5 p-4")}>
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         {action}
@@ -459,41 +463,27 @@ export default function PersonProfilePage() {
         читались як пʼять кнопок дії, і активна губилась серед них. Тут активна
         тримається вагою тексту й тонкою рискою знизу.
       */}
-      <div className="-mx-1 border-b border-border/60 px-1">
-        <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {visibleSections.map((key) => {
-            const active = section === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSection(key)}
-                aria-pressed={active}
-                className={cn(
-                  "relative inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                  "after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors",
-                  active
-                    ? "font-semibold text-foreground after:bg-primary"
-                    : "font-medium text-muted-foreground after:bg-transparent hover:text-foreground"
-                )}
-              >
-                <span>{SECTION_LABELS[key]}</span>
-                {SECTION_BADGES[key] ? (
-                  <span
-                    className={cn(
-                      "text-2xs tabular-nums",
-                      active ? "text-muted-foreground" : "text-muted-foreground/75"
-                    )}
-                  >
-                    {SECTION_BADGES[key]}
-                  </span>
-                ) : null}
-                {key !== "overview" ? <Lock className="h-3 w-3 text-muted-foreground/60" /> : null}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <TabBar value={section} wrapperClassName="-mx-1 border-b border-border/60 px-1">
+        {visibleSections.map((key) => {
+          const active = section === key;
+          return (
+            <TabBarItem key={key} value={key} onSelect={(next) => setSection(next as SectionKey)}>
+              <span>{SECTION_LABELS[key]}</span>
+              {SECTION_BADGES[key] ? (
+                <span
+                  className={cn(
+                    "text-2xs tabular-nums",
+                    active ? "text-muted-foreground" : "text-muted-foreground/75"
+                  )}
+                >
+                  {SECTION_BADGES[key]}
+                </span>
+              ) : null}
+              {key !== "overview" ? <Lock className="h-3 w-3 text-muted-foreground/60" /> : null}
+            </TabBarItem>
+          );
+        })}
+      </TabBar>
 
       {/*
         Зміст ліворуч, стала рейка праворуч — каркас картки прорахунку.

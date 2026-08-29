@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger, switchTabWithTransition } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -819,7 +819,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
           ) : (
             <Tabs
               value={section}
-              onValueChange={(value) => switchTabWithTransition(() => setSection(value as typeof section))}
+              onValueChange={(value) => setSection(value as typeof section)}
               className="w-full"
             >
               <TabsList variant="underline" className="mb-4 w-full overflow-x-auto">

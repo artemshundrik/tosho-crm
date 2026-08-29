@@ -26,7 +26,7 @@ import { useSegmentedSlider } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import type { ImageUploadMode } from "@/types/catalog";
-import { Tabs, TabsContent, TabsList, TabsTrigger, switchTabWithTransition } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 // LTV (MVP, frontend-only): summary card data — purely additive props.
 import {
@@ -992,7 +992,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
           ) : (
           <Tabs
             value={section}
-            onValueChange={(value) => switchTabWithTransition(() => setSection(value as typeof section))}
+            onValueChange={(value) => setSection(value as typeof section)}
             className="w-full"
           >
             <TabsList variant="underline" className="mb-4 w-full overflow-x-auto">
