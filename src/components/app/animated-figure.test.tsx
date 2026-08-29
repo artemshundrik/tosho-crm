@@ -6,6 +6,7 @@ import {
   AnimatedFigure,
   FIGURE_LOCALE,
   FIGURE_UAH_FORMAT,
+  figureBarRevealStyle,
   useFigureReveal,
 } from "@/components/app/animated-figure";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
@@ -99,5 +100,31 @@ describe("useFigureReveal", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+/**
+ * Смуга часток розкривається затинанням, а не зростанням часток.
+ *
+ * ЧОМУ ЦЕ ВЗАГАЛІ ТЕСТУЄТЬСЯ. Перша спроба тягнула `flex-grow` з нуля — і
+ * виглядало це так, ніби смуга не анімується зовсім. Причина не в анімації, а
+ * в самому `flex-grow`: він ділить вільне місце ПРОПОРЦІЙНО, тож щойно ваги
+ * стають більші за нуль, місце роздається цілком, а співвідношення часток на
+ * кожному кадрі однакове. Смуга стрибала з порожньої на повну за один кадр.
+ * Тест тримає саме той бік, який це виправив.
+ */
+describe("figureBarRevealStyle", () => {
+  it("до готовності смуга відрізана повністю", () => {
+    expect(figureBarRevealStyle(false).clipPath).toBe("inset(0 100% 0 0)");
+  });
+
+  it("після готовності відкрита вся", () => {
+    expect(figureBarRevealStyle(true).clipPath).toBe("inset(0 0 0 0)");
+  });
+
+  it("їде саме затинання, а не ширина чи частки", () => {
+    const { transition } = figureBarRevealStyle(true);
+    expect(transition).toContain("clip-path");
+    expect(transition).not.toContain("flex-grow");
   });
 });

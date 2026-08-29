@@ -1,7 +1,12 @@
 import * as React from "react";
 import type { Format } from "@number-flow/react";
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { AnimatedFigure, figureRevealTransition, useFigureReveal } from "@/components/app/animated-figure";
+import {
+  AnimatedFigure,
+  FIGURE_BAR_SEGMENT_TRANSITION,
+  figureBarRevealStyle,
+  useFigureReveal,
+} from "@/components/app/animated-figure";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 
@@ -140,21 +145,24 @@ export function FinanceBentoSummary({
       {buckets.length > 0 ? (
         <>
           {/* Смуга — частки пропорційні сумам; дрібні лишаються видимі завдяки minWidth */}
-          <div className="mt-4 flex h-2.5 gap-[3px] overflow-hidden rounded-full" aria-hidden="true">
+          <div
+            className="mt-4 flex h-2.5 gap-[3px] overflow-hidden rounded-full"
+            aria-hidden="true"
+            // Смуга наливається зліва направо разом із числом (REQ-200).
+            style={figureBarRevealStyle(ready)}
+          >
             {buckets.map((b) => (
               <div
                 key={b.key}
                 className={cn("rounded-[2px]", b.color)}
-                // Смуга росте разом із числом і тією ж кривою. `minWidth` теж
-                // їде з нуля, інакше до готовності від неї лишався б ряд
-                // шестипіксельних пеньків — і «зростання» починалось би не з
-                // порожньої смуги. `@starting-style` тут не підходить: ширину
-                // задає інлайновий стиль із даних, а він специфічніший.
+                // Ваги справжні від першого кадру — з'яву малює затинання на
+                // обгортці. Перехід тут лише на ЗМІНУ значень: перемкнули
+                // місяць — частки їдуть одна відносно одної.
                 style={{
-                  flexGrow: ready ? b.amount : 0,
+                  flexGrow: b.amount,
                   flexBasis: 0,
-                  minWidth: ready ? 6 : 0,
-                  transition: figureRevealTransition,
+                  minWidth: 6,
+                  transition: FIGURE_BAR_SEGMENT_TRANSITION,
                 }}
                 title={`${b.label} — ${formatOrderMoney(b.amount, "UAH")}`}
               />

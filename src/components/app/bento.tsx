@@ -3,7 +3,8 @@ import * as React from "react";
 import {
   AnimatedFigure,
   FigureRevealProvider,
-  figureRevealTransition,
+  FIGURE_BAR_SEGMENT_TRANSITION,
+  figureBarRevealStyle,
   useFigureReveal,
   useSharedFigureReveal,
 } from "@/components/app/animated-figure";
@@ -75,19 +76,22 @@ export function SplitBar({
 
   return (
     <div className={className}>
-      <div className="flex h-2.5 gap-[3px] overflow-hidden rounded-full" aria-hidden="true">
+      <div
+        className="flex h-2.5 gap-[3px] overflow-hidden rounded-full"
+        aria-hidden="true"
+        style={figureBarRevealStyle(ready)}
+      >
         {visible.map((part) => (
           <div
             key={part.key}
             className={cn("rounded-[2px]", part.color)}
-            // Смуга росте разом із великим числом і тією ж кривою. `minWidth`
-            // теж їде з нуля, інакше замість порожньої смуги на старті стояв
-            // би ряд шестипіксельних пеньків.
+            // Ваги справжні одразу: з'яву малює затинання на обгортці, а цей
+            // перехід — лише зміну значень.
             style={{
-              flexGrow: ready ? part.weight : 0,
+              flexGrow: part.weight,
               flexBasis: 0,
-              minWidth: ready ? 6 : 0,
-              transition: figureRevealTransition,
+              minWidth: 6,
+              transition: FIGURE_BAR_SEGMENT_TRANSITION,
             }}
             title={`${part.label} — ${part.valueText ?? part.weight}`}
           />

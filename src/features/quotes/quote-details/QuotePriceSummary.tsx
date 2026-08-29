@@ -1,6 +1,11 @@
 import { AlertTriangle, ChevronDown } from "lucide-react";
 
-import { AnimatedFigure, figureRevealTransition, useFigureReveal } from "@/components/app/animated-figure";
+import {
+  AnimatedFigure,
+  FIGURE_BAR_SEGMENT_TRANSITION,
+  figureBarRevealStyle,
+  useFigureReveal,
+} from "@/components/app/animated-figure";
 import { cn } from "@/lib/utils";
 
 /**
@@ -119,16 +124,16 @@ export function QuotePriceSummary({
           <>
             {/* `flexGrow` за величиною, `minWidth` щоб дрібна частка не зникла в
                 нуль і смуга не брехала складом. */}
-            <div className="mt-3 flex h-2.5 gap-[3px] overflow-hidden rounded-full">
+            <div className="mt-3 flex h-2.5 gap-[3px] overflow-hidden rounded-full" style={figureBarRevealStyle(ready)}>
               {parts.map((part) => (
                 <span
                   key={`bar-${part.key}`}
                   className={cn("rounded-[2px]", part.color)}
                   style={{
-                    flexGrow: ready ? part.value : 0,
+                    flexGrow: part.value,
                     flexBasis: 0,
-                    minWidth: ready ? 6 : 0,
-                    transition: figureRevealTransition,
+                    minWidth: 6,
+                    transition: FIGURE_BAR_SEGMENT_TRANSITION,
                   }}
                 />
               ))}

@@ -109,6 +109,7 @@ import {
   type ModuleAccess,
 } from "@/lib/moduleAccess";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { switchTabWithTransition } from "@/components/ui/tabs";
 import { AccessMatrix, type MatrixPerson } from "@/components/team/AccessMatrix";
 import {
   getAccessBadgeClass,
@@ -1130,8 +1131,13 @@ export function TeamMembersPage() {
   const isExpired = (dateStr: string) => new Date(dateStr) < new Date();
 
   const handleTabChange = (next: AdminTab) => {
-    setActiveTab(next);
-    setParams(next === "overview" ? {} : { tab: next });
+    // Обидві зміни — в ОДНОМУ переході (REQ-202): кадр «до» знімається перед
+    // зворотним викликом, тож розділити їх означало б зняти його вже після
+    // половини змін.
+    switchTabWithTransition(() => {
+      setActiveTab(next);
+      setParams(next === "overview" ? {} : { tab: next });
+    });
   };
 
   /**
