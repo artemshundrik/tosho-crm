@@ -25,6 +25,7 @@ import { MODULE_KEYS } from "@/lib/moduleAccess";
 import { isKnownModuleKey } from "@/lib/projectMap";
 import { supabase } from "@/lib/supabaseClient";
 import { useDictation } from "@/lib/useDictation";
+import { KNOWN_THEMES } from "./themeRegistry";
 import {
   KIND_LABELS,
   MODULE_LABELS,
@@ -528,13 +529,27 @@ export function NewDevRequestDialog({
 
             <div className="space-y-2">
               <Label htmlFor={`${fieldId}-theme`}>Тема</Label>
+              {/* Поле лишається вільним текстом — нова тема має заводитись тут
+                  же, без міграції й без правки коду. Але порожнє поле не давало
+                  побачити, що така тема вже є: 29.08.2026 на дошці стояли
+                  «AI» і «AI-операції», «модалки» й «мова інтерфейсу» — мітки,
+                  які фільтр розводив по різних групах, хоч робота одна.
+                  Datalist показує наявні теми одразу при фокусі: щоб узяти
+                  наявну, треба нічого не знати про реєстр, а щоб завести
+                  синонім — треба дописати його попри підказку. */}
               <Input
                 id={`${fieldId}-theme`}
+                list={`${fieldId}-theme-options`}
                 value={theme}
                 onChange={(event) => setTheme(event.target.value)}
-                placeholder="навігація"
+                placeholder="мова інтерфейсу"
                 maxLength={40}
               />
+              <datalist id={`${fieldId}-theme-options`}>
+                {KNOWN_THEMES.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
             </div>
           </div>
 

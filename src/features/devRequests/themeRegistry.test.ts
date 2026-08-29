@@ -49,6 +49,16 @@ describe("реєстр напрямів", () => {
     expect(isKnownTheme("невідоме")).toBe(false);
   });
 
+  it("дві теми не відрізняються лише регістром чи пробілами", () => {
+    // Правило «синонім не заводиться ніколи» (docs/DEV_REQUESTS_DESIGN.md §7.4)
+    // тримається людиною, але найдешевший його різновид — «AI» проти «ai» —
+    // ловиться механічно. Пошук теми регістр РОЗРІЗНЯЄ (`themeLook` лише
+    // зрізає краї), тож два таких ключі дали б дві різні групи на дошці й дві
+    // однакові на вигляд підказки в полі — при тому, що робота одна.
+    const normalized = Object.keys(THEME_LOOK).map((theme) => theme.trim().toLowerCase());
+    expect(new Set(normalized).size).toBe(normalized.length);
+  });
+
   it("перелік тем віддається повністю", () => {
     expect(KNOWN_THEMES).toHaveLength(Object.keys(THEME_LOOK).length);
     expect(KNOWN_THEMES).toContain("довіра до релізу");
