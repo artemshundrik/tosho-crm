@@ -655,6 +655,7 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
   }
   if (isOwnerRole(role)) {
     buttons.push(
+      { text: "💳 Кредити Netlify", callback_data: "qa:hosting_usage" },
       { text: "🚨 Що не працює", callback_data: "qa:whats_broken" },
       { text: "💬 Що це значить", callback_data: "qa:explain_problem" },
       { text: "🩺 Стан системи", callback_data: "qa:system_health" }

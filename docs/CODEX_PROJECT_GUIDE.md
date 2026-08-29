@@ -434,6 +434,11 @@ Every list-type page renders its title, filters, and primary action through one 
     - `TELEGRAM_SUPPORT_CHAT_ID`
     - `TOSHO_APP_BASE_URL`
   - if `OPENAI_API_KEY` is absent, `netlify/functions/tosho-ai.ts` falls back to deterministic support routing/answer heuristics
+  - `NETLIFY_API_TOKEN` — personal access token for the `hosting_usage` bot intent
+    (credit balance + usage breakdown). Optional: without it the intent answers with
+    setup instructions instead of failing. Scope **Functions only** — it grants full
+    account access, so it must never reach the client bundle.
+  - `NETLIFY_ACCOUNT_SLUG` — optional override; resolved from the API when absent
 
 ## Docs Status
 

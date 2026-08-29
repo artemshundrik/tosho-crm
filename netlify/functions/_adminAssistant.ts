@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // йде в ранковий тех-звіт. Це навмисно: інакше бот і звіт розійдуться в оцінках.
 
 import { escapeTelegramHtml } from "./_telegram";
+import { loadNetlifyUsage, renderNetlifyUsage } from "./_netlifyUsage";
 import { TONE_EMOJI, collectSystemSignals, isProblem, worstTone } from "./_systemHealth";
 import { resolvePeriod, type DesignPeriod } from "./_designAssistant";
 import { classifyAiBudget } from "../../src/lib/systemHealthThresholds";
@@ -15,6 +16,7 @@ const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
 
 export type AdminIntent =
   | "ai_usage"
+  | "hosting_usage"
   | "system_health"
   | "whats_broken"
   | "explain_problem"
@@ -391,6 +393,36 @@ async function answerReleases(params: { admin: SupabaseClient; now: Date }): Pro
   return lines.join("\n");
 }
 
+/**
+ * Кредити Netlify: залишок, розбивка, темп, прогноз. Числа — з API Netlify,
+ * лічить їх `_netlifyUsage`.
+ *
+ * ЧОМУ ОКРЕМИЙ ІНТЕНТ, А НЕ ЧАСТИНА `ai_usage`. Обидва про гроші, але це різні
+ * гаманці й різні глядачі: витрати на AI бачить і CEO (це бюджет), а кредити
+ * хостингу — лише власник, бо реагувати на них означає міняти темп викочувань.
+ * Плюс запитання «скільки лишилось кредитів» без цього розділення двозначне.
+ */
+async function answerHostingUsage(now: Date): Promise<string> {
+  const token = process.env.NETLIFY_API_TOKEN?.trim();
+  if (!token) {
+    return [
+      "💳 Статистика Netlify не налаштована.",
+      "",
+      "Треба токен: Netlify → User settings → Applications → Personal access tokens,",
+      "далі покласти його у змінну <code>NETLIFY_API_TOKEN</code> (scope Functions).",
+    ].join("\n");
+  }
+  try {
+    const usage = await loadNetlifyUsage(token);
+    return renderNetlifyUsage(usage, now);
+  } catch (error) {
+    // Показуємо причину, а не «щось пішло не так»: інтент бачить лише власник,
+    // і саме йому цю причину й усувати.
+    const reason = error instanceof Error ? error.message : String(error);
+    return `💳 Netlify не відповів: ${escapeTelegramHtml(reason)}`;
+  }
+}
+
 export async function answerAdminQuery(params: {
   admin: SupabaseClient;
   intent: AdminIntent;
@@ -405,6 +437,8 @@ export async function answerAdminQuery(params: {
       return answerReleases({ admin, now });
     case "ai_usage":
       return answerAiUsage({ admin, workspaceId, period, now });
+    case "hosting_usage":
+      return answerHostingUsage(now);
     case "system_health":
       return answerSystemHealth({ admin, teamIds, now });
     case "explain_problem":
