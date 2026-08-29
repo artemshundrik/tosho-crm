@@ -41,6 +41,34 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 const ДОПУСК = 0.05;
 
 const рядків = (file) => readFileSync(file, "utf8").split("\n").length - 1;
+
+/**
+ * Номер рядка, на якому в файлі вперше збігається шаблон.
+ *
+ * НАВІЩО. `docs/LARGE_FILES_MAP.md` — це таблиця «на якому рядку що лежить»,
+ * і читають її, щоб не сканувати десятитисячний файл з нуля. Числа в ній
+ * протухають швидше за все інше в документації: будь-яка правка вище зсуває
+ * все нижче, і жоден коміт про це не згадує.
+ *
+ * ЗАМІРЯНО 29.08.2026, коли Артем спитав, що це за офсети. За чотири дні після
+ * останньої звірки таблиця розійшлася так:
+ *
+ *   QuoteDetailsPage — обробники       +72 рядки
+ *   DesignTaskPage — компонент        +177
+ *   DesignPage — duplicateStandaloneTask  −307
+ *   DesignPage — DuplicateDesignTaskDialog −1094
+ *   applyTaskType у довіднику типів     −3220
+ *
+ * Тобто мапа вела не туди, і сама ж попереджала: «мапа, якій не вірять, гірша
+ * за її відсутність». Перевірка розмірів файлу цього не ловила й не могла:
+ * файл цілий міняється на відсотки, а якір усередині — на тисячі рядків.
+ */
+const рядок = (file, шаблон) => {
+  const рядки = readFileSync(file, "utf8").split("\n");
+  const i = рядки.findIndex((line) => шаблон.test(line));
+  if (i === -1) throw new Error(`${file}: не знайдено ${шаблон}`);
+  return i + 1;
+};
 const кілобайт = (file) => Math.round(statSync(file).size / 1024);
 
 /** Скільки тестів насправді — питаємо самого vitest, а не рахуємо `it(` регуляркою. */
@@ -85,6 +113,34 @@ const ТВЕРДЖЕННЯ = [
       факт: () => рядків(page),
     },
   ]),
+  /**
+   * Якорі мапи великих файлів — БЕЗ допуску.
+   *
+   * П'ять відсотків тут означали б ±205 рядків на позначці 4109, тобто
+   * перевірка мовчала б рівно в тому діапазоні, у якому мапа й бреше. Номер
+   * рядка має одну правильну відповідь, тож `допуск: 0`.
+   *
+   * Беремо лише однозначні якорі — ті, що знаходяться grep-ом за іменем. Рядки
+   * з `~` у мапі навмисно лишаються приблизними: вони показують на блок JSX,
+   * у якого немає імені, і зводити їх до одного числа означало б обіцяти
+   * точність, якої там немає.
+   */
+  ...[
+    ["src/pages/QuoteDetailsPage.tsx", /^export function QuoteDetailsPage/, /\| \*\*(\d+)\*\* \| `export function QuoteDetailsPage/, "компонент"],
+    ["src/pages/QuoteDetailsPage.tsx", /^ {2}const quoteRequirements\b/, /\| \*\*(\d+)\*\* \| `quoteRequirements`/, "quoteRequirements"],
+    ["src/pages/QuoteDetailsPage.tsx", /^ {2}const statusBlockReason\b/, /\| \*\*(\d+)\*\* \| `statusBlockReason`/, "statusBlockReason"],
+    ["src/pages/QuoteDetailsPage.tsx", /^ {2}const quotePageTabs\b/, /\| \*\*(\d+)\*\* \| `quotePageTabs`/, "quotePageTabs"],
+    ["src/pages/DesignTaskPage.tsx", /^export default function DesignTaskPage/, /\| \*\*(\d+)\*\* \| `export default function DesignTaskPage/, "компонент"],
+    ["src/pages/QuotesPage.tsx", /^export function QuotesPage/, /\| \*\*(\d+)\*\* \| `export function QuotesPage/, "компонент"],
+    ["src/pages/DesignPage.tsx", /^export default function DesignPage/, /\| \*\*(\d+)\*\* \| `export default function DesignPage/, "компонент"],
+    ["src/pages/DesignPage.tsx", /^ {2}const duplicateStandaloneTask\b/, /\| (\d+) \| `duplicateStandaloneTask/, "duplicateStandaloneTask"],
+  ].map(([page, уКоді, уМапі, про]) => ({
+    де: "docs/LARGE_FILES_MAP.md",
+    про: `${page} — рядок якоря «${про}»`,
+    знайти: уМапі,
+    факт: () => рядок(page, уКоді),
+    допуск: 0,
+  })),
   {
     де: ".github/workflows/ci.yml",
     про: "кількість тестів",
@@ -154,7 +210,7 @@ for (const твердження of ТВЕРДЖЕННЯ) {
   }
 
   const відхилення = Math.abs(написано - факт) / Math.max(факт, 1);
-  if (відхилення > ДОПУСК) {
+  if (відхилення > (твердження.допуск ?? ДОПУСК)) {
     розбіжності.push({ ...твердження, написано, факт, відхилення });
   }
 }
