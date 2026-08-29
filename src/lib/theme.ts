@@ -17,6 +17,8 @@
  * node-середовищі, де ні window, ні document немає.
  */
 
+import { prefersReducedMotion } from "@/lib/motion";
+
 export type ThemePreference = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
@@ -222,15 +224,6 @@ export function isThemeTransitionInFlight(): boolean {
  */
 const REVEAL_DURATION_MS = 460;
 const REVEAL_EASING = "cubic-bezier(0.42, 0.04, 0.3, 0.96)";
-
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  try {
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Перемикання теми з круговим проявленням із точки натискання.

@@ -107,7 +107,7 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
       {/* Bento-підсумок (спільний із Витратами): всього грошей і як вони лежать по касах. */}
       <FinanceBentoSummary
         title="Всього по касах"
-        totalText={formatOrderMoney(grandBalance, "UAH")}
+        total={grandBalance}
         buckets={accountBuckets}
         footnote={
           <>

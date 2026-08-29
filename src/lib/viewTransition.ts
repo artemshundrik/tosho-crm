@@ -19,6 +19,8 @@
  * працює до першого рендера, і тягнути в нього `react-dom` не варто.
  */
 
+import { prefersReducedMotion } from "@/lib/motion";
+
 type ViewTransition = {
   finished: Promise<void>;
   ready?: Promise<void>;
@@ -28,15 +30,6 @@ type ViewTransition = {
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => void) => ViewTransition;
 };
-
-export function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  try {
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Виконати `update` під перехресним згасанням, а де це неможливо — просто

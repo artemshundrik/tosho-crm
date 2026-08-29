@@ -8556,7 +8556,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
             {canViewSummarySection ? (
               <QuotePriceSummary
-                totalLabel={formatCurrencyCompact(totals.total, quote.currency)}
+                total={totals.total}
+                currency={quote.currency}
                 totalTitle={`${hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}: ${formatCurrency(totals.total, quote.currency)} · ставка менеджера ${activeManagerRateLabel}`}
                 markupLabel={
                   activeRunPricingTotals.markupTotal > 0

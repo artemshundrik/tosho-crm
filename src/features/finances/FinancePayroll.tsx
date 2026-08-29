@@ -612,7 +612,11 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
           виплат смугою (виплачено/лишилось) і склад суми у виносці. */}
       <FinanceBentoSummary
         title={`До виплати за ${PAYROLL_MONTHS[month - 1].toLowerCase()} ${year}`}
-        totalText={formatUAH(totals.total)}
+        total={totals.total}
+        // Виплати друкуються «22 500 грн», а не «22 500 ₴», і показують копійки
+        // лише коли вони є — рівно те, що робив formatUAH.
+        totalFormat={{ maximumFractionDigits: Math.round(totals.total * 100) % 100 === 0 ? 0 : 2 }}
+        totalSuffix=" грн"
         deltaPct={prevTotal !== null && prevTotal > 0 ? ((totals.total - prevTotal) / prevTotal) * 100 : null}
         deltaVs={monthGenitive(
           `${prev.year}-${String(prev.month).padStart(2, "0")}`,

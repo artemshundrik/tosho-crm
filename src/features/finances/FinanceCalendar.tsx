@@ -218,7 +218,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
       {/* Bento-підсумок (спільний із Витратами), але кольори статусні — за терміновістю. */}
       <FinanceBentoSummary
         title="Загалом до сплати"
-        totalText={formatOrderMoney(total, "UAH")}
+        total={total}
         buckets={dueBuckets}
         footnote={
           <span>Несплачені податки, невиплачені зарплати та підписки з датою наступного списання.</span>

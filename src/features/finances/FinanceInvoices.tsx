@@ -288,7 +288,7 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
       {!loading && invoices.length > 0 ? (
         <FinanceBentoSummary
           title="Дебіторка · відкриті рахунки"
-          totalText={formatOrderMoney(receivables.total, "UAH")}
+          total={receivables.total}
           buckets={[
             { key: "overdue", label: "Прострочено", amount: receivables.overdue, color: "tone-dot-danger" },
             { key: "partial", label: "Частково оплачено", amount: receivables.partial, color: "tone-dot-warning" },

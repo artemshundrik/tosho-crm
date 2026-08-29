@@ -1,5 +1,6 @@
 import { AlertTriangle, ChevronDown } from "lucide-react";
 
+import { AnimatedFigure, figureRevealTransition, useFigureReveal } from "@/components/app/animated-figure";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,8 +23,13 @@ export type PriceBreakdownPart = {
 };
 
 type QuotePriceSummaryProps = {
-  /** Сума продажу, компактно (без копійок). */
-  totalLabel: string;
+  /**
+   * Сума продажу ЧИСЛОМ, а не готовим рядком: із рядка не видно розрядів, тож
+   * і крутити в ньому нема чого (REQ-200). Формат складається тут, з `currency`.
+   */
+  total: number;
+  /** Валюта прорахунку — сума показується без копійок, як і раніше. */
+  currency?: string | null;
   /** Та сама сума повністю — для підказки. */
   totalTitle: string;
   markupLabel: string | null;
@@ -41,7 +47,8 @@ type QuotePriceSummaryProps = {
 };
 
 export function QuotePriceSummary({
-  totalLabel,
+  total,
+  currency,
   totalTitle,
   markupLabel,
   markupTitle,
@@ -54,15 +61,22 @@ export function QuotePriceSummary({
   open,
   onToggle,
 }: QuotePriceSummaryProps) {
+  // Число й смуга складу ціни рушать від одного прапорця.
+  const ready = useFigureReveal();
+
   return (
     <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
       <div className="p-2.5">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <span
-            className="font-mono text-[26px] font-semibold leading-none tabular-nums tracking-tight text-primary"
+            className="font-mono text-[26px] font-semibold leading-none tracking-tight text-primary"
             title={totalTitle}
           >
-            {totalLabel}
+            <AnimatedFigure
+              value={total}
+              ready={ready}
+              format={{ style: "currency", currency: currency ?? "UAH", maximumFractionDigits: 0 }}
+            />
           </span>
           {markupLabel ? (
             // Надцінка — текст поруч із числом, а не бейдж під ним: це друга
@@ -110,7 +124,12 @@ export function QuotePriceSummary({
                 <span
                   key={`bar-${part.key}`}
                   className={cn("rounded-[2px]", part.color)}
-                  style={{ flexGrow: part.value, flexBasis: 0, minWidth: 6 }}
+                  style={{
+                    flexGrow: ready ? part.value : 0,
+                    flexBasis: 0,
+                    minWidth: ready ? 6 : 0,
+                    transition: figureRevealTransition,
+                  }}
                 />
               ))}
             </div>

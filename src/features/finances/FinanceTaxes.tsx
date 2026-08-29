@@ -159,7 +159,7 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
       {/* Bento-підсумок (спільний із Витратами): скільки до сплати і з яких податків складається. */}
       <FinanceBentoSummary
         title="Податки до сплати"
-        totalText={formatOrderMoney(unpaidTotal, "UAH")}
+        total={unpaidTotal}
         buckets={pendingByType}
         footnote={
           <>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { AnimatedFigure, useFigureReveal } from "@/components/app/animated-figure";
 import { cn } from "@/lib/utils";
 import { PageLoading } from "@/components/app/page-loading";
 import { useReleases, useWorkSessions } from "@/features/features/releaseQueries";
@@ -333,6 +334,15 @@ export function ReleaseHistory() {
     return () => window.removeEventListener("keydown", onKey);
   }, [active, dayKeys, monthKeys, go]);
 
+  // Три лічильники в шапці крутяться від одного прапорця — вони в одному рядку,
+  // і розбіжність між ними читалась би як збій, а не як анімація (REQ-200).
+  //
+  // Прапорець прив'язаний до ПОЯВИ ЛІЧИЛЬНИКІВ, а не до монтування компонента:
+  // поки історія вантажиться, сторінка малює каркас, і відлік двох кадрів
+  // устиг би скінчитись іще до появи чисел — тоді вони просто стали б готовими,
+  // без жодного руху.
+  const countersReady = useFigureReveal(!isPending && dayKeys.length > 0);
+
   if (isPending) {
     // Був голий рядок «Завантажую…» посеред порожнечі: каркас маршруту встигав
     // з'явитись і зникнути, а на його місці лишалось слово. Тепер тут той самий
@@ -404,8 +414,13 @@ export function ReleaseHistory() {
               note: "Кожен відрізок міряний одним приладом: до появи транскриптів Claude єдине джерело — коміти, після — ритм сесій. Тому суму складати чесно. Обидва прилади дають близькі числа на спільному періоді, і це їх взаємна перевірка.",
             }))}
           >
-            <b className={cn("text-xl font-semibold tabular-nums text-primary", HOV)}>
-              ≈{fmtN(hoursSplit.total || totals.hours)}
+            <b className={cn("text-xl font-semibold text-primary", HOV)}>
+              <AnimatedFigure
+                value={hoursSplit.total || totals.hours}
+                ready={countersReady}
+                format={{}}
+                prefix="≈"
+              />
             </b>
             год
           </span>
@@ -424,7 +439,9 @@ export function ReleaseHistory() {
               note: "Зміна = один коміт. Назва місяця над теплокартою відкриває його докладно.",
             }))}
           >
-            <b className={cn("text-xl font-semibold tabular-nums", HOV)}>{fmtN(totals.n)}</b>
+            <b className={cn("text-xl font-semibold", HOV)}>
+              <AnimatedFigure value={totals.n} ready={countersReady} format={{}} />
+            </b>
             {changesWord(totals.n)}
           </span>
 
@@ -452,8 +469,8 @@ export function ReleaseHistory() {
                 note: "День зараховується, якщо був хоч один коміт.",
               }))}
             >
-              <b className={cn("text-xl font-semibold tabular-nums text-chart-3", HOV)}>
-                {shownStreak.length}
+              <b className={cn("text-xl font-semibold text-chart-3", HOV)}>
+                <AnimatedFigure value={shownStreak.length} ready={countersReady} format={{}} />
               </b>
               {daysWord(shownStreak.length)} поспіль
             </span>

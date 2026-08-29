@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-28T07:39:56.160Z",
+  "generatedAt": "2026-08-29T10:16:29.692Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -18,7 +18,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "8ecf8f8",
+        "sha": "8ecf8f82",
         "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Базовий набір правил лінту.",
@@ -33,7 +33,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-07-24T00:51:50+03:00",
       "bumpCommit": {
-        "sha": "e4f87bc",
+        "sha": "e4f87bcf",
         "subject": "perf(fonts): self-host Inter замість Google Fonts CDN"
       },
       "description": "Шрифт Inter, покладений у наш бандл, щоб не тягнути його з чужого сервера.",
@@ -42,13 +42,25 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": "https://www.google.com/s2/favicons?domain=fontsource.org&sz=128"
     },
     {
+      "name": "@number-flow/react",
+      "version": "0.6.2",
+      "layer": "screen",
+      "dev": false,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Крутить великі підсумки розряд за розрядом, коли сума міняється: «Витрати», картки «Огляду», сума прорахунку, лічильники «Релізів».",
+      "homepage": "https://number-flow.barvian.me",
+      "usedIn": 2,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=number-flow.barvian.me&sz=128"
+    },
+    {
       "name": "@playwright/test",
       "version": "1.62.1",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-24T21:22:52+03:00",
       "bumpCommit": {
-        "sha": "0b908f4",
+        "sha": "0b908f4c",
         "subject": "Застосунок тепер проклацується в справжньому браузері, а не лише перевіряється по коду"
       },
       "description": "Ганяє зібраний застосунок у справжньому браузері й клацає по ньому, як людина: відкриває дошки, закриває вікна, шукає. Ловить те, чого не бачить жоден тест коду, — наприклад блимання сторінки при закритті вікна.",
@@ -63,7 +75,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Вікна підтвердження — «Точно видалити?».",
@@ -78,7 +90,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Аватарка з відкотом на монограму, коли фото не завантажилось.",
@@ -93,7 +105,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Галочки у формах і списках.",
@@ -108,7 +120,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Модальні вікна: діалог замовника, форма прорахунку, палітра команд.",
@@ -123,7 +135,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Випадні меню: три крапки на картках і в рядках таблиць.",
@@ -138,7 +150,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Підписи до полів, привʼязані до самого поля.",
@@ -153,7 +165,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Спливні картки біля елемента — як пояснення пакета на цій сторінці.",
@@ -168,7 +180,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Випадні списки вибору у формах.",
@@ -183,7 +195,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Лінії-роздільники між блоками.",
@@ -198,7 +210,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Дозволяє кнопці прикинутись посиланням, не дублюючи стилі.",
@@ -213,7 +225,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Вкладки — як «За шарами» / «За терміновістю» вгорі.",
@@ -228,7 +240,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Збирає PDF-документи — рахунки, специфікації, договори.",
@@ -243,12 +255,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T19:46:50+03:00",
       "bumpCommit": {
-        "sha": "6a560ae",
+        "sha": "6a560aea",
         "subject": "Статус прорахунку більше не можна зіпсувати невідомим значенням"
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 88,
+      "usedIn": 89,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -258,7 +270,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T21:10:41+03:00",
       "bumpCommit": {
-        "sha": "7a272fe",
+        "sha": "7a272fe4",
         "subject": "Збірка застосунку стала швидшою в шість разів"
       },
       "description": "Підключає Tailwind до складальника: збирає CSS під час збірки.",
@@ -273,12 +285,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Памʼятає, що вже завантажено, і не питає базу двічі. Через нього ходять майже всі запити.",
       "homepage": "https://tanstack.com/query",
-      "usedIn": 14,
+      "usedIn": 18,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
@@ -288,7 +300,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-21T12:32:46+03:00",
       "bumpCommit": {
-        "sha": "080ba8a",
+        "sha": "080ba8a4",
         "subject": "perf(дизайн): дошка тримає в браузері лише видимі картки — на третину менше роботи для сторінки"
       },
       "description": "Малює лише видимі рядки довгих списків. Без нього дошка з сотнями карток гальмувала б.",
@@ -303,7 +315,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-24T15:50:59+03:00",
       "bumpCommit": {
-        "sha": "1b7f37a",
+        "sha": "1b7f37a8",
         "subject": "Захист від втрати введеного тепер перевіряють тести, а не лише очі"
       },
       "description": "Додає до тестів зрозумілі перевірки про розмітку: «видно на екрані», «поле має таке значення».",
@@ -318,12 +330,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-24T15:50:59+03:00",
       "bumpCommit": {
-        "sha": "1b7f37a",
+        "sha": "1b7f37a8",
         "subject": "Захист від втрати введеного тепер перевіряють тести, а не лише очі"
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 7,
+      "usedIn": 13,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -333,12 +345,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-24T15:50:59+03:00",
       "bumpCommit": {
-        "sha": "1b7f37a",
+        "sha": "1b7f37a8",
         "subject": "Захист від втрати введеного тепер перевіряють тести, а не лише очі"
       },
       "description": "Клікає й друкує в тестах так, як це робить людина, — з наведенням, фокусом і клавіатурою, а не одним синтетичним кліком.",
       "homepage": null,
-      "usedIn": 4,
+      "usedIn": 6,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -348,7 +360,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
       "bumpCommit": {
-        "sha": "56ce4fc",
+        "sha": "56ce4fcf",
         "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
       },
       "description": "Посилання в редакторі ТЗ.",
@@ -363,7 +375,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
       "bumpCommit": {
-        "sha": "56ce4fc",
+        "sha": "56ce4fcf",
         "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
       },
       "description": "Підкреслення в редакторі ТЗ.",
@@ -378,7 +390,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
       "bumpCommit": {
-        "sha": "56ce4fc",
+        "sha": "56ce4fcf",
         "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
       },
       "description": "Рушій ProseMirror, на якому побудований редактор ТЗ. У коді не викликається — його вимагають самі розширення tiptap.",
@@ -394,7 +406,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
       "bumpCommit": {
-        "sha": "56ce4fc",
+        "sha": "56ce4fcf",
         "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
       },
       "description": "Редактор технічного завдання: жирний, списки, посилання.",
@@ -409,7 +421,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
       "bumpCommit": {
-        "sha": "56ce4fc",
+        "sha": "56ce4fcf",
         "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
       },
       "description": "Базовий набір можливостей редактора ТЗ.",
@@ -424,7 +436,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Опис типів Node для коду, що працює на сервері.",
@@ -444,7 +456,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-20T23:28:32+03:00",
       "bumpCommit": {
-        "sha": "9aa6579",
+        "sha": "9aa6579f",
         "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
       },
       "description": "Опис типів React для перевірки типів.",
@@ -460,7 +472,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-20T23:28:32+03:00",
       "bumpCommit": {
-        "sha": "9aa6579",
+        "sha": "9aa6579f",
         "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
       },
       "description": "Опис типів react-dom.",
@@ -476,7 +488,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-07-25T18:16:21+03:00",
       "bumpCommit": {
-        "sha": "af67210",
+        "sha": "af672104",
         "subject": "fix(finance): полагодити нагадування про платежі + тести на резолвер"
       },
       "description": "Опис типів бібліотеки пуш-сповіщень.",
@@ -491,7 +503,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-23T21:10:41+03:00",
       "bumpCommit": {
-        "sha": "7a272fe",
+        "sha": "7a272fe4",
         "subject": "Збірка застосунку стала швидшою в шість разів"
       },
       "description": "Навчає складальник розуміти React.",
@@ -506,7 +518,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-21T12:03:25+03:00",
       "bumpCommit": {
-        "sha": "ae13e6c",
+        "sha": "ae13e6c3",
         "subject": "chore(надійність): борг перед React Compiler більше не може рости непомітно"
       },
       "description": "React Compiler: сам розставляє оптимізації, які раніше писали руками.",
@@ -522,7 +534,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Описує варіанти вигляду компонента (розмір, тон) без каші з умов у класах.",
@@ -537,7 +549,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Крихітний помічник: склеює класи, пропускаючи порожні й вимкнені.",
@@ -552,7 +564,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Рушій палітри команд — того вікна, що відкривається на Cmd+K.",
@@ -567,7 +579,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Робота з датами: дедлайни, періоди, «3 дні тому».",
@@ -582,7 +594,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Чистить HTML від чужого коду перед показом — захист від підстановки скриптів.",
@@ -597,7 +609,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "8ecf8f8",
+        "sha": "8ecf8f82",
         "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Лінт: шукає підозрілі місця в коді за правилами.",
@@ -613,7 +625,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-23T20:50:06+03:00",
       "bumpCommit": {
-        "sha": "83e0b10",
+        "sha": "83e0b104",
         "subject": "Пульс команди більше не буває порожнім, коли події встигають раніше за список людей"
       },
       "description": "Правила про React-хуки — саме він знайшов порожній Пульс.",
@@ -628,7 +640,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "8ecf8f8",
+        "sha": "8ecf8f82",
         "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Стежить, щоб компоненти можна було оновлювати без перезавантаження сторінки.",
@@ -643,7 +655,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "8ecf8f8",
+        "sha": "8ecf8f82",
         "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Список глобальних імен різних середовищ, щоб лінт не лаявся на window чи process.",
@@ -658,7 +670,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-08T00:42:10+03:00",
       "bumpCommit": {
-        "sha": "14dfafe",
+        "sha": "14dfafe1",
         "subject": "build(deps): jsdom — залежність тесту, який я закомітив без неї"
       },
       "description": "Підроблений браузер для тестів, які працюють із розміткою.",
@@ -674,12 +686,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T21:38:45+03:00",
       "bumpCommit": {
-        "sha": "06cefd1",
+        "sha": "06cefd1c",
         "subject": "Іконки соцмереж у списку «звідки прийшов клієнт» тепер свої, а не чужі"
       },
       "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
       "homepage": "https://lucide.dev",
-      "usedIn": 196,
+      "usedIn": 201,
       "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
     },
     {
@@ -689,7 +701,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-04-08T22:34:06+03:00",
       "bumpCommit": {
-        "sha": "4a3714f",
+        "sha": "4a3714fc",
         "subject": "dropbox"
       },
       "description": "Інструмент Netlify: піднімає функції локально, щоб перевіряти їх до викочування.",
@@ -704,7 +716,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T18:14:42+03:00",
       "bumpCommit": {
-        "sha": "3bc001d",
+        "sha": "3bc001d2",
         "subject": "Закрито дві дірки безпеки: присланий PDF більше не виконує чужий код у вкладці"
       },
       "description": "Малює прев'ю PDF-вкладень прямо в браузері.",
@@ -719,12 +731,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-20T23:28:32+03:00",
       "bumpCommit": {
-        "sha": "9aa6579",
+        "sha": "9aa6579f",
         "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 274,
+      "usedIn": 287,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -735,7 +747,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T22:41:44+03:00",
       "bumpCommit": {
-        "sha": "9d3adbf",
+        "sha": "9d3adbfd",
         "subject": "Календар переїхав на нову версію, і React 19 більше не тримається силою"
       },
       "description": "Календар вибору дати — той, що випадає в полях дедлайнів.",
@@ -750,12 +762,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-20T23:28:32+03:00",
       "bumpCommit": {
-        "sha": "9aa6579",
+        "sha": "9aa6579f",
         "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
       },
       "description": "Частина React, яка власне малює в браузері.",
       "homepage": "https://react.dev/",
-      "usedIn": 9,
+      "usedIn": 10,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -766,7 +778,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2025-12-31T18:09:40+02:00",
       "bumpCommit": {
-        "sha": "65745f4",
+        "sha": "65745f4d",
         "subject": "user menu"
       },
       "description": "Обрізання картинки при завантаженні аватарки чи лого.",
@@ -781,12 +793,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Адреси сторінок: що показати на /orders/estimates і як переходити між розділами без перезавантаження.",
       "homepage": null,
-      "usedIn": 49,
+      "usedIn": 53,
       "iconUrl": "https://github.com/remix-run.png?size=64"
     },
     {
@@ -796,12 +808,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Графіки: стовпчики й площі на сторінках аналітики.",
       "homepage": null,
-      "usedIn": 2,
+      "usedIn": 1,
       "iconUrl": "https://github.com/recharts.png?size=64"
     },
     {
@@ -811,7 +823,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-21T00:41:35+03:00",
       "bumpCommit": {
-        "sha": "0032436",
+        "sha": "00324361",
         "subject": "perf(швидкість): перший вхід у CRM став легшим на 43 кБ — палітра пошуку більше не вантажиться всім"
       },
       "description": "Малює карту бандла: що саме займає місце. Вмикається тільки вручну.",
@@ -826,7 +838,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T18:14:42+03:00",
       "bumpCommit": {
-        "sha": "3bc001d",
+        "sha": "3bc001d2",
         "subject": "Закрито дві дірки безпеки: присланий PDF більше не виконує чужий код у вкладці"
       },
       "description": "Обробка зображень на сервері: стискає й переганяє у webp картинки каталогу.",
@@ -841,12 +853,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Спливні повідомлення в кутку: «Збережено», «Не вийшло».",
       "homepage": "https://sonner.emilkowal.ski/",
-      "usedIn": 56,
+      "usedIn": 60,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
     },
     {
@@ -856,7 +868,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Розв'язує суперечки між класами Tailwind, коли їх складають із кількох джерел.",
@@ -871,7 +883,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-23T21:10:41+03:00",
       "bumpCommit": {
-        "sha": "7a272fe",
+        "sha": "7a272fe4",
         "subject": "Збірка застосунку стала швидшою в шість разів"
       },
       "description": "Спосіб писати стилі короткими класами прямо в розмітці. Уся зовнішність CRM тримається на ньому.",
@@ -887,7 +899,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "bumpCommit": {
-        "sha": "414eedf",
+        "sha": "414eedfe",
         "subject": "Initial commit"
       },
       "description": "Готові анімації для Tailwind: появи, зникнення, плавні переходи панелей.",
@@ -902,7 +914,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-27T23:47:47+03:00",
       "bumpCommit": {
-        "sha": "8fd0e7f",
+        "sha": "8fd0e7f7",
         "subject": "Перевірка типів стала за секунду замість шістнадцяти"
       },
       "description": "Той самий TypeScript, версія 7: перевірка типів за 1,4 с замість 16. Стоїть аліасом, тому в скриптах його кличуть повним шляхом.",
@@ -917,7 +929,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-25T18:48:42+03:00",
       "bumpCommit": {
-        "sha": "5519d3f",
+        "sha": "5519d3f5",
         "subject": "Проєкт переїхав на TypeScript 6 — місток перед стрибком на сімку"
       },
       "description": "Перевіряє типи: ловить помилки до запуску, а не в проді. Лишається заради лінту — typescript-eslint ще не пускає сімку.",
@@ -933,7 +945,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "8ecf8f8",
+        "sha": "8ecf8f82",
         "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Дає лінту розуміти TypeScript.",
@@ -948,7 +960,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-23T21:10:41+03:00",
       "bumpCommit": {
-        "sha": "7a272fe",
+        "sha": "7a272fe4",
         "subject": "Збірка застосунку стала швидшою в шість разів"
       },
       "description": "Складальник: перетворює сотні файлів коду на кілька, які розуміє браузер. Він же тримає локальний сервер для перевірок.",
@@ -964,12 +976,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
+        "sha": "e9a6e239",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 102,
+      "usedIn": 116,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -980,7 +992,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-24T13:52:17+03:00",
       "bumpCommit": {
-        "sha": "2cc0887",
+        "sha": "2cc0887e",
         "subject": "Функції доступів і кадрових рішень тепер перевіряють, що їм прислали"
       },
       "description": "Надсилає пуш-сповіщення в браузер.",
@@ -995,7 +1007,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-08-24T13:52:17+03:00",
       "bumpCommit": {
-        "sha": "2cc0887",
+        "sha": "2cc0887e",
         "subject": "Функції доступів і кадрових рішень тепер перевіряють, що їм прислали"
       },
       "description": "Перевіряє, що дані, які прийшли ззовні, справді такі, як ми чекаємо: серверні функції звіряють із нею тіло запиту.",
@@ -1014,94 +1026,13 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "note": "рантайм збірки й усіх функцій · з netlify.toml"
     }
   ],
-  "guards": [
-    {
-      "name": "типи застосунку",
-      "note": "Звіряє типи по всьому коду. Ловить помилку на кшталт «тут очікується число, а приїхав рядок» до того, як вона стане поломкою в проді.",
-      "group": "code"
-    },
-    {
-      "name": "лінт + борг компілятора",
-      "note": "Шукає підозрілі місця в коді й рахує борг перед React Compiler. Борг може лише зменшуватись: виріс — пуш не проходить.",
-      "group": "code"
-    },
-    {
-      "name": "тести",
-      "note": "Проганяє всі автотести. Кожен з них — зафіксована поведінка, яку колись уже ламали.",
-      "group": "code"
-    },
-    {
-      "name": "типи функцій",
-      "note": "Те саме, що типи застосунку, але для 42 серверних функцій. Вони мають окремий список перевірених файлів, який росте в міру приведення їх до ладу.",
-      "group": "code"
-    },
-    {
-      "name": "реєстр функцій",
-      "note": "Імена файлів функцій мають бути прийнятні для Netlify. Одна крапка в імені — і деплой падає вже після оплати збірки.",
-      "group": "registry"
-    },
-    {
-      "name": "ключі фіч",
-      "note": "Ключі можливостей у коді й у базі мають збігатися, інакше замір використання рахує не те.",
-      "group": "registry"
-    },
-    {
-      "name": "реєстр поверхонь",
-      "note": "Нова сторінка зі смугою дій має бути записана в реєстр, інакше каркас завантаження малює не ту форму й блимає порожньою смугою.",
-      "group": "registry"
-    },
-    {
-      "name": "копії спільних модулів",
-      "note": "Дві копії Radix у залежностях глушать випадні панелі всередині модалок — мовчки, без жодної помилки. Ця перевірка ловить саме такий дубль.",
-      "group": "registry"
-    },
-    {
-      "name": "читачі правил",
-      "note": null,
-      "group": "registry"
-    },
-    {
-      "name": "заглушки правил хуків",
-      "note": "Рахує місця, де правила React-хуків вимкнені коментарем. Кожна така заглушка вимикає React Compiler для ЦІЛОГО файлу — тобто одна прихована помилка коштує всієї сторінки. Число може лише зменшуватись.",
-      "group": "registry"
-    },
-    {
-      "name": "розростання файлів",
-      "note": "Стежить, щоб найбільші сторінки не росли. У файлі на десять тисяч рядків компілятор здається й перестає бачити помилки взагалі.",
-      "group": "registry"
-    },
-    {
-      "name": "знімок стеку",
-      "note": "Звіряє цю сторінку з реально встановленими пакетами. Без неї після кожного npm i вона показувала б стару версію й радила оновити те, що вже оновлене.",
-      "group": "registry"
-    },
-    {
-      "name": "версія Node",
-      "note": "Версія Node записана у трьох місцях: прод, ця машина й GitHub Actions. Розійдуться — локально збереться одне, а в проді запуститься інше.",
-      "group": "registry"
-    },
-    {
-      "name": "адреси кронів",
-      "note": "Розклад кронів живе в базі й містить адресу функції рядком. Перейменував файл — крон щодня стукає в нікуди, і журнал при цьому показує «успішно».",
-      "group": "db"
-    },
-    {
-      "name": "захист БД",
-      "note": "Дивиться в живу базу: чи не з'явилось таблиці без захисту рядків, зайвого доступу для анонімів, в'юхи, що читає повз захист, або функції з плавучим пошуком схем. Падає лише на НОВОМУ — знімок відомого боргу лежить поруч.",
-      "group": "db"
-    },
-    {
-      "name": "SQL-журнал",
-      "note": "Звіряє, чи поїхав на прод той SQL, який їде в цьому пуші. Код і схема ходять різними дорогами й розходяться мовчки: одного разу так нагадування мовчали добу при зелених приладах.",
-      "group": "db"
-    }
-  ],
-  "tests": 1521,
-  "testFiles": 101,
-  "lintStubs": 30,
+  "guards": [],
+  "tests": 1650,
+  "testFiles": 115,
+  "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 249679,
+  "sourceLines": 255240,
   "automation": {
     "workflows": [
       {
@@ -1124,6 +1055,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       }
     ],
     "hooks": [
+      "commit-msg",
       "post-commit",
       "pre-push"
     ],

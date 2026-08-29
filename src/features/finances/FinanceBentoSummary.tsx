@@ -1,5 +1,7 @@
 import * as React from "react";
+import type { Format } from "@number-flow/react";
 import { TrendingDown, TrendingUp } from "lucide-react";
+import { AnimatedFigure, figureRevealTransition, useFigureReveal } from "@/components/app/animated-figure";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 
@@ -55,7 +57,9 @@ export const monthGenitive = (key: string, vsKey: string) => {
 
 export function FinanceBentoSummary({
   title,
-  totalText,
+  total,
+  totalFormat,
+  totalSuffix,
   deltaPct,
   deltaVs,
   increaseIsGood = false,
@@ -65,8 +69,17 @@ export function FinanceBentoSummary({
 }: {
   /** Напр. «Разом за Липень 2026» — малим капсом над числом. */
   title: string;
-  /** Відформатоване велике число (напр. «94 307 ₴»). */
-  totalText: string;
+  /**
+   * Велике число САМИМ ЧИСЛОМ, а не готовим рядком: інакше його нема чим
+   * анімувати — з рядка не видно ні розрядів, ні того, звідки й куди він
+   * змінився (REQ-200). Формат складається тут, тими самими опціями, що дає
+   * `formatOrderMoney` для гривні.
+   */
+  total: number;
+  /** Свій формат — розділам, які рахують не в гривні зі знаком (виплати). */
+  totalFormat?: Format;
+  /** Хвіст після числа, напр. « грн». */
+  totalSuffix?: string;
   /** Δ% до попереднього періоду; null/undefined — бейдж не показуємо. */
   deltaPct?: number | null;
   /** Родовий відмінок періоду порівняння: «червня» → «+3% до червня». */
@@ -100,6 +113,10 @@ export function FinanceBentoSummary({
       </span>
     );
 
+  // ОДИН прапорець на число й на смугу: вони мусять рушити в тому самому кадрі,
+  // а два незалежні розійшлись би (REQ-200).
+  const ready = useFigureReveal();
+
   const legendItem = (b: BentoBucket) => (
     <>
       <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", b.color)} />
@@ -113,8 +130,8 @@ export function FinanceBentoSummary({
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div>
           <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
-          <div className="figure mt-1.5 text-2xl font-semibold leading-none text-foreground sm:text-[28px]">
-            {totalText}
+          <div className="mt-1.5 text-2xl font-semibold leading-none text-foreground sm:text-[28px]">
+            <AnimatedFigure value={total} ready={ready} format={totalFormat} suffix={totalSuffix} />
           </div>
         </div>
         {deltaBadge}
@@ -128,7 +145,17 @@ export function FinanceBentoSummary({
               <div
                 key={b.key}
                 className={cn("rounded-[2px]", b.color)}
-                style={{ flexGrow: b.amount, flexBasis: 0, minWidth: 6 }}
+                // Смуга росте разом із числом і тією ж кривою. `minWidth` теж
+                // їде з нуля, інакше до готовності від неї лишався б ряд
+                // шестипіксельних пеньків — і «зростання» починалось би не з
+                // порожньої смуги. `@starting-style` тут не підходить: ширину
+                // задає інлайновий стиль із даних, а він специфічніший.
+                style={{
+                  flexGrow: ready ? b.amount : 0,
+                  flexBasis: 0,
+                  minWidth: ready ? 6 : 0,
+                  transition: figureRevealTransition,
+                }}
                 title={`${b.label} — ${formatOrderMoney(b.amount, "UAH")}`}
               />
             ))}

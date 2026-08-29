@@ -1112,7 +1112,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
               Легенда клікабельна: розгортає відповідну секцію нижче і скролить до неї. */}
           <FinanceBentoSummary
             title={`Разом за ${monthLabel(selectedMonth)}`}
-            totalText={formatOrderMoney(monthTotal, "UAH")}
+            total={monthTotal}
             deltaPct={monthDeltaPct}
             deltaVs={monthGenitive(prevMonthKey, selectedMonth)}
             buckets={monthTotal > 0 ? monthBuckets : []}

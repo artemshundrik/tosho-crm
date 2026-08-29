@@ -1,5 +1,12 @@
 import * as React from "react";
 
+import {
+  AnimatedFigure,
+  FigureRevealProvider,
+  figureRevealTransition,
+  useFigureReveal,
+  useSharedFigureReveal,
+} from "@/components/app/animated-figure";
 import { cn } from "@/lib/utils";
 
 /**
@@ -52,6 +59,9 @@ export function SplitBar({
   /** Легенда стає кнопками. Без обробника — звичайний текст, як у «Стеку». */
   onPartClick?: (key: string) => void;
 }) {
+  // Прапорець картки, якщо смуга всередині героя, і власний, якщо ні (REQ-200).
+  const ready = useSharedFigureReveal();
+
   const visible = parts.filter((part) => part.weight > 0);
   if (visible.length === 0) return null;
 
@@ -70,7 +80,15 @@ export function SplitBar({
           <div
             key={part.key}
             className={cn("rounded-[2px]", part.color)}
-            style={{ flexGrow: part.weight, flexBasis: 0, minWidth: 6 }}
+            // Смуга росте разом із великим числом і тією ж кривою. `minWidth`
+            // теж їде з нуля, інакше замість порожньої смуги на старті стояв
+            // би ряд шестипіксельних пеньків.
+            style={{
+              flexGrow: ready ? part.weight : 0,
+              flexBasis: 0,
+              minWidth: ready ? 6 : 0,
+              transition: figureRevealTransition,
+            }}
             title={`${part.label} — ${part.valueText ?? part.weight}`}
           />
         ))}
@@ -122,25 +140,37 @@ export function HeroShell({
   footnote?: React.ReactNode;
   className?: string;
 }) {
+  // Число й смуга під ним рушать від ОДНОГО прапорця: смуга живе в `children`,
+  // тож дістає його через контекст (REQ-200).
+  const ready = useFigureReveal();
+
   return (
-    <div className={cn(BENTO_CARD, "p-4 sm:p-5", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <div className="min-w-0">
-          <div className={BENTO_LABEL}>{label}</div>
-          <div className="figure mt-1.5 flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold leading-none text-foreground sm:text-[28px]">
-            {value}
-            {suffix ? <span className="text-sm font-normal leading-snug text-muted-foreground sm:text-base">{suffix}</span> : null}
+    <FigureRevealProvider ready={ready}>
+      <div className={cn(BENTO_CARD, "p-4 sm:p-5", className)}>
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0">
+            <div className={BENTO_LABEL}>{label}</div>
+            <div className="figure mt-1.5 flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold leading-none text-foreground sm:text-[28px]">
+              {/* Число анімується лише коли воно ЧИСЛО. Вузол може бути й
+                  складеним («12 з 40»), і такому крутитись нема чим. */}
+              {typeof value === "number" ? (
+                <AnimatedFigure value={value} ready={ready} format={{}} />
+              ) : (
+                value
+              )}
+              {suffix ? <span className="text-sm font-normal leading-snug text-muted-foreground sm:text-base">{suffix}</span> : null}
+            </div>
           </div>
+          {badge}
         </div>
-        {badge}
+        {children}
+        {footnote ? (
+          <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
+            {footnote}
+          </div>
+        ) : null}
       </div>
-      {children}
-      {footnote ? (
-        <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
-          {footnote}
-        </div>
-      ) : null}
-    </div>
+    </FigureRevealProvider>
   );
 }
 
