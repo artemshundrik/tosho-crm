@@ -456,8 +456,10 @@ function readAiDiagnostics(metadata: Record<string, unknown> | null) {
     const value = source?.[key];
     return typeof value === "string" && value.trim() ? value.trim() : null;
   };
-  const stringList = (source: Record<string, unknown> | null, key: string) =>
-    Array.isArray(source?.[key]) ? (source?.[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
+  const stringList = (source: Record<string, unknown> | null, key: string) => {
+    const raw = source?.[key];
+    return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === "string") : [];
+  };
 
   return {
     openAi: openAi

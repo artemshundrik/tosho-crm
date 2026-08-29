@@ -1,11 +1,62 @@
-import base from "./eslint.config.js";
-
 /**
- * Окрема конфігурація — перевірка сумісності з React Compiler.
+ * Борг перед React Compiler — єдине, заради чого в проєкті лишився ESLint.
  *
- * Три правила нижче вимкнені в основному конфігу (`eslint.config.js`), бо 33
- * наявні порушення робили б `npm run lint` вічно червоним. Ратчет у
- * `scripts/check-compiler-debt.mjs` стежить, щоб борг лише зменшувався.
+ * ═══ REQ-208: ЧОМУ ЦЕЙ ФАЙЛ ПЕРЕЖИВ ПЕРЕЇЗД НА OXLINT (2026-08-29) ═══
+ *
+ * Звичайний лінт тепер робить oxlint за 2 секунди замість 98,6 (`.oxlintrc.json`).
+ * Але п'ять правил нижче з собою забрати не вийшло, і ось замір, щоб ніхто не
+ * пробував удруге.
+ *
+ * ЩО ПОКАЗАЛА ЗВІРКА. Імена правил в oxlint Є — усі п'ять. А знахідок менше:
+ *
+ *     set-state-in-effect          ESLint 190 → oxlint 137
+ *     preserve-manual-memoization  ESLint  34 → oxlint   7
+ *     refs                         ESLint  17 → oxlint   8
+ *     immutability                 ESLint   6 → oxlint   2
+ *     purity                       ESLint   4 → oxlint   1
+ *
+ * ПРИЧИНА, І ВОНА НАМ ЗНАЙОМА. Oxlint 1.80 глушить УВЕСЬ ФАЙЛ, щойно в ньому
+ * трапиться `eslint-disable` на будь-яке правило react-hooks. Рівно та пастка,
+ * про яку попереджає `scripts/check-hook-disables.mjs`, — тільки ми думали, що
+ * вона позаду: `eslint-plugin-react-hooks@7.1.1` її вже полагодив, а oxlint
+ * повернув. Дослід: два байт-у-байт однакові файли, різниця лише в коментарі
+ * `// eslint-disable-next-line react-hooks/exhaustive-deps` на іншому правилі —
+ * у чистому oxlint знаходить два `set-state-in-effect`, у другому нуль.
+ *
+ * ЦІНА ЦЬОГО В НАШОМУ КОДІ. 30 заглушок у 17 файлах. Сліпнуть ЦІЛКОМ усі
+ * чотири гіганти: DesignTaskPage (47 знахідок), QuotesPage (13), DesignPage
+ * (12), ProfilePage (6), TeamMembersPage (5). Тобто ратчет перестав би стежити
+ * саме за тим, заради чого його заводили.
+ *
+ * КОЛИ ЦЕЙ ФАЙЛ МОЖНА БУДЕ ВИДАЛИТИ. Коли oxlint навчиться не глушити файл
+ * цілком — і повторна звірка дасть ті самі 190/34/17/6/4. Правило
+ * `preserve-manual-memoization` в oxlint узагалі з'явилось у 1.79.0, за два
+ * тижні до заміру, тож дозрівання попереду. Рецепт звірки: цей конфіг і
+ * `.oxlintrc.json` із тими самими п'ятьма правилами, обидва з `-f json`,
+ * порівняти за ключем `файл:рядок:правило`.
+ *
+ * ═══ ЧОМУ ПАРСЕР BABEL, А НЕ typescript-eslint ═══
+ *
+ * Це друга половина REQ-208 і причина, з якої аліас `tsc7` нарешті помер.
+ * `typescript-eslint` тримав `typescript >=4.8.4 <6.1.0`, і саме через нього
+ * сімка стояла в проєкті під псевдонімом. При цьому для ЦИХ п'яти правил він
+ * не потрібен зовсім: `eslint-plugin-react-hooks@7.1.1` не має peer на
+ * typescript і парсить сам, власним babel.
+ *
+ * Перевірено на всьому `src` (631 файл): з `@babel/eslint-parser` виходить
+ * 190/34/17/6/4 — збіг знахідка в знахідку за ключем `файл:рядок:правило`,
+ * жодної зайвої, жодної втраченої.
+ *
+ * ШВИДШЕ ВІД ЦЬОГО НЕ СТАЛО, і не треба сподіватись: 90 с проти 90 с із
+ * typescript-eslint. Уся ціна — це прохід React Compiler усередині плагіна,
+ * парсер у ній майже нічого не важить. (Старий конфіг брав 155 с лише тому, що
+ * тягнув ще й базові правила, які тепер робить oxlint за 2 с.) Виграш тут не в
+ * секундах, а в тому, що ланцюжок `typescript` більше ніхто не тримає.
+ *
+ * САМЕ ТОМУ ЦЕЙ РАТЧЕТ ЖИВЕ В CI, А НЕ В `npm run check`. 90 с — це рівно та
+ * ціна, від якої тікали; локально вона з'їдала б увесь виграш переїзду.
+ * Перевірка ходить у GitHub Actions на кожен пуш і кожен PR, де хвилина нічого
+ * не коштує. Локально запускається руками: `npm run check:compiler-debt`.
  *
  * ═══ REQ-90: КОМПІЛЯТОР ПЕРЕВІРИЛИ Й СВІДОМО НЕ ВВІМКНУЛИ (2026-08-21) ═══
  *
@@ -37,9 +88,7 @@ import base from "./eslint.config.js";
  * у тілі — тоді компілятору буде за що вхопитись, і замір дасть інше число.
  * Або коли вийде версія компілятора, яка вміє try/catch (у 1.0 не вміє).
  *
- * ═══════════════════════════════════════════════════════════════════════════
- *
- * ЩО ЦЕ ЗМІНЮЄ ДЛЯ ТРЬОХ ПРАВИЛ НИЖЧЕ:
+ * ЩО ЦЕ ЗМІНЮЄ ДЛЯ П'ЯТИ ПРАВИЛ НИЖЧЕ:
  *
  *   set-state-in-effect — ЗАМІР СПРОСТУВАВ давнє припущення, ніби компілятор
  *                         тут щось зламає. Усі 26 файлів із цим порушенням він
@@ -48,27 +97,66 @@ import base from "./eslint.config.js";
  *                         заради швидкості.
  *   purity              — Date.now()/Math.random() у рендері. Ось це справді
  *                         небезпечно, якщо компілятор колись увімкнуть: він
- *                         мемоїзує результат, і час «застигає». Порушень 0.
- *   immutability        — накопичувач, який мутують у .map(). Лишилось одне
- *                         місце (picker-input), піде разом із forwardRef.
+ *                         мемоїзує результат, і час «застигає».
+ *   immutability        — накопичувач, який мутують у .map().
  *
- * І ГОЛОВНА ПАСТКА: у компонентах із `try/catch` у тілі лінт СЛІПИЙ — він
- * замовкає там повністю (facebook/react#35644, відкритий з 27.01.2026). Тому
- * в тих самих чотирьох гігантах він знаходить 0 порушень, хоч у них 132, 145,
- * 112 і 80 useState. Число «борг 33» — це не правда про код, а межа зору.
- *
- * Запускати: `npm run lint:compiler`.
+ * Запускати: `npm run lint:compiler`. Ратчет: `npm run check:compiler-debt`.
  */
-export default [
-  ...base,
+import babelParser from "@babel/eslint-parser";
+import reactHooks from "eslint-plugin-react-hooks";
+import { defineConfig, globalIgnores } from "eslint/config";
+
+/**
+ * Заглушка для одного імені.
+ *
+ * У `src/lib/viewOnlyGuard.ts` стоїть `eslint-disable-next-line
+ * @typescript-eslint/no-explicit-any` — коментар потрібен oxlint, який це
+ * правило справді має. А тут плагіна `@typescript-eslint` більше немає, і
+ * ESLint на невідоме ім'я в коментарі лається «Definition for rule was not
+ * found», псуючи вихід ратчета. Тому реєструємо порожнє правило: воно нічого
+ * не перевіряє, лише робить ім'я відомим.
+ *
+ * Інших імен у заглушках немає — станом на 29.08.2026 їх рівно три:
+ * `react-hooks/exhaustive-deps` (30, дає плагін нижче), `no-control-regex` (2,
+ * базове правило ESLint, відоме завжди) і цей один.
+ */
+const typescriptEslintNameStub = {
+  rules: { "no-explicit-any": { create: () => ({}) } },
+};
+
+export default defineConfig([
+  globalIgnores(["dist", "ds-bundle", "types", ".ds-sync", ".design-sync"]),
   {
     files: ["**/*.{ts,tsx}"],
+    // 30 заглушок у коді стоять на `react-hooks/exhaustive-deps` — правило, яке
+    // тепер веде oxlint, а не цей конфіг. Для ESLint вони через це «зайві», і
+    // він додає 32 зауваження, яких ніхто не просив. Вимикаємо: за самими
+    // заглушками стежить окремий ратчет, scripts/check-hook-disables.mjs.
+    linterOptions: { reportUnusedDisableDirectives: "off" },
+    languageOptions: {
+      parser: babelParser,
+      parserOptions: {
+        // Без цього babel шукає babel.config.js у корені й падає, не знайшовши.
+        requireConfigFile: false,
+        sourceType: "module",
+        babelOptions: {
+          // preset-typescript сам вмикає розбір TSX за розширенням файлу;
+          // preset-react ОБОВ'ЯЗКОВИЙ — без нього JSX не парситься, і замір
+          // валиться з 252 знахідок до 17 (решта файлів просто не читаються).
+          presets: ["@babel/preset-typescript", ["@babel/preset-react", { runtime: "automatic" }]],
+        },
+      },
+    },
+    plugins: {
+      "react-hooks": reactHooks,
+      "@typescript-eslint": typescriptEslintNameStub,
+    },
     rules: {
-      "react-hooks/purity": "error",
-      "react-hooks/immutability": "error",
       "react-hooks/set-state-in-effect": "error",
-      "react-hooks/refs": "error",
       "react-hooks/preserve-manual-memoization": "error",
+      "react-hooks/refs": "error",
+      "react-hooks/immutability": "error",
+      "react-hooks/purity": "error",
     },
   },
-];
+]);

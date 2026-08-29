@@ -514,45 +514,7 @@ export async function collectSystemSignals(
   // 10. Стек: чи не відстали залежності й чи немає відкритих дірок безпеки.
   signals.push(await stackSignal(admin));
 
-  // 11. Чи не відкрилась нарешті дорога до TypeScript 7. Мовчить, поки ні.
-  const gate = await typescriptGateSignal(admin);
-  if (gate) signals.push(gate);
-
   return signals;
-}
-
-/**
- * Сторож за єдиною чужою умовою, яка тримає найбільше оновлення в стеку.
- *
- * TypeScript 7 утричі швидший (17,5 с із 24,3 на збірку — це три чверті часу),
- * але взяти його не можна: typescript-eslint не працює на новому компіляторі й
- * тримає межу `<6.1.0`. Про той день, коли межу піднімуть, ніхто не дізнається
- * сам — доведеться памʼятати й перевіряти руками, а такі перевірки завжди
- * забуваються.
- *
- * МОВЧИТЬ, ПОКИ НЕ ЧАС. Це навмисно і це виняток із правила «рядок є завжди»:
- * решта сигналів описують СТАН, який треба бачити щодня, а цей — ПОДІЮ, якої
- * чекають. Щоденне «ще не можна» за півроку перестали б читати, і саме той
- * рядок, заради якого все робилось, загубився б серед них.
- */
-async function typescriptGateSignal(admin: SupabaseClient): Promise<Signal | null> {
-  try {
-    const { data, error } = await admin
-      .schema("tosho")
-      .from("stack_watch")
-      .select("value,ready")
-      .eq("key", "typescript_eslint_peer")
-      .maybeSingle();
-    if (error || !data?.ready) return null;
-
-    return {
-      tone: "good",
-      code: "typescript_gate",
-      text: `TypeScript 7 можна брати: typescript-eslint підняв межу до ${data.value}. Це найбільше прискорення в стеку — див. картку про оновлення TypeScript.`,
-    };
-  } catch {
-    return null;
-  }
 }
 
 /**

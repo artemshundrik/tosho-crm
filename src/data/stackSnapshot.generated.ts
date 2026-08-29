@@ -9,22 +9,56 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-29T10:16:29.692Z",
+  "generatedAt": "2026-08-29T11:01:23.340Z",
   "packages": [
     {
-      "name": "@eslint/js",
-      "version": "10.0.1",
+      "name": "@babel/core",
+      "version": "8.0.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-08-25T18:41:40+03:00",
-      "bumpCommit": {
-        "sha": "8ecf8f82",
-        "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
-      },
-      "description": "Базовий набір правил лінту.",
-      "homepage": "https://eslint.org",
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Двигун обох розборів вище.",
+      "homepage": "https://babel.dev/docs/en/next/babel-core",
+      "usedIn": 0,
+      "peerRequired": true,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=babel.dev&sz=128"
+    },
+    {
+      "name": "@babel/eslint-parser",
+      "version": "8.0.1",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Дає тій одній перевірці читати TypeScript. Стоїть замість typescript-eslint, який тримав нас на шостій версії TypeScript.",
+      "homepage": "https://babel.dev/",
       "usedIn": 1,
-      "iconUrl": "https://www.google.com/s2/favicons?domain=eslint.org&sz=128"
+      "iconUrl": "https://www.google.com/s2/favicons?domain=babel.dev&sz=128"
+    },
+    {
+      "name": "@babel/preset-react",
+      "version": "8.0.1",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Розбір JSX для парсера вище. Без нього перевірка бачить одну знахідку з п'ятнадцяти.",
+      "homepage": "https://babel.dev/docs/en/next/babel-preset-react",
+      "usedIn": 1,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=babel.dev&sz=128"
+    },
+    {
+      "name": "@babel/preset-typescript",
+      "version": "8.0.1",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Розбір TypeScript для парсера вище.",
+      "homepage": "https://babel.dev/docs/en/next/babel-preset-typescript",
+      "usedIn": 1,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=babel.dev&sz=128"
     },
     {
       "name": "@fontsource-variable/inter",
@@ -46,8 +80,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "0.6.2",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-08-29T13:21:18+03:00",
+      "bumpCommit": {
+        "sha": "b6e69840",
+        "subject": "Великі підсумки більше не стрибають: число перекручується розряд за розрядом, а смуга часток росте разом із ним"
+      },
       "description": "Крутить великі підсумки розряд за розрядом, коли сума міняється: «Витрати», картки «Огляду», сума прорахунку, лічильники «Релізів».",
       "homepage": "https://number-flow.barvian.me",
       "usedIn": 2,
@@ -335,7 +372,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 13,
+      "usedIn": 14,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -612,7 +649,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "8ecf8f82",
         "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
-      "description": "Лінт: шукає підозрілі місця в коді за правилами.",
+      "description": "Лишився заради однієї перевірки — боргу перед React Compiler. Ті п'ять правил oxlint поки не тягне, тож вони ганяються окремо в CI.",
       "homepage": "https://eslint.org",
       "usedIn": 2,
       "peerRequired": true,
@@ -628,40 +665,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "83e0b104",
         "subject": "Пульс команди більше не буває порожнім, коли події встигають раніше за список людей"
       },
-      "description": "Правила про React-хуки — саме він знайшов порожній Пульс.",
+      "description": "Правила про React-хуки — саме він знайшов порожній Пульс. Заради нього ESLint і лишили.",
       "homepage": "https://react.dev/",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
-    },
-    {
-      "name": "eslint-plugin-react-refresh",
-      "version": "0.5.4",
-      "layer": "build",
-      "dev": true,
-      "bumpedAt": "2026-08-25T18:41:40+03:00",
-      "bumpCommit": {
-        "sha": "8ecf8f82",
-        "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
-      },
-      "description": "Стежить, щоб компоненти можна було оновлювати без перезавантаження сторінки.",
-      "homepage": null,
-      "usedIn": 1,
-      "iconUrl": null
-    },
-    {
-      "name": "globals",
-      "version": "17.11.0",
-      "layer": "build",
-      "dev": true,
-      "bumpedAt": "2026-08-25T18:41:40+03:00",
-      "bumpCommit": {
-        "sha": "8ecf8f82",
-        "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
-      },
-      "description": "Список глобальних імен різних середовищ, щоб лінт не лаявся на window чи process.",
-      "homepage": null,
-      "usedIn": 1,
-      "iconUrl": "https://github.com/sindresorhus.png?size=64"
     },
     {
       "name": "jsdom",
@@ -710,6 +717,18 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": "https://github.com/netlify.png?size=64"
     },
     {
+      "name": "oxlint",
+      "version": "1.80.0",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Лінт: шукає підозрілі місця в коді за правилами. Написаний на Rust — увесь проєкт за 2 с замість 98,6 в ESLint.",
+      "homepage": "https://oxc.rs/docs/guide/usage/linter",
+      "usedIn": 0,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=oxc.rs&sz=128"
+    },
+    {
       "name": "pdfjs-dist",
       "version": "6.2.108",
       "layer": "platform",
@@ -736,7 +755,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 287,
+      "usedIn": 289,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -908,23 +927,8 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": null
     },
     {
-      "name": "tsc7",
-      "version": "7.0.2",
-      "layer": "build",
-      "dev": true,
-      "bumpedAt": "2026-08-27T23:47:47+03:00",
-      "bumpCommit": {
-        "sha": "8fd0e7f7",
-        "subject": "Перевірка типів стала за секунду замість шістнадцяти"
-      },
-      "description": "Той самий TypeScript, версія 7: перевірка типів за 1,4 с замість 16. Стоїть аліасом, тому в скриптах його кличуть повним шляхом.",
-      "homepage": "https://www.typescriptlang.org/",
-      "usedIn": 0,
-      "iconUrl": "https://www.google.com/s2/favicons?domain=www.typescriptlang.org&sz=128"
-    },
-    {
       "name": "typescript",
-      "version": "6.0.3",
+      "version": "7.0.2",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-25T18:48:42+03:00",
@@ -932,26 +936,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "5519d3f5",
         "subject": "Проєкт переїхав на TypeScript 6 — місток перед стрибком на сімку"
       },
-      "description": "Перевіряє типи: ловить помилки до запуску, а не в проді. Лишається заради лінту — typescript-eslint ще не пускає сімку.",
+      "description": "Перевіряє типи: ловить помилки до запуску, а не в проді. Версія 7 — перевірка за 2,6 с замість 16.",
       "homepage": "https://www.typescriptlang.org/",
-      "usedIn": 0,
-      "peerRequired": true,
-      "iconUrl": "https://www.google.com/s2/favicons?domain=www.typescriptlang.org&sz=128"
-    },
-    {
-      "name": "typescript-eslint",
-      "version": "8.68.0",
-      "layer": "build",
-      "dev": true,
-      "bumpedAt": "2026-08-25T18:41:40+03:00",
-      "bumpCommit": {
-        "sha": "8ecf8f82",
-        "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
-      },
-      "description": "Дає лінту розуміти TypeScript.",
-      "homepage": "https://typescript-eslint.io/packages/typescript-eslint",
       "usedIn": 1,
-      "iconUrl": "https://www.google.com/s2/favicons?domain=typescript-eslint.io&sz=128"
+      "iconUrl": "https://www.google.com/s2/favicons?domain=www.typescriptlang.org&sz=128"
     },
     {
       "name": "vite",
@@ -981,7 +969,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 116,
+      "usedIn": 117,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1027,12 +1015,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 1650,
-  "testFiles": 115,
+  "tests": 1658,
+  "testFiles": 116,
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 255240,
+  "sourceLines": 255433,
   "automation": {
     "workflows": [
       {

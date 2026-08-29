@@ -218,7 +218,7 @@ export function listWorkdays(params: WorkdayParams): WorkdayCell[] {
   const asOfKey = `${asOf.getUTCFullYear()}-${pad2(asOf.getUTCMonth() + 1)}-${pad2(asOf.getUTCDate())}`;
 
   const cells: WorkdayCell[] = [];
-  for (let day = new Date(from); day < to; day.setUTCDate(day.getUTCDate() + 1)) {
+  for (const day = new Date(from); day < to; day.setUTCDate(day.getUTCDate() + 1)) {
     const key = `${day.getUTCFullYear()}-${pad2(day.getUTCMonth() + 1)}-${pad2(day.getUTCDate())}`;
     const weekday = day.getUTCDay(); // 0 = нд, 6 = сб
     const isWorkdayByDefault = weekday !== 0 && weekday !== 6;

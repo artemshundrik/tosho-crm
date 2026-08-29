@@ -4244,11 +4244,12 @@ export default function DesignTaskPage() {
           storage_path: file.storage_path,
           uploaded_by: file.uploaded_by,
         }));
+        const previousBriefFiles = task.metadata?.standalone_brief_files;
         const nextMetadata: Record<string, unknown> = {
           ...(task.metadata ?? {}),
           standalone_brief_files: [
             ...standaloneBriefFiles,
-            ...((Array.isArray(task.metadata?.standalone_brief_files) ? task.metadata?.standalone_brief_files : []) as unknown[]),
+            ...(Array.isArray(previousBriefFiles) ? (previousBriefFiles as unknown[]) : []),
           ],
         };
 

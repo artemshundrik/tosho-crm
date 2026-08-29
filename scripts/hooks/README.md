@@ -103,14 +103,14 @@ git config core.hooksPath
 
 ## pre-push — перевірки коду (блокують)
 
-Перед пушем ганяє **п'ятнадцять** перевірок і **зупиняє пуш**, якщо хоч одна
-впала. Часи заміряні 24.08.2026 на цій машині:
+Перед пушем ганяє **сімнадцять** перевірок і **зупиняє пуш**, якщо хоч одна
+впала. Часи заміряні 29.08.2026 на цій машині, після переїзду на oxlint (REQ-208):
 
 | Перевірка | Команда | ~час |
 |---|---|---|
-| типи застосунку | `npm run typecheck` (TypeScript 7) | 16 с |
-| лінт + борг компілятора | `node scripts/check-compiler-debt.mjs` | 88 с |
-| тести | `npm run test` | 2.7 с |
+| типи застосунку | `npm run typecheck` (TypeScript 7) | 2.6 с |
+| лінт | `npm run lint` (oxlint) | 2 с |
+| тести | `npm run test` | 4.7 с |
 | типи Netlify-функцій | `npm run typecheck:functions` | 1.3 с |
 | реєстр Netlify-функцій | `npm run check:functions` | 0.1 с |
 | ключі фіч | `npm run check:feature-keys` | 0.1 с |
@@ -119,6 +119,7 @@ git config core.hooksPath
 | заглушки правил хуків | `node scripts/check-hook-disables.mjs` | 0.1 с |
 | читачі правил | `node scripts/check-rule-readers.mjs` | 0.05 с |
 | розростання файлів | `node scripts/check-file-growth.mjs` | 0.05 с |
+| розмір інструкцій | `node scripts/check-instruction-size.mjs` | 0.05 с |
 | знімок стеку | `node scripts/check-stack-snapshot.mjs` | 0.03 с |
 | версія Node | `node scripts/check-node-version.mjs` | 0.02 с |
 | адреси кронів ¹ | `node scripts/check-cron-endpoints.mjs` | 0.7 с |
@@ -128,9 +129,17 @@ git config core.hooksPath
 ¹ Дивиться в ЖИВУ базу через `BACKUP_DB_URL` із `.env.backup`. Немає доступу
 (CI, свіжий клон, чужа машина) — перевірка мовчки пропускається.
 
-Разом близько двох хвилин, і 88 із них — лінт: він ганяє ESLint двічі, окремо з
-конфігом React Compiler. Падіння однієї перевірки не зупиняє решту — усі проблеми
-видно за один прогін, а не по черзі.
+Разом **11 секунд**. Було майже дві хвилини, з яких 88 с їв ESLint. Падіння
+однієї перевірки не зупиняє решту — усі проблеми видно за один прогін, а не по
+черзі.
+
+**Чого тут більше немає: борг перед React Compiler.** Ця перевірка коштує 90 с
+і швидшою не стає — це прохід компілятора всередині `eslint-plugin-react-hooks`,
+єдине, заради чого в проєкті лишився ESLint. Вона переїхала в GitHub Actions,
+де хвилина безкоштовна. Отже борг тепер ловиться ПІСЛЯ пушу, паралельно з
+деплоєм; перед пушем його можна прогнати руками — `npm run check:compiler-debt`.
+Чому не вийшло віддати ці п'ять правил oxlint — у шапці
+`eslint.compiler.config.mjs`.
 
 ### Чому тут, а не лише в CI
 

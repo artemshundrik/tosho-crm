@@ -94,14 +94,14 @@ const LAYERS = {
     "vite",
     "@vitejs/plugin-react",
     "typescript",
-    "tsc7",
-    "typescript-eslint",
+    "oxlint",
     "eslint",
-    "@eslint/js",
     "eslint-plugin-react-hooks",
-    "eslint-plugin-react-refresh",
+    "@babel/eslint-parser",
+    "@babel/preset-typescript",
+    "@babel/preset-react",
+    "@babel/core",
     "babel-plugin-react-compiler",
-    "globals",
     "vitest",
     "@playwright/test",
     "jsdom",
@@ -180,14 +180,14 @@ const EXPLAINED = {
 
   vite: "Складальник: перетворює сотні файлів коду на кілька, які розуміє браузер. Він же тримає локальний сервер для перевірок.",
   "@vitejs/plugin-react": "Навчає складальник розуміти React.",
-  typescript: "Перевіряє типи: ловить помилки до запуску, а не в проді. Лишається заради лінту — typescript-eslint ще не пускає сімку.",
-  tsc7: "Той самий TypeScript, версія 7: перевірка типів за 1,4 с замість 16. Стоїть аліасом, тому в скриптах його кличуть повним шляхом.",
-  "typescript-eslint": "Дає лінту розуміти TypeScript.",
-  eslint: "Лінт: шукає підозрілі місця в коді за правилами.",
-  "@eslint/js": "Базовий набір правил лінту.",
-  "eslint-plugin-react-hooks": "Правила про React-хуки — саме він знайшов порожній Пульс.",
-  "eslint-plugin-react-refresh": "Стежить, щоб компоненти можна було оновлювати без перезавантаження сторінки.",
-  globals: "Список глобальних імен різних середовищ, щоб лінт не лаявся на window чи process.",
+  typescript: "Перевіряє типи: ловить помилки до запуску, а не в проді. Версія 7 — перевірка за 2,6 с замість 16.",
+  oxlint: "Лінт: шукає підозрілі місця в коді за правилами. Написаний на Rust — увесь проєкт за 2 с замість 98,6 в ESLint.",
+  eslint: "Лишився заради однієї перевірки — боргу перед React Compiler. Ті п'ять правил oxlint поки не тягне, тож вони ганяються окремо в CI.",
+  "eslint-plugin-react-hooks": "Правила про React-хуки — саме він знайшов порожній Пульс. Заради нього ESLint і лишили.",
+  "@babel/eslint-parser": "Дає тій одній перевірці читати TypeScript. Стоїть замість typescript-eslint, який тримав нас на шостій версії TypeScript.",
+  "@babel/preset-typescript": "Розбір TypeScript для парсера вище.",
+  "@babel/preset-react": "Розбір JSX для парсера вище. Без нього перевірка бачить одну знахідку з п'ятнадцяти.",
+  "@babel/core": "Двигун обох розборів вище.",
   "babel-plugin-react-compiler": "React Compiler: сам розставляє оптимізації, які раніше писали руками.",
   zod: "Перевіряє, що дані, які прийшли ззовні, справді такі, як ми чекаємо: серверні функції звіряють із нею тіло запиту.",
   vitest: "Тести. Ті самі, що ганяються перед кожним пушем.",
@@ -318,7 +318,7 @@ function metaFor(name) {
  * зробить пакет «живим», а не навпаки.
  *
  * ЧОМУ НУЛЬ — ПРИВІД ЛИШЕ ДЛЯ ДВОХ ШАРІВ. Складальники й типи не імпортуються
- * в код ніколи (vite, eslint, @types/*), і для них нуль — норма. Сторінка
+ * в код ніколи (vite, oxlint, @types/*), і для них нуль — норма. Сторінка
  * позначає «не використовується» тільки для «Екрана» й «Даних».
  */
 /**
@@ -332,7 +332,7 @@ const ROOT_CONFIGS = [
   "vite.config.ts",
   "vitest.config.ts",
   "tailwind.config.js",
-  "eslint.config.js",
+  ".oxlintrc.json",
   "eslint.compiler.config.mjs",
   "netlify.toml",
 ].filter((file) => existsSync(join(ROOT, file)));
