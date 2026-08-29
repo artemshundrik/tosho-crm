@@ -17,6 +17,7 @@ import {
   Webhook,
 } from "lucide-react";
 import { toast } from "sonner";
+import { BENTO_CARD, HeroShell, SplitBar } from "@/components/app/bento";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -168,75 +169,6 @@ export function StackOverview() {
 
 /* ─────────────────────────────── герої ─────────────────────────────── */
 
-const CARD = "rounded-2xl border border-border/40 bg-card";
-const LABEL = "text-2xs font-medium uppercase tracking-wide text-muted-foreground";
-
-/** Смуга з часток + легенда — той самий примітив, що в bento-підсумку «Витрат». */
-function Split({ parts }: { parts: Array<{ key: string; label: string; value: number; color: string }> }) {
-  const visible = parts.filter((part) => part.value > 0);
-  if (visible.length === 0) return null;
-  return (
-    <>
-      <div className="mt-4 flex h-2.5 gap-[3px] overflow-hidden rounded-full" aria-hidden="true">
-        {visible.map((part) => (
-          <div
-            key={part.key}
-            className={cn("rounded-[2px]", part.color)}
-            style={{ flexGrow: part.value, flexBasis: 0, minWidth: 6 }}
-            title={`${part.label} — ${part.value}`}
-          />
-        ))}
-      </div>
-      <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1">
-        {visible.map((part) => (
-          <span key={part.key} className="inline-flex items-center gap-1.5 py-0.5 text-xs">
-            <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", part.color)} />
-            <span className="text-muted-foreground">{part.label}</span>
-            <span className="font-medium tabular-nums text-foreground">{part.value}</span>
-          </span>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function HeroShell({
-  label,
-  value,
-  suffix,
-  badge,
-  children,
-  footnote,
-}: {
-  label: string;
-  value: number;
-  suffix: string;
-  badge: React.ReactNode;
-  children?: React.ReactNode;
-  footnote?: React.ReactNode;
-}) {
-  return (
-    <div className={cn(CARD, "p-4 sm:p-5")}>
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <div>
-          <div className={LABEL}>{label}</div>
-          <div className="figure mt-1.5 flex items-baseline gap-2 text-2xl font-semibold leading-none text-foreground sm:text-[28px]">
-            {value}
-            <span className="text-base font-normal text-muted-foreground">{suffix}</span>
-          </div>
-        </div>
-        {badge}
-      </div>
-      {children}
-      {footnote ? (
-        <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
-          {footnote}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function Pill({ tone, children }: { tone: "good" | "warn" | "bad"; children: React.ReactNode }) {
   return (
     <span
@@ -287,11 +219,12 @@ function LayersHero({
       }
       footnote={<PlatformFootnote platform={platform} />}
     >
-      <Split
+      <SplitBar
+        className="mt-4"
         parts={LAYER_ORDER.map((layer) => ({
           key: layer,
           label: LAYER_META[layer].label,
-          value: items.filter((item) => item.layer === layer).length,
+          weight: items.filter((item) => item.layer === layer).length,
           color: LAYER_META[layer].dot,
         }))}
       />
@@ -329,12 +262,13 @@ function UrgencyHero({ totals }: { totals: StackTotals }) {
         </>
       }
     >
-      <Split
+      <SplitBar
+        className="mt-4"
         parts={[
-          { key: "major", label: "Ламає код", value: totals.major, color: "bg-destructive" },
-          { key: "minor", label: "Є нове", value: totals.minor + totals.patch, color: "bg-warning-solid" },
-          { key: "fresh", label: "Свіже", value: totals.fresh, color: "bg-success-solid" },
-          { key: "unknown", label: "Невідомо", value: totals.unknown, color: "bg-muted-foreground/30" },
+          { key: "major", label: "Ламає код", weight: totals.major, color: "bg-destructive" },
+          { key: "minor", label: "Є нове", weight: totals.minor + totals.patch, color: "bg-warning-solid" },
+          { key: "fresh", label: "Свіже", weight: totals.fresh, color: "bg-success-solid" },
+          { key: "unknown", label: "Невідомо", weight: totals.unknown, color: "bg-muted-foreground/30" },
         ]}
       />
     </HeroShell>
@@ -889,7 +823,7 @@ function EffortCard({ items }: { items: StackItem[] }) {
   const alarming = counts.security > 0;
 
   return (
-    <section className={cn(CARD, "p-3.5")}>
+    <section className={cn(BENTO_CARD, "p-3.5")}>
       <h3 className={ASIDE_TITLE}>Оновлення</h3>
       <p
         className={cn(
@@ -968,7 +902,7 @@ function GuardsCard() {
   }, [guards]);
 
   return (
-    <section className={cn(CARD, "p-3.5")}>
+    <section className={cn(BENTO_CARD, "p-3.5")}>
       <h3 className={ASIDE_TITLE}>Сторожа перед пушем</h3>
       {/*
         ПРО КОЛІР. Тон каже, ЩО ЦЕ ЗА СТОРОЖА, а не «щойно пройшла»: сторінка
@@ -1088,7 +1022,7 @@ function AutomationCard({ platform }: { platform: StackPlatform | null }) {
   ];
 
   return (
-    <section className={cn(CARD, "p-3.5")}>
+    <section className={cn(BENTO_CARD, "p-3.5")}>
       <h3 className={ASIDE_TITLE}>Що працює само</h3>
       <p className="mt-0.5 text-3xs text-muted-foreground">
         Крутиться без людини — і саме тому про це забувають.

@@ -35,6 +35,31 @@ type Rect = { left: number; width: number; height: number; top: number };
 export function useSegmentedSlider<T extends HTMLElement>() {
   const ref = React.useRef<T>(null);
   const indicatorRef = React.useRef<HTMLSpanElement>(null);
+
+  /**
+   * Ім'я плашки для View Transitions — і без нього плашка НЕ ЇДЕ.
+   *
+   * Поки перемикання розділу було звичайним оновленням стану, плашку рухав
+   * `transition` по `transform`. Щойно розділ став мінятись під перехресним
+   * згасанням (REQ-202), цього стало замало: під час переходу сторінка на
+   * екрані — це два нерухомі знімки, а справжній DOM схований. Перехід плашки
+   * чесно йде, але його НІХТО не бачить, і в кадрі «після» вона вже стоїть на
+   * новому місці. Збоку це рівно те, на що скаржився Артем: розділ згасає, а
+   * плашка стрибає.
+   *
+   * З іменем браузер знімає плашку окремим шаром і сам розводить два її
+   * положення рухом — тобто вона їде РАЗОМ зі згасанням вмісту, а не замість
+   * нього. Ім'я своє в кожної групи: на сторінці прорахунків їх три, а два
+   * однакові імені в кадрі скасовують перехід цілком.
+   *
+   * `useId` віддає щось на кшталт «r0» у лапках-ялинках — у CSS це недійсний
+   * ідентифікатор, і ім'я мовчки стало б `none`. Тому чистимо.
+   */
+  const id = React.useId();
+  const transitionName = React.useMemo(
+    () => `segmented-slider-${id.replace(/[^a-zA-Z0-9_-]/g, "")}`,
+    [id]
+  );
   const [rect, setRect] = React.useState<Rect | null>(null);
   // Перший вимір не анімуємо: плашка мусить з'явитись одразу під активним
   // елементом, а не приїхати з лівого краю на завантаженні сторінки. Це
@@ -128,7 +153,7 @@ export function useSegmentedSlider<T extends HTMLElement>() {
       data-segmented-indicator=""
       className={cn(
         "pointer-events-none absolute z-0 rounded-lg border border-border bg-background",
-        animated && "transition-[transform,width] duration-200 ease-out motion-reduce:transition-none"
+        animated && "transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none"
       )}
       style={{
         transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
@@ -136,6 +161,7 @@ export function useSegmentedSlider<T extends HTMLElement>() {
         height: rect.height,
         left: 0,
         top: 0,
+        viewTransitionName: transitionName,
       }}
     />
   ) : null;

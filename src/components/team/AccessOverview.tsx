@@ -27,6 +27,12 @@ import {
   type ModuleKey,
 } from "@/lib/moduleAccess";
 import { callToshoRpc } from "@/lib/toshoRpc";
+import {
+  AnimatedFigure,
+  FIGURE_BAR_SEGMENT_TRANSITION,
+  figureBarRevealStyle,
+  useFigureReveal,
+} from "@/components/app/animated-figure";
 import { cn } from "@/lib/utils";
 import type { MatrixPerson } from "@/components/team/AccessMatrix";
 
@@ -90,7 +96,11 @@ function when(iso: string) {
     : date.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" });
 }
 
-/** Смуга часток + легенда — той самий примітив, що в «Стеку». */
+/**
+ * Смуга часток + легенда. Розкладка своя (легенда стовпчиком, одиниця поруч із
+ * числом), а от РУХ спільний із рештою підсумків: число крутиться, смуга
+ * наливається, обидва — від одного прапорця (REQ-200).
+ */
 function ShareTile({
   cap,
   value,
@@ -103,21 +113,25 @@ function ShareTile({
   parts: { label: string; count: number; color: string }[];
 }) {
   const total = parts.reduce((sum, part) => sum + part.count, 0) || 1;
+  const ready = useFigureReveal();
+
   return (
     <div className={cn(CARD, "flex flex-col gap-3 p-4")}>
       <span className={CAP}>{cap}</span>
       <div className="flex items-baseline gap-2">
-        <span className="text-[28px] font-semibold leading-none tabular-nums tracking-tight">{value}</span>
+        <span className="text-[28px] font-semibold leading-none tracking-tight">
+          <AnimatedFigure value={value} ready={ready} format={{}} />
+        </span>
         <span className="text-sm font-medium text-muted-foreground">{unit}</span>
       </div>
-      <div className="flex h-2.5 gap-[3px] overflow-hidden" aria-hidden="true">
+      <div className="flex h-2.5 gap-[3px] overflow-hidden" aria-hidden="true" style={figureBarRevealStyle(ready)}>
         {parts
           .filter((part) => part.count > 0)
           .map((part) => (
             <span
               key={part.label}
               className={cn("rounded-[2px]", part.color)}
-              style={{ flexGrow: part.count / total }}
+              style={{ flexGrow: part.count / total, transition: FIGURE_BAR_SEGMENT_TRANSITION }}
             />
           ))}
       </div>
