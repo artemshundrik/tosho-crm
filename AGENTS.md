@@ -13,9 +13,9 @@ This repository has project-specific Codex guidance. Start here before broad exp
 
 **`git push` costs real money. Committing does not.**
 
-Every push to `origin/main` triggers a Netlify production deploy billed at a flat ~15 credits,
-regardless of how many commits it carries or how long the build takes. The monthly budget is
-**≈40 deploys** — roughly one per day. Full policy and the measured numbers behind it:
+Every push to `origin/main` triggers a Netlify production deploy billed at a flat 15 credits
+(≈$0.15), regardless of commits or build time. That is a price, not a monthly quota: never
+scare with "N deploys left". Failed deploys, rollbacks and previews are free. Full policy:
 [docs/DEPLOY_POLICY.md](/Users/artem/Projects/tosho-crm/docs/DEPLOY_POLICY.md).
 
 - **Commit freely, locally.** Verify with `npm run typecheck` + `npm run lint` before each commit. Free.
