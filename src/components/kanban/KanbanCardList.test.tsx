@@ -157,6 +157,97 @@ describe("KanbanCardList — прощання картки", () => {
     }
   });
 
+  /**
+   * Перемикання дошки — це НЕ дія над карткою.
+   *
+   * ЗАМІРЯНО 29.08.2026 на дошці дизайну: вкладка «Всі» (125 задач) → «З
+   * прорахунку» (16) давала 15 анімацій — 7 згортань висоти й 8 появ. Жодна
+   * колонка при цьому не перевищила свою четвірку: перемикання міняє ВСІ
+   * колонки потроху, і кожна окремо чесно вважала це дією людини.
+   *
+   * Тому тут навмисно кілька списків поруч: у ОДНОМУ списку цю ваду не видно —
+   * вона тільки між ними.
+   */
+  it("не анімує перемикання дошки, хоч у кожній колонці змінилось мало", () => {
+    const columns = (ids: string[][]) => (
+      <>
+        {ids.map((column, index) => (
+          <KanbanCardList
+            key={`col-${index}`}
+            items={list(column)}
+            getKey={(item: Item) => item.id}
+            renderItem={(item: Item) => <div>{item.id}</div>}
+          />
+        ))}
+      </>
+    );
+
+    const { container, rerender } = render(
+      columns([
+        ["a1", "a2", "a3"],
+        ["b1", "b2", "b3"],
+        ["c1", "c2", "c3"],
+      ])
+    );
+    expect(rows(container)).toHaveLength(9);
+
+    const animate = vi.spyOn(Element.prototype, "animate");
+    try {
+      // Кожна колонка втрачає по дві картки — під власною межею. Але на дошці
+      // це шість, тобто перебудова, а не переїзд однієї картки.
+      rerender(
+        columns([
+          ["a1"],
+          ["b1"],
+          ["c1"],
+        ])
+      );
+
+      expect(rows(container).map((row) => row.key)).toEqual(["a1", "b1", "c1"]);
+      expect(rows(container).some((row) => row.leaving)).toBe(false);
+      expect(animate).not.toHaveBeenCalled();
+    } finally {
+      animate.mockRestore();
+    }
+  });
+
+  /**
+   * Зворотний бік тієї ж межі: полагодивши перемикання, легко вбити рух, заради
+   * якого все й робилось. Перетягування чіпає дошку рівно на дві картки —
+   * пішла з однієї колонки, прийшла в іншу, — і воно мусить лишитись живим.
+   */
+  it("лишає прощання картці, яка переїхала в сусідню колонку", () => {
+    const board = (left: string[], right: string[]) => (
+      <>
+        <KanbanCardList
+          items={list(left)}
+          getKey={(item: Item) => item.id}
+          renderItem={(item: Item) => <div>{item.id}</div>}
+        />
+        <KanbanCardList
+          items={list(right)}
+          getKey={(item: Item) => item.id}
+          renderItem={(item: Item) => <div>{item.id}</div>}
+        />
+      </>
+    );
+
+    const { container, rerender } = render(board(["a", "b"], ["c"]));
+
+    const animate = vi.spyOn(Element.prototype, "animate");
+    try {
+      rerender(board(["a"], ["b", "c"]));
+
+      // «b» ще стоїть у лівій колонці й прощається — саме те, заради чого
+      // хореографія існує.
+      const leaving = rows(container).filter((row) => row.leaving).map((row) => row.key);
+      expect(leaving).toEqual(["b"]);
+      expect(animate).toHaveBeenCalled();
+    } finally {
+      animate.mockRestore();
+    }
+  });
+
   it("не лишає привида, якщо картка повернулась у дані", () => {
     vi.useFakeTimers();
     try {

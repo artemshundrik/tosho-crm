@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import { KanbanVirtualList } from "./KanbanVirtualList";
 import { cn } from "@/lib/utils";
@@ -72,6 +72,80 @@ const MAX_MOVE_PX = 640;
  * перезавантаження даних, і там правильна поведінка саме миттєва.
  */
 const BULK_CHANGE_LIMIT = 4;
+
+/**
+ * Те саме число, але для ВСІЄЇ ДОШКИ, а не для однієї колонки.
+ *
+ * ЧОМУ ОДНОГО ЛІМІТУ НА КОЛОНКУ ЗАМАЛО. `BULK_CHANGE_LIMIT` рахує картки в
+ * межах свого списку, а перемикання дошки міняє ВСІ колонки одночасно —
+ * потроху в кожній. Кожен список окремо чесно бачить «змінилось дві-три
+ * картки, це дія людини» і програє рух, хоч насправді людина просто натиснула
+ * іншу вкладку.
+ *
+ * ЗАМІРЯНО 29.08.2026 на дошці дизайну. Перемикання вкладки «Всі» (125 задач)
+ * на «З прорахунку» (16) інструментованим `Element.animate`:
+ *
+ *   намальованих рядків   42 → 13
+ *   від'їздів (height)    7   ← кожен згортав 243 px за 200 мс
+ *   приїздів (opacity)    8
+ *   разом анімацій        15
+ *
+ * Тобто зміну вкладки дошка показувала як п'ятнадцять окремих дій над
+ * картками. Жодна колонка при цьому не перевищила свою четвірку — саме тому
+ * старий сторож усе пропустив.
+ *
+ * Справжня дія над карткою чіпає дошку на дві картки: пішла з однієї колонки,
+ * прийшла в іншу. Створення й видалення — на одну. Тому четвірка на дошку — це
+ * та сама межа, тільки поміряна там, де вона щось означає.
+ */
+const BOARD_CHANGE_LIMIT = 4;
+
+/**
+ * Скільки карток змінилось на дошці за цей прохід рендеру.
+ *
+ * ЧОМУ МОДУЛЬНА ЗМІННА, А НЕ КОНТЕКСТ. На екрані завжди рівно одна дошка, і
+ * контекст тут дав би провайдер у `KanbanBoard`, пропси й нову залежність
+ * заради числа, яке живе один кадр. Модульний лічильник — той самий підхід, що
+ * вже стоїть поруч у `skipChoreography`.
+ *
+ * ЧОМУ MAP, А НЕ ЛІЧИЛЬНИК. У StrictMode рендер викликається двічі, і лічильник
+ * подвоїв би кожен внесок — половина справжніх дій почала б вважатись
+ * перебудовою, тобто рух тихо зник би саме в розробці. Map за ключем списку
+ * перезаписує внесок, скільки б разів прохід не повторився.
+ *
+ * ЧОМУ ЦЕ ПРАЦЮЄ. React завершує рендер УСЬОГО дерева, перш ніж викликати
+ * перший layout-ефект. Тому на момент, коли перший список питає підсумок, свій
+ * внесок уже поклали всі колонки — і кожна бачить одне й те саме число.
+ */
+const boardChurn = { pending: new Map<string, number>(), total: null as number | null };
+
+/**
+ * Внесок одного списку. Викликається під час рендеру — навмисно: до layout-ефекту
+ * підсумок має бути зібраний повністю. Запис ідемпотентний (див. про Map вище).
+ */
+function reportBoardChurn(id: string, changed: number) {
+  // Порожня черга означає, що почався НОВИЙ прохід: підсумок минулого більше
+  // не дійсний. Так лічильник чиститься сам, без сторожа зверху.
+  if (boardChurn.pending.size === 0) boardChurn.total = null;
+  boardChurn.pending.set(id, changed);
+}
+
+/**
+ * Підсумок по дошці. Перший, хто спитав у фазі layout, і закриває прохід:
+ * рахує суму, запам'ятовує її й чистить чергу — решта списків отримує те саме
+ * число, а не залишок після себе.
+ */
+function readBoardChurn(): number {
+  if (boardChurn.total === null) {
+    let sum = 0;
+    boardChurn.pending.forEach((value) => {
+      sum += value;
+    });
+    boardChurn.total = sum;
+    boardChurn.pending.clear();
+  }
+  return boardChurn.total;
+}
 
 /**
  * Вікно, у якому список НЕ анімує зміну даних, бо її вже показав хтось інший.
@@ -177,6 +251,9 @@ export function KanbanCardList<T>({
   emptyState,
 }: KanbanCardListProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Постійне ім'я списку на дошці — під ним колонка кладе свій внесок у
+  // спільний лічильник змін (див. boardChurn).
+  const listId = useId();
   const liveKeys = items.map(getKey);
 
   /**
@@ -207,6 +284,16 @@ export function KanbanCardList<T>({
       const item = snapshot.items[index];
       if (item !== undefined) gone.push({ key, item, index });
     });
+
+    // Скільки карток ця колонка втратила Й отримала. Рахуємо по ДАНИХ, а не по
+    // намальованих рядках: у віртуалізованому списку прокрутка міняє набір
+    // рядків щокадру, і рахунок по DOM приймав би її за зміну.
+    const snapshotSet = new Set(snapshot.keys);
+    let arrived = 0;
+    liveKeys.forEach((key) => {
+      if (!snapshotSet.has(key)) arrived += 1;
+    });
+    reportBoardChurn(listId, gone.length + arrived);
 
     // Привида не заводимо ні на перебудові списку, ні тоді, коли рух уже
     // показав хтось інший: інакше після перетягування картка ще двісті
@@ -248,7 +335,18 @@ export function KanbanCardList<T>({
   });
 
   const signature = rendered.map((entry) => `${entry.key}${entry.leaving ? "*" : ""}`).join("|");
-  useCardChoreography(containerRef, signature);
+  /**
+   * Прибрати привидів, не чекаючи їхнього прощання.
+   *
+   * Потрібно рівно на перемиканні дошки: чи це перебудова, видно лише коли
+   * відрендерились УСІ колонки, а привид заводиться раніше — під час рендеру
+   * своєї. Виклик іде з layout-ефекту, тобто React перемалює список ще до
+   * показу кадру, і старі картки на екран не потраплять узагалі.
+   */
+  const dropGhosts = useCallback(() => {
+    setLeaving((current) => (current.length === 0 ? current : []));
+  }, []);
+  useCardChoreography(containerRef, signature, dropGhosts);
 
   const renderRow = useCallback(
     (entry: { item: T; key: string; leaving: boolean }, index: number, withKey: boolean) => (
@@ -304,7 +402,11 @@ export function KanbanCardList<T>({
  * реально займає місце в потоці, і саме його висоту треба згортати, коли картка
  * прощається.
  */
-function useCardChoreography(containerRef: RefObject<HTMLDivElement | null>, signature: string) {
+function useCardChoreography(
+  containerRef: RefObject<HTMLDivElement | null>,
+  signature: string,
+  dropGhosts: () => void
+) {
   const rects = useRef(new Map<string, DOMRect>());
   const lastSignature = useRef<string | null>(null);
   /**
@@ -346,12 +448,22 @@ function useCardChoreography(containerRef: RefObject<HTMLDivElement | null>, sig
     // тільки перезаписати позиції.
     const ghostJustLeft = hadGhost.current && !hasGhost;
 
+    // Підсумок по ВСІЙ дошці. Тут він уже повний: рендер усіх колонок
+    // завершився до першого layout-ефекту (див. boardChurn).
+    const boardChanged = readBoardChurn();
+    const boardRebuild = boardChanged > BOARD_CHANGE_LIMIT;
+
     const animate =
       changed &&
       !ghostJustLeft &&
+      !boardRebuild &&
       churn <= BULK_CHANGE_LIMIT &&
       !skipChoreography &&
       !prefersReducedMotion();
+
+    // Перемкнули дошку — прощатись нема за що: картки не пішли, їх замінили
+    // іншими. Привид, заведений під час рендеру, тут і зникає, ще до кадру.
+    if (hasGhost && boardRebuild) dropGhosts();
 
     rows.forEach((row) => {
       const key = row.dataset.kanbanRow;
@@ -401,5 +513,5 @@ function useCardChoreography(containerRef: RefObject<HTMLDivElement | null>, sig
     rects.current = next;
     lastSignature.current = signature;
     hadGhost.current = hasGhost;
-  }, [containerRef, signature]);
+  }, [containerRef, dropGhosts, signature]);
 }
