@@ -1966,6 +1966,50 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     })}`;
   };
 
+  /**
+   * Скільки днів між сьогодні й дедлайном. Мінус — прострочено, нуль — сьогодні.
+   *
+   * Рахунок ведеться по ДОБАХ, а не по годинах: дедлайн о 10:00 не стає
+   * «завтрашнім» об 11-й. Раніше ця арифметика лежала в трьох місцях трьома
+   * копіями, і кожна нова мірка дедлайну починалась із неї ж.
+   */
+  const deadlineDiffDays = (value?: string | null): number | null => {
+    const date = value ? parseDeadlineDate(value) : null;
+    if (!date) return null;
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startOfDeadline = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    return Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  /**
+   * Підпис вкладки «Дедлайни» — знак і число, і більше нічого.
+   *
+   * ЩО БУЛО НЕ ТАК. Підпис збирався з повного бейджа й часу, і виходило
+   * «Прострочено (24 дн.) · 10:00» — 159 px у коробку завширшки 96. Обрізало
+   * рівно там, де починалась інформація: слово лишалось, ЧИСЛО зникало, і на
+   * вкладці висіло «Прострочено (…».
+   *
+   * ДРУГА ВАДА БУЛА ГІРША ЗА ОБРІЗАННЯ. Підпис говорив чотирма мовами залежно
+   * від стану: словом («Сьогодні»), лічильником («Через 2 дн.»), датою
+   * («05.09.2026») і сумішшю з часом. Одне місце на вкладці щоразу відповідало
+   * на інше питання, і прочитати його з розгону було неможливо.
+   *
+   * ТЕПЕР ОДНА МОВА НА ВСІ СТАНИ: «−24 дн», «Сьогодні», «+1 дн», «+11 дн».
+   * Найдовше — п'ять знаків замість двадцяти восьми. Час прибрано: він з'їдав
+   * майже половину коробки, а вирішує рідко — повна дата з часом лишається під
+   * курсором у доріжці дедлайнів збоку.
+   *
+   * Дедлайну немає — підпису теж немає: про це вже говорить червона крапка
+   * «потребує уваги», і слово «Не вказано» поруч із нею лише повторювало її.
+   */
+  const buildDeadlineTabBadge = (value?: string | null): string | null => {
+    const diffDays = deadlineDiffDays(value);
+    if (diffDays === null) return null;
+    if (diffDays === 0) return "Сьогодні";
+    return `${diffDays < 0 ? "−" : "+"}${Math.abs(diffDays)} дн`;
+  };
+
   const buildDeadlineBadgePreview = (value?: string | null) => {
     if (!value) {
       return {
@@ -2001,14 +2045,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       return { label, short: "—", tone: "none" as QuoteDeadlineTone, title: `${label}: не вказано` };
     }
     const date = parseDeadlineDate(value);
-    const today = new Date();
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const startOfDeadline = date
-      ? new Date(date.getFullYear(), date.getMonth(), date.getDate())
-      : startOfToday;
-    const diffDays = Math.round(
-      (startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const diffDays = deadlineDiffDays(value) ?? 0;
     const short =
       diffDays < 0
         ? `−${Math.abs(diffDays)} дн`
@@ -2078,10 +2115,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!date) {
       return { label: "Без дедлайну", tone: "none" as QuoteDeadlineTone };
     }
-    const today = new Date();
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const startOfDeadline = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const diffDays = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+    const diffDays = deadlineDiffDays(value) ?? 0;
 
     if (diffDays < 0) {
       return {
@@ -5373,7 +5407,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     );
   }
 
-  const deadlineTabBadge = quote.deadline_at ? buildDeadlineBadgePreview(quote.deadline_at).label : "Не вказано";
+  const deadlineTabBadge = buildDeadlineTabBadge(quote.deadline_at);
   const discussionCount = comments.length + attachments.length;
   const designBadge = designTask
     ? "Задача"
