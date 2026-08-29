@@ -186,7 +186,11 @@ function SimpleModelCardBase({
               size="icon"
               variant="ghost"
               aria-label="Дії з моделлю"
-              className="h-8 w-8 rounded-full border border-border/60 bg-background/90 text-muted-foreground backdrop-blur-sm transition-all hover:bg-background hover:text-foreground data-[state=open]:bg-background data-[state=open]:text-foreground data-[state=open]:ring-2 data-[state=open]:ring-primary/40 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 data-[state=open]:opacity-100"
+              // focus-visible на самій кнопці, а не group-focus-within на картці:
+              // картка focusable (role=button, tabIndex=0), тож клік по ній лишав
+              // фокус на картці — і три крапки стирчали, доки не клікнеш деінде.
+              // Відкрите меню тримає видимість окремо, через data-[state=open].
+              className="h-8 w-8 rounded-full border border-border/60 bg-background/90 text-muted-foreground backdrop-blur-sm transition-all hover:bg-background hover:text-foreground data-[state=open]:bg-background data-[state=open]:text-foreground data-[state=open]:ring-2 data-[state=open]:ring-primary/40 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 data-[state=open]:opacity-100"
             >
               <MoreVertical className="h-4 w-4" />
             </Button>

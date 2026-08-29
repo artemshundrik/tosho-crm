@@ -239,7 +239,10 @@ export function CompactSidebar({
                                     onEditType(type.id);
                                   }}
                                   className={cn(
-                                    "p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+                                    // focus-visible НА САМІЙ КНОПЦІ, не group-focus-within
+                                    // на рядку: focus-within ловив і мишачий фокус, тож
+                                    // клік по шеврону лишав олівець стирчати без наведення.
+                                    "p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100",
                                     TREE_ICON_BUTTON,
                                     isSelected && "opacity-100"
                                   )}
@@ -298,7 +301,7 @@ export function CompactSidebar({
                                             onEditKind(kind.id);
                                           }}
                                           className={cn(
-                                            "p-1 opacity-100 md:opacity-0 md:group-hover/kind:opacity-100 md:group-focus-within/kind:opacity-100",
+                                            "p-1 opacity-100 md:opacity-0 md:group-hover/kind:opacity-100 md:focus-visible:opacity-100",
                                             TREE_ICON_BUTTON,
                                             isKindSelected && "opacity-100"
                                           )}

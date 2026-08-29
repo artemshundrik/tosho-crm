@@ -6916,7 +6916,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                                    // focus-visible на кнопці, не group-focus-within на
+                                    // рядку: у рядку тиражу є поля вводу, і клік у будь-яке
+                                    // з них лишав кошик стирчати. Гірше — наведеш на сусідній
+                                    // рядок, і кошики світяться в ДВОХ рядках одночасно.
+                                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       void removeRun(idx);
@@ -8340,7 +8344,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                                        // focus-visible на кнопці, не group-focus-within на
+                                        // рядку: клік по «Завантажити» лишав фокус на ній, і
+                                        // обидві кнопки рядка стирчали далі без наведення.
+                                        className="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                                         onClick={() => {
                                           void ensureAttachmentAccessUrl(file).then((url) => {
                                             if (url) {
@@ -8359,7 +8366,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="shrink-0 text-destructive opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                                          className="shrink-0 text-destructive opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                                           onClick={() => requestDeleteAttachment(file)}
                                           disabled={attachmentsDeletingId === file.id}
                                         >
