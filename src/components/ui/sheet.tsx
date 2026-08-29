@@ -5,6 +5,7 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { OverlayPresenceMarker } from "@/components/ui/overlayPresence"
+import { useEdgeFade } from "@/hooks/useEdgeFade"
 import { UnsavedChangesPrompt, UnsavedGuardListener, useUnsavedGuard } from "@/components/ui/unsaved-guard"
 
 const Sheet = SheetPrimitive.Root
@@ -241,9 +242,23 @@ SheetHeader.displayName = "SheetHeader"
 const SheetBody = ({
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", className)} {...props} />
-)
+}: React.HTMLAttributes<HTMLDivElement>) => {
+  // Довгий список у дровері обривався так само різко, як колонка канбану, і
+  // за тією ж причиною — рівний зріз по межі прокрутки (REQ-201). Маска тут
+  // безпечна: липких шапок усередині дроверів немає (обидві таблиці зі
+  // `stickyHeader` живуть на сторінках), а спливне з дровера Radix виносить у
+  // портал, тож під маску воно не потрапляє.
+  const bodyRef = React.useRef<HTMLDivElement>(null);
+  useEdgeFade(bodyRef, "y");
+
+  return (
+    <div
+      ref={bodyRef}
+      className={cn("edge-fade-y min-h-0 flex-1 overflow-y-auto overscroll-contain", className)}
+      {...props}
+    />
+  );
+}
 SheetBody.displayName = "SheetBody"
 
 const SheetFooter = ({

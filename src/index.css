@@ -1552,6 +1552,97 @@
     border-color: hsl(var(--cmd-kind-design-border));
     color: hsl(var(--cmd-kind-design-foreground));
   }
+
+  /* === КРАЇ ПРОКРУТКИ, ЩО ЗГАСАЮТЬ (REQ-201) ===
+   *
+   * ЩО ЛІКУЄ. Колонка канбану обривається рівно по своїй межі, і остання
+   * картка виявляється розрізаною навпіл. Це читається як вада верстки, а не
+   * як «там ще є картки»: рівний зріз нічого не обіцяє, бо точнісінько так
+   * само виглядав би повний список, якому просто не пощастило з висотою.
+   *
+   * ЧОМУ МАСКА, А НЕ НАКЛАДКА З ГРАДІЄНТОМ. Накладка — це зайвий вузол
+   * усередині прокрутки: вона або їде разом із вмістом (і тоді її треба
+   * робити sticky, а це вже вплив на розкладку), або ловить події й заважає
+   * перетягуванню карток. `mask-image` не додає жодного вузла: висота,
+   * ширина, порядок і потрапляння миші лишаються рівно ті самі, змінюється
+   * тільки те, ЯК намальовано вже наявний вміст. Тому вимоги картки «не
+   * змінювати розкладку» й «не блокувати перетягування» тут виконуються не
+   * обережністю, а вибором механізму.
+   *
+   * ЗГАСАННЯ ЖИВЕ В ДВОХ ЗМІННИХ, і глибина кожної керується окремо, бо краї
+   * незалежні: зверху згасати нема чого, поки список не зрушили з місця, а
+   * знизу — коли докрутили до кінця. Ставить їх `useEdgeFade`, і ставить
+   * РІВНО ДВА значення (0 або глибина), а не поточний зсув: інакше кожен
+   * кадр прокрутки писав би в стиль, а це найдорожче, що можна повісити на
+   * прокрутку довгого списку.
+   *
+   * @property потрібен саме для переходу. Незареєстрована змінна для CSS —
+   * просто текст, і `transition` по ній не працює: край з'являвся б стрибком,
+   * тобто рівно тим, від чого картка й починалась. Реєстрація робить її
+   * справжньою довжиною, яку можна інтерполювати. Де @property не підтримано
+   * (Safari до 16.4), маска все одно працює — зникає лише плавність.
+   */
+  .edge-fade-y {
+    --edge-fade-depth: 2rem;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--edge-fade-start),
+      #000 calc(100% - var(--edge-fade-end)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--edge-fade-start),
+      #000 calc(100% - var(--edge-fade-end)),
+      transparent 100%
+    );
+    transition: --edge-fade-start 160ms linear, --edge-fade-end 160ms linear;
+  }
+
+  .edge-fade-x {
+    --edge-fade-depth: 2.5rem;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--edge-fade-start),
+      #000 calc(100% - var(--edge-fade-end)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--edge-fade-start),
+      #000 calc(100% - var(--edge-fade-end)),
+      transparent 100%
+    );
+    transition: --edge-fade-start 160ms linear, --edge-fade-end 160ms linear;
+  }
+
+  /* «Зменшити рух» вимикає саме ПЕРЕХІД, а не маску: згасання краю — це не
+     рух, а спосіб намалювати межу, і прибирати його означало б повернути
+     скаргу з картки тим, хто просив менше руху. */
+  @media (prefers-reduced-motion: reduce) {
+    .edge-fade-y,
+    .edge-fade-x {
+      transition: none;
+    }
+  }
+}
+
+/* Обидві змінні реєструються ПОЗА @layer: @property шарів не має, і всередині
+   @layer utilities Tailwind його не пропускає в збірку. */
+@property --edge-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --edge-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
 /* === SHIMMER ANIMATION FOR IMAGE LOADING === */

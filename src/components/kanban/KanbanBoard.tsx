@@ -1,4 +1,5 @@
 import { useEffect, useRef, type PropsWithChildren } from "react";
+import { useEdgeFade } from "@/hooks/useEdgeFade";
 import { cn } from "@/lib/utils";
 
 type KanbanBoardProps = PropsWithChildren<{
@@ -8,6 +9,12 @@ type KanbanBoardProps = PropsWithChildren<{
 
 export function KanbanBoard({ className, rowClassName, children }: KanbanBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
+
+  // Бічні краї стрічки згасають, поки збоку лишаються колонки (REQ-201). Той
+  // самий ref, що й у колеса миші: маска нічого не слухає, тож зшивати два
+  // немає потреби.
+  useEdgeFade(boardRef, "x");
+
   useEffect(() => {
     const board = boardRef.current;
     if (!board) return;
@@ -56,7 +63,7 @@ export function KanbanBoard({ className, rowClassName, children }: KanbanBoardPr
       // (kanbanDrag.tsx).
       data-kanban-board="true"
       className={cn(
-        "overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pt-4 pb-6 md:px-5 md:pt-5 md:pb-7 [scrollbar-gutter:stable_both-edges]",
+        "edge-fade-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pt-4 pb-6 md:px-5 md:pt-5 md:pb-7 [scrollbar-gutter:stable_both-edges]",
         className
       )}
     >
