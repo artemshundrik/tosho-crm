@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger, switchTabWithTransition } from "@/components/ui/tabs";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -146,9 +146,6 @@ const SectionCard = ({
     {children}
   </section>
 );
-
-const UNDERLINE_TAB =
-  "h-auto shrink-0 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0";
 
 const getInitials = (value?: string) => {
   if (!value) return "ЛД";
@@ -820,12 +817,16 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               </Button>
             </div>
           ) : (
-            <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
-              <TabsList className="mb-4 h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-0 border-b border-border/40 bg-transparent p-0">
-                <TabsTrigger value="basic" className={UNDERLINE_TAB}>Основне</TabsTrigger>
-                <TabsTrigger value="requisites" className={UNDERLINE_TAB}>Реквізити</TabsTrigger>
-                <TabsTrigger value="communication" className={UNDERLINE_TAB}>Комунікація</TabsTrigger>
-                <TabsTrigger value="logistics" className={UNDERLINE_TAB}>
+            <Tabs
+              value={section}
+              onValueChange={(value) => switchTabWithTransition(() => setSection(value as typeof section))}
+              className="w-full"
+            >
+              <TabsList variant="underline" className="mb-4 w-full overflow-x-auto">
+                <TabsTrigger value="basic">Основне</TabsTrigger>
+                <TabsTrigger value="requisites">Реквізити</TabsTrigger>
+                <TabsTrigger value="communication">Комунікація</TabsTrigger>
+                <TabsTrigger value="logistics">
                   Логістика
                   {form.deliveryPoints.length > 0 ? (
                     <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
@@ -833,7 +834,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     </span>
                   ) : null}
                 </TabsTrigger>
-                <TabsTrigger value="related" className={UNDERLINE_TAB}>
+                <TabsTrigger value="related">
                   Пов'язане
                   <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                     {relatedTotalCount}

@@ -34,6 +34,7 @@ type Rect = { left: number; width: number; height: number; top: number };
  */
 export function useSegmentedSlider<T extends HTMLElement>() {
   const ref = React.useRef<T>(null);
+  const indicatorRef = React.useRef<HTMLSpanElement>(null);
   const [rect, setRect] = React.useState<Rect | null>(null);
   // Перший вимір не анімуємо: плашка мусить з'явитись одразу під активним
   // елементом, а не приїхати з лівого краю на завантаженні сторінки. Це
@@ -61,12 +62,31 @@ export function useSegmentedSlider<T extends HTMLElement>() {
         setAnimated(false);
         return;
       }
-      setRect({
+      const next = {
         left: active.offsetLeft,
         top: active.offsetTop,
         width: active.offsetWidth,
         height: active.offsetHeight,
-      });
+      };
+
+      // Положення пишеться В СТИЛЬ ОДРАЗУ, а не тільки в стан.
+      //
+      // Стан лишається (з нього малюється перший кадр і від нього залежить
+      // `animated`), але покладатись ЛИШЕ на нього не можна через View
+      // Transitions: усередині переходу React оновлюється синхронно, браузер
+      // одразу по тому знімає кадр «після», і рендер, запланований звідси,
+      // до нього не встигає. Плашка потрапила б у кадр «після» на СТАРОМУ
+      // місці — і переїхала б уже після переходу, окремим ривком. Прямий
+      // запис у стиль відбувається в тому ж мікрозавданні, що й зміна
+      // атрибута, тож у кадр вона потрапляє вже на новому місці.
+      const slider = indicatorRef.current;
+      if (slider) {
+        slider.style.transform = `translate3d(${next.left}px, ${next.top}px, 0)`;
+        slider.style.width = `${next.width}px`;
+        slider.style.height = `${next.height}px`;
+      }
+
+      setRect(next);
     };
 
     measure();
@@ -103,6 +123,7 @@ export function useSegmentedSlider<T extends HTMLElement>() {
 
   const indicator = rect ? (
     <span
+      ref={indicatorRef}
       aria-hidden
       data-segmented-indicator=""
       className={cn(

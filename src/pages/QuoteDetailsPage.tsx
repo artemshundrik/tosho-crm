@@ -17,7 +17,14 @@ import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  switchTabWithTransition,
+  useViewTransitionTabs,
+} from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Command,
@@ -976,6 +983,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return () => window.removeEventListener("resize", apply);
   });
   const [detailsTab, setDetailsTab] = useState<"comments" | "files" | "activity">("comments");
+  // Вкладки перемикаються під перехресним згасанням (REQ-202), а для цього
+  // значення мусить бути КЕРОВАНИМ — див. коментар до `useViewTransitionTabs`.
+  const briefTabs = useViewTransitionTabs("brief");
+  const partyTabs = useViewTransitionTabs("internal");
   const commentDraftKey = useMemo(() => buildDraftKey("quote-comment", quoteId), [quoteId]);
   const [commentText, setCommentText] = useState(() => readDraft<string>(commentDraftKey)?.value ?? "");
   const [commentSaving, setCommentSaving] = useState(false);
@@ -7000,7 +7011,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
 
               <div className="space-y-4">
-                <Tabs defaultValue="internal" className="w-full">
+                <Tabs {...partyTabs} className="w-full">
                   <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
                   <TabsList className="grid h-auto w-full grid-cols-1 gap-2 border-0 bg-transparent p-0">
                     <TabsTrigger
@@ -7401,25 +7412,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </div>
 
-              <Tabs defaultValue="brief" className="w-full">
-                <TabsList className="mb-5 h-auto justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0">
-                  <TabsTrigger
-                    value="brief"
-                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
-                  >
+              <Tabs {...briefTabs} className="w-full">
+                <TabsList variant="underline" className="mb-5">
+                  <TabsTrigger value="brief">
                     ТЗ
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="visuals"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
-                  >
+                  <TabsTrigger value="visuals">
                     Візуалізації
                     <span className="ml-2 text-xs text-muted-foreground">{visibleDesignVisualizations.length}</span>
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="task"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
-                  >
+                  <TabsTrigger value="task">
                     Задача
                     <span className="ml-2 text-xs text-muted-foreground">{designTasks.length}</span>
                   </TabsTrigger>
@@ -7957,26 +7959,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </div>
 
-              <Tabs value={detailsTab} onValueChange={(value) => setDetailsTab(value as "comments" | "files" | "activity")} className="w-full">
-                <TabsList className="mb-5 h-auto w-full justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0">
-                  <TabsTrigger
-                    value="comments"
-                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
-                  >
+              <Tabs
+                value={detailsTab}
+                onValueChange={(value) =>
+                  switchTabWithTransition(() => setDetailsTab(value as "comments" | "files" | "activity"))
+                }
+                className="w-full"
+              >
+                <TabsList variant="underline" className="mb-5 w-full">
+                  <TabsTrigger value="comments">
                     Коментарі
                     <span className="ml-2 text-xs text-muted-foreground">{comments.length}</span>
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="files"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
-                  >
+                  <TabsTrigger value="files">
                     Вкладення
                     <span className="ml-2 text-xs text-muted-foreground">{attachments.length}</span>
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="activity"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
-                  >
+                  <TabsTrigger value="activity">
                     Активність
                   </TabsTrigger>
                 </TabsList>

@@ -17,7 +17,7 @@ import { DictationButton } from "@/components/dictation/DictationButton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger, switchTabWithTransition } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { DropboxIcon } from "@/components/icons/DropboxIcon";
 import {
@@ -11357,12 +11357,16 @@ export default function DesignTaskPage() {
               value={activeDesignOutputTab}
               onValueChange={(value) => {
                 const nextKind = value as DesignOutputKind;
-                setActiveDesignOutputTab(nextKind);
-                setUploadTargetKind(nextKind);
-                setAddLinkKind(nextKind);
-                // Масові дії показуються під видимим табом, тож вибір із
-                // попереднього не має «тягнутись» у наступний невидимим.
-                setOutputSelectionIds([]);
+                // Усі чотири зміни — в одному переході (REQ-202): інакше
+                // браузер зняв би кадр «до» вже після частини з них.
+                switchTabWithTransition(() => {
+                  setActiveDesignOutputTab(nextKind);
+                  setUploadTargetKind(nextKind);
+                  setAddLinkKind(nextKind);
+                  // Масові дії показуються під видимим табом, тож вибір із
+                  // попереднього не має «тягнутись» у наступний невидимим.
+                  setOutputSelectionIds([]);
+                });
               }}
               className="w-full"
             >

@@ -26,7 +26,7 @@ import { useSegmentedSlider } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import type { ImageUploadMode } from "@/types/catalog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger, switchTabWithTransition } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 // LTV (MVP, frontend-only): summary card data — purely additive props.
 import {
@@ -215,9 +215,6 @@ const SectionCard = ({
     {children}
   </section>
 );
-
-const UNDERLINE_TAB =
-  "h-auto shrink-0 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0";
 
 const getInitials = (value?: string) => {
   if (!value) return "Не вказано";
@@ -993,12 +990,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </Button>
             </div>
           ) : (
-          <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
-            <TabsList className="mb-4 h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-0 border-b border-border/40 bg-transparent p-0">
-              <TabsTrigger value="basic" className={UNDERLINE_TAB}>Основне</TabsTrigger>
-              <TabsTrigger value="legalEntities" className={UNDERLINE_TAB}>Юр. особи</TabsTrigger>
-              <TabsTrigger value="communication" className={UNDERLINE_TAB}>Комунікація</TabsTrigger>
-              <TabsTrigger value="logistics" className={UNDERLINE_TAB}>
+          <Tabs
+            value={section}
+            onValueChange={(value) => switchTabWithTransition(() => setSection(value as typeof section))}
+            className="w-full"
+          >
+            <TabsList variant="underline" className="mb-4 w-full overflow-x-auto">
+              <TabsTrigger value="basic">Основне</TabsTrigger>
+              <TabsTrigger value="legalEntities">Юр. особи</TabsTrigger>
+              <TabsTrigger value="communication">Комунікація</TabsTrigger>
+              <TabsTrigger value="logistics">
                 Логістика
                 {form.deliveryPoints.length > 0 ? (
                   <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
@@ -1006,8 +1007,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   </span>
                 ) : null}
               </TabsTrigger>
-              <TabsTrigger value="accountant" className={UNDERLINE_TAB}>Бухгалтер</TabsTrigger>
-              <TabsTrigger value="related" className={UNDERLINE_TAB}>
+              <TabsTrigger value="accountant">Бухгалтер</TabsTrigger>
+              <TabsTrigger value="related">
                 Пов'язане
                 <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                   {relatedTotalCount}
