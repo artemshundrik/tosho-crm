@@ -18,6 +18,11 @@ Local runtime rule:
 - for local Netlify function parity, `.env.local` must include server-side Supabase vars too: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; `VITE_SUPABASE_*` alone only covers the frontend client
 - when using `netlify dev`, test the app via `http://localhost:8888` unless the local proxy is configured differently
 
+MCP-сервери (підключені в local scope, `~/.claude.json` — не в `.mcp.json` репозиторію):
+
+- **Context7** — доки бібліотек, актуальніші за навчальні дані. Для цього стека ID підставляй одразу, без пошуку: Tailwind v4 — `/websites/tailwindcss` (віддає `@theme`; v3-рецепти лежать окремо в `/websites/v3_tailwindcss` і для нас хибні), React 19 — `/react/react/v19.2.7`. Версію можна пінити прямо в ID. Увага: `/react/react` віддає вихідний код і CHANGELOG, а прозу документації — `/reactjs/react.dev`. Ліміт `resolve-library-id` — 3 виклики на питання.
+- **Chrome DevTools** — траси продуктивності для скіла `web-perf`. Браузер у нього свій, із чистим профілем, тож сесії з дев-сервера там немає і будь-який URL редіректить на `/login`: без логіна міряється лише оболонка застосунку. Міряти на прод-збірці (`npm run build`), а не на `npm run dev` — dev завищує. Прев'ю піднімай конфігом `preview-alt` (порт 5200): `preview` на 5199 регулярно зайнятий дев-сервером іншої сесії, і чужий сервер `preview_stop` не гасить.
+
 ## 1. New Frontend Change
 
 Use when the task is mainly UI or client behavior.
