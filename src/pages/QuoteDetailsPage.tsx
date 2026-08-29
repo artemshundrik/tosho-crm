@@ -8190,201 +8190,199 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         </Button>
                       </div>
 
-                      {filesCustomerOpen && (
-                        <div className="mt-3 space-y-2">
-                          {attachmentsLoading ? (
-                            <div className="py-4 text-center">
-                              <Loader2 className="mx-auto mb-1 h-4 w-4 animate-spin text-muted-foreground" />
-                              <p className="text-xs text-muted-foreground">Завантаження...</p>
-                            </div>
-                          ) : attachmentsError ? (
-                            <div className="text-sm text-destructive">{attachmentsError}</div>
-                          ) : attachments.length === 0 ? (
-                            <div
-                              className={cn(
-                                "cursor-pointer rounded-xl border border-dashed p-6 text-center transition-colors",
-                                attachmentsDragActive
-                                  ? "border-primary/60 bg-primary/10"
-                                  : "border-border/60 hover:border-primary/40 hover:bg-primary/5"
-                              )}
-                              onClick={() => attachmentsInputRef.current?.click()}
-                              onDrop={handleAttachmentsDrop}
-                              onDragOver={handleAttachmentsDragOver}
-                              onDragLeave={handleAttachmentsDragLeave}
-                            >
-                              <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
-                              <p className="mb-1 text-sm font-medium">Перетягніть файли сюди</p>
-                              <p className="text-xs text-muted-foreground">або натисніть для вибору</p>
-                              <p className="mt-2 text-xs text-muted-foreground">
-                                До {MAX_QUOTE_ATTACHMENTS} файлів · до 50 MB · PDF, AI, SVG, PNG, JPG, ZIP
-                              </p>
-                            </div>
-                          ) : (
-                            <div
-                              className={cn(
-                                "space-y-2 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] p-2",
-                                attachmentsDragActive && "border-primary/60 bg-primary/5"
-                              )}
-                              onDrop={handleAttachmentsDrop}
-                              onDragOver={handleAttachmentsDragOver}
-                              onDragLeave={handleAttachmentsDragLeave}
-                            >
-                              {attachments.map((file) => {
-                                const displayName = getAttachmentDisplayName(file);
-                                const extension = getFileExtension(displayName);
-                                // Та сама умова й той самий шлях до прев'ю, що
-                                // й у сітці візуалізацій нижче на цій сторінці:
-                                // мініатюра лежить у storage поруч з оригіналом
-                                // (uploadAttachmentWithVariants), і панель
-                                // вкладень просто нею не користувалась.
-                                const previewImage =
-                                  (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
-                                  Boolean(file.storageBucket && file.storagePath);
-                                const openPreview = () => {
-                                  if (!previewImage) return;
-                                  // Варіант «preview» існує не в кожного файлу:
-                                  // getAttachmentVariantCandidatePaths шукає лише
-                                  // __preview.webp/.png і НЕ відкочується до
-                                  // оригіналу. Без запасного шляху клік по файлу
-                                  // без згенерованого прев'ю просто нічого не
-                                  // робив би — найгірший вид поламаного.
-                                  void ensureAttachmentAccessUrl(file, { variant: "preview" })
-                                    .then((url) => url ?? ensureAttachmentAccessUrl(file, { variant: "original" }))
-                                    .then((url) => {
-                                      if (!url) {
-                                        toast.error("Не вдалося відкрити превʼю файлу");
-                                        return;
-                                      }
-                                      setVisualizationPreview({ ...file, url });
-                                    });
-                                };
-                                return (
-                                  <div
-                                    key={file.id}
-                                    className="group flex items-center justify-between rounded-xl border border-border/30 p-3 transition-colors hover:bg-muted/10"
-                                  >
-                                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                                      {previewImage ? (
-                                        /* Обгортка — div, а не button, хоча вона й
-                                           клікабельна: hoverPreview усередині
-                                           StorageObjectImage сам ставить tabIndex,
-                                           а фокусований елемент у <button> — це
-                                           вкладена інтерактивність, чого модель
-                                           вмісту кнопки не допускає. З клавіатури
-                                           прев'ю відкривається кнопкою на назві
-                                           файлу поруч. */
-                                        <div
-                                          onClick={openPreview}
-                                          className="h-11 w-11 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-muted/20 transition-transform hover:scale-[1.04]"
-                                        >
-                                          {/* object-cover саме через imageClassName:
-                                              className лягає на обгортку, і широка
-                                              мініатюра в квадраті 44×44 інакше
-                                              стискається в смужку. */}
-                                          <StorageObjectImage
-                                            bucket={file.storageBucket}
-                                            path={file.storagePath}
-                                            alt={displayName}
-                                            variant="thumb"
-                                            hoverPreview
-                                            className="h-full w-full"
-                                            imageClassName="object-cover"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-lg bg-primary/10">
-                                          <Paperclip className="h-5 w-5 text-primary" />
-                                        </div>
-                                      )}
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2">
-                                          {previewImage ? (
-                                            <button
-                                              type="button"
-                                              onClick={openPreview}
-                                              title={displayName}
-                                              className="min-w-0 truncate text-left text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-                                            >
-                                              {displayName}
-                                            </button>
-                                          ) : (
-                                            <div className="truncate text-sm font-semibold" title={displayName}>
-                                              {displayName}
-                                            </div>
-                                          )}
-                                          {extension && (
-                                            <Badge variant="secondary" className="text-3xs uppercase">
-                                              {extension}
-                                            </Badge>
-                                          )}
-                                          {/* Позначаємо лише дизайнерські:
-                                              файли прорахунку тут більшість,
-                                              і бейдж на кожному рядку був би
-                                              шумом, а не інформацією. */}
-                                          {file.audience === "design" && (
-                                            <Badge variant="outline" className="shrink-0 text-3xs">
-                                              Для дизайнера
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {file.size} ·{" "}
-                                          {new Date(file.created_at).toLocaleString("uk-UA", {
-                                            day: "2-digit",
-                                            month: "2-digit",
-                                            year: "numeric",
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          })}
-                                          {file.uploadedByLabel ? ` · ${file.uploadedByLabel}` : ""}
-                                        </div>
+                      <div hidden={!filesCustomerOpen} className="panel-reveal mt-3 space-y-2">
+                        {attachmentsLoading ? (
+                          <div className="py-4 text-center">
+                            <Loader2 className="mx-auto mb-1 h-4 w-4 animate-spin text-muted-foreground" />
+                            <p className="text-xs text-muted-foreground">Завантаження...</p>
+                          </div>
+                        ) : attachmentsError ? (
+                          <div className="text-sm text-destructive">{attachmentsError}</div>
+                        ) : attachments.length === 0 ? (
+                          <div
+                            className={cn(
+                              "cursor-pointer rounded-xl border border-dashed p-6 text-center transition-colors",
+                              attachmentsDragActive
+                                ? "border-primary/60 bg-primary/10"
+                                : "border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                            )}
+                            onClick={() => attachmentsInputRef.current?.click()}
+                            onDrop={handleAttachmentsDrop}
+                            onDragOver={handleAttachmentsDragOver}
+                            onDragLeave={handleAttachmentsDragLeave}
+                          >
+                            <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
+                            <p className="mb-1 text-sm font-medium">Перетягніть файли сюди</p>
+                            <p className="text-xs text-muted-foreground">або натисніть для вибору</p>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              До {MAX_QUOTE_ATTACHMENTS} файлів · до 50 MB · PDF, AI, SVG, PNG, JPG, ZIP
+                            </p>
+                          </div>
+                        ) : (
+                          <div
+                            className={cn(
+                              "space-y-2 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] p-2",
+                              attachmentsDragActive && "border-primary/60 bg-primary/5"
+                            )}
+                            onDrop={handleAttachmentsDrop}
+                            onDragOver={handleAttachmentsDragOver}
+                            onDragLeave={handleAttachmentsDragLeave}
+                          >
+                            {attachments.map((file) => {
+                              const displayName = getAttachmentDisplayName(file);
+                              const extension = getFileExtension(displayName);
+                              // Та сама умова й той самий шлях до прев'ю, що
+                              // й у сітці візуалізацій нижче на цій сторінці:
+                              // мініатюра лежить у storage поруч з оригіналом
+                              // (uploadAttachmentWithVariants), і панель
+                              // вкладень просто нею не користувалась.
+                              const previewImage =
+                                (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
+                                Boolean(file.storageBucket && file.storagePath);
+                              const openPreview = () => {
+                                if (!previewImage) return;
+                                // Варіант «preview» існує не в кожного файлу:
+                                // getAttachmentVariantCandidatePaths шукає лише
+                                // __preview.webp/.png і НЕ відкочується до
+                                // оригіналу. Без запасного шляху клік по файлу
+                                // без згенерованого прев'ю просто нічого не
+                                // робив би — найгірший вид поламаного.
+                                void ensureAttachmentAccessUrl(file, { variant: "preview" })
+                                  .then((url) => url ?? ensureAttachmentAccessUrl(file, { variant: "original" }))
+                                  .then((url) => {
+                                    if (!url) {
+                                      toast.error("Не вдалося відкрити превʼю файлу");
+                                      return;
+                                    }
+                                    setVisualizationPreview({ ...file, url });
+                                  });
+                              };
+                              return (
+                                <div
+                                  key={file.id}
+                                  className="group flex items-center justify-between rounded-xl border border-border/30 p-3 transition-colors hover:bg-muted/10"
+                                >
+                                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                                    {previewImage ? (
+                                      /* Обгортка — div, а не button, хоча вона й
+                                         клікабельна: hoverPreview усередині
+                                         StorageObjectImage сам ставить tabIndex,
+                                         а фокусований елемент у <button> — це
+                                         вкладена інтерактивність, чого модель
+                                         вмісту кнопки не допускає. З клавіатури
+                                         прев'ю відкривається кнопкою на назві
+                                         файлу поруч. */
+                                      <div
+                                        onClick={openPreview}
+                                        className="h-11 w-11 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-muted/20 transition-transform hover:scale-[1.04]"
+                                      >
+                                        {/* object-cover саме через imageClassName:
+                                            className лягає на обгортку, і широка
+                                            мініатюра в квадраті 44×44 інакше
+                                            стискається в смужку. */}
+                                        <StorageObjectImage
+                                          bucket={file.storageBucket}
+                                          path={file.storagePath}
+                                          alt={displayName}
+                                          variant="thumb"
+                                          hoverPreview
+                                          className="h-full w-full"
+                                          imageClassName="object-cover"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-lg bg-primary/10">
+                                        <Paperclip className="h-5 w-5 text-primary" />
+                                      </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        {previewImage ? (
+                                          <button
+                                            type="button"
+                                            onClick={openPreview}
+                                            title={displayName}
+                                            className="min-w-0 truncate text-left text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+                                          >
+                                            {displayName}
+                                          </button>
+                                        ) : (
+                                          <div className="truncate text-sm font-semibold" title={displayName}>
+                                            {displayName}
+                                          </div>
+                                        )}
+                                        {extension && (
+                                          <Badge variant="secondary" className="text-3xs uppercase">
+                                            {extension}
+                                          </Badge>
+                                        )}
+                                        {/* Позначаємо лише дизайнерські:
+                                            файли прорахунку тут більшість,
+                                            і бейдж на кожному рядку був би
+                                            шумом, а не інформацією. */}
+                                        {file.audience === "design" && (
+                                          <Badge variant="outline" className="shrink-0 text-3xs">
+                                            Для дизайнера
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {file.size} ·{" "}
+                                        {new Date(file.created_at).toLocaleString("uk-UA", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                        {file.uploadedByLabel ? ` · ${file.uploadedByLabel}` : ""}
                                       </div>
                                     </div>
-                                    <div className="ml-4 flex items-center gap-1">
+                                  </div>
+                                  <div className="ml-4 flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      // focus-visible на кнопці, не group-focus-within на
+                                      // рядку: клік по «Завантажити» лишав фокус на ній, і
+                                      // обидві кнопки рядка стирчали далі без наведення.
+                                      className="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                                      onClick={() => {
+                                        void ensureAttachmentAccessUrl(file).then((url) => {
+                                          if (url) {
+                                            void downloadFileToDevice(
+                                              url,
+                                              getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
+                                            );
+                                          }
+                                        });
+                                      }}
+                                      disabled={!file.storageBucket || !file.storagePath}
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                    {canDeleteDesignerBriefAttachment(file) ? (
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        // focus-visible на кнопці, не group-focus-within на
-                                        // рядку: клік по «Завантажити» лишав фокус на ній, і
-                                        // обидві кнопки рядка стирчали далі без наведення.
-                                        className="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                                        onClick={() => {
-                                          void ensureAttachmentAccessUrl(file).then((url) => {
-                                            if (url) {
-                                              void downloadFileToDevice(
-                                                url,
-                                                getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
-                                              );
-                                            }
-                                          });
-                                        }}
-                                        disabled={!file.storageBucket || !file.storagePath}
+                                        className="shrink-0 text-destructive opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                                        onClick={() => requestDeleteAttachment(file)}
+                                        disabled={attachmentsDeletingId === file.id}
                                       >
-                                        <Download className="h-4 w-4" />
+                                        {attachmentsDeletingId === file.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="h-4 w-4" />
+                                        )}
                                       </Button>
-                                      {canDeleteDesignerBriefAttachment(file) ? (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="shrink-0 text-destructive opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                                          onClick={() => requestDeleteAttachment(file)}
-                                          disabled={attachmentsDeletingId === file.id}
-                                        >
-                                          {attachmentsDeletingId === file.id ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                          ) : (
-                                            <Trash2 className="h-4 w-4" />
-                                          )}
-                                        </Button>
-                                      ) : null}
-                                    </div>
+                                    ) : null}
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -8406,11 +8404,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           Додати
                         </Button>
                       </div>
-                      {filesDocsOpen && (
-                        <div className="mt-3 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] p-4 text-xs text-muted-foreground">
-                          Рахунки, договори, акти — скоро буде доступно.
-                        </div>
-                      )}
+                      <div
+                        hidden={!filesDocsOpen}
+                        className="panel-reveal mt-3 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] p-4 text-xs text-muted-foreground"
+                      >
+                        Рахунки, договори, акти — скоро буде доступно.
+                      </div>
                     </div>
 
                     {attachmentsUploadError && (

@@ -2149,152 +2149,149 @@ export function ToShoAiConsole({
               </div>
             </div>
 
-            {showRequestList ? (
-              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">Попередні чати</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Тільки твої діалоги з ToSho AI.</div>
-                  </div>
-                  <Badge tone="neutral" size="sm" pill>
-                    Мої чати
-                  </Badge>
+            {/* Обидві панелі лишаються в дереві, а ховає їх `hidden`: вузол мусить дожити до кінця згасання (REQ-203). */}
+            <div hidden={!showRequestList} className="panel-reveal rounded-[26px] border border-border/60 bg-card/88 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-foreground">Попередні чати</div>
+                  <div className="mt-1 text-sm text-muted-foreground">Тільки твої діалоги з ToSho AI.</div>
                 </div>
-                <Input
-                  value={queueSearch}
-                  onChange={(event) => setQueueSearch(event.target.value)}
-                  placeholder="Пошук по чатах"
-                  disabled={historyPanelLoading && !historyLoaded}
-                  className="mt-3 rounded-2xl border-border/60 bg-background/70"
-                />
-                <div className="mt-3 space-y-3">
-                  {historyPanelLoading && !historyLoaded ? (
-                    <HistoryListSkeleton />
-                  ) : filteredThreads.length > 0 ? (
-                    filteredThreads.map((item) => (
-                      <ThreadCard
-                        key={item.id}
-                        item={item}
-                        active={selectedThread?.id === item.id}
-                        onSelect={() => handleSelectThread(item.id)}
-                      />
-                    ))
-                  ) : (
-                    <EmptyPanel
-                      icon={<MessageSquare className="h-5 w-5" />}
-                      title={queueSearchValue ? "Нічого не знайдено" : "Поки тихо"}
-                      description={
-                        queueSearchValue
-                          ? "Спробуй інший пошук."
-                          : "Щойно з’явиться перший чат, він буде тут."
-                      }
-                    />
-                  )}
-                </div>
+                <Badge tone="neutral" size="sm" pill>
+                  Мої чати
+                </Badge>
               </div>
-            ) : null}
+              <Input
+                value={queueSearch}
+                onChange={(event) => setQueueSearch(event.target.value)}
+                placeholder="Пошук по чатах"
+                disabled={historyPanelLoading && !historyLoaded}
+                className="mt-3 rounded-2xl border-border/60 bg-background/70"
+              />
+              <div className="mt-3 space-y-3">
+                {historyPanelLoading && !historyLoaded ? (
+                  <HistoryListSkeleton />
+                ) : filteredThreads.length > 0 ? (
+                  filteredThreads.map((item) => (
+                    <ThreadCard
+                      key={item.id}
+                      item={item}
+                      active={selectedThread?.id === item.id}
+                      onSelect={() => handleSelectThread(item.id)}
+                    />
+                  ))
+                ) : (
+                  <EmptyPanel
+                    icon={<MessageSquare className="h-5 w-5" />}
+                    title={queueSearchValue ? "Нічого не знайдено" : "Поки тихо"}
+                    description={
+                      queueSearchValue
+                        ? "Спробуй інший пошук."
+                        : "Щойно з’явиться перший чат, він буде тут."
+                    }
+                  />
+                )}
+              </div>
+            </div>
 
-            {knowledgeExpanded ? (
-              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">База знань</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Що вже знає ToSho AI і звідки він це бере.</div>
-                  </div>
-                  <Badge tone="neutral" size="sm" pill>
-                    {knowledgePanelLoading && !knowledgeLoaded
-                      ? "Завантаження"
-                      : `Активних: ${snapshot?.stats.knowledgeActiveCount ?? 0}`}
-                  </Badge>
+            <div hidden={!knowledgeExpanded} className="panel-reveal rounded-[26px] border border-border/60 bg-card/88 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-foreground">База знань</div>
+                  <div className="mt-1 text-sm text-muted-foreground">Що вже знає ToSho AI і звідки він це бере.</div>
                 </div>
-                <div className="mt-3 space-y-3">
-                  {knowledgePanelLoading && !knowledgeLoaded ? (
-                    <KnowledgeListSkeleton />
-                  ) : (snapshot?.knowledgeItems ?? []).length > 0 ? (
-                    (snapshot?.knowledgeItems ?? []).map((item) => (
-                      <div key={item.id} className="rounded-4xl border border-border/60 bg-background/65 px-4 py-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge
-                                tone={
-                                  item.status === "active" ? "success" : item.status === "draft" ? "warning" : "neutral"
-                                }
-                                size="sm"
-                                pill
-                              >
-                                {item.status === "active" ? "Активна" : item.status === "draft" ? "Чернетка" : "Архів"}
-                              </Badge>
-                              {item.tags.slice(0, 3).map((tag) => (
-                                <Badge key={`${item.id}:${tag}`} tone="neutral" size="sm" pill>
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                            <div className="text-[15px] font-semibold leading-5 text-foreground">{item.title}</div>
-                            <div className="text-sm leading-6 text-muted-foreground">
-                              {item.summary || item.body.slice(0, compact ? 120 : 190)}
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="secondary"
+                <Badge tone="neutral" size="sm" pill>
+                  {knowledgePanelLoading && !knowledgeLoaded
+                    ? "Завантаження"
+                    : `Активних: ${snapshot?.stats.knowledgeActiveCount ?? 0}`}
+                </Badge>
+              </div>
+              <div className="mt-3 space-y-3">
+                {knowledgePanelLoading && !knowledgeLoaded ? (
+                  <KnowledgeListSkeleton />
+                ) : (snapshot?.knowledgeItems ?? []).length > 0 ? (
+                  (snapshot?.knowledgeItems ?? []).map((item) => (
+                    <div key={item.id} className="rounded-4xl border border-border/60 bg-background/65 px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              tone={
+                                item.status === "active" ? "success" : item.status === "draft" ? "warning" : "neutral"
+                              }
                               size="sm"
-                              onClick={() => setExpandedKnowledgeId((prev) => (prev === item.id ? null : item.id))}
+                              pill
                             >
-                              {expandedKnowledgeId === item.id ? "Сховати" : "Читати"}
-                              <ChevronDown
-                                className={cn("h-4 w-4 transition-transform", expandedKnowledgeId === item.id && "rotate-180")}
-                              />
+                              {item.status === "active" ? "Активна" : item.status === "draft" ? "Чернетка" : "Архів"}
+                            </Badge>
+                            {item.tags.slice(0, 3).map((tag) => (
+                              <Badge key={`${item.id}:${tag}`} tone="neutral" size="sm" pill>
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="text-[15px] font-semibold leading-5 text-foreground">{item.title}</div>
+                          <div className="text-sm leading-6 text-muted-foreground">
+                            {item.summary || item.body.slice(0, compact ? 120 : 190)}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setExpandedKnowledgeId((prev) => (prev === item.id ? null : item.id))}
+                          >
+                            {expandedKnowledgeId === item.id ? "Сховати" : "Читати"}
+                            <ChevronDown
+                              className={cn("h-4 w-4 transition-transform", expandedKnowledgeId === item.id && "rotate-180")}
+                            />
+                          </Button>
+                          {item.sourceHref ? (
+                            <Button type="button" variant="outline" size="sm" asChild>
+                              <a href={item.sourceHref} target="_blank" rel="noreferrer">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
                             </Button>
-                            {item.sourceHref ? (
-                              <Button type="button" variant="outline" size="sm" asChild>
-                                <a href={item.sourceHref} target="_blank" rel="noreferrer">
-                                  <ExternalLink className="h-4 w-4" />
-                                </a>
-                              </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                      {expandedKnowledgeId === item.id ? (
+                        <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+                          <div className="whitespace-pre-wrap text-sm leading-6 text-foreground">{item.body}</div>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="text-xs text-muted-foreground">
+                              {item.sourceLabel ? `Основа: ${item.sourceLabel}` : "Внутрішня база знань"}
+                            </div>
+                            {snapshot?.permissions.canManageKnowledge ? (
+                              <div className="flex items-center gap-2">
+                                <Button type="button" variant="ghost" size="sm" onClick={() => openKnowledgeDialog(item)}>
+                                  Редагувати
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={actionBusy === `delete-knowledge:${item.id}`}
+                                  onClick={() => void handleDeleteKnowledge(item)}
+                                >
+                                  Видалити
+                                </Button>
+                              </div>
                             ) : null}
                           </div>
                         </div>
-                        {expandedKnowledgeId === item.id ? (
-                          <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
-                            <div className="whitespace-pre-wrap text-sm leading-6 text-foreground">{item.body}</div>
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div className="text-xs text-muted-foreground">
-                                {item.sourceLabel ? `Основа: ${item.sourceLabel}` : "Внутрішня база знань"}
-                              </div>
-                              {snapshot?.permissions.canManageKnowledge ? (
-                                <div className="flex items-center gap-2">
-                                  <Button type="button" variant="ghost" size="sm" onClick={() => openKnowledgeDialog(item)}>
-                                    Редагувати
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="destructive"
-                                    size="sm"
-                                    disabled={actionBusy === `delete-knowledge:${item.id}`}
-                                    onClick={() => void handleDeleteKnowledge(item)}
-                                  >
-                                    Видалити
-                                  </Button>
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    ))
-                  ) : (
-                    <EmptyPanel
-                      icon={<BookOpen className="h-5 w-5" />}
-                      title="База знань поки порожня"
-                      description="Додай перші картки по найчастіших питаннях команди, і ToSho AI почне відповідати сильніше."
-                    />
-                  )}
-                </div>
+                      ) : null}
+                    </div>
+                  ))
+                ) : (
+                  <EmptyPanel
+                    icon={<BookOpen className="h-5 w-5" />}
+                    title="База знань поки порожня"
+                    description="Додай перші картки по найчастіших питаннях команди, і ToSho AI почне відповідати сильніше."
+                  />
+                )}
               </div>
-            ) : null}
+            </div>
 
             {!snapshot && !loading && loadError ? (
               <div className="rounded-[26px] border border-border/60 bg-card/70 p-4">

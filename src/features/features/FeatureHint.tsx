@@ -181,8 +181,9 @@ export function FeatureHint({
     });
   }, [visible, state, write]);
 
-  if (!visible) return null;
-
+  // Підказка НЕ знімається з дерева, поки її ховають (REQ-203): вузол мусить
+  // дожити до кінця згасання, інакше анімувати закриття нема чого. Ховає
+  // `hidden`, а решту — CSS-утиліта `panel-reveal`.
   const dismiss = () => {
     setVisible(false);
     void write({ dismissed_at: new Date().toISOString() });
@@ -207,8 +208,9 @@ export function FeatureHint({
     return (
       <div
         role="note"
+        hidden={!visible}
         className={cn(
-          "flex items-start gap-2 rounded-lg border border-primary/25 bg-primary/[0.05] px-2.5 py-2",
+          "panel-reveal flex items-start gap-2 rounded-lg border border-primary/25 bg-primary/[0.05] px-2.5 py-2",
           className
         )}
       >
@@ -236,9 +238,12 @@ export function FeatureHint({
   return (
     <span
       role="note"
+      hidden={!visible}
       className={cn(
-        "absolute z-30 flex w-max max-w-[240px] items-start gap-1.5 rounded-lg border border-primary/30 bg-popover px-2.5 py-1.5",
-        side === "top" ? "bottom-full mb-2" : "top-full mt-2",
+        "panel-reveal absolute z-30 flex w-max max-w-[240px] items-start gap-1.5 rounded-lg border border-primary/30 bg-popover px-2.5 py-1.5",
+        // Поповер під кнопкою заходить згори вниз, над кнопкою — знизу вгору:
+        // рух завжди «від тригера», інакше підказка ніби наповзає збоку.
+        side === "top" ? "bottom-full mb-2 [--panel-reveal-shift:0_0.375rem]" : "top-full mt-2",
         align === "end" ? "right-0" : "left-0",
         className
       )}
