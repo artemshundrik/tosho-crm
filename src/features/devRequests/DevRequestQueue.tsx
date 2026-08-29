@@ -563,7 +563,12 @@ function PapercutCard({
   saving: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const look = themeLook(papercutLabel(request));
+  // Вигляд береться з ТЕМИ картки, а не з її назви. Спершу тут стояв
+  // `papercutLabel`, і полиця «Дрібниці» тихо перетворилась на другу, застарілу
+  // таксономію: 29.08.2026 теми звели у крупні, а полиця далі показувала
+  // «гроші замовлення», «мова інтерфейсу» й «картка прорахунку» — назви, яких
+  // уже немає, — усі із запасною іконкою шарів, бо в реєстрі їх не лишилось.
+  const look = themeLook(request.theme);
   const ThemeIcon = look?.icon ?? Scissors;
   const progress = checklistProgress(request.checklist);
   const left = progress.total - progress.done;
