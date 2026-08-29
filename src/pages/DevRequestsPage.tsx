@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Archive, CheckCheck, KanbanSquare, Lightbulb, ListChecks, PlusCircle, Trash2, XCircle } from "lucide-react";
+import { Archive, CheckCheck, Inbox, KanbanSquare, Lightbulb, ListChecks, PlusCircle, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -14,6 +14,7 @@ import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
   TOOLBAR_ACTION_BUTTON,
+  TOOLBAR_FILTER,
 } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
@@ -167,6 +168,25 @@ export default function DevRequestsPage() {
   const moveRequest = useMoveDevRequest(teamId);
   const updateRequest = useUpdateDevRequest(teamId);
   const deleteRequest = useDeleteDevRequest(teamId);
+
+  /**
+   * Вхід на дошку скидає скрол сторінки в нуль — ДО заміру висоти нижче.
+   *
+   * Без цього перемикання зі скроленої «Черги» міряло канбан відносно
+   * проскроленого вікна: rect.top виходив глибоко від'ємним, дошка отримувала
+   * висоту в тисячі пікселів, документ не коротшав — і людина лишалась
+   * дивитись у білу порожнечу під колонками. Той самий лік і той самий набір
+   * викликів, що на вході в канбан прорахунків (QuotesPage).
+   */
+  useLayoutEffect(() => {
+    if (view !== "board") return;
+    if (typeof window === "undefined") return;
+
+    document.scrollingElement?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [view]);
 
   /**
    * Висота дошки — рівно до низу вікна, як на дизайні та прорахунках.
@@ -325,6 +345,9 @@ export default function DevRequestsPage() {
       board: all.filter(
         (r) => r.status !== "someday" && r.status !== "wont_do" && !isArchivedRequest(r, now)
       ).length,
+      // «Вхідні» — для кнопки «Розібрати» в тулбарі «Черги». Архів не
+      // віднімаємо: архівуються лише викочені, тож нерозібране туди не потрапляє.
+      triage: all.filter((r) => r.status === "triage").length,
       // Лічильник «Черги» свій: викоченого там немає, тож число дошки їй бреше.
       queue: all.filter(
         (r) =>
@@ -560,6 +583,29 @@ export default function DevRequestsPage() {
             {/* Групування лише на дошці: «Ідеї» — стіна нотаток без колонок,
                 а «Не робимо» — плаский список. Різати там нема чого. */}
             {view === "board" ? <GroupControl value={groupBy} onChange={changeGroupBy} /> : null}
+            {/*
+             * «Розібрати» — двері до «Вхідних» на дошці, видимі лише з «Черги»
+             * і лише коли є що розбирати. Раніше кнопка стояла смугою в самому
+             * низу черги: щоб розібрати кошик, треба було долистати повз усе.
+             * Ряд із «Фільтром» уже тримає контроли конкретного вигляду —
+             * групування живе тут само. Лічильник — по всій дошці, як на
+             * перемикачах вигляду, а не по знайденому пошуком.
+             */}
+            {view === "queue" && counts.triage > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setView("board")}
+                className={cn(TOOLBAR_FILTER, "shrink-0 px-3.5")}
+                title={`${counts.triage} не розібрано — це робота на раз на тиждень, не щодня`}
+              >
+                <Inbox className="h-4 w-4" />
+                Розібрати
+                <span className="rounded-full bg-foreground/10 px-1.5 font-mono text-2xs tabular-nums">
+                  {counts.triage}
+                </span>
+              </Button>
+            ) : null}
           </>
         }
         meta={
@@ -712,7 +758,6 @@ export default function DevRequestsPage() {
             todayIds={todayIds}
             onToday={handleToday}
             onSelect={setSelected}
-            onOpenTriage={() => setView("board")}
             onChecklist={canSee ? handleChecklist : undefined}
             savingChecklistId={savingChecklistId}
           />

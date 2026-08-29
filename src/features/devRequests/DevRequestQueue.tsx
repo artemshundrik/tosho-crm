@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Clock, Inbox, Plus, Rocket, Scissors, X } from "lucide-react";
+import { Check, ChevronRight, Clock, Plus, Rocket, Scissors, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -25,9 +25,13 @@ import { KIND_LABELS, KIND_TONE, type DevRequest } from "./types";
  * лише верстка. Правило, заради якого все й затівалось: те, що стоїть не через
  * тебе, не лежить у списку доступного.
  *
- * «НЕ РОЗІБРАНО» ЗГОРНУТЕ НАВМИСНО. Це найбільша полиця, і водночас та, куди
- * заглядають раз на тиждень. Розгорнута, вона повернула б рівно ту дошку, від
- * якої тікали: третину екрана під картки, про які ще нічого не вирішено.
+ * «НЕ РОЗІБРАНО» ТУТ НЕМАЄ ВЗАГАЛІ — НАВМИСНО. Це найбільша купа, і водночас
+ * та, куди заглядають раз на тиждень. Полицею вона повернула б рівно ту
+ * дошку, від якої тікали: третину екрана під картки, про які ще нічого не
+ * вирішено. Двері до розбору — кнопка «Розібрати» в тулбарі сторінки (лише на
+ * «Черзі»), а сам розбір живе на дошці у «Вхідних». Смуга внизу черги, що
+ * була тут раніше, вимагала долистати повз усе — і з самого низу перемикалась
+ * на дошку з поламаним заміром висоти.
  */
 
 type QueueProps = {
@@ -35,8 +39,6 @@ type QueueProps = {
   todayIds: string[];
   onToday: (ids: string[]) => void;
   onSelect: (request: DevRequest) => void;
-  /** Перемкнути сторінку на дошку у «Вхідних» — розбирати зручніше там. */
-  onOpenTriage: () => void;
   /** Зберегти пункти дрібниці. Немає — галочки лише показуються. */
   onChecklist?: (request: DevRequest, items: ChecklistItem[]) => void;
   savingChecklistId?: string | null;
@@ -47,7 +49,6 @@ export function DevRequestQueue({
   todayIds,
   onToday,
   onSelect,
-  onOpenTriage,
   onChecklist,
   savingChecklistId,
 }: QueueProps) {
@@ -219,20 +220,6 @@ export function DevRequestQueue({
       ) : null}
 
       </div>
-
-      {/* ── Не розібрано: на всю ширину, під обома колонками ── */}
-      {shelves.triage.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border/60 px-4 py-3 xl:col-span-2">
-          <Inbox className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">{shelves.triage.length}</span> не
-            розібрано — це робота на раз на тиждень, не щодня
-          </span>
-          <Button variant="outline" size="xs" onClick={onOpenTriage} className="ml-auto">
-            Розібрати
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }
