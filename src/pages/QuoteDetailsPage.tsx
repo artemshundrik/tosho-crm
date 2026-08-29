@@ -5965,7 +5965,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           itemIndex > 0 && "mt-4"
                         )}
                       >
-                        <div className="flex flex-col gap-3 p-2.5 sm:flex-row sm:items-start sm:gap-4 sm:p-3">
+                        {/*
+                          Поле картки — 16 px, а не 12.
+
+                          Ущільнення 25.08 (ca7cd5bb) урізало його з 20 до 12,
+                          щоб виграти ширину для таблиці тиражів. Виграш
+                          лишається, а от 12 виявилось замало з двох причин.
+
+                          Вкладений блок «Активний тираж» має власне поле 16 px
+                          — тобто дихав вільніше за картку, яка його тримає:
+                          поля вводу стояли за 28 px від краю картки, а
+                          мініатюра товару поруч — за 14. Око бачить цю різницю
+                          і робить висновок про всю картку.
+
+                          Плюс радіус картки 22 px: при полі 12 верхній лівий
+                          ріг мініатюри заходив під саму дугу.
+
+                          16 коштує по 4 px з боку — щільність від цього не
+                          повертається до старої, а «впритул» зникає.
+                        */}
+                        <div className="flex flex-col gap-3 p-2.5 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
                           <div className="shrink-0">
                             {productPreview?.type === "image" ? (
                               <KanbanImageZoomPreview
