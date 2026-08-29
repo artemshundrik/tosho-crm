@@ -22,7 +22,7 @@
     "check:db-guards": "node scripts/check-db-guards.mjs",
     "check:sql-journal": "node scripts/check-sql-journal.mjs",
     "check:docs-drift": "node scripts/check-docs-drift.mjs",
-    "docs:sync": "node scripts/check-docs-drift.mjs --fix && node scripts/check-file-growth.mjs --fix",
+    "docs:sync": "node scripts/check-docs-drift.mjs --fix && node scripts/check-file-growth.mjs --fix && node scripts/check-instruction-size.mjs --fix",
     "check:page-surfaces": "node scripts/check-page-surfaces.mjs",
     "check:rule-readers": "node scripts/check-rule-readers.mjs",
     "typecheck:functions": "node node_modules/tsc7/bin/tsc -p netlify/functions/tsconfig.json",
@@ -53,7 +53,8 @@
     "check:stack-snapshot": "node scripts/check-stack-snapshot.mjs",
     "check:node-version": "node scripts/check-node-version.mjs",
     "db:apply": "node scripts/db-apply.mjs",
-    "db:backfill-journal": "node scripts/backfill-sql-journal.mjs"
+    "db:backfill-journal": "node scripts/backfill-sql-journal.mjs",
+    "check:instruction-size": "node scripts/check-instruction-size.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
