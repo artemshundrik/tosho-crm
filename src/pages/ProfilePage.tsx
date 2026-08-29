@@ -48,7 +48,6 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
-import { switchTabWithTransition } from "@/components/ui/tabs";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
@@ -331,16 +330,13 @@ export function ProfilePage() {
   const year = Number(todayKey.slice(0, 4));
 
   const setTab = useCallback(
-    // Обгортка тут, а не на кнопках: розділ перемикають ще з двох місць (REQ-202).
     (next: ProfileTab) =>
-      switchTabWithTransition(() =>
-        setSearchParams((prev) => {
-          const params = new URLSearchParams(prev);
-          if (next === "overview") params.delete("tab");
-          else params.set("tab", next);
-          return params;
-        }, { replace: true })
-      ),
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === "overview") params.delete("tab");
+        else params.set("tab", next);
+        return params;
+      }, { replace: true }),
     [setSearchParams]
   );
 

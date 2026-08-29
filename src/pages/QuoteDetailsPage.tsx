@@ -17,6 +17,7 @@ import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSegmentedSlider } from "@/components/ui/segmented-group";
 import {
   Tabs,
   TabsContent,
@@ -935,6 +936,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [activeQuoteTab, setActiveQuoteTab] = useState<QuotePageTab>("products");
+  // Риска під активною вкладкою переїжджає, а не гасне й засвічується.
+  const { ref: quoteTabsRef, indicator: quoteTabsIndicator } =
+    useSegmentedSlider<HTMLDivElement>("underline");
   /**
    * Згортання підсумку — щоб віддати висоту розмові.
    *
@@ -5635,7 +5639,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             рискою знизу — рядок вкладок перестав сперечатися зі смугою дій.
           */}
           <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:shrink-0 2xl:-mx-8 2xl:px-8">
-            <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              ref={quoteTabsRef}
+              className="relative flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {quoteTabsIndicator}
               {quotePageTabs.map((tab) => {
                 const isActive = activeQuoteTab === tab.value;
                 return (
@@ -5645,13 +5653,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     onClick={() => setActiveQuoteTab(tab.value)}
                     className={cn(
                       "relative inline-flex h-11 shrink-0 items-center gap-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                      // Підкреслення малюємо псевдоелементом на самій кнопці, а не
-                      // окремим вузлом: інакше воно стрибає на 1px від нижньої
-                      // межі контейнера при скролі вкладок.
-                      "after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors",
+                      // Риску малює ОДИН спільний вузол, що переїжджає між
+                      // вкладками (useSegmentedSlider). Псевдоелемент на кожній
+                      // кнопці цього не вміє: він може лише згаснути в одному
+                      // місці й засвітитись в іншому.
                       isActive
-                        ? "font-semibold text-foreground after:bg-primary"
-                        : "font-medium text-muted-foreground after:bg-transparent hover:text-foreground",
+                        ? "font-semibold text-foreground"
+                        : "font-medium text-muted-foreground hover:text-foreground",
                       tab.mobileOnly && "xl:hidden"
                     )}
                     aria-pressed={isActive}
@@ -5742,7 +5750,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
             ) : null}
 
-            <section className={cn("py-2", activeQuoteTab !== "products" && "hidden")}>
+            <section className={cn("tab-panel py-2", activeQuoteTab !== "products" && "hidden")}>
               <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -6987,7 +6995,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               )}
             </details>
 
-            <section className={cn("py-2", activeQuoteTab !== "deadlines" && "hidden")}>
+            <section className={cn("tab-panel py-2", activeQuoteTab !== "deadlines" && "hidden")}>
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -7389,7 +7397,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               {updatedMinutes !== null && <></>}
             </section>
 
-            <section className={cn("py-2", activeQuoteTab !== "design" && "hidden")}>
+            <section className={cn("tab-panel py-2", activeQuoteTab !== "design" && "hidden")}>
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -7936,7 +7944,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </Tabs>
             </section>
 
-            <section className={cn("py-2", activeQuoteTab !== "discussion" && "hidden")}>
+            <section className={cn("tab-panel py-2", activeQuoteTab !== "discussion" && "hidden")}>
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -8511,7 +8519,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               ціни ця вкладка не чіпає: доки відкриті питання не закриті, все
               рахується рівно так, як рахувалось.
             */}
-            <section className={cn("py-2", activeQuoteTab !== "economics" && "hidden")}>
+            <section className={cn("tab-panel py-2", activeQuoteTab !== "economics" && "hidden")}>
               <EconomicsComingSoon />
             </section>
           </div>

@@ -2,26 +2,24 @@ import * as React from "react";
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { SegmentedGroup, useSegmentedSlider } from "@/components/ui/segmented-group";
 
 /**
- * Ковзна плашка сегментованого перемикача (REQ-202).
+ * Ковзна плашка й ковзна риска — одна механіка на два види.
  *
- * ЧОМУ ЦЕ ТЕСТУЄТЬСЯ САМЕ ТУТ. Плашка їде двома різними способами, і другий
- * ламається мовчки. Звичайне перемикання рухає її `transition` по `transform`.
- * Але коли розділ міняється під перехресним згасанням, на екрані два нерухомі
- * знімки, а справжній DOM схований: перехід плашки йде, і його ніхто не
- * бачить. Тоді її веде `view-transition-name` — і саме він має два способи
- * зникнути беззвучно: недійсний ідентифікатор (стає `none`) і збіг імен у двох
- * груп (браузер скасовує перехід ЦІЛКОМ). Ні типи, ні лінт цього не ловлять, а
- * збоку це виглядає як «плашка стрибає».
+ * ЩО ТУТ МОЖНА ПЕРЕВІРЯТИ, А ЩО НІ. Положення міряється через `offsetLeft` і
+ * `offsetWidth`, а jsdom розкладки не рахує — там усе нулі. Тому координати тут
+ * не перевіряються (і не мають: це робота ока в браузері). Перевіряється те, що
+ * ламається логікою: чи взагалі з'являється індикатор, чи зникає він без
+ * активного тригера, і чи риска не тягне на собі оформлення плашки.
  *
- * Розміри тут нульові (jsdom не рахує розкладку), тому положення плашки не
- * перевіряється — лише те, що взагалі робить її рух можливим.
+ * ЧОМУ ЦЕ ВАЖЛИВО. Індикатор один на групу, і саме тому група з ДВОМА
+ * активними тригерами — помилка розмітки: підсвітку забере перший, а другий
+ * лишиться зовсім без неї, бо власний фон у нього погашено.
  */
-function Group({ label, active }: { label: string; active: string }) {
+function Group({ active }: { active: string | null }) {
   return (
-    <SegmentedGroup aria-label={label}>
+    <SegmentedGroup aria-label="Вигляд">
       <button type="button" aria-pressed={active === "first"}>
         Перший
       </button>
@@ -32,28 +30,39 @@ function Group({ label, active }: { label: string; active: string }) {
   );
 }
 
-const indicatorName = (label: string) => {
-  const group = screen.getByLabelText(label);
-  const indicator = group.querySelector<HTMLElement>("[data-segmented-indicator]");
-  return indicator?.style.viewTransitionName ?? null;
-};
+const indicator = (label = "Вигляд") =>
+  screen.getByLabelText(label).querySelector<HTMLElement>("[data-segmented-indicator]");
 
-describe("ковзна плашка", () => {
-  it("ім'я переходу — валідний CSS-ідентифікатор", () => {
-    render(<Group label="Розділи" active="first" />);
-    expect(indicatorName("Розділи")).toMatch(/^segmented-slider-[A-Za-z0-9_-]+$/);
+function UnderlineBar() {
+  const { ref, indicator: bar } = useSegmentedSlider<HTMLDivElement>("underline");
+  return (
+    <div ref={ref} aria-label="Вкладки" className="relative">
+      {bar}
+      <button type="button" aria-pressed>
+        Товари
+      </button>
+    </div>
+  );
+}
+
+describe("ковзний індикатор", () => {
+  it("з'являється під активним тригером", () => {
+    render(<Group active="first" />);
+    expect(indicator()).not.toBeNull();
   });
 
-  it("дві групи на сторінці мають різні імена", () => {
-    // На сторінці прорахунків їх дві, на картці замовника — теж. Однакові імена
-    // в одному кадрі браузер вважає помилкою й скасовує перехід цілком, тобто
-    // сусідні перемикачі позбавляли б анімації один одного.
-    render(
-      <>
-        <Group label="Вигляд" active="first" />
-        <Group label="Режим" active="second" />
-      </>
-    );
-    expect(indicatorName("Вигляд")).not.toBe(indicatorName("Режим"));
+  it("без активного тригера індикатора немає", () => {
+    // Інакше плашка зависла б там, де щойно був активний елемент, і показувала
+    // б вибір, якого вже немає.
+    render(<Group active={null} />);
+    expect(indicator()).toBeNull();
+  });
+
+  it("риска не тягне на собі рамку й фон плашки", () => {
+    render(<UnderlineBar />);
+    const bar = screen.getByLabelText("Вкладки").querySelector<HTMLElement>("[data-segmented-indicator]");
+    expect(bar).not.toBeNull();
+    expect(bar!.className).toContain("bg-primary");
+    expect(bar!.className).not.toContain("border-border");
   });
 });

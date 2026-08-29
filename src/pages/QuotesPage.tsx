@@ -190,7 +190,6 @@ import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuote
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
 import { isOffBoardStatus } from "@/lib/kanbanBoards";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
-import { switchTabWithTransition } from "@/components/ui/tabs";
 import { getCurrentUserId } from "@/lib/currentUser";
 
 type QuotesPageProps = {
@@ -5721,7 +5720,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               variant="segmented"
               size="xs"
               aria-pressed={contentView === "quotes"}
-              onClick={() => switchTabWithTransition(() => setContentView("quotes"))}
+              onClick={() => setContentView("quotes")}
               className={cn(SEGMENTED_TRIGGER, "px-5")}
             >
               Прорахунки
@@ -5730,7 +5729,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               variant="segmented"
               size="xs"
               aria-pressed={contentView === "sets"}
-              onClick={() => switchTabWithTransition(() => setContentView("sets"))}
+              onClick={() => setContentView("sets")}
               className={cn(SEGMENTED_TRIGGER, "px-5")}
             >
               КП та набори

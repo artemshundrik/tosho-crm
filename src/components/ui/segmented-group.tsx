@@ -5,6 +5,20 @@ import { cn } from "@/lib/utils";
 /**
  * Сегментований перемикач із ковзною плашкою.
  *
+ * ПЛАШКУ НЕ МОЖНА ВІДДАВАТИ View Transitions — перевірено на собі 29.08.2026.
+ * Спокуса зрозуміла: дати їй `view-transition-name`, і браузер сам розведе два
+ * положення рухом. Але тоді вона виїжджає з загального знімка сторінки в
+ * ОКРЕМИЙ шар, а названі шари малюються ПОВЕРХ кореневого — тобто поверх
+ * підписів кнопок. Плашка світла, підписи опиняються під нею, і перехід
+ * виглядає так, ніби назва, на яку переходиш, блимає білим. Шар під корінь не
+ * сховаєш: корінь непрозорий, і плашка просто зникне.
+ *
+ * Тому плашка їде звичайним `transition` по `transform` і лишається ВСЕРЕДИНІ
+ * знімка. Наслідок, з яким миримось свідомо: під перехресним згасанням цілої
+ * сторінки її руху не видно (на екрані два нерухомі кадри). Отже сторінки із
+ * сегментованим перемикачем таким згасанням НЕ обгортаються — там працює сама
+ * плашка, і цього досить.
+ *
  * Обгортка НАД наявною розміткою, а не заміна їй: діти лишаються тими самими
  * кнопками (`variant="segmented"` з `aria-pressed`) або тригерами Radix
  * (`data-state="active" | "on"`). Тому 40+ місць у застосунку отримують
@@ -32,34 +46,27 @@ type Rect = { left: number; width: number; height: number; top: number };
  * Механіка ковзання окремо від розмітки — щоб її можна було вдягнути і на
  * `TabsList` Radix, який власним `div` не є й обгортку всередину не пустить.
  */
-export function useSegmentedSlider<T extends HTMLElement>() {
-  const ref = React.useRef<T>(null);
-  const indicatorRef = React.useRef<HTMLSpanElement>(null);
+export type SliderVariant = "pill" | "underline";
 
+export function useSegmentedSlider<T extends HTMLElement>(variant: SliderVariant = "pill") {
   /**
-   * Ім'я плашки для View Transitions — і без нього плашка НЕ ЇДЕ.
+   * Вузол тримається в СТАНІ, а посилання на нього — callback-ref.
    *
-   * Поки перемикання розділу було звичайним оновленням стану, плашку рухав
-   * `transition` по `transform`. Щойно розділ став мінятись під перехресним
-   * згасанням (REQ-202), цього стало замало: під час переходу сторінка на
-   * екрані — це два нерухомі знімки, а справжній DOM схований. Перехід плашки
-   * чесно йде, але його НІХТО не бачить, і в кадрі «після» вона вже стоїть на
-   * новому місці. Збоку це рівно те, на що скаржився Артем: розділ згасає, а
-   * плашка стрибає.
+   * Звичайний `useRef` тут мовчки не працює на сторінках, де ряд кнопок
+   * з'являється не з першим рендером (картка прорахунку показує спершу
+   * каркас). Layout-ефект зі списком залежностей `[]` відпрацьовує один раз,
+   * бачить `ref.current === null`, виходить — і більше не повертається ніколи.
+   * Збоку це виглядає як «індикатора просто немає»: розмітка ціла, активна
+   * кнопка на місці, а підсвітки нема й нізвідки взятись.
    *
-   * З іменем браузер знімає плашку окремим шаром і сам розводить два її
-   * положення рухом — тобто вона їде РАЗОМ зі згасанням вмісту, а не замість
-   * нього. Ім'я своє в кожної групи: на сторінці прорахунків їх три, а два
-   * однакові імені в кадрі скасовують перехід цілком.
-   *
-   * `useId` віддає щось на кшталт «r0» у лапках-ялинках — у CSS це недійсний
-   * ідентифікатор, і ім'я мовчки стало б `none`. Тому чистимо.
+   * Callback-ref спрацьовує саме тоді, коли вузол справді приєднався, і
+   * оновлює стан — ефект перезапускається вже з живим вузлом. Заразом це
+   * закриває й зворотний випадок: вузол ЗАМІНИЛИ (каркас на справжню смугу),
+   * і спостерігачі мусять переїхати на новий, а не тримати від'єднаний.
    */
-  const id = React.useId();
-  const transitionName = React.useMemo(
-    () => `segmented-slider-${id.replace(/[^a-zA-Z0-9_-]/g, "")}`,
-    [id]
-  );
+  const [node, setNode] = React.useState<T | null>(null);
+  const ref = React.useCallback((next: T | null) => setNode(next), []);
+
   const [rect, setRect] = React.useState<Rect | null>(null);
   // Перший вимір не анімуємо: плашка мусить з'явитись одразу під активним
   // елементом, а не приїхати з лівого краю на завантаженні сторінки. Це
@@ -68,7 +75,6 @@ export function useSegmentedSlider<T extends HTMLElement>() {
   const [animated, setAnimated] = React.useState(false);
 
   React.useLayoutEffect(() => {
-    const node = ref.current;
     if (!node) return;
 
     const measure = () => {
@@ -94,22 +100,6 @@ export function useSegmentedSlider<T extends HTMLElement>() {
         height: active.offsetHeight,
       };
 
-      // Положення пишеться В СТИЛЬ ОДРАЗУ, а не тільки в стан.
-      //
-      // Стан лишається (з нього малюється перший кадр і від нього залежить
-      // `animated`), але покладатись ЛИШЕ на нього не можна через View
-      // Transitions: усередині переходу React оновлюється синхронно, браузер
-      // одразу по тому знімає кадр «після», і рендер, запланований звідси,
-      // до нього не встигає. Плашка потрапила б у кадр «після» на СТАРОМУ
-      // місці — і переїхала б уже після переходу, окремим ривком. Прямий
-      // запис у стиль відбувається в тому ж мікрозавданні, що й зміна
-      // атрибута, тож у кадр вона потрапляє вже на новому місці.
-      const slider = indicatorRef.current;
-      if (slider) {
-        slider.style.transform = `translate3d(${next.left}px, ${next.top}px, 0)`;
-        slider.style.width = `${next.width}px`;
-        slider.style.height = `${next.height}px`;
-      }
 
       setRect(next);
     };
@@ -136,33 +126,57 @@ export function useSegmentedSlider<T extends HTMLElement>() {
       mutation.disconnect();
       resize.disconnect();
     };
-    // Порожній масив свідомо: спостерігачі вже ловлять і зміну стану, і
-    // появу/зникнення тригерів (childList), тож перепідписка на кожен рендер
-    // лише плодила б роботу.
-  }, []);
+    // Залежність одна — сам вузол. Спостерігачі вже ловлять і зміну стану, і
+    // появу/зникнення тригерів (childList), тож перепідписуватись на кожен
+    // рендер немає потреби; а от на ЗАМІНУ вузла — обов'язково.
+  }, [node]);
 
   React.useEffect(() => {
     // Вмикаємо перехід ПІСЛЯ того, як плашка вже стала на місце.
     if (rect) setAnimated(true);
   }, [rect]);
 
+  /**
+   * Два види однієї механіки: плашка під активною кнопкою й риска під активною
+   * вкладкою. Спільне в них головне — положення міряється по тому самому
+   * активному тригеру, тож смуга вкладок отримує ковзання, не переписуючись.
+   *
+   * Риска БЕЗ рамки й фону і рахує свою ширину з відступом: підкреслення на всю
+   * ширину кнопки разом із її падінгами читається як підкреслений абзац, а не
+   * як мітка вкладки.
+   */
+  const underline = variant === "underline";
+  const inset = underline ? 8 : 0;
+
   const indicator = rect ? (
     <span
-      ref={indicatorRef}
       aria-hidden
       data-segmented-indicator=""
       className={cn(
-        "pointer-events-none absolute z-0 rounded-lg border border-border bg-background",
-        animated && "transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none"
+        "pointer-events-none absolute",
+        underline
+          ? "bottom-0 z-base h-0.5 rounded-full bg-primary"
+          : "z-0 rounded-lg border border-border bg-background",
+        animated &&
+          (underline
+            ? "transition-[transform,width] duration-200 ease-out motion-reduce:transition-none"
+            : "transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none")
       )}
-      style={{
-        transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
-        width: rect.width,
-        height: rect.height,
-        left: 0,
-        top: 0,
-        viewTransitionName: transitionName,
-      }}
+      style={
+        underline
+          ? {
+              transform: `translate3d(${rect.left + inset}px, 0, 0)`,
+              width: Math.max(rect.width - inset * 2, 0),
+              left: 0,
+            }
+          : {
+              transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
+              width: rect.width,
+              height: rect.height,
+              left: 0,
+              top: 0,
+            }
+      }
     />
   ) : null;
 
