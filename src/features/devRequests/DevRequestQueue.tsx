@@ -462,7 +462,15 @@ function Rows({
                     "-ml-2 max-w-0 opacity-0",
                     "transition-[max-width,opacity,margin] duration-200 ease-out",
                     "group-hover:ml-0 group-hover:max-w-32 group-hover:opacity-100",
-                    "group-focus-within:ml-0 group-focus-within:max-w-32 group-focus-within:opacity-100",
+                    // has-[:focus-visible] НА САМІЙ ОБГОРТЦІ, а не focus-within
+                    // на рядку. Тут стояло group-focus-within, і воно ловило
+                    // будь-який фокус, зокрема мишачий: клік по назві рядка
+                    // (відкрити картку) лишав фокус на кнопці, і «Сьогодні»
+                    // стирчала вже без наведення — доки не клікнеш деінде.
+                    // Повернешся з дровера — фокус відновлюється на тому ж
+                    // рядку, і кнопка знову стирчить. :focus-visible — це саме
+                    // «фокус, який треба показати», тобто клавіатура, а не миша.
+                    "has-[:focus-visible]:ml-0 has-[:focus-visible]:max-w-32 has-[:focus-visible]:opacity-100",
                     "motion-reduce:transition-none",
                     // На вузькому екрані ховера немає — там кнопка стоїть завжди.
                     "max-sm:ml-0 max-sm:max-w-32 max-sm:opacity-100"
@@ -673,7 +681,12 @@ function PapercutCard({
               "-mr-3 max-w-0 opacity-0",
               "transition-[max-width,opacity,margin] duration-200 ease-out",
               "group-hover/papercut:mr-0 group-hover/papercut:max-w-32 group-hover/papercut:opacity-100",
-              "group-focus-within/papercut:mr-0 group-focus-within/papercut:max-w-32 group-focus-within/papercut:opacity-100",
+              // Той самий лік, що й у рядках «Можна брати», і тут він помітніший
+              // за все: назва накопичувача — КНОПКА, яка розгортає список. Тобто
+              // щоб побачити дрібниці, ти зобов'язаний клікнути, а клік лишав
+              // фокус на назві — і «Сьогодні» стирчала над відкритим списком, не
+              // зникаючи ні коли ведеш мишу вниз до пунктів, ні коли вертаєшся.
+              "has-[:focus-visible]:mr-0 has-[:focus-visible]:max-w-32 has-[:focus-visible]:opacity-100",
               "motion-reduce:transition-none",
               "max-sm:mr-0 max-sm:max-w-32 max-sm:opacity-100"
             )}
