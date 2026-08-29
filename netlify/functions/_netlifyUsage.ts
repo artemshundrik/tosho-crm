@@ -206,13 +206,51 @@ export async function loadNetlifyUsage(token: string): Promise<NetlifyUsage> {
   };
 }
 
-function fmt(value: number): string {
+export type NetlifyForecast = {
+  daysLeft: number;
+  /** Скільки з'їсть фон до кінця циклу. */
+  backgroundLeft: number;
+  /** Що лишиться на викочування після фону. */
+  forDeploys: number;
+  deploysLeft: number;
+  /** Загальна витрата за добу: фон плюс викочування. */
+  burnPerDay: number;
+  /** Коли за поточним темпом скінчиться ПАКЕТ (без запасу). */
+  zeroAt: Date | null;
+  runsOutBeforeCycleEnd: boolean;
+};
+
+/**
+ * Прогноз до кінця циклу. Винесений окремо, бо ті самі числа потрібні у двох
+ * місцях — у відповіді бота і в сигналі здоров'я, який іде в ранковий тех-звіт.
+ * Дві копії цієї арифметики розійшлися б і почали суперечити одна одній.
+ */
+export function forecastNetlify(usage: NetlifyUsage, now: Date): NetlifyForecast {
+  const daysLeft = usage.periodEnd
+    ? Math.max(0, Math.ceil((usage.periodEnd.getTime() - now.getTime()) / DAY_MS))
+    : 0;
+  const backgroundLeft = usage.backgroundPerDay * daysLeft;
+  const forDeploys = usage.planLeft - backgroundLeft;
+  const burnPerDay = usage.backgroundPerDay + usage.deploysPerDay * DEPLOY_CREDITS;
+  const daysToZero = burnPerDay > 0 ? usage.planLeft / burnPerDay : Infinity;
+  return {
+    daysLeft,
+    backgroundLeft,
+    forDeploys,
+    deploysLeft: Math.floor(forDeploys / DEPLOY_CREDITS),
+    burnPerDay,
+    zeroAt: Number.isFinite(daysToZero) ? new Date(now.getTime() + daysToZero * DAY_MS) : null,
+    runsOutBeforeCycleEnd: daysToZero < daysLeft,
+  };
+}
+
+export function fmt(value: number): string {
   if (!Number.isFinite(value)) return "—";
   if (Math.abs(value) >= 100) return String(Math.round(value));
   return (Math.round(value * 10) / 10).toString().replace(".", ",");
 }
 
-function shortDate(date: Date): string {
+export function shortDate(date: Date): string {
   return new Intl.DateTimeFormat("uk-UA", { timeZone: TIME_ZONE, day: "2-digit", month: "2-digit" }).format(date);
 }
 
@@ -271,10 +309,8 @@ export function renderNetlifyUsage(usage: NetlifyUsage, now: Date): string {
   }
 
   if (usage.periodEnd) {
-    const daysLeft = Math.max(0, Math.ceil((usage.periodEnd.getTime() - now.getTime()) / DAY_MS));
-    const backgroundLeft = usage.backgroundPerDay * daysLeft;
-    const forDeploys = usage.planLeft - backgroundLeft;
-    const deploysLeft = Math.floor(forDeploys / DEPLOY_CREDITS);
+    const { daysLeft, backgroundLeft, forDeploys, deploysLeft, burnPerDay, zeroAt, runsOutBeforeCycleEnd } =
+      forecastNetlify(usage, now);
     lines.push(
       `До кінця циклу ${daysLeft} ${plural(daysLeft, "день", "дні", "днів")}, фон з'їсть ще ~${fmt(backgroundLeft)}`
     );
@@ -286,20 +322,15 @@ export function renderNetlifyUsage(usage: NetlifyUsage, now: Date): string {
 
     // Дата, коли пакет закінчиться за поточним темпом. Показуємо лише тоді, коли
     // вона настає раніше за кінець циклу: інакше це просто зайвий рядок.
-    const burnPerDay = usage.backgroundPerDay + usage.deploysPerDay * DEPLOY_CREDITS;
-    if (burnPerDay > 0) {
-      const daysToZero = usage.planLeft / burnPerDay;
-      if (daysToZero < daysLeft) {
-        const zeroAt = new Date(now.getTime() + daysToZero * DAY_MS);
-        lines.push("");
-        lines.push(
-          `⚠️ За цим темпом пакет скінчиться ${shortDate(zeroAt)} — раніше за кінець циклу.` +
-            (usage.addonLeft > 0
-              ? ` Далі піде запас (${fmt(usage.addonLeft)}), його вистачить ще на ~${fmt(usage.addonLeft / burnPerDay)} дн.`
-              : " Запасу немає.")
-        );
-        lines.push("Коли кредити скінчаться, Netlify зупиняє сайти — автопоповнення вимкнене.");
-      }
+    if (runsOutBeforeCycleEnd && zeroAt) {
+      lines.push("");
+      lines.push(
+        `⚠️ За цим темпом пакет скінчиться ${shortDate(zeroAt)} — раніше за кінець циклу.` +
+          (usage.addonLeft > 0
+            ? ` Далі піде запас (${fmt(usage.addonLeft)}), його вистачить ще на ~${fmt(usage.addonLeft / burnPerDay)} дн.`
+            : " Запасу немає.")
+      );
+      lines.push("Коли кредити скінчаться, Netlify зупиняє сайти — автопоповнення вимкнене.");
     }
   }
 

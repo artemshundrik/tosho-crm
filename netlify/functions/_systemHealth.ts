@@ -8,6 +8,7 @@ import {
   PRO_STORAGE_LIMIT_BYTES,
   classifyAiBudget,
   classifyAiCost,
+  classifyNetlifyCredits,
   classifyAttachmentHygiene,
   classifyBackupAge,
   classifyCronJob,
@@ -25,6 +26,8 @@ import { buildStackItems, stackSummaryText, stackTotals, type StackVersionRow } 
 
 // Сигнали здоров'я системи — ЄДИНЕ джерело для ранкового тех-дайджесту і для
 // питань у боті («що не працює?»).
+
+import { DEPLOY_CREDITS, fmt, forecastNetlify, loadNetlifyUsage, shortDate } from "./_netlifyUsage";
 
 export type Tone = HealthTone;
 /**
@@ -49,6 +52,7 @@ export type SignalCode =
   | "attachments"
   | "audit_trigger"
   | "runtime_errors"
+  | "netlify_credits"
   | "dropbox"
   | "stack"
   | "typescript_gate";
@@ -511,6 +515,9 @@ export async function collectSystemSignals(
   // 9. Падіння інтерфейсу в людей.
   signals.push(await runtimeErrorsSignal(admin, options.teamIds ?? [], now));
 
+  const netlifyCredits = await netlifyCreditsSignal(now);
+  if (netlifyCredits) signals.push(netlifyCredits);
+
   // 10. Стек: чи не відстали залежності й чи немає відкритих дірок безпеки.
   signals.push(await stackSignal(admin));
 
@@ -602,6 +609,59 @@ async function runtimeErrorsSignal(
     // права зробити весь звіт неправдою.
     const message = error instanceof Error ? error.message : "невідома помилка";
     return { tone: "neutral", code: "runtime_errors", text: `Помилки браузера: стан недоступний (${message})` };
+  }
+}
+
+/**
+ * Кредити хостингу: чи дотягнуть до кінця біллінгового циклу.
+ *
+ * ЧОМУ ЦЕ СИГНАЛ ЗДОРОВ'Я, А НЕ ПРОСТО СТАТИСТИКА. Коли кредити скінчаться,
+ * Netlify зупиняє сайти — CRM перестає працювати для всіх. Тобто це не «рахунок
+ * виріс», а прогнозована аварія з відомою датою. Тут вона й має жити, поряд із
+ * бекапами й cron.
+ *
+ * Без токена сигналу немає взагалі: «не налаштовано» — не стан системи.
+ * Netlify — зовнішній сервіс, тож будь-яка помилка гаситься в сірий рядок і не
+ * має права зробити весь звіт неправдою (той самий принцип, що з Dropbox).
+ */
+async function netlifyCreditsSignal(now: Date): Promise<Signal | null> {
+  const token = process.env.NETLIFY_API_TOKEN?.trim();
+  if (!token) return null;
+  try {
+    const usage = await loadNetlifyUsage(token);
+    const forecast = forecastNetlify(usage, now);
+    const left = usage.planLeft + usage.addonLeft;
+    const tone = classifyNetlifyCredits({
+      creditsLeft: left,
+      backgroundPerDay: usage.backgroundPerDay,
+      burnPerDay: forecast.burnPerDay,
+      daysLeft: forecast.daysLeft,
+    });
+    const head = `Кредити Netlify: ${fmt(usage.planLeft)} із ${fmt(usage.planTotal)}`;
+    const reserve = usage.addonLeft > 0 ? `, запас ${fmt(usage.addonLeft)}` : "";
+    if (tone === "danger") {
+      return {
+        tone,
+        code: "netlify_credits",
+        text: `${head}${reserve} — не дотягне до кінця циклу навіть без викочувань (фон ${fmt(usage.backgroundPerDay)}/добу). При нулі Netlify зупиняє сайти`,
+      };
+    }
+    if (tone === "warning") {
+      const when = forecast.zeroAt ? ` близько ${shortDate(forecast.zeroAt)}` : "";
+      return {
+        tone,
+        code: "netlify_credits",
+        text: `${head}${reserve} — за поточним темпом скінчаться${when}, раніше за кінець циклу. Возити пачками рідше або докупити`,
+      };
+    }
+    return {
+      tone,
+      code: "netlify_credits",
+      text: `${head}${reserve} — вистачить до кінця циклу, ще ~${Math.max(forecast.deploysLeft, 0)} викочувань по ${DEPLOY_CREDITS}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "невідома помилка";
+    return { tone: "neutral", code: "netlify_credits", text: `Кредити Netlify: стан недоступний (${message})` };
   }
 }
 
