@@ -68,9 +68,18 @@ export const FIGURE_LOCALE = "uk-UA";
  * анімація там і так вимкнена (`respectMotionPreference` у NumberFlow), тож
  * нуль першого кадру нічим би не змінився на справжнє число — він просто
  * блимнув би нулем. Це гірше за відсутність анімації.
+ *
+ * І ТАК САМО НА СХОВАНІЙ СТОРІНЦІ — але тут причина серйозніша за красу.
+ * `requestAnimationFrame` у схованої вкладки НЕ ВИКЛИКАЄТЬСЯ взагалі: браузер
+ * притримує кадри до повернення. Прапорець лишався б опущеним, а на місці
+ * підсумку стояв би НУЛЬ — тобто не «анімації немає», а неправильна сума. Для
+ * фінансового підсумку це не дрібниця, тому на схованій сторінці розкриття
+ * пропускається цілком: показувати рух усе одно нема кому.
  */
 export function useFigureReveal(enabled: boolean = true): boolean {
-  const [ready, setReady] = React.useState(() => prefersReducedMotion());
+  const [ready, setReady] = React.useState(
+    () => prefersReducedMotion() || (typeof document !== "undefined" && document.visibilityState === "hidden")
+  );
 
   React.useEffect(() => {
     if (!enabled) return;
@@ -82,9 +91,23 @@ export function useFigureReveal(enabled: boolean = true): boolean {
     const first = requestAnimationFrame(() => {
       second = requestAnimationFrame(() => setReady(true));
     });
+
+    // Страхувальний таймер — на випадок, коли кадрів немає, а сторінка при
+    // цьому вважається видимою. Так буває у вікна, повністю перекритого іншим:
+    // `visibilityState` каже «visible», а `requestAnimationFrame` не
+    // викликається. Без цієї страховки на місці підсумку лишався б НУЛЬ —
+    // тобто неправильна сума, а не просто відсутній рух.
+    //
+    // Чверть секунди — свідомо багато. Два кадри на будь-якій живій машині це
+    // десятки мілісекунд, тож у нормальному житті таймер завжди програє
+    // кадрам і на анімацію не впливає; він потрібен рівно там, де кадрів
+    // немає взагалі.
+    const fallback = setTimeout(() => setReady(true), 250);
+
     return () => {
       cancelAnimationFrame(first);
       cancelAnimationFrame(second);
+      clearTimeout(fallback);
     };
     // Залежність одна — `enabled`. Перевірки «а раптом уже готово» тут навмисно
     // немає: повторний `setReady(true)` React відкидає сам, зате без неї ефекту

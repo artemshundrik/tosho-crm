@@ -1,5 +1,5 @@
 import * as React from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
 import {
@@ -84,5 +84,20 @@ describe("useFigureReveal", () => {
     // лічильники не «встигають» стати готовими ще на каркасі.
     rerender(<Probe enabled />);
     await waitFor(() => expect(screen.getByTestId("ready")).toHaveTextContent("true"));
+  });
+
+  /**
+   * Найдорожча з можливих поломок: на схованій вкладці `requestAnimationFrame`
+   * не викликається взагалі, тож прапорець лишився б опущеним — і на місці
+   * підсумку «Витрати» стояв би НУЛЬ. Не «анімації немає», а неправильна сума.
+   */
+  it("на схованій сторінці готово одразу — щоб не показати нуль замість суми", () => {
+    const spy = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    try {
+      render(<Probe />);
+      expect(screen.getByTestId("ready")).toHaveTextContent("true");
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
