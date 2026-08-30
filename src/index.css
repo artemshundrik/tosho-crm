@@ -29,9 +29,15 @@
     
     /* --- BRAND TOKENS (single knob) --- */
     /* Change only --brand-h to switch brand color (blue -> magenta, etc.) */
-    --brand-h: 219;
-    --brand-s: 99.2%;
-    --brand-l: 52.7%;
+    /* ОДИН СИНІЙ НА ЗАСТОСУНОК (REQ-175#p43). Було два, і вони стояли поруч:
+       219° з майже стовідсотковою насиченістю в кнопках і активних станах проти
+       213° / 68 % у смузі складу ціни та решті візуалізацій. Поруч перший
+       читався як «електричний» — і саме на цю яскравість у світлій темі
+       скаржились. Тепер бренд ДОРІВНЮЄ --chart-1: один тон, різна світлість за
+       роллю, як у зеленого. */
+    --brand-h: 213;
+    --brand-s: 67.7%;
+    --brand-l: 50.2%;
 
     --primary: var(--brand-h) var(--brand-s) var(--brand-l);
     --primary-foreground: 210 40% 98%;
@@ -59,8 +65,14 @@
     --skeleton-bg: 0 0% 89%;
 
     /* --- КНОПКИ (Gradient) --- */
-    --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) + 5%);
-    --btn-primary-grad-bot: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 4%);
+    /* У СВІТЛІЙ ТЕМІ ЗАЛИВКА ТЕМНІША ЗА ТЕКСТОВИЙ СИНІЙ (REQ-175#p43).
+       Градієнт ішов від --brand-l + 5 %, і білий напис на ньому давав 3.6:1 —
+       нижче норми 4.5, а на око просто «різало». Синій лишається тим самим
+       тоном: суцільна заливка під білим текстом на світлому тлі мусить бути
+       темнішою за той самий синій як текст. Темної теми не стосується — там
+       заливка стоїть на темному, і формула лишилась старою (нижче, у .dark). */
+    --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 3%);
+    --btn-primary-grad-bot: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 11%);
     --btn-primary-shadow: var(--brand-h) var(--brand-s) var(--brand-l);
 
     /* --- СТАНИ КОНТРОЛІВ (REQ-48) --- */
@@ -116,9 +128,9 @@
     --neutral-soft-border: 0 0% 84%;
     --neutral-foreground: 0 0% 34%;
 
-    --info-soft: 214 100% 92%;
-    --info-soft-border: 214 96% 80%;
-    --info-foreground: 216 95% 46%;
+    --info-soft: 213 100% 92%;
+    --info-soft-border: 213 96% 80%;
+    --info-foreground: 213 72% 40%;
 
     --accent-tone-soft: 262 100% 93%;
     --accent-tone-soft-border: 263 90% 79%;
@@ -210,10 +222,11 @@
        триматись на самому кольорі).
 
        КОНВЕНЦІЯ СИНЬОГО: --chart-1 — канонічний синій УСІХ візуалізацій
-       (спарклайни, area/line-графіки з однією серією, слот 1 палітри). Бренд
-       --primary (219°, майже 100% насиченості) — це UI: кнопки, фокус, активний
-       стан. У графіках його НЕ використовуємо: поруч із chart-1 (213°, 68%) він
-       читається як другий, «електричний» синій і розсинхронізовує екран. */
+       (спарклайни, area/line-графіки з однією серією, слот 1 палітри). З
+       REQ-175#p43 бренд --primary дорівнює йому ТОЧНО, тож правило «у графіках
+       primary не використовуємо» лишається чинним технічно (у візуалізаціях
+       беремо chart-1), але різниці на екрані більше немає — синій в застосунку
+       один. */
     --chart-1: 213 67.7% 50.2%;
     --chart-2: 17 82.1% 56.3%;
     --chart-3: 159 73.3% 39.6%;
@@ -438,16 +451,20 @@
     --skeleton-transition: 80ms;
     --skeleton-bg: 0 0% 14.2%;
 
-    --primary: 218 100% 63.5%;
-    --ring: 218 100% 63.5%;
+    /* Той самий тон 213°, що й --chart-1 у темній темі (REQ-175#p43). */
+    --primary: 213 76.8% 56.1%;
+    --ring: 213 76.8% 56.1%;
+    /* Темна тема лишається як була: заливка світліша за середину бренду. */
+    --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) + 5%);
+    --btn-primary-grad-bot: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 4%);
 
     --neutral-soft: 0 0% 13%;
     --neutral-soft-border: 0 0% 22%;
     --neutral-foreground: 0 0% 76%;
 
-    --info-soft: 216 30% 16%;
-    --info-soft-border: 216 34% 30%;
-    --info-foreground: 216 100% 70%;
+    --info-soft: 213 30% 16%;
+    --info-soft-border: 213 34% 30%;
+    --info-foreground: 213 85% 72%;
 
     --accent-tone-soft: 263 34% 19%;
     --accent-tone-soft-border: 263 40% 36%;

@@ -58,11 +58,14 @@ describe("ковзний індикатор", () => {
     expect(indicator()).toBeNull();
   });
 
-  it("риска не тягне на собі рамку й фон плашки", () => {
+  it("риска монохромна й не тягне на собі рамку й фон плашки", () => {
+    // Кольором ТЕКСТУ, а не бренду (REQ-175#p44): активна вкладка — це місце, де
+    // ти стоїш, а не дія. Синє в цьому інтерфейсі означає дію або посилання.
     render(<UnderlineBar />);
     const bar = screen.getByLabelText("Вкладки").querySelector<HTMLElement>("[data-segmented-indicator]");
     expect(bar).not.toBeNull();
-    expect(bar!.className).toContain("bg-primary");
+    expect(bar!.className).toContain("bg-foreground");
+    expect(bar!.className).not.toContain("bg-primary");
     expect(bar!.className).not.toContain("border-border");
   });
 });

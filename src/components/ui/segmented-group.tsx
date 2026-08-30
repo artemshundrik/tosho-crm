@@ -155,7 +155,11 @@ export function useSegmentedSlider<T extends HTMLElement>(variant: SliderVariant
       className={cn(
         "pointer-events-none absolute",
         underline
-          ? "bottom-0 z-base h-0.5 rounded-full bg-primary"
+          ? // Риска вкладки — кольором ТЕКСТУ, а не бренду (REQ-175#p44): чорна
+            // у світлій темі, біла в темній. Синій у цьому інтерфейсі означає
+            // дію або посилання, а активна вкладка — не дія, а місце, де ти
+            // зараз стоїш.
+            "bottom-0 z-base h-0.5 rounded-full bg-foreground"
           : "z-0 rounded-lg border border-border bg-background",
         animated &&
           (underline

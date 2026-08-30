@@ -6,6 +6,7 @@ import {
   figureBarRevealStyle,
   useFigureReveal,
 } from "@/components/app/animated-figure";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -122,36 +123,74 @@ export function QuotePriceSummary({
 
         {open && parts.length > 0 ? (
           <>
-            {/* `flexGrow` за величиною, `minWidth` щоб дрібна частка не зникла в
-                нуль і смуга не брехала складом. */}
-            <div className="mt-3 flex h-2.5 gap-[3px] overflow-hidden rounded-full" style={figureBarRevealStyle(ready)}>
+            {/*
+              ЧИСЛА ПЕРЕЇХАЛИ В ПІДКАЗКУ, ПІДПИСИ СТАЛИ РЯДКОМ (REQ-175#p45).
+
+              Легенда стовпчиком витрачала по рядку колонки на кожну частку —
+              чотири рядки на те, що смуга вже показала пропорцією. Підпис
+              відповідає на «з чого складається», і для цього досить назви;
+              «скільки саме» питають рідше, тож числа тепер у бульбашці по
+              наведенню на смугу — тим самим прийомом, що підказки біля знаків
+              питання в дизайн-задачі.
+
+              `flexGrow` за величиною, `minWidth` щоб дрібна частка не зникла в
+              нуль і смуга не брехала складом.
+            */}
+            <HoverTip
+              className="mt-3 w-full"
+              side="bottom"
+              contentClassName="max-w-none px-3 py-2"
+              label={
+                <dl className="grid gap-1.5">
+                  {parts.map((part) => (
+                    <div
+                      key={`tip-${part.key}`}
+                      className="flex items-baseline gap-3 whitespace-nowrap text-xs"
+                    >
+                      <span
+                        className={cn("h-2.5 w-2.5 shrink-0 translate-y-[1px] rounded-[3px]", part.color)}
+                        aria-hidden
+                      />
+                      <dt className="text-muted-foreground">{part.label}</dt>
+                      <dd className="ml-auto font-semibold tabular-nums text-foreground">
+                        {formatFull(part.value)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              }
+            >
+              <span
+                className="flex h-2.5 w-full gap-[3px] overflow-hidden rounded-full"
+                style={figureBarRevealStyle(ready)}
+              >
+                {parts.map((part) => (
+                  <span
+                    key={`bar-${part.key}`}
+                    className={cn("rounded-[2px]", part.color)}
+                    style={{
+                      flexGrow: part.value,
+                      flexBasis: 0,
+                      minWidth: 6,
+                      transition: FIGURE_BAR_SEGMENT_TRANSITION,
+                    }}
+                  />
+                ))}
+              </span>
+            </HoverTip>
+
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground">
               {parts.map((part) => (
                 <span
-                  key={`bar-${part.key}`}
-                  className={cn("rounded-[2px]", part.color)}
-                  style={{
-                    flexGrow: part.value,
-                    flexBasis: 0,
-                    minWidth: 6,
-                    transition: FIGURE_BAR_SEGMENT_TRANSITION,
-                  }}
-                />
+                  key={`legend-${part.key}`}
+                  className="inline-flex items-center gap-1.5 whitespace-nowrap"
+                  title={`${part.label} · ${formatCompact(part.value)}`}
+                >
+                  <span className={cn("h-2 w-2 shrink-0 rounded-[3px]", part.color)} aria-hidden />
+                  {part.label}
+                </span>
               ))}
             </div>
-            <dl className="mt-2.5 grid gap-1">
-              {parts.map((part) => (
-                <div key={`legend-${part.key}`} className="flex items-baseline gap-2 text-xs">
-                  <span
-                    className={cn("h-2.5 w-2.5 shrink-0 translate-y-[1px] rounded-[3px]", part.color)}
-                    aria-hidden
-                  />
-                  <dt className="text-muted-foreground">{part.label}</dt>
-                  <dd className="ml-auto font-medium tabular-nums" title={formatFull(part.value)}>
-                    {formatCompact(part.value)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
           </>
         ) : null}
       </div>
