@@ -5,37 +5,46 @@ import type { RunSalePricing } from "@/lib/quoteRuns";
 import type { QuoteRun } from "@/lib/toshoApi";
 
 /**
- * Перелік тиражів позиції — РЯДКАМИ НА ЖОРСТКІЙ СІТЦІ (REQ-155 p1).
+ * Перелік тиражів позиції — ТАБЛИЦЯ З ШАПКОЮ (REQ-175#p31).
  *
- * ЧОМУ НЕ ПІГУЛКИ, ЯК БУЛО. Пігулка «100 шт» показувала рівно одне число з
- * пʼяти, які потрібні, щоб обрати тираж: скільки, з чого складається
- * собівартість, яка накрутка, скільки виходить і по чому за штуку. Решту
- * доводилось діставати по одному кліку на кожен тираж — тобто порівняння двох
- * тиражів між собою було неможливе в принципі.
+ * ЧОМУ НЕ ПІГУЛКИ, ЯК БУЛО ДО REQ-155. Пігулка «100 шт» показувала рівно одне
+ * число з пʼяти, потрібних, щоб обрати тираж, — решту доводилось діставати
+ * кліком на кожен тираж окремо, тобто порівняння було неможливе в принципі.
  *
- * ЧОМУ САМЕ GRID, А НЕ FLEX. Це не смак: бейдж «Погоджено клієнтом» ширший за
- * кнопку «Погодити» на добру сотню пікселів, і на flex-і поява бейджа зсувала
- * сусідні колонки — суми в стовпчику переставали стояти одна під одною рівно в
- * тому рядку, який щойно погодили. Колонка фіксованої ширини тримає місце
- * незалежно від того, що в ній зараз лежить.
+ * ЧОМУ НЕ ПРОЗА, ЯК БУЛО ПІСЛЯ. Числа стояли рядком-формулою:
+ * «1 136,28 + 70,30 /од · логістика 1 000 · накрутка 28 %». Це формула, записана
+ * прозою: підписів у неї немає, і читач мав сам здогадуватись, що перше число —
+ * модель, а друге — нанесення. Усе однакового кольору й кегля, тож око не мало
+ * за що зачепитись, а на вузькому екрані рядок обрізався просто посеред
+ * формули.
  *
- * ШИРИНИ КОЛОНОК: 18px радіо · кількість і сума — auto · решта опис · 160px
- * рішення клієнта. На вузькому екрані рядок розкладається на три яруси
- * (кількість і сума зверху, опис і рішення під ними) — сітка з пʼятьох колонок
- * у 360 px не влазить ніяк, а стовпчик сум там і не з чим вирівнювати.
+ * Тепер підписи стоять У ШАПЦІ ОДИН РАЗ, а кожен тираж — рядок вирівняних
+ * чисел. Це дає те, заради чого перелік і робили: тиражі порівнюються ПО
+ * ВЕРТИКАЛІ — видно, що собівартість однакова, а різниця в нанесенні й
+ * накрутці.
  *
- * ЧОМУ AUTO, А НЕ ФІКСОВАНІ 88 і 152. Колонка `auto` в гріді дорівнює
- * найширшій комірці СВОГО стовпця по всіх рядках — тобто числа стоять одне під
- * одним так само рівно, але без порожнечі під тираж на пʼять цифр, якого тут
- * немає. Фіксовані ширини лишали 47 px повітря між «30 шт.» і розкладкою
- * собівартості й 37 px між кнопкою погодження та сумою: очі проходили цю
- * прогалину як межу таблиці, хоч це один рядок про один тираж.
+ * ШИРИНИ КОЛОНОК ФІКСОВАНІ, і тепер це не діра, а таблиця: ширину задає
+ * найдовше з двох — підпис у шапці чи типове значення (заміряно: «Собівартість
+ * /од.» — 96 px, «47 612,67 UAH» — 109). Шапка й рядки — окремі гріди, тож
+ * `auto` в них розʼїхався б; спільний шаблон тримає колонки на спільній
+ * вертикалі.
  *
- * А от колонка рішення лишається ФІКСОВАНОЮ, бо її ширину диктує не дані, а
- * стан: бейдж «Погоджено клієнтом» — 157 px, кнопка «Погодити» — 94. На `auto`
- * погодження тиражу зсувало б стовпчик сум на 60 px убік. 10rem = 160 px —
- * рівно під найширший стан.
+ * Найтісніше не на найширшому екрані, а рівно на xl (1280 px): там зʼявляється
+ * права колонка справи, картці лишається 773 px, і вільного місця в рядку
+ * тиражу — 33 px. Тому проміжок між колонками на lg — 12 px, а не 16.
+ *
+ * Колонка рішення клієнта — 10rem: її ширину диктує не дані, а стан (бейдж
+ * «Погоджено клієнтом» — 157 px проти 94 у кнопки «Погодити»), тож на `auto`
+ * погодження тиражу зсувало б стовпчик сум убік.
+ *
+ * ДО lg — ТРИ ЯРУСИ. Вісім колонок потребують ~740 px і на планшеті не влазять.
+ * Там рядок розкладається на кількість і суму зверху, склад собівартості
+ * підписами під ними й рішення внизу — порівнювати на телефоні все одно нема з
+ * чим, бо тираж на екрані один.
  */
+
+/** Шаблон колонок — спільний для шапки й рядків, інакше вони розʼїдуться. */
+const GRID_COLS = "lg:grid-cols-[4rem_6rem_5.25rem_4.25rem_4.5rem_minmax(0,1fr)_10rem_7rem]";
 
 const num = (value: number, digits = 0) =>
   (Math.round(value * 100) / 100).toLocaleString("uk-UA", {
@@ -83,19 +92,54 @@ export function QuoteRunRows({
   onToggleApproved,
 }: QuoteRunRowsProps) {
   const currencyLabel = currency ?? "UAH";
+  // Шапка без жодного числа під собою обіцяла б колонки, яких немає: поки
+  // собівартість не внесена, підписи ховаються разом із даними.
+  const anyPriced = runs.some((run) => getPricing(run).costTotal > 0);
 
   return (
     <div>
-      <div className="mb-1.5 text-xs font-semibold uppercase tracking-caps text-muted-foreground">
-        Тиражі
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-foreground">
+          Тиражі{" "}
+          {runs.length > 0 ? (
+            <span className="font-normal tabular-nums text-muted-foreground">{runs.length}</span>
+          ) : null}
+        </div>
+        {canAddRun ? (
+          <button
+            type="button"
+            onClick={onAddRun}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Тираж
+          </button>
+        ) : null}
       </div>
 
-      {/*
-        Рядки на всю ширину картки, вміст — по її полю (REQ-175#p28).
+      {anyPriced ? (
+        <div
+          className={cn(
+            "-mx-3 hidden gap-x-3 border-b border-border/40 px-3 pb-1.5 text-2xs text-muted-foreground sm:-mx-4 sm:px-4 lg:grid",
+            GRID_COLS
+          )}
+          aria-hidden
+        >
+          <span>Тираж</span>
+          <span className="text-right">Собівартість/од.</span>
+          <span className="text-right">Нанесення/од.</span>
+          <span className="text-right">Логістика</span>
+          <span className="text-right">Накрутка</span>
+          <span />
+          <span />
+          <span className="text-right">Сума</span>
+        </div>
+      ) : null}
 
-        Відʼємне поле дорівнює полю ярусу, а внутрішнє повертає числа на ту
-        саму вертикаль, що назва товару вгорі. Тому риски між тиражами йдуть
-        від краю до краю, а підсвітка ряду не має «полів усередині полів».
+      {/*
+        Відʼємне поле дорівнює полю ярусу, а внутрішнє повертає числа на ту саму
+        вертикаль, що назва товару вгорі. Тому риски між тиражами йдуть від краю
+        до краю картки, а підсвітка ряду не має «полів усередині полів».
       */}
       <div role="radiogroup" aria-label="Тиражі позиції" className="-mx-3 sm:-mx-4">
         {runs.map((run, runIndex) => {
@@ -104,10 +148,34 @@ export function QuoteRunRows({
           const isApproved = run.is_approved === true;
           const pricing = getPricing(run);
           const priced = pricing.costTotal > 0;
-          const modelPrice = Number(run.unit_price_model) || 0;
-          const printPrice = Number(run.unit_price_print) || 0;
-          const logistics = Number(run.logistics_cost) || 0;
-          const markupRate = Math.round((Number(run.markup_rate) || 0) * 100) / 100;
+          // Класи колонок — літералами: Tailwind читає вихідний код, а не
+          // рантайм, тож зібраний з шматків `lg:col-start-${i}` не існував би.
+          const costCells = [
+            {
+              key: "model",
+              label: "Собівартість",
+              value: num(Number(run.unit_price_model) || 0, 2),
+              col: "lg:col-start-2",
+            },
+            {
+              key: "print",
+              label: "Нанесення",
+              value: num(Number(run.unit_price_print) || 0, 2),
+              col: "lg:col-start-3",
+            },
+            {
+              key: "logistics",
+              label: "Логістика",
+              value: num(Number(run.logistics_cost) || 0),
+              col: "lg:col-start-4",
+            },
+            {
+              key: "markup",
+              label: "Накрутка",
+              value: `${num(Math.round((Number(run.markup_rate) || 0) * 100) / 100, 2)} %`,
+              col: "lg:col-start-5",
+            },
+          ];
 
           return (
             <div
@@ -122,44 +190,51 @@ export function QuoteRunRows({
                 onSelect(run);
               }}
               className={cn(
-                "grid cursor-pointer items-center gap-x-4 gap-y-1.5 border-b border-border/40 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 sm:px-4",
-                "grid-cols-[1.125rem_minmax(0,1fr)_auto]",
-                "md:grid-cols-[1.125rem_auto_minmax(0,1fr)_10rem_auto]"
+                // Смужка стоїть на ВСІХ рядках, просто прозора: інакше вибір
+                // зсував би вміст рядка на 3 px убік.
+                "grid cursor-pointer items-center gap-x-4 gap-y-1.5 lg:gap-x-3 border-b border-l-[3px] border-border/40 border-l-transparent py-2.5 pl-[9px] pr-3 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:pl-[13px] sm:pr-4",
+                "grid-cols-[minmax(0,1fr)_auto]",
+                GRID_COLS,
+                isSelected && "border-l-foreground bg-muted"
               )}
             >
-              <span
-                className={cn(
-                  "col-start-1 row-start-1 grid h-4 w-4 place-items-center rounded-full border",
-                  isSelected ? "border-primary" : "border-border"
-                )}
-                aria-hidden
-              >
-                {isSelected ? <span className="h-2 w-2 rounded-full bg-primary" /> : null}
+              <span className="col-start-1 row-start-1 whitespace-nowrap">
+                <span
+                  className={cn(
+                    "text-base tabular-nums text-foreground",
+                    isSelected ? "font-semibold" : "font-medium"
+                  )}
+                >
+                  {qty}
+                </span>
+                <span className="ml-1 text-2xs text-muted-foreground lg:hidden">{unitLabel}</span>
               </span>
 
-              <span className="col-start-2 row-start-1 whitespace-nowrap">
-                <span className="font-mono text-base font-bold tabular-nums text-foreground">{qty}</span>
-                <span className="ml-1 text-2xs text-muted-foreground">{unitLabel}</span>
-              </span>
-
-              <span className="col-start-2 col-end-4 row-start-2 min-w-0 text-xs text-muted-foreground md:col-start-3 md:col-end-4 md:row-start-1 md:truncate">
+              {/*
+                До lg склад собівартості — один ярус із підписами; на lg обгортка
+                розчиняється (`contents`), і кожне число стає своєю колонкою
+                таблиці. Одна розмітка на обидва випадки: другої гілки, яку
+                React комітив би вхолосту, тут немає.
+              */}
+              <div className="col-start-1 col-end-3 row-start-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 lg:contents">
                 {priced ? (
-                  <>
-                    <span className="font-mono tabular-nums">
-                      {num(modelPrice, 2)} + {num(printPrice, 2)}
-                    </span>{" "}
-                    /од · логістика <span className="font-mono tabular-nums">{num(logistics)}</span> ·
-                    накрутка <span className="font-mono tabular-nums">{num(markupRate, 2)} %</span>
-                  </>
+                  costCells.map((cell) => (
+                    <span key={cell.key} className={cn("whitespace-nowrap lg:row-start-1 lg:text-right", cell.col)}>
+                      <span className="mr-1 text-2xs text-muted-foreground lg:hidden">{cell.label}</span>
+                      <span className="text-sm tabular-nums text-foreground">{cell.value}</span>
+                    </span>
+                  ))
                 ) : (
-                  "собівартість не внесена"
+                  <span className="text-xs text-muted-foreground lg:col-start-2 lg:col-end-6 lg:row-start-1">
+                    собівартість не внесена
+                  </span>
                 )}
-              </span>
+              </div>
 
               {/* Колонка рішення клієнта — тут воно й ухвалюється (REQ-155 p2).
                   Порожня — теж колонка: вона тримає ширину, щоб сума праворуч не
                   їздила туди-сюди, коли бейдж змінюється кнопкою й навпаки. */}
-              <span className="col-start-2 col-end-4 row-start-3 flex items-center justify-start md:col-start-4 md:col-end-5 md:row-start-1 md:justify-end">
+              <span className="col-start-1 col-end-3 row-start-3 flex items-center justify-start lg:col-start-7 lg:col-end-8 lg:row-start-1 lg:justify-end">
                 {canApproveRun ? (
                   <button
                     type="button"
@@ -192,38 +267,32 @@ export function QuoteRunRows({
                 ) : null}
               </span>
 
-              <span className="col-start-3 row-start-1 text-right md:col-start-5">
+              {/* Прочерка тут більше немає: він казав «нуль», хоч ішлося про «ще
+                  невідомо», а це вже сказано словами ліворуч. */}
+              <span className="col-start-2 row-start-1 whitespace-nowrap text-right lg:col-start-8">
                 {priced ? (
                   <>
-                    <span className="font-mono text-base font-semibold tabular-nums text-foreground">
+                    <span
+                      className={cn(
+                        "text-base tabular-nums text-foreground",
+                        isSelected ? "font-semibold" : "font-medium"
+                      )}
+                    >
                       {amount(pricing.saleTotal)}
                     </span>
                     <span className="ml-1 text-2xs font-medium text-muted-foreground">{currencyLabel}</span>
-                    <span className="block font-mono text-2xs tabular-nums text-muted-foreground">
-                      {pricing.saleUnitPrice === null ? "—" : `${num(pricing.saleUnitPrice, 2)} /${unitLabel}`}
-                    </span>
+                    {pricing.saleUnitPrice === null ? null : (
+                      <span className="block text-2xs tabular-nums text-muted-foreground">
+                        {`${num(pricing.saleUnitPrice, 2)} /${unitLabel}`}
+                      </span>
+                    )}
                   </>
-                ) : (
-                  <span className="text-base text-muted-foreground">—</span>
-                )}
+                ) : null}
               </span>
             </div>
           );
         })}
       </div>
-
-      {canAddRun ? (
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={onAddRun}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-border/70 px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Тираж
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -60,8 +60,13 @@ export function QuoteRunPriceFields({
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {COST_FIELDS.map(({ field, label, who, aria }) => (
-        <div key={field} className="space-y-2">
-          <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
+        <div key={field} className="space-y-1.5">
+          {/* Реченням, а не капсом (REQ-175#p33): підписи полів, заголовки
+              ярусів ціни й назви груп специфікації малювались однаково —
+              text-2xs uppercase tracking-wide, — тож жоден рівень не мав рангу.
+              Український текст капсом на 10 px до того ж найважчий для читання
+              з усього, що є на сторінці. */}
+          <Label className="block min-h-5 text-xs font-normal leading-tight text-muted-foreground">
             {label}
           </Label>
           <CurrencyAmountInput
@@ -75,8 +80,8 @@ export function QuoteRunPriceFields({
           />
         </div>
       ))}
-      <div className="space-y-2">
-        <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
+      <div className="space-y-1.5">
+        <Label className="block min-h-5 text-xs font-normal leading-tight text-muted-foreground">
           Накрутка на собівартість
         </Label>
         <PercentAmountInput

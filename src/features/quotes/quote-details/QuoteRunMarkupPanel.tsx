@@ -508,9 +508,9 @@ export function QuoteRunMarkupPanel({
           «чому саме стільки», і з неї починається розмова про ціну. */}
       <div className="border-t border-border/40 pt-4">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
-          <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
-            Накрутка на собівартість ·{" "}
-            <span className="font-mono tabular-nums text-foreground">{formatRate(markupRate)}</span>
+          <span className="text-sm font-semibold text-foreground">
+            Накрутка на собівартість{" "}
+            <span className="font-normal tabular-nums text-muted-foreground">{formatRate(markupRate)}</span>
           </span>
           <span className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
             орієнтир на цій позиції
@@ -535,11 +535,11 @@ export function QuoteRunMarkupPanel({
 
       {/* ЯРУС ДРУГИЙ — ціна. Скільки вийшло і, кому належить бачити, з чого. */}
       <div className="border-t border-border/40 pt-4">
-        <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
+        <span className="text-sm font-semibold text-foreground">
           {off ? "Ціна" : `Ціна з накруткою ${formatRate(markupRate)}`}
         </span>
         <div className="mt-1.5 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-          <div className="font-mono text-3xl font-semibold leading-none tabular-nums text-foreground">
+          <div className="text-3xl font-semibold leading-none tracking-tight tabular-nums text-foreground">
             {off ? "—" : formatCurrency(pricing.saleTotal, currency)}
           </div>
           <div className="text-xs text-muted-foreground">

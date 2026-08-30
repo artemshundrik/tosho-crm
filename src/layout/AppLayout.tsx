@@ -1837,7 +1837,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     <WorkspacePresenceProvider value={workspacePresence}>
       <div
         className={cn(
-          "min-h-screen min-h-[100dvh] text-foreground selection:bg-primary/20 selection:text-primary",
+          // Виділення тексту монохромне: синій у цьому інтерфейсі означає дію
+          // або посилання, а підсвітка виділеного тексту — ні.
+          "min-h-screen min-h-[100dvh] text-foreground selection:bg-foreground/20 selection:text-foreground",
           "bg-[hsl(var(--page-underlay-bg))]"
         )}
         /* Затримка другої фази згортання сайдбара — на корені, бо її слухають

@@ -14,7 +14,7 @@ export function PercentAmountInput({ className, ...props }: NumberInputProps) {
     <div className="relative">
       <NumberInput
         {...props}
-        className={cn("h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums", className)}
+        className={cn("h-11 rounded-xl bg-background pr-14 text-lg tabular-nums", className)}
       />
       <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold text-muted-foreground">
         %

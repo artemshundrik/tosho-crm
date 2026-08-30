@@ -4830,33 +4830,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       ...methodSections,
                     ].filter((section): section is { title: string; fields: Array<{ label: string; value: string }> } => Boolean(section));
                     const renderedSections = packageSections.length > 0 ? packageSections : defaultSpecSections;
-                    const printSummaryPriority = [
-                      "Розмір (Ш × В × Г)",
-                      "Формат",
-                      "Матеріал",
-                      "Папір",
-                      "Папір блоку",
-                      "Щільність",
-                      "Щільність блоку",
-                      "Кількість аркушів",
-                      "Тип нанесення",
-                      "Друк",
-                      "Друк обкладинки",
-                      "Друк блоку",
-                      "Ламінація",
-                      "Додаткове оздоблення",
-                      "Вибірковий лак",
-                    ];
-                    const printDetailFields = packageSections.flatMap((section) =>
-                      section.fields.map((field) => ({ ...field, section: section.title }))
-                    );
-                    const compactPrintFields = printDetailFields
-                      .filter((field) => printSummaryPriority.includes(field.label))
-                      .sort(
-                        (a, b) =>
-                          printSummaryPriority.indexOf(a.label) - printSummaryPriority.indexOf(b.label)
-                      )
-                      .slice(0, 6);
+                    const printDetailFields = packageSections.flatMap((section) => section.fields);
 
                     return (
                       <div
@@ -5028,56 +5002,52 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             </div>
 
                             {packageSections.length > 0 ? (
-                              <div className="mt-4 space-y-3">
-                                {compactPrintFields.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {compactPrintFields.map((field) => (
-                                      <QuoteItemFact
-                                        key={`print-summary:${field.label}:${field.value}`}
-                                        label={field.label === "Розмір (Ш × В × Г)" ? "Розмір" : field.label}
-                                        value={field.value}
-                                      />
-                                    ))}
-                                  </div>
-                                ) : null}
+                              /*
+                                Специфікацію показано ОДИН раз (REQ-175#p32).
 
-                                <details className="group rounded-xl border border-border/50">
-                                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                                    <div>
-                                      <div className="text-sm font-semibold text-foreground">Специфікація поліграфії</div>
-                                      <div className="mt-0.5 text-xs text-muted-foreground">
-                                        {printDetailFields.length} параметрів у {packageSections.length} секціях
-                                      </div>
+                                Над згорткою стояв ряд чипів із шістьма
+                                параметрами — і це буквально ті самі параметри,
+                                що всередині: список чипів брав
+                                `packageSections`, розплющував і відрізав перші
+                                шість. Два покажчики на одні дані, один над
+                                одним. Лишилась згортка, відкрита за
+                                замовчуванням: специфікацію видно з першого
+                                погляду, а згорнути її можна.
+
+                                Групи більше не коробки й не мають риски під
+                                заголовком: риска робила з групи «шапку
+                                таблиці», і око чекало таблиці, якої немає, а дві
+                                короткі риски поруч читались як обрізані. Групу
+                                тримає відступ між колонками й те, що заголовок
+                                ТИХІШИЙ за власні рядки.
+                              */
+                              <details open className="group mt-4">
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-t border-border/50 pt-3 [&::-webkit-details-marker]:hidden">
+                                  <span className="text-sm font-semibold text-foreground">Специфікація</span>
+                                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <span className="tabular-nums">{printDetailFields.length}</span> параметрів
+                                    <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+                                  </span>
+                                </summary>
+                                <div className="mt-3 grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                                  {packageSections.map((section) => (
+                                    <div key={section.title}>
+                                      <div className="mb-2 text-xs text-muted-foreground">{section.title}</div>
+                                      {section.fields.map((field) => (
+                                        <div
+                                          key={`${section.title}:${field.label}`}
+                                          className="flex items-baseline justify-between gap-4 py-1 text-sm"
+                                        >
+                                          <span className="min-w-0 text-muted-foreground">{field.label}</span>
+                                          <span className="min-w-0 text-right font-medium tabular-nums text-foreground">
+                                            {field.value}
+                                          </span>
+                                        </div>
+                                      ))}
                                     </div>
-                                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-                                  </summary>
-                                  <div className="grid gap-3 border-t border-border/50 p-3 md:grid-cols-2 xl:grid-cols-3">
-                                    {packageSections.map((section) => (
-                                      <div
-                                        key={section.title}
-                                        className="rounded-lg border border-border/50 bg-muted p-3"
-                                      >
-                                        <div className="mb-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                          {section.title}
-                                        </div>
-                                        <div className="space-y-2">
-                                          {section.fields.map((field) => (
-                                            <div
-                                              key={`${section.title}:${field.label}`}
-                                              className="grid grid-cols-[minmax(96px,0.8fr)_minmax(0,1.2fr)] gap-3 text-sm"
-                                            >
-                                              <div className="min-w-0 text-muted-foreground">{field.label}</div>
-                                              <div className="min-w-0 font-semibold leading-snug text-foreground">
-                                                {field.value}
-                                              </div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </details>
-                              </div>
+                                  ))}
+                                </div>
+                              </details>
                             ) : renderedSections.length > 0 ? (
                               <div className="mt-4 flex flex-wrap gap-1.5">
                                 {renderedSections.map((section) => (
@@ -5184,7 +5154,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   <div className="-mx-3 border-t border-border/40 px-3 pt-4 sm:-mx-4 sm:px-4">
                                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+                                        {/* Синя блямба тут нічого не позначала — просто
+                                            прикрашала заголовок. Активний тираж уже видно
+                                            в переліку смужкою по лівому краю рядка. */}
                                         <span className="text-sm font-semibold text-foreground">Активний тираж</span>
                                         <span className="text-sm text-muted-foreground">·</span>
                                         <div className="relative h-8 w-32">
@@ -5194,7 +5166,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             onValueChange={(next) => updateRunValue(activeItemRunIndex, "quantity", next)}
                                             min={1}
                                             emptyValue={1}
-                                            className="h-8 w-full rounded-lg bg-background pl-3 pr-12 text-left font-mono text-sm font-semibold tabular-nums"
+                                            className="h-8 w-full rounded-lg bg-background pl-3 pr-12 text-left text-sm font-semibold tabular-nums"
                                             aria-label="Кількість активного тиражу"
                                           />
                                           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
