@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarPlus, Loader2, PartyPopper, Trash2 } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, PartyPopper, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,11 @@ import { deleteHoliday, listHolidays, upsertHoliday, type HolidayRow } from "@/l
  * НАВІЩО ЦЕ В ІНТЕРФЕЙСІ, а не в SQL-скрипті: перехідні свята (Великдень,
  * Трійця) щороку припадають на нові дати, тож «внести наступний рік» — це
  * регулярна робота, і вона не має вимагати розробника.
+ *
+ * РІК ТУТ СВІЙ, а не позичений у планера. Раніше вікно показувало рік обраного
+ * на /team місяця, і набрати наступний рік означало перегорнути планер до
+ * січня — по місяцю, з перезавантаженням усієї сторінки відсутностей на
+ * кожному кроці. А календар наступного року саме й набирають заздалегідь.
  *
  * Свято = рядок `is_workday = false`. Робочу суботу цей екран не показує й не
  * створює: вона теж виняток календаря, але це не свято.
@@ -70,6 +75,18 @@ export function HolidayEditorDialog({
   currentUserId: string | null;
   onSaved?: () => void;
 }) {
+  const [activeYear, setActiveYear] = useState(year);
+  /*
+   * Рік із планера — стартовий, і скидається він РІВНО в момент відкриття, а не
+   * ефектом: ефект спрацював би на такт пізніше, і вікно встигло б показати й
+   * завантажити той рік, який дивились минулого разу.
+   */
+  const [openedFor, setOpenedFor] = useState<number | null>(open ? year : null);
+  if (open ? openedFor !== year : openedFor !== null) {
+    setOpenedFor(open ? year : null);
+    if (open) setActiveYear(year);
+  }
+
   const [rows, setRows] = useState<HolidayRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -81,14 +98,14 @@ export function HolidayEditorDialog({
     if (!workspaceId) return;
     setLoading(true);
     try {
-      setRows(await listHolidays({ workspaceId, year }));
+      setRows(await listHolidays({ workspaceId, year: activeYear }));
     } catch (error) {
       console.error("[team] holidays load failed", error);
       toast.error("Не вдалося завантажити свята");
     } finally {
       setLoading(false);
     }
-  }, [workspaceId, year]);
+  }, [workspaceId, activeYear]);
 
   useEffect(() => {
     if (!open) return;
@@ -98,10 +115,20 @@ export function HolidayEditorDialog({
   }, [open, reload]);
 
   const canAdd = Boolean(
-    workspaceId && draftDate && draftName.trim() && draftDate.slice(0, 4) === String(year)
+    workspaceId && draftDate && draftName.trim() && draftDate.slice(0, 4) === String(activeYear)
   );
 
-  const wrongYear = Boolean(draftDate && draftDate.slice(0, 4) !== String(year));
+  const wrongYear = Boolean(draftDate && draftDate.slice(0, 4) !== String(activeYear));
+
+  /*
+   * Куди можна ходити: минулий рік (свята вносили заднім числом), поточний і
+   * наступний — далі вперед календаря просто не існує, перехідні свята на
+   * 2029-й ніхто не знає. Планер, відгорнутий далі, межу розсуває: вікно не
+   * має відкриватись на році, якого саме воно й не показує.
+   */
+  const nowYear = new Date().getFullYear();
+  const minYear = Math.min(nowYear - 1, year);
+  const maxYear = Math.max(nowYear + 1, year);
 
   const handleAdd = useCallback(async () => {
     if (!workspaceId || !canAdd) return;
@@ -153,7 +180,7 @@ export function HolidayEditorDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PartyPopper className={cn("h-4 w-4", toneTextClass.festive)} aria-hidden />
-            Календар свят — {year}
+            Календар свят
           </DialogTitle>
           <DialogDescription>
             Святкові дні не списують квоту відсутностей і не додають нормо-днів. Перехідні
@@ -162,14 +189,43 @@ export function HolidayEditorDialog({
         </DialogHeader>
 
         <div className="space-y-3">
+          {/* Рік — головний перемикач вікна: усе нижче (форма, список, підсумок)
+              стосується саме його, тож він стоїть перший і крупно. Стрілки такі
+              самі, як у планера місяців, — це той самий жест. */}
+          <div className="flex items-center justify-center gap-1.5">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setActiveYear((prev) => Math.max(minYear, prev - 1))}
+              disabled={activeYear <= minYear}
+              aria-label="Попередній рік"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden />
+            </Button>
+            <span className="min-w-[72px] text-center text-sm font-semibold tabular-nums">
+              {activeYear}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setActiveYear((prev) => Math.min(maxYear, prev + 1))}
+              disabled={activeYear >= maxYear}
+              aria-label="Наступний рік"
+            >
+              <ChevronRight className="h-4 w-4" aria-hidden />
+            </Button>
+          </div>
+
           <div className="grid gap-2 sm:grid-cols-[150px_1fr_auto] sm:items-end">
             <div className="space-y-1.5">
               <Label htmlFor="holiday-date">Дата</Label>
               <DateInput
                 id="holiday-date"
                 value={draftDate}
-                min={`${year}-01-01`}
-                max={`${year}-12-31`}
+                min={`${activeYear}-01-01`}
+                max={`${activeYear}-12-31`}
                 onChange={(event) => setDraftDate(event.target.value)}
               />
             </div>
@@ -198,7 +254,7 @@ export function HolidayEditorDialog({
 
           {wrongYear ? (
             <p className={cn("text-2xs", toneTextClass.warning)}>
-              Дата поза {year} роком — перемкніть рік на сторінці, щоб її внести.
+              Дата поза {activeYear} роком — перемкніть рік угорі, щоб її внести.
             </p>
           ) : draftDate && isWeekend(draftDate) ? (
             <p className="text-2xs text-muted-foreground">
@@ -215,7 +271,7 @@ export function HolidayEditorDialog({
             ) : rows.length === 0 ? (
               <EmptyStateCard
                 badgeLabel="Календар порожній"
-                title={`За ${year} рік свят не внесено`}
+                title={`За ${activeYear} рік свят не внесено`}
                 description="Поки жодного дня немає, робочими вважаються всі пн–пт."
                 className="border-0"
               />
