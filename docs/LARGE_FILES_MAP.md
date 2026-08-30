@@ -13,10 +13,11 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~9 893 lines, 473 KB, as of 2026-08-29)
+## src/pages/QuoteDetailsPage.tsx (~9 851 lines, 467 KB, as of 2026-08-30)
 
-Зміщення звірені grep-ом 25.08.2026 (двічі за день: удруге — після редизайну
-шапки й вкладок, який зсунув усе нижче 2300 приблизно на +200 рядків).
+Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p3 (тиражі рядками,
+рішення клієнта в рядку, накрутка й ціна двома ярусами). Попередній звір був
+25.08.2026, і за пʼять днів таблиця розійшлася на 60–90 рядків.
 Попередня версія таблиці розійшлася з файлом на півтори тисячі рядків —
 обробники статусу шукались біля 3600, а лежали біля 4200. Якщо цифра нижче не
 сходиться, звіряй grep-ом і онови тут: мапа, якій не вірять, гірша за її
@@ -26,30 +27,31 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 |---|---|
 | 1–287 | imports |
 | 288–828 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `resizeTextareaToContent`, `formatBriefSelection`, `toggleWrappedFormatting`, `renderBriefRichText`) |
-| **829** | `export function QuoteDetailsPage(...)` — main component starts |
-| **1345** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
-| 1479 / 1483 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
-| 1630 / 1743 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
-| **2377** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
-| 2540 / 2587 | `handlePrimaryStatusAction`, `handleCreateOrder` |
-| 4109 / 4223 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
-| 4311 / 4405 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
-| 4418 / 4534 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
-| 4746 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
-| 4861 / 5102 | items: `handleSaveItem`, `handleAddComment` |
-| **5369** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
-| 5444–5592 | `<header>`: статус-контрол (DropdownMenu) + меню «⋮» |
-| 5615 | смуга вкладок — спільний `<TabBar>` (`src/components/ui/tab-bar.tsx`); риска ПЕРЕЇЖДЖАЄ окремим вузлом, псевдоелемента `after:` у файлі більше немає |
-| 5656 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
-| 5715 | вкладка «Товари» — `<section className="tab-panel">` |
-| 5722 | картка «Товари і тиражі» — заголовок |
-| ~6326–6480 | ціни активного тиражу: чотири поля, «Погодив клієнт», підсумки |
-| 6594–6977 | окрема картка «Тиражі» (`<details className="hidden">` — мертва, не рендериться) |
-| 6979 / 7381 | вкладки «Дедлайни», «Дизайн» |
-| 7928 / 8501 | вкладки «Обговорення», «Економіка» (заглушка `EconomicsComingSoon`) |
-| 9778 | діалог «Створити замовлення» |
+| **838** | `export function QuoteDetailsPage(...)` — main component starts |
+| **1361** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
+| 1478 / 1482 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
+| 1654 / 1767 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
+| **2431** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
+| 2608 / 2655 | `handlePrimaryStatusAction`, `handleCreateOrder` |
+| 4191 / 4305 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
+| 4393 / 4495 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
+| 4508 / 4624 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
+| 4836 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
+| 4951 / 5192 | items: `handleSaveItem`, `handleAddComment` |
+| **5459** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
+| 5534–5690 | `<header>`: статус-контрол (DropdownMenu) + меню «⋮» |
+| 5705 | смуга вкладок — спільний `<TabBar>` (`src/components/ui/tab-bar.tsx`); риска ПЕРЕЇЖДЖАЄ окремим вузлом, псевдоелемента `after:` у файлі більше немає |
+| 5746 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
+| 5807 | вкладка «Товари» — `<section className="tab-panel">` |
+| 5814 | картка «Товари і тиражі» — заголовок |
+| 6362 | `<QuoteRunRows>` — перелік тиражів рядками на жорсткій сітці; сама розмітка живе в `src/features/quotes/quote-details/QuoteRunRows.tsx` |
+| 6445 / 6463 | активний тираж: `<QuoteRunPriceFields>` (чотири поля) і `<QuoteRunMarkupPanel>` (накрутка зі шкалою + ціна з розкладом) |
+| 6519–6902 | окрема картка «Тиражі» (`<details className="hidden">` — мертва, не рендериться) |
+| 6904 / 7306 | вкладки «Дедлайни», «Дизайн» |
+| 7853 / 8426 | вкладки «Обговорення», «Економіка» (заглушка `EconomicsComingSoon`) |
+| 9736 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 865 lines, 583 KB, as of 2026-08-29)
+## src/pages/DesignTaskPage.tsx (~12 865 lines, 583 KB, as of 2026-08-30)
 
 | Range | Content |
 |---|---|
@@ -58,15 +60,15 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | **1326** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~8 380 lines, 360 KB, as of 2026-08-29)
+## src/pages/QuotesPage.tsx (~8 408 lines, 362 KB, as of 2026-08-30)
 
 | Range | Content |
 |---|---|
 | 1–193 | imports |
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
-| **551** | `export function QuotesPage(...)` — main component starts |
+| **553** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 949 lines, 258 KB, as of 2026-08-29)
+## src/pages/DesignPage.tsx (~5 949 lines, 258 KB, as of 2026-08-30)
 
 | Range | Content |
 |---|---|
