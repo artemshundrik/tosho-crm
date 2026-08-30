@@ -386,6 +386,12 @@ export function QuoteRunMarkupPanel({
   const showRequestButton = canEditMarkup && canRequestMarkupApproval(state);
   const showDecideButtons = canApprove && state.kind === "pending";
 
+  // Два підписи, що стоять надто близько, злипаються в кашу. Орієнтир важливіший:
+  // дно й так видно червоною зоною, і його число повторене в розкладі нижче.
+  // Поріг у 9 пунктів шкали — це приблизно ширина «дно 20 %» на цій смузі.
+  const showFloorLabel =
+    !benchmark || Math.abs(pctOfTrack(benchmark.rate) - pctOfTrack(MIN_MARKUP_RATE)) > 9;
+
   const track = (
     <>
       <div className="relative">
@@ -406,19 +412,17 @@ export function QuoteRunMarkupPanel({
               style={{ width: `${pctOfTrack(markupRate)}%` }}
             />
           )}
+          {/* Відмітка-орієнтир — чиста риска на всю висоту.
+              Голови-ромба тут більше немає: 8-піксельний квадрат під 45° сидів
+              у верхній третині смуги й читався як шпилька на мапі, а не як
+              позначка на шкалі — форма, якої більше ніде в CRM немає. Тепер
+              риску називає підпис прямо під нею, тож голова зайва. */}
           {benchmark ? (
-            <>
-              <div
-                className="absolute inset-y-0 w-0.5 bg-success-solid"
-                style={{ left: `${pctOfTrack(benchmark.rate)}%` }}
-                aria-hidden
-              />
-              <div
-                className="absolute top-px h-2 w-2 -translate-x-[3px] rotate-45 bg-success-solid"
-                style={{ left: `${pctOfTrack(benchmark.rate)}%` }}
-                aria-hidden
-              />
-            </>
+            <div
+              className="absolute inset-y-0 w-0.5 bg-success-solid"
+              style={{ left: `${pctOfTrack(benchmark.rate)}%` }}
+              aria-hidden
+            />
           ) : null}
           {canMove ? (
             <div
@@ -442,15 +446,35 @@ export function QuoteRunMarkupPanel({
           />
         ) : null}
       </div>
-      <div className="mt-1.5 flex justify-between text-2xs tabular-nums text-muted-foreground">
-        <span>0 %</span>
-        <span>дно {MIN_MARKUP_RATE} %</span>
+      {/* Підпис стоїть ПІД своєю відміткою, а не рівномірно по ширині.
+          Було `justify-between` — чотири слова розкидані порівну, і на смузі
+          870 px «дно 20 %» опинялось на 30,9 % замість 16,6 %, а «орієнтир
+          54,08 %» — на 64,9 % замість 45,2 %. Розбіг 124 і 171 піксель:
+          підпис показував не туди, куди показує риска. Успадковано з
+          прототипу, де числа були такі, що це не впадало в око. */}
+      <div className="relative mt-1.5 h-4 text-2xs tabular-nums text-muted-foreground">
+        <span className="absolute left-0 whitespace-nowrap">0 %</span>
+        {showFloorLabel ? (
+          <span
+            className="absolute -translate-x-1/2 whitespace-nowrap"
+            style={{ left: `${pctOfTrack(MIN_MARKUP_RATE)}%` }}
+          >
+            дно {MIN_MARKUP_RATE} %
+          </span>
+        ) : null}
         {benchmark ? (
-          <span className="text-success-foreground">орієнтир {formatRate(benchmark.rate)}</span>
+          <span
+            className="absolute -translate-x-1/2 whitespace-nowrap text-success-foreground"
+            style={{ left: `${pctOfTrack(benchmark.rate)}%` }}
+          >
+            орієнтир {formatRate(benchmark.rate)}
+          </span>
         ) : (
-          <span>{benchmarkLoading ? "рахуємо орієнтир…" : "орієнтира немає"}</span>
+          <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
+            {benchmarkLoading ? "рахуємо орієнтир…" : "орієнтира немає"}
+          </span>
         )}
-        <span>{TRACK_MAX} %</span>
+        <span className="absolute right-0 whitespace-nowrap">{TRACK_MAX} %</span>
       </div>
     </>
   );
