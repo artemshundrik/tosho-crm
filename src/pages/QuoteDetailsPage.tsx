@@ -2685,6 +2685,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         ? [selected, ...visuals.filter((file) => file.id !== selected.id)]
         : visuals;
 
+      const assigneeId = readString("assignee_user_id");
+      // Тираж беремо той самий, що піде в замовлення: погоджений клієнтом, а
+      // якщо позначки ще немає — перший. Інакше в шапці задачі стояло б одне
+      // число, а в «Товарах» інше.
+      const runForItem =
+        section?.runs.find((entry) => entry.run.is_approved)?.run ?? section?.runs[0]?.run ?? null;
+      const quantity = Number(runForItem?.quantity) || 0;
+
       return {
         id: task.id,
         number: readString("design_task_number"),
@@ -2696,6 +2704,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           "Дизайн-задача",
         typeLabel: taskType ? DESIGN_TASK_TYPE_LABELS[taskType] : null,
         imageUrl: section?.imageUrl ?? null,
+        status: readString("status"),
+        itemMeta:
+          [section?.meta || null, quantity > 0 ? `тираж ${quantity} ${normalizeUnitLabel(section?.item?.unit)}` : null]
+            .filter(Boolean)
+            .join(" · ") || null,
+        assignee: assigneeId
+          ? {
+              name: memberById.get(assigneeId) ?? "Виконавець",
+              avatarUrl: memberAvatarById.get(assigneeId) ?? null,
+            }
+          : null,
+        deadline: readString("design_deadline") ?? readString("deadline"),
         // ТЗ прорахунку — запасний варіант, і тільки коли задача одна: на двох
         // задачах спільний текст приписав би одній із них чуже ТЗ.
         brief: readString("design_brief") ?? (single && quoteBrief ? quoteBrief : null),
@@ -2703,7 +2723,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         selectedVisualId: selected?.id ?? null,
       } satisfies QuoteDesignTaskCard;
     });
-  }, [designTasks, designVisualizations, memberById, quote?.design_brief, runSections]);
+  }, [designTasks, designVisualizations, memberAvatarById, memberById, quote?.design_brief, runSections]);
 
   const resolvedItemSelection = useMemo(
     () =>

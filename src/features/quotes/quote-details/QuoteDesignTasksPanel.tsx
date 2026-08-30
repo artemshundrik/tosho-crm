@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
 import { ExternalLink, FileText, Image as ImageIcon, Package, Pencil } from "lucide-react";
 
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { getAttachmentDisplayFileName } from "@/lib/attachmentPreview";
+import { DESIGN_STATUS_LABELS, type DesignStatus } from "@/lib/designTaskStatus";
+import { designStatusTone, toneDotClass, toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 
 import { canPreviewDocumentThumb, canPreviewImage, getFileExtension } from "./config";
@@ -39,11 +42,38 @@ export type QuoteDesignTaskCard = {
   title: string;
   typeLabel: string | null;
   imageUrl: string | null;
+  /** Статус задачі як він лежить у metadata: new, in_progress, approved… */
+  status: string | null;
+  /** «Одяг / Куртки · тираж 100 шт» — про що саме задача. */
+  itemMeta: string | null;
+  assignee: { name: string; avatarUrl: string | null } | null;
+  /** Дедлайн макета, ISO. Форматується тут-таки, поруч із показом. */
+  deadline: string | null;
   brief: string | null;
   visuals: QuoteAttachment[];
   /** `id` візуала, який обрали як фінальний, — саме він піде в КП і замовлення. */
   selectedVisualId: string | null;
 };
+
+const statusOf = (status: string | null) => {
+  if (!status) return null;
+  const label = DESIGN_STATUS_LABELS[status as DesignStatus];
+  if (!label) return null;
+  return { label, tone: designStatusTone(status) };
+};
+
+/** Дедлайн у мета-рядку — коротко: «2 вер», з часом лише коли він заданий. */
+const formatDeadline = (value: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const day = date.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+  if (!/T\d{2}:\d{2}/.test(value)) return day;
+  const time = date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+  return time === "00:00" ? day : `${day}, ${time}`;
+};
+
+const MetaDot = () => <span className="h-1 w-1 shrink-0 rounded-full bg-border" aria-hidden />;
 
 function VisualCard({
   file,
@@ -138,6 +168,7 @@ export function QuoteDesignTasksPanel({
   // Від чотирьох пігулок підпис тіснішає: назва товару лишається, мініатюра й
   // поля меншають. Інакше п'ять задач розповзаються на три ряди.
   const tight = tasks.length > 3;
+  const activeStatus = statusOf(active.status);
 
   return (
     <div>
@@ -159,6 +190,7 @@ export function QuoteDesignTasksPanel({
         <div className="mb-4 flex flex-wrap gap-2">
           {tasks.map((task) => {
             const on = task.id === active.id;
+            const pillStatus = statusOf(task.status);
             return (
               <button
                 key={task.id}
@@ -190,14 +222,40 @@ export function QuoteDesignTasksPanel({
                     <span className="block font-mono text-3xs text-muted-foreground">{task.number}</span>
                   ) : null}
                 </span>
+                {/* Стан задачі видно НЕ ВІДКРИВАЮЧИ її: без крапки пігулки
+                    відрізнялись лише назвою товару, і «яка з трьох ще не
+                    зроблена» доводилось перебирати кліками. */}
+                {pillStatus ? (
+                  <span
+                    className={cn("h-2 w-2 shrink-0 rounded-full", toneDotClass[pillStatus.tone])}
+                    title={pillStatus.label}
+                  />
+                ) : null}
               </button>
             );
           })}
         </div>
       ) : null}
 
+      {/*
+        ШАПКА Ш1 (REQ-155 p6). Три яруси, і кожен відповідає на своє питання:
+        ЩО ЦЕ (номер і статус) → ПРО ЩО (товар і тип) → ХТО Й КОЛИ (позиція,
+        тираж, виконавець, дедлайн).
+
+        Статус — крапкою біля НОМЕРА, тобто там, де ідентичність задачі, а не
+        окремим бейджем праворуч: праворуч живе дія, і бейдж поруч із кнопкою
+        читався як друга кнопка. Виконавець — ФАКТОМ у мета-рядку, а не
+        випадайкою: раніше тут стояв повноцінний вибір дизайнера, через який
+        призначення мінялось повз сторінку задачі, де в нього своя історія й
+        сповіщення. Праворуч лишилась одна дія — «Відкрити».
+
+        Прототип пропонував ще дві шапки: Ш2 зі смужкою статусу на краю картки
+        й Ш3 зі службовим у підвалі. Обидві відхилені: смужка не має підпису й
+        читається як прикраса, а підвал відсуває стан задачі за екран, коли
+        візуалів багато.
+      */}
       <div className="overflow-hidden rounded-4xl border border-border/60 bg-background">
-        <div className="flex items-center gap-3 p-4">
+        <div className="flex items-start gap-3 p-4">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted/30">
             {active.imageUrl ? (
               <img src={active.imageUrl} alt="" className="h-full w-full object-cover" />
@@ -206,16 +264,54 @@ export function QuoteDesignTasksPanel({
             )}
           </span>
           <div className="min-w-0 flex-1">
-            {active.number ? (
-              <div className="font-mono text-2xs text-muted-foreground">{active.number}</div>
-            ) : null}
-            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              {active.number ? (
+                <span className="font-mono text-2xs text-muted-foreground">{active.number}</span>
+              ) : null}
+              {activeStatus ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={cn("h-1.5 w-1.5 rounded-full", toneDotClass[activeStatus.tone])} aria-hidden />
+                  <span className={cn("text-2xs font-semibold", toneTextClass[activeStatus.tone])}>
+                    {activeStatus.label}
+                  </span>
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
               <span className="text-base font-semibold tracking-tight text-foreground">{active.title}</span>
               {active.typeLabel ? (
                 <span className="rounded-md border border-border/60 px-1.5 py-0.5 text-2xs text-muted-foreground">
                   {active.typeLabel}
                 </span>
               ) : null}
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              {active.itemMeta ? (
+                <>
+                  <span>{active.itemMeta}</span>
+                  <MetaDot />
+                </>
+              ) : null}
+              {active.assignee ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <AvatarBase
+                    src={active.assignee.avatarUrl}
+                    name={active.assignee.name}
+                    size={18}
+                    className="text-3xs font-semibold"
+                  />
+                  {active.assignee.name}
+                </span>
+              ) : (
+                <span>без виконавця</span>
+              )}
+              <MetaDot />
+              <span>
+                дедлайн{" "}
+                <span className="font-mono font-semibold tabular-nums text-foreground">
+                  {formatDeadline(active.deadline) ?? "не заданий"}
+                </span>
+              </span>
             </div>
           </div>
           <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => onOpenTask(active.id)}>
