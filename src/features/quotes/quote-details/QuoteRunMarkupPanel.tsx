@@ -402,59 +402,45 @@ export function QuoteRunMarkupPanel({
 
   const track = (
     <>
-      <div className="relative">
-        <div
-          className={cn(
-            "relative h-7 overflow-hidden rounded-lg border border-border bg-muted",
-            off && "opacity-50"
-          )}
-        >
-          {/* ЗАЛИВКА — одна, і її колір несе стан.
-              Бурштинова, коли накрутка під дном: та сама мова, що в бейджі
-              «Треба погодження», в рамці поля й у примітці нижче. */}
+      {/*
+        РЕЙКА, ПОВЗУНОК, ПОРОГИ — три яруси, а не все в одній смузі.
+
+        До 30.08.2026 це була смуга 28 px, у якій впритул стояли чотири тонкі
+        кольорові вертикалі: правий бордер заливки, хвіст повзунка, риска дна й
+        риска орієнтира. Вони стикались і читались як заклепка, а не як
+        повзунок. Плюс бордер заливки був `border-r-2` при `border-box`, тобто
+        лежав УСЕРЕДИНІ її ширини — центр риски виходив на 1 px лівіше за край,
+        а повзунок центрувався по краю. Звідси видимий зсув кружечка.
+
+        Тепер: тонка рейка з суцільною заливкою, повзунок рівно на її кінці й
+        БЕЗ бордера (нічому вилазити за кружечок), а пороги — окремим ярусом під
+        рейкою, кожен рівно над своїм підписом. Кольори більше ніде не стикаються.
+      */}
+      <div className={cn("relative flex h-4 items-center", off && "opacity-50")}>
+        <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
           {off ? null : (
             <div
               className={cn(
-                "absolute inset-y-0 left-0 border-r-2",
-                doorsClosed ? "border-warning-solid bg-warning-soft" : "border-primary bg-primary/30"
+                "absolute inset-y-0 left-0 rounded-full",
+                // Колір заливки несе стан дверей, а не «нижче дна»: підтверджена
+                // накрутка теж нижче дна, але тривожити нею око нема за що.
+                doorsClosed ? "bg-warning-solid" : "bg-primary"
               )}
               style={{ width: `${pctOfTrack(markupRate)}%` }}
             />
           )}
-          {/* ДНО — риска, а не зона.
-              Зоною воно було до 30.08.2026 і давало дві біди. Перша: заливка
-              накрутки лежала поверх неї, і в перетині виходив фіолетовий,
-              якого немає в токенах, — колір із випадку, а не зі змісту. Друга,
-              гірша: зона брехала в обидва боки. На 28 % червоне під заливкою не
-              означало нічого поганого, а на 8 % червоне ПРАВОРУЧ від заливки
-              читалось як «небезпека попереду», хоч ти вже всередині неї.
-              Дно — це поріг, а не територія, тож малюємо його так само, як
-              орієнтир: риска з підписом під нею. */}
+        </div>
+        {off ? null : (
           <div
-            className="absolute inset-y-0 border-l-2 border-dashed border-destructive/70"
-            style={{ left: `${pctOfTrack(MIN_MARKUP_RATE)}%` }}
+            className={cn(
+              "pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-background",
+              canMove ? "shadow-sm" : "opacity-70",
+              doorsClosed ? "border-warning-solid" : "border-primary"
+            )}
+            style={{ left: `${pctOfTrack(markupRate)}%` }}
             aria-hidden
           />
-          {/* Відмітка-орієнтир — чиста риска на всю висоту.
-              Голови-ромба тут більше немає: 8-піксельний квадрат під 45° сидів
-              у верхній третині смуги й читався як шпилька на мапі, а не як
-              позначка на шкалі — форма, якої більше ніде в CRM немає. Тепер
-              риску називає підпис прямо під нею, тож голова зайва. */}
-          {benchmark ? (
-            <div
-              className="absolute inset-y-0 w-0.5 bg-success-solid"
-              style={{ left: `${pctOfTrack(benchmark.rate)}%` }}
-              aria-hidden
-            />
-          ) : null}
-          {canMove ? (
-            <div
-              className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-background"
-              style={{ left: `${pctOfTrack(markupRate)}%` }}
-              aria-hidden
-            />
-          ) : null}
-        </div>
+        )}
         {canMove ? (
           <input
             type="range"
@@ -469,13 +455,27 @@ export function QuoteRunMarkupPanel({
           />
         ) : null}
       </div>
+      {/* Пороги живуть ПІД рейкою, а не в ній: так вони нічого не перетинають і
+          стоять рівно над своїми підписами — око веде «риска → число» вертикаллю. */}
+      <div className="relative mt-1 h-1.5" aria-hidden>
+        <span
+          className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-destructive/70"
+          style={{ left: `${pctOfTrack(MIN_MARKUP_RATE)}%` }}
+        />
+        {benchmark ? (
+          <span
+            className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-success-solid"
+            style={{ left: `${pctOfTrack(benchmark.rate)}%` }}
+          />
+        ) : null}
+      </div>
       {/* Підпис стоїть ПІД своєю відміткою, а не рівномірно по ширині.
           Було `justify-between` — чотири слова розкидані порівну, і на смузі
           870 px «дно 20 %» опинялось на 30,9 % замість 16,6 %, а «орієнтир
           54,08 %» — на 64,9 % замість 45,2 %. Розбіг 124 і 171 піксель:
           підпис показував не туди, куди показує риска. Успадковано з
           прототипу, де числа були такі, що це не впадало в око. */}
-      <div className="relative mt-1.5 h-4 text-2xs tabular-nums text-muted-foreground">
+      <div className="relative mt-0.5 h-4 text-2xs tabular-nums text-muted-foreground">
         <span className="absolute left-0 whitespace-nowrap">0 %</span>
         {showFloorLabel ? (
           <span

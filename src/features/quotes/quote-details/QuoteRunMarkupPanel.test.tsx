@@ -169,8 +169,11 @@ describe("стани погодження", () => {
 });
 
 describe("колір заливки несе стан дверей, а не «нижче дна»", () => {
+  // Заливка — єдиний елемент рейки, ширина якого задана відсотком.
   const fillClass = (container: HTMLElement) =>
-    container.querySelector('[class*="border-r-2"]')?.className ?? "";
+    container.querySelector('[style*="width"]')?.className ?? "";
+  const thumbClass = (container: HTMLElement) =>
+    container.querySelector(".rounded-full.border-2")?.className ?? "";
 
   it("замкнені двері — бурштинова: та сама мова, що в бейджі й у полі", () => {
     for (const status of ["pending", "rejected"] as const) {
@@ -193,7 +196,10 @@ describe("колір заливки несе стан дверей, а не «н
           onDecide={vi.fn()}
         />
       );
-      expect(fillClass(container)).toContain("bg-warning-soft");
+      expect(fillClass(container)).toContain("bg-warning-solid");
+      // Обідок повзунка йде за заливкою: синій кружечок на бурштиновій рейці
+      // читався б як чужа деталь.
+      expect(thumbClass(container)).toContain("border-warning-solid");
       unmount();
     }
   });
@@ -218,8 +224,9 @@ describe("колір заливки несе стан дверей, а не «н
         onDecide={vi.fn()}
       />
     );
-    expect(fillClass(container)).toContain("bg-primary/30");
-    expect(fillClass(container)).not.toContain("bg-warning-soft");
+    expect(fillClass(container)).toContain("bg-primary");
+    expect(fillClass(container)).not.toContain("bg-warning-solid");
+    expect(thumbClass(container)).toContain("border-primary");
   });
 });
 
