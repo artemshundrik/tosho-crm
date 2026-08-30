@@ -416,56 +416,69 @@ export function QuoteRunMarkupPanel({
         БЕЗ бордера (нічому вилазити за кружечок), а пороги — окремим ярусом під
         рейкою, кожен рівно над своїм підписом. Кольори більше ніде не стикаються.
       */}
-      <div className={cn("relative flex h-4 items-center", off && "opacity-50")}>
-        <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+      <div className={cn("relative", off && "opacity-50")}>
+        {/* Трохи повітря зверху: лінія порогу починається НАД рейкою, інакше
+            вона впирається в неї й перестає читатись як наскрізна. */}
+        <div className="h-1.5" aria-hidden />
+        <div className="relative flex h-4 items-center">
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+            {off ? null : (
+              <div
+                className={cn(
+                  "absolute inset-y-0 left-0 rounded-full",
+                  // Колір заливки несе стан дверей, а не «нижче дна»: підтверджена
+                  // накрутка теж нижче дна, але тривожити нею око нема за що.
+                  doorsClosed ? "bg-warning-solid" : "bg-primary"
+                )}
+                style={{ width: `${pctOfTrack(markupRate)}%` }}
+              />
+            )}
+          </div>
           {off ? null : (
             <div
               className={cn(
-                "absolute inset-y-0 left-0 rounded-full",
-                // Колір заливки несе стан дверей, а не «нижче дна»: підтверджена
-                // накрутка теж нижче дна, але тривожити нею око нема за що.
-                doorsClosed ? "bg-warning-solid" : "bg-primary"
+                "pointer-events-none absolute top-1/2 z-20 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-background",
+                canMove ? "shadow-sm" : "opacity-70",
+                doorsClosed ? "border-warning-solid" : "border-primary"
               )}
-              style={{ width: `${pctOfTrack(markupRate)}%` }}
+              style={{ left: `${pctOfTrack(markupRate)}%` }}
+              aria-hidden
             />
           )}
+          {canMove ? (
+            <input
+              type="range"
+              min={0}
+              max={TRACK_MAX}
+              step={1}
+              value={Math.min(TRACK_MAX, Math.round(markupRate))}
+              disabled={busy}
+              onChange={(event) => onChangeMarkupRate(Number(event.target.value))}
+              className="absolute inset-0 z-30 m-0 h-full w-full cursor-grab opacity-0 active:cursor-grabbing"
+              aria-label="Накрутка на собівартість, відсотки"
+            />
+          ) : null}
         </div>
-        {off ? null : (
-          <div
-            className={cn(
-              "pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-background",
-              canMove ? "shadow-sm" : "opacity-70",
-              doorsClosed ? "border-warning-solid" : "border-primary"
-            )}
-            style={{ left: `${pctOfTrack(markupRate)}%` }}
-            aria-hidden
-          />
-        )}
-        {canMove ? (
-          <input
-            type="range"
-            min={0}
-            max={TRACK_MAX}
-            step={1}
-            value={Math.min(TRACK_MAX, Math.round(markupRate))}
-            disabled={busy}
-            onChange={(event) => onChangeMarkupRate(Number(event.target.value))}
-            className="absolute inset-0 m-0 h-full w-full cursor-grab opacity-0 active:cursor-grabbing"
-            aria-label="Накрутка на собівартість, відсотки"
-          />
-        ) : null}
-      </div>
-      {/* Пороги живуть ПІД рейкою, а не в ній: так вони нічого не перетинають і
-          стоять рівно над своїми підписами — око веде «риска → число» вертикаллю. */}
-      <div className="relative mt-1 h-1.5" aria-hidden>
+        {/* Хвіст лінії — донизу, до самого підпису. Коротко: підпис має
+            сидіти під рейкою, а не висіти окремо від неї. */}
+        <div className="h-1.5" aria-hidden />
+
+        {/* ПОРОГИ — НАСКРІЗНІ ЛІНІЇ.
+            Ідуть від підпису вгору ЧЕРЕЗ рейку, а не тиснуться під нею коротким
+            штрихом. Так поріг видно навіть тоді, коли заливка вже його минула, а
+            підпис унизу й місце на рейці зв'язані однією лінією, а не здогадом.
+            Лежать НАД заливкою (z-10) і ПІД повзунком (z-20): перекреслений
+            кружечок виглядав би поламаним. */}
         <span
-          className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-destructive/70"
+          className="pointer-events-none absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 rounded-full bg-destructive/70"
           style={{ left: `${pctOfTrack(MIN_MARKUP_RATE)}%` }}
+          aria-hidden
         />
         {benchmark ? (
           <span
-            className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-success-solid"
+            className="pointer-events-none absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 rounded-full bg-success-solid"
             style={{ left: `${pctOfTrack(benchmark.rate)}%` }}
+            aria-hidden
           />
         ) : null}
       </div>
@@ -475,11 +488,11 @@ export function QuoteRunMarkupPanel({
           54,08 %» — на 64,9 % замість 45,2 %. Розбіг 124 і 171 піксель:
           підпис показував не туди, куди показує риска. Успадковано з
           прототипу, де числа були такі, що це не впадало в око. */}
-      <div className="relative mt-0.5 h-4 text-2xs tabular-nums text-muted-foreground">
+      <div className="relative h-4 text-2xs tabular-nums text-muted-foreground">
         <span className="absolute left-0 whitespace-nowrap">0 %</span>
         {showFloorLabel ? (
           <span
-            className="absolute -translate-x-1/2 whitespace-nowrap"
+            className="absolute -translate-x-1/2 whitespace-nowrap text-destructive/80"
             style={{ left: `${pctOfTrack(MIN_MARKUP_RATE)}%` }}
           >
             дно {MIN_MARKUP_RATE} %
