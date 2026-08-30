@@ -6,7 +6,11 @@ import {
   formatMarkupBenchmarkBasis,
   type MarkupBenchmark,
 } from "@/lib/quoteMarkupBenchmark";
-import { canRequestMarkupApproval, type QuoteRunMarkupState } from "@/lib/quoteMarkupApproval";
+import {
+  canRequestMarkupApproval,
+  isMarkupBlockingRelease,
+  type QuoteRunMarkupState,
+} from "@/lib/quoteMarkupApproval";
 import type { QuoteMarkupView } from "@/lib/quoteMarkupView";
 import { MIN_MARKUP_RATE, type RunSalePricing } from "@/lib/quoteRuns";
 
@@ -370,6 +374,10 @@ export function QuoteRunMarkupPanel({
   //   canEditMarkup    — чи належить їй поле накрутки;
   //   isMarkupFrozen   — чи не заморожене число зараз запитом.
   const frozen = state.kind === "pending" || state.kind === "approved";
+  // Бурштиновою заливка стає рівно тоді, коли ЗАМКНЕНІ ДВЕРІ, — не «нижче
+  // дна». Підтверджена накрутка теж нижче дна, але вона вже дозволена, і
+  // тривожити нею око нема за що: бейдж на ній зелений, заливка синя.
+  const doorsClosed = !off && isMarkupBlockingRelease(state);
   const canMove = view.hasSlider && canEditMarkup && !off && !frozen;
   const note = markupNote({
     state,
@@ -401,17 +409,32 @@ export function QuoteRunMarkupPanel({
             off && "opacity-50"
           )}
         >
-          {/* Дно — зона, а не риска: видно, скільки її лишилось під поточним числом. */}
-          <div
-            className="absolute inset-y-0 left-0 border-r border-dashed border-destructive/55 bg-destructive/[0.14]"
-            style={{ width: `${pctOfTrack(MIN_MARKUP_RATE)}%` }}
-          />
+          {/* ЗАЛИВКА — одна, і її колір несе стан.
+              Бурштинова, коли накрутка під дном: та сама мова, що в бейджі
+              «Треба погодження», в рамці поля й у примітці нижче. */}
           {off ? null : (
             <div
-              className="absolute inset-y-0 left-0 border-r-2 border-primary bg-primary/20"
+              className={cn(
+                "absolute inset-y-0 left-0 border-r-2",
+                doorsClosed ? "border-warning-solid bg-warning-soft" : "border-primary bg-primary/30"
+              )}
               style={{ width: `${pctOfTrack(markupRate)}%` }}
             />
           )}
+          {/* ДНО — риска, а не зона.
+              Зоною воно було до 30.08.2026 і давало дві біди. Перша: заливка
+              накрутки лежала поверх неї, і в перетині виходив фіолетовий,
+              якого немає в токенах, — колір із випадку, а не зі змісту. Друга,
+              гірша: зона брехала в обидва боки. На 28 % червоне під заливкою не
+              означало нічого поганого, а на 8 % червоне ПРАВОРУЧ від заливки
+              читалось як «небезпека попереду», хоч ти вже всередині неї.
+              Дно — це поріг, а не територія, тож малюємо його так само, як
+              орієнтир: риска з підписом під нею. */}
+          <div
+            className="absolute inset-y-0 border-l-2 border-dashed border-destructive/70"
+            style={{ left: `${pctOfTrack(MIN_MARKUP_RATE)}%` }}
+            aria-hidden
+          />
           {/* Відмітка-орієнтир — чиста риска на всю висоту.
               Голови-ромба тут більше немає: 8-піксельний квадрат під 45° сидів
               у верхній третині смуги й читався як шпилька на мапі, а не як

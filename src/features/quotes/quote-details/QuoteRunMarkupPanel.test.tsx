@@ -168,6 +168,61 @@ describe("стани погодження", () => {
   });
 });
 
+describe("колір заливки несе стан дверей, а не «нижче дна»", () => {
+  const fillClass = (container: HTMLElement) =>
+    container.querySelector('[class*="border-r-2"]')?.className ?? "";
+
+  it("замкнені двері — бурштинова: та сама мова, що в бейджі й у полі", () => {
+    for (const status of ["pending", "rejected"] as const) {
+      const { container, unmount } = render(
+        <QuoteRunMarkupPanel
+          view={QUOTE_MARKUP_VIEWS.manager}
+          state={resolveQuoteRunMarkupState({
+            costTotal: COST,
+            markupRate: RATE,
+            approval: approval({ status }),
+          })}
+          pricing={pricing}
+          markupRate={RATE}
+          currency="UAH"
+          benchmark={null}
+          canEditMarkup={false}
+          canApprove={false}
+          onChangeMarkupRate={vi.fn()}
+          onRequestApproval={vi.fn()}
+          onDecide={vi.fn()}
+        />
+      );
+      expect(fillClass(container)).toContain("bg-warning-soft");
+      unmount();
+    }
+  });
+
+  it("підтверджена накрутка — синя, хоч і нижче дна: бити тривогу вже нема за що", () => {
+    const { container } = render(
+      <QuoteRunMarkupPanel
+        view={QUOTE_MARKUP_VIEWS.manager}
+        state={resolveQuoteRunMarkupState({
+          costTotal: COST,
+          markupRate: RATE,
+          approval: approval({ status: "approved" }),
+        })}
+        pricing={pricing}
+        markupRate={RATE}
+        currency="UAH"
+        benchmark={null}
+        canEditMarkup={false}
+        canApprove={false}
+        onChangeMarkupRate={vi.fn()}
+        onRequestApproval={vi.fn()}
+        onDecide={vi.fn()}
+      />
+    );
+    expect(fillClass(container)).toContain("bg-primary/30");
+    expect(fillClass(container)).not.toContain("bg-warning-soft");
+  });
+});
+
 describe("відмітка-орієнтир", () => {
   it("замало даних — так і написано, а не намальовано число", () => {
     render(
