@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { CurrencyAmountInput } from "@/features/quotes/components/CurrencyAmountInput";
+import { PercentAmountInput } from "@/features/quotes/components/PercentAmountInput";
 import { TimeInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
@@ -119,14 +120,13 @@ import {
 import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import {
   applyApprovedRunToggle,
-  computeRunSalePricing,
   mergeQuoteRunsWithExisting,
   needsApprovedRunChoice,
   pickApprovedRun,
-  validateRunEconomics,
+  computeRunSalePricingFromMarkup,
   DEFAULT_MARKUP_RATE,
-  MIN_MANAGER_INCOME,
-  MIN_RUN_MARKUP,
+  MIN_MARKUP_RATE,
+  needsMarkupApproval,
 } from "@/lib/quoteRuns";
 import { pluralUk } from "@/lib/lastSeen";
 import {
@@ -1293,6 +1293,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         costTotal: 0,
         costPerUnit: null as number | null,
         desiredManagerIncome: 0,
+        managerIncome: 0,
+        markupRate: DEFAULT_MARKUP_RATE,
         managerRate: currentManagerRate,
         fixedCostRate: companyRates.fixedCostRate,
         vatRate: companyRates.vatRate,
@@ -1313,10 +1315,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       : resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE);
     const fixedCostRate = resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate);
     const vatRate = resolveNumericRate(run.vat_rate, companyRates.vatRate);
-    const pricing = computeRunSalePricing({
+    // Ціну веде НАКРУТКА, а не бажаний заробіток: заробіток тепер похідний і
+    // тому не входить у розрахунок, лише читається з результату. Через це
+    // зміна ставки менеджера більше не переписує вже показану клієнту ціну.
+    const markupRate = Math.max(0, resolveNumericRate(run.markup_rate, DEFAULT_MARKUP_RATE));
+    const pricing = computeRunSalePricingFromMarkup({
       quantity,
       costTotal,
-      desiredManagerIncome,
+      markupRate,
       managerRate,
       fixedCostRate,
       vatRate,
@@ -1325,6 +1331,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return {
       ...pricing,
       desiredManagerIncome,
+      markupRate,
       managerRate,
       fixedCostRate,
       vatRate,
@@ -1350,43 +1357,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!hasParty) issues.push("Замовник або Лід");
     if (!hasDeadline) issues.push("Дедлайн прорахунку");
 
-    // Захист від продажу за собівартістю (рішення CEO 18.08).
+    // ПОРОГІВ 150/1000 ₴ ТУТ БІЛЬШЕ НЕМАЄ — і це рішення, а не забудькуватість.
     //
-    // Перевірка живе САМЕ ТУТ, а не на кнопці «Зберегти»: тиражі мають
-    // автозбереження через 900 мс після правки, і гейт на кнопці воно б
-    // спокійно обійшло. quoteRequirements гальмує і кнопку, і автозбереження,
-    // і решту шляхів збереження — це єдине місце, повз яке не пройти.
-    const economicsIssues = new Set<string>();
-    for (const run of runs) {
-      const pricing = getRunPricing(run);
-      const issue = validateRunEconomics({
-        quantity: Number(run.quantity) || 0,
-        costTotal: pricing.costTotal,
-        desiredManagerIncome: pricing.desiredManagerIncome,
-        managerRate: pricing.managerRate,
-        fixedCostRate: pricing.fixedCostRate,
-        vatRate: pricing.vatRate,
-      });
-      if (!issue) continue;
-      const qty = Number(run.quantity) || 0;
-      const where = qty > 0 ? ` (тираж ${qty} шт)` : "";
-      economicsIssues.add(
-        issue.code === "markup_below_min"
-          ? `Націнка від ${MIN_RUN_MARKUP} ₴${where}`
-          : `Бажаний заробіток від ${MIN_MANAGER_INCOME} ₴${where}`
-      );
-    }
-    issues.push(...economicsIssues);
+    // Вони стояли з 18.08 як захист від продажу за собівартістю: 44 тиражі за
+    // 90 днів мали порожній заробіток, тобто нульову націнку. Захист спрацював
+    // не так, як хотілось: заборона не прибрала потребу, а перенесла її в
+    // цифри. У TS-0826-0039 проджект вписав 1000 ₴, щоб розблокувати картку, і
+    // менеджер через дві хвилини виправив на 500 ₴.
+    //
+    // Тепер порожнього стану немає в самій базі: markup_rate має DEFAULT 40, і
+    // ціна, рівна собівартості, більше не виникає сама собою. А дно 20 % не
+    // блокує збереження — воно вмикає погодження СЕО або головного бухгалтера
+    // (needsMarkupApproval), тобто виняток лишається видимим замість того, щоб
+    // ховатись у підроблену собівартість.
 
     return issues;
-  }, [
-    deadlineDate,
-    getRunPricing,
-    quote?.customer_id,
-    quote?.customer_name,
-    quote?.deadline_at,
-    runs,
-  ]);
+    // Тиражів і цін у залежностях більше немає: гейт перестав дивитись на
+    // економіку тиражу разом зі зняттям порогів 150/1000 ₴.
+  }, [deadlineDate, quote?.customer_id, quote?.customer_name, quote?.deadline_at]);
 
   const loadRuns = useCallback(async () => {
     setRunsLoading(true);
@@ -1466,6 +1454,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       | "unit_price_print"
       | "logistics_cost"
       | "desired_manager_income"
+      | "markup_rate"
       | "manager_rate"
       | "fixed_cost_rate"
       | "vat_rate",
@@ -2435,7 +2424,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // команду — при вході в прорахунок вікно по центру екрану»). Прапорець у
   // localStorage, а не в базі: це оголошення, а не право. Побачив ще раз —
   // нічого страшного; не побачив зовсім — гірше.
-  const marginNoticeKey = userId ? `tosho_margin_notice_v1_${userId}` : null;
+  const marginNoticeKey = userId ? `tosho_margin_notice_v2_${userId}` : null;
   // Чи бачили підказку — читаємо сховище один раз на ключ, а не щорендеру.
   const marginNoticeAlreadySeen = useMemo(() => {
     if (!marginNoticeKey) return true;
@@ -2472,6 +2461,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       unit_price_print: canEditRuns && byRole.unit_price_print,
       logistics_cost: canEditRuns && byRole.logistics_cost,
       desired_manager_income: canEditRuns && byRole.desired_manager_income,
+      markup_rate: canEditRuns && byRole.markup_rate,
     };
   }, [canEditRuns, permissions, viewerJobRole]);
 
@@ -6258,16 +6248,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 const activeItemRun = getSelectedRunForItem(item.id);
                                 const activeItemRunIndex = getRunIndex(activeItemRun);
                                 const activePricing = getRunPricing(activeItemRun);
-                                const activeRunEconomics = activeItemRun
-                                  ? validateRunEconomics({
-                                      quantity: Number(activeItemRun.quantity) || 0,
+                                // Дно накрутки не БЛОКУЄ роботу: воно вмикає погодження.
+                                // Саме тверда заборона на попередньому порозі й
+                                // народжувала фіктивні суми (TS-0826-0039).
+                                const activeRunBelowFloor = activeItemRun
+                                  ? needsMarkupApproval({
                                       costTotal: activePricing.costTotal,
-                                      desiredManagerIncome: activePricing.desiredManagerIncome,
-                                      managerRate: activePricing.managerRate,
-                                      fixedCostRate: activePricing.fixedCostRate,
-                                      vatRate: activePricing.vatRate,
+                                      markupRate: activePricing.markupRate,
                                     })
-                                  : null;
+                                  : false;
 
                                 return (
                                   <div className="space-y-4">
@@ -6446,53 +6435,50 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                           </div>
                                           <div className="space-y-2">
                                             <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
-                                              Бажаний особистий заробіток
+                                              Накрутка на собівартість
                                             </Label>
-                                            <CurrencyAmountInput
-                                              value={activeItemRun.desired_manager_income}
-                                              disabled={!runPriceFieldAccess.desired_manager_income}
-                                              title={runFieldLockHint(runPriceFieldAccess.desired_manager_income, "менеджер")}
-                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "desired_manager_income", next)}
+                                            <PercentAmountInput
+                                              // У полі — округлене до сотих, у базі лишається повне.
+                                              // Перенесені з історії відсотки на кшталт
+                                              // 30,840579710144926 інакше виглядають як збій, а
+                                              // округлити їх У СХОВИЩІ не можна: на собівартості в
+                                              // 4 644 ₴ два знаки зсувають ціну на копійки, а на
+                                              // великих тиражах — на гривні (заміряно, до 8,39 ₴).
+                                              value={Math.round(Number(activeItemRun.markup_rate) * 100) / 100}
+                                              disabled={!runPriceFieldAccess.markup_rate}
+                                              title={runFieldLockHint(runPriceFieldAccess.markup_rate, "менеджер")}
+                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "markup_rate", next)}
                                               className={cn(
-                                                activeRunEconomics && "border-destructive focus-visible:ring-destructive/30"
+                                                activeRunBelowFloor && "border-warning-soft-border focus-visible:ring-warning-soft-border/40"
                                               )}
-                                              placeholder="0"
+                                              placeholder={String(DEFAULT_MARKUP_RATE)}
                                               min={0}
-                                              currency={quote.currency}
                                             />
-                                            {/* Пояснення важливіше за заборону: менеджер лишав нуль не
-                                                зі злого наміру, а тому що не бачив зв'язку між цим полем
-                                                і ціною. Тепер зв'язок стоїть під полем і рахується наживо. */}
+                                            {/* Зв'язок між відсотком і грошима стоїть просто під полем і
+                                                рахується наживо: без нього «40 %» — абстракція, і саме
+                                                тому попереднє поле роками лишалось нулем. */}
                                             {activePricing.costTotal > 0 ? (
                                               <p
                                                 className={cn(
                                                   "text-2xs leading-snug",
-                                                  activeRunEconomics ? "text-destructive" : "text-muted-foreground"
+                                                  activeRunBelowFloor ? "text-warning-copy" : "text-muted-foreground"
                                                 )}
                                               >
-                                                {activeRunEconomics?.code === "empty_income" ? (
-                                                  "Націнки немає — ціна дорівнює собівартості"
-                                                ) : (
+                                                дає націнку{" "}
+                                                <span className="font-semibold tabular-nums">
+                                                  {formatCurrency(activePricing.markupTotal, quote.currency)}
+                                                </span>
+                                                {activePricing.saleUnitPrice === null ? null : (
                                                   <>
-                                                    дає націнку{" "}
+                                                    {" · ціна "}
                                                     <span className="font-semibold tabular-nums">
-                                                      {formatCurrency(activePricing.markupTotal, quote.currency)}
+                                                      {formatCurrency(activePricing.saleUnitPrice, quote.currency)}
                                                     </span>
-                                                    {activePricing.saleUnitPrice === null ? null : (
-                                                      <>
-                                                        {" · ціна "}
-                                                        <span className="font-semibold tabular-nums">
-                                                          {formatCurrency(activePricing.saleUnitPrice, quote.currency)}
-                                                        </span>
-                                                      </>
-                                                    )}
-                                                    {activeRunEconomics?.code === "income_below_min"
-                                                      ? ` · мінімум ${MIN_MANAGER_INCOME} ₴`
-                                                      : activeRunEconomics?.code === "markup_below_min"
-                                                        ? ` · націнка має бути від ${MIN_RUN_MARKUP} ₴`
-                                                        : null}
                                                   </>
                                                 )}
+                                                {activeRunBelowFloor
+                                                  ? ` · нижче дна ${MIN_MARKUP_RATE} % — треба погодження СЕО або головного бухгалтера`
+                                                  : null}
                                               </p>
                                             ) : null}
                                           </div>
@@ -8606,7 +8592,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
         <DialogHeader>
 
-          <DialogTitle>Прорахунок більше не збережеться з порожнім заробітком</DialogTitle>
+          <DialogTitle>Ціну тепер задає накрутка, а не бажаний заробіток</DialogTitle>
 
         </DialogHeader>
 
@@ -8614,29 +8600,43 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
           <p>
 
-            Уся націнка рахується з поля <b className="font-semibold text-foreground">«Бажаний особистий
+            Замість гривень у полі стоїть{" "}
 
-            заробіток»</b>. Якщо воно порожнє, націнки немає взагалі — ні прибутку, ні постійних
+            <b className="font-semibold text-foreground">накрутка на собівартість у відсотках</b>.
 
-            витрат, ні податкового резерву, — і робота йде клієнту за собівартістю.
+            Собівартість 10 000 ₴ при 40 % дає ціну 14 000 ₴; постійні витрати й податковий резерв
 
-          </p>
-
-          <p>
-
-            За останні три місяці так пішли <b className="font-semibold text-foreground">44 тиражі</b>,
-
-            два з них уже погодили.
+            уже всередині цих відсотків, зверху нічого не додається.
 
           </p>
 
           <p>
 
-            Тепер прорахунок не збережеться, поки заробіток менший за{" "}
+            Система підставляє{" "}
 
-            <b className="font-semibold text-foreground">{MIN_MANAGER_INCOME} ₴</b> на кожному тиражі.
+            <b className="font-semibold text-foreground">{DEFAULT_MARKUP_RATE} %</b> — це
 
-            Під полем видно, яку націнку і яку ціну дає введене число.
+            рекомендований мінімум, а не стеля: на дрібних замовленнях компанія зазвичай заробляє
+
+            значно більше, і піднімати відсоток можна й треба.
+
+          </p>
+
+          <p>
+
+            Нижче <b className="font-semibold text-foreground">{MIN_MARKUP_RATE} %</b> ціну погоджує
+
+            СЕО або головний бухгалтер. Зберігати й рахувати це не заважає — закритими будуть лише
+
+            КП клієнту й перехід у «Затверджено».
+
+          </p>
+
+          <p>
+
+            Ваш заробіток тепер рахується з ціни сам, тож зміна вашої ставки більше не переписує
+
+            суму, яку вже побачив клієнт.
 
           </p>
 
