@@ -74,9 +74,14 @@ const BADGE_CLASS: Record<BadgeTone, string> = {
  */
 const DOT_CLASS: Record<BadgeTone, string> = {
   mute: "bg-muted-foreground/50",
-  ok: "bg-success-foreground",
+  // *-solid, а не *-foreground: у токенів це рівно та роль — «суцільні
+  // заливки без тексту, крапки статусів». Текстовий бурштин у світлій темі
+  // темний (26° 32 %), бо мусить триматись на світлому тлі, і крапка з нього
+  // виходила брунатною; --warning-solid — справжній бурштин (41° 46,5 %), а в
+  // темній темі світліший (42° 62 %).
+  ok: "bg-success-solid",
   info: "bg-info-foreground",
-  warn: "bg-warning-foreground",
+  warn: "bg-warning-solid",
   bad: "bg-destructive",
 };
 
@@ -629,12 +634,21 @@ export function QuoteRunMarkupPanel({
         відкриє), лежить під «Що це означає» й не займає місця, поки не спитали.
       */}
       {note || showRequestButton || showDecideButtons ? (
-        <div className="mt-3 border-t border-border/40 pt-3">
-          <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+        /*
+          БЕЗ ВЛАСНОЇ РИСКИ. Ярус ціни вже має свою зверху, виноска — свою
+          знизу; третя посередині рубала блок на смужки, і поруч вони читались
+          як випадкові. Стан належить ярусу ціни, а не окремій секції — його
+          відділяє проміжок.
+        */
+        <div className="mt-1">
+          {/* items-center: контроли на 28 px і рядок тексту на 17 вирівнюються
+              по середині, а не по верхньому краю — саме тому кнопки й напис
+              стояли сходинкою. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             {note ? (
               <>
                 <span
-                  className={cn("mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full", DOT_CLASS[note.tone])}
+                  className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT_CLASS[note.tone])}
                   aria-hidden
                 />
                 <span className="min-w-0 flex-1 text-2xs leading-relaxed text-muted-foreground">
@@ -650,7 +664,7 @@ export function QuoteRunMarkupPanel({
                 type="button"
                 onClick={() => setDetailsOpen((open) => !open)}
                 aria-expanded={detailsOpen}
-                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-border/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 Що це означає
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", detailsOpen && "rotate-180")} />
