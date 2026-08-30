@@ -36,6 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { ActivityRow } from "@/lib/activity";
 import { cn } from "@/lib/utils";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -43,6 +44,7 @@ import { EconomicsComingSoon } from "@/features/quotes/quote-details/EconomicsCo
 import {
   buildDeadlineTabBadge,
   deadlineDiffDays,
+  formatDeadlineLabel,
   parseDeadlineDate,
   toLocalDate,
 } from "@/features/quotes/quote-details/deadlineLabels";
@@ -60,7 +62,6 @@ import {
 } from "@/lib/attachmentPreview";
 import { downloadFileToDevice } from "@/lib/downloadFileToDevice";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
-import { DictationButton } from "@/components/dictation/DictationButton";
 import {
   formatPrintProductSummary,
   getPrintProductConfig,
@@ -82,15 +83,12 @@ import {
   type QuoteAttachmentAudience,
 } from "@/lib/quoteAttachmentAudience";
 import { supabase } from "@/lib/supabaseClient";
-import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
-import { notifyUsers } from "@/lib/designTaskActivity";
 import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChange,
   notifyQuotesCreated,
 } from "@/lib/workflowNotifications";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
@@ -126,6 +124,8 @@ import {
   buildQuoteDesignTaskCards,
 } from "@/features/quotes/quote-details/QuoteDesignTasksPanel";
 import { QuoteDeadlineOrderWarning } from "@/features/quotes/quote-details/QuoteDeadlineOrderWarning";
+import { QuoteFeed } from "@/features/quotes/quote-details/QuoteFeed";
+import { buildQuoteFeed } from "@/features/quotes/quote-details/quoteFeedEvents";
 import { QuoteRunRows } from "@/features/quotes/quote-details/QuoteRunRows";
 import {
   parseDesignOutputMetaFiles,
@@ -166,12 +166,9 @@ import {
   CircleHelp,
   Check,
   Clock,
-  Send,
   XCircle,
   Calendar,
   Users,
-  Upload,
-  Download,
   Search,
   ChevronDown,
   Loader2,
@@ -182,34 +179,23 @@ import {
   Palette,
 } from "lucide-react";
 import {
-  ATTACHMENTS_ACCEPT,
   CANCEL_REASON_OPTIONS,
   ITEM_VISUAL_BUCKET,
   MAX_ATTACHMENT_SIZE_BYTES,
   MAX_QUOTE_ATTACHMENTS,
   STATUS_NEXT_ACTION,
   STATUS_OPTIONS,
-  buildMentionAlias,
-  canPreviewDocumentThumb,
-  canPreviewImage,
   createLocalId,
-  extractMentionKeys,
   formatCurrency,
   formatCurrencyCompact,
   formatFileSize,
   resolveNumericRate,
   formatStatusLabel,
   getErrorMessage,
-  getFileExtension,
   getInitials,
-  isMentionTerminator,
   minutesAgo,
-  normalizeMentionKey,
   normalizeStatus,
-  renderTextWithMentions,
-  statusClasses,
   statusIcons,
-  toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
 import {
   deleteQuoteItemRow,
@@ -234,7 +220,6 @@ import {
   updateActivityMetadata,
   uploadQuoteAttachmentFile,
   persistQuoteRuns,
-  createQuoteComment,
   logQuoteActivity,
   updateQuoteFields,
   fetchDesignTaskRows,
@@ -245,13 +230,10 @@ import {
   fetchQuoteSummaryForDetails,
   fetchQuoteAttachments,
   fetchManagerRate,
-  fetchMentionLabelOverrides,
   fetchQuoteSetMembership,
   fetchQuoteRuns,
   fetchStatusHistory,
-  invokeQuoteCommentsFunction,
   type DesignTaskRow,
-  type InsertedCommentRow,
   type QuoteAttachment,
   type QuoteComment,
 } from "@/features/quotes/quote-details/queries";
@@ -280,8 +262,6 @@ import {
   getTypeLabel,
   type CatalogType,
 } from "@/features/quotes/quote-details/catalog-utils";
-import { buildDraftKey, readDraft } from "@/lib/draftStorage";
-import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { getCurrentUser, getCurrentUserId } from "@/lib/currentUser";
 
 type QuoteDetailsPageProps = {
@@ -368,32 +348,6 @@ const toTimeInputValue = (value?: string | null) => {
 };
 
 /**
- * Дедлайни — теж чисті форматувальники на рівні модуля.
- *
- * formatDeadlineLabel читає стрічка подій (useMemo). Поки функція жила в тілі
- * компонента, React перестворював її щорендеру, тож чесний список залежностей
- * перераховував би всю стрічку на кожен рендер — саме тому там і висіла
- * заглушка. На рівні модуля тотожність стала, і залежність зникає (REQ-109).
- *
- * Дедлайни зберігаються як настінний час без пояси — хвіст «+00:00»/«Z»
- * навмисно ігнорується, читаються компоненти як є.
- */
-const formatDeadlineLabel = (value?: string | null) => {
-  const date = parseDeadlineDate(value);
-  if (!date) return "Без дедлайну";
-  const dateLabel = date.toLocaleDateString("uk-UA", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-  if (!/T\d{2}:\d{2}/.test(value ?? "")) return dateLabel;
-  return `${dateLabel}, ${date.toLocaleTimeString("uk-UA", {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
-};
-
-/**
  * Повертає true рівно на тому рендері, коли `signature` змінився.
  *
  * Це React-івський шаблон «виправити стан під новий вхід прямо в рендері»
@@ -413,10 +367,6 @@ function useSignatureChanged(signature: string) {
   return false;
 }
 
-const isGenericMentionLabel = (label?: string | null) => {
-  const normalized = (label ?? "").trim().toLowerCase();
-  return normalized === "користувач" || normalized === "невідомий користувач";
-};
 
 type ItemMethod = {
   id: string;
@@ -461,40 +411,10 @@ type QuoteItem = {
   resolvedModelThumbUrl?: string;
   resolvedMethodNames?: Record<string, string>;
 };
-type MentionContext = {
-  start: number;
-  end: number;
-  query: string;
-};
-type MentionSuggestion = {
-  id: string;
-  label: string;
-  alias: string;
-  avatarUrl: string | null;
-};
-type MentionDropdownState = {
-  side: "top" | "bottom";
-  maxHeight: number;
-};
-
 type ResolvedCatalogSelection = {
   typeId?: string;
   kindId?: string;
   modelId?: string;
-};
-
-type ActivityIcon = LucideIcon;
-
-type ActivityEvent = {
-  id: string;
-  type: "status" | "comment" | "runs" | "other";
-  created_at: string;
-  title: string;
-  description?: string;
-  actorId?: string | null;
-  actorLabel?: string | null;
-  icon: ActivityIcon;
-  accentClass?: string;
 };
 
 const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
@@ -710,30 +630,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     window.addEventListener("resize", apply);
     return () => window.removeEventListener("resize", apply);
   });
-  const [detailsTab, setDetailsTab] = useState<"comments" | "files" | "activity">("comments");
-  const commentDraftKey = useMemo(() => buildDraftKey("quote-comment", quoteId), [quoteId]);
-  const [commentText, setCommentText] = useState(() => readDraft<string>(commentDraftKey)?.value ?? "");
-  const [commentSaving, setCommentSaving] = useState(false);
-  useDraftPersist(commentDraftKey, commentText);
-  // Re-hydrate when navigating between quotes (same component instance, new quoteId).
-  // Перемкнули прорахунок — підставляємо його чернетку коментаря.
-  //
-  // Це не побічна дія, а виправлення стану під новий вхід, тож робиться прямо
-  // під час рендеру, а не в ефекті: React відкидає незавершений рендер і
-  // починає новий ще ДО того, як щось потрапить на екран. Через ефект те саме
-  // коштувало б зайвий показ старого тексту (REQ-109).
-  const [commentDraftQuoteId, setCommentDraftQuoteId] = useState(quoteId);
-  if (commentDraftQuoteId !== quoteId) {
-    setCommentDraftQuoteId(quoteId);
-    setCommentText(readDraft<string>(commentDraftKey)?.value ?? "");
-  }
-  const [mentionContext, setMentionContext] = useState<MentionContext | null>(null);
-  const [mentionActiveIndexRaw, setMentionActiveIndex] = useState(0);
-  const [mentionDropdown, setMentionDropdown] = useState<MentionDropdownState>({
-    side: "bottom",
-    maxHeight: 224,
-  });
-  const commentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [briefText, setBriefText] = useState("");
 
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
@@ -744,7 +640,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const filesTabLoadedQuoteRef = useRef<string | null>(null);
 
   const [filesCustomerOpen, setFilesCustomerOpen] = useState(true);
-  const [filesDocsOpen, setFilesDocsOpen] = useState(true);
 
   const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
   const [designVisualizations, setDesignVisualizations] = useState<QuoteAttachment[]>([]);
@@ -755,7 +650,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [attachmentsDeletingId, setAttachmentsDeletingId] = useState<string | null>(null);
   const [attachmentsDeleteError, setAttachmentsDeleteError] = useState<string | null>(null);
   const [visualizationPreview, setVisualizationPreview] = useState<QuoteAttachment | null>(null);
-  const [attachmentsDragActive, setAttachmentsDragActive] = useState(false);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
   const [deleteAttachmentOpen, setDeleteAttachmentOpen] = useState(false);
   const [deleteAttachmentTarget, setDeleteAttachmentTarget] = useState<QuoteAttachment | null>(null);
@@ -763,7 +657,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const attachmentObjectUrlRegistryRef = useRef<Set<string>>(new Set());
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
   const [memberInactiveById, setMemberInactiveById] = useState<Record<string, boolean>>({});
-  const [mentionLabelOverrides, setMentionLabelOverrides] = useState<Record<string, string>>({});
   const [designTask, setDesignTask] = useState<{
     id: string;
     assigneeUserId: string | null;
@@ -1867,80 +1760,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     enabled: !!teamId && !!quoteId && !!userId,
   });
   const quoteLockedByOther = quoteLock.lockedByOther;
-  const mentionSuggestions = useMemo<MentionSuggestion[]>(
-    () =>
-      teamMembers
-        .filter((member) => member.id !== userId)
-        .map((member) => {
-          const label = (mentionLabelOverrides[member.id] ?? member.label ?? "").trim() || "Користувач";
-          return {
-            id: member.id,
-            label,
-            alias: buildMentionAlias(label, member.id),
-            avatarUrl: member.avatarUrl ?? null,
-          };
-        })
-        .sort((a, b) => {
-          const aGeneric = isGenericMentionLabel(a.label);
-          const bGeneric = isGenericMentionLabel(b.label);
-          if (aGeneric !== bGeneric) return aGeneric ? 1 : -1;
-          return a.label.localeCompare(b.label, "uk");
-        }),
-    [mentionLabelOverrides, teamMembers, userId]
-  );
-  const mentionLookup = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-
-    const addKey = (raw: string | null | undefined, userId: string) => {
-      const key = normalizeMentionKey(raw);
-      if (!key) return;
-      const existing = map.get(key) ?? new Set<string>();
-      existing.add(userId);
-      map.set(key, existing);
-    };
-
-    for (const suggestion of mentionSuggestions) {
-      const label = suggestion.label;
-      if (!label) continue;
-
-      addKey(suggestion.id, suggestion.id);
-      addKey(suggestion.alias, suggestion.id);
-      addKey(label, suggestion.id);
-      addKey(label.replace(/\s+/g, ""), suggestion.id);
-      addKey(label.replace(/\s+/g, "."), suggestion.id);
-      addKey(label.replace(/\s+/g, "_"), suggestion.id);
-      addKey(toEmailLocalPart(label), suggestion.id);
-
-      for (const part of label.split(/\s+/).filter((token) => token.length >= 2)) {
-        addKey(part, suggestion.id);
-      }
-    }
-
-    return map;
-  }, [mentionSuggestions]);
-  const filteredMentionSuggestions = useMemo(() => {
-    if (!mentionContext) return [];
-    const query = normalizeMentionKey(mentionContext.query);
-    return mentionSuggestions
-      .filter((member) => {
-        if (!query) return true;
-        return (
-          normalizeMentionKey(member.alias).includes(query) ||
-          normalizeMentionKey(member.label).includes(query)
-        );
-      })
-      .slice(0, 12);
-  }, [mentionContext, mentionSuggestions]);
 
   // Індекс тримаємо в межах ПРИ ЧИТАННІ, а не ефектом.
   //
   // Ефект правив стан навздогін: список підказок уже перемалювався з коротшим
   // масивом, і лише наступним проходом індекс ставав валідним. Тепер обрізаємо
   // на місці — зайвий прохід зник, а поведінка та сама (REQ-109).
-  const mentionActiveIndex =
-    filteredMentionSuggestions.length === 0
-      ? 0
-      : Math.max(0, Math.min(mentionActiveIndexRaw, filteredMentionSuggestions.length - 1));
   // Поля дістаємо ДО ефектів: тоді їхні тіла читають лише рядки, а не весь
   // quote, і списки залежностей стають чесними. Якби в залежностях стояв сам
   // quote, набраний текст перезаписувався б на КОЖНЕ його перезавантаження —
@@ -2244,143 +2069,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setCreateOrderSubmitting(false);
   };
 
-  const activityEvents = useMemo<ActivityEvent[]>(() => {
-    const statusEvents: ActivityEvent[] = history.map((item) => {
-      const toStatus = normalizeStatus(item.to_status);
-      const fromStatus = normalizeStatus(item.from_status);
-      const Icon = statusIcons[toStatus] ?? Clock;
-      const title = item.from_status
-        ? `${formatStatusLabel(fromStatus)} → ${formatStatusLabel(toStatus)}`
-        : `Статус: ${formatStatusLabel(toStatus)}`;
-      return {
-        id: `status-${item.id}`,
-        type: "status",
-        created_at: item.created_at ?? new Date().toISOString(),
-        title,
-        description: item.note ?? undefined,
-        actorId: item.changed_by ?? null,
-        actorLabel: item.changed_by
-          ? memberById.get(item.changed_by) ?? "Невідомий користувач"
-          : "Система",
-        icon: Icon,
-        accentClass: statusClasses[toStatus] ?? statusClasses.new,
-      };
-    });
-
-    const commentEvents: ActivityEvent[] = comments.map((comment) => ({
-      id: `comment-${comment.id}`,
-      type: "comment",
-      created_at: comment.created_at,
-      title: "Додав коментар",
-      description: comment.body,
-      actorId: comment.created_by ?? null,
-      actorLabel: comment.created_by
-        ? memberById.get(comment.created_by) ?? "Невідомий користувач"
-        : "Невідомий користувач",
-      icon: MessageSquare as ActivityIcon,
-      accentClass: "quote-activity-accent-comment",
-    }));
-
-    const hasHistory = history.length > 0;
-    const activityLogEvents: ActivityEvent[] = activityRows
-      .filter((row) => {
-        const metadata = parseActivityMetadata(row.metadata);
-        const source = typeof metadata?.source === "string" ? metadata.source : "";
-        if (source === "quote_comment") return false;
-        if (source === "quote_status" && hasHistory) return false;
-        return true;
-      })
-      .map((row) => {
-        const metadata = parseActivityMetadata(row.metadata);
-        const source = typeof metadata?.source === "string" ? metadata.source : "";
-        const type: ActivityEvent["type"] =
-          source === "quote_runs"
-            ? "runs"
-            : source === "quote_status"
-            ? "status"
-            : source === "quote_deadline"
-            ? "status"
-            : "other";
-        const itemTitle = typeof metadata?.item_title === "string" ? metadata.item_title : null;
-        const actorLabel =
-          row.user_id && memberById.has(row.user_id)
-            ? memberById.get(row.user_id) ?? row.actor_name ?? "Користувач"
-            : row.actor_name ?? "Користувач";
-        const fromStatus =
-          typeof metadata?.from === "string" ? normalizeStatus(metadata.from) : null;
-        const toStatus =
-          typeof metadata?.to === "string" ? normalizeStatus(metadata.to) : null;
-        const fromDeadline =
-          typeof metadata?.from === "string" ? (metadata.from as string) : null;
-        const toDeadline =
-          typeof metadata?.to === "string" ? (metadata.to as string) : null;
-        const deadlineTitle =
-          source === "quote_deadline"
-            ? `Дедлайн: ${formatDeadlineLabel(fromDeadline)} → ${formatDeadlineLabel(toDeadline)}`
-            : null;
-        const title =
-          source === "quote_status" && fromStatus && toStatus
-            ? `${formatStatusLabel(fromStatus)} → ${formatStatusLabel(toStatus)}`
-            : source === "quote_deadline" && deadlineTitle
-            ? deadlineTitle
-            : row.title?.trim() || `${actorLabel} ${row.action ?? "оновив"}`.trim();
-        const description =
-          typeof metadata?.note === "string"
-            ? metadata.note
-            : source === "quote_items" && itemTitle
-            ? `Позиція: ${itemTitle}`
-            : undefined;
-        const Icon: ActivityIcon =
-          source === "quote_runs"
-            ? Calculator
-            : source === "quote_items"
-            ? Package
-            : source === "quote_status" && toStatus
-            ? (statusIcons[toStatus] as ActivityIcon) ?? Clock
-            : source === "quote_deadline"
-            ? Calendar
-            : Clock;
-        const accentClass =
-          source === "quote_runs"
-            ? "quote-activity-accent-runs"
-            : source === "quote_items"
-            ? "quote-activity-accent-items"
-            : source === "quote_status" && toStatus
-            ? statusClasses[toStatus] ?? statusClasses.new
-            : source === "quote_deadline"
-            ? "quote-activity-accent-deadline"
-            : "quote-activity-accent-default";
-        return {
-          id: `activity-${row.id}`,
-          type,
-          created_at: row.created_at,
-          title,
-          description,
-          actorId: row.user_id ?? null,
-          actorLabel,
-          icon: Icon,
-          accentClass,
-        };
-      });
-
-    return [...statusEvents, ...commentEvents, ...activityLogEvents].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-  }, [activityRows, comments, history, memberById]);
-
-  const activityGroups = useMemo(() => {
-    const groups: { label: string; items: ActivityEvent[] }[] = [];
-    activityEvents.forEach((event) => {
-      const label = formatActivityDayLabel(event.created_at);
-      const lastGroup = groups[groups.length - 1];
-      if (!lastGroup || lastGroup.label !== label) {
-        groups.push({ label, items: [event] });
-      } else {
-        lastGroup.items.push(event);
-      }
-    });
-    return groups;
-  }, [activityEvents]);
+  const feedEvents = useMemo(
+    () => buildQuoteFeed({ history, comments, activityRows, attachments, memberById }),
+    [activityRows, attachments, comments, history, memberById]
+  );
 
   const totals = useMemo(() => {
     const subtotal = activeRunPricingSummaries.length > 0 ? activeRunPricingTotals.saleTotal : itemsSubtotal;
@@ -2786,47 +2478,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       active = false;
     };
   }, [teamId, userId]);
-
-  // Імена для згадок @ підтягуємо ЛИШЕ коли людина справді почала згадку.
-  //
-  // Раніше це висіло на монтуванні сторінки — і тягло за собою netlify-функцію
-  // create-workspace-invite, яка на холодному старті відповідає 1.8-2.4 секунди
-  // (заміряно на проді 21.08.2026). Тобто відкриття картки прорахунку чекало
-  // на дані, потрібні хіба що тому, хто зараз писатиме коментар зі згадкою.
-  // Поки список не підвантажився, у підказці стоять звичайні імена з
-  // teamMembers — вона працює, просто без уточнених підписів.
-  const mentionLabelsRequestedRef = useRef(false);
-  const mentionLabelsNeeded = mentionContext !== null;
-
-  useEffect(() => {
-    if (!mentionLabelsNeeded) return;
-    if (mentionLabelsRequestedRef.current) return;
-    if (teamMembers.length === 0) return;
-    if (import.meta.env.DEV) return;
-    mentionLabelsRequestedRef.current = true;
-
-    let active = true;
-    const loadMentionLabelOverrides = async () => {
-      const genericMemberIds = teamMembers
-        .filter((member) => isGenericMentionLabel(member.label))
-        .map((member) => member.id);
-
-      const result = await fetchMentionLabelOverrides(genericMemberIds);
-      if (!active) return;
-      if (!result.ok) {
-        setMentionLabelOverrides({});
-        return;
-      }
-      // null — «міняти нема кого»: підписи лишаються ті, що були.
-      if (result.data === null) return;
-      setMentionLabelOverrides(result.data);
-    };
-
-    void loadMentionLabelOverrides();
-    return () => {
-      active = false;
-    };
-  }, [mentionLabelsNeeded, teamMembers]);
 
   useEffect(() => {
     if (!teamId || !editQuoteDialogOpen) return;
@@ -3460,21 +3111,29 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   }, [quoteId, teamId]);
 
+  /**
+   * Історія й журнал вантажаться, коли ВІДКРИТА «Стрічка».
+   *
+   * Раніше обидва ефекти чекали на підвкладку «Активність» усередині
+   * «Обговорення». Підвкладок більше немає (REQ-155 p9), і без цієї заміни
+   * стрічка лишилась би назавжди порожньою: єдиний вимикач, який їх умикав,
+   * зник разом із ними.
+   */
   useEffect(() => {
-    if (detailsTab !== "files") return;
+    if (activeQuoteTab !== "discussion") return;
     if (!quoteId || filesTabLoadedQuoteRef.current === quoteId) return;
     filesTabLoadedQuoteRef.current = quoteId;
     void loadAttachments();
-  }, [detailsTab, loadAttachments, quoteId]);
+  }, [activeQuoteTab, loadAttachments, quoteId]);
 
   useEffect(() => {
-    if (detailsTab !== "activity") return;
+    if (activeQuoteTab !== "discussion") return;
     if (!quote || quote.id !== quoteId || error) return;
     if (activityTabLoadedQuoteRef.current === quoteId) return;
     activityTabLoadedQuoteRef.current = quoteId;
     void loadHistory();
     void loadActivityLog();
-  }, [detailsTab, error, loadActivityLog, loadHistory, quote, quoteId]);
+  }, [activeQuoteTab, error, loadActivityLog, loadHistory, quote, quoteId]);
 
   useEffect(() => {
     if (attachments.length === 0 || memberById.size === 0) return;
@@ -3535,24 +3194,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     void loadAttachments();
   }, [itemAttachmentUploading, loadAttachments]);
 
-  const handleAttachmentsDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setAttachmentsDragActive(false);
-    void uploadAttachments(event.dataTransfer.files);
-  };
 
-  const handleAttachmentsDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setAttachmentsDragActive(true);
-  };
 
-  const handleAttachmentsDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setAttachmentsDragActive(false);
-  };
 
   const handleSaveDeadline = async (overrides?: {
     date?: string;
@@ -4555,231 +4198,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     await logItemChange("delete", target);
   };
 
-  const handleAddComment = () => {
-    if (!commentText.trim() || commentSaving) return;
-    void saveComment(commentText.trim());
-  };
 
-  const measureMentionDropdown = () => {
-    const textarea = commentTextareaRef.current;
-    if (!textarea || typeof window === "undefined") return;
 
-    const rect = textarea.getBoundingClientRect();
-    const viewportPadding = 16;
-    const gap = 8;
-    const maxDropdownHeight = 224;
-    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding - gap;
-    const spaceAbove = rect.top - viewportPadding - gap;
-    const side =
-      spaceBelow >= maxDropdownHeight || spaceBelow >= spaceAbove ? "bottom" : "top";
-    const availableSpace = side === "bottom" ? spaceBelow : spaceAbove;
 
-    setMentionDropdown({
-      side,
-      maxHeight: Math.max(96, Math.min(maxDropdownHeight, Math.floor(Math.max(availableSpace, 96)))),
-    });
-  };
 
-  const resolveMentionContext = (text: string, cursor: number): MentionContext | null => {
-    if (!text || cursor <= 0) return null;
 
-    const start = text.lastIndexOf("@", Math.max(0, cursor - 1));
-    if (start < 0) return null;
 
-    const prevChar = start > 0 ? text[start - 1] : "";
-    if (start > 0 && !/[\s(]/u.test(prevChar)) return null;
 
-    const query = text.slice(start + 1, cursor);
-    if (query.includes("@")) return null;
-    if ([...query].some((char) => isMentionTerminator(char))) return null;
-
-    let end = cursor;
-    while (end < text.length && !isMentionTerminator(text[end])) {
-      end += 1;
-    }
-
-    return { start, end, query };
-  };
-
-  const syncMentionContext = (text: string, cursor: number) => {
-    const nextContext = resolveMentionContext(text, cursor);
-    setMentionContext(nextContext);
-    if (nextContext) {
-      measureMentionDropdown();
-    }
-    if (
-      !nextContext ||
-      !mentionContext ||
-      mentionContext.start !== nextContext.start ||
-      mentionContext.end !== nextContext.end ||
-      mentionContext.query !== nextContext.query
-    ) {
-      setMentionActiveIndex(0);
-    }
-  };
-
-  const applyMentionSuggestion = (suggestion: MentionSuggestion) => {
-    if (!mentionContext) return;
-
-    const before = commentText.slice(0, mentionContext.start);
-    const after = commentText.slice(mentionContext.end);
-    const mentionToken = `@${suggestion.alias}`;
-    const needsSpaceAfter =
-      after.length > 0 && !/^[\s,;:!?()[\]{}<>]/u.test(after);
-    const insertText = `${mentionToken}${needsSpaceAfter ? " " : ""}`;
-    const nextValue = `${before}${insertText}${after}`;
-    const caretPosition = before.length + insertText.length;
-
-    setCommentText(nextValue);
-    setMentionContext(null);
-    setMentionActiveIndex(0);
-
-    requestAnimationFrame(() => {
-      const input = commentTextareaRef.current;
-      if (!input) return;
-      input.focus();
-      input.setSelectionRange(caretPosition, caretPosition);
-    });
-  };
-
-  const handleCommentTextKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!mentionContext) return;
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setMentionContext(null);
-      setMentionActiveIndex(0);
-      return;
-    }
-
-    if (filteredMentionSuggestions.length === 0) return;
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setMentionActiveIndex((prev) => (prev + 1) % filteredMentionSuggestions.length);
-      return;
-    }
-
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setMentionActiveIndex((prev) =>
-        prev === 0 ? filteredMentionSuggestions.length - 1 : prev - 1
-      );
-      return;
-    }
-
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      const selected =
-        filteredMentionSuggestions[Math.max(0, mentionActiveIndex)] ??
-        filteredMentionSuggestions[0];
-      if (selected) {
-        applyMentionSuggestion(selected);
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (!mentionContext) return;
-    const handleViewportChange = () => measureMentionDropdown();
-    window.addEventListener("resize", handleViewportChange);
-    window.addEventListener("scroll", handleViewportChange, true);
-    return () => {
-      window.removeEventListener("resize", handleViewportChange);
-      window.removeEventListener("scroll", handleViewportChange, true);
-    };
-  }, [mentionContext]);
-
-  const saveComment = async (body: string) => {
-    setCommentSaving(true);
-    setCommentsError(null);
-
-    const authorId = await getCurrentUserId();
-    if (!authorId) {
-      setCommentsError("Не вдалося визначити користувача.");
-      setCommentSaving(false);
-      return;
-    }
-    const effectiveTeamId = quote?.team_id ?? teamId;
-    if (!effectiveTeamId) {
-      setCommentsError("Немає доступної команди.");
-      setCommentSaving(false);
-      return;
-    }
-
-    const mentionKeys = extractMentionKeys(body);
-    const hasMentionsInBody = mentionKeys.length > 0;
-    const mentionedUserIds = new Set<string>();
-    for (const mentionKey of mentionKeys) {
-      const candidates = mentionLookup.get(mentionKey);
-      // Згадку розсилаємо лише коли ім'я однозначне: два однакові — не вгадуємо.
-      if (!candidates || candidates.size !== 1) continue;
-      const [mentionedUserId] = Array.from(candidates);
-      if (mentionedUserId && mentionedUserId !== authorId) {
-        mentionedUserIds.add(mentionedUserId);
-      }
-    }
-    const mentionUserIdsList = Array.from(mentionedUserIds);
-
-    const result = await createQuoteComment({
-      quoteId,
-      teamId: effectiveTeamId,
-      body,
-      userId: authorId,
-      threadKey: threadKeyForQuote(quoteId),
-      mentionedUserIds: mentionUserIdsList,
-      hasMentionsInBody,
-    });
-
-    if (!result.ok) {
-      setCommentsError(result.message);
-      setCommentSaving(false);
-      return;
-    }
-
-    const inserted: InsertedCommentRow = result.data.comment;
-    setComments((prev) => [
-      {
-        id: inserted.id,
-        body: inserted.body ?? body,
-        created_at: inserted.created_at ?? new Date().toISOString(),
-        created_by: inserted.created_by ?? authorId,
-      },
-      ...prev,
-    ]);
-
-    if (hasMentionsInBody && !result.data.mentionsHandledViaServer) {
-      try {
-        await invokeQuoteCommentsFunction({
-          mode: "notify_mentions",
-          quoteId,
-          body,
-          mentionedUserIds: mentionUserIdsList,
-        });
-      } catch (notifyError) {
-        const actorLabel = memberById.get(authorId) ?? "Користувач";
-        const quoteLabel = quote?.number ? `#${quote.number}` : quoteId;
-        const trimmedBody = body.length > 220 ? `${body.slice(0, 217)}...` : body;
-        try {
-          await notifyUsers({
-            userIds: mentionUserIdsList,
-            title: `${actorLabel} згадав(ла) вас у коментарі`,
-            body: `Прорахунок ${quoteLabel}: ${trimmedBody}`,
-            href: `/orders/estimates/${quoteId}`,
-            type: "info",
-          });
-        } catch (notificationsError) {
-          console.warn("Failed to send mention notifications", notificationsError, notifyError);
-        }
-      }
-    }
-
-    setCommentText("");
-    setMentionContext(null);
-    setMentionActiveIndex(0);
-    await loadActivityLog();
-    setCommentSaving(false);
-  };
 
   const toggleMethod = (methodId: string) => {
     setItemMethods(prev => {
@@ -4868,7 +4293,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     },
     {
       value: "discussion",
-      label: "Обговорення",
+      label: "Стрічка",
       icon: MessageSquare,
       badge: discussionCount || null,
       attention: Boolean(commentsError || attachmentsError || activityError || historyError),
@@ -6771,569 +6196,45 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </section>
 
             <section className={cn("tab-panel py-2", activeQuoteTab !== "discussion" && "hidden")}>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
-                    <FileText className="h-4 w-4" />
-                  </div>
-                  <div className="text-base font-semibold tracking-tight text-foreground">Обговорення</div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="peer flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                      aria-label="Інформація про обговорення"
-                      onClick={(event) => event.preventDefault()}
-                    >
-                      <CircleHelp className="h-3.5 w-3.5" />
-                    </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                      Загальні коментарі, вкладення від замовника і журнал активності по прорахунку.
-                    </div>
-                  </div>
+              <div className="mb-4 flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                  <Clock className="h-4 w-4" />
                 </div>
+                <div className="text-base font-semibold tracking-tight text-foreground">Стрічка</div>
               </div>
 
-              <Tabs
-                value={detailsTab}
-                onValueChange={(value) => setDetailsTab(value as "comments" | "files" | "activity")}
-                className="w-full"
-              >
-                <TabsList variant="underline" className="mb-5 w-full">
-                  <TabsTrigger value="comments">
-                    Коментарі
-                    <span className="ml-2 text-xs text-muted-foreground">{comments.length}</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="files">
-                    Вкладення
-                    <span className="ml-2 text-xs text-muted-foreground">{attachments.length}</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="activity">
-                    Активність
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="comments" className="mt-0">
-                  <div className="space-y-4">
-                    <div className="rounded-xl border border-border/40 bg-muted/[0.02] p-4">
-                      <div className="relative">
-                        <Textarea
-                          ref={commentTextareaRef}
-                          value={commentText}
-                          onChange={(event) => {
-                            const cursor = event.target.selectionStart ?? event.target.value.length;
-                            setCommentText(event.target.value);
-                            syncMentionContext(event.target.value, cursor);
-                          }}
-                          onSelect={(event) => {
-                            const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
-                            syncMentionContext(event.currentTarget.value, cursor);
-                          }}
-                          onKeyDown={handleCommentTextKeyDown}
-                          placeholder="Напишіть коментар... (використовуйте @ім'я для згадки)"
-                          className="min-h-[88px] resize-none"
-                        />
-
-                        {mentionContext ? (
-                          <div
-                            className={cn(
-                              "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover",
-                              mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
-                            )}
-                          >
-                            {filteredMentionSuggestions.length > 0 ? (
-                              <div className="overflow-y-auto py-1" style={{ maxHeight: `${mentionDropdown.maxHeight}px` }}>
-                                {filteredMentionSuggestions.map((member, index) => (
-                                  <button
-                                    key={member.id}
-                                    type="button"
-                                    className={cn(
-                                      "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
-                                      index === mentionActiveIndex
-                                        ? "bg-primary/10 text-foreground"
-                                        : "hover:bg-muted/60"
-                                    )}
-                                    onMouseDown={(event) => {
-                                      event.preventDefault();
-                                      applyMentionSuggestion(member);
-                                    }}
-                                  >
-                                    <AvatarBase
-                                      src={member.avatarUrl}
-                                      name={member.label}
-                                      fallback={getInitials(member.label)}
-                                      size={24}
-                                      className="text-3xs font-semibold"
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                      <div className="truncate text-sm font-medium">{member.label}</div>
-                                      <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="px-3 py-2 text-xs text-muted-foreground">
-                                {mentionContext.query ? `Немає збігів для @${mentionContext.query}` : "Немає доступних користувачів"}
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">{commentText.length} символів</span>
-                        <div className="flex items-center gap-2">
-                          <DictationButton
-                            textareaRef={commentTextareaRef}
-                            value={commentText}
-                            onChange={setCommentText}
-                            context="comment"
-                            disabled={commentSaving}
-                          />
-                          <Button
-                            size="sm"
-                            onClick={handleAddComment}
-                            disabled={!commentText.trim() || commentSaving}
-                            className="gap-2"
-                          >
-                            {commentSaving ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Send className="h-3 w-3" />
-                            )}
-                            {commentSaving ? "Збереження..." : "Додати"}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {commentsLoading ? (
-                      <AppSectionLoader label="Завантаження..." className="border-none bg-transparent py-2" />
-                    ) : commentsError ? (
-                      <div className="text-sm text-destructive">{commentsError}</div>
-                    ) : comments.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-border/40 bg-muted/[0.02] py-8 text-center">
-                        <MessageSquare className="mx-auto mb-2 h-10 w-10 text-muted-foreground/30" />
-                        <p className="text-sm text-muted-foreground">Коментарів ще немає</p>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-border/40">
-                        {comments.map((comment) => (
-                          <div
-                            key={comment.id}
-                            className="py-4 transition-colors hover:bg-muted/10"
-                          >
-                            <div className="flex items-start gap-3">
-                              <AvatarBase
-                                src={comment.created_by ? memberAvatarById.get(comment.created_by) ?? null : null}
-                                name={
-                                  comment.created_by
-                                    ? memberById.get(comment.created_by) ?? comment.created_by
-                                    : "Користувач"
-                                }
-                                fallback={
-                                  comment.created_by
-                                    ? getInitials(memberById.get(comment.created_by) ?? comment.created_by)
-                                    : "Не вказано"
-                                }
-                                size={32}
-                                className="text-3xs font-semibold"
-                              />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-baseline justify-between gap-2">
-                                  <div className="min-w-0 truncate text-sm font-semibold">
-                                    {comment.created_by
-                                      ? memberById.get(comment.created_by) ?? "Користувач"
-                                      : "Користувач"}
-                                  </div>
-                                  <div className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                                    {new Date(comment.created_at).toLocaleDateString("uk-UA", {
-                                      day: "numeric",
-                                      month: "short",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </div>
-                                </div>
-                                <div className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-                                  {renderTextWithMentions(comment.body ?? "")}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="files" className="mt-0">
-                  <div className="space-y-4">
-                    <input
-                      ref={attachmentsInputRef}
-                      type="file"
-                      multiple
-                      className="hidden"
-                      accept={ATTACHMENTS_ACCEPT}
-                      onChange={(event) => uploadAttachments(event.target.files)}
-                    />
-
-                    {attachmentsUploading && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Завантаження файлів...
-                      </div>
-                    )}
-
-                    <div className="space-y-3">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        className="flex w-full cursor-pointer items-center justify-between rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        onClick={() => setFilesCustomerOpen((v) => !v)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setFilesCustomerOpen((v) => !v);
-                          }
-                        }}
-                      >
-                        <div className="flex items-center gap-2 text-sm font-semibold">
-                          Від замовника
-                          {attachments.length > 0 && (
-                            <Badge variant="secondary" className="text-2xs">
-                              {attachments.length}
-                            </Badge>
-                          )}
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="gap-2"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            attachmentsInputRef.current?.click();
-                          }}
-                          disabled={attachmentsUploading}
-                        >
-                          <Upload className="h-4 w-4" />
-                          Додати
-                        </Button>
-                      </div>
-
-                      <div hidden={!filesCustomerOpen} className="panel-reveal mt-3 space-y-2">
-                        {attachmentsLoading ? (
-                          <div className="py-4 text-center">
-                            <Loader2 className="mx-auto mb-1 h-4 w-4 animate-spin text-muted-foreground" />
-                            <p className="text-xs text-muted-foreground">Завантаження...</p>
-                          </div>
-                        ) : attachmentsError ? (
-                          <div className="text-sm text-destructive">{attachmentsError}</div>
-                        ) : attachments.length === 0 ? (
-                          <div
-                            className={cn(
-                              "cursor-pointer rounded-xl border border-dashed p-6 text-center transition-colors",
-                              attachmentsDragActive
-                                ? "border-primary/60 bg-primary/10"
-                                : "border-border/60 hover:border-primary/40 hover:bg-primary/5"
-                            )}
-                            onClick={() => attachmentsInputRef.current?.click()}
-                            onDrop={handleAttachmentsDrop}
-                            onDragOver={handleAttachmentsDragOver}
-                            onDragLeave={handleAttachmentsDragLeave}
-                          >
-                            <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
-                            <p className="mb-1 text-sm font-medium">Перетягніть файли сюди</p>
-                            <p className="text-xs text-muted-foreground">або натисніть для вибору</p>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              До {MAX_QUOTE_ATTACHMENTS} файлів · до 50 MB · PDF, AI, SVG, PNG, JPG, ZIP
-                            </p>
-                          </div>
-                        ) : (
-                          <div
-                            className={cn(
-                              "space-y-2 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] p-2",
-                              attachmentsDragActive && "border-primary/60 bg-primary/5"
-                            )}
-                            onDrop={handleAttachmentsDrop}
-                            onDragOver={handleAttachmentsDragOver}
-                            onDragLeave={handleAttachmentsDragLeave}
-                          >
-                            {attachments.map((file) => {
-                              const displayName = getAttachmentDisplayName(file);
-                              const extension = getFileExtension(displayName);
-                              // Та сама умова й той самий шлях до прев'ю, що
-                              // й у сітці візуалізацій нижче на цій сторінці:
-                              // мініатюра лежить у storage поруч з оригіналом
-                              // (uploadAttachmentWithVariants), і панель
-                              // вкладень просто нею не користувалась.
-                              const previewImage =
-                                (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
-                                Boolean(file.storageBucket && file.storagePath);
-                              const openPreview = () => {
-                                if (!previewImage) return;
-                                // Варіант «preview» існує не в кожного файлу:
-                                // getAttachmentVariantCandidatePaths шукає лише
-                                // __preview.webp/.png і НЕ відкочується до
-                                // оригіналу. Без запасного шляху клік по файлу
-                                // без згенерованого прев'ю просто нічого не
-                                // робив би — найгірший вид поламаного.
-                                void ensureAttachmentAccessUrl(file, { variant: "preview" })
-                                  .then((url) => url ?? ensureAttachmentAccessUrl(file, { variant: "original" }))
-                                  .then((url) => {
-                                    if (!url) {
-                                      toast.error("Не вдалося відкрити превʼю файлу");
-                                      return;
-                                    }
-                                    setVisualizationPreview({ ...file, url });
-                                  });
-                              };
-                              return (
-                                <div
-                                  key={file.id}
-                                  className="group flex items-center justify-between rounded-xl border border-border/30 p-3 transition-colors hover:bg-muted/10"
-                                >
-                                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                                    {previewImage ? (
-                                      /* Обгортка — div, а не button, хоча вона й
-                                         клікабельна: hoverPreview усередині
-                                         StorageObjectImage сам ставить tabIndex,
-                                         а фокусований елемент у <button> — це
-                                         вкладена інтерактивність, чого модель
-                                         вмісту кнопки не допускає. З клавіатури
-                                         прев'ю відкривається кнопкою на назві
-                                         файлу поруч. */
-                                      <div
-                                        onClick={openPreview}
-                                        className="h-11 w-11 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-muted/20 transition-transform hover:scale-[1.04]"
-                                      >
-                                        {/* object-cover саме через imageClassName:
-                                            className лягає на обгортку, і широка
-                                            мініатюра в квадраті 44×44 інакше
-                                            стискається в смужку. */}
-                                        <StorageObjectImage
-                                          bucket={file.storageBucket}
-                                          path={file.storagePath}
-                                          alt={displayName}
-                                          variant="thumb"
-                                          hoverPreview
-                                          className="h-full w-full"
-                                          imageClassName="object-cover"
-                                        />
-                                      </div>
-                                    ) : (
-                                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-lg bg-primary/10">
-                                        <Paperclip className="h-5 w-5 text-primary" />
-                                      </div>
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2">
-                                        {previewImage ? (
-                                          <button
-                                            type="button"
-                                            onClick={openPreview}
-                                            title={displayName}
-                                            className="min-w-0 truncate text-left text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-                                          >
-                                            {displayName}
-                                          </button>
-                                        ) : (
-                                          <div className="truncate text-sm font-semibold" title={displayName}>
-                                            {displayName}
-                                          </div>
-                                        )}
-                                        {extension && (
-                                          <Badge variant="secondary" className="text-3xs uppercase">
-                                            {extension}
-                                          </Badge>
-                                        )}
-                                        {/* Позначаємо лише дизайнерські:
-                                            файли прорахунку тут більшість,
-                                            і бейдж на кожному рядку був би
-                                            шумом, а не інформацією. */}
-                                        {file.audience === "design" && (
-                                          <Badge variant="outline" className="shrink-0 text-3xs">
-                                            Для дизайнера
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {file.size} ·{" "}
-                                        {new Date(file.created_at).toLocaleString("uk-UA", {
-                                          day: "2-digit",
-                                          month: "2-digit",
-                                          year: "numeric",
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })}
-                                        {file.uploadedByLabel ? ` · ${file.uploadedByLabel}` : ""}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="ml-4 flex items-center gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      // focus-visible на кнопці, не group-focus-within на
-                                      // рядку: клік по «Завантажити» лишав фокус на ній, і
-                                      // обидві кнопки рядка стирчали далі без наведення.
-                                      className="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                                      onClick={() => {
-                                        void ensureAttachmentAccessUrl(file).then((url) => {
-                                          if (url) {
-                                            void downloadFileToDevice(
-                                              url,
-                                              getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
-                                            );
-                                          }
-                                        });
-                                      }}
-                                      disabled={!file.storageBucket || !file.storagePath}
-                                    >
-                                      <Download className="h-4 w-4" />
-                                    </Button>
-                                    {canDeleteDesignerBriefAttachment(file) ? (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="shrink-0 text-destructive opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                                        onClick={() => requestDeleteAttachment(file)}
-                                        disabled={attachmentsDeletingId === file.id}
-                                      >
-                                        {attachmentsDeletingId === file.id ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <Trash2 className="h-4 w-4" />
-                                        )}
-                                      </Button>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        className="flex w-full cursor-pointer items-center justify-between rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        onClick={() => setFilesDocsOpen((v) => !v)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setFilesDocsOpen((v) => !v);
-                          }
-                        }}
-                      >
-                        <div className="text-sm font-semibold">Документи</div>
-                        <Button size="sm" variant="ghost" className="gap-2" disabled>
-                          <Upload className="h-4 w-4" />
-                          Додати
-                        </Button>
-                      </div>
-                      <div
-                        hidden={!filesDocsOpen}
-                        className="panel-reveal mt-3 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] p-4 text-xs text-muted-foreground"
-                      >
-                        Рахунки, договори, акти — скоро буде доступно.
-                      </div>
-                    </div>
-
-                    {attachmentsUploadError && (
-                      <div className="text-xs text-destructive">{attachmentsUploadError}</div>
-                    )}
-                    {attachmentsDeleteError && (
-                      <div className="text-xs text-destructive">{attachmentsDeleteError}</div>
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="activity" className="mt-0">
-                  <div className="space-y-4">
-                    {activityLoading || historyLoading || commentsLoading ? (
-                      <div className="py-6 text-center">
-                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">Завантаження...</p>
-                      </div>
-                    ) : activityEvents.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-border/40 bg-muted/[0.02] py-8 text-center">
-                        <Clock className="mx-auto mb-2 h-10 w-10 text-muted-foreground/30" />
-                        <p className="text-sm text-muted-foreground">Активність порожня</p>
-                        {(activityError || historyError || commentsError) && (
-                          <p className="mt-2 text-xs text-destructive">
-                            {activityError ?? historyError ?? commentsError}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <>
-                        {(activityError || historyError || commentsError) && (
-                          <div className="text-xs text-destructive">
-                            {activityError ?? historyError ?? commentsError}
-                          </div>
-                        )}
-                        <div className="space-y-6">
-                          {activityGroups.map((group) => (
-                            <div key={group.label} className="space-y-3">
-                              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                {group.label}
-                              </div>
-                              <div className="divide-y divide-border/40">
-                                {group.items.map((event) => {
-                                  const Icon = event.icon;
-                                  return (
-                                    <div
-                                      key={event.id}
-                                      className="flex items-start gap-3 py-4 transition-colors hover:bg-muted/10"
-                                    >
-                                      <div
-                                        className={cn(
-                                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border",
-                                          event.accentClass ?? "border-border bg-muted/20 text-muted-foreground"
-                                        )}
-                                      >
-                                        <Icon className="h-4 w-4" />
-                                      </div>
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div className="text-sm font-semibold">{event.title}</div>
-                                          <div className="whitespace-nowrap text-xs text-muted-foreground">
-                                            {formatActivityClock(event.created_at)}
-                                          </div>
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">{event.actorLabel}</div>
-                                        {event.description && (
-                                          <p className="mt-1 text-xs text-muted-foreground">{event.description}</p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                          {!activityLoadedAll ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="w-full"
-                              disabled={activityLoading}
-                              onClick={() => void loadActivityLog({ full: true })}
-                            >
-                              {activityLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                              Завантажити всю активність
-                            </Button>
-                          ) : null}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
+              <QuoteFeed
+                events={feedEvents}
+                files={attachments}
+                loading={activityLoading || historyLoading || commentsLoading || attachmentsLoading}
+                error={
+                  attachmentsUploadError ??
+                  attachmentsDeleteError ??
+                  activityError ??
+                  historyError ??
+                  commentsError ??
+                  attachmentsError
+                }
+                filesOpen={filesCustomerOpen}
+                filesUploading={attachmentsUploading}
+                filesDeletingId={attachmentsDeletingId}
+                canDeleteFile={canDeleteDesignerBriefAttachment}
+                onToggleFiles={() => setFilesCustomerOpen((open) => !open)}
+                onAddFiles={(files) => void uploadAttachments(files)}
+                onDownloadFile={(file) => {
+                  void ensureAttachmentAccessUrl(file).then((url) => {
+                    if (!url) return;
+                    void downloadFileToDevice(
+                      url,
+                      getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
+                    );
+                  });
+                }}
+                onDeleteFile={requestDeleteAttachment}
+                canLoadMore={!activityLoadedAll}
+                loadingMore={activityLoading}
+                onLoadMore={() => void loadActivityLog({ full: true })}
+              />
             </section>
 
             {/*

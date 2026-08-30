@@ -112,3 +112,29 @@ export const buildDeadlineTabBadge = (value?: string | null): DeadlineTabBadge |
     diffDays < 0 ? "text-danger-foreground" : diffDays <= 2 ? "text-warning-foreground" : null;
   return { label, toneClass };
 };
+
+/**
+ * Дедлайни — теж чисті форматувальники на рівні модуля.
+ *
+ * Повний підпис дедлайна — «12 березня 2026 р., 15:00». Читає стрічка подій і
+ * підказка під курсором у картці. Поки функція жила в тілі компонента, React
+ * перестворював її щорендеру, тож чесний список залежностей перераховував би
+ * всю стрічку на кожен рендер (REQ-109).
+ *
+ * Дедлайни зберігаються як настінний час без пояси — хвіст «+00:00»/«Z»
+ * навмисно ігнорується, читаються компоненти як є.
+ */
+export const formatDeadlineLabel = (value?: string | null) => {
+  const date = parseDeadlineDate(value);
+  if (!date) return "Без дедлайну";
+  const dateLabel = date.toLocaleDateString("uk-UA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  if (!/T\d{2}:\d{2}/.test(value ?? "")) return dateLabel;
+  return `${dateLabel}, ${date.toLocaleTimeString("uk-UA", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+};

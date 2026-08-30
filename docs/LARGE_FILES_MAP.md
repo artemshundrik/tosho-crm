@@ -13,45 +13,48 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~8 533 lines, 406 KB, as of 2026-08-30)
+## src/pages/QuoteDetailsPage.tsx (~7 434 lines, 353 KB, as of 2026-08-30)
 
-Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p7. За цю роботу файл
-СХУДНУВ на 1 340 рядків: вкладка «Дизайн» поїхала в окремий модуль, розбір
-файлів-виходів дизайну — у `designOutputFiles.ts`, а мертвий після редизайну
-редактор ТЗ прибрано. Тому все нижче 1 200 зсунулось УГОРУ на сотні рядків, а не
-вниз, як звикле.
+Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p12. Файл СХУДНУВ на
+2 460 рядків (9 893 → 7 434): три вкладки з чотирьох поїхали в окремі модулі, а
+разом із ними — мертвий редактор ТЗ і вся машинерія згадок @ у коментарях. Тому
+все нижче 1 000 зсунулось УГОРУ на сотні рядків, а не вниз, як звикле.
+
+Якщо цифра нижче не сходиться, звіряй grep-ом і онови тут: мапа, якій не вірять,
+гірша за її відсутність.
 
 Якщо цифра нижче не сходиться, звіряй grep-ом і онови тут: мапа, якій не вірять,
 гірша за її відсутність.
 
 | Range | Content |
 |---|---|
-| 1–245 | imports |
-| 246–588 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `renderBriefRichText`); розбір файлів дизайну переїхав у `quote-details/designOutputFiles.ts` |
-| **590** | `export function QuoteDetailsPage(...)` — main component starts |
-| **1109** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
-| 1223 / 1227 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
-| 1399 / 1450 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
-| **2004** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
-| 2178 / 2225 | `handlePrimaryStatusAction`, `handleCreateOrder` |
-| 3554 / 3668 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
-| 3756 / 3858 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
-| 3871 / 3987 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
-| 4199 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
-| 4314 / 4555 | items: `handleSaveItem`, `handleAddComment` |
-| **4836** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
-| 4897–5053 | `<header>`: статус-контрол (DropdownMenu) + меню «⋮» (там же «Створити дизайн-задачу») |
-| 5068 | смуга вкладок — спільний `<TabBar>` (`src/components/ui/tab-bar.tsx`); риска ПЕРЕЇЖДЖАЄ окремим вузлом, псевдоелемента `after:` у файлі більше немає |
-| 5109 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
-| 5170 | вкладка «Товари» — `<section className="tab-panel">` |
-| 5177 | картка «Товари і тиражі» — заголовок |
-| 5725 | `<QuoteRunRows>` — перелік тиражів рядками на жорсткій сітці; розмітка в `src/features/quotes/quote-details/QuoteRunRows.tsx` |
-| 5808 / 5826 | активний тираж: `<QuoteRunPriceFields>` (чотири поля) і `<QuoteRunMarkupPanel>` (накрутка зі шкалою + ціна з розкладом) |
-| 5882–6265 | окрема картка «Тиражі» (`<details className="hidden">` — мертва, не рендериться) |
-| 6267 / 6669 | вкладки «Дедлайни», «Дизайн» |
-| 6697 | `<QuoteDesignTasksPanel>` — уся вкладка «Дизайн»: пігулки задач, шапка Ш1, ТЗ, візуали, вихідні матеріали. Розмітка й збирач карток (`buildQuoteDesignTaskCards`) — у `src/features/quotes/quote-details/QuoteDesignTasksPanel.tsx` |
-| 6751 / 7324 | вкладки «Обговорення», «Економіка» (заглушка `EconomicsComingSoon`) |
-| 8396 | діалог «Створити замовлення» |
+| 1–213 | imports |
+| 214–509 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `renderBriefRichText`); розбір файлів дизайну — у `quote-details/designOutputFiles.ts`, збирач стрічки — у `quoteFeedEvents.ts` |
+| **510** | `export function QuoteDetailsPage(...)` — main component starts |
+| **1002** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
+| 1119 / 1123 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
+| 1295 / 1346 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
+| **1829** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
+| 2006 / 2053 | `handlePrimaryStatusAction`, `handleCreateOrder` |
+| 3123 / 3130 | ліниві завантажувачі «Стрічки»: вкладення й журнал вантажаться, коли відкрита вкладка |
+| 3200 / 3314 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
+| 3402 / 3504 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
+| 3517 / 3633 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
+| 3845 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
+| 3960 | items: `handleSaveItem` |
+| **4261** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
+| 4336–4492 | `<header>`: статус-контрол (DropdownMenu) + меню «⋮» (там же «Створити дизайн-задачу») |
+| 4507 | смуга вкладок — спільний `<TabBar>` (`src/components/ui/tab-bar.tsx`); риска ПЕРЕЇЖДЖАЄ окремим вузлом, псевдоелемента `after:` у файлі більше немає |
+| 4548 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
+| 4609 / 4616 | вкладка «Товари» — `<section>` і заголовок картки «Товари і тиражі» |
+| 5164 | `<QuoteRunRows>` — перелік тиражів рядками на жорсткій сітці (`QuoteRunRows.tsx`) |
+| 5247 / 5265 | активний тираж: `<QuoteRunPriceFields>` (чотири поля) і `<QuoteRunMarkupPanel>` (накрутка зі шкалою + ціна з розкладом) |
+| 5321–5704 | окрема картка «Тиражі» (`<details className="hidden">` — мертва, не рендериться) |
+| 5706 / 6116 | вкладки «Дедлайни», «Дизайн» |
+| 6144 | `<QuoteDesignTasksPanel>` — уся вкладка «Дизайн» (`QuoteDesignTasksPanel.tsx`, збирач карток `buildQuoteDesignTaskCards` там же) |
+| 6198 / 6206 | вкладка «Стрічка» — `<QuoteFeed>`; збирач подій — `quoteFeedEvents.ts`, розмітка — `QuoteFeed.tsx` |
+| 6247 | вкладка «Економіка» (заглушка `EconomicsComingSoon`) |
+| 7319 | діалог «Створити замовлення» |
 
 ## src/pages/DesignTaskPage.tsx (~12 865 lines, 583 KB, as of 2026-08-30)
 
