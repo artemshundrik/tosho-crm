@@ -49,6 +49,15 @@ export type QuoteFeedEvent = {
   accentClass?: string;
   /** Вкладення, з якого зроблена подія, — щоб рядок умів завантажити файл. */
   attachment?: QuoteAttachment;
+  /**
+   * Чи потрапляє подія у зріз «лише головне».
+   *
+   * Головне — це те, що змінює домовленість: розмова, гроші й статус. Файли,
+   * дедлайни та правки позицій лишаються у стрічці, але у звуженому зрізі їх
+   * немає: коли подій під сотню, «що сталось важливого» і «що сталось узагалі» —
+   * різні питання.
+   */
+  important: boolean;
 };
 
 export /** Три дедлайни прорахунку — і три джерела, якими їх пише журнал. */
@@ -110,6 +119,7 @@ export function buildQuoteFeed({
       from: item.from_status ? formatStatusLabel(fromStatus) : undefined,
       to: formatStatusLabel(toStatus),
       meta: item.note ?? undefined,
+      important: true,
       icon: statusIcons[toStatus] ?? Clock,
       accentClass: statusClasses[toStatus] ?? statusClasses.new,
     };
@@ -123,6 +133,7 @@ export function buildQuoteFeed({
     actorLabel: nameOf(comment.created_by),
     title: "Написав у справі",
     body: comment.body,
+    important: true,
     icon: MessageSquare,
     accentClass: "quote-activity-accent-comment",
   }));
@@ -140,6 +151,7 @@ export function buildQuoteFeed({
     meta: [file.size, file.audience === "design" ? "для дизайнера" : "по справі"]
       .filter(Boolean)
       .join(" · "),
+    important: false,
     icon: Paperclip,
     accentClass: "quote-activity-accent-default",
     attachment: file,
@@ -227,6 +239,7 @@ export function buildQuoteFeed({
         meta,
         from: delta?.from,
         to: delta?.to,
+        important: kind === "money" || source === "quote_status",
         icon,
         accentClass,
       } satisfies QuoteFeedEvent;

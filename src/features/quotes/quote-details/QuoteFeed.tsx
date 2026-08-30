@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ArrowRight, ChevronDown, Clock, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 import { getFileExtension } from "./config";
 import type { QuoteAttachment } from "./queries";
-import type { QuoteFeedEvent } from "./quoteFeedEvents";
+import type { QuoteFeedEvent, QuoteFeedKind } from "./quoteFeedEvents";
 
 /**
  * СТРІЧКА СПРАВИ (REQ-155 p9, p12).
@@ -29,6 +30,25 @@ import type { QuoteFeedEvent } from "./quoteFeedEvents";
  * момент, коли його додали, а реєстр відповідає на інше питання — «які файли є
  * взагалі». Два різні питання, тому два різні місця на одному екрані.
  */
+
+/**
+ * ФІЛЬТРИ СТРІЧКИ (REQ-155 p11).
+ *
+ * П'ять зрізів замість трьох підвкладок, які були раніше, — і різниця не в
+ * кількості. Підвкладка ділила ІСТОРІЮ на три історії; зріз лишає одну й лише
+ * ховає зайве, тож час не рветься: перемкнув на «Гроші» — бачиш ті самі дні, ті
+ * самі години, тільки без файлів і статусів.
+ *
+ * Лічильники стоять від УСІХ подій, а не від показаних: інакше «Файли 0» у зрізі
+ * «Розмова» читалось би як «файлів немає», хоч вони є.
+ */
+const FEED_FILTERS: Array<{ key: QuoteFeedKind | "all"; label: string }> = [
+  { key: "all", label: "Усе" },
+  { key: "talk", label: "Розмова" },
+  { key: "money", label: "Гроші" },
+  { key: "file", label: "Файли" },
+  { key: "event", label: "Події" },
+];
 
 function FeedRow({
   event,
@@ -255,8 +275,18 @@ export function QuoteFeed({
   loadingMore?: boolean;
   onLoadMore?: () => void;
 }) {
+  const [filter, setFilter] = useState<QuoteFeedKind | "all">("all");
+  const [onlyImportant, setOnlyImportant] = useState(false);
+
+  const counts = new Map<QuoteFeedKind | "all", number>([["all", events.length]]);
+  events.forEach((event) => counts.set(event.kind, (counts.get(event.kind) ?? 0) + 1));
+
+  const shown = events.filter(
+    (event) => (filter === "all" || event.kind === filter) && (!onlyImportant || event.important)
+  );
+
   const groups: Array<{ label: string; items: QuoteFeedEvent[] }> = [];
-  events.forEach((event) => {
+  shown.forEach((event) => {
     const label = formatActivityDayLabel(event.createdAt);
     const last = groups[groups.length - 1];
     if (!last || last.label !== label) groups.push({ label, items: [event] });
@@ -277,6 +307,43 @@ export function QuoteFeed({
         onDelete={onDeleteFile}
       />
 
+      <div className="flex flex-wrap items-center gap-2">
+        {FEED_FILTERS.map((entry) => {
+          const count = counts.get(entry.key) ?? 0;
+          const on = filter === entry.key;
+          return (
+            <button
+              key={entry.key}
+              type="button"
+              onClick={() => setFilter(entry.key)}
+              className={cn(
+                "inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                on
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border/60 text-muted-foreground hover:bg-muted/40"
+              )}
+            >
+              {entry.label}
+              {count > 0 ? (
+                <span className={cn("font-mono tabular-nums", on ? "opacity-70" : "opacity-60")}>{count}</span>
+              ) : null}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setOnlyImportant((value) => !value)}
+          className={cn(
+            "ml-auto inline-flex h-7 items-center rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+            onlyImportant
+              ? "border-foreground bg-foreground text-background"
+              : "border-border/60 text-muted-foreground hover:bg-muted/40"
+          )}
+        >
+          лише головне
+        </button>
+      </div>
+
       {error ? <div className="text-xs text-destructive">{error}</div> : null}
 
       {loading ? (
@@ -284,10 +351,16 @@ export function QuoteFeed({
           <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-muted-foreground" />
           <p className="text-xs text-muted-foreground">Завантаження...</p>
         </div>
-      ) : events.length === 0 ? (
+      ) : shown.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/40 py-8 text-center">
           <Clock className="mx-auto mb-2 h-9 w-9 text-muted-foreground/30" />
-          <p className="text-sm text-muted-foreground">У справі ще нічого не сталося</p>
+          <p className="text-sm text-muted-foreground">
+            {events.length === 0
+              ? "У справі ще нічого не сталося"
+              : onlyImportant
+                ? "Серед головного тут порожньо — зніміть фільтр"
+                : "У цьому зрізі подій немає"}
+          </p>
         </div>
       ) : (
         <div className="space-y-5">
@@ -318,7 +391,9 @@ export function QuoteFeed({
       <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border/40 pt-3 text-2xs text-muted-foreground">
         <span>Писати — у панелі праворуч: тут розмова показана як частина історії</span>
         <span className="ml-auto tabular-nums">
-          {events.length} подій{canLoadMore ? " показано" : " від створення"}
+          {shown.length === events.length
+            ? `${events.length} подій${canLoadMore ? " показано" : " від створення"}`
+            : `${shown.length} з ${events.length} подій`}
         </span>
       </div>
     </div>
