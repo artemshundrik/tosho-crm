@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ExternalLink, FileText, Image as ImageIcon, Package, Pencil } from "lucide-react";
+import { ExternalLink, FileText, Image as ImageIcon, Package, Paperclip, Pencil, Upload } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
@@ -62,8 +62,12 @@ const statusOf = (status: string | null) => {
   return { label, tone: designStatusTone(status) };
 };
 
-/** Дедлайн у мета-рядку — коротко: «2 вер», з часом лише коли він заданий. */
-const formatDeadline = (value: string | null) => {
+/**
+ * Коротка дата: «2 вер» або «2 вер, 17:00». Одна на дедлайн у шапці й на дату
+ * файлу в матеріалах — вони стоять за десяток пікселів одна від одної, і два
+ * різні написання дати на одному екрані читались би як різні речі.
+ */
+const formatWhen = (value: string | null) => {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
@@ -148,19 +152,28 @@ export function QuoteDesignTasksPanel({
   tasks,
   activeTaskId,
   renderBrief,
+  materials,
+  materialsUploading,
+  canAddMaterials,
   onSelectTask,
   onOpenTask,
   onPreviewVisual,
   onDownloadVisual,
+  onAddMaterials,
 }: {
   tasks: QuoteDesignTaskCard[];
   activeTaskId: string | null;
   /** Розмітка ТЗ — та сама, що в редакторі: заголовки, списки, жирний. */
   renderBrief: (text: string) => ReactNode;
+  /** Вкладення прорахунку з `audience=design` — вхідні матеріали для дизайнера. */
+  materials: QuoteAttachment[];
+  materialsUploading?: boolean;
+  canAddMaterials?: boolean;
   onSelectTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   onPreviewVisual: (file: QuoteAttachment) => void;
   onDownloadVisual: (file: QuoteAttachment) => void;
+  onAddMaterials: (files: FileList | null) => void;
 }) {
   const active = tasks.find((task) => task.id === activeTaskId) ?? tasks[0] ?? null;
   if (!active) return null;
@@ -309,7 +322,7 @@ export function QuoteDesignTasksPanel({
               <span>
                 дедлайн{" "}
                 <span className="font-mono font-semibold tabular-nums text-foreground">
-                  {formatDeadline(active.deadline) ?? "не заданий"}
+                  {formatWhen(active.deadline) ?? "не заданий"}
                 </span>
               </span>
             </div>
@@ -385,6 +398,101 @@ export function QuoteDesignTasksPanel({
             </div>
           )}
         </div>
+
+        {/*
+          ВИХІДНІ МАТЕРІАЛИ (REQ-155 p7) — те, з чого дизайнер починає: логотипи,
+          макети, фото минулого тиражу. Лежали вони за другою підвкладкою
+          «Обговорення», хоч за заміром на проді 477 із 484 вкладень (98,6 %)
+          позначені `audience=design`. Тобто вкладення прорахунку — це майже
+          завжди матеріали дизайну, і їхнє місце поруч із ТЗ, а не в розмові.
+
+          ФАЙЛ ПРИВʼЯЗАНИЙ ДО ПРОРАХУНКУ, А НЕ ДО ЗАДАЧІ, і поки що інакше не
+          буває: у `quote_attachments` є `quote_id` і `audience`, задачі немає.
+          Тому на прорахунку з кількома задачами той самий перелік стоїть у
+          кожній, і про це сказано словами — вигадувати належність, якої немає в
+          даних, гірше, ніж чесно назвати список спільним.
+        */}
+        {materials.length > 0 || canAddMaterials ? (
+          <div className="border-t border-border/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
+                Вихідні матеріали
+                {materials.length ? (
+                  <span className="ml-1.5 font-mono tabular-nums text-foreground">{materials.length}</span>
+                ) : null}
+                {tasks.length > 1 ? (
+                  <span className="ml-2 font-normal normal-case tracking-normal">
+                    спільні для прорахунку
+                  </span>
+                ) : null}
+              </span>
+              {canAddMaterials ? (
+                <label
+                  className={cn(
+                    "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-border/60 px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
+                    materialsUploading && "pointer-events-none opacity-60"
+                  )}
+                >
+                  <Upload className="h-3 w-3" />
+                  {materialsUploading ? "Завантаження..." : "Додати"}
+                  <input
+                    type="file"
+                    multiple
+                    className="sr-only"
+                    onChange={(event) => {
+                      onAddMaterials(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+              ) : null}
+            </div>
+
+            {materials.length > 0 ? (
+              <div className="mt-2">
+                {materials.map((file) => {
+                  const displayName = getAttachmentDisplayFileName(file.name, file.storagePath, file.mimeType);
+                  const extension = getFileExtension(displayName);
+                  return (
+                    <div
+                      key={file.id}
+                      className="flex items-center gap-3 border-b border-border/40 py-2.5 last:border-b-0"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">
+                        {extension ?? <Paperclip className="h-4 w-4" />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-foreground" title={displayName}>
+                          {displayName}
+                        </div>
+                        <div className="truncate text-2xs text-muted-foreground">
+                          {[file.size, formatWhen(file.created_at), file.uploadedByLabel]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      </div>
+                      {file.storageBucket && file.storagePath ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 shrink-0 px-2 text-2xs text-muted-foreground"
+                          onClick={() => onDownloadVisual(file)}
+                        >
+                          Завантажити
+                        </Button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-2.5 flex items-center gap-2.5 rounded-xl border border-dashed border-border/60 px-3.5 py-3 text-sm text-muted-foreground">
+                <Paperclip className="h-4 w-4 shrink-0" />
+                <span>Матеріалів для дизайнера ще немає — логотипи, макети й фото додають сюди</span>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );

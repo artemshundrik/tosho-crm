@@ -2725,6 +2725,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     });
   }, [designTasks, designVisualizations, memberAvatarById, memberById, quote?.design_brief, runSections]);
 
+  /**
+   * Вихідні матеріали дизайну — вкладення прорахунку з `audience=design`.
+   * Прив'язки до конкретної задачі в даних немає (у `quote_attachments` є
+   * `quote_id`, задачі немає), тож перелік один на прорахунок — панель так про
+   * нього й каже, коли задач кілька.
+   */
+  const designMaterials = useMemo(
+    () => attachments.filter((file) => file.audience === "design"),
+    [attachments]
+  );
+
   const resolvedItemSelection = useMemo(
     () =>
       resolveCatalogSelection({
@@ -6870,6 +6881,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   tasks={designTaskCards}
                   activeTaskId={activeDesignTaskId}
                   renderBrief={renderBriefRichText}
+                  materials={designMaterials}
+                  materialsUploading={attachmentsUploading}
+                  canAddMaterials={canEditQuoteContent}
                   onSelectTask={setActiveDesignTaskId}
                   onOpenTask={(taskId) => navigate(`/design/${taskId}`)}
                   onPreviewVisual={(file) => {
@@ -6887,6 +6901,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       );
                     });
                   }}
+                  onAddMaterials={(files) => void uploadAttachments(files, "design")}
                 />
               ) : (
                 /*
