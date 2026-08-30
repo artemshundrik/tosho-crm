@@ -3,7 +3,7 @@ import { CurrencyAmountInput } from "@/features/quotes/components/CurrencyAmount
 import { PercentAmountInput } from "@/features/quotes/components/PercentAmountInput";
 import { cn } from "@/lib/utils";
 import type { QuoteRunMarkupState } from "@/lib/quoteMarkupApproval";
-import { DEFAULT_MARKUP_RATE, MIN_MARKUP_RATE, type RunSalePricing } from "@/lib/quoteRuns";
+import { DEFAULT_MARKUP_RATE, type RunSalePricing } from "@/lib/quoteRuns";
 import type { QuoteRunPriceFieldAccess } from "@/lib/permissions";
 import type { QuoteRun } from "@/lib/toshoApi";
 
@@ -125,9 +125,14 @@ export function QuoteRunPriceFields({
                 </span>
               </div>
             )}
-            {markupFrozen || belowFloor ? (
-              <div>{markupFrozen ? frozenLabel : `нижче дна ${MIN_MARKUP_RATE} %`}</div>
-            ) : null}
+            {/*
+              «Нижче дна 20 %» тут більше не пишемо (REQ-175#p59): рядок висів
+              без значення в списку пар підпис → число й ламав його. А сам факт
+              і так сказаний тричі поруч — бурштиновою рамкою поля, бейджем
+              «Треба погодження» під ним і рискою дна на смузі. Заморозка
+              лишається: вона пояснює, чому поле не рухається.
+            */}
+            {markupFrozen ? <div>{frozenLabel}</div> : null}
           </div>
         ) : null}
       </div>

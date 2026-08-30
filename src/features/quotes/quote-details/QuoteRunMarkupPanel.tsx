@@ -485,15 +485,36 @@ export function QuoteRunMarkupPanel({
             />
           )}
           {canMove ? (
+            /*
+              ЧОМУ ПОВЗУНОК «ЗАЛИПАВ» — ДВІ ПРИЧИНИ, ОБИДВІ ГЕОМЕТРИЧНІ
+              (REQ-175#p58).
+
+              ПЕРША: власний повзунок браузера. Він невидимий (opacity-0), але
+              ЗАЙМАЄ МІСЦЕ: значення в range розкладається не по всій ширині, а
+              по «ширина мінус повзунок», і центр рухається від half-thumb до
+              width − half-thumb. Наш намальований кружечок їде по ПОВНІЙ ширині
+              (left: %, -translate-x-1/2). Тобто курсор і кружечок розходились
+              до восьми пікселів, і найдужче — біля країв. Ширина повзунка 1 px
+              зводить обидві геометрії до однієї.
+
+              ДРУГА: крок 1 % на шкалі 0–120 — це 1/120 ширини, тобто близько
+              7 px на смузі 870. Кружечок ішов сходинками. 0,1 % дає ~0,7 px —
+              око бачить рух, а число лишається охайним.
+
+              Плюс value більше не округлюється: при збереженому 19,81 кружечок
+              стояв на 20, а заливка на 19,81, і перший рух драга «стрибав».
+            */
             <input
               type="range"
               min={0}
               max={TRACK_MAX}
-              step={1}
-              value={Math.min(TRACK_MAX, Math.round(markupRate))}
+              step={0.1}
+              value={Math.min(TRACK_MAX, Math.max(0, Number(markupRate) || 0))}
               disabled={busy}
-              onChange={(event) => onChangeMarkupRate(Number(event.target.value))}
-              className="absolute inset-0 z-30 m-0 h-full w-full cursor-grab opacity-0 active:cursor-grabbing"
+              onChange={(event) =>
+                onChangeMarkupRate(Math.round(Number(event.target.value) * 100) / 100)
+              }
+              className="absolute inset-0 z-30 m-0 h-full w-full cursor-grab opacity-0 active:cursor-grabbing [&::-moz-range-thumb]:h-full [&::-moz-range-thumb]:w-px [&::-moz-range-thumb]:border-0 [&::-webkit-slider-thumb]:h-full [&::-webkit-slider-thumb]:w-px [&::-webkit-slider-thumb]:appearance-none"
               aria-label="Накрутка на собівартість, відсотки"
             />
           ) : null}
@@ -583,14 +604,24 @@ export function QuoteRunMarkupPanel({
             <span className="font-normal tabular-nums text-muted-foreground">{formatRate(markupRate)}</span>
           </span>
           <span className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
-            орієнтир на цій позиції
-            <span className="font-medium text-foreground">
-              {benchmarkLoading
-                ? "…"
-                : benchmark
-                  ? `${formatRate(benchmark.rate)} · ${formatMarkupBenchmarkBasis(benchmark.basis)}`
-                  : "замало даних"}
-            </span>
+            {/*
+              «Орієнтир на цій позиції — замало даних» більше не пишемо
+              (REQ-175#p59). Це був підпис без значення: він обіцяв число,
+              віддавав відмову, і стояв упритул до бейджа стану — той читався як
+              продовження фрази про орієнтир, хоч каже про геть інше. Коли
+              орієнтира немає, про нього мовчимо: смуга нижче й так підписана
+              «орієнтира немає», а бейдж лишається сам за себе.
+            */}
+            {benchmarkLoading || benchmark ? (
+              <>
+                орієнтир на цій позиції
+                <span className="font-medium text-foreground">
+                  {benchmark
+                    ? `${formatRate(benchmark.rate)} · ${formatMarkupBenchmarkBasis(benchmark.basis)}`
+                    : "…"}
+                </span>
+              </>
+            ) : null}
             {canEditMarkup ? null : (
               <span className="inline-flex items-center gap-1">
                 <Eye className="h-3 w-3" />
