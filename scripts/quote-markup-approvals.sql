@@ -226,12 +226,29 @@ for select
 to authenticated
 using (public.is_team_member(team_id));
 
+-- Запис прив'язується до СВОГО прорахунку, а не до будь-якого.
+--
+-- `is_team_member(team_id)` саме по собі перевіряє лише те, що людина в цій
+-- команді: team_id приходить від клієнта й ні з чим не звірявся, тож рядок міг
+-- вказувати на тираж чужої команди. Доступу це не давало (чужа команда такого
+-- рядка не бачить), але лишало в таблиці записи, які не стосуються нічого
+-- видимого. Звіряємо трійку team_id → quote_id → run_id одразу.
 drop policy if exists "quote_run_markup_approvals_insert" on tosho.quote_run_markup_approvals;
 create policy "quote_run_markup_approvals_insert"
 on tosho.quote_run_markup_approvals
 for insert
 to authenticated
-with check (public.is_team_member(team_id));
+with check (
+  public.is_team_member(team_id)
+  and exists (
+    select 1
+    from tosho.quote_item_runs r
+    join tosho.quotes q on q.id = r.quote_id
+    where r.id = quote_run_markup_approvals.run_id
+      and r.quote_id = quote_run_markup_approvals.quote_id
+      and q.team_id = quote_run_markup_approvals.team_id
+  )
+);
 
 drop policy if exists "quote_run_markup_approvals_update" on tosho.quote_run_markup_approvals;
 create policy "quote_run_markup_approvals_update"
