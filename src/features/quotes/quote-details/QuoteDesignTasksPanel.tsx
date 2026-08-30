@@ -334,12 +334,12 @@ export function QuoteDesignTasksPanel({
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
           Дизайн-задачі{" "}
-          <span className="font-mono tabular-nums text-foreground">{tasks.length}</span>
+          <span className="tabular-nums text-foreground">{tasks.length}</span>
           <span className="font-normal normal-case tracking-normal"> · по одній на товар із нанесенням</span>
         </span>
         {tasks.length > 1 ? (
           <span className="text-xs text-muted-foreground">
-            показано <span className="font-mono font-semibold tabular-nums text-foreground">{activeIndex + 1}</span> з{" "}
+            показано <span className="font-semibold tabular-nums text-foreground">{activeIndex + 1}</span> з{" "}
             {tasks.length}
           </span>
         ) : null}
@@ -378,7 +378,7 @@ export function QuoteDesignTasksPanel({
                     {task.title}
                   </span>
                   {task.number ? (
-                    <span className="block font-mono text-3xs text-muted-foreground">{task.number}</span>
+                    <span className="block tabular-nums text-3xs text-muted-foreground">{task.number}</span>
                   ) : null}
                 </span>
                 {/* Стан задачі видно НЕ ВІДКРИВАЮЧИ її: без крапки пігулки
@@ -425,7 +425,7 @@ export function QuoteDesignTasksPanel({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
               {active.number ? (
-                <span className="font-mono text-2xs text-muted-foreground">{active.number}</span>
+                <span className="tabular-nums text-2xs text-muted-foreground">{active.number}</span>
               ) : null}
               {activeStatus ? (
                 <span className="inline-flex items-center gap-1.5">
@@ -467,7 +467,7 @@ export function QuoteDesignTasksPanel({
               <MetaDot />
               <span>
                 дедлайн{" "}
-                <span className="font-mono font-semibold tabular-nums text-foreground">
+                <span className="font-semibold tabular-nums text-foreground">
                   {formatWhen(active.deadline) ?? "не заданий"}
                 </span>
               </span>
@@ -518,7 +518,7 @@ export function QuoteDesignTasksPanel({
             <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
               Візуалізації
               {active.visuals.length ? (
-                <span className="ml-1.5 font-mono tabular-nums text-foreground">{active.visuals.length}</span>
+                <span className="ml-1.5 tabular-nums text-foreground">{active.visuals.length}</span>
               ) : null}
             </span>
           </div>
@@ -564,7 +564,7 @@ export function QuoteDesignTasksPanel({
               <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
                 Вихідні матеріали
                 {materials.length ? (
-                  <span className="ml-1.5 font-mono tabular-nums text-foreground">{materials.length}</span>
+                  <span className="ml-1.5 tabular-nums text-foreground">{materials.length}</span>
                 ) : null}
                 {tasks.length > 1 ? (
                   <span className="ml-2 font-normal normal-case tracking-normal">

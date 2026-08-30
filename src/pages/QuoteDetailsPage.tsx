@@ -4358,7 +4358,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
               <HoverCopyText
                 value={quote.number ?? quote.id}
-                textClassName="font-mono text-[15px] font-medium tracking-wide text-foreground sm:text-[17px]"
+                textClassName="tabular-nums text-[15px] font-medium tracking-wide text-foreground sm:text-[17px]"
                 successMessage="Номер прорахунку скопійовано"
                 copyLabel="Скопіювати номер прорахунку"
               >
@@ -5117,12 +5117,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             спершу зробити його активним. Тут лишається сам факт —
                                             щоб, дивлячись на поля цін, було ясно, чиї вони. */}
                                         {activeItemRun.is_approved ? (
-                                          <>
-                                            <span className="text-sm text-muted-foreground">·</span>
-                                            <span className="text-sm font-semibold text-success-foreground">
-                                              погоджений клієнтом
-                                            </span>
-                                          </>
+                                          /* Той самий бейдж, що в рядку тиражу вище (REQ-175#p41).
+                                             Тут стояв просто зелений текст — один факт двома
+                                             виглядами, і зелений сам по собі, без рамки й тла,
+                                             читався як помилка кольору, а не як позначка. */
+                                          <span className="inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-lg border border-success-soft-border bg-success-soft px-2 text-2xs font-semibold text-success-foreground">
+                                            <Check className="h-3 w-3 shrink-0" />
+                                            Погоджено клієнтом
+                                          </span>
                                         ) : null}
                                       </div>
                                       <div className="flex items-center gap-1">
@@ -5382,7 +5384,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 </div>
                               </div>
                               <div className="shrink-0 text-right">
-                                <div className="font-mono text-lg font-semibold tabular-nums text-foreground">
+                                <div className="text-lg font-semibold tabular-nums text-foreground">
                                   {formatCurrency(total, quote.currency)}
                                 </div>
                                 <div className="mt-0.5 text-2xs text-muted-foreground">
@@ -5395,7 +5397,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">Кількість</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background"
                                   value={run.quantity}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -5407,7 +5409,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Модель · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background"
                                   value={run.unit_price_model}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -5418,7 +5420,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Нанесення · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background"
                                   value={run.unit_price_print}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -5429,7 +5431,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Логістика · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
                                   value={run.logistics_cost}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -5484,7 +5486,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background"
                                     value={run.quantity}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5497,7 +5499,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background"
                                     value={run.unit_price_model}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5509,7 +5511,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background"
                                     value={run.unit_price_print}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5520,7 +5522,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                                 <div className="space-y-1">
                                   <NumberInput
-                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
+                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
                                     value={run.logistics_cost}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5532,7 +5534,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               </div>
 
                               <div className="w-[120px] shrink-0 text-right 2xl:w-[132px]">
-                                <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                                <div className="text-sm font-semibold tabular-nums text-foreground">
                                   {formatCurrency(total, quote.currency)}
                                 </div>
                                 <div className="mt-0.5 hidden truncate text-2xs text-muted-foreground 2xl:block">
@@ -5576,7 +5578,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       {selectedUnitCost !== null && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-muted-foreground">Собівартість / од.:</span>
-                          <span className="font-mono text-xs font-semibold text-foreground">
+                          <span className="tabular-nums text-xs font-semibold text-foreground">
                             {formatCurrency(selectedUnitCost, quote.currency)}
                           </span>
                         </div>
@@ -7138,14 +7140,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span>Базова ціна:</span>
-                          <span className="font-mono">
+                          <span className="tabular-nums">
                             {getModelPrice(catalogTypes, itemTypeId, itemKindId, itemModelId, Number(itemQty))}
                           </span>
                         </div>
                         {itemMethods.length > 0 && (
                           <div className="flex justify-between">
                             <span>Методи:</span>
-                            <span className="font-mono">
+                            <span className="tabular-nums">
                               +{itemMethods.reduce(
                                 (sum, m) =>
                                   sum + getMethodPrice(catalogTypes, itemTypeId, itemKindId, m.methodId) * m.count,
@@ -7156,11 +7158,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         )}
                         <div className="flex justify-between border-t border-primary/20 pt-2 font-semibold">
                           <span>Ціна за одиницю:</span>
-                          <span className="font-mono text-primary">{computedItemPrice}</span>
+                          <span className="tabular-nums text-primary">{computedItemPrice}</span>
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>Загальна сума:</span>
-                          <span className="font-mono">
+                          <span className="tabular-nums">
                             {(computedItemPrice * (Number(itemQty) || 1)).toLocaleString("uk-UA")}
                           </span>
                         </div>

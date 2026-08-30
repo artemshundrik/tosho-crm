@@ -39,8 +39,8 @@ export function QuoteDeadlineOrderWarning({
         <AlertTriangle className="h-3.5 w-3.5" />
       </span>
       <span className="min-w-[16rem] flex-1 leading-relaxed">
-        Дедлайн макета <b className="font-mono font-semibold">{designLabel}</b> пізніший за дедлайн відповіді
-        замовнику <b className="font-mono font-semibold">{answerLabel}</b> — відповідь доведеться давати без
+        Дедлайн макета <b className="tabular-nums font-semibold">{designLabel}</b> пізніший за дедлайн відповіді
+        замовнику <b className="tabular-nums font-semibold">{answerLabel}</b> — відповідь доведеться давати без
         погодженого дизайну.
       </span>
       {/* Кнопка ВЕДЕ до дати, а не переставляє її сама: які саме дві дати

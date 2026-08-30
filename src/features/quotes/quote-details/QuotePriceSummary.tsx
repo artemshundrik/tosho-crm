@@ -74,7 +74,7 @@ export function QuotePriceSummary({
       <div className="p-2.5">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <span
-            className="font-mono text-[26px] font-semibold leading-none tracking-tight text-primary"
+            className="tabular-nums text-[26px] font-semibold leading-none tracking-tight text-primary"
             title={totalTitle}
           >
             <AnimatedFigure
@@ -146,7 +146,7 @@ export function QuotePriceSummary({
                     aria-hidden
                   />
                   <dt className="text-muted-foreground">{part.label}</dt>
-                  <dd className="ml-auto font-mono font-medium tabular-nums" title={formatFull(part.value)}>
+                  <dd className="ml-auto font-medium tabular-nums" title={formatFull(part.value)}>
                     {formatCompact(part.value)}
                   </dd>
                 </div>

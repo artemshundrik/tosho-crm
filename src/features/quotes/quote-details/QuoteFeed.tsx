@@ -86,7 +86,7 @@ function FeedRow({
           {/* У репліці підпис «Написав у справі» зайвий: текст нижче і так
               видно. У решті подій підпис — це і є подія. */}
           {isTalk ? null : <span className="text-sm text-muted-foreground">{event.title}</span>}
-          <span className="ml-auto shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
+          <span className="ml-auto shrink-0 text-2xs tabular-nums text-muted-foreground">
             {formatActivityClock(event.createdAt)}
           </span>
         </div>
@@ -102,7 +102,7 @@ function FeedRow({
               <span className="text-muted-foreground line-through decoration-border">{event.from}</span>
             ) : null}
             {event.from ? <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden /> : null}
-            <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono font-semibold text-foreground">
+            <span className="rounded-md bg-muted px-1.5 py-0.5 tabular-nums font-semibold text-foreground">
               {event.to}
             </span>
           </div>
@@ -157,7 +157,7 @@ function FilesRegister({
         >
           <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
           <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
-            Файли справи <span className="font-mono tabular-nums text-foreground">{files.length}</span>
+            Файли справи <span className="tabular-nums text-foreground">{files.length}</span>
           </span>
           <span className="truncate text-xs text-muted-foreground">
             {designCount} для дизайнера · {files.length - designCount} по справі
@@ -377,7 +377,7 @@ export function QuoteFeed({
             >
               {entry.label}
               {count > 0 ? (
-                <span className={cn("font-mono tabular-nums", on ? "opacity-70" : "opacity-60")}>{count}</span>
+                <span className={cn("tabular-nums", on ? "opacity-70" : "opacity-60")}>{count}</span>
               ) : null}
             </button>
           );
