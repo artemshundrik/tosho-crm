@@ -1724,6 +1724,30 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }, []),
   });
 
+  /*
+    Хто саме тримає двері зачиненими (REQ-175#p61). Лічильник без імені змушує
+    переглядати всі тиражі всіх товарів руками — а їх тут шість.
+  */
+  const markupGateRuns = useMemo(() => {
+    const blocking = new Set(markup.gate.blockingRunIds);
+    if (blocking.size === 0) return [];
+    const titleByItemId = new Map(items.map((item) => [item.id, item] as const));
+    return runs
+      .filter((run) => run.id && blocking.has(run.id))
+      .map((run) => {
+        const item = run.quote_item_id ? titleByItemId.get(run.quote_item_id) : undefined;
+        const unit = normalizeUnitLabel(item?.unit);
+        const qty = Number(run.quantity) || 0;
+        const rate = Math.round((Number(run.markup_rate) || 0) * 100) / 100;
+        return {
+          id: run.id as string,
+          label: [item?.title, `${qty.toLocaleString("uk-UA")} ${unit}`].filter(Boolean).join(" · "),
+          rateLabel: `${rate.toLocaleString("uk-UA")} %`,
+        };
+      });
+  }, [items, markup.gate.blockingRunIds, runs]);
+
+
   useEffect(() => {
     withdrawSettledMarkupRef.current = markup.withdrawSettledRequests;
   }, [markup.withdrawSettledRequests]);
@@ -4401,7 +4425,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
 
             <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5 lg:order-none">
-              <QuoteMarkupGateChip blockingCount={markup.gate.blockingRunIds.length} />
+              <QuoteMarkupGateChip blocking={markupGateRuns} />
               {currentStatus === "approved" ? (
                 <Button
                   variant="outline"

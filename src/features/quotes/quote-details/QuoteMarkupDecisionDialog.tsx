@@ -90,7 +90,16 @@ export function QuoteMarkupDecisionDialog({
  * читалась би як поломка — і саме такі місця родять фіктивні числа «щоб пішло
  * далі» (TS-0826-0039).
  */
-export function QuoteMarkupGateChip({ blockingCount }: { blockingCount: number }) {
+export type QuoteMarkupGateRun = {
+  id: string;
+  /** «Куртка софтшел чоловіча · 50 шт.» — щоб не шукати очима по всій сторінці. */
+  label: string;
+  /** «15,65 %» — уже відформатований відсоток. */
+  rateLabel: string;
+};
+
+export function QuoteMarkupGateChip({ blocking }: { blocking: QuoteMarkupGateRun[] }) {
+  const blockingCount = blocking.length;
   if (blockingCount <= 0) return null;
   return (
     /*
@@ -114,6 +123,26 @@ export function QuoteMarkupGateChip({ blockingCount }: { blockingCount: number }
             : `${blockingCount} тиражі стоять нижче дна `}
           {MIN_MARKUP_RATE} % — потрібне підтвердження СЕО або головного бухгалтера. Рахувати,
           редагувати й зберігати прорахунок це не заважає.
+          {/*
+            НАЗИВАЄМО ТИРАЖ ПОІМЕННО (REQ-175#p61).
+
+            Лічильник без імені коштував Артему пошуків по всій сторінці: у
+            прорахунку три товари по два тиражі, і «1 нижче дна» не каже, у
+            котрому з шести. Він переглянув перший товар, побачив 20 і 22 % і
+            вирішив, що лічильник бреше. Двері рахуються по ВСІХ тиражах
+            навмисно (щоб «позначу інший» не був обхідним шляхом) — тим
+            потрібніше сказати, по якому саме.
+          */}
+          <span className="mt-2 flex flex-col gap-1 border-t border-border/40 pt-2">
+            {blocking.map((run) => (
+              <span key={run.id} className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate">{run.label}</span>
+                <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                  {run.rateLabel}
+                </span>
+              </span>
+            ))}
+          </span>
         </span>
       }
     >
