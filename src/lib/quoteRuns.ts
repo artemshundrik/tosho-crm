@@ -30,6 +30,11 @@ export type RunSalePricing = {
   markupTotal: number;
   saleTotal: number;
   saleUnitPrice: number | null;
+  /**
+   * Заробіток менеджера. У старій формі це вхід, у новій — НАСЛІДОК ціни.
+   * Поле є в обох, щоб читачі не питали, яку саме форму порахували.
+   */
+  managerIncome: number;
 };
 
 /**
@@ -68,7 +73,90 @@ export function computeRunSalePricing(params: {
     markupTotal,
     saleTotal,
     saleUnitPrice,
+    managerIncome: requiredGrossProfit * (managerRate / 100),
   };
+}
+
+/**
+ * Дно накрутки: нижче нього ціну може погодити лише СЕО або головний бухгалтер.
+ * Менеджер сам туди не опускається (рішення СЕО 30.08.2026).
+ */
+export const MIN_MARKUP_RATE = 20;
+
+/**
+ * Що система підставляє сама, поки менеджер не змінив (рішення СЕО 30.08.2026).
+ *
+ * Це РЕКОМЕНДОВАНИЙ МІНІМУМ, а не стеля: заміряна медіанна накрутка по проду —
+ * 46,9 %, і за розміром замовлення вона розкидана від 87,1 % на дрібних до
+ * 23,0 % на замовленнях понад 50 тис. Тому підставлене число тут іде в парі з
+ * відміткою-орієнтиром на смузі, інакше воно читалось би як «стільки й треба».
+ */
+export const DEFAULT_MARKUP_RATE = 40;
+
+/**
+ * Друга форма тієї самої формули: вхід — ЦІЛЬОВА НАКРУТКА НА СОБІВАРТІСТЬ,
+ * а не бажаний заробіток менеджера.
+ *
+ * Рішення СЕО 30.08.2026: відсоток означає накрутку на собівартість, тобто
+ * собівартість 10 000 ₴ при 40 % дає ціну 14 000 ₴. Постійні витрати й
+ * податковий резерв НЕ додаються зверху — вони лежать усередині цих 40 %.
+ * Інакше число в полі й число на екрані розходились би, а вся вигода від
+ * підстановки в тому й полягає, що менеджер бачить ту саму ціну, яку назве
+ * клієнту.
+ *
+ * Звідси зворотний хід ставок: валовий прибуток дістається діленням націнки
+ * назад, а заробіток менеджера стає НАСЛІДКОМ ціни. Це не косметика — доти
+ * зміна ставки менеджера переписувала вже показану клієнту ціну.
+ */
+export function computeRunSalePricingFromMarkup(params: {
+  quantity: number;
+  costTotal: number;
+  markupRate: number;
+  managerRate: number;
+  fixedCostRate: number;
+  vatRate: number;
+}): RunSalePricing {
+  const quantity = Math.max(0, Number(params.quantity) || 0);
+  const costTotal = Number(params.costTotal) || 0;
+  const costPerUnit = quantity > 0 ? costTotal / quantity : null;
+  const markupRate = Math.max(0, Number(params.markupRate) || 0);
+  const managerRate = Number(params.managerRate) || 0;
+  // Ставки клампимо знизу: від'ємна постійна витрата або ПДВ — це не «знижка»,
+  // а зіпсований довідник, і саме вони обнулили б дільник нижче.
+  const fixedCostRate = Math.max(0, Number(params.fixedCostRate) || 0);
+  const vatRate = Math.max(0, Number(params.vatRate) || 0);
+
+  const markupTotal = costTotal * (markupRate / 100);
+  const requiredGrossProfit = markupTotal / ((1 + fixedCostRate / 100) * (1 + vatRate / 100));
+  const fixedCosts = requiredGrossProfit * (fixedCostRate / 100);
+  const vatAmount = (requiredGrossProfit + fixedCosts) * (vatRate / 100);
+  const saleTotal = costTotal + markupTotal;
+  const saleUnitPrice = quantity > 0 ? saleTotal / quantity : null;
+
+  return {
+    costTotal,
+    costPerUnit,
+    requiredGrossProfit,
+    fixedCosts,
+    vatAmount,
+    markupTotal,
+    saleTotal,
+    saleUnitPrice,
+    managerIncome: requiredGrossProfit * (managerRate / 100),
+  };
+}
+
+/**
+ * Чи треба на цю ціну погодження СЕО або головного бухгалтера.
+ *
+ * Тираж без собівартості не питаємо — це заготовка, яку щойно додали. Те саме
+ * правило, що й у validateRunEconomics: поріг вмикається, коли з'являються
+ * гроші, а не коли рядок створили.
+ */
+export function needsMarkupApproval(params: { costTotal: number; markupRate: number }): boolean {
+  const costTotal = Number(params.costTotal) || 0;
+  if (costTotal <= 0) return false;
+  return (Number(params.markupRate) || 0) < MIN_MARKUP_RATE;
 }
 
 /**

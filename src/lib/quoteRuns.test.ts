@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { QuoteRun } from "@/lib/toshoApi";
 import {
   computeRunSalePricing,
+  computeRunSalePricingFromMarkup,
   getRunSalePricingFromRun,
   mergeQuoteRunsWithExisting,
+  needsMarkupApproval,
   validateRunEconomics,
+  DEFAULT_MARKUP_RATE,
   MIN_MANAGER_INCOME,
+  MIN_MARKUP_RATE,
 } from "./quoteRuns";
 
 /**
@@ -351,5 +355,102 @@ describe("validateRunEconomics", () => {
       managerRate: 30, fixedCostRate: 30, vatRate: 60,
     });
     expect(issue).toBeNull();
+  });
+});
+
+
+/**
+ * Друга форма формули — вхід НАКРУТКОЮ НА СОБІВАРТІСТЬ (рішення СЕО 30.08.2026).
+ * Числа пораховані вручну з домовленості, а не зняті з коду: собівартість
+ * 10 000 ₴ при 40 % дає ціну рівно 14 000 ₴, і постійні витрати з ПДВ сидять
+ * УСЕРЕДИНІ цих 40 %, а не додаються зверху.
+ */
+describe("computeRunSalePricingFromMarkup", () => {
+  const rates = { managerRate: 10, fixedCostRate: 30, vatRate: 20 };
+
+  it("40 % накрутки на 10 000 ₴ дають ціну 14 000 ₴", () => {
+    const pricing = computeRunSalePricingFromMarkup({
+      quantity: 100, costTotal: 10000, markupRate: 40, ...rates,
+    });
+
+    expect(pricing.saleTotal).toBe(14000);
+    expect(pricing.markupTotal).toBe(4000);
+    expect(pricing.saleUnitPrice).toBe(140);
+  });
+
+  it("постійні витрати й ПДВ лежать УСЕРЕДИНІ накрутки, а не зверху", () => {
+    const pricing = computeRunSalePricingFromMarkup({
+      quantity: 100, costTotal: 10000, markupRate: 40, ...rates,
+    });
+    const parts = pricing.requiredGrossProfit + pricing.fixedCosts + pricing.vatAmount;
+
+    expect(parts).toBeCloseTo(pricing.markupTotal, 6);
+    // 4000 / (1,3 × 1,2) = 2564,10 — валовий прибуток після ставок.
+    expect(pricing.requiredGrossProfit).toBeCloseTo(2564.1, 1);
+  });
+
+  it("дає ту саму ціну, що й стара форма з порахованого заробітку", () => {
+    const fromMarkup = computeRunSalePricingFromMarkup({
+      quantity: 200, costTotal: 12400, markupRate: 40, ...rates,
+    });
+    const fromIncome = computeRunSalePricing({
+      quantity: 200, costTotal: 12400, desiredManagerIncome: fromMarkup.managerIncome, ...rates,
+    });
+
+    expect(fromIncome.saleTotal).toBeCloseTo(fromMarkup.saleTotal, 6);
+  });
+
+  it("ЗМІНА СТАВКИ МЕНЕДЖЕРА НЕ ЧІПАЄ ЦІНУ — заробіток тепер наслідок, а не вхід", () => {
+    // Через це й переходимо на накрутку: доти підняття ставки переписувало
+    // ціну, вже показану клієнту.
+    const base = computeRunSalePricingFromMarkup({
+      quantity: 200, costTotal: 12400, markupRate: 40, ...rates,
+    });
+    const richer = computeRunSalePricingFromMarkup({
+      quantity: 200, costTotal: 12400, markupRate: 40, ...rates, managerRate: 20,
+    });
+
+    expect(richer.saleTotal).toBe(base.saleTotal);
+    expect(richer.managerIncome).toBeCloseTo(base.managerIncome * 2, 6);
+  });
+
+  it("тираж без кількості не вигадує ціну за штуку", () => {
+    const pricing = computeRunSalePricingFromMarkup({
+      quantity: 0, costTotal: 10000, markupRate: 40, ...rates,
+    });
+
+    expect(pricing.saleUnitPrice).toBeNull();
+    expect(pricing.saleTotal).toBe(14000);
+  });
+
+  it("зіпсовані ставки не роблять ціну нескінченною", () => {
+    // Від'ємний ПДВ у довіднику обнулив би дільник, і ціна стала б Infinity.
+    const pricing = computeRunSalePricingFromMarkup({
+      quantity: 100, costTotal: 10000, markupRate: 40,
+      managerRate: 10, fixedCostRate: -100, vatRate: -100,
+    });
+
+    expect(Number.isFinite(pricing.saleTotal)).toBe(true);
+    expect(pricing.saleTotal).toBe(14000);
+  });
+});
+
+describe("needsMarkupApproval", () => {
+  it("нижче дна — на погодження", () => {
+    expect(needsMarkupApproval({ costTotal: 12400, markupRate: MIN_MARKUP_RATE - 0.1 })).toBe(true);
+  });
+
+  it("рівно дно — без погодження", () => {
+    expect(needsMarkupApproval({ costTotal: 12400, markupRate: MIN_MARKUP_RATE })).toBe(false);
+  });
+
+  it("підставлене за замовчуванням значення проходить саме", () => {
+    expect(needsMarkupApproval({ costTotal: 12400, markupRate: DEFAULT_MARKUP_RATE })).toBe(false);
+  });
+
+  it("тираж без собівартості не питаємо — це заготовка", () => {
+    // Те саме правило, що у validateRunEconomics: поріг вмикається, коли
+    // з'являються гроші, а не коли створили рядок.
+    expect(needsMarkupApproval({ costTotal: 0, markupRate: 0 })).toBe(false);
   });
 });

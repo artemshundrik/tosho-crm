@@ -55,12 +55,30 @@ describe("resolveQuoteRunPriceFieldAccess", () => {
     expect(access.logistics_cost).toBe(true);
   });
 
+  it("накрутку веде менеджер, а проєктний менеджер — НІ", () => {
+    // Єдине поле, де pm відрізняється від сусіднього desired_manager_income.
+    // Замір 30.08.2026: із 28 змін заробітку 12 зробив pm, у 9 випадках
+    // менеджер потім переписував число (TS-0826-0039: pm поставив 1000 ₴,
+    // менеджер за дві хвилини виправив на 500 ₴).
+    expect(accessFor("manager").markup_rate).toBe(true);
+    expect(accessFor("sales_manager").markup_rate).toBe(true);
+    expect(accessFor("pm").markup_rate).toBe(false);
+    expect(accessFor("pm").desired_manager_income).toBe(true);
+  });
+
+  it("бухгалтерія накрутку не рухає — вона лише погоджує", () => {
+    for (const role of ["accountant", "chief_accountant", "junior_accountant"]) {
+      expect(accessFor(role).markup_rate).toBe(false);
+    }
+  });
+
   it("owner і seo можуть усе — це задум, а не виняток", () => {
     for (const access of [accessFor(null, "owner"), accessFor("seo")]) {
       expect(access.unit_price_model).toBe(true);
       expect(access.unit_price_print).toBe(true);
       expect(access.logistics_cost).toBe(true);
       expect(access.desired_manager_income).toBe(true);
+      expect(access.markup_rate).toBe(true);
     }
   });
 

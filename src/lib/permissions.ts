@@ -197,6 +197,7 @@ export const QUOTE_RUN_PRICE_FIELDS = [
   "unit_price_print",
   "logistics_cost",
   "desired_manager_income",
+  "markup_rate",
 ] as const;
 
 export type QuoteRunPriceField = (typeof QUOTE_RUN_PRICE_FIELDS)[number];
@@ -222,6 +223,15 @@ export function canEditQuoteRunPriceField(
     case "unit_price_model":
     case "desired_manager_income":
       return isPm || isQuoteManagerJobRole(role);
+    // Накрутка — БЕЗ pm, і це головна відмінність від сусідньої гілки.
+    //
+    // Заміряно 30.08.2026: із 28 змін «бажаного заробітку» 12 зробив проєктний
+    // менеджер, і в 9 випадках менеджер потім переписував його число. У
+    // TS-0826-0039 pm поставив 1000 ₴ о 08:13, менеджер виправив на 500 ₴ о
+    // 08:15 — гроші вписували, щоб зняти блокування, а не тому, що така ціна.
+    // Проєктний менеджер веде собівартість; ціну для клієнта веде менеджер.
+    case "markup_rate":
+      return isQuoteManagerJobRole(role);
     default:
       return false;
   }
