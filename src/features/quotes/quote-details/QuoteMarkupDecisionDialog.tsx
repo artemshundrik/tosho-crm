@@ -11,6 +11,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MIN_MARKUP_RATE } from "@/lib/quoteRuns";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
  * Одне вікно на дві дії: менеджер пояснює, чому просить нижче дна, погоджувач —
@@ -89,30 +90,37 @@ export function QuoteMarkupDecisionDialog({
  * читалась би як поломка — і саме такі місця родять фіктивні числа «щоб пішло
  * далі» (TS-0826-0039).
  */
-export function QuoteMarkupGateBanner({ blockingCount }: { blockingCount: number }) {
+export function QuoteMarkupGateChip({ blockingCount }: { blockingCount: number }) {
   if (blockingCount <= 0) return null;
   return (
     /*
-      Рядком, а не плакатом (REQ-175#p52).
+      ЗАМОК СТОЇТЬ БІЛЯ СТАТУСУ, А НЕ СМУГОЮ НАД СТОРІНКОЮ (REQ-175#p56).
 
-      Було: коробка з полем 14 px, значок у власній рамці 28×28 і два абзаци —
-      заголовок 14 px та пояснення під ним. На повну ширину колонки це давало
-      жовтий прямокутник заввишки 76 px над самим прорахунком, хоч сказати треба
-      одне речення, і воно нічого не блокує в роботі.
-
-      Тепер це та сама записка, що під ціною тиражу: жирний зачин, далі текст,
-      значок 14 px без рамки. Один вигляд для всіх попереджень справи.
+      Попередження було жовтою смугою на всю ширину — і на широкому екрані це
+      майже метр кольору заради одного речення, яке до того ж нічого не блокує в
+      роботі. Тепер воно живе на тому, чого стосується: поруч зі статусом, у який
+      людина впреться, коли натисне. Текст лишився повністю — під наведенням.
     */
-    <div className="flex items-start gap-2 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-2xs leading-relaxed text-warning-copy">
-      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      <div>
-        <span className="font-semibold">КП клієнту й перехід у «Затверджено» замкнені.</span>{" "}
-        {blockingCount === 1
-          ? "Один тираж стоїть нижче дна "
-          : `${blockingCount} тиражі стоять нижче дна `}
-        {MIN_MARKUP_RATE} % — потрібне підтвердження СЕО або головного бухгалтера. Рахувати,
-        редагувати й зберігати прорахунок це не заважає.
-      </div>
-    </div>
+    <HoverTip
+      side="bottom"
+      contentClassName="max-w-[320px] px-3 py-2 text-2xs leading-relaxed"
+      label={
+        <span>
+          <span className="font-semibold text-foreground">
+            КП клієнту й перехід у «Затверджено» замкнені.
+          </span>{" "}
+          {blockingCount === 1
+            ? "Один тираж стоїть нижче дна "
+            : `${blockingCount} тиражі стоять нижче дна `}
+          {MIN_MARKUP_RATE} % — потрібне підтвердження СЕО або головного бухгалтера. Рахувати,
+          редагувати й зберігати прорахунок це не заважає.
+        </span>
+      }
+    >
+      <span className="inline-flex h-8 shrink-0 cursor-default items-center gap-1.5 rounded-lg border border-border/60 bg-muted px-2.5 text-2xs font-medium text-foreground">
+        <Lock className="h-3.5 w-3.5 shrink-0 text-warning-solid" />
+        <span className="tabular-nums">{blockingCount}</span> нижче дна
+      </span>
+    </HoverTip>
   );
 }

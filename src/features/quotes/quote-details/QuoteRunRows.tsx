@@ -1,5 +1,6 @@
-import { Check, Plus } from "lucide-react";
+import { AlertTriangle, Check, Plus } from "lucide-react";
 
+import { HoverTip } from "@/components/ui/hover-tip";
 import { currencyLabel } from "@/features/quotes/currencyLabel";
 import { cn } from "@/lib/utils";
 import type { RunSalePricing } from "@/lib/quoteRuns";
@@ -80,6 +81,8 @@ export type QuoteRunRowsProps = {
   onSelect: (run: QuoteRun) => void;
   onAddRun: () => void;
   onToggleApproved: (run: QuoteRun) => void;
+  /** Тиражів кілька, і жоден ще не позначений як погоджений клієнтом. */
+  needsApprovedChoice?: boolean;
 };
 
 export function QuoteRunRows({
@@ -93,6 +96,7 @@ export function QuoteRunRows({
   onSelect,
   onAddRun,
   onToggleApproved,
+  needsApprovedChoice = false,
 }: QuoteRunRowsProps) {
   const money = currencyLabel(currency);
   // Шапка без жодного числа під собою обіцяла б колонки, яких немає: поки
@@ -102,10 +106,34 @@ export function QuoteRunRows({
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-foreground">
-          Тиражі{" "}
-          {runs.length > 0 ? (
-            <span className="font-normal tabular-nums text-muted-foreground">{runs.length}</span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-foreground">
+            Тиражі{" "}
+            {runs.length > 0 ? (
+              <span className="font-normal tabular-nums text-muted-foreground">{runs.length}</span>
+            ) : null}
+          </span>
+          {/*
+            Підказка стоїть у шапці ПЕРЕЛІКУ, а не смугою над полями ціни
+            (REQ-175#p56). Вона про вибір у цьому списку — там їй і місце, і там
+            її видно, коли на список дивишся. Повний текст під наведенням.
+          */}
+          {needsApprovedChoice ? (
+            <HoverTip
+              side="bottom"
+              contentClassName="max-w-[300px] px-3 py-2 text-2xs leading-relaxed"
+              label={
+                <span>
+                  <span className="font-semibold text-foreground">Тиражів кілька.</span> Позначте той,
+                  який погодив клієнт: саме з нього підуть кількість і ціна в замовлення.
+                </span>
+              }
+            >
+              <span className="inline-flex h-6 cursor-default items-center gap-1.5 rounded-md border border-border/60 bg-muted px-2 text-2xs text-muted-foreground">
+                <AlertTriangle className="h-3 w-3 shrink-0 text-warning-solid" />
+                позначте погоджений клієнтом
+              </span>
+            </HoverTip>
           ) : null}
         </div>
         {canAddRun ? (

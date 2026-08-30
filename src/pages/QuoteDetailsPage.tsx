@@ -135,7 +135,7 @@ import {
 } from "@/features/quotes/quote-details/designOutputFiles";
 import {
   QuoteMarkupDecisionDialog,
-  QuoteMarkupGateBanner,
+  QuoteMarkupGateChip,
 } from "@/features/quotes/quote-details/QuoteMarkupDecisionDialog";
 import { pluralUk } from "@/lib/lastSeen";
 import {
@@ -4401,6 +4401,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
 
             <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5 lg:order-none">
+              <QuoteMarkupGateChip blockingCount={markup.gate.blockingRunIds.length} />
               {currentStatus === "approved" ? (
                 <Button
                   variant="outline"
@@ -4629,8 +4630,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
                   </div>
                 ) : null}
-
-                <QuoteMarkupGateBanner blockingCount={markup.gate.blockingRunIds.length} />
 
               </div>
             ) : null}
@@ -5106,6 +5105,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   onToggleApproved={(run) =>
                                     toggleApprovedRun(run.id, run.quote_item_id ?? item.id)
                                   }
+                                  needsApprovedChoice={needsApprovedRunChoice(itemRuns)}
                                 />
 
                                 {itemRuns.length === 0 ? (
@@ -5173,17 +5173,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                                     {/* Поки вибору немає, замовлення з прорахунку не зробити —
                                         краще сказати це тут, ніж за три кроки у вікні створення. */}
-                                    {needsApprovedRunChoice(itemRuns) ? (
-                                      <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-2xs leading-relaxed text-warning-copy">
-                                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                                        <div>
-                                          <span className="font-semibold">Тиражів кілька.</span> Позначте той,
-                                          який погодив клієнт: саме з нього підуть кількість і ціна в
-                                          замовлення.
-                                        </div>
-                                      </div>
-                                    ) : null}
-
                                     <QuoteRunPriceFields
                                       run={activeItemRun}
                                       pricing={activePricing}

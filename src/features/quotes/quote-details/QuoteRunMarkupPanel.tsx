@@ -640,7 +640,7 @@ export function QuoteRunMarkupPanel({
           як випадкові. Стан належить ярусу ціни, а не окремій секції — його
           відділяє проміжок.
         */
-        <div className="mt-1">
+        <div className="mt-1 rounded-lg border border-border/60 bg-muted/60 px-3 py-2.5">
           {/* items-center: контроли на 28 px і рядок тексту на 17 вирівнюються
               по середині, а не по верхньому краю — саме тому кнопки й напис
               стояли сходинкою. */}
