@@ -6366,8 +6366,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       currency={quote.currency}
                                       getPricing={getRunPricing}
                                       canAddRun={canEditRuns}
+                                      canApproveRun={canEditRuns}
                                       onSelect={(run) => selectRunForItem(run, item.id)}
                                       onAddRun={() => addRun(item.id)}
+                                      onToggleApproved={(run) =>
+                                        toggleApprovedRun(run.id, run.quote_item_id ?? item.id)
+                                      }
                                     />
 
                                     {itemRuns.length === 0 ? (
@@ -6395,38 +6399,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                                 {normalizeUnitLabel(item.unit)}
                                               </span>
                                             </div>
+                                            {/* Рішення клієнта ухвалюється в РЯДКУ тиражу (REQ-155 p2),
+                                                а не тут. Кнопка стояла в цій шапці й питала про тираж,
+                                                якого в ній не видно: щоб позначити другий, треба було
+                                                спершу зробити його активним. Тут лишається сам факт —
+                                                щоб, дивлячись на поля цін, було ясно, чиї вони. */}
+                                            {activeItemRun.is_approved ? (
+                                              <>
+                                                <span className="text-sm text-muted-foreground">·</span>
+                                                <span className="text-sm font-semibold text-success-foreground">
+                                                  погоджений клієнтом
+                                                </span>
+                                              </>
+                                            ) : null}
                                           </div>
                                           <div className="flex items-center gap-1">
-                                            {/* Рішення клієнта фіксується там, де воно ухвалюється, —
-                                                на самому тиражі. Саме звідси беруться кількість і ціна
-                                                в замовлення; без позначки замовлення бралось за першим
-                                                створеним тиражем (25.08.2026). */}
-                                            {canEditRuns ? (
-                                              <Button
-                                                variant={activeItemRun.is_approved ? "secondary" : "ghost"}
-                                                size="sm"
-                                                className={cn(
-                                                  "h-8 gap-1.5",
-                                                  activeItemRun.is_approved
-                                                    ? "bg-success-soft text-success-foreground hover:bg-success-soft/70"
-                                                    : "text-muted-foreground"
-                                                )}
-                                                onClick={() => toggleApprovedRun(activeItemRun.id, activeItemRun.quote_item_id ?? item.id)}
-                                                title={
-                                                  activeItemRun.is_approved
-                                                    ? "Зняти позначку погодження"
-                                                    : "Цей тираж погодив клієнт — саме він піде в замовлення"
-                                                }
-                                              >
-                                                <Check className="h-3.5 w-3.5" />
-                                                {activeItemRun.is_approved ? "Погоджено клієнтом" : "Погодив клієнт"}
-                                              </Button>
-                                            ) : activeItemRun.is_approved ? (
-                                              <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-success-soft px-2.5 text-xs font-medium text-success-foreground">
-                                                <Check className="h-3.5 w-3.5" />
-                                                Погоджено клієнтом
-                                              </span>
-                                            ) : null}
                                             {canEditRuns ? (
                                               <Button
                                                 variant="ghost"

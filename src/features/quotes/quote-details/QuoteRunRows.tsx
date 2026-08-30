@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { RunSalePricing } from "@/lib/quoteRuns";
@@ -51,8 +51,11 @@ export type QuoteRunRowsProps = {
   currency?: string | null;
   getPricing: (run: QuoteRun) => RunSalePricing;
   canAddRun: boolean;
+  /** Чи має глядач право ставити й знімати позначку «Погодив клієнт». */
+  canApproveRun: boolean;
   onSelect: (run: QuoteRun) => void;
   onAddRun: () => void;
+  onToggleApproved: (run: QuoteRun) => void;
 };
 
 export function QuoteRunRows({
@@ -62,8 +65,10 @@ export function QuoteRunRows({
   currency,
   getPricing,
   canAddRun,
+  canApproveRun,
   onSelect,
   onAddRun,
+  onToggleApproved,
 }: QuoteRunRowsProps) {
   const currencyLabel = currency ?? "UAH";
 
@@ -132,11 +137,37 @@ export function QuoteRunRows({
                 )}
               </span>
 
-              {/* Колонка рішення клієнта. Порожня — теж колонка: вона тримає
-                  ширину, щоб сума праворуч не їздила туди-сюди. */}
+              {/* Колонка рішення клієнта — тут воно й ухвалюється (REQ-155 p2).
+                  Порожня — теж колонка: вона тримає ширину, щоб сума праворуч не
+                  їздила туди-сюди, коли бейдж змінюється кнопкою й навпаки. */}
               <span className="col-start-2 col-end-4 row-start-3 flex items-center justify-start md:col-start-4 md:col-end-5 md:row-start-1 md:justify-end">
-                {isApproved ? (
+                {canApproveRun ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      // Погодження — рішення про ЦЕЙ тираж, а не про вибір активного:
+                      // без зупинки бульбашки клік робив би обидві дії одразу.
+                      event.stopPropagation();
+                      onToggleApproved(run);
+                    }}
+                    title={
+                      isApproved
+                        ? "Зняти позначку погодження"
+                        : "Цей тираж погодив клієнт — саме він піде в замовлення"
+                    }
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-2xs font-semibold transition-colors",
+                      isApproved
+                        ? "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/70"
+                        : "border-dashed border-border text-muted-foreground hover:border-success-soft-border hover:bg-success-soft/40 hover:text-success-foreground"
+                    )}
+                  >
+                    <Check className="h-3.5 w-3.5 shrink-0" />
+                    {isApproved ? "Погоджено клієнтом" : "Погодити"}
+                  </button>
+                ) : isApproved ? (
                   <span className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-lg border border-success-soft-border bg-success-soft px-2.5 text-2xs font-semibold text-success-foreground">
+                    <Check className="h-3.5 w-3.5 shrink-0" />
                     Погоджено клієнтом
                   </span>
                 ) : null}
