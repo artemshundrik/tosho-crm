@@ -19,10 +19,22 @@ import type { QuoteRun } from "@/lib/toshoApi";
  * тому рядку, який щойно погодили. Колонка фіксованої ширини тримає місце
  * незалежно від того, що в ній зараз лежить.
  *
- * ШИРИНИ КОЛОНОК: 18px радіо · 88px кількість · решта опис · 184px рішення
- * клієнта · 152px сума. На вузькому екрані рядок розкладається на три яруси
+ * ШИРИНИ КОЛОНОК: 18px радіо · кількість і сума — auto · решта опис · 160px
+ * рішення клієнта. На вузькому екрані рядок розкладається на три яруси
  * (кількість і сума зверху, опис і рішення під ними) — сітка з пʼятьох колонок
  * у 360 px не влазить ніяк, а стовпчик сум там і не з чим вирівнювати.
+ *
+ * ЧОМУ AUTO, А НЕ ФІКСОВАНІ 88 і 152. Колонка `auto` в гріді дорівнює
+ * найширшій комірці СВОГО стовпця по всіх рядках — тобто числа стоять одне під
+ * одним так само рівно, але без порожнечі під тираж на пʼять цифр, якого тут
+ * немає. Фіксовані ширини лишали 47 px повітря між «30 шт.» і розкладкою
+ * собівартості й 37 px між кнопкою погодження та сумою: очі проходили цю
+ * прогалину як межу таблиці, хоч це один рядок про один тираж.
+ *
+ * А от колонка рішення лишається ФІКСОВАНОЮ, бо її ширину диктує не дані, а
+ * стан: бейдж «Погоджено клієнтом» — 157 px, кнопка «Погодити» — 94. На `auto`
+ * погодження тиражу зсувало б стовпчик сум на 60 px убік. 10rem = 160 px —
+ * рівно під найширший стан.
  */
 
 const num = (value: number, digits = 0) =>
@@ -74,19 +86,18 @@ export function QuoteRunRows({
 
   return (
     <div>
-      <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-muted-foreground">
+      <div className="mb-1.5 text-xs font-semibold uppercase tracking-caps text-muted-foreground">
         Тиражі
       </div>
 
       {/*
-        Підсвітка рядка вилазить за поле, самі рядки — ні (REQ-175#p27).
+        Рядки на всю ширину картки, вміст — по її полю (REQ-175#p28).
 
-        Рядку потрібне власне поле px-2, інакше кружечок вибору стоїть
-        упритул до тла підсвітки. Але це поле зсувало ВЕСЬ перелік на 8 px
-        правіше за підпис «Тиражі» й за решту вмісту картки. -mx-2 повертає
-        числа на спільну вертикаль, лишаючи підсвітці її поле.
+        Відʼємне поле дорівнює полю ярусу, а внутрішнє повертає числа на ту
+        саму вертикаль, що назва товару вгорі. Тому риски між тиражами йдуть
+        від краю до краю, а підсвітка ряду не має «полів усередині полів».
       */}
-      <div role="radiogroup" aria-label="Тиражі позиції" className="-mx-2">
+      <div role="radiogroup" aria-label="Тиражі позиції" className="-mx-3 sm:-mx-4">
         {runs.map((run, runIndex) => {
           const qty = Number(run.quantity) || 0;
           const isSelected = !!run.id && run.id === activeRunId;
@@ -111,9 +122,9 @@ export function QuoteRunRows({
                 onSelect(run);
               }}
               className={cn(
-                "grid cursor-pointer items-center gap-x-3 gap-y-1.5 rounded-lg border-b border-border/40 px-2 py-2.5 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                "grid cursor-pointer items-center gap-x-4 gap-y-1.5 border-b border-border/40 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 sm:px-4",
                 "grid-cols-[1.125rem_minmax(0,1fr)_auto]",
-                "md:grid-cols-[1.125rem_5.5rem_minmax(0,1fr)_11.5rem_9.5rem]"
+                "md:grid-cols-[1.125rem_auto_minmax(0,1fr)_10rem_auto]"
               )}
             >
               <span

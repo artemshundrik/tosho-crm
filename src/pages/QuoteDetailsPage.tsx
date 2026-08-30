@@ -4744,7 +4744,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     const printProductConfig = getPrintProductConfig(item.metadata);
                     const packageSummary = printProductConfig ? formatPrintProductSummary(printProductConfig) : [];
                     const packageSections = printProductConfig ? getPrintProductDetailSections(printProductConfig) : [];
-                    const packageSizeHint = null;
                     const catalogVariant =
                       item.metadata?.catalogVariant?.name.trim()
                         ? {
@@ -4754,6 +4753,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           }
                         : null;
                     const itemSku = item.metadata?.sku?.trim() || catalogVariant?.sku || null;
+                    // Рід, колір і артикул — ОДИН рядок під назвою, а не пігулки
+                    // поруч із нею: це паспорт товару, його читають разом, і
+                    // жодна з трьох частин не є дією, щоб мати рамку кнопки.
+                    const itemMeta = [
+                      metaLine,
+                      catalogVariant?.name,
+                      itemSku ? `Артикул: ${itemSku}` : null,
+                    ].filter((part): part is string => Boolean(part));
                     const shouldShowDescription =
                       item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
                     const isMerchQuote = (quote?.quote_type ?? "") === "merch";
@@ -4902,35 +4909,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           </div>
 
                           <div className="min-w-0 flex-1">
-                            {/* Reserve at least the image height so the full-width runs
-                                section below never rides up under the product image when
-                                there are no spec chips (e.g. merch without нанесення). */}
-                            <div className="sm:min-h-20">
-                            <div className="flex flex-wrap items-center justify-between gap-4">
+                            {/* items-start, а не items-center: посилання й «…» мають
+                                починатись на одній лінії з верхом мініатюри, як просив
+                                Артем. На items-center вони зʼїжджали вниз рівно на
+                                півряд паспортних даних — тобто тим нижче, чим більше
+                                про товар відомо. */}
+                            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                               <div className="min-w-0">
-                                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                                  <div className="truncate text-xl font-semibold tracking-tight text-foreground">{item.title}</div>
-                                  {metaLine ? (
-                                    <div className="text-sm text-muted-foreground">{metaLine}</div>
-                                  ) : null}
-                                  {packageSizeHint ? (
-                                    <span className="rounded-md border border-border/50 bg-muted px-2 py-0.5 text-3xs font-medium uppercase tracking-caps text-muted-foreground">
-                                      {packageSizeHint}
-                                    </span>
-                                  ) : null}
+                                <div className="truncate text-xl font-semibold leading-tight tracking-tight text-foreground">
+                                  {item.title}
                                 </div>
-                                {catalogVariant || itemSku ? (
-                                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                    {catalogVariant ? (
-                                      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-border/50 bg-muted px-2 py-1">
-                                        <span className="truncate">{catalogVariant.name}</span>
-                                      </span>
-                                    ) : null}
-                                    {itemSku ? (
-                                      <span className="inline-flex items-center rounded-lg border border-border/50 bg-muted px-2 py-1">
-                                        Артикул: {itemSku}
-                                      </span>
-                                    ) : null}
+                                {itemMeta.length > 0 ? (
+                                  <div
+                                    className="mt-1 truncate text-sm text-muted-foreground"
+                                    title={itemMeta.join(" · ")}
+                                  >
+                                    {itemMeta.join(" · ")}
                                   </div>
                                 ) : null}
                               </div>
@@ -5128,179 +5122,186 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 </div>
                               </div>
                             ) : null}
-                            </div>
+                          </div>
+                        </div>
 
-                            {/* Ярус тиражів вирівняний з карткою (REQ-175#p27).
-                                Було -ml-[6.5rem] при мініатюрі 80 px і проміжку
-                                16 px — на 8 px лівіше за все інше; на телефоні
-                                -mx-5/px-5 не збігалось із полем картки взагалі.
-                                Зсув = «мініатюра + проміжок», на вузькому екрані
-                                його немає: колонка там і так на всю ширину. */}
-                            <div className="mt-5 border-t border-border/50 pt-4 pb-0 sm:-ml-[6rem] sm:w-[calc(100%+6rem)]">
-                              {(() => {
-                                const activeItemRun = getSelectedRunForItem(item.id);
-                                const activeItemRunIndex = getRunIndex(activeItemRun);
-                                const activePricing = getRunPricing(activeItemRun);
-                                // Дно накрутки не БЛОКУЄ роботу: воно вмикає погодження.
-                                // Саме тверда заборона на попередньому порозі й
-                                // народжувала фіктивні суми (TS-0826-0039).
-                                const activeRunMarkupState = markup.getRunState(activeItemRun);
-                                // Поки число на погодженні (і після підтвердження) воно не
-                                // рухається: інакше рішення стосувалося б не того, що поїде
-                                // клієнту. Дзеркало в базі — тригер freeze_quote_run_markup_while_pending.
-                                const activeRunMarkupFrozen = isMarkupFrozen(activeRunMarkupState);
-                                const activeItemBenchmark = markup.benchmarks.get(item.id) ?? null;
+                        {/*
+                          Ярус тиражів — власний ПОВЕРХ картки, а не вставка в
+                          текстовій колонці (REQ-175#p28).
 
-                                return (
-                                  <div className="space-y-4">
-                                    <QuoteRunRows
-                                      runs={itemRuns}
-                                      activeRunId={activeItemRun?.id ?? null}
-                                      unitLabel={normalizeUnitLabel(item.unit)}
+                          Доки він жив усередині колонки поруч із мініатюрою,
+                          на всю ширину його виводили відʼємні поля
+                          -ml-[6rem]/w-[calc(100%+6rem)], а риска над ним
+                          починалась там, де починається текст. Риска, що не
+                          доходить до краю, ділить не картку, а її половину.
+                          Поверхом риска йде від краю до краю сама, без
+                          арифметики, а обгортка sm:min-h-20 (резерв під висоту
+                          мініатюри) стає непотрібною: висоту ряду й так тримає
+                          сама мініатюра.
+                        */}
+                        <div className="border-t border-border/50 p-3 sm:p-4">
+                          {(() => {
+                            const activeItemRun = getSelectedRunForItem(item.id);
+                            const activeItemRunIndex = getRunIndex(activeItemRun);
+                            const activePricing = getRunPricing(activeItemRun);
+                            // Дно накрутки не БЛОКУЄ роботу: воно вмикає погодження.
+                            // Саме тверда заборона на попередньому порозі й
+                            // народжувала фіктивні суми (TS-0826-0039).
+                            const activeRunMarkupState = markup.getRunState(activeItemRun);
+                            // Поки число на погодженні (і після підтвердження) воно не
+                            // рухається: інакше рішення стосувалося б не того, що поїде
+                            // клієнту. Дзеркало в базі — тригер freeze_quote_run_markup_while_pending.
+                            const activeRunMarkupFrozen = isMarkupFrozen(activeRunMarkupState);
+                            const activeItemBenchmark = markup.benchmarks.get(item.id) ?? null;
+
+                            return (
+                              <div className="space-y-4">
+                                <QuoteRunRows
+                                  runs={itemRuns}
+                                  activeRunId={activeItemRun?.id ?? null}
+                                  unitLabel={normalizeUnitLabel(item.unit)}
+                                  currency={quote.currency}
+                                  getPricing={getRunPricing}
+                                  canAddRun={canEditRuns}
+                                  canApproveRun={canEditRuns}
+                                  onSelect={(run) => selectRunForItem(run, item.id)}
+                                  onAddRun={() => addRun(item.id)}
+                                  onToggleApproved={(run) =>
+                                    toggleApprovedRun(run.id, run.quote_item_id ?? item.id)
+                                  }
+                                />
+
+                                {itemRuns.length === 0 ? (
+                                  <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                                    Для цього товару ще немає тиражів
+                                  </div>
+                                ) : activeItemRun && activeItemRunIndex >= 0 ? (
+                                  /* Активний тираж — не вставка в рамці, а ярус картки на всю
+                                     ширину (REQ-155 p3). Рамка робила блок вужчим за картку,
+                                     що його тримає, і тиснула смугу часток під ціною в
+                                     половину доступної ширини. Ділять яруси риски, а не
+                                     коробки: та сама мова, що в «Витратах» і «Огляді». */
+                                  <div className="-mx-3 border-t border-border/40 px-3 pt-4 sm:-mx-4 sm:px-4">
+                                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                        <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+                                        <span className="text-sm font-semibold text-foreground">Активний тираж</span>
+                                        <span className="text-sm text-muted-foreground">·</span>
+                                        <div className="relative h-8 w-32">
+                                          <NumberInput
+                                            value={activeItemRun.quantity}
+                                            disabled={!canEditRuns}
+                                            onValueChange={(next) => updateRunValue(activeItemRunIndex, "quantity", next)}
+                                            min={1}
+                                            emptyValue={1}
+                                            className="h-8 w-full rounded-lg bg-background pl-3 pr-12 text-left font-mono text-sm font-semibold tabular-nums"
+                                            aria-label="Кількість активного тиражу"
+                                          />
+                                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                            {normalizeUnitLabel(item.unit)}
+                                          </span>
+                                        </div>
+                                        {/* Рішення клієнта ухвалюється в РЯДКУ тиражу (REQ-155 p2),
+                                            а не тут. Кнопка стояла в цій шапці й питала про тираж,
+                                            якого в ній не видно: щоб позначити другий, треба було
+                                            спершу зробити його активним. Тут лишається сам факт —
+                                            щоб, дивлячись на поля цін, було ясно, чиї вони. */}
+                                        {activeItemRun.is_approved ? (
+                                          <>
+                                            <span className="text-sm text-muted-foreground">·</span>
+                                            <span className="text-sm font-semibold text-success-foreground">
+                                              погоджений клієнтом
+                                            </span>
+                                          </>
+                                        ) : null}
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        {canEditRuns ? (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
+                                            onClick={() => void removeRun(activeItemRunIndex)}
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            Видалити
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+
+                                    {/* Поки вибору немає, замовлення з прорахунку не зробити —
+                                        краще сказати це тут, ніж за три кроки у вікні створення. */}
+                                    {needsApprovedRunChoice(itemRuns) ? (
+                                      <div className="mb-4 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-xs text-warning-copy">
+                                        Тиражів кілька — позначте той, який погодив клієнт. Саме з нього
+                                        підуть кількість і ціна в замовлення.
+                                      </div>
+                                    ) : null}
+
+                                    <QuoteRunPriceFields
+                                      run={activeItemRun}
+                                      pricing={activePricing}
+                                      access={runPriceFieldAccess}
+                                      markupState={activeRunMarkupState}
+                                      markupFrozen={activeRunMarkupFrozen}
                                       currency={quote.currency}
-                                      getPricing={getRunPricing}
-                                      canAddRun={canEditRuns}
-                                      canApproveRun={canEditRuns}
-                                      onSelect={(run) => selectRunForItem(run, item.id)}
-                                      onAddRun={() => addRun(item.id)}
-                                      onToggleApproved={(run) =>
-                                        toggleApprovedRun(run.id, run.quote_item_id ?? item.id)
-                                      }
+                                      lockHint={runFieldLockHint}
+                                      onChange={(field, value) => updateRunValue(activeItemRunIndex, field, value)}
                                     />
 
-                                    {itemRuns.length === 0 ? (
-                                      <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
-                                        Для цього товару ще немає тиражів
-                                      </div>
-                                    ) : activeItemRun && activeItemRunIndex >= 0 ? (
-                                      /* Активний тираж — не вставка в рамці, а ярус картки на всю
-                                         ширину (REQ-155 p3). Рамка робила блок вужчим за картку,
-                                         що його тримає, і тиснула смугу часток під ціною в
-                                         половину доступної ширини. Ділять яруси риски, а не
-                                         коробки: та сама мова, що в «Витратах» і «Огляді». */
-                                      <div className="border-t border-border/40 pt-4">
-                                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                                          <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                            <span className="h-2.5 w-2.5 rounded-full bg-primary" />
-                                            <span className="text-sm font-semibold text-foreground">Активний тираж</span>
-                                            <span className="text-sm text-muted-foreground">·</span>
-                                            <div className="relative h-8 w-32">
-                                              <NumberInput
-                                                value={activeItemRun.quantity}
-                                                disabled={!canEditRuns}
-                                                onValueChange={(next) => updateRunValue(activeItemRunIndex, "quantity", next)}
-                                                min={1}
-                                                emptyValue={1}
-                                                className="h-8 w-full rounded-lg bg-background pl-3 pr-12 text-left font-mono text-sm font-semibold tabular-nums"
-                                                aria-label="Кількість активного тиражу"
-                                              />
-                                              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                                                {normalizeUnitLabel(item.unit)}
-                                              </span>
-                                            </div>
-                                            {/* Рішення клієнта ухвалюється в РЯДКУ тиражу (REQ-155 p2),
-                                                а не тут. Кнопка стояла в цій шапці й питала про тираж,
-                                                якого в ній не видно: щоб позначити другий, треба було
-                                                спершу зробити його активним. Тут лишається сам факт —
-                                                щоб, дивлячись на поля цін, було ясно, чиї вони. */}
-                                            {activeItemRun.is_approved ? (
-                                              <>
-                                                <span className="text-sm text-muted-foreground">·</span>
-                                                <span className="text-sm font-semibold text-success-foreground">
-                                                  погоджений клієнтом
-                                                </span>
-                                              </>
-                                            ) : null}
-                                          </div>
-                                          <div className="flex items-center gap-1">
-                                            {canEditRuns ? (
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
-                                                onClick={() => void removeRun(activeItemRunIndex)}
-                                              >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                                Видалити
-                                              </Button>
-                                            ) : null}
-                                          </div>
-                                        </div>
-
-                                        {/* Поки вибору немає, замовлення з прорахунку не зробити —
-                                            краще сказати це тут, ніж за три кроки у вікні створення. */}
-                                        {needsApprovedRunChoice(itemRuns) ? (
-                                          <div className="mb-4 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-xs text-warning-copy">
-                                            Тиражів кілька — позначте той, який погодив клієнт. Саме з нього
-                                            підуть кількість і ціна в замовлення.
-                                          </div>
-                                        ) : null}
-
-                                        <QuoteRunPriceFields
-                                          run={activeItemRun}
-                                          pricing={activePricing}
-                                          access={runPriceFieldAccess}
-                                          markupState={activeRunMarkupState}
-                                          markupFrozen={activeRunMarkupFrozen}
-                                          currency={quote.currency}
-                                          lockHint={runFieldLockHint}
-                                          onChange={(field, value) => updateRunValue(activeItemRunIndex, field, value)}
-                                        />
-
-                                        {/* Один блок ціни, шість виглядів за посадою (REQ-149 p11).
-                                            Він СТАВ на місце трійки карток «Собівартість / Ціна за од. /
-                                            Сума» і згортки «Деталі ціни»: ті показували всім одне й те
-                                            саме, тоді як проджекту не можна бачити заробіток менеджера,
-                                            а менеджеру розклад ціни на прибуток/постійні/ПДВ — це не
-                                            його рішення. Тримати обидва означало б показувати ті самі
-                                            числа двічі, один раз повз матрицю доступу. */}
-                                        <QuoteRunMarkupPanel
-                                          view={markupView}
-                                          state={activeRunMarkupState}
-                                          pricing={activePricing}
-                                          markupRate={activePricing.markupRate}
-                                          currency={quote.currency}
-                                          benchmark={activeItemBenchmark}
-                                          benchmarkLoading={!markup.benchmarks.has(item.id)}
-                                          canEditMarkup={runPriceFieldAccess.markup_rate}
-                                          canApprove={canApproveMarkup}
-                                          managerName={
-                                            quote.assigned_to ? memberById.get(quote.assigned_to) ?? null : null
-                                          }
-                                          deciderName={
-                                            activeRunMarkupState.approval?.decidedBy
-                                              ? memberById.get(activeRunMarkupState.approval.decidedBy) ?? null
-                                              : null
-                                          }
-                                          busy={markup.busy || runsSaving}
-                                          onChangeMarkupRate={(next) =>
-                                            updateRunValue(activeItemRunIndex, "markup_rate", next)
-                                          }
-                                          onRequestApproval={() =>
-                                            activeItemRun.id
-                                              ? markup.openDialog("request", activeItemRun.id)
-                                              : undefined
-                                          }
-                                          onDecide={(decision) => {
-                                            if (!activeItemRun.id) return;
-                                            if (decision === "rejected") {
-                                              markup.openDialog("reject", activeItemRun.id);
-                                              return;
-                                            }
-                                            void markup.submitDecision(activeItemRun.id, "approved", "");
-                                          }}
-                                        />
-                                      </div>
-                                    ) : (
-                                      <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
-                                        Оберіть або додайте тираж
-                                      </div>
-                                    )}
+                                    {/* Один блок ціни, шість виглядів за посадою (REQ-149 p11).
+                                        Він СТАВ на місце трійки карток «Собівартість / Ціна за од. /
+                                        Сума» і згортки «Деталі ціни»: ті показували всім одне й те
+                                        саме, тоді як проджекту не можна бачити заробіток менеджера,
+                                        а менеджеру розклад ціни на прибуток/постійні/ПДВ — це не
+                                        його рішення. Тримати обидва означало б показувати ті самі
+                                        числа двічі, один раз повз матрицю доступу. */}
+                                    <QuoteRunMarkupPanel
+                                      view={markupView}
+                                      state={activeRunMarkupState}
+                                      pricing={activePricing}
+                                      markupRate={activePricing.markupRate}
+                                      currency={quote.currency}
+                                      benchmark={activeItemBenchmark}
+                                      benchmarkLoading={!markup.benchmarks.has(item.id)}
+                                      canEditMarkup={runPriceFieldAccess.markup_rate}
+                                      canApprove={canApproveMarkup}
+                                      managerName={
+                                        quote.assigned_to ? memberById.get(quote.assigned_to) ?? null : null
+                                      }
+                                      deciderName={
+                                        activeRunMarkupState.approval?.decidedBy
+                                          ? memberById.get(activeRunMarkupState.approval.decidedBy) ?? null
+                                          : null
+                                      }
+                                      busy={markup.busy || runsSaving}
+                                      onChangeMarkupRate={(next) =>
+                                        updateRunValue(activeItemRunIndex, "markup_rate", next)
+                                      }
+                                      onRequestApproval={() =>
+                                        activeItemRun.id
+                                          ? markup.openDialog("request", activeItemRun.id)
+                                          : undefined
+                                      }
+                                      onDecide={(decision) => {
+                                        if (!activeItemRun.id) return;
+                                        if (decision === "rejected") {
+                                          markup.openDialog("reject", activeItemRun.id);
+                                          return;
+                                        }
+                                        void markup.submitDecision(activeItemRun.id, "approved", "");
+                                      }}
+                                    />
                                   </div>
-                                );
-                              })()}
-                            </div>
-                          </div>
+                                ) : (
+                                  <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                                    Оберіть або додайте тираж
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
