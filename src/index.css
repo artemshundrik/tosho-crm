@@ -379,7 +379,10 @@
     --app-shell-radius: 16px;
     --app-main-bg: 0 0% 99.2%;
     --page-underlay-bg: var(--app-main-bg);
-    --sidebar-surface-bg: 0 0% 96.4%;
+    /* Бокова колонка того самого кольору, що й середина (REQ-175#p49): вона
+       темніша за сторінку читалась як окрема панель, хоч тримає не вміст, а
+       навігацію. Межу лишає волосінь border-r, а не зміна тону. */
+    --sidebar-surface-bg: 0 0% 98.8%;
     --app-structure-divider: 0 0% 86.5%;
     --design-task-details-bg: 0 0% 98.3%;
     --design-task-panel-card-bg: 0 0% 100%;
@@ -631,7 +634,7 @@
     --app-shell-radius: 14px;
     --app-main-bg: 0 0% 8%;
     --page-underlay-bg: var(--app-main-bg);
-    --sidebar-surface-bg: 0 0% 6.2%;
+    --sidebar-surface-bg: 0 0% 7.8%;
     --app-structure-divider: 0 0% 12.6%;
     --design-task-details-bg: 0 0% 9.4%;
     --design-task-panel-card-bg: 0 0% 10.4%;

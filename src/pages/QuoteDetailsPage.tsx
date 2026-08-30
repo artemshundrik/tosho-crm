@@ -4333,7 +4333,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       */}
       <div className="grid grid-cols-1 xl:h-full xl:grid-cols-[minmax(0,1fr)_var(--quote-rail-w,380px)] xl:overflow-hidden">
         <div className="flex min-w-0 flex-col xl:h-full xl:min-h-0 xl:overflow-hidden">
-      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur xl:static xl:shrink-0 xl:bg-transparent xl:backdrop-blur-none">
+      {/* Без власної риски (REQ-175#p47): одразу під шапкою йде смуга вкладок,
+          і в неї своя нижня межа. Дві горизонтальні лінії за 40 px одна від
+          одної читались як порожня перекладина між номером справи й вкладками. */}
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur xl:static xl:shrink-0 xl:bg-transparent xl:backdrop-blur-none">
         <div className="px-4 py-2 md:px-5 lg:px-6">
           {/*
             Один ряд і на телефоні теж.
@@ -4503,7 +4506,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             губилась серед них. Тепер активна тримається вагою тексту і тонкою
             рискою знизу — рядок вкладок перестав сперечатися зі смугою дій.
           */}
-          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:shrink-0 2xl:-mx-8 2xl:px-8">
+          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:mb-0 xl:shrink-0 2xl:-mx-8 2xl:px-8">
             <TabBar value={activeQuoteTab}>
               {quotePageTabs.map((tab) => {
                 const isActive = activeQuoteTab === tab.value;
@@ -4542,7 +4545,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               })}
             </TabBar>
           </div>
-          <div className="space-y-6 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pb-8">
+          {/*
+            СМУГА ПРОКРУТКИ СТОЇТЬ У ПОЛІ, А НЕ НА КАРТЦІ (REQ-175#p48).
+
+            Правий край цієї коробки збігався з правим краєм картки товару, тож
+            накладна смуга прокрутки малювалась просто по її межі. Відʼємне поле
+            завширшки з поле <main> виносить край коробки в порожню смужку між
+            карткою і колонкою розмови, а внутрішнє того ж розміру лишає саму
+            картку там, де вона була.
+
+            Верхній відступ теж переїхав СЮДИ з-під вкладок: поки він був
+            зовнішнім, вміст зникав на 16 px нижче за риску, і між ними стояла
+            порожня сходинка. Тепер прокрутка починається рівно від риски.
+          */}
+          <div className="space-y-6 xl:-mr-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pb-8 xl:pr-3 xl:pt-4 2xl:-mr-4 2xl:pr-4">
             {quoteLockedByOther || quoteLock.releaseRequestedByName || quoteLock.idleSecondsLeft !== null || quoteLock.releasedReason || statusError || quoteRequirements.length > 0 || markup.gate.blocked ? (
               <div className="space-y-3">
                 <EntityLockBanner
