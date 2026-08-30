@@ -24,7 +24,6 @@ import { canOpenQuoteDetails } from "@/lib/permissions";
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
-import { syncDesignOutputFilesToQuoteAttachments } from "@/lib/designTaskOutputSync";
 import {
   createOrderFromApprovedQuote,
   loadOrderCreationDraft,
@@ -840,30 +839,6 @@ export async function fetchQuotePartyOptions(
   }
 }
 
-export type DesignTaskCandidateRow = {
-  id: string;
-  title: string | null;
-  metadata?: Record<string, unknown> | null;
-  created_at?: string | null;
-};
-
-/** Усі дизайн-задачі команди — сторінка сама відбирає з них придатних кандидатів. */
-export async function fetchTeamDesignTasks(
-  teamId: string
-): Promise<QueryResult<DesignTaskCandidateRow[]>> {
-  try {
-    const { data, error } = await supabase
-      .from("activity_log")
-      .select("id, title, metadata, created_at")
-      .eq("action", "design_task")
-      .eq("team_id", teamId)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return { ok: true, data: (data ?? []) as DesignTaskCandidateRow[] };
-  } catch (error: unknown) {
-    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити дизайн-задачі.") };
-  }
-}
 
 /**
  * Обгортки над записом — щоб сторінка не тримала try/catch у себе.
@@ -1302,42 +1277,7 @@ export async function linkDesignVisualizationToQuote(input: {
   }
 }
 
-/**
- * Привʼязати наявну дизайн-задачу до прорахунку.
- *
- * Разом із metadata оновлюється entity_id — саме за ним задачу потім знаходять
- * швидким запитом, без пошуку по metadata->>quote_id.
- */
-export async function attachDesignTaskToQuote(
-  designTaskId: string,
-  teamId: string,
-  quoteId: string,
-  metadata: unknown
-): Promise<QueryResult<null>> {
-  try {
-    const { error } = await supabase
-      .from("activity_log")
-      .update({ metadata: metadata as never, entity_id: quoteId })
-      .eq("id", designTaskId)
-      .eq("team_id", teamId);
-    if (error) throw error;
-    return { ok: true, data: null };
-  } catch (error: unknown) {
-    return { ok: false, message: getErrorMessage(error, "Не вдалося привʼязати дизайн-задачу.") };
-  }
-}
 
-export async function syncDesignOutputFiles(
-  params: Parameters<typeof syncDesignOutputFilesToQuoteAttachments>[0],
-  fallbackMessage: string
-): Promise<QueryResult<null>> {
-  try {
-    await syncDesignOutputFilesToQuoteAttachments(params);
-    return { ok: true, data: null };
-  } catch (error: unknown) {
-    return { ok: false, message: getErrorMessage(error, fallbackMessage) };
-  }
-}
 
 export async function logDesignTaskEvent(
   params: Parameters<typeof logDesignTaskActivity>[0],

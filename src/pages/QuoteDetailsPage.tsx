@@ -218,7 +218,6 @@ import {
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
 import {
-  attachDesignTaskToQuote,
   deleteQuoteItemRow,
   insertQuoteItemRow,
   deleteQuoteRunsByIds,
@@ -229,7 +228,6 @@ import {
   uploadQuoteItemVisual,
   changeQuoteStatus,
   logDesignTaskEvent,
-  syncDesignOutputFiles,
   linkDesignVisualizationToQuote,
   fetchCatalogBase,
   fetchCatalogEnrichment,
@@ -248,7 +246,6 @@ import {
   updateQuoteFields,
   fetchDesignTaskRows,
   fetchQuotePartyOptions,
-  fetchTeamDesignTasks,
   fetchQuoteActivity,
   fetchQuoteComments,
   fetchQuoteItemsWithCatalog,
@@ -498,17 +495,6 @@ type DesignOutputMetaFile = {
   created_at: string;
 };
 
-type DesignTaskCandidate = {
-  id: string;
-  title: string | null;
-  createdAt: string;
-  designTaskNumber: string | null;
-  status: string | null;
-  metadata: Record<string, unknown>;
-  selectedFile: DesignOutputMetaFile | null;
-  outputsCount: number;
-};
-
 type ResolvedCatalogSelection = {
   typeId?: string;
   kindId?: string;
@@ -662,13 +648,6 @@ function removeDesignOutputReferencesFromMetadata(
 
   return nextMetadata;
 }
-
-const normalizePartyMatch = (value?: string | null) =>
-  (value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[«»"'`]/g, "");
 
 const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -1041,10 +1020,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [createDesignTaskDialogOpen, setCreateDesignTaskDialogOpen] = useState(false);
   /** На яку позицію створюємо задачу. null — на прорахунок загалом. */
   const [designTaskItemId, setDesignTaskItemId] = useState<string | null>(null);
-  const [designTaskCandidates, setDesignTaskCandidates] = useState<DesignTaskCandidate[]>([]);
-  const [designTaskCandidatesLoading, setDesignTaskCandidatesLoading] = useState(false);
-  const [attachDesignTaskDialogOpen, setAttachDesignTaskDialogOpen] = useState(false);
-  const [attachingDesignTaskId, setAttachingDesignTaskId] = useState<string | null>(null);
   // Сторож від повторного входу — ref, а не стан: його ніхто не показує на
   // екрані, зате як стан він отруював ефект синхронізації. У чесному списку
   // залежностей він змушував ефект перезапуститись одразу після setSyncing(true),
@@ -3301,175 +3276,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDesignTaskLoading(false);
   }, [quoteId, teamId]);
 
-  const loadDesignTaskCandidates = useCallback(async () => {
-    // Знімок робимо один раз на виклик — див. пояснення біля loaderInputsRef.
-    const {
-      quote: currentQuote,
-      designTask: currentDesignTask,
-      canCreateMoreDesignTasks: canCreateMore,
-    } = loaderInputsRef.current;
-    if (!teamId || !currentQuote) {
-      setDesignTaskCandidates([]);
-      return;
-    }
-    // Раніше тут стояло «якщо задача вже є — кандидатів немає». Тепер на
-    // прорахунку може бути кілька задач, тож закриваємось лише коли вільних
-    // позицій не лишилось.
-    if (currentDesignTask && !canCreateMore) {
-      setDesignTaskCandidates([]);
-      return;
-    }
-    setDesignTaskCandidatesLoading(true);
-    const candidatesResult = await fetchTeamDesignTasks(teamId);
-    if (!candidatesResult.ok) {
-      setDesignTaskCandidates([]);
-      setDesignTaskCandidatesLoading(false);
-      return;
-    }
-    {
-      const data = candidatesResult.data;
-
-      const quoteCustomerId =
-        typeof (currentQuote as unknown as { customer_id?: string | null }).customer_id === "string" &&
-        (currentQuote as unknown as { customer_id?: string | null }).customer_id
-          ? ((currentQuote as unknown as { customer_id?: string | null }).customer_id as string)
-          : null;
-      const quoteCustomerName = normalizePartyMatch(currentQuote.customer_name ?? null);
-
-      const nextCandidates = ((data ?? []) as Array<{
-        id: string;
-        title: string | null;
-        metadata?: Record<string, unknown> | null;
-        created_at?: string | null;
-      }>)
-        .map((row) => {
-          const metadata = row.metadata ?? {};
-          const taskKind = typeof metadata.task_kind === "string" ? metadata.task_kind.trim() : null;
-          const metaQuoteId = typeof metadata.quote_id === "string" ? metadata.quote_id.trim() : "";
-          const customerId = typeof metadata.customer_id === "string" ? metadata.customer_id.trim() : "";
-          const customerName =
-            typeof metadata.customer_name === "string" ? normalizePartyMatch(metadata.customer_name) : "";
-          const status = typeof metadata.status === "string" ? metadata.status.trim() : null;
-          const files = parseDesignOutputMetaFiles(metadata.design_output_files);
-          const selectedId =
-            typeof metadata.selected_design_output_file_id === "string"
-              ? metadata.selected_design_output_file_id.trim()
-              : "";
-          const selectedFile = files.find((file) => file.id === selectedId) ?? null;
-          const sameCustomer =
-            (quoteCustomerId && customerId && quoteCustomerId === customerId) ||
-            (!!quoteCustomerName && !!customerName && quoteCustomerName === customerName);
-          const isStandalone =
-            !metaQuoteId &&
-            (taskKind === "standalone" ||
-              typeof metadata.source === "string" && metadata.source === "design_task_created_manual");
-          if (!sameCustomer || !isStandalone || status === "cancelled") return null;
-          return {
-            id: row.id,
-            title: row.title ?? null,
-            createdAt: row.created_at ?? new Date().toISOString(),
-            designTaskNumber:
-              typeof metadata.design_task_number === "string" && metadata.design_task_number.trim()
-                ? metadata.design_task_number.trim()
-                : null,
-            status,
-            metadata,
-            selectedFile,
-            outputsCount: files.length,
-          } satisfies DesignTaskCandidate;
-        })
-        .filter(Boolean) as DesignTaskCandidate[];
-
-      setDesignTaskCandidates(nextCandidates);
-    }
-    setDesignTaskCandidatesLoading(false);
-  }, [teamId]);
-
-  const attachExistingDesignTask = async (candidate: DesignTaskCandidate) => {
-    if (!teamId || !quote || attachingDesignTaskId) return;
-    setAttachingDesignTaskId(candidate.id);
-    setDesignTaskError(null);
-
-    const fail = (message: string) => {
-      setDesignTaskError(message);
-      toast.error(message);
-      setAttachingDesignTaskId(null);
-    };
-    const FAIL_MESSAGE = "Не вдалося прив’язати дизайн-задачу.";
-
-    const actorName = userId ? memberById.get(userId) ?? userId : "System";
-    const nextMetadata: Record<string, unknown> = {
-      ...(candidate.metadata ?? {}),
-      quote_id: quoteId,
-      quote_number: quote.number ?? null,
-      quote_type: quote.quote_type ?? null,
-      customer_name: quote.customer_name ?? null,
-      customer_logo_url: quote.customer_logo_url ?? null,
-      task_kind: "linked",
-      attached_quote_at: new Date().toISOString(),
-      attached_quote_by: userId ?? null,
-    };
-
-    const attached = await attachDesignTaskToQuote(candidate.id, teamId, quoteId, nextMetadata);
-    if (!attached.ok) return fail(attached.message);
-
-    const synced = await syncDesignOutputFiles(
-      {
-        teamId,
-        quoteId,
-        files: parseDesignOutputMetaFiles(candidate.metadata.design_output_files),
-        fallbackUploadedBy: userId ?? null,
-      },
-      FAIL_MESSAGE
-    );
-    if (!synced.ok) return fail(synced.message);
-
-    const taskLogged = await logDesignTaskEvent(
-      {
-        teamId,
-        designTaskId: candidate.id,
-        quoteId,
-        userId,
-        actorName,
-        action: "design_task_attachment",
-        title: `Задачу прив’язано до прорахунку ${quote.number ?? quoteId.slice(0, 8)}`,
-        metadata: {
-          source: "design_task_attachment",
-          from_quote_id: null,
-          to_quote_id: quoteId,
-          selected_design_output_file_id:
-            typeof candidate.metadata.selected_design_output_file_id === "string"
-              ? candidate.metadata.selected_design_output_file_id
-              : null,
-        },
-      },
-      FAIL_MESSAGE
-    );
-    if (!taskLogged.ok) return fail(taskLogged.message);
-
-    const logged = await logQuoteActivity(
-      {
-        teamId,
-        action: "привʼязав дизайн-задачу",
-        entityType: "quotes",
-        entityId: quoteId,
-        title: `Привʼязав дизайн-задачу до прорахунку ${quote.number ?? ""}`.trim(),
-        href: `/orders/estimates/${quoteId}`,
-        metadata: {
-          source: "design_task_attachment",
-          design_task_id: candidate.id,
-        },
-      },
-      FAIL_MESSAGE
-    );
-    if (!logged.ok) return fail(logged.message);
-
-    setAttachDesignTaskDialogOpen(false);
-    toast.success("Дизайн-задачу прив’язано");
-    await Promise.all([loadDesignTask(), loadAttachments(), loadActivityLog()]);
-    setAttachingDesignTaskId(null);
-  };
-
   const createDesignTask = async (override?: {
     assigneeUserId?: string | null;
     collaboratorUserIds?: string[];
@@ -4038,7 +3844,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDesignTaskError(null);
     setDesignAssigneeId(null);
     setDesignTaskType(null);
-    setDesignTaskCandidates([]);
     activityTabLoadedQuoteRef.current = null;
     setHistory([]);
     setHistoryError(null);
@@ -4084,15 +3889,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       active = false;
     };
   }, [quoteId, teamId]);
-
-  useEffect(() => {
-    if (!quote || quote.id !== quoteId || !teamId) {
-      setDesignTaskCandidates([]);
-      return;
-    }
-    if (!attachDesignTaskDialogOpen) return;
-    void loadDesignTaskCandidates();
-  }, [attachDesignTaskDialogOpen, designTask?.id, loadDesignTaskCandidates, quote, quoteId, teamId]);
 
   useEffect(() => {
     if (detailsTab !== "files") return;
@@ -7667,183 +7463,39 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
                     </div>
                   ) : (
-                    <div className="space-y-3 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] px-4 py-5">
-                      <div className="text-sm font-medium text-foreground">
-                        Дизайн-задача ще не створена
+                    /*
+                      ЗАДАЧА НАРОДЖУЄТЬСЯ РАЗОМ ІЗ ПРОРАХУНКОМ (REQ-155 p5), і
+                      тут її не створюють. Раніше на цьому місці стояли дві
+                      кнопки — «Створити задачу» і «Підтягнути з дизайну», — і
+                      обидві суперечили тому, як воно працює насправді:
+                      QuotesPage заводить по одній задачі на кожну позицію з
+                      нанесенням у момент створення прорахунку. Порожня вкладка
+                      з кнопкою «Створити» вчила зворотного — що задачу треба
+                      завести руками, — і люди заводили ДРУГУ на той самий товар.
+
+                      Тому тут не кнопка, а відповідь на питання «чому порожньо»:
+                      задач немає, бо немає нанесення. Аварійний шлях лишився в
+                      меню «⋮» шапки, де він і має бути: там це виняток, а не
+                      типова дія.
+                    */
+                    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center">
+                      <Palette className="h-9 w-9 text-muted-foreground/30" />
+                      <div>
+                        <p className="font-medium text-foreground">Дизайн-задач у цьому прорахунку немає</p>
+                        <p className="mx-auto mt-1.5 max-w-[56ch] text-sm leading-relaxed text-muted-foreground">
+                          Задача створюється разом із прорахунком — по одній на кожен товар із нанесенням.
+                          Щоб вона тут зʼявилась, додайте нанесення в товарі.
+                        </p>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Створи нову задачу або привʼяжи існуючу дизайн-задачу цього ж замовника.
-                      </div>
-                      <div className="grid gap-3 md:max-w-[760px] md:grid-cols-3">
-                        <div>
-                          <div className="mb-2 text-xs font-medium text-muted-foreground">Тип задачі</div>
-                          <Select
-                            value={designTaskType ?? "none"}
-                            onValueChange={(value) => setDesignTaskType(value === "none" ? null : (value as DesignTaskType))}
-                            disabled={designTaskSaving}
-                          >
-                            <SelectTrigger
-                          controlSize="md"
-                          className="w-full border-border/40 bg-muted/[0.03]">
-                              <SelectValue placeholder="Оберіть тип задачі">
-                                {designTaskType ? (
-                                  <span className="inline-flex items-center gap-2">
-                                    {createElement(DESIGN_TASK_TYPE_ICONS[designTaskType], { className: "h-4 w-4 text-muted-foreground" })}
-                                    <span>{DESIGN_TASK_TYPE_LABELS[designTaskType]}</span>
-                                  </span>
-                                ) : (
-                                  "Оберіть тип задачі"
-                                )}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none" disabled>
-                                Оберіть тип задачі
-                              </SelectItem>
-                              {DESIGN_TASK_TYPE_OPTIONS.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  <span className="inline-flex items-center gap-2">
-                                    {createElement(DESIGN_TASK_TYPE_ICONS[option.value], { className: "h-4 w-4 text-muted-foreground" })}
-                                    <span>{option.label}</span>
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <div className="mb-2 text-xs font-medium text-muted-foreground">Виконавець</div>
-                          <Select
-                            value={designAssigneeId ?? "none"}
-                            onValueChange={(value) => {
-                              const nextAssigneeId = value === "none" ? null : value;
-                              setDesignAssigneeId(nextAssigneeId);
-                              setDesignCollaboratorIds((prev) => prev.filter((entry) => entry !== nextAssigneeId));
-                            }}
-                            disabled={designTaskSaving}
-                          >
-                            <SelectTrigger
-                          controlSize="md"
-                          className="w-full border-border/40 bg-muted/[0.03]">
-                              {designAssigneeId ? (
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <AvatarBase
-                                    src={memberAvatarById.get(designAssigneeId) ?? null}
-                                    name={memberById.get(designAssigneeId) ?? designAssigneeId}
-                                    fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
-                                    size={20}
-                                    inactive={memberInactiveById[designAssigneeId] ?? false}
-                                    className="text-3xs font-semibold"
-                                  />
-                                  <span className="truncate">{memberById.get(designAssigneeId) ?? designAssigneeId}</span>
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground">Без виконавця</span>
-                              )}
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Без виконавця</SelectItem>
-                              {designerMembers.length > 0 ? (
-                                designerMembers.map((member) => (
-                                  <SelectItem key={member.id} value={member.id}>
-                                    <div className="flex items-center gap-2">
-                                      <AvatarBase
-                                        src={member.avatarUrl}
-                                        name={member.label}
-                                        fallback={getInitials(member.label)}
-                                        size={20}
-                                        inactive={memberInactiveById[member.id] ?? false}
-                                        className="text-3xs font-semibold"
-                                      />
-                                      <span>{member.label}</span>
-                                    </div>
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="empty" disabled>
-                                  {teamMembers.length === 0
-                                    ? "Немає учасників"
-                                    : hasRoleInfo
-                                    ? "Немає дизайнерів"
-                                    : "Ролі не налаштовані"}
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <div className="mb-2 text-xs font-medium text-muted-foreground">Співвиконавці</div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 w-full justify-start border-border/40 bg-muted/[0.03]"
-                                disabled={designTaskSaving}
-                              >
-                                <Users className="mr-2 h-4 w-4 text-muted-foreground" />
-                                <span className="truncate">
-                                  {designCollaboratorIds.length === 0
-                                    ? "Не додано"
-                                    : designCollaboratorIds.length === 1
-                                    ? getMemberLabel(designCollaboratorIds[0])
-                                    : `Співвиконавці · ${designCollaboratorIds.length}`}
-                                </span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-[280px]">
-                              <DropdownMenuLabel>Співвиконавці</DropdownMenuLabel>
-                              {designerMembers.filter((member) => member.id !== designAssigneeId).map((member) => {
-                                const checked = designCollaboratorIds.includes(member.id);
-                                return (
-                                  <DropdownMenuCheckboxItem
-                                    key={member.id}
-                                    checked={checked}
-                                    onCheckedChange={(nextChecked) => {
-                                      setDesignCollaboratorIds((prev) =>
-                                        nextChecked ? [...prev, member.id] : prev.filter((entry) => entry !== member.id)
-                                      );
-                                    }}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <AvatarBase
-                                        src={member.avatarUrl}
-                                        name={member.label}
-                                        fallback={getInitials(member.label)}
-                                        size={20}
-                                        inactive={memberInactiveById[member.id] ?? false}
-                                        className="text-3xs font-semibold"
-                                      />
-                                      <span>{member.label}</span>
-                                    </div>
-                                  </DropdownMenuCheckboxItem>
-                                );
-                              })}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => void createDesignTask()}
-                          disabled={designTaskSaving || !designTaskType}
-                        >
-                          {designTaskSaving ? "Створення..." : "Створити задачу"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setAttachDesignTaskDialogOpen(true)}
-                          disabled={designTaskCandidatesLoading || designTaskCandidates.length === 0}
-                        >
-                          {designTaskCandidatesLoading
-                            ? "Пошук..."
-                            : designTaskCandidates.length > 0
-                            ? `Підтягнути з дизайну (${designTaskCandidates.length})`
-                            : "Немає задач для привʼязки"}
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-1 gap-2"
+                        onClick={() => setActiveQuoteTab("products")}
+                      >
+                        <Package className="h-4 w-4" />
+                        Відкрити «Товари»
+                      </Button>
                     </div>
                   )}
                 </TabsContent>
@@ -8766,97 +8418,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         onConfirm={handleDeleteQuote}
       loading={deleteQuoteBusy}
     />
-
-    <Dialog open={attachDesignTaskDialogOpen} onOpenChange={setAttachDesignTaskDialogOpen}>
-      <DialogContent
-        // Список із дією, а не форма: «Привʼязати» виконується одразу, чернетки
-        // тут нема. Без опт-ауту перший же клік по кнопці в списку вмикав
-        // питання «Закрити без збереження?».
-        dismissible
-        className="sm:max-w-[720px]"
-      >
-        <DialogHeader>
-          <DialogTitle>Привʼязати існуючу дизайн-задачу</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="text-sm text-muted-foreground">
-            Показані standalone дизайн-задачі цього ж замовника. Якщо у задачі вже обрано візуал, він одразу
-            підтягнеться у прорахунок.
-          </div>
-          {designTaskCandidatesLoading ? (
-            <div className="flex items-center gap-2 rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-6 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Завантаження...
-            </div>
-          ) : designTaskCandidates.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border/40 px-4 py-6 text-sm text-muted-foreground">
-              Немає standalone дизайн-задач для цього замовника.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {designTaskCandidates.map((candidate) => (
-                <div
-                  key={candidate.id}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-border/40 px-4 py-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-semibold text-foreground">
-                        {candidate.designTaskNumber ?? "Дизайн-задача"}
-                      </div>
-                      {candidate.status ? (
-                        <Badge variant="outline" className="h-5 px-2 text-3xs">
-                          {candidate.status}
-                        </Badge>
-                      ) : null}
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(candidate.createdAt).toLocaleDateString("uk-UA", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </div>
-                    </div>
-                    <div className="mt-1 truncate text-sm text-foreground">
-                      {candidate.title ?? "Без назви"}
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span>{candidate.outputsCount} файл(ів)</span>
-                      {candidate.selectedFile ? (
-                        <Badge
-                          variant="outline"
-                          className="tone-success h-5 px-2 text-3xs"
-                        >
-                          Обрано: {candidate.selectedFile.file_name}
-                        </Badge>
-                      ) : (
-                        <span>Візуал ще не вибрано</span>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => void attachExistingDesignTask(candidate)}
-                    disabled={attachingDesignTaskId === candidate.id}
-                    className="shrink-0"
-                  >
-                    {attachingDesignTaskId === candidate.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : null}
-                    Привʼязати
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setAttachDesignTaskDialogOpen(false)}>
-            Закрити
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     <Dialog
       open={Boolean(visualizationPreview)}
