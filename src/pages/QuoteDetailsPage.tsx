@@ -125,6 +125,7 @@ import {
 } from "@/features/quotes/quote-details/QuoteDesignTasksPanel";
 import { QuoteDeadlineOrderWarning } from "@/features/quotes/quote-details/QuoteDeadlineOrderWarning";
 import { QuoteFeed } from "@/features/quotes/quote-details/QuoteFeed";
+import { describeRunChanges } from "@/features/quotes/quote-details/quoteRunChanges";
 import { buildQuoteFeed } from "@/features/quotes/quote-details/quoteFeedEvents";
 import { QuoteRunRows } from "@/features/quotes/quote-details/QuoteRunRows";
 import {
@@ -221,6 +222,7 @@ import {
   uploadQuoteAttachmentFile,
   persistQuoteRuns,
   logQuoteActivity,
+  logQuoteRunChanges,
   updateQuoteFields,
   fetchDesignTaskRows,
   fetchQuotePartyOptions,
@@ -1168,6 +1170,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         setRunsSaving(false);
       };
 
+      // Знімок ДО перезавантаження: `loadRuns` перепише `runsOriginal` новими
+      // рядками, і порівнювати вже не буде з чим.
+      const previousRuns = runsOriginal;
+
       const saved = await persistQuoteRuns(quoteId, sanitized, idsToDelete);
       if (!saved.ok) return fail(saved.message);
 
@@ -1179,23 +1185,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       await withdrawSettledMarkupRef.current(
         sanitized.map((run) => ({ id: run.id, markup_rate: run.markup_rate, costTotal: getRunTotal(run) }))
       );
-      if (!silent) {
-        const logged = await logQuoteActivity(
-          {
-            teamId,
-            action: "прорахував тиражі",
-            entityType: "quotes",
-            entityId: quoteId,
-            title: `Прорахував тиражі для прорахунку ${quote?.number ?? ""}`.trim(),
-            href: `/orders/estimates/${quoteId}`,
-            metadata: { source: "quote_runs" },
-          },
-          "Не вдалося зберегти тиражі."
-        );
+      // У стрічку йде те, ЩО ЗМІНИЛОСЬ, а не «прорахував тиражі», — і на
+      // автозбереженні теж (майже всі зміни цін саме такі). Що вважається
+      // подією, вирішує `describeRunChanges`, там же й пояснення.
+      const runChanges = describeRunChanges(previousRuns, sanitized);
+      if (runChanges.length > 0) {
+        const logged = await logQuoteRunChanges({ teamId, quoteId, changes: runChanges });
         if (!logged.ok) return fail(logged.message);
         await loadActivityLog();
-        toast.success("Тиражі збережено");
       }
+      if (!silent) toast.success("Тиражі збережено");
     }
     setRunsSaving(false);
   };

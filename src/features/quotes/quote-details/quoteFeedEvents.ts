@@ -42,10 +42,20 @@ export type QuoteFeedEvent = {
   body?: string;
   /** Другий рядок: розмір файлу, позиція, примітка до події. */
   meta?: string;
+  /** «Було → стало». Порожнє `from` означає, що значення задали вперше. */
+  from?: string;
+  to?: string;
   icon: LucideIcon;
   accentClass?: string;
   /** Вкладення, з якого зроблена подія, — щоб рядок умів завантажити файл. */
   attachment?: QuoteAttachment;
+};
+
+export /** Три дедлайни прорахунку — і три джерела, якими їх пише журнал. */
+const DEADLINE_TITLES: Record<string, string | undefined> = {
+  quote_deadline: "Дедлайн відповіді замовнику",
+  design_deadline_at: "Дедлайн дизайну",
+  customer_deadline_at: "Дедлайн замовника",
 };
 
 export const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
@@ -96,9 +106,9 @@ export function buildQuoteFeed({
       kind: "event",
       actorId: item.changed_by ?? null,
       actorLabel: item.changed_by ? nameOf(item.changed_by) : "Система",
-      title: item.from_status
-        ? `${formatStatusLabel(fromStatus)} → ${formatStatusLabel(toStatus)}`
-        : `Статус: ${formatStatusLabel(toStatus)}`,
+      title: "Статус прорахунку",
+      from: item.from_status ? formatStatusLabel(fromStatus) : undefined,
+      to: formatStatusLabel(toStatus),
       meta: item.note ?? undefined,
       icon: statusIcons[toStatus] ?? Clock,
       accentClass: statusClasses[toStatus] ?? statusClasses.new,
@@ -153,12 +163,30 @@ export function buildQuoteFeed({
       const fromValue = typeof metadata.from === "string" ? metadata.from : null;
       const toValue = typeof metadata.to === "string" ? metadata.to : null;
 
+      // Назви трьох дедлайнів беруться з джерела запису: у метаданих
+      // вторинних дедлайнів лежить сама колонка, у головного — «quote_deadline».
+      const deadlineTitle = DEADLINE_TITLES[source];
       const title =
-        source === "quote_status" && fromValue && toValue
-          ? `${formatStatusLabel(normalizeStatus(fromValue))} → ${formatStatusLabel(normalizeStatus(toValue))}`
-          : source === "quote_deadline"
-            ? `Дедлайн: ${formatDeadlineLabel(fromValue)} → ${formatDeadlineLabel(toValue)}`
-            : row.title?.trim() || `${actorLabel} ${row.action ?? "оновив"}`.trim();
+        source === "quote_status"
+          ? "Статус прорахунку"
+          : deadlineTitle ??
+            (typeof metadata.label === "string" && metadata.label.trim()
+              ? metadata.label.trim()
+              : row.title?.trim() || `${actorLabel} ${row.action ?? "оновив"}`.trim());
+
+      // «Було → стало» — окремим рядком, а не всередині підпису. Підпис
+      // відповідає на «що змінилось», значення — на «з чого на що»; злиті в один
+      // рядок, вони читались як довга назва події.
+      const delta = deadlineTitle
+        ? { from: fromValue ? formatDeadlineLabel(fromValue) : "не заданий", to: formatDeadlineLabel(toValue) }
+        : source === "quote_status" && (fromValue || toValue)
+          ? {
+              from: fromValue ? formatStatusLabel(normalizeStatus(fromValue)) : undefined,
+              to: toValue ? formatStatusLabel(normalizeStatus(toValue)) : undefined,
+            }
+          : fromValue || toValue
+            ? { from: fromValue ?? undefined, to: toValue ?? undefined }
+            : null;
 
       const meta =
         typeof metadata.note === "string"
@@ -173,7 +201,7 @@ export function buildQuoteFeed({
           ? Calculator
           : source === "quote_items"
             ? Package
-            : source === "quote_deadline"
+            : deadlineTitle
               ? Calendar
               : source === "quote_status" && toValue
                 ? statusIcons[normalizeStatus(toValue)] ?? Clock
@@ -183,7 +211,7 @@ export function buildQuoteFeed({
           ? "quote-activity-accent-runs"
           : source === "quote_items"
             ? "quote-activity-accent-items"
-            : source === "quote_deadline"
+            : deadlineTitle
               ? "quote-activity-accent-deadline"
               : source === "quote_status" && toValue
                 ? statusClasses[normalizeStatus(toValue)] ?? statusClasses.new
@@ -197,6 +225,8 @@ export function buildQuoteFeed({
         actorLabel,
         title,
         meta,
+        from: delta?.from,
+        to: delta?.to,
         icon,
         accentClass,
       } satisfies QuoteFeedEvent;

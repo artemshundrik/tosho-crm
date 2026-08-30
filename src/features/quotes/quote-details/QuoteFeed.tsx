@@ -1,4 +1,4 @@
-import { ChevronDown, Clock, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
+import { ArrowRight, ChevronDown, Clock, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,20 @@ function FeedRow({
         </div>
         {isTalk && event.body ? (
           <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{event.body}</p>
+        ) : null}
+        {event.to ? (
+          /* «Було → стало». Старе значення закреслене й приглушене, нове —
+             моношрифтом на підкладці: у стрічці з двадцяти рядків саме нове
+             число шукають очима, і воно має чіплятись першим. */
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            {event.from ? (
+              <span className="text-muted-foreground line-through decoration-border">{event.from}</span>
+            ) : null}
+            {event.from ? <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden /> : null}
+            <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono font-semibold text-foreground">
+              {event.to}
+            </span>
+          </div>
         ) : null}
         {event.meta ? <p className="mt-0.5 text-xs text-muted-foreground">{event.meta}</p> : null}
         {event.attachment && event.attachment.storageBucket && event.attachment.storagePath ? (

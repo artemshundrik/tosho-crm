@@ -24,6 +24,8 @@ import { canOpenQuoteDetails } from "@/lib/permissions";
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
+
+import type { QuoteRunChange } from "./quoteRunChanges";
 import {
   createOrderFromApprovedQuote,
   loadOrderCreationDraft,
@@ -1278,6 +1280,36 @@ export async function linkDesignVisualizationToQuote(input: {
 }
 
 
+
+/**
+ * Зміни тиражів у журнал — по запису на кожну зміну.
+ *
+ * Окремими рядками, а не одним «прорахував тиражі»: стрічка справи показує
+ * значення «було → стало», і зшити їх в один запис означало б або втратити
+ * половину, або писати кашу в один рядок.
+ */
+export async function logQuoteRunChanges(params: {
+  teamId: string;
+  quoteId: string;
+  changes: QuoteRunChange[];
+}): Promise<QueryResult<null>> {
+  for (const change of params.changes) {
+    const logged = await logQuoteActivity(
+      {
+        teamId: params.teamId,
+        action: "змінив тиражі",
+        entityType: "quotes",
+        entityId: params.quoteId,
+        title: change.label,
+        href: `/orders/estimates/${params.quoteId}`,
+        metadata: { source: "quote_runs", label: change.label, from: change.from, to: change.to },
+      },
+      "Не вдалося зберегти тиражі."
+    );
+    if (!logged.ok) return logged;
+  }
+  return { ok: true, data: null };
+}
 
 export async function logDesignTaskEvent(
   params: Parameters<typeof logDesignTaskActivity>[0],
