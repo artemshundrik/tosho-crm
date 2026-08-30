@@ -45,7 +45,7 @@ If older docs conflict with current code, current code wins.
 
 ## Large files navigation
 
-`QuoteDetailsPage.tsx` (~8511 рядків), `DesignTaskPage.tsx` (~12865), `QuotesPage.tsx` (~8408), `DesignPage.tsx` (~5949) — станом на 30.08.2026. `Read` ріже по 2000 рядків, тож стрибай за офсетами з [docs/LARGE_FILES_MAP.md](docs/LARGE_FILES_MAP.md), а не скануй з першого рядка.
+`QuoteDetailsPage.tsx` (~8533 рядків), `DesignTaskPage.tsx` (~12865), `QuotesPage.tsx` (~8408), `DesignPage.tsx` (~5949) — станом на 30.08.2026. `Read` ріже по 2000 рядків, тож стрибай за офсетами з [docs/LARGE_FILES_MAP.md](docs/LARGE_FILES_MAP.md), а не скануй з першого рядка.
 
 ## Skills
 

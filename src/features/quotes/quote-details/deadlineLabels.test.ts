@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildDeadlineTabBadge, deadlineDiffDays, parseDeadlineDate } from "./deadlineLabels";
+import {
+  buildDeadlineTabBadge,
+  deadlineDiffDays,
+  isDesignDeadlineAfterAnswer,
+  parseDeadlineDate,
+} from "./deadlineLabels";
 
 /**
  * Підпис вкладки «Дедлайни» — те місце, де раніше висіло обрізане
@@ -86,5 +91,26 @@ describe("parseDeadlineDate", () => {
   it("читає настінний час, не перераховуючи в пояс браузера", () => {
     expect(parseDeadlineDate("2026-08-29T15:30:00+00:00")?.getHours()).toBe(15);
     expect(parseDeadlineDate("2026-08-29")?.getDate()).toBe(29);
+  });
+});
+
+describe("isDesignDeadlineAfterAnswer", () => {
+  it("макет після відповіді — попереджаємо", () => {
+    expect(isDesignDeadlineAfterAnswer("2026-09-02T12:00", "2026-08-05T12:00")).toBe(true);
+  });
+
+  it("макет раніше або в один час — нічого не сталося", () => {
+    expect(isDesignDeadlineAfterAnswer("2026-08-01T12:00", "2026-08-05T12:00")).toBe(false);
+    expect(isDesignDeadlineAfterAnswer("2026-08-05T12:00", "2026-08-05T12:00")).toBe(false);
+  });
+
+  it("той самий день, але макет пізніше по годинах — теж пастка", () => {
+    expect(isDesignDeadlineAfterAnswer("2026-08-05T18:00", "2026-08-05T10:00")).toBe(true);
+  });
+
+  it("однієї з дат немає — не порівнюємо", () => {
+    expect(isDesignDeadlineAfterAnswer(null, "2026-08-05T12:00")).toBe(false);
+    expect(isDesignDeadlineAfterAnswer("2026-08-05T12:00", null)).toBe(false);
+    expect(isDesignDeadlineAfterAnswer(null, null)).toBe(false);
   });
 });

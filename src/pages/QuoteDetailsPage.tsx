@@ -125,6 +125,7 @@ import {
   QuoteDesignTasksPanel,
   buildQuoteDesignTaskCards,
 } from "@/features/quotes/quote-details/QuoteDesignTasksPanel";
+import { QuoteDeadlineOrderWarning } from "@/features/quotes/quote-details/QuoteDeadlineOrderWarning";
 import { QuoteRunRows } from "@/features/quotes/quote-details/QuoteRunRows";
 import {
   parseDesignOutputMetaFiles,
@@ -781,6 +782,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    * в списку більше немає (інший прорахунок, задачу видалили).
    */
   const [activeDesignTaskId, setActiveDesignTaskId] = useState<string | null>(null);
+  /** Підвкладка «Дедлайнів». Керована, щоб попередження вміло привести до потрібної дати. */
+  const [deadlineSubTab, setDeadlineSubTab] = useState("internal");
   const [designTaskLoading, setDesignTaskLoading] = useState(false);
   const [designTaskError, setDesignTaskError] = useState<string | null>(null);
   const [designTaskSaving, setDesignTaskSaving] = useState(false);
@@ -4811,6 +4814,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }
 
   const deadlineTabBadge = buildDeadlineTabBadge(quote.deadline_at);
+
+  // Дві дати для попередження про порядок дедлайнів (REQ-155 p8). Беремо
+  // ЧЕРНЕТКУ — значення в полях: попередження має спрацювати в мить, коли дату
+  // набрали, а не після «Зберегти». Саме правило — у `deadlineLabels`.
+  const answerDeadlineValue = resolveDeadlinePreviewValue(deadlineDate, deadlineTime, quote.deadline_at);
+  const designDeadlineValue = resolveDeadlinePreviewValue(
+    designDeadlineDate,
+    designDeadlineTime,
+    quote.design_deadline_at
+  );
+
   const discussionCount = comments.length + attachments.length;
   const designBadge = designTask
     ? "Задача"
@@ -6287,8 +6301,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </div>
 
+              <QuoteDeadlineOrderWarning
+                designDeadline={designDeadlineValue}
+                answerDeadline={answerDeadlineValue}
+                designLabel={formatShortDeadlineLabel(designDeadlineValue)}
+                answerLabel={formatShortDeadlineLabel(answerDeadlineValue)}
+                onFix={() => setDeadlineSubTab("design")}
+              />
+
               <div className="space-y-4">
-                <Tabs defaultValue="internal" className="w-full">
+                <Tabs value={deadlineSubTab} onValueChange={setDeadlineSubTab} className="w-full">
                   <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
                   <TabsList className="grid h-auto w-full grid-cols-1 gap-2 border-0 bg-transparent p-0">
                     <TabsTrigger
