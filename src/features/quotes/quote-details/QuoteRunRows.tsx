@@ -74,11 +74,19 @@ export function QuoteRunRows({
 
   return (
     <div>
-      <div className="mb-1 px-2 text-xs font-semibold uppercase tracking-caps text-muted-foreground">
+      <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-muted-foreground">
         Тиражі
       </div>
 
-      <div role="radiogroup" aria-label="Тиражі позиції">
+      {/*
+        Підсвітка рядка вилазить за поле, самі рядки — ні (REQ-175#p27).
+
+        Рядку потрібне власне поле px-2, інакше кружечок вибору стоїть
+        упритул до тла підсвітки. Але це поле зсувало ВЕСЬ перелік на 8 px
+        правіше за підпис «Тиражі» й за решту вмісту картки. -mx-2 повертає
+        числа на спільну вертикаль, лишаючи підсвітці її поле.
+      */}
+      <div role="radiogroup" aria-label="Тиражі позиції" className="-mx-2">
         {runs.map((run, runIndex) => {
           const qty = Number(run.quantity) || 0;
           const isSelected = !!run.id && run.id === activeRunId;
@@ -103,7 +111,7 @@ export function QuoteRunRows({
                 onSelect(run);
               }}
               className={cn(
-                "grid cursor-pointer items-center gap-x-3 gap-y-1.5 rounded-xl border-b border-border/40 px-2 py-2.5 transition-colors last:border-b-0 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                "grid cursor-pointer items-center gap-x-3 gap-y-1.5 rounded-lg border-b border-border/40 px-2 py-2.5 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                 "grid-cols-[1.125rem_minmax(0,1fr)_auto]",
                 "md:grid-cols-[1.125rem_5.5rem_minmax(0,1fr)_11.5rem_9.5rem]"
               )}
@@ -194,7 +202,7 @@ export function QuoteRunRows({
       </div>
 
       {canAddRun ? (
-        <div className="mt-2 px-2">
+        <div className="mt-2">
           <button
             type="button"
             onClick={onAddRun}

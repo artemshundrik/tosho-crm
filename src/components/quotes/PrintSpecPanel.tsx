@@ -113,7 +113,7 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
   const filled = summary.length > 0;
 
   return (
-    <div className="mt-4 rounded-xl border border-border/50 bg-muted/10 p-4">
+    <div className="mt-4 rounded-xl border border-border/50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Settings2 className="h-4 w-4 text-muted-foreground" />

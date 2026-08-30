@@ -71,6 +71,7 @@ import {
 } from "@/lib/printPackage";
 import { parsePrintSpecMetadata } from "@/lib/printSpec";
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
+import { QuoteItemFact } from "@/features/quotes/quote-details/QuoteItemFact";
 import { normalizeUnitLabel } from "@/lib/units";
 import {
   DESIGN_TASK_TYPE_ICONS,
@@ -4606,11 +4607,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             ) : null}
 
             <section className={cn("tab-panel py-2", activeQuoteTab !== "products" && "hidden")}>
-              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+              {/* Заголовок без декоративного значка (REQ-175#p24): постійний
+                  акцентний тінт казав «тут щось відбувається» там, де це просто
+                  назва єдиної секції вкладки. Тінт — за станами, не за оздобленням. */}
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
-                    <Package className="h-4 w-4" />
-                  </div>
                   <div>
                     <div className="text-base font-semibold tracking-tight text-foreground">Товари і тиражі</div>
                     <div className="text-xs text-muted-foreground">
@@ -4641,7 +4642,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
 
               {itemsLockedHint ? (
-                <div className="mb-4 flex items-start gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground">
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-border/50 bg-card px-3 py-2.5 text-sm text-muted-foreground">
                   <Lock className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
                     {itemsLockedHint}{" "}
@@ -4662,7 +4663,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               ) : itemsError ? (
                 <div className="py-4 text-sm text-destructive">{itemsError}</div>
               ) : items.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/60 px-6 py-10 text-center">
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center">
                   <Package className="h-10 w-10 text-muted-foreground/30" />
                   <div>
                     <p className="font-medium">Модель не обрана</p>
@@ -4854,8 +4855,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div
                         key={item.id}
                         className={cn(
-                          "overflow-hidden rounded-4xl border border-border/60 bg-background",
-                          itemIndex > 0 && "mt-4"
+                          /* Картка — ПОВЕРХНЯ, а не обведення (REQ-175#p25).
+                             bg-background збігався з кольором сторінки, тож межу
+                             тримала сама лише дуга 22 px: порожній балон замість
+                             аркуша. Мова «Економіки» — крок поверхні bg-card плюс
+                             волосінь border/50 — тримає її кольором. */
+                          "overflow-hidden rounded-2xl border border-border/50 bg-card",
+                          itemIndex > 0 && "mt-3"
                         )}
                       >
                         {/*
@@ -4877,7 +4883,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           16 коштує по 4 px з боку — щільність від цього не
                           повертається до старої, а «впритул» зникає.
                         */}
-                        <div className="flex flex-col gap-3 p-2.5 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
+                        <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
                           <div className="shrink-0">
                             {productPreview?.type === "image" ? (
                               <KanbanImageZoomPreview
@@ -4885,11 +4891,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 zoomImageUrl={productPreview.zoomUrl}
                                 alt={modelLabel ?? "Товар"}
                                 loadStrategy="eager"
-                                className="h-20 w-20 rounded-2xl border-border/50 bg-muted/20 ring-1 ring-border/50 [&>div]:rounded-2xl"
+                                className="h-20 w-20 rounded-xl border-border/50 bg-muted/20 ring-1 ring-border/50 [&>div]:rounded-xl"
                                 imageClassName="object-cover"
                               />
                             ) : (
-                              <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-border/40 bg-muted/40">
+                              <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-border/50 bg-muted">
                                 <Package className="h-6 w-6 text-muted-foreground/50" />
                               </div>
                             )}
@@ -4908,7 +4914,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     <div className="text-sm text-muted-foreground">{metaLine}</div>
                                   ) : null}
                                   {packageSizeHint ? (
-                                    <span className="rounded-md border border-border/50 bg-muted/20 px-2 py-0.5 text-3xs font-medium uppercase tracking-caps text-muted-foreground">
+                                    <span className="rounded-md border border-border/50 bg-muted px-2 py-0.5 text-3xs font-medium uppercase tracking-caps text-muted-foreground">
                                       {packageSizeHint}
                                     </span>
                                   ) : null}
@@ -4916,12 +4922,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 {catalogVariant || itemSku ? (
                                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                                     {catalogVariant ? (
-                                      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-border/50 bg-muted/20 px-2 py-1">
+                                      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-border/50 bg-muted px-2 py-1">
                                         <span className="truncate">{catalogVariant.name}</span>
                                       </span>
                                     ) : null}
                                     {itemSku ? (
-                                      <span className="inline-flex items-center rounded-lg border border-border/50 bg-muted/20 px-2 py-1">
+                                      <span className="inline-flex items-center rounded-lg border border-border/50 bg-muted px-2 py-1">
                                         Артикул: {itemSku}
                                       </span>
                                     ) : null}
@@ -5030,25 +5036,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             {packageSections.length > 0 ? (
                               <div className="mt-4 space-y-3">
                                 {compactPrintFields.length > 0 ? (
-                                  <div className="flex flex-wrap gap-2">
+                                  <div className="flex flex-wrap gap-1.5">
                                     {compactPrintFields.map((field) => (
-                                      <span
+                                      <QuoteItemFact
                                         key={`print-summary:${field.label}:${field.value}`}
-                                        className="inline-flex min-h-14 min-w-[112px] max-w-full flex-col justify-center gap-1 rounded-xl border border-border/50 bg-muted/20 px-3 py-2"
-                                        title={`${field.label}: ${field.value}`}
-                                      >
-                                        <span className="text-3xs font-semibold uppercase leading-none tracking-caps text-muted-foreground">
-                                          {field.label === "Розмір (Ш × В × Г)" ? "Розмір" : field.label}
-                                        </span>
-                                        <span className="max-w-full truncate text-base font-semibold leading-none text-foreground/90">
-                                          {field.value}
-                                        </span>
-                                      </span>
+                                        label={field.label === "Розмір (Ш × В × Г)" ? "Розмір" : field.label}
+                                        value={field.value}
+                                      />
                                     ))}
                                   </div>
                                 ) : null}
 
-                                <details className="group rounded-xl border border-border/50 bg-muted/[0.04]">
+                                <details className="group rounded-xl border border-border/50">
                                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
                                     <div>
                                       <div className="text-sm font-semibold text-foreground">Специфікація поліграфії</div>
@@ -5062,7 +5061,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     {packageSections.map((section) => (
                                       <div
                                         key={section.title}
-                                        className="rounded-lg border border-border/40 bg-background/60 p-3"
+                                        className="rounded-lg border border-border/50 bg-muted p-3"
                                       >
                                         <div className="mb-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                                           {section.title}
@@ -5086,27 +5085,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 </details>
                               </div>
                             ) : renderedSections.length > 0 ? (
-                              <div className="mt-4 flex flex-wrap gap-2">
+                              <div className="mt-4 flex flex-wrap gap-1.5">
                                 {renderedSections.map((section) => (
-                                  <div
-                                    key={section.title}
-                                    className="contents"
-                                  >
+                                  <div key={section.title} className="contents">
                                     {section.fields.map((field) => (
-                                      <span
+                                      <QuoteItemFact
                                         key={`${section.title}:${field.label}`}
-                                        className="inline-flex min-h-14 min-w-[112px] max-w-full flex-col justify-center gap-1 rounded-xl border border-border/50 bg-muted/20 px-3 py-2"
-                                        title={field.value ? `${field.label}: ${field.value}` : field.label}
-                                      >
-                                        <span className="text-3xs font-semibold uppercase leading-none tracking-caps text-muted-foreground">
-                                          {field.label}
-                                        </span>
-                                        {field.value ? (
-                                          <span className="max-w-full truncate text-base font-semibold leading-none text-foreground/90">
-                                            {field.value}
-                                          </span>
-                                        ) : null}
-                                      </span>
+                                        label={field.label}
+                                        value={field.value}
+                                      />
                                     ))}
                                   </div>
                                 ))}
@@ -5143,7 +5130,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             ) : null}
                             </div>
 
-                            <div className="mt-5 -mx-5 border-t border-border/50 px-5 pt-4 pb-0 sm:mr-0 sm:-ml-[6.5rem] sm:w-[calc(100%+6.5rem)] sm:px-0">
+                            {/* Ярус тиражів вирівняний з карткою (REQ-175#p27).
+                                Було -ml-[6.5rem] при мініатюрі 80 px і проміжку
+                                16 px — на 8 px лівіше за все інше; на телефоні
+                                -mx-5/px-5 не збігалось із полем картки взагалі.
+                                Зсув = «мініатюра + проміжок», на вузькому екрані
+                                його немає: колонка там і так на всю ширину. */}
+                            <div className="mt-5 border-t border-border/50 pt-4 pb-0 sm:-ml-[6rem] sm:w-[calc(100%+6rem)]">
                               {(() => {
                                 const activeItemRun = getSelectedRunForItem(item.id);
                                 const activeItemRunIndex = getRunIndex(activeItemRun);
