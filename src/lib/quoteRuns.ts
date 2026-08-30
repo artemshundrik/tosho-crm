@@ -43,6 +43,10 @@ export type RunSalePricing = {
  * Єдине джерело правди для розрахунку — використовується і в калькуляторі прорахунку
  * (QuoteDetailsPage `getRunPricing`), і в КП (QuotesPage `buildCommercialDocument`).
  */
+// ЧОМУ ЦЯ ФУНКЦІЯ ЩЕ ТУТ, хоч застосунок нею більше не рахує. На ній тримається
+// доказ, що переїзд на накрутку не зрушив жодної ціни: тест ганяє одні й ті самі
+// вхідні крізь обидві форми й вимагає збігу. Прибрати її означає прибрати
+// перевірку, а не мертвий код.
 export function computeRunSalePricing(params: {
   quantity: number;
   costTotal: number;
@@ -327,62 +331,4 @@ export function mergeQuoteRunsWithExisting({
     .filter((id): id is string => typeof id === "string" && id.trim().length > 0 && !keptIds.has(id));
 
   return { payload, idsToDelete };
-}
-
-/**
- * Пороги, нижче яких прорахунок зберігати не можна.
- *
- * Причина (замір на проді 18.08.2026): за 90 днів 44 тиражі мали порожній
- * «бажаний заробіток», а отже НУЛЬОВУ націнку — ціна дорівнювала собівартості,
- * і два таких прорахунки вже пройшли погодження. Уся націнка виводиться з
- * одного поля, і якщо його не заповнили, зникає все: і прибуток, і постійні
- * витрати, і податковий резерв. Жодного сигналу при цьому не було.
- *
- * Рішення CEO 18.08: заробіток від 150 ₴, націнка від 1000 ₴.
- */
-export const MIN_MANAGER_INCOME = 150;
-export const MIN_RUN_MARKUP = 1000;
-
-export type RunEconomicsIssueCode = "empty_income" | "income_below_min" | "markup_below_min";
-
-export type RunEconomicsIssue = {
-  code: RunEconomicsIssueCode;
-  /** Порахована націнка — щоб UI показав, чого саме бракує. */
-  markupTotal: number;
-  minIncome: number;
-  minMarkup: number;
-};
-
-/**
- * Чи можна зберігати цей тираж. `null` — можна.
- *
- * ДВА ПОРОГИ, а не один: при чинних ставках (10–20 %) поріг заробітку 150 ₴
- * уже дає націнку від 1170 ₴, тож поріг націнки не спрацьовує. Але він
- * почне діяти, щойно ставка перевищить ~23 % або зміняться постійні витрати
- * чи податковий резерв — тому обидва рахуються ЖИВОЮ формулою від чинних
- * ставок, а не зашитими похідними числами.
- *
- * Тираж без собівартості не перевіряємо: це заготовка, яку щойно додали, і
- * забороняти зберігати недописаний прорахунок було б знущанням. Поріг
- * вмикається рівно тоді, коли з'являються гроші.
- */
-export function validateRunEconomics(params: {
-  quantity: number;
-  costTotal: number;
-  desiredManagerIncome: number;
-  managerRate: number;
-  fixedCostRate: number;
-  vatRate: number;
-}): RunEconomicsIssue | null {
-  const costTotal = Number(params.costTotal) || 0;
-  if (costTotal <= 0) return null;
-
-  const income = Math.max(0, Number(params.desiredManagerIncome) || 0);
-  const pricing = computeRunSalePricing(params);
-  const base = { markupTotal: pricing.markupTotal, minIncome: MIN_MANAGER_INCOME, minMarkup: MIN_RUN_MARKUP };
-
-  if (income <= 0) return { code: "empty_income", ...base };
-  if (income < MIN_MANAGER_INCOME) return { code: "income_below_min", ...base };
-  if (pricing.markupTotal < MIN_RUN_MARKUP) return { code: "markup_below_min", ...base };
-  return null;
 }

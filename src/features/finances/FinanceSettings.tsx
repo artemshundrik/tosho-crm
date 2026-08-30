@@ -33,7 +33,7 @@ import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/contro
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
-import { computeRunSalePricing } from "@/lib/quoteRuns";
+import { computeRunSalePricingFromMarkup, DEFAULT_MARKUP_RATE } from "@/lib/quoteRuns";
 import {
   loadCompanyPricingRates,
   loadCompanyPricingRateHistory,
@@ -1018,17 +1018,25 @@ function PricingRatesPanel() {
   const dirty = parsed.fixed !== savedFixed || parsed.vat !== savedVat;
   const valid = parsed.fixed !== null && parsed.vat !== null;
 
-  // Приклад із живою формулою: ставка сама по собі нічого не каже, а «націнка
-  // на цьому тиражі виросте на N ₴» — каже.
+  // Приклад із живою формулою: ставка сама по собі нічого не каже, а «прибуток
+  // на цьому тиражі впаде на N ₴» — каже.
+  //
+  // ЩО САМЕ ПОКАЗУЄМО, ЗМІНИЛОСЬ 30.08.2026. Доти ціна виводилась із бажаного
+  // заробітку, і підняття постійних витрат чи ПДВ ПІДНІМАЛО ціну для клієнта —
+  // тому прев'ю й показувало «націнка зросте». Тепер ціну задає накрутка на
+  // собівартість, а ставки лише ділять цю накрутку всередині: ціна для клієнта
+  // не рухається взагалі, зате з тих самих грошей компанії лишається менше.
+  // Показувати тут зростання ціни означало б лякати керівництво наслідком,
+  // якого не буде, і ховати той, який буде.
   const preview = React.useMemo(() => {
-    const sample = { quantity: 180, costTotal: 8172, desiredManagerIncome: 500, managerRate: 10 };
-    const was = computeRunSalePricing({ ...sample, fixedCostRate: savedFixed, vatRate: savedVat });
-    const now = computeRunSalePricing({
+    const sample = { quantity: 180, costTotal: 8172, markupRate: DEFAULT_MARKUP_RATE, managerRate: 10 };
+    const was = computeRunSalePricingFromMarkup({ ...sample, fixedCostRate: savedFixed, vatRate: savedVat });
+    const now = computeRunSalePricingFromMarkup({
       ...sample,
       fixedCostRate: parsed.fixed ?? savedFixed,
       vatRate: parsed.vat ?? savedVat,
     });
-    return { was, now, diff: now.markupTotal - was.markupTotal };
+    return { was, now, diff: now.requiredGrossProfit - was.requiredGrossProfit };
   }, [parsed.fixed, parsed.vat, savedFixed, savedVat]);
 
   const handleSave = async () => {
@@ -1146,13 +1154,15 @@ function PricingRatesPanel() {
             </p>
             <div className="mt-3 space-y-1.5 text-xs">
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Націнка зараз</span>
-                <span className="font-mono font-semibold tabular-nums">{money(preview.was.markupTotal)}</span>
+                <span className="text-muted-foreground">Прибуток зараз</span>
+                <span className="font-mono font-semibold tabular-nums">
+                  {money(preview.was.requiredGrossProfit)}
+                </span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Націнка стане</span>
+                <span className="text-muted-foreground">Прибуток стане</span>
                 <span className="font-mono font-semibold tabular-nums text-primary">
-                  {money(preview.now.markupTotal)}
+                  {money(preview.now.requiredGrossProfit)}
                 </span>
               </div>
               <div className="flex justify-between gap-3 border-t border-border/60 pt-1.5">
@@ -1162,10 +1172,14 @@ function PricingRatesPanel() {
                 </span>
               </div>
             </div>
+            <p className="mt-3 text-2xs leading-relaxed text-muted-foreground">
+              Ціна для клієнта від цих ставок не залежить — її задає накрутка на собівартість.
+              Ставки ділять уже зібрану націнку між прибутком, постійними витратами й резервом.
+            </p>
             {Math.abs(preview.diff) >= 0.5 ? (
-              <p className="mt-3 text-2xs leading-relaxed text-amber-700 dark:text-amber-400">
-                Націнка {preview.diff > 0 ? "зросте" : "впаде"} на {money(Math.abs(preview.diff))} на цьому
-                прикладі.
+              <p className="mt-1.5 text-2xs leading-relaxed text-amber-700 dark:text-amber-400">
+                Прибуток {preview.diff > 0 ? "зросте" : "впаде"} на {money(Math.abs(preview.diff))} на цьому
+                прикладі — з тих самих грошей клієнта.
               </p>
             ) : null}
           </div>
