@@ -13,44 +13,45 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~8 694 lines, 414 KB, as of 2026-08-30)
+## src/pages/QuoteDetailsPage.tsx (~8 511 lines, 405 KB, as of 2026-08-30)
 
 Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p7. За цю роботу файл
-СХУДНУВ на 1 200 рядків: вкладка «Дизайн» поїхала в окремий модуль, а разом із
-нею — мертвий після редизайну редактор ТЗ і привʼязка наявних задач. Тому все
-нижче 1 300 зсунулось УГОРУ на сотні рядків, а не вниз, як звикле.
+СХУДНУВ на 1 340 рядків: вкладка «Дизайн» поїхала в окремий модуль, розбір
+файлів-виходів дизайну — у `designOutputFiles.ts`, а мертвий після редизайну
+редактор ТЗ прибрано. Тому все нижче 1 200 зсунулось УГОРУ на сотні рядків, а не
+вниз, як звикле.
 
 Якщо цифра нижче не сходиться, звіряй grep-ом і онови тут: мапа, якій не вірять,
 гірша за її відсутність.
 
 | Range | Content |
 |---|---|
-| 1–250 | imports |
-| 251–714 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `parseDesignOutputMetaFiles`, `renderBriefRichText`) |
-| **715** | `export function QuoteDetailsPage(...)` — main component starts |
-| **1232** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
-| 1349 / 1353 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
-| 1525 / 1576 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
-| **2127** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
-| 2304 / 2351 | `handlePrimaryStatusAction`, `handleCreateOrder` |
-| 3737 / 3851 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
-| 3939 / 4041 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
-| 4054 / 4170 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
-| 4382 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
-| 4497 / 4738 | items: `handleSaveItem`, `handleAddComment` |
-| **5005** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
-| 5080–5236 | `<header>`: статус-контрол (DropdownMenu) + меню «⋮» (там же «Створити дизайн-задачу») |
-| 5251 | смуга вкладок — спільний `<TabBar>` (`src/components/ui/tab-bar.tsx`); риска ПЕРЕЇЖДЖАЄ окремим вузлом, псевдоелемента `after:` у файлі більше немає |
-| 5292 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
-| 5353 | вкладка «Товари» — `<section className="tab-panel">` |
-| 5360 | картка «Товари і тиражі» — заголовок |
-| 5908 | `<QuoteRunRows>` — перелік тиражів рядками на жорсткій сітці; розмітка в `src/features/quotes/quote-details/QuoteRunRows.tsx` |
-| 5991 / 6009 | активний тираж: `<QuoteRunPriceFields>` (чотири поля) і `<QuoteRunMarkupPanel>` (накрутка зі шкалою + ціна з розкладом) |
-| 6065–6448 | окрема картка «Тиражі» (`<details className="hidden">` — мертва, не рендериться) |
-| 6450 / 6852 | вкладки «Дедлайни», «Дизайн» |
-| 6880 | `<QuoteDesignTasksPanel>` — уся вкладка «Дизайн»: пігулки задач, шапка Ш1, ТЗ, візуали, вихідні матеріали. Розмітка в `src/features/quotes/quote-details/QuoteDesignTasksPanel.tsx`, дані збирає `designTaskCards` поруч із `runSections` |
-| 6934 / 7507 | вкладки «Обговорення», «Економіка» (заглушка `EconomicsComingSoon`) |
-| 8579 | діалог «Створити замовлення» |
+| 1–245 | imports |
+| 246–588 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `renderBriefRichText`); розбір файлів дизайну переїхав у `quote-details/designOutputFiles.ts` |
+| **589** | `export function QuoteDetailsPage(...)` — main component starts |
+| **1106** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
+| 1223 / 1227 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
+| 1399 / 1450 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
+| **2001** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
+| 2178 / 2225 | `handlePrimaryStatusAction`, `handleCreateOrder` |
+| 3554 / 3668 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
+| 3756 / 3858 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
+| 3871 / 3987 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
+| 4199 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
+| 4314 / 4555 | items: `handleSaveItem`, `handleAddComment` |
+| **4822** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
+| 4897–5053 | `<header>`: статус-контрол (DropdownMenu) + меню «⋮» (там же «Створити дизайн-задачу») |
+| 5068 | смуга вкладок — спільний `<TabBar>` (`src/components/ui/tab-bar.tsx`); риска ПЕРЕЇЖДЖАЄ окремим вузлом, псевдоелемента `after:` у файлі більше немає |
+| 5109 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
+| 5170 | вкладка «Товари» — `<section className="tab-panel">` |
+| 5177 | картка «Товари і тиражі» — заголовок |
+| 5725 | `<QuoteRunRows>` — перелік тиражів рядками на жорсткій сітці; розмітка в `src/features/quotes/quote-details/QuoteRunRows.tsx` |
+| 5808 / 5826 | активний тираж: `<QuoteRunPriceFields>` (чотири поля) і `<QuoteRunMarkupPanel>` (накрутка зі шкалою + ціна з розкладом) |
+| 5882–6265 | окрема картка «Тиражі» (`<details className="hidden">` — мертва, не рендериться) |
+| 6267 / 6669 | вкладки «Дедлайни», «Дизайн» |
+| 6697 | `<QuoteDesignTasksPanel>` — уся вкладка «Дизайн»: пігулки задач, шапка Ш1, ТЗ, візуали, вихідні матеріали. Розмітка й збирач карток (`buildQuoteDesignTaskCards`) — у `src/features/quotes/quote-details/QuoteDesignTasksPanel.tsx` |
+| 6751 / 7324 | вкладки «Обговорення», «Економіка» (заглушка `EconomicsComingSoon`) |
+| 8396 | діалог «Створити замовлення» |
 
 ## src/pages/DesignTaskPage.tsx (~12 865 lines, 583 KB, as of 2026-08-30)
 

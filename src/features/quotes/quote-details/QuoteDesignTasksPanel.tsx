@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
-import { ExternalLink, FileText, Image as ImageIcon, Package, Paperclip, Pencil, Upload } from "lucide-react";
+import {
+  ExternalLink,
+  FileText,
+  Image as ImageIcon,
+  Package,
+  Paperclip,
+  Pencil,
+  Upload,
+} from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
@@ -7,10 +15,12 @@ import { Button } from "@/components/ui/button";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { getAttachmentDisplayFileName } from "@/lib/attachmentPreview";
 import { DESIGN_STATUS_LABELS, type DesignStatus } from "@/lib/designTaskStatus";
+import { DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } from "@/lib/designTaskType";
 import { designStatusTone, toneDotClass, toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 
-import { canPreviewDocumentThumb, canPreviewImage, getFileExtension } from "./config";
+import { canPreviewDocumentThumb, canPreviewImage, formatFileSize, getFileExtension } from "./config";
+import { parseDesignOutputMetaFiles } from "./designOutputFiles";
 import type { QuoteAttachment } from "./queries";
 
 /**
@@ -78,6 +88,142 @@ const formatWhen = (value: string | null) => {
 };
 
 const MetaDot = () => <span className="h-1 w-1 shrink-0 rounded-full bg-border" aria-hidden />;
+
+
+/** Рядок дизайн-задачі як його віддає activity_log. */
+export type QuoteDesignTaskSource = {
+  id: string;
+  title?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+/**
+ * Секція товару зі сторінки: мініатюра, підпис і ТИРАЖ — усе, що треба картці.
+ *
+ * Тираж приходить уже вибраним, а не масивом тиражів. Це не дрібниця: «який із
+ * тиражів рахується» — правило погодженого тиражу, і живе воно в `quoteRuns`
+ * разом із єдиним читачем на сторінці. Другий читач тут розійшовся б із
+ * вкладкою «Товари» на першій же зміні правила.
+ */
+export type QuoteDesignSectionSource = {
+  key: string;
+  title: string;
+  meta: string;
+  imageUrl: string | null;
+  unitLabel: string;
+  quantity: number | null;
+};
+
+/**
+ * Складання карток вкладки «Дизайн» із сирих даних сторінки.
+ *
+ * ВІЗУАЛИ БЕРУТЬСЯ З МЕТАДАНИХ САМОЇ ЗАДАЧІ (design_output_files), а не зі
+ * спільного списку файлів прорахунку. Спільний для цього не годиться: у нього
+ * фоновий ефект докладає лише ОБРАНИЙ вихід, і на двох задачах він однаково не
+ * сказав би, чий це файл.
+ *
+ * Виняток — прорахунок з ОДНІЄЮ задачею: там до її списку доливаються файли
+ * прорахунку, яких немає в метаданих. На старих задачах візуали лежать тільки
+ * там, і без цього вони б зникли з екрана. З тієї ж причини й ТЗ прорахунку
+ * підставляється запасним варіантом лише при одній задачі: на двох спільний
+ * текст приписав би одній із них чуже ТЗ.
+ */
+export function buildQuoteDesignTaskCards({
+  tasks: designTasks,
+  sections: runSections,
+  visualizations: designVisualizations,
+  quoteBrief: rawQuoteBrief,
+  memberById,
+  memberAvatarById,
+}: {
+  tasks: QuoteDesignTaskSource[];
+  sections: QuoteDesignSectionSource[];
+  visualizations: QuoteAttachment[];
+  quoteBrief: string | null;
+  memberById: Map<string, string>;
+  memberAvatarById: Map<string, string | null>;
+}): QuoteDesignTaskCard[] {
+    const sectionByItemId = new Map(runSections.map((section) => [section.key, section]));
+    const single = designTasks.length === 1;
+    const quoteBrief = (rawQuoteBrief ?? "").trim();
+
+    return designTasks.map((task) => {
+      const metadata = task.metadata ?? {};
+      const readString = (key: string) => {
+        const value = metadata[key];
+        return typeof value === "string" && value.trim() ? value.trim() : null;
+      };
+      const itemId = readString("quote_item_id");
+      const section = itemId ? sectionByItemId.get(itemId) ?? null : null;
+      const taskType = parseDesignTaskType(metadata.design_task_type);
+
+      const visuals: QuoteAttachment[] = parseDesignOutputMetaFiles(metadata.design_output_files).map(
+        (file) => ({
+          id: file.id,
+          name: file.file_name,
+          size: formatFileSize(file.file_size),
+          created_at: file.created_at,
+          mimeType: file.mime_type,
+          uploadedBy: file.uploaded_by,
+          uploadedByLabel: file.uploaded_by ? memberById.get(file.uploaded_by) : undefined,
+          storageBucket: file.storage_bucket,
+          storagePath: file.storage_path,
+        })
+      );
+      if (single) {
+        designVisualizations.forEach((file) => {
+          if (visuals.some((known) => known.storagePath && known.storagePath === file.storagePath)) return;
+          visuals.push(file);
+        });
+      }
+
+      const selectedId = readString("selected_design_output_file_id");
+      const selectedPath = readString("selected_design_output_storage_path");
+      const selectedName = readString("selected_design_output_file_name");
+      const selected =
+        visuals.find((file) => selectedId && file.id === selectedId) ??
+        visuals.find((file) => selectedPath && file.storagePath === selectedPath) ??
+        visuals.find((file) => selectedName && file.name === selectedName) ??
+        null;
+      // Обраний іде першим: саме він потрапляє в КП і в замовлення.
+      const ordered = selected
+        ? [selected, ...visuals.filter((file) => file.id !== selected.id)]
+        : visuals;
+
+      const assigneeId = readString("assignee_user_id");
+      const quantity = section?.quantity ?? 0;
+
+      return {
+        id: task.id,
+        number: readString("design_task_number"),
+        title:
+          readString("model") ??
+          readString("quote_item_title") ??
+          section?.title ??
+          task.title?.trim() ??
+          "Дизайн-задача",
+        typeLabel: taskType ? DESIGN_TASK_TYPE_LABELS[taskType] : null,
+        imageUrl: section?.imageUrl ?? null,
+        status: readString("status"),
+        itemMeta:
+          [section?.meta || null, quantity > 0 ? `тираж ${quantity} ${section?.unitLabel ?? "шт."}` : null]
+            .filter(Boolean)
+            .join(" · ") || null,
+        assignee: assigneeId
+          ? {
+              name: memberById.get(assigneeId) ?? "Виконавець",
+              avatarUrl: memberAvatarById.get(assigneeId) ?? null,
+            }
+          : null,
+        deadline: readString("design_deadline") ?? readString("deadline"),
+        // ТЗ прорахунку — запасний варіант, і тільки коли задача одна: на двох
+        // задачах спільний текст приписав би одній із них чуже ТЗ.
+        brief: readString("design_brief") ?? (single && quoteBrief ? quoteBrief : null),
+        visuals: ordered,
+        selectedVisualId: selected?.id ?? null,
+      } satisfies QuoteDesignTaskCard;
+    });
+}
 
 function VisualCard({
   file,

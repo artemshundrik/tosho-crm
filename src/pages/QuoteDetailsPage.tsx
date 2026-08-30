@@ -123,9 +123,13 @@ import { QuoteRunMarkupPanel } from "@/features/quotes/quote-details/QuoteRunMar
 import { QuoteRunPriceFields } from "@/features/quotes/quote-details/QuoteRunPriceFields";
 import {
   QuoteDesignTasksPanel,
-  type QuoteDesignTaskCard,
+  buildQuoteDesignTaskCards,
 } from "@/features/quotes/quote-details/QuoteDesignTasksPanel";
 import { QuoteRunRows } from "@/features/quotes/quote-details/QuoteRunRows";
+import {
+  parseDesignOutputMetaFiles,
+  removeDesignOutputReferencesFromMetadata,
+} from "@/features/quotes/quote-details/designOutputFiles";
 import {
   QuoteMarkupDecisionDialog,
   QuoteMarkupGateBanner,
@@ -471,16 +475,6 @@ type MentionDropdownState = {
   side: "top" | "bottom";
   maxHeight: number;
 };
-type DesignOutputMetaFile = {
-  id: string;
-  file_name: string;
-  file_size: number | null;
-  mime_type: string | null;
-  storage_bucket: string;
-  storage_path: string;
-  uploaded_by: string | null;
-  created_at: string;
-};
 
 type ResolvedCatalogSelection = {
   typeId?: string;
@@ -515,126 +509,6 @@ const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
   if (typeof value === "object") return value as Record<string, unknown>;
   return {};
 };
-
-const parseDesignOutputMetaFiles = (value: unknown): DesignOutputMetaFile[] => {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((row) => {
-      if (!row || typeof row !== "object") return null;
-      const entry = row as Record<string, unknown>;
-      const fileName = typeof entry.file_name === "string" && entry.file_name ? entry.file_name : null;
-      const storageBucket =
-        typeof entry.storage_bucket === "string" && entry.storage_bucket ? entry.storage_bucket : null;
-      const storagePath = typeof entry.storage_path === "string" && entry.storage_path ? entry.storage_path : null;
-      if (!fileName || !storageBucket || !storagePath) return null;
-      return {
-        id: typeof entry.id === "string" && entry.id ? entry.id : crypto.randomUUID(),
-        file_name: fileName,
-        file_size: entry.file_size == null ? null : Number(entry.file_size),
-        mime_type: typeof entry.mime_type === "string" ? entry.mime_type : null,
-        storage_bucket: storageBucket,
-        storage_path: storagePath,
-        uploaded_by: typeof entry.uploaded_by === "string" ? entry.uploaded_by : null,
-        created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
-      } satisfies DesignOutputMetaFile;
-    })
-    .filter(Boolean) as DesignOutputMetaFile[];
-};
-
-const filterSelectedOutputIds = (value: unknown, removedIds: Set<string>) =>
-  Array.isArray(value)
-    ? value
-        .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
-        .filter((entry) => !removedIds.has(entry))
-    : [];
-
-const filterSelectedOutputLabels = (value: unknown, removedIds: Set<string>) => {
-  if (!value || typeof value !== "object") return {};
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).filter(([key]) => !removedIds.has(key))
-  );
-};
-
-function removeDesignOutputReferencesFromMetadata(
-  metadata: Record<string, unknown>,
-  storageBucket: string,
-  storagePath: string
-) {
-  const files = parseDesignOutputMetaFiles(metadata.design_output_files);
-  const remainingFiles = files.filter(
-    (file) => !(file.storage_bucket === storageBucket && file.storage_path === storagePath)
-  );
-  if (remainingFiles.length === files.length) return null;
-
-  const removedIds = new Set(
-    files
-      .filter((file) => file.storage_bucket === storageBucket && file.storage_path === storagePath)
-      .map((file) => file.id)
-  );
-  const nextMetadata: Record<string, unknown> = {
-    ...metadata,
-    design_output_files: remainingFiles.map((file) => ({
-      id: file.id,
-      file_name: file.file_name,
-      file_size: file.file_size,
-      mime_type: file.mime_type,
-      storage_bucket: file.storage_bucket,
-      storage_path: file.storage_path,
-      uploaded_by: file.uploaded_by,
-      created_at: file.created_at,
-    })),
-    selected_design_output_file_ids: filterSelectedOutputIds(metadata.selected_design_output_file_ids, removedIds),
-    selected_visual_output_file_ids: filterSelectedOutputIds(metadata.selected_visual_output_file_ids, removedIds),
-    selected_layout_output_file_ids: filterSelectedOutputIds(metadata.selected_layout_output_file_ids, removedIds),
-    selected_visual_output_labels: filterSelectedOutputLabels(metadata.selected_visual_output_labels, removedIds),
-    selected_layout_output_labels: filterSelectedOutputLabels(metadata.selected_layout_output_labels, removedIds),
-  };
-
-  if (
-    metadata.selected_design_output_storage_bucket === storageBucket &&
-    metadata.selected_design_output_storage_path === storagePath
-  ) {
-    nextMetadata.selected_design_output_file_id = null;
-    nextMetadata.selected_design_output_file_name = null;
-    nextMetadata.selected_design_output_storage_bucket = null;
-    nextMetadata.selected_design_output_storage_path = null;
-    nextMetadata.selected_design_output_mime_type = null;
-    nextMetadata.selected_design_output_file_size = null;
-    nextMetadata.selected_design_output_selected_at = null;
-    nextMetadata.selected_design_output_selected_by = null;
-    nextMetadata.selected_design_output_selected_by_label = null;
-  }
-  if (
-    metadata.selected_visual_output_storage_bucket === storageBucket &&
-    metadata.selected_visual_output_storage_path === storagePath
-  ) {
-    nextMetadata.selected_visual_output_file_id = null;
-    nextMetadata.selected_visual_output_file_name = null;
-    nextMetadata.selected_visual_output_storage_bucket = null;
-    nextMetadata.selected_visual_output_storage_path = null;
-    nextMetadata.selected_visual_output_mime_type = null;
-    nextMetadata.selected_visual_output_file_size = null;
-    nextMetadata.selected_visual_output_selected_at = null;
-    nextMetadata.selected_visual_output_selected_by = null;
-    nextMetadata.selected_visual_output_selected_by_label = null;
-  }
-  if (
-    metadata.selected_layout_output_storage_bucket === storageBucket &&
-    metadata.selected_layout_output_storage_path === storagePath
-  ) {
-    nextMetadata.selected_layout_output_file_id = null;
-    nextMetadata.selected_layout_output_file_name = null;
-    nextMetadata.selected_layout_output_storage_bucket = null;
-    nextMetadata.selected_layout_output_storage_path = null;
-    nextMetadata.selected_layout_output_mime_type = null;
-    nextMetadata.selected_layout_output_file_size = null;
-    nextMetadata.selected_layout_output_selected_at = null;
-    nextMetadata.selected_layout_output_selected_by = null;
-    nextMetadata.selected_layout_output_selected_by_label = null;
-  }
-
-  return nextMetadata;
-}
 
 const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -2637,93 +2511,36 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    * прорахунку, яких немає в метаданих. На старих задачах візуали лежать тільки
    * там, і без цього вони б зникли з екрана.
    */
-  const designTaskCards = useMemo<QuoteDesignTaskCard[]>(() => {
-    const sectionByItemId = new Map(runSections.map((section) => [section.key, section]));
-    const single = designTasks.length === 1;
-    const quoteBrief = (quote?.design_brief ?? "").trim();
-
-    return designTasks.map((task) => {
-      const metadata = task.metadata ?? {};
-      const readString = (key: string) => {
-        const value = metadata[key];
-        return typeof value === "string" && value.trim() ? value.trim() : null;
-      };
-      const itemId = readString("quote_item_id");
-      const section = itemId ? sectionByItemId.get(itemId) ?? null : null;
-      const taskType = parseDesignTaskType(metadata.design_task_type);
-
-      const visuals: QuoteAttachment[] = parseDesignOutputMetaFiles(metadata.design_output_files).map(
-        (file) => ({
-          id: file.id,
-          name: file.file_name,
-          size: formatFileSize(file.file_size),
-          created_at: file.created_at,
-          mimeType: file.mime_type,
-          uploadedBy: file.uploaded_by,
-          uploadedByLabel: file.uploaded_by ? memberById.get(file.uploaded_by) : undefined,
-          storageBucket: file.storage_bucket,
-          storagePath: file.storage_path,
-        })
-      );
-      if (single) {
-        designVisualizations.forEach((file) => {
-          if (visuals.some((known) => known.storagePath && known.storagePath === file.storagePath)) return;
-          visuals.push(file);
-        });
-      }
-
-      const selectedId = readString("selected_design_output_file_id");
-      const selectedPath = readString("selected_design_output_storage_path");
-      const selectedName = readString("selected_design_output_file_name");
-      const selected =
-        visuals.find((file) => selectedId && file.id === selectedId) ??
-        visuals.find((file) => selectedPath && file.storagePath === selectedPath) ??
-        visuals.find((file) => selectedName && file.name === selectedName) ??
-        null;
-      // Обраний іде першим: саме він потрапляє в КП і в замовлення.
-      const ordered = selected
-        ? [selected, ...visuals.filter((file) => file.id !== selected.id)]
-        : visuals;
-
-      const assigneeId = readString("assignee_user_id");
-      // Тираж беремо той самий, що піде в замовлення: погоджений клієнтом, а
-      // якщо позначки ще немає — перший. Інакше в шапці задачі стояло б одне
-      // число, а в «Товарах» інше.
-      const runForItem =
-        section?.runs.find((entry) => entry.run.is_approved)?.run ?? section?.runs[0]?.run ?? null;
-      const quantity = Number(runForItem?.quantity) || 0;
-
-      return {
-        id: task.id,
-        number: readString("design_task_number"),
-        title:
-          readString("model") ??
-          readString("quote_item_title") ??
-          section?.title ??
-          task.title?.trim() ??
-          "Дизайн-задача",
-        typeLabel: taskType ? DESIGN_TASK_TYPE_LABELS[taskType] : null,
-        imageUrl: section?.imageUrl ?? null,
-        status: readString("status"),
-        itemMeta:
-          [section?.meta || null, quantity > 0 ? `тираж ${quantity} ${normalizeUnitLabel(section?.item?.unit)}` : null]
-            .filter(Boolean)
-            .join(" · ") || null,
-        assignee: assigneeId
-          ? {
-              name: memberById.get(assigneeId) ?? "Виконавець",
-              avatarUrl: memberAvatarById.get(assigneeId) ?? null,
-            }
-          : null,
-        deadline: readString("design_deadline") ?? readString("deadline"),
-        // ТЗ прорахунку — запасний варіант, і тільки коли задача одна: на двох
-        // задачах спільний текст приписав би одній із них чуже ТЗ.
-        brief: readString("design_brief") ?? (single && quoteBrief ? quoteBrief : null),
-        visuals: ordered,
-        selectedVisualId: selected?.id ?? null,
-      } satisfies QuoteDesignTaskCard;
-    });
-  }, [designTasks, designVisualizations, memberAvatarById, memberById, quote?.design_brief, runSections]);
+  const designTaskCards = useMemo(
+    () =>
+      buildQuoteDesignTaskCards({
+        tasks: designTasks,
+        sections: runSections.map((section) => ({
+          key: section.key,
+          title: section.title,
+          meta: section.meta,
+          imageUrl: section.imageUrl,
+          unitLabel: normalizeUnitLabel(section.item?.unit),
+          // Тираж вибирає getSelectedRunForItem — той самий, що показує вкладка
+          // «Товари» (погоджений клієнтом, а поки позначки немає — перший).
+          // Правило погодженого тиражу лишається з одним читачем на сторінці.
+          quantity: section.item ? Number(getSelectedRunForItem(section.item.id)?.quantity) || null : null,
+        })),
+        visualizations: designVisualizations,
+        quoteBrief: quote?.design_brief ?? null,
+        memberById,
+        memberAvatarById,
+      }),
+    [
+      designTasks,
+      designVisualizations,
+      getSelectedRunForItem,
+      memberAvatarById,
+      memberById,
+      quote?.design_brief,
+      runSections,
+    ]
+  );
 
   /**
    * Вихідні матеріали дизайну — вкладення прорахунку з `audience=design`.
