@@ -6379,7 +6379,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         Для цього товару ще немає тиражів
                                       </div>
                                     ) : activeItemRun && activeItemRunIndex >= 0 ? (
-                                      <div className="rounded-xl border border-border/60 bg-muted/[0.03] p-4">
+                                      /* Активний тираж — не вставка в рамці, а ярус картки на всю
+                                         ширину (REQ-155 p3). Рамка робила блок вужчим за картку,
+                                         що його тримає, і тиснула смугу часток під ціною в
+                                         половину доступної ширини. Ділять яруси риски, а не
+                                         коробки: та сама мова, що в «Витратах» і «Огляді». */
+                                      <div className="border-t border-border/40 pt-4">
                                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                           <div className="flex min-w-0 flex-wrap items-center gap-2">
                                             <span className="h-2.5 w-2.5 rounded-full bg-primary" />

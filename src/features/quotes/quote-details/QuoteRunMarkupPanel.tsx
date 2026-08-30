@@ -277,20 +277,19 @@ function markupNote(params: {
   return null;
 }
 
-function EconomicsBreakdown({
+/**
+ * Розклад ціни — смуга часток із легендою. Тільки смуга: числа, які раніше йшли
+ * під нею окремим списком (заробіток, орієнтир, дно), розійшлися по своїх
+ * місцях — орієнтир у шапку накрутки, заробіток і дно у виноску (REQ-155 p3).
+ * Список під смугою повторював те, що вже сказано поруч, і робив із двох
+ * повідомлень одне довге.
+ */
+function PriceSplit({
   pricing,
-  view,
   currency,
-  benchmark,
-  benchmarkLoading,
-  managerName,
 }: {
   pricing: RunSalePricing;
-  view: QuoteMarkupView;
   currency?: string | null;
-  benchmark: MarkupBenchmark | null;
-  benchmarkLoading?: boolean;
-  managerName?: string | null;
 }) {
   const off = pricing.costTotal <= 0;
 
@@ -316,32 +315,6 @@ function EconomicsBreakdown({
       ) : (
         <SplitBar parts={parts} />
       )}
-      {/* Накрутки й ціни за штуку тут навмисно немає: обидві стоять у полі
-          вище й у великому числі поруч. Лишається те, чого більше ніде не видно. */}
-      <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs">
-        {view.income ? (
-          <>
-            <dt className="text-muted-foreground">
-              {view.income === "own"
-                ? "Твій заробіток"
-                : `Заробіток менеджера${managerName ? ` (${managerName})` : ""}`}
-            </dt>
-            <dd className="text-right font-medium tabular-nums">
-              {off ? "—" : formatCurrency(pricing.managerIncome, currency)}
-            </dd>
-          </>
-        ) : null}
-        <dt className="text-muted-foreground">Орієнтир на цій позиції</dt>
-        <dd className="text-right font-medium tabular-nums">
-          {benchmarkLoading
-            ? "…"
-            : benchmark
-              ? `${formatRate(benchmark.rate)} · ${formatMarkupBenchmarkBasis(benchmark.basis)}`
-              : "замало даних"}
-        </dd>
-        <dt className="text-muted-foreground">Дно</dt>
-        <dd className="text-right font-medium tabular-nums">{MIN_MARKUP_RATE} %</dd>
-      </dl>
     </div>
   );
 }
@@ -511,67 +484,72 @@ export function QuoteRunMarkupPanel({
     </>
   );
 
+  /**
+   * НАКРУТКА І ЦІНА — ДВА ЯРУСИ НА ВСЮ ШИРИНУ (REQ-155 p3).
+   *
+   * До 30.08.2026 це була одна коробка з рамкою, у якій порядок ярусів залежав
+   * від посади: менеджеру спершу велике число ціни, бек-офісу — розклад. Дві
+   * різні відповіді на питання «що тут головне» коштували дорожче, ніж давали:
+   * розмову про один екран доводилось вести двома мовами, а сама коробка була
+   * вужча за картку й тиснула смугу часток у половину доступної ширини.
+   *
+   * Тепер порядок один для всіх і йде за ходом думки: спершу ЧОМУ така ціна
+   * (накрутка на шкалі між дном і орієнтиром), потім СКІЛЬКИ вийшло (число,
+   * ціна за штуку, з чого складається). Що саме показати з другого ярусу, і далі
+   * вирішує посада — `view.showEconomics`.
+   *
+   * Заробіток менеджера пішов у виноску внизу: це не крок розрахунку, а його
+   * наслідок, і в стовпчику з ПДВ та постійними він читався як ще одна складова
+   * ціни.
+   */
   return (
-    <div className="mt-4 rounded-xl border border-border/60 bg-muted/[0.03] p-4">
-      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-foreground">Накрутка і ціна</span>
-        <span className="flex items-center gap-2">
-          {canEditMarkup ? null : (
-            <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
-              <Eye className="h-3 w-3" />
-              тільки очима
+    <div className="mt-4 space-y-4">
+      {/* ЯРУС ПЕРШИЙ — накрутка. Шкала між дном і орієнтиром відповідає на
+          «чому саме стільки», і з неї починається розмова про ціну. */}
+      <div className="border-t border-border/40 pt-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
+            Накрутка на собівартість ·{" "}
+            <span className="font-mono tabular-nums text-foreground">{formatRate(markupRate)}</span>
+          </span>
+          <span className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
+            орієнтир на цій позиції
+            <span className="font-medium text-foreground">
+              {benchmarkLoading
+                ? "…"
+                : benchmark
+                  ? `${formatRate(benchmark.rate)} · ${formatMarkupBenchmarkBasis(benchmark.basis)}`
+                  : "замало даних"}
             </span>
-          )}
-          <StateBadge state={state} />
-        </span>
+            {canEditMarkup ? null : (
+              <span className="inline-flex items-center gap-1">
+                <Eye className="h-3 w-3" />
+                тільки очима
+              </span>
+            )}
+            <StateBadge state={state} />
+          </span>
+        </div>
+        <div className="mt-2.5">{track}</div>
       </div>
 
-      {view.layout === "headline" ? (
-        <>
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-            <div className="min-w-0">
-              <div className="font-mono text-2xl font-semibold leading-tight tabular-nums text-foreground">
-                {off ? "—" : formatCurrency(pricing.saleTotal, currency)}
-              </div>
-              <div className="mt-0.5 text-2xs text-muted-foreground">
-                {off
-                  ? "ціна з'явиться з собівартістю"
-                  : `${formatCurrency(pricing.saleUnitPrice ?? 0, currency)} за штуку · накрутка ${formatRate(markupRate)} · ${formatCurrency(pricing.markupTotal, currency)}`}
-              </div>
-            </div>
-            {view.income === "own" ? (
-              <div className="text-right">
-                <div className="text-2xs text-muted-foreground">твій заробіток</div>
-                <div className="font-mono text-base font-semibold tabular-nums text-foreground">
-                  {off ? "—" : formatCurrency(pricing.managerIncome, currency)}
-                </div>
-              </div>
-            ) : null}
-          </div>
-          {track}
-        </>
-      ) : (
-        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-          <div className="font-mono text-2xl font-semibold leading-tight tabular-nums text-foreground">
+      {/* ЯРУС ДРУГИЙ — ціна. Скільки вийшло і, кому належить бачити, з чого. */}
+      <div className="border-t border-border/40 pt-4">
+        <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
+          {off ? "Ціна" : `Ціна з накруткою ${formatRate(markupRate)}`}
+        </span>
+        <div className="mt-1.5 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+          <div className="font-mono text-3xl font-semibold leading-none tabular-nums text-foreground">
             {off ? "—" : formatCurrency(pricing.saleTotal, currency)}
           </div>
-          <div className="text-2xs text-muted-foreground">
-            {off ? "чекає на собівартість" : `накрутка ${formatRate(markupRate)}`}
-            {managerName ? ` · веде ${managerName}` : ""}
+          <div className="text-xs text-muted-foreground">
+            {off
+              ? "ціна з'явиться з собівартістю"
+              : `${formatCurrency(pricing.saleUnitPrice ?? 0, currency)} за штуку · націнка ${formatCurrency(pricing.markupTotal, currency)}`}
           </div>
         </div>
-      )}
-
-      {view.showEconomics ? (
-        <EconomicsBreakdown
-          pricing={pricing}
-          view={view}
-          currency={currency}
-          benchmark={benchmark}
-          benchmarkLoading={benchmarkLoading}
-          managerName={managerName}
-        />
-      ) : null}
+        {view.showEconomics ? <PriceSplit pricing={pricing} currency={currency} /> : null}
+      </div>
 
       {note ? (
         <div
@@ -610,6 +588,25 @@ export function QuoteRunMarkupPanel({
           ) : null}
         </div>
       ) : null}
+
+      {/* ВИНОСКА. Два факти, які треба тримати в полі зору, але жоден із них не
+          крок розрахунку: скільки з цієї ціни заробить менеджер і що дно —
+          поріг погодження, а не заборона зберігати. У стовпчику разом із ПДВ
+          і постійними заробіток читався як ще одна складова ціни, а дно —
+          як межа, за яку не пускають. */}
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border/40 pt-3 text-2xs text-muted-foreground">
+        {view.income ? (
+          <span>
+            {view.income === "own"
+              ? "Твій заробіток"
+              : `Заробіток менеджера${managerName ? ` (${managerName})` : ""}`}{" "}
+            <span className="font-medium tabular-nums text-foreground">
+              {off ? "—" : formatCurrency(pricing.managerIncome, currency)}
+            </span>
+          </span>
+        ) : null}
+        <span>Дно {MIN_MARKUP_RATE} % вмикає погодження, а не блокує збереження</span>
+      </div>
     </div>
   );
 }

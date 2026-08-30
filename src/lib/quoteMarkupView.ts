@@ -16,6 +16,12 @@ import { normalizeJobRole, type AppPermissions } from "@/lib/permissions";
  * разом із дзеркалом у базі. Вигляд, який сам роздає кнопки погодження, рано чи
  * пізно розійшовся б із правом за ними, і кнопка почала б повертати 42501.
  *
+ * ЧОГО ТУТ БІЛЬШЕ НЕМАЄ: поля `layout`. Воно ставило порядок ярусів за посадою —
+ * менеджеру спершу велике число ціни, бек-офісу спершу розклад. REQ-155 p3 звів
+ * блок до одного порядку для всіх (накрутка зі шкалою, під нею ціна з розкладом),
+ * і поле лишилось би конфігурацією, якої ніхто не читає. Такі поля рано чи пізно
+ * починають «підтримувати» наосліп.
+ *
  * ЩО ЦЕЙ ФАЙЛ ТЕЖ НЕ ВИРІШУЄ: чи можна РУХАТИ накрутку. Вигляд каже лише, чи є
  * повзунок у цієї посади взагалі; право на поле лишається за
  * `canEditQuoteRunPriceField("markup_rate")`, а заморозка на час погодження —
@@ -27,11 +33,6 @@ export type QuoteMarkupViewKey = "manager" | "seo" | "chief" | "back" | "pm" | "
 
 export type QuoteMarkupView = {
   key: QuoteMarkupViewKey;
-  /**
-   * "headline" — велика ціна й смуга зверху (менеджерська мова).
-   * "breakdown" — розклад ціни першим (мова бухгалтерії й виробництва).
-   */
-  layout: "headline" | "breakdown";
   /** Чи є смуга-повзунок у цієї посади. */
   hasSlider: boolean;
   /** Чи видно розклад ціни на прибуток / постійні / ПДВ. */
@@ -46,18 +47,18 @@ export type QuoteMarkupView = {
 const VIEWS: Record<QuoteMarkupViewKey, QuoteMarkupView> = {
   // Тягне повзунок, бачить свій заробіток і орієнтир. Розкладу ціни на
   // прибуток/постійні/ПДВ немає — це не його рішення.
-  manager: { key: "manager", layout: "headline", hasSlider: true, showEconomics: false, income: "own" },
+  manager: { key: "manager", hasSlider: true, showEconomics: false, income: "own" },
   // Той самий повзунок лишається свідомо: СЕО єдиний, хто опускає нижче дна
   // власноруч. Плюс уся економіка й кнопки погодження.
-  seo: { key: "seo", layout: "headline", hasSlider: true, showEconomics: true, income: "manager" },
+  seo: { key: "seo", hasSlider: true, showEconomics: true, income: "manager" },
   // Ціну не рухає, але рішення ухвалює нарівні з СЕО.
-  chief: { key: "chief", layout: "breakdown", hasSlider: false, showEconomics: true, income: "manager" },
+  chief: { key: "chief", hasSlider: false, showEconomics: true, income: "manager" },
   // Те саме без кнопок. Заробіток менеджера видно — він потрібен для нарахування.
-  back: { key: "back", layout: "breakdown", hasSlider: false, showEconomics: true, income: "manager" },
+  back: { key: "back", hasSlider: false, showEconomics: true, income: "manager" },
   // Проджект вносить собівартість; чужі гроші його не стосуються.
-  pm: { key: "pm", layout: "breakdown", hasSlider: false, showEconomics: true, income: null },
+  pm: { key: "pm", hasSlider: false, showEconomics: true, income: null },
   // Вигляд менеджера, тільки очима.
-  junior: { key: "junior", layout: "headline", hasSlider: false, showEconomics: false, income: null },
+  junior: { key: "junior", hasSlider: false, showEconomics: false, income: null },
 };
 
 const MANAGER_VIEW_ROLES = new Set([
