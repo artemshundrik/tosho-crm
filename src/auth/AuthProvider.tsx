@@ -79,8 +79,12 @@ type AuthState = {
   canViewAsPerson: boolean;
   /** Приміряти посаду — owner і CEO. */
   canViewAsRole: boolean;
-  /** Приміряти ЛЮДИНУ-ВЛАСНИКА — лише owner (див. isOwnerViewAsTarget). */
-  canViewAsOwner: boolean;
+  /**
+   * СПРАВЖНЯ роль доступу — не підмінена режимом. Потрібна рівно одному
+   * споживачеві: вікну вибору, щоб не пропонувати цілей, старших за глядача
+   * (див. canTryOnAccessRole). Для решти читай `accessRole`.
+   */
+  realAccessRole: AccessRole;
   /**
    * Чиї дані ПОКАЗУВАТИ. У режимі «Дивитись як» — id обраної людини, інакше
    * власний. Навмисно окремо від `userId`: той лишається справжнім, бо на ньому
@@ -539,20 +543,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * екран — це ховати відповідь, а не дані. Дії там усе одно вимкнені
    * (viewOnlyGuard), тож нічиїм іменем нічого не станеться.
    *
-   * ВИНЯТОК — людина-власник: її приміряє лише власник. Прапорці «хто я»
-   * беруться з цілі без перетину, тож така ціль видала б CEO справжній
-   * isSuperAdmin (див. isOwnerViewAsTarget).
+   * ВИНЯТОК — ціль, СТАРША ЗА ГЛЯДАЧА (власник для CEO, адмін для не-адміна).
+   * Прапорці «хто я» беруться з цілі без перетину, тож така ціль домалювала б
+   * старші екрани (див. canTryOnAccessRole).
    *
    * Рахується від РЕАЛЬНИХ прав, а не від підмінених: інакше, увійшовши «як
    * дизайнер», людина втратила б разом із правами й вихід із режиму.
    */
   const canViewAsPerson = realPermissions.isSuperAdmin || realPermissions.isSeo;
   const canViewAsRole = realPermissions.isSuperAdmin || realPermissions.isSeo;
-  const canViewAsOwner = realPermissions.isSuperAdmin;
   const activeViewAs = allowedViewAsTarget(viewAs, {
     canViewAsPerson,
     canViewAsRole,
-    canViewAsOwner,
+    accessRole,
   });
   const viewAsMode = viewAsModeOf(activeViewAs);
 
@@ -747,7 +750,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       canUseViewAs: canViewAsPerson || canViewAsRole,
       canViewAsPerson,
       canViewAsRole,
-      canViewAsOwner,
+      realAccessRole: accessRole,
       // Приміряна посада — це не чужі дані: показуємо свої, але чужим інтерфейсом.
       viewUserId: viewAsPersonId ?? userId,
     }),
@@ -767,7 +770,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       viewAsMode,
       canViewAsPerson,
       canViewAsRole,
-      canViewAsOwner,
+      accessRole,
       viewAsPersonId,
     ],
   );

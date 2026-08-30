@@ -12,8 +12,8 @@ import { normalizeAccessRole } from "@/lib/permissions";
  *    одразу щось підправити. Чужих особистих даних тут немає в принципі, тож і
  *    ховати нічого не треба.
  *
- * Обидва входи має і owner, і CEO. Один виняток — ЛЮДИНА-ВЛАСНИК: її приміряє
- * лише власник (див. `isOwnerViewAsTarget`).
+ * Обидва входи має і owner, і CEO. Один виняток — ЦІЛЬ, СТАРША ЗА ГЛЯДАЧА: її
+ * приміряти не можна (див. `canTryOnAccessRole`).
  *
  * ⚠️ ЦЕ UI-РІВЕНЬ, А НЕ БЕЗПЕКА.
  * Сесія в Supabase лишається власною, тож RLS у базі не змінюється. Режим
@@ -62,17 +62,29 @@ export const isViewAsPerson = (target: ViewAsTarget | null | undefined): target 
   target?.kind === "person";
 
 /**
- * Ціль — власник? Таку приміряє тільки власник.
+ * Приміряти можна рівного або нижчого за себе — ніколи старшого.
  *
- * Прапорці «хто я» (`isSuperAdmin`, `isSeo`, `isDesigner`…) беруться з ЦІЛІ без
- * перетину — інакше owner очима дизайнера не побачив би жодного
- * дизайнерського екрана. Тому людина-власник видала б CEO справжній
- * `isSuperAdmin`, а за цим прапорцем відкриваються owner-ські екрани: маржа у
- * Фінансах, повне меню повз власні галочки. Режим має тільки ЗВУЖУВАТИ, тож
- * такий вхід закритий — і в списку вибору, і на вході в застосунок.
+ * Прапорці «хто я» (`isSuperAdmin`, `isAdmin`, `isDesigner`…) беруться з ЦІЛІ
+ * без перетину — інакше owner очима дизайнера не побачив би жодного
+ * дизайнерського екрана. Ціна цього: ціль-власник видала б CEO справжній
+ * `isSuperAdmin` (за ним відкриваються маржа у Фінансах і повне меню повз
+ * власні галочки), а ціль-адмін — `isAdmin` (спостережність, /dev/health).
+ * Гроші й дані все одно тримає RLS, але режим не має ДОМАЛЬОВУВАТИ людині
+ * старших екранів: він існує, щоб звужувати.
+ *
+ * Рангів рівно три, бо стільки їх у `mapAccessRoleToTeamRole`: власник, адмін,
+ * решта. Посада (`jobRole`) тут ні до чого — вона не ієрархія, і саме заради
+ * неї режим і потрібен.
  */
-export const isOwnerViewAsTarget = (accessRole: string | null | undefined) =>
-  normalizeAccessRole(accessRole) === "owner";
+const ACCESS_ROLE_RANK: Record<string, number> = { owner: 2, admin: 1 };
+
+const accessRank = (accessRole: string | null | undefined) =>
+  ACCESS_ROLE_RANK[normalizeAccessRole(accessRole)] ?? 0;
+
+export const canTryOnAccessRole = (
+  targetAccessRole: string | null | undefined,
+  viewerAccessRole: string | null | undefined,
+) => accessRank(targetAccessRole) <= accessRank(viewerAccessRole);
 
 /**
  * Ціль, яку цьому глядачеві справді дозволено, — або null.
@@ -83,12 +95,13 @@ export const isOwnerViewAsTarget = (accessRole: string | null | undefined) =>
  */
 export function allowedViewAsTarget(
   target: ViewAsTarget | null | undefined,
-  viewer: { canViewAsPerson: boolean; canViewAsRole: boolean; canViewAsOwner: boolean },
+  viewer: { canViewAsPerson: boolean; canViewAsRole: boolean; accessRole: string | null },
 ): ViewAsTarget | null {
   if (!target) return null;
+  // Посада без людини не несе accessRole взагалі, тож старшою бути не може.
   if (!isViewAsPerson(target)) return viewer.canViewAsRole ? target : null;
   if (!viewer.canViewAsPerson) return null;
-  return viewer.canViewAsOwner || !isOwnerViewAsTarget(target.accessRole) ? target : null;
+  return canTryOnAccessRole(target.accessRole, viewer.accessRole) ? target : null;
 }
 
 export const viewAsModeOf = (target: ViewAsTarget | null | undefined): ViewAsMode | null => {

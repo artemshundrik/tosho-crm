@@ -41,15 +41,15 @@ const viewer = (overrides: Record<string, unknown>) => ({
   userId: "u-ceo",
   canViewAsPerson: true,
   canViewAsRole: true,
-  canViewAsOwner: false,
+  realAccessRole: "member",
   viewAs: null,
   ...overrides,
 });
 
 /**
  * Вхід «Людина» відкрито не лише власнику (REQ-224), і разом із ним доводиться
- * тримати єдиний виняток: ЦІЛЬ-ВЛАСНИКА приміряє тільки власник. Прапорці «хто
- * я» беруться з цілі без перетину, тож така ціль видала б CEO справжній
+ * тримати виняток: ціль, СТАРШУ ЗА ГЛЯДАЧА, приміряти не можна. Прапорці «хто
+ * я» беруться з цілі без перетину, тож ціль-власник видала б CEO справжній
  * isSuperAdmin — а за ним відкриваються owner-ські екрани.
  */
 describe("ViewAsDialog — кого пропонують у списку людей", () => {
@@ -62,7 +62,7 @@ describe("ViewAsDialog — кого пропонують у списку люд�
   });
 
   it("власник бачить у списку й іншого власника", async () => {
-    auth.mockReturnValue(viewer({ userId: "u-someone", canViewAsOwner: true }));
+    auth.mockReturnValue(viewer({ userId: "u-someone", realAccessRole: "owner" }));
     render(<ViewAsDialog open onOpenChange={() => {}} />);
 
     expect(await screen.findByText("Артем Ш.")).toBeTruthy();
