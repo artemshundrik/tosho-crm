@@ -60,15 +60,6 @@ import {
 } from "@/lib/attachmentPreview";
 import { downloadFileToDevice } from "@/lib/downloadFileToDevice";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
-import {
-  BRIEF_DIALOG_PREVIEW_CLASS,
-  BRIEF_SURFACE_FRAME_CLASS,
-  BRIEF_SURFACE_TEXT_CLASS,
-  BRIEF_TEXTAREA_CLASS,
-  BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT,
-  BRIEF_INLINE_TEXTAREA_MAX_HEIGHT,
-  resizeBriefTextarea,
-} from "@/components/brief/briefSurfaceStyles";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import {
   formatPrintProductSummary,
@@ -130,6 +121,10 @@ import { resolveQuoteMarkupView } from "@/lib/quoteMarkupView";
 import { useQuoteMarkupApprovals } from "@/features/quotes/quote-details/useQuoteMarkupApprovals";
 import { QuoteRunMarkupPanel } from "@/features/quotes/quote-details/QuoteRunMarkupPanel";
 import { QuoteRunPriceFields } from "@/features/quotes/quote-details/QuoteRunPriceFields";
+import {
+  QuoteDesignTasksPanel,
+  type QuoteDesignTaskCard,
+} from "@/features/quotes/quote-details/QuoteDesignTasksPanel";
 import { QuoteRunRows } from "@/features/quotes/quote-details/QuoteRunRows";
 import {
   QuoteMarkupDecisionDialog,
@@ -176,16 +171,10 @@ import {
   ChevronDown,
   Loader2,
   Package,
-  Image,
   ExternalLink,
   Lock,
   Calculator,
   Palette,
-  Bold,
-  Italic,
-  List,
-  ListOrdered,
-  Heading2,
 } from "lucide-react";
 import {
   ATTACHMENTS_ACCEPT,
@@ -227,7 +216,6 @@ import {
   insertDesignTaskRow,
   uploadQuoteItemVisual,
   changeQuoteStatus,
-  logDesignTaskEvent,
   linkDesignVisualizationToQuote,
   fetchCatalogBase,
   fetchCatalogEnrichment,
@@ -254,7 +242,6 @@ import {
   fetchManagerRate,
   fetchMentionLabelOverrides,
   fetchQuoteSetMembership,
-  notifyDesignTaskAssignmentChange,
   fetchQuoteRuns,
   fetchStatusHistory,
   invokeQuoteCommentsFunction,
@@ -718,95 +705,6 @@ function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCac
   }
 }
 
-/**
- * Мінімум інлайнового поля ТЗ на цій сторінці.
- *
- * Був зашитий у власну копію resizeTextareaToContent, через що однойменна
- * функція на сторінці задачі поводилась інакше. Тепер функція спільна, а
- * мінімум лишився тут — він саме про цю сторінку.
- */
-const BRIEF_MIN_HEIGHT = 140;
-
-function formatBriefSelection(
-  textarea: HTMLTextAreaElement,
-  formatter: (params: {
-    value: string;
-    selectionStart: number;
-    selectionEnd: number;
-    selectedText: string;
-  }) => { nextText: string; replaceStart?: number; replaceEnd?: number; selectionStart: number; selectionEnd: number }
-) {
-  const selectionStart = textarea.selectionStart ?? 0;
-  const selectionEnd = textarea.selectionEnd ?? selectionStart;
-  const selectedText = textarea.value.slice(selectionStart, selectionEnd);
-  const formatted = formatter({
-    value: textarea.value,
-    selectionStart,
-    selectionEnd,
-    selectedText,
-  });
-  const replaceStart = formatted.replaceStart ?? selectionStart;
-  const replaceEnd = formatted.replaceEnd ?? selectionEnd;
-  const nextValue = `${textarea.value.slice(0, replaceStart)}${formatted.nextText}${textarea.value.slice(replaceEnd)}`;
-  return {
-    nextValue,
-    selectionStart: replaceStart + formatted.selectionStart,
-    selectionEnd: replaceStart + formatted.selectionEnd,
-  };
-}
-
-function toggleWrappedFormatting(
-  value: string,
-  selectionStart: number,
-  selectionEnd: number,
-  marker: string,
-  fallback: string
-) {
-  const selectedText = value.slice(selectionStart, selectionEnd);
-  const beforeSelection = value.slice(Math.max(0, selectionStart - marker.length), selectionStart);
-  const afterSelection = value.slice(selectionEnd, selectionEnd + marker.length);
-  const hasWrappedSelection = beforeSelection === marker && afterSelection === marker;
-  if (hasWrappedSelection) {
-    return {
-      nextText: selectedText,
-      replaceStart: selectionStart - marker.length,
-      replaceEnd: selectionEnd + marker.length,
-      selectionStart: 0,
-      selectionEnd: selectedText.length,
-    };
-  }
-  const inlineWrapped =
-    selectedText.startsWith(marker) && selectedText.endsWith(marker) && selectedText.length >= marker.length * 2;
-  if (inlineWrapped) {
-    const unwrapped = selectedText.slice(marker.length, selectedText.length - marker.length);
-    return {
-      nextText: unwrapped,
-      selectionStart: 0,
-      selectionEnd: unwrapped.length,
-    };
-  }
-  const nextValue = selectedText || fallback;
-  return {
-    nextText: `${marker}${nextValue}${marker}`,
-    selectionStart: marker.length,
-    selectionEnd: marker.length + nextValue.length,
-  };
-}
-
-function toggleLinePrefix(selectedText: string, prefixFactory: (index: number) => string, matcher: RegExp, fallback: string) {
-  const source = selectedText || fallback;
-  const lines = source.split("\n");
-  const allFormatted = lines.every((line) => matcher.test(line));
-  const nextText = allFormatted
-    ? lines.map((line) => line.replace(matcher, "")).join("\n")
-    : lines.map((line, index) => `${prefixFactory(index)}${line}`).join("\n");
-  return {
-    nextText,
-    selectionStart: 0,
-    selectionEnd: nextText.length,
-  };
-}
-
 function renderBriefRichText(value: string | null | undefined) {
   return renderRichTextBlocks(value, {
     emptyFallback: <span>Спочатку вкажіть дедлайн дизайну або текст задачі.</span>,
@@ -962,14 +860,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   });
   const commentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [briefText, setBriefText] = useState("");
-  const [briefDirty, setBriefDirty] = useState(false);
-  const [briefSaving, setBriefSaving] = useState(false);
-  const [briefError, setBriefError] = useState<string | null>(null);
-  const [briefEditorOpen, setBriefEditorOpen] = useState(false);
-  const [briefInlineEditing, setBriefInlineEditing] = useState(false);
-  const [briefSelection, setBriefSelection] = useState({ start: 0, end: 0 });
-  const briefTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const briefDialogTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -1011,6 +901,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    * списком, кожна зі своїм посиланням.
    */
   const [designTasks, setDesignTasks] = useState<DesignTaskRow[]>([]);
+  /**
+   * Яку задачу показує вкладка «Дизайн». null — першу зі списку; окремого
+   * ефекту-скидання немає навмисно: панель сама падає на першу, коли обраної
+   * в списку більше немає (інший прорахунок, задачу видалили).
+   */
+  const [activeDesignTaskId, setActiveDesignTaskId] = useState<string | null>(null);
   const [designTaskLoading, setDesignTaskLoading] = useState(false);
   const [designTaskError, setDesignTaskError] = useState<string | null>(null);
   const [designTaskSaving, setDesignTaskSaving] = useState(false);
@@ -1643,68 +1539,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDeleteQuoteDialogOpen(false);
   };
 
-  const saveBrief = async () => {
-    if (!quote || !teamId || briefSaving) return;
-    if (quoteRequirements.length > 0) {
-      const message = `Щоб зберегти ТЗ, заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`;
-      setBriefError(message);
-      toast.error(message);
-      return;
-    }
-    setBriefSaving(true);
-    setBriefError(null);
-
-    const fail = (message: string) => {
-      setBriefError(message);
-      toast.error(message);
-      setBriefSaving(false);
-    };
-
-    const nextBrief = briefText.trim();
-    const saved = await updateQuoteFields(
-      {
-        quoteId,
-        teamId,
-        comment: nextBrief ? nextBrief : null,
-        designBrief: nextBrief ? nextBrief : null,
-      },
-      "Не вдалося зберегти ТЗ."
-    );
-    if (!saved.ok) return fail(saved.message);
-
-    const data = saved.data;
-    setQuote((prev) =>
-      prev
-        ? {
-            ...prev,
-            comment: data?.comment ?? nextBrief ?? null,
-            design_brief: data?.design_brief ?? nextBrief ?? null,
-            updated_at: data?.updated_at ?? prev.updated_at,
-          }
-        : prev
-    );
-    setBriefDirty(false);
-    setBriefInlineEditing(false);
-
-    const logged = await logQuoteActivity(
-      {
-        teamId,
-        action: "оновив ТЗ",
-        entityType: "quotes",
-        entityId: quoteId,
-        title: `Оновив ТЗ для дизайнера${quote?.number ? ` (#${quote.number})` : ""}`,
-        href: `/orders/estimates/${quoteId}`,
-        metadata: { source: "quote_brief" },
-      },
-      "Не вдалося зберегти ТЗ."
-    );
-    if (!logged.ok) return fail(logged.message);
-
-    await loadActivityLog();
-    toast.success("ТЗ збережено");
-    setBriefSaving(false);
-  };
-
   /*
     «Доповнення» прибрано з картки 25.08.2026.
 
@@ -2143,25 +1977,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const files = parseDesignOutputMetaFiles(metadata.design_output_files);
     return files.find((file) => file.id === selectedId) ?? null;
   }, [designTask?.metadata]);
-  const selectedDesignOutputStoragePath = useMemo(() => {
-    const value = designTask?.metadata?.selected_design_output_storage_path;
-    if (typeof value === "string" && value.trim()) return value.trim();
-    return selectedDesignOutputFile?.storage_path ?? null;
-  }, [designTask?.metadata, selectedDesignOutputFile]);
-  const selectedDesignOutputFileName = useMemo(() => {
-    const value = designTask?.metadata?.selected_design_output_file_name;
-    if (typeof value === "string" && value.trim()) return value.trim();
-    return selectedDesignOutputFile?.file_name ?? null;
-  }, [designTask?.metadata, selectedDesignOutputFile]);
-  const visibleDesignVisualizations = useMemo(() => {
-    const selected = designVisualizations.find(
-      (file) =>
-        (selectedDesignOutputStoragePath && file.storagePath === selectedDesignOutputStoragePath) ||
-        (selectedDesignOutputFileName && file.name === selectedDesignOutputFileName)
-    );
-    const rest = designVisualizations.filter((file) => file.id !== selected?.id);
-    return selected ? [selected, ...rest] : designVisualizations;
-  }, [designVisualizations, selectedDesignOutputFileName, selectedDesignOutputStoragePath]);
   const getMemberLabel = (userId?: string | null) => {
     if (!userId) return "Не вказано";
     return memberById.get(userId) ?? userId;
@@ -2256,109 +2071,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const quoteIdentity = quote?.id ?? null;
   const briefSourceText = quote?.design_brief ?? quote?.comment ?? "";
 
-  const briefInputChanged = useSignatureChanged(
-    `${quoteIdentity ?? ""}\u0000${briefDirty ? "1" : "0"}\u0000${briefSourceText}`
-  );
-  if (briefInputChanged && quoteIdentity && !briefDirty) {
+  // ТЗ прорахунку більше НЕ редагується в картці (REQ-155 p4): текст живе в
+  // задачі, а це поле лишається його ДЖЕРЕЛОМ для нових задач — воно йде в
+  // metadata.design_brief у момент створення. Тому тут лише читання: набирати
+  // тут нічого, і сторожа «не перезаписуй набране» більше не потрібно.
+  const briefInputChanged = useSignatureChanged(`${quoteIdentity ?? ""}\u0000${briefSourceText}`);
+  if (briefInputChanged && quoteIdentity) {
     setBriefText(briefSourceText);
-    setBriefError(null);
   }
 
-  useEffect(() => {
-    resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
-    resizeBriefTextarea(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
-  }, [briefEditorOpen, briefInlineEditing, briefText]);
-
-  useEffect(() => {
-    if (!briefInlineEditing) return;
-    const frameId = requestAnimationFrame(() => {
-      const textarea = briefTextareaRef.current;
-      if (!textarea) return;
-      textarea.focus();
-      // Place the caret at the END so continuing to type appends to existing
-      // ТЗ text instead of prepending at position 0.
-      const length = textarea.value.length;
-      textarea.setSelectionRange(length, length);
-    });
-    return () => cancelAnimationFrame(frameId);
-  }, [briefInlineEditing]);
-
-  const handleBriefInlineBlur = useCallback(() => {
-    if (briefDirty) return;
-    requestAnimationFrame(() => {
-      if (document.activeElement === briefTextareaRef.current) return;
-      setBriefInlineEditing(false);
-    });
-  }, [briefDirty]);
-
-  useEffect(() => {
-    if (!briefEditorOpen) return;
-    const frameId = requestAnimationFrame(() => {
-      briefDialogTextareaRef.current?.focus();
-      const length = briefDialogTextareaRef.current?.value.length ?? 0;
-      briefDialogTextareaRef.current?.setSelectionRange(length, length);
-      setBriefSelection({ start: length, end: length });
-    });
-    return () => cancelAnimationFrame(frameId);
-  }, [briefEditorOpen]);
-
-  const applyBriefFormatting = useCallback(
-    (formatter: (params: {
-      value: string;
-      selectionStart: number;
-      selectionEnd: number;
-      selectedText: string;
-    }) => { nextText: string; replaceStart?: number; replaceEnd?: number; selectionStart: number; selectionEnd: number }) => {
-      const textarea = briefDialogTextareaRef.current;
-      if (!textarea || briefSaving) return;
-      const formatted = formatBriefSelection(textarea, formatter);
-      setBriefText(formatted.nextValue);
-      setBriefDirty(true);
-      requestAnimationFrame(() => {
-        const target = briefDialogTextareaRef.current;
-        if (!target) return;
-        target.focus();
-        target.setSelectionRange(formatted.selectionStart, formatted.selectionEnd);
-        setBriefSelection({ start: formatted.selectionStart, end: formatted.selectionEnd });
-        resizeBriefTextarea(target, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
-      });
-    },
-    [briefSaving]
-  );
-
-  const syncBriefSelection = useCallback(() => {
-    const textarea = briefDialogTextareaRef.current;
-    if (!textarea) return;
-    setBriefSelection({
-      start: textarea.selectionStart ?? 0,
-      end: textarea.selectionEnd ?? 0,
-    });
-  }, []);
-
-  const selectedBriefText = useMemo(() => {
-    const start = Math.min(briefSelection.start, briefSelection.end);
-    const end = Math.max(briefSelection.start, briefSelection.end);
-    return briefText.slice(start, end);
-  }, [briefSelection.end, briefSelection.start, briefText]);
-
-  const briefSelectionStart = Math.min(briefSelection.start, briefSelection.end);
-  const briefSelectionEnd = Math.max(briefSelection.start, briefSelection.end);
-  const briefSelectionBeforeBold = briefText.slice(Math.max(0, briefSelectionStart - 2), briefSelectionStart);
-  const briefSelectionAfterBold = briefText.slice(briefSelectionEnd, briefSelectionEnd + 2);
-  const briefSelectionBeforeItalic = briefText.slice(Math.max(0, briefSelectionStart - 1), briefSelectionStart);
-  const briefSelectionAfterItalic = briefText.slice(briefSelectionEnd, briefSelectionEnd + 1);
-
-  const boldActive =
-    (selectedBriefText.startsWith("**") && selectedBriefText.endsWith("**") && selectedBriefText.length > 4) ||
-    (selectedBriefText.length > 0 && briefSelectionBeforeBold === "**" && briefSelectionAfterBold === "**");
-  const italicActive =
-    ((selectedBriefText.startsWith("*") && selectedBriefText.endsWith("*") && !boldActive && selectedBriefText.length > 2) ||
-      (selectedBriefText.length > 0 && briefSelectionBeforeItalic === "*" && briefSelectionAfterItalic === "*")) &&
-    !boldActive;
-  const headingActive = /^##\s+.+$/m.test(selectedBriefText.trim());
-  const bulletActive = selectedBriefText.trim().length > 0 && selectedBriefText.split("\n").every((line) => /^-\s+/.test(line));
-  const orderedActive =
-    selectedBriefText.trim().length > 0 && selectedBriefText.split("\n").every((line) => /^\d+\.\s+/.test(line));
   const currentStatus = normalizeStatus(quote?.status);
 
   useEffect(() => {
@@ -2904,6 +2625,86 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return sections;
   }, [catalogTypes, items, resolveCatalogSelection, runs]);
 
+  /**
+   * Картки вкладки «Дизайн» — по одній на задачу (REQ-155 p4).
+   *
+   * ВІЗУАЛИ БЕРУТЬСЯ З МЕТАДАНИХ САМОЇ ЗАДАЧІ (`design_output_files`), а не зі
+   * спільного списку файлів прорахунку. Спільний список для цього не годиться:
+   * у нього потрапляє лише ОБРАНИЙ вихід (його докладає фоновий ефект нижче),
+   * і на прорахунку з двома задачами він однаково не сказав би, чий це файл.
+   *
+   * Виняток — прорахунок з ОДНІЄЮ задачею: там до її списку доливаються файли
+   * прорахунку, яких немає в метаданих. На старих задачах візуали лежать тільки
+   * там, і без цього вони б зникли з екрана.
+   */
+  const designTaskCards = useMemo<QuoteDesignTaskCard[]>(() => {
+    const sectionByItemId = new Map(runSections.map((section) => [section.key, section]));
+    const single = designTasks.length === 1;
+    const quoteBrief = (quote?.design_brief ?? "").trim();
+
+    return designTasks.map((task) => {
+      const metadata = task.metadata ?? {};
+      const readString = (key: string) => {
+        const value = metadata[key];
+        return typeof value === "string" && value.trim() ? value.trim() : null;
+      };
+      const itemId = readString("quote_item_id");
+      const section = itemId ? sectionByItemId.get(itemId) ?? null : null;
+      const taskType = parseDesignTaskType(metadata.design_task_type);
+
+      const visuals: QuoteAttachment[] = parseDesignOutputMetaFiles(metadata.design_output_files).map(
+        (file) => ({
+          id: file.id,
+          name: file.file_name,
+          size: formatFileSize(file.file_size),
+          created_at: file.created_at,
+          mimeType: file.mime_type,
+          uploadedBy: file.uploaded_by,
+          uploadedByLabel: file.uploaded_by ? memberById.get(file.uploaded_by) : undefined,
+          storageBucket: file.storage_bucket,
+          storagePath: file.storage_path,
+        })
+      );
+      if (single) {
+        designVisualizations.forEach((file) => {
+          if (visuals.some((known) => known.storagePath && known.storagePath === file.storagePath)) return;
+          visuals.push(file);
+        });
+      }
+
+      const selectedId = readString("selected_design_output_file_id");
+      const selectedPath = readString("selected_design_output_storage_path");
+      const selectedName = readString("selected_design_output_file_name");
+      const selected =
+        visuals.find((file) => selectedId && file.id === selectedId) ??
+        visuals.find((file) => selectedPath && file.storagePath === selectedPath) ??
+        visuals.find((file) => selectedName && file.name === selectedName) ??
+        null;
+      // Обраний іде першим: саме він потрапляє в КП і в замовлення.
+      const ordered = selected
+        ? [selected, ...visuals.filter((file) => file.id !== selected.id)]
+        : visuals;
+
+      return {
+        id: task.id,
+        number: readString("design_task_number"),
+        title:
+          readString("model") ??
+          readString("quote_item_title") ??
+          section?.title ??
+          task.title?.trim() ??
+          "Дизайн-задача",
+        typeLabel: taskType ? DESIGN_TASK_TYPE_LABELS[taskType] : null,
+        imageUrl: section?.imageUrl ?? null,
+        // ТЗ прорахунку — запасний варіант, і тільки коли задача одна: на двох
+        // задачах спільний текст приписав би одній із них чуже ТЗ.
+        brief: readString("design_brief") ?? (single && quoteBrief ? quoteBrief : null),
+        visuals: ordered,
+        selectedVisualId: selected?.id ?? null,
+      } satisfies QuoteDesignTaskCard;
+    });
+  }, [designTasks, designVisualizations, memberById, quote?.design_brief, runSections]);
+
   const resolvedItemSelection = useMemo(
     () =>
       resolveCatalogSelection({
@@ -3418,88 +3219,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDesignTaskSaving(false);
   };
 
-  const updateDesignAssignee = async (nextAssigneeUserId: string | null) => {
-    if (!designTask || !teamId) return;
-    setDesignTaskSaving(true);
-    setDesignTaskError(null);
-    const previousAssignee = designTask.assigneeUserId ?? null;
-    const previousAssignedAt = designTask.assignedAt ?? null;
-    const nextAssignedAt = nextAssigneeUserId ? new Date().toISOString() : null;
-    const nextMetadata: Record<string, unknown> = {
-      ...(designTask.metadata ?? {}),
-      assignee_user_id: nextAssigneeUserId,
-      assigned_at: nextAssignedAt,
-    };
-
-    // Якщо запис не пройшов — повертаємо виконавця, якого бачили до спроби.
-    // Інакше на екрані лишився б новий, а в базі старий.
-    const rollback = (message: string) => {
-      setDesignTask({
-        ...designTask,
-        assigneeUserId: previousAssignee,
-        assignedAt: previousAssignedAt,
-        metadata: designTask.metadata,
-      });
-      setDesignAssigneeId(previousAssignee);
-      setDesignTaskError(message);
-      toast.error(message);
-      setDesignTaskSaving(false);
-    };
-
-    const authUser = await getCurrentUser();
-    const actorUserId = authUser?.id ?? null;
-    const actorName = (actorUserId ? memberById.get(actorUserId) : null) || authUser?.email || "System";
-
-    const saved = await updateActivityMetadata(designTask.id, teamId, nextMetadata);
-    if (!saved.ok) return rollback("Не вдалося оновити виконавця.");
-
-    setDesignTask({
-      ...designTask,
-      assigneeUserId: nextAssigneeUserId,
-      assignedAt: nextAssignedAt,
-      metadata: nextMetadata,
-    });
-    setDesignAssigneeId(nextAssigneeUserId);
-
-    // Журнал і сповіщення — не привід відкочувати призначення: воно вже в базі.
-    const logged = await logDesignTaskEvent(
-      {
-        teamId,
-        designTaskId: designTask.id,
-        quoteId,
-        userId: actorUserId,
-        actorName,
-        action: "design_task_assignment",
-        title: nextAssigneeUserId
-          ? `Призначено виконавця: ${getMemberLabel(nextAssigneeUserId)}`
-          : `Знято виконавця (${getMemberLabel(previousAssignee)})`,
-        metadata: {
-          source: "design_task_assignment",
-          from_assignee_user_id: previousAssignee,
-          from_assignee_label: getMemberLabel(previousAssignee),
-          to_assignee_user_id: nextAssigneeUserId,
-          to_assignee_label: nextAssigneeUserId ? getMemberLabel(nextAssigneeUserId) : null,
-        },
-      },
-      "Не вдалося оновити виконавця."
-    );
-    if (!logged.ok) {
-      console.warn("Failed to log design task assignment event", logged.message);
-    }
-
-    const quoteLabel = quote?.number ? `#${quote.number}` : quoteId.slice(0, 8);
-    await notifyDesignTaskAssignmentChange({
-      designTaskId: designTask.id,
-      quoteLabel,
-      actorName,
-      actorUserId,
-      previousAssignee,
-      nextAssigneeUserId,
-    });
-
-    toast.success(nextAssigneeUserId ? "Виконавця призначено" : "Призначення знято");
-    setDesignTaskSaving(false);
-  };
 
   const loadItems = useCallback(async () => {
     setItemsLoading(true);
@@ -7122,384 +6841,59 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </div>
 
-              <Tabs defaultValue="brief" className="w-full">
-                <TabsList variant="underline" className="mb-5">
-                  <TabsTrigger value="brief">
-                    ТЗ
-                  </TabsTrigger>
-                  <TabsTrigger value="visuals">
-                    Візуалізації
-                    <span className="ml-2 text-xs text-muted-foreground">{visibleDesignVisualizations.length}</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="task">
-                    Задача
-                    <span className="ml-2 text-xs text-muted-foreground">{designTasks.length}</span>
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="brief" className="mt-0">
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">ТЗ для дизайнера</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Короткий опис задачі без дедлайнів і службових деталей.
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <DictationButton
-                          textareaRef={briefTextareaRef}
-                          value={briefText}
-                          onChange={(next) => {
-                            setBriefText(next);
-                            setBriefDirty(true);
-                            setBriefInlineEditing(true);
-                          }}
-                          onAfterInsert={() =>
-                            resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT)
-                          }
-                          context="brief"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setBriefEditorOpen(true)}
-                        >
-                          Відкрити редактор
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      {briefInlineEditing || briefDirty ? (
-                        <Textarea
-                          ref={briefTextareaRef}
-                          value={briefText}
-                          onChange={(event) => {
-                            setBriefText(event.target.value);
-                            setBriefDirty(true);
-                            resizeBriefTextarea(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
-                          }}
-                          onBlur={handleBriefInlineBlur}
-                          placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
-                          className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[180px]")}
-                        />
-                      ) : (
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          className={cn(BRIEF_SURFACE_FRAME_CLASS, "px-4 py-4")}
-                          aria-readonly="true"
-                          onClick={() => setBriefInlineEditing(true)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              setBriefInlineEditing(true);
-                            }
-                          }}
-                        >
-                          <div className={cn("min-h-[120px]", BRIEF_SURFACE_TEXT_CLASS)}>
-                            {renderBriefRichText(briefText)}
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{briefText.length} символів</span>
-                        {briefDirty ? <span>Є незбережені зміни</span> : <span>Усі зміни збережено</span>}
-                      </div>
-                      {briefError ? <div className="text-sm text-destructive">{briefError}</div> : null}
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setBriefText(quote?.design_brief ?? quote?.comment ?? "");
-                            setBriefDirty(false);
-                            setBriefInlineEditing(false);
-                            setBriefError(null);
-                          }}
-                          disabled={!briefDirty}
-                        >
-                          Скинути
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => void saveBrief()}
-                          disabled={!briefDirty || briefSaving || quoteRequirements.length > 0}
-                          className="gap-2"
-                        >
-                          {briefSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                          {briefSaving ? "Збереження..." : "Зберегти ТЗ"}
-                        </Button>
-                      </div>
-                    </div>
+              {designTaskLoading ? (
+                <AppSectionLoader label="Завантаження..." />
+              ) : designTaskError ? (
+                <div className="py-4 text-sm text-destructive">{designTaskError}</div>
+              ) : designTaskCards.length > 0 ? (
+                <QuoteDesignTasksPanel
+                  tasks={designTaskCards}
+                  activeTaskId={activeDesignTaskId}
+                  renderBrief={renderBriefRichText}
+                  onSelectTask={setActiveDesignTaskId}
+                  onOpenTask={(taskId) => navigate(`/design/${taskId}`)}
+                  onPreviewVisual={(file) => {
+                    void ensureAttachmentAccessUrl(file, { variant: "preview" }).then((url) => {
+                      if (!url) return;
+                      setVisualizationPreview({ ...file, url });
+                    });
+                  }}
+                  onDownloadVisual={(file) => {
+                    void ensureAttachmentAccessUrl(file).then((url) => {
+                      if (!url) return;
+                      void downloadFileToDevice(
+                        url,
+                        getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
+                      );
+                    });
+                  }}
+                />
+              ) : (
+                /*
+                  ЗАДАЧА НАРОДЖУЄТЬСЯ РАЗОМ ІЗ ПРОРАХУНКОМ (REQ-155 p5), і тут її
+                  не створюють. Аварійний шлях лишився в меню «⋮» шапки: виняток
+                  має жити в меню, а не займати екран замість типового стану.
+                */
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center">
+                  <Palette className="h-9 w-9 text-muted-foreground/30" />
+                  <div>
+                    <p className="font-medium text-foreground">Дизайн-задач у цьому прорахунку немає</p>
+                    <p className="mx-auto mt-1.5 max-w-[56ch] text-sm leading-relaxed text-muted-foreground">
+                      Задача створюється разом із прорахунком — по одній на кожен товар із нанесенням.
+                      Щоб вона тут зʼявилась, додайте нанесення в товарі.
+                    </p>
                   </div>
-                </TabsContent>
-
-                <TabsContent value="visuals" className="mt-0">
-                  {visibleDesignVisualizations.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border/50 px-6 py-10 text-center">
-                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted/20">
-                          <Image className="h-5 w-5" />
-                        </div>
-                        <div className="text-sm font-medium text-foreground">Візуалізації ще не додані</div>
-                        <div className="text-xs text-muted-foreground">
-                          Тут будуть макети, превʼю та фінальні файли від дизайнера.
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {visibleDesignVisualizations.map((file) => {
-                        const extension = getFileExtension(getAttachmentDisplayName(file));
-                        const previewImage =
-                          (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
-                          Boolean(file.storageBucket && file.storagePath);
-                        const isSelectedVisualization =
-                          (selectedDesignOutputStoragePath && file.storagePath === selectedDesignOutputStoragePath) ||
-                          (selectedDesignOutputFileName && file.name === selectedDesignOutputFileName);
-                        return (
-                          <div key={file.id} className="group rounded-xl border border-border/40 p-3 transition-colors hover:bg-muted/10">
-                            <button
-                              type="button"
-                              className="flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-muted/20 text-left transition-transform hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-default disabled:hover:scale-100"
-                              onClick={() => {
-                                if (!previewImage) return;
-                                void ensureAttachmentAccessUrl(file, { variant: "preview" }).then((url) => {
-                                  if (!url) return;
-                                  setVisualizationPreview({ ...file, url });
-                                });
-                              }}
-                              disabled={!previewImage}
-                              aria-label={previewImage ? `Переглянути ${getAttachmentDisplayName(file)}` : getAttachmentDisplayName(file)}
-                            >
-                              {previewImage ? (
-                                <StorageObjectImage
-                                  bucket={file.storageBucket}
-                                  path={file.storagePath}
-                                  alt={getAttachmentDisplayName(file)}
-                                  variant="thumb"
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex flex-col items-center gap-2 text-muted-foreground/70">
-                                  <FileText className="h-8 w-8" />
-                                  <span className="text-2xs font-semibold uppercase tracking-wide">
-                                    {extension ?? "Файл"}
-                                  </span>
-                                </div>
-                              )}
-                            </button>
-                            <div className="mt-3 truncate text-sm font-medium text-foreground" title={getAttachmentDisplayName(file)}>
-                              {getAttachmentDisplayName(file)}
-                            </div>
-                            <div className="mt-1 flex items-center gap-2">
-                              <div className="text-xs text-muted-foreground">
-                                {getFileExtension(getAttachmentDisplayName(file))?.toUpperCase() ?? "Файл"}
-                              </div>
-                              {isSelectedVisualization ? (
-                                <Badge
-                                  variant="outline"
-                                  className="tone-success h-5 px-2 text-3xs"
-                                >
-                                  Обрано
-                                </Badge>
-                              ) : null}
-                            </div>
-                            <div className="mt-3 flex items-center gap-2">
-                              {file.storageBucket && file.storagePath ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    void ensureAttachmentAccessUrl(file).then((url) => {
-                                      if (url) {
-                                        void downloadFileToDevice(
-                                          url,
-                                          getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
-                                        );
-                                      }
-                                    });
-                                  }}
-                                >
-                                  Завантажити
-                                </Button>
-                              ) : null}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="task" className="mt-0">
-                  {designTaskLoading ? (
-                    <div className="flex items-center gap-2 rounded-xl border border-border/30 bg-muted/[0.02] px-4 py-4 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Завантаження...
-                    </div>
-                  ) : designTaskError ? (
-                    <div className="text-sm text-destructive">{designTaskError}</div>
-                  ) : designTask ? (
-                    <div className="max-w-3xl space-y-3">
-                      {designTasks.length > 1 ? (
-                        <div className="rounded-xl border border-border/40 bg-muted/[0.02] p-4">
-                          <div className="mb-3 text-sm font-semibold text-foreground">
-                            Задачі прорахунку · {designTasks.length}
-                          </div>
-                          <div className="space-y-1.5">
-                            {designTasks.map((task) => {
-                              const metadata = task.metadata ?? {};
-                              const number =
-                                typeof metadata.design_task_number === "string" ? metadata.design_task_number : null;
-                              const itemTitle =
-                                typeof metadata.quote_item_title === "string" ? metadata.quote_item_title : null;
-                              const assignee =
-                                typeof metadata.assignee_user_id === "string" ? metadata.assignee_user_id : null;
-                              return (
-                                <button
-                                  key={task.id}
-                                  type="button"
-                                  onClick={() => navigate(`/design/${task.id}`)}
-                                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left transition hover:border-border/60 hover:bg-muted/20"
-                                >
-                                  <span className="min-w-0 truncate text-sm text-foreground">
-                                    {number ? `${number} · ` : ""}
-                                    {itemTitle || task.title || "Дизайн-задача"}
-                                  </span>
-                                  <span className="shrink-0 text-xs text-muted-foreground">
-                                    {assignee ? memberById.get(assignee) ?? "Виконавець" : "Без виконавця"}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : null}
-                    <div className="grid gap-4 rounded-xl border border-border/40 bg-muted/[0.02] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end md:p-5">
-                      <div className="space-y-2">
-                        <div className="text-sm font-semibold text-foreground">Дизайн-задача</div>
-                        {selectedDesignOutputFileName ? (
-                          <div className="text-xs text-muted-foreground">
-                            Обраний візуал: <span className="font-medium text-foreground">{selectedDesignOutputFileName}</span>
-                          </div>
-                        ) : null}
-                        {designTaskType ? (
-                          <div className="inline-flex max-w-[360px] items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                            Тип задачі: {DESIGN_TASK_TYPE_LABELS[designTaskType]}
-                          </div>
-                        ) : null}
-                        <div className="max-w-[360px]">
-                          <div className="mb-2 text-xs font-medium text-muted-foreground">Виконавець</div>
-                          <Select
-                            value={designAssigneeId ?? "none"}
-                            onValueChange={(value) => void updateDesignAssignee(value === "none" ? null : value)}
-                            disabled={designTaskSaving}
-                          >
-                            <SelectTrigger
-                          controlSize="md"
-                          className="w-full border-border/40 bg-muted/[0.03]">
-                              {designAssigneeId ? (
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <AvatarBase
-                                    src={memberAvatarById.get(designAssigneeId) ?? null}
-                                    name={memberById.get(designAssigneeId) ?? designAssigneeId}
-                                    fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
-                                    size={20}
-                                    inactive={memberInactiveById[designAssigneeId] ?? false}
-                                    className="text-3xs font-semibold"
-                                  />
-                                  <span className="truncate">
-                                    {memberById.get(designAssigneeId) ?? designAssigneeId}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground">Без виконавця</span>
-                              )}
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Без виконавця</SelectItem>
-                              {designerMembers.length > 0 ? (
-                                designerMembers.map((member) => (
-                                  <SelectItem key={member.id} value={member.id}>
-                                    <div className="flex items-center gap-2">
-                                      <AvatarBase
-                                        src={member.avatarUrl}
-                                        name={member.label}
-                                        fallback={getInitials(member.label)}
-                                        size={20}
-                                        inactive={memberInactiveById[member.id] ?? false}
-                                        className="text-3xs font-semibold"
-                                      />
-                                      <span>{member.label}</span>
-                                    </div>
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="empty" disabled>
-                                  {teamMembers.length === 0
-                                    ? "Немає учасників"
-                                    : hasRoleInfo
-                                    ? "Немає дизайнерів"
-                                    : "Ролі не налаштовані"}
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate(`/design/${designTask.id}`)}
-                      >
-                        Відкрити
-                      </Button>
-                    </div>
-                    </div>
-                  ) : (
-                    /*
-                      ЗАДАЧА НАРОДЖУЄТЬСЯ РАЗОМ ІЗ ПРОРАХУНКОМ (REQ-155 p5), і
-                      тут її не створюють. Раніше на цьому місці стояли дві
-                      кнопки — «Створити задачу» і «Підтягнути з дизайну», — і
-                      обидві суперечили тому, як воно працює насправді:
-                      QuotesPage заводить по одній задачі на кожну позицію з
-                      нанесенням у момент створення прорахунку. Порожня вкладка
-                      з кнопкою «Створити» вчила зворотного — що задачу треба
-                      завести руками, — і люди заводили ДРУГУ на той самий товар.
-
-                      Тому тут не кнопка, а відповідь на питання «чому порожньо»:
-                      задач немає, бо немає нанесення. Аварійний шлях лишився в
-                      меню «⋮» шапки, де він і має бути: там це виняток, а не
-                      типова дія.
-                    */
-                    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center">
-                      <Palette className="h-9 w-9 text-muted-foreground/30" />
-                      <div>
-                        <p className="font-medium text-foreground">Дизайн-задач у цьому прорахунку немає</p>
-                        <p className="mx-auto mt-1.5 max-w-[56ch] text-sm leading-relaxed text-muted-foreground">
-                          Задача створюється разом із прорахунком — по одній на кожен товар із нанесенням.
-                          Щоб вона тут зʼявилась, додайте нанесення в товарі.
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-1 gap-2"
-                        onClick={() => setActiveQuoteTab("products")}
-                      >
-                        <Package className="h-4 w-4" />
-                        Відкрити «Товари»
-                      </Button>
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-1 gap-2"
+                    onClick={() => setActiveQuoteTab("products")}
+                  >
+                    <Package className="h-4 w-4" />
+                    Відкрити «Товари»
+                  </Button>
+                </div>
+              )}
             </section>
 
             <section className={cn("tab-panel py-2", activeQuoteTab !== "discussion" && "hidden")}>
@@ -8258,153 +7652,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         void markup.submitRequest(target.runId, note);
       }}
     />
-
-    <Dialog open={briefEditorOpen} onOpenChange={setBriefEditorOpen}>
-      <DialogContent className="h-[min(92dvh,860px)] sm:max-w-[min(920px,92vw)]">
-        <DialogHeader>
-          <DialogTitle>ТЗ для дизайнера</DialogTitle>
-        </DialogHeader>
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/10 p-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className={cn("h-8 px-2", headingActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-              disabled={briefSaving}
-              onClick={() =>
-                applyBriefFormatting(({ selectedText }) =>
-                  toggleLinePrefix(selectedText, () => "## ", /^##\s+/, "Заголовок")
-                )
-              }
-            >
-              <Heading2 className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className={cn("h-8 px-2", boldActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-              disabled={briefSaving}
-              onClick={() =>
-                applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
-                  toggleWrappedFormatting(value, selectionStart, selectionEnd, "**", "жирний текст")
-                )
-              }
-            >
-              <Bold className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className={cn("h-8 px-2", italicActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-              disabled={briefSaving}
-              onClick={() =>
-                applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
-                  toggleWrappedFormatting(value, selectionStart, selectionEnd, "*", "курсив")
-                )
-              }
-            >
-              <Italic className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className={cn("h-8 px-2", bulletActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-              disabled={briefSaving}
-              onClick={() =>
-                applyBriefFormatting(({ selectedText }) =>
-                  toggleLinePrefix(selectedText, () => "- ", /^-\s+/, "Пункт списку")
-                )
-              }
-            >
-              <List className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className={cn("h-8 px-2", orderedActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-              disabled={briefSaving}
-              onClick={() =>
-                applyBriefFormatting(({ selectedText }) =>
-                  toggleLinePrefix(selectedText, (index) => `${index + 1}. `, /^\d+\.\s+/, "Пункт списку")
-                )
-              }
-            >
-              <ListOrdered className="h-4 w-4" />
-            </Button>
-            <div className="ml-auto">
-              <DictationButton
-                textareaRef={briefDialogTextareaRef}
-                value={briefText}
-                onChange={(next) => {
-                  setBriefText(next);
-                  setBriefDirty(true);
-                }}
-                onAfterInsert={() =>
-                  resizeBriefTextarea(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT)
-                }
-                context="brief"
-                disabled={briefSaving}
-              />
-            </div>
-          </div>
-          <Textarea
-            ref={briefDialogTextareaRef}
-            value={briefText}
-            onChange={(event) => {
-              setBriefText(event.target.value);
-              setBriefDirty(true);
-              resizeBriefTextarea(event.currentTarget, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
-            }}
-            onSelect={syncBriefSelection}
-            onKeyUp={syncBriefSelection}
-            onClick={syncBriefSelection}
-            onWheelCapture={(event) => event.stopPropagation()}
-            placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
-            rows={10}
-            disabled={briefSaving}
-            className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[240px] flex-1 overflow-y-auto overscroll-contain")}
-          />
-          <div className={BRIEF_DIALOG_PREVIEW_CLASS}>
-            <div className="mb-2 text-xs text-muted-foreground">Попередній перегляд</div>
-            <div className={cn("max-h-48 overflow-auto", BRIEF_SURFACE_TEXT_CLASS)}>
-              {renderBriefRichText(designBriefPreview)}
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setBriefText(quote?.design_brief ?? quote?.comment ?? "");
-              setBriefDirty(false);
-              setBriefInlineEditing(false);
-              setBriefError(null);
-            }}
-            disabled={!briefDirty}
-          >
-            Скинути
-          </Button>
-          <Button type="button" variant="outline" onClick={() => setBriefEditorOpen(false)}>
-            Закрити
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void saveBrief()}
-            disabled={!briefDirty || briefSaving || quoteRequirements.length > 0}
-            className="gap-2"
-          >
-            {briefSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-            {briefSaving ? "Збереження..." : "Зберегти ТЗ"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     <ConfirmDialog
       open={deleteQuoteDialogOpen}
