@@ -161,8 +161,10 @@ describe("стани погодження", () => {
     renderPanel({ view: "manager", approval: approval({ status: "approved" }) });
     expect(screen.getByText("Погоджено")).toBeTruthy();
     expect(screen.getByText(/Зміна собівартості або накрутки вниз відкриє запит наново/)).toBeTruthy();
-    // Ані надіслати, ані відкликати: рішення вже є.
-    expect(screen.queryByRole("button")).toBeNull();
+    // Ані надіслати, ані відкликати: рішення вже є. «Що це означає» кнопкою є,
+    // але це не дія над тиражем, а розкриття подробиць рішення (REQ-175#p54).
+    expect(screen.queryByRole("button", { name: /Надіслати|Підтвердити|Відхилити/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Що це означає/ })).toBeTruthy();
   });
 
   it("заморозка знімає повзунок навіть у СЕО — інакше рішення стосувалось би іншого числа", () => {

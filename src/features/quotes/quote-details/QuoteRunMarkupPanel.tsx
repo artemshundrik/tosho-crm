@@ -1,4 +1,6 @@
-import { Check, CircleAlert, Clock, Eye, Info, Lock } from "lucide-react";
+import { useState } from "react";
+
+import { Check, ChevronDown, CircleAlert, Clock, Eye, Info, Lock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -62,12 +64,20 @@ const BADGE_CLASS: Record<BadgeTone, string> = {
   bad: "bg-destructive/10 text-destructive border-destructive/40",
 };
 
-const NOTE_CLASS: Record<BadgeTone, string> = {
-  mute: "bg-muted/60 text-muted-foreground border-border",
-  ok: "bg-success-soft text-success-foreground border-success-soft-border",
-  info: "bg-info-soft text-info-foreground border-info-soft-border",
-  warn: "bg-warning-soft text-warning-copy border-warning-soft-border",
-  bad: "bg-destructive/10 text-destructive border-destructive/40",
+/**
+ * Стан говорить КРАПКОЮ, а не заливкою (REQ-175#p54).
+ *
+ * Записка стояла в жовтому прямокутнику на всю ширину блока цін — і поруч із
+ * такими самими жовтими плашками вгорі сторінки це читалось як «тут аварія»,
+ * хоч дно нічого не блокує. Тепер тон — сім пікселів кольору перед рядком;
+ * решта фарби лишається числам.
+ */
+const DOT_CLASS: Record<BadgeTone, string> = {
+  mute: "bg-muted-foreground/50",
+  ok: "bg-success-foreground",
+  info: "bg-info-foreground",
+  warn: "bg-warning-foreground",
+  bad: "bg-destructive",
 };
 
 export type QuoteRunMarkupPanelProps = {
@@ -133,31 +143,52 @@ function markupNote(params: {
   currency?: string | null;
   managerName?: string | null;
   deciderName?: string | null;
-}): { tone: BadgeTone; icon: typeof Info; text: React.ReactNode } | null {
+}): {
+  tone: BadgeTone;
+  text: React.ReactNode;
+  /** Те, що не влазить у рядок, але потрібне, щоб ухвалити рішення. */
+  details: Array<{ label: string; value: string }>;
+} | null {
   const { state, view, canApprove, pricing, markupRate, benchmark, currency } = params;
   const who = params.managerName?.trim() || "Менеджер";
   const decider = params.deciderName?.trim() || "Погоджувач";
+  const money = (value: number) => formatCurrency(value, currency);
+  const WHO_SIGNS = "Двоє СЕО або головний бухгалтер";
+  const OPENS = "КП клієнту й перехід у «Затверджено»";
 
   if (state.kind === "draft") {
     return {
       tone: "mute",
-      icon: Info,
       text: "Ціни ще немає: собівартість вносить проєктний менеджер. Смуга ввімкнеться разом із нею.",
+      details: [],
     };
   }
 
   if (state.kind === "pending") {
     const sent = formatDateTime(state.approval.requestedAt);
+    // Ціну на дні й ціну запиту рахуємо тут-таки, щоб ніхто не тримав
+    // арифметику в голові: рішення ухвалюють про гроші, а не про відсотки.
+    const floorSale = state.approval.costTotal * (1 + MIN_MARKUP_RATE / 100);
+    const askedSale = state.approval.costTotal * (1 + state.approval.markupRate / 100);
+    const pendingDetails = [
+      { label: "Просить", value: sent ? `${who} · ${sent}` : who },
+      { label: "Просить накрутку", value: `${formatRate(state.approval.markupRate)} замість ${MIN_MARKUP_RATE} %` },
+      { label: "Ціна на дні", value: money(floorSale) },
+      { label: "Ціна за запитом", value: `${money(askedSale)} · нижче на ${money(floorSale - askedSale)}` },
+      { label: "Собівартість, при якій рахували", value: money(state.approval.costTotal) },
+      { label: "Чекаємо на", value: WHO_SIGNS },
+      ...(state.approval.requestNote
+        ? [{ label: "Пояснення", value: `«${state.approval.requestNote}»` }]
+        : []),
+      { label: "Поле накрутки", value: "Заморожене до відповіді" },
+    ];
     if (canApprove) {
-      // Погоджувачу треба одне: наскільки нижче й на скільки грошей. Ціну на
-      // дні рахуємо тут-таки, щоб він не тримав арифметику в голові.
-      const floorSale = state.approval.costTotal * (1 + MIN_MARKUP_RATE / 100);
       return {
         tone: "warn",
-        icon: Clock,
+        details: pendingDetails,
         text: (
           <>
-            <b className="font-semibold">
+            <b className="font-semibold text-foreground">
               {who} просить {formatRate(state.approval.markupRate)} замість {MIN_MARKUP_RATE} %.
             </b>{" "}
             {sent ? `Надіслано ${sent}. ` : ""}
@@ -170,10 +201,10 @@ function markupNote(params: {
     }
     return {
       tone: "warn",
-      icon: Clock,
+      details: pendingDetails,
       text: (
         <>
-          <b className="font-semibold">Запит надіслано{sent ? ` ${sent}` : ""}.</b> Чекаємо на будь-кого з
+          <b className="font-semibold text-foreground">Запит надіслано{sent ? ` ${sent}` : ""}.</b> Чекаємо на будь-кого з
           трьох: двоє СЕО і головний бухгалтер. Рахувати й зберігати можна далі.
         </>
       ),
@@ -184,10 +215,19 @@ function markupNote(params: {
     const when = formatDateTime(state.approval.decidedAt);
     return {
       tone: "bad",
-      icon: Lock,
+      details: [
+        { label: "Відхилив", value: when ? `${decider} · ${when}` : decider },
+        ...(state.approval.decisionNote
+          ? [{ label: "Причина", value: `«${state.approval.decisionNote}»` }]
+          : []),
+        { label: "Просили", value: formatRate(state.approval.markupRate) },
+        { label: "Число в тиражі", value: `Лишилось ${formatRate(markupRate)} — саме не відкотиться` },
+        { label: "Замкнено", value: OPENS },
+        { label: "Хто може підписати", value: WHO_SIGNS },
+      ],
       text: (
         <>
-          <b className="font-semibold">
+          <b className="font-semibold text-foreground">
             Відхилив {decider}
             {when ? ` ${when}` : ""}.
           </b>{" "}
@@ -201,8 +241,17 @@ function markupNote(params: {
   if (state.kind === "approved") {
     const when = formatDateTime(state.approval.decidedAt);
     return {
-      tone: "mute",
-      icon: Check,
+      tone: "ok",
+      details: [
+        { label: "Підтвердив", value: when ? `${decider} · ${when}` : decider },
+        { label: "Погоджено накрутку", value: formatRate(state.approval.markupRate) },
+        { label: "При собівартості", value: money(state.approval.costTotal) },
+        ...(state.approval.decisionNote
+          ? [{ label: "Коментар", value: `«${state.approval.decisionNote}»` }]
+          : []),
+        { label: "Відкрито", value: OPENS },
+        { label: "Запит відкриється наново", value: "Якщо накрутка або собівартість піде вниз" },
+      ],
       text: (
         <>
           Підтвердив {decider}
@@ -215,13 +264,22 @@ function markupNote(params: {
   }
 
   if (state.kind === "under") {
+    const floorSale = pricing.costTotal * (1 + MIN_MARKUP_RATE / 100);
+    const underDetails = [
+      { label: "Накрутка зараз", value: `${formatRate(markupRate)} · дно ${MIN_MARKUP_RATE} %` },
+      { label: "Ціна на дні", value: money(floorSale) },
+      { label: "Ціна зараз", value: `${money(pricing.saleTotal)} · нижче на ${money(floorSale - pricing.saleTotal)}` },
+      { label: "Підписати можуть", value: WHO_SIGNS },
+      { label: "Підпис відкриє", value: OPENS },
+      { label: "Що не блокується", value: "Рахунок, редагування, збереження" },
+    ];
     if (canApprove) {
       return {
         tone: "warn",
-        icon: CircleAlert,
+        details: underDetails,
         text: (
           <>
-            <b className="font-semibold">
+            <b className="font-semibold text-foreground">
               {who} веде ціну нижче дна {MIN_MARKUP_RATE} %.
             </b>{" "}
             Запит прийде вам, щойно його надішлють.
@@ -231,10 +289,10 @@ function markupNote(params: {
     }
     return {
       tone: "warn",
-      icon: CircleAlert,
+      details: underDetails,
       text: (
         <>
-          <b className="font-semibold">Нижче дна {MIN_MARKUP_RATE} %.</b> Рахувати й зберігати можна далі,
+          <b className="font-semibold text-foreground">Нижче дна {MIN_MARKUP_RATE} %.</b> Рахувати й зберігати можна далі,
           але КП клієнту й перехід у «Затверджено» відкриються після підтвердження СЕО або головного
           бухгалтера.
         </>
@@ -249,10 +307,15 @@ function markupNote(params: {
     // Розділяємо не за правом, а за мовою вигляду: у бек-офісу (СЕО,
     // бухгалтерія, проджект) це опис чужого рішення, у менеджера — підказка
     // про власні гроші.
+    const benchmarkDetails = [
+      { label: "Накрутка зараз", value: formatRate(markupRate) },
+      { label: "Орієнтир позиції", value: `${formatRate(benchmark.rate)} · ${formatMarkupBenchmarkBasis(benchmark.basis)}` },
+      { label: "Різниця в грошах", value: money(gap) },
+    ];
     if (view.showEconomics) {
       return {
         tone: "info",
-        icon: Info,
+        details: benchmarkDetails,
         text: (
           <>
             Менеджер поставив {formatRate(markupRate)} при орієнтирі {formatRate(benchmark.rate)} — на{" "}
@@ -263,10 +326,10 @@ function markupNote(params: {
     }
     return {
       tone: "info",
-      icon: Info,
+      details: benchmarkDetails,
       text: (
         <>
-          <b className="font-semibold">Орієнтир для цієї позиції — {formatRate(benchmark.rate)}.</b> Це не
+          <b className="font-semibold text-foreground">Орієнтир для цієї позиції — {formatRate(benchmark.rate)}.</b> Це не
           стеля й не вимога: на такому замовленні зазвичай виходить на {formatCurrency(gap, currency)}{" "}
           більше.
         </>
@@ -336,6 +399,9 @@ export function QuoteRunMarkupPanel({
   onRequestApproval,
   onDecide,
 }: QuoteRunMarkupPanelProps) {
+  // Подробиці згорнуті за замовчуванням: у щоденній роботі стан читають, а не
+  // розбирають. Розгорнув один раз — лишається розгорнутим, поки не закриють.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const off = pricing.costTotal <= 0;
   // Три РІЗНІ питання, які легко злити в одне й отримати або зайвий повзунок,
   // або замкнене поле там, де воно має рухатись:
@@ -359,7 +425,6 @@ export function QuoteRunMarkupPanel({
     managerName,
     deciderName,
   });
-  const NoteIcon = note?.icon ?? Info;
   const showRequestButton = canEditMarkup && canRequestMarkupApproval(state);
   const showDecideButtons = canApprove && state.kind === "pending";
 
@@ -551,40 +616,81 @@ export function QuoteRunMarkupPanel({
         {view.showEconomics ? <PriceSplit pricing={pricing} currency={currency} /> : null}
       </div>
 
-      {note ? (
-        <div
-          className={cn(
-            "mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-2xs leading-relaxed",
-            NOTE_CLASS[note.tone]
-          )}
-        >
-          <NoteIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <div>{note.text}</div>
-        </div>
-      ) : null}
+      {/*
+        ЯРУС СТАНУ — ОДИН РЯДОК, А ПОДРОБИЦІ ПІД НИМ (REQ-175#p54).
 
-      {showRequestButton || showDecideButtons ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {showRequestButton ? (
-            <Button size="sm" className="h-8" disabled={busy} onClick={onRequestApproval}>
-              {state.kind === "rejected" ? "Надіслати запит наново" : "Надіслати на погодження"}
-            </Button>
-          ) : null}
-          {showDecideButtons ? (
-            <>
-              <Button size="sm" className="h-8" disabled={busy} onClick={() => onDecide("approved")}>
-                Підтвердити {formatRate(state.approval.markupRate)}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 border-destructive/45 text-destructive hover:bg-destructive/10"
-                disabled={busy}
-                onClick={() => onDecide("rejected")}
+        Було: жовтий прямокутник на всю ширину, під ним окремим ярусом кнопка.
+        Два блоки на одну думку, і колір такий самий, як у попереджень угорі
+        сторінки, — хоч дно нічого не блокує, а лише вмикає погодження.
+
+        Стало: крапка тону, речення, дія — в один рядок. Усе, що потрібно, аби
+        ухвалити рішення й не рахувати в голові (хто просить, скільки замість
+        скількох, ціна на дні проти ціни запиту, хто підписує, що підпис
+        відкриє), лежить під «Що це означає» й не займає місця, поки не спитали.
+      */}
+      {note || showRequestButton || showDecideButtons ? (
+        <div className="mt-3 border-t border-border/40 pt-3">
+          <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+            {note ? (
+              <>
+                <span
+                  className={cn("mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full", DOT_CLASS[note.tone])}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 text-2xs leading-relaxed text-muted-foreground">
+                  {note.text}
+                </span>
+              </>
+            ) : (
+              <span className="flex-1" />
+            )}
+
+            {note && note.details.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setDetailsOpen((open) => !open)}
+                aria-expanded={detailsOpen}
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                Відхилити
+                Що це означає
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", detailsOpen && "rotate-180")} />
+              </button>
+            ) : null}
+
+            {showRequestButton ? (
+              <Button size="sm" className="h-7 shrink-0" disabled={busy} onClick={onRequestApproval}>
+                {state.kind === "rejected" ? "Надіслати запит наново" : "Надіслати на погодження"}
               </Button>
-            </>
+            ) : null}
+            {showDecideButtons ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 shrink-0"
+                  disabled={busy}
+                  onClick={() => onDecide("rejected")}
+                >
+                  Відхилити
+                </Button>
+                <Button size="sm" className="h-7 shrink-0" disabled={busy} onClick={() => onDecide("approved")}>
+                  Підтвердити {formatRate(state.approval.markupRate)}
+                </Button>
+              </>
+            ) : null}
+          </div>
+
+          {note && detailsOpen && note.details.length > 0 ? (
+            <div className="mt-3 grid gap-x-8 gap-y-1.5 border-t border-border/40 pt-3 sm:grid-cols-2">
+              {note.details.map((row) => (
+                <div key={row.label} className="flex items-baseline justify-between gap-4 text-2xs">
+                  <span className="min-w-0 text-muted-foreground">{row.label}</span>
+                  <span className="min-w-0 text-right font-medium tabular-nums text-foreground">
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
           ) : null}
         </div>
       ) : null}
