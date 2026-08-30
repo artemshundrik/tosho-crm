@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type DragEvent } from "react";
 import { ArrowRight, ChevronDown, Clock, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -277,6 +277,16 @@ export function QuoteFeed({
 }) {
   const [filter, setFilter] = useState<QuoteFeedKind | "all">("all");
   const [onlyImportant, setOnlyImportant] = useState(false);
+  /**
+   * Перетягування файлів у стрічку.
+   *
+   * Зона — УСЯ стрічка, а не сама згортка файлів: коли її згорнуто (а типово
+   * вона згорнута), цілитись доводилось би в смужку заввишки 44 px. Лічильник
+   * замість прапорця, бо `dragleave` стріляє і на кожному вкладеному вузлі —
+   * з булевим прапорцем підсвітка блимала на кожному русі миші.
+   */
+  const [dragDepth, setDragDepth] = useState(0);
+  const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer.types).includes("Files");
 
   const counts = new Map<QuoteFeedKind | "all", number>([["all", events.length]]);
   events.forEach((event) => counts.set(event.kind, (counts.get(event.kind) ?? 0) + 1));
@@ -294,7 +304,37 @@ export function QuoteFeed({
   });
 
   return (
-    <div className="space-y-4">
+    <div
+      className={cn(
+        "space-y-4 rounded-2xl transition-colors",
+        dragDepth > 0 && "outline-dashed outline-2 outline-offset-4 outline-primary/60"
+      )}
+      onDragEnter={(event) => {
+        if (!hasFiles(event)) return;
+        event.preventDefault();
+        setDragDepth((depth) => depth + 1);
+      }}
+      onDragOver={(event) => {
+        if (!hasFiles(event)) return;
+        event.preventDefault();
+      }}
+      onDragLeave={(event) => {
+        if (!hasFiles(event)) return;
+        setDragDepth((depth) => Math.max(0, depth - 1));
+      }}
+      onDrop={(event) => {
+        if (!hasFiles(event)) return;
+        event.preventDefault();
+        setDragDepth(0);
+        onAddFiles(event.dataTransfer.files);
+      }}
+    >
+      {dragDepth > 0 ? (
+        <div className="rounded-xl border border-dashed border-primary/60 bg-primary/5 px-3.5 py-2.5 text-sm font-medium text-primary">
+          Відпустіть — файли підуть у справу
+        </div>
+      ) : null}
+
       <FilesRegister
         files={files}
         open={filesOpen}
