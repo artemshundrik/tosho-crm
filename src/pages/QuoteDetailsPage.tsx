@@ -130,6 +130,7 @@ import { resolveQuoteMarkupView } from "@/lib/quoteMarkupView";
 import { useQuoteMarkupApprovals } from "@/features/quotes/quote-details/useQuoteMarkupApprovals";
 import { QuoteRunMarkupPanel } from "@/features/quotes/quote-details/QuoteRunMarkupPanel";
 import { QuoteRunPriceFields } from "@/features/quotes/quote-details/QuoteRunPriceFields";
+import { QuoteRunRows } from "@/features/quotes/quote-details/QuoteRunRows";
 import {
   QuoteMarkupDecisionDialog,
   QuoteMarkupGateBanner,
@@ -6358,55 +6359,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                                 return (
                                   <div className="space-y-4">
-                                    <div className="flex flex-wrap items-center gap-2.5">
-                                      <div className="mr-1 text-xs font-semibold uppercase tracking-caps text-muted-foreground">
-                                        Тиражі
-                                      </div>
-                                      {itemRuns.map((run, runIndex) => {
-                                        const qty = Number(run.quantity) || 0;
-                                        const isSelected = !!run.id && activeItemRun?.id === run.id;
-                                        const isApproved = run.is_approved === true;
-                                        return (
-                                          <button
-                                            key={run.id ?? `${item.id}:run-pill:${runIndex}`}
-                                            type="button"
-                                            onClick={() => selectRunForItem(run, item.id)}
-                                            title={isApproved ? "Цей тираж погодив клієнт" : undefined}
-                                            className={cn(
-                                              "inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                                              isSelected
-                                                ? "border-primary bg-primary text-primary-foreground"
-                                                : isApproved
-                                                  ? "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/70"
-                                                  : "border-border/60 bg-background hover:bg-muted/40"
-                                            )}
-                                          >
-                                            {isApproved ? (
-                                              <Check
-                                                className={cn(
-                                                  "h-3.5 w-3.5 shrink-0",
-                                                  isSelected ? "text-primary-foreground" : "text-success-foreground"
-                                                )}
-                                              />
-                                            ) : null}
-                                            <span className="font-mono text-base tabular-nums">{qty}</span>
-                                            <span className={cn("text-xs", isSelected ? "text-primary-foreground/75" : "text-muted-foreground")}>
-                                              {normalizeUnitLabel(item.unit)}
-                                            </span>
-                                          </button>
-                                        );
-                                      })}
-                                      {canEditRuns ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => addRun(item.id)}
-                                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-dashed border-border/70 text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
-                                          aria-label="Додати тираж"
-                                        >
-                                          <Plus className="h-4 w-4" />
-                                        </button>
-                                      ) : null}
-                                    </div>
+                                    <QuoteRunRows
+                                      runs={itemRuns}
+                                      activeRunId={activeItemRun?.id ?? null}
+                                      unitLabel={normalizeUnitLabel(item.unit)}
+                                      currency={quote.currency}
+                                      getPricing={getRunPricing}
+                                      canAddRun={canEditRuns}
+                                      onSelect={(run) => selectRunForItem(run, item.id)}
+                                      onAddRun={() => addRun(item.id)}
+                                    />
 
                                     {itemRuns.length === 0 ? (
                                       <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
