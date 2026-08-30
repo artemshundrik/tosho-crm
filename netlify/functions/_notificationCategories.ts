@@ -6,6 +6,8 @@ export type NotificationCategoryKey =
   | "quote_created"
   | "quote_deadline"
   | "quote_comment"
+  | "quote_markup_request"
+  | "quote_markup_decision"
   | "design"
   | "contractor"
   | "team_events"
@@ -27,6 +29,8 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "quote_created", label: "Нові прорахунки" },
   { key: "quote_deadline", label: "Дедлайни прорахунків" },
   { key: "quote_comment", label: "Коментарі у прорахунках" },
+  { key: "quote_markup_request", label: "Запити на погодження накрутки" },
+  { key: "quote_markup_decision", label: "Рішення по накрутці" },
   { key: "design", label: "Дизайн-задачі" },
   { key: "contractor", label: "Контрагенти" },
   { key: "team_events", label: "Події команди" },
@@ -70,6 +74,11 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // (див. src/lib/notificationCategories.ts — тримати синхронно).
     case "quote_created":
       return isPrivileged || job === "pm";
+    // Запит бачать лише ті, хто його вирішує; відповідь — той, хто просив.
+    case "quote_markup_request":
+      return access === "owner" || job === "seo" || job === "chief_accountant";
+    case "quote_markup_decision":
+      return isQuoteWorker;
     case "customer_followup":
     case "quote_deadline":
     case "quote_comment":

@@ -612,6 +612,7 @@ export async function notifyMarkupApprovalRequested(params: {
     body: `${who} просить погодити ${params.runs.length} ${countLabel} у ${quoteRef}: ${list}. Дно — ${MIN_MARKUP_RATE} %.`,
     href: `/orders/estimates/${params.quoteId}`,
     type: "warning",
+    category: "quote_markup_request",
   });
 }
 
@@ -642,6 +643,9 @@ export async function notifyMarkupApprovalDecided(params: {
       : `${who} відхилив(ла) ${rate} % на тиражі ${params.runLabel} у ${quoteRef}. Число лишається як є — підніміть накрутку або надішліть запит із поясненням.${note ? ` Коментар: ${note}` : ""}`,
     href: `/orders/estimates/${params.quoteId}`,
     type: approved ? "success" : "warning",
+    // Окрема категорія від запиту: вимкнути «чужі запити» не має заодно
+    // глушити відповідь на власне прохання.
+    category: "quote_markup_decision",
   });
 }
 

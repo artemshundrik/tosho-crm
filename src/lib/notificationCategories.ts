@@ -8,6 +8,8 @@ export type NotificationCategoryKey =
   | "quote_created"
   | "quote_deadline"
   | "quote_comment"
+  | "quote_markup_request"
+  | "quote_markup_decision"
   | "design"
   | "contractor"
   | "team_events"
@@ -47,6 +49,16 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     key: "quote_comment",
     label: "Коментарі у прорахунках",
     description: "Нові коментарі та згадки у прорахунках",
+  },
+  {
+    key: "quote_markup_request",
+    label: "Запити на погодження накрутки",
+    description: "Менеджер просить накрутку нижче дна 20 % — потрібне рішення",
+  },
+  {
+    key: "quote_markup_decision",
+    label: "Рішення по накрутці",
+    description: "Вашу накрутку нижче дна підтвердили або відхилили",
   },
   {
     key: "design",
@@ -142,6 +154,16 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // свідомо немає: він і так знає, що щойно завів прорахунок.
     case "quote_created":
       return isPrivileged || job === "pm";
+    // Запит на знижену накрутку бачать ТІЛЬКИ ті, хто його вирішує, — той самий
+    // перелік, що в canApproveQuoteMarkup і tosho.is_quote_markup_approver.
+    // Менеджеру перемикач на це був би брехнею: запити йому не шлють.
+    case "quote_markup_request":
+      return access === "owner" || job === "seo" || job === "chief_accountant";
+    // А відповідь на запит летить назад менеджерові — тому окрема категорія, а
+    // не одна на обидва боки: вимкнути «мені більше не приходять чужі запити»
+    // не має заодно глушити «на моє прохання відповіли».
+    case "quote_markup_decision":
+      return isQuoteWorker;
     // Збут / прорахунки / контрагенти — лише ті, хто з цим працює.
     case "customer_followup":
     case "quote_deadline":
