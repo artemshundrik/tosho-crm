@@ -138,6 +138,7 @@ import {
   QuoteMarkupGateChip,
   QuoteRunChoiceChip,
 } from "@/features/quotes/quote-details/QuoteHeaderFlags";
+import { useQuoteHeaderFlags } from "@/features/quotes/quote-details/useQuoteHeaderFlags";
 import { pluralUk } from "@/lib/lastSeen";
 import {
   canOpenQuoteDetails,
@@ -1725,50 +1726,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }, []),
   });
 
-  /*
-    Хто саме тримає двері зачиненими (REQ-175#p61). Лічильник без імені змушує
-    переглядати всі тиражі всіх товарів руками — а їх тут шість.
-  */
-  /*
-    Вибір погодженого тиражу — ТЕЖ двері (REQ-175#p64): без нього замовлення не
-    зробити. Досі це знав лише той, хто дивився на конкретну картку товару.
-  */
-  const runChoiceItems = useMemo(
-    () =>
-      items
-        .filter((item) =>
-          needsApprovedRunChoice(
-            runs.filter((run) => (run.quote_item_id ? run.quote_item_id === item.id : items.length === 1))
-          )
-        )
-        .map((item) => ({ id: item.id, title: item.title })),
-    [items, runs]
-  );
-
-  const blockingRunIdSet = useMemo(
-    () => new Set(markup.gate.blockingRunIds),
-    [markup.gate.blockingRunIds]
-  );
-
-  const markupGateRuns = useMemo(() => {
-    const blocking = new Set(markup.gate.blockingRunIds);
-    if (blocking.size === 0) return [];
-    const titleByItemId = new Map(items.map((item) => [item.id, item] as const));
-    return runs
-      .filter((run) => run.id && blocking.has(run.id))
-      .map((run) => {
-        const item = run.quote_item_id ? titleByItemId.get(run.quote_item_id) : undefined;
-        const unit = normalizeUnitLabel(item?.unit);
-        const qty = Number(run.quantity) || 0;
-        const rate = Math.round((Number(run.markup_rate) || 0) * 100) / 100;
-        return {
-          id: run.id as string,
-          label: [item?.title, `${qty.toLocaleString("uk-UA")} ${unit}`].filter(Boolean).join(" · "),
-          rateLabel: `${rate.toLocaleString("uk-UA")} %`,
-        };
-      });
-  }, [items, markup.gate.blockingRunIds, runs]);
-
+  const { blockingRunIdSet, markupGateRuns, runChoiceItems, focusOnPage } = useQuoteHeaderFlags({
+    items,
+    runs,
+    blockingRunIds: markup.gate.blockingRunIds,
+    onOpenProducts: useCallback(() => setActiveQuoteTab("products"), []),
+  });
 
   useEffect(() => {
     withdrawSettledMarkupRef.current = markup.withdrawSettledRequests;
@@ -4447,8 +4410,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
 
             <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5 lg:order-none">
-              <QuoteMarkupGateChip blocking={markupGateRuns} />
-              <QuoteRunChoiceChip items={runChoiceItems} />
+              <QuoteMarkupGateChip blocking={markupGateRuns} onFocus={(id) => focusOnPage(`quote-run-${id}`)} />
+              <QuoteRunChoiceChip items={runChoiceItems} onFocus={(id) => focusOnPage(`quote-item-${id}`)} />
               {currentStatus === "approved" ? (
                 <Button
                   variant="outline"
@@ -4620,7 +4583,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             порожня сходинка. Тепер прокрутка починається рівно від риски.
           */}
           <div className="space-y-6 xl:-mr-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pb-8 xl:pr-3 xl:pt-4 2xl:-mr-4 2xl:pr-4">
-            {quoteLockedByOther || quoteLock.releaseRequestedByName || quoteLock.idleSecondsLeft !== null || quoteLock.releasedReason || statusError || quoteRequirements.length > 0 || markup.gate.blocked ? (
+            {/* `markup.gate.blocked` з умови прибрано (REQ-175#p66): замок
+                переїхав у шапку, а обгортка лишалась і малювала порожню смугу
+                на всю ширину над «Товарами і тиражами». */}
+            {quoteLockedByOther || quoteLock.releaseRequestedByName || quoteLock.idleSecondsLeft !== null || quoteLock.releasedReason || statusError || quoteRequirements.length > 0 ? (
               <div className="space-y-3">
                 <EntityLockBanner
                   lock={quoteLock}
@@ -4909,6 +4875,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     return (
                       <div
                         key={item.id}
+                        id={`quote-item-${item.id}`}
                         className={cn(
                           /* Картка — ПОВЕРХНЯ, а не обведення (REQ-175#p25).
                              bg-background збігався з кольором сторінки, тож межу

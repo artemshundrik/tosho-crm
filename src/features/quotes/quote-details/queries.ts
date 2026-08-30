@@ -659,7 +659,21 @@ export async function fetchQuoteItemsWithCatalog(
       let query = table
         .select(withMetadata ? QUOTE_ITEM_COLUMNS_WITH_METADATA : QUOTE_ITEM_COLUMNS_WITHOUT_METADATA)
         .eq("quote_id", quoteId)
-        .order("position", { ascending: true });
+        .order("position", { ascending: true })
+        /*
+          ДРУГИЙ КЛЮЧ СОРТУВАННЯ ОБОВ'ЯЗКОВИЙ (REQ-175#p65) — і для товарів, і
+          для тиражів (getQuoteRuns, listQuoteRunsForQuotes).
+
+          Тиражі сортуються по `created_at`, а він за замовчуванням now(); now()
+          у Postgres СТАЛЕ НА ВСЮ ТРАНЗАКЦІЮ, тож рядки, вставлені одним
+          записом, мають однакову мітку. Сортування по ній не повне, і порядок у
+          межах групи визначає фізичне розташування рядків — а воно міняється
+          після UPDATE. Звідси скарга: позначив «погоджено клієнтом» — тиражі
+          помінялись місцями. Те саме можливе з товарами при однакових position.
+
+          `id` — uuid, унікальний і незмінний: він робить порядок повним.
+        */
+        .order("id", { ascending: true });
       if (withTeamFilter && teamId) {
         query = query.eq("team_id", teamId);
       }

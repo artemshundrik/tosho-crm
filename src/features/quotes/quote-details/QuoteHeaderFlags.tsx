@@ -26,12 +26,19 @@ export type QuoteMarkupGateRun = {
 };
 
 const CHIP_CLASS =
-  "inline-flex h-8 shrink-0 cursor-default items-center gap-1.5 rounded-lg border border-border/60 bg-muted px-2.5 text-2xs font-medium text-foreground";
+  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-muted px-2.5 text-2xs font-medium text-foreground transition-colors hover:border-border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
 
 const LIST_CLASS = "mt-2 flex flex-col gap-1 border-t border-border/40 pt-2";
 
 /** Тиражі нижче дна без чинного погодження: КП клієнту й «Затверджено» замкнені. */
-export function QuoteMarkupGateChip({ blocking }: { blocking: QuoteMarkupGateRun[] }) {
+export function QuoteMarkupGateChip({
+  blocking,
+  onFocus,
+}: {
+  blocking: QuoteMarkupGateRun[];
+  /** Довезти до першого винуватця: сам лічильник не каже, де він на сторінці. */
+  onFocus?: (runId: string) => void;
+}) {
   if (blocking.length === 0) return null;
   return (
     <HoverTip
@@ -60,10 +67,10 @@ export function QuoteMarkupGateChip({ blocking }: { blocking: QuoteMarkupGateRun
         </span>
       }
     >
-      <span className={CHIP_CLASS}>
+      <button type="button" className={CHIP_CLASS} onClick={() => onFocus?.(blocking[0].id)}>
         <Lock className="h-3.5 w-3.5 shrink-0 text-warning-solid" />
         <span className="tabular-nums">{blocking.length}</span> нижче дна
-      </span>
+      </button>
     </HoverTip>
   );
 }
@@ -76,7 +83,13 @@ export function QuoteMarkupGateChip({ blocking }: { blocking: QuoteMarkupGateRun
  * хто дивився на конкретну картку товару; у шапці не було нічого, і причину
  * заблокованого замовлення доводилось шукати.
  */
-export function QuoteRunChoiceChip({ items }: { items: Array<{ id: string; title: string }> }) {
+export function QuoteRunChoiceChip({
+  items,
+  onFocus,
+}: {
+  items: Array<{ id: string; title: string }>;
+  onFocus?: (itemId: string) => void;
+}) {
   if (items.length === 0) return null;
   return (
     <HoverTip
@@ -100,10 +113,10 @@ export function QuoteRunChoiceChip({ items }: { items: Array<{ id: string; title
         </span>
       }
     >
-      <span className={CHIP_CLASS}>
+      <button type="button" className={CHIP_CLASS} onClick={() => onFocus?.(items[0].id)}>
         <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning-solid" />
         <span className="tabular-nums">{items.length}</span> без вибору
-      </span>
+      </button>
     </HoverTip>
   );
 }

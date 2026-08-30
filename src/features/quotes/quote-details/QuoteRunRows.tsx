@@ -225,6 +225,7 @@ export function QuoteRunRows({
           return (
             <div
               key={run.id ?? `run-row:${runIndex}`}
+              id={run.id ? `quote-run-${run.id}` : undefined}
               role="radio"
               tabIndex={0}
               aria-checked={isSelected}
@@ -287,7 +288,14 @@ export function QuoteRunRows({
                   Порожня — теж колонка: вона тримає ширину, щоб сума праворуч не
                   їздила туди-сюди, коли бейдж змінюється кнопкою й навпаки. */}
               <span className="col-start-1 col-end-3 row-start-3 flex items-center justify-start lg:col-start-7 lg:col-end-8 lg:row-start-1 lg:justify-end">
-                {canApproveRun ? (
+                {/*
+                  Погоджувати нема чого, поки немає ціни (REQ-175#p67). Кнопка
+                  стояла активною на тиражі з написом «собівартість не внесена»
+                  — тобто пропонувала зафіксувати вибір клієнта на числі, якого
+                  ще немає. Уже позначений тираж кнопку зберігає: інакше зняти
+                  помилкову позначку до внесення собівартості було б нічим.
+                */}
+                {canApproveRun && (priced || isApproved) ? (
                   <button
                     type="button"
                     onClick={(event) => {

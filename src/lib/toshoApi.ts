@@ -1250,7 +1250,7 @@ export async function getQuoteRuns(quoteId: string) {
       .from("quote_item_runs")
       .select(useFallbackSelect ? QUOTE_RUN_LEGACY_SELECT : QUOTE_RUN_SELECT)
       .eq("quote_id", quoteId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true }).order("id", { ascending: true }); // другий ключ: REQ-175#p65
   };
 
   // Єдиний живий запасний варіант — старіша схема без полів ставок.
@@ -1319,7 +1319,7 @@ export async function listQuoteRunsForQuotes(params: {
       .from("quote_item_runs")
       .select(useFallbackSelect ? QUOTE_RUN_LEGACY_SELECT : QUOTE_RUN_SELECT)
       .in("quote_id", ids)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true }).order("id", { ascending: true });
   };
 
   const fetchBatch = async (ids: string[]) => {
