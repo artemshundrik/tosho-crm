@@ -133,10 +133,11 @@ import {
   parseDesignOutputMetaFiles,
   removeDesignOutputReferencesFromMetadata,
 } from "@/features/quotes/quote-details/designOutputFiles";
+import { QuoteMarkupDecisionDialog } from "@/features/quotes/quote-details/QuoteMarkupDecisionDialog";
 import {
-  QuoteMarkupDecisionDialog,
   QuoteMarkupGateChip,
-} from "@/features/quotes/quote-details/QuoteMarkupDecisionDialog";
+  QuoteRunChoiceChip,
+} from "@/features/quotes/quote-details/QuoteHeaderFlags";
 import { pluralUk } from "@/lib/lastSeen";
 import {
   canOpenQuoteDetails,
@@ -1728,6 +1729,27 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     Хто саме тримає двері зачиненими (REQ-175#p61). Лічильник без імені змушує
     переглядати всі тиражі всіх товарів руками — а їх тут шість.
   */
+  /*
+    Вибір погодженого тиражу — ТЕЖ двері (REQ-175#p64): без нього замовлення не
+    зробити. Досі це знав лише той, хто дивився на конкретну картку товару.
+  */
+  const runChoiceItems = useMemo(
+    () =>
+      items
+        .filter((item) =>
+          needsApprovedRunChoice(
+            runs.filter((run) => (run.quote_item_id ? run.quote_item_id === item.id : items.length === 1))
+          )
+        )
+        .map((item) => ({ id: item.id, title: item.title })),
+    [items, runs]
+  );
+
+  const blockingRunIdSet = useMemo(
+    () => new Set(markup.gate.blockingRunIds),
+    [markup.gate.blockingRunIds]
+  );
+
   const markupGateRuns = useMemo(() => {
     const blocking = new Set(markup.gate.blockingRunIds);
     if (blocking.size === 0) return [];
@@ -4426,6 +4448,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
             <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5 lg:order-none">
               <QuoteMarkupGateChip blocking={markupGateRuns} />
+              <QuoteRunChoiceChip items={runChoiceItems} />
               {currentStatus === "approved" ? (
                 <Button
                   variant="outline"
@@ -5130,6 +5153,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     toggleApprovedRun(run.id, run.quote_item_id ?? item.id)
                                   }
                                   needsApprovedChoice={needsApprovedRunChoice(itemRuns)}
+                                  blockingRunIds={blockingRunIdSet}
                                 />
 
                                 {itemRuns.length === 0 ? (

@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Plus } from "lucide-react";
+import { AlertTriangle, Check, Lock, Plus } from "lucide-react";
 
 import { HoverTip } from "@/components/ui/hover-tip";
 import { currencyLabel } from "@/features/quotes/currencyLabel";
@@ -83,6 +83,8 @@ export type QuoteRunRowsProps = {
   onToggleApproved: (run: QuoteRun) => void;
   /** Тиражів кілька, і жоден ще не позначений як погоджений клієнтом. */
   needsApprovedChoice?: boolean;
+  /** Тиражі, що тримають КП зачиненим: нижче дна без чинного погодження. */
+  blockingRunIds?: ReadonlySet<string>;
 };
 
 export function QuoteRunRows({
@@ -97,6 +99,7 @@ export function QuoteRunRows({
   onAddRun,
   onToggleApproved,
   needsApprovedChoice = false,
+  blockingRunIds,
 }: QuoteRunRowsProps) {
   const money = currencyLabel(currency);
   // Шапка без жодного числа під собою обіцяла б колонки, яких немає: поки
@@ -177,6 +180,10 @@ export function QuoteRunRows({
           const qty = Number(run.quantity) || 0;
           const isSelected = !!run.id && run.id === activeRunId;
           const isApproved = run.is_approved === true;
+          // Замок у шапці каже, СКІЛЬКИ тиражів тримають двері; тут видно, ЯКІ
+          // саме (REQ-175#p63). Без цього доводилось звіряти шість рядків із
+          // підказкою вгорі сторінки.
+          const isBlocking = !!run.id && !!blockingRunIds?.has(run.id);
           const pricing = getPricing(run);
           const priced = pricing.costTotal > 0;
           // Класи колонок — літералами: Tailwind читає вихідний код, а не
@@ -261,6 +268,12 @@ export function QuoteRunRows({
                       <span className="mr-1 text-2xs text-muted-foreground lg:hidden">{cell.label}</span>
                       <span className="text-sm tabular-nums text-foreground">{cell.value}</span>
                       <span className="ml-1 text-2xs text-muted-foreground">{cell.unit}</span>
+                      {isBlocking && cell.key === "markup" ? (
+                        <Lock
+                          className="ml-1 inline h-3 w-3 shrink-0 -translate-y-px text-warning-solid"
+                          aria-label="нижче дна — КП замкнено"
+                        />
+                      ) : null}
                     </span>
                   ))
                 ) : (

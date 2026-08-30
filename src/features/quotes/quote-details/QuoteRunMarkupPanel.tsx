@@ -548,7 +548,19 @@ export function QuoteRunMarkupPanel({
               max={TRACK_MAX}
               step={0.1}
               value={Math.min(TRACK_MAX, Math.max(0, Number(markupRate) || 0))}
-              disabled={busy}
+              /*
+                БЕЗ disabled НА ЧАС ЗБЕРЕЖЕННЯ (REQ-175#p62).
+
+                Автозбереження вмикає busy приблизно через 3 с після зміни й
+                тримає його ще ~1,7 с (заміряно в браузері: disabled true на
+                3281→5017 мс). Хто відпускав повзунок і брався за нього знову в
+                це вікно — не міг: поле мертве, жест з'їдено. Саме звідси
+                «не кожен раз бере».
+
+                Право й заморозка тут ні до чого — їх тримає canMove вище, і
+                сусіднє числове поле накрутки теж не вимикається на час
+                збереження.
+              */
               onChange={(event) =>
                 onChangeMarkupRate(
                   snapMarkupRate(Number(event.target.value), [MIN_MARKUP_RATE, benchmark?.rate])
