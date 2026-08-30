@@ -14,6 +14,8 @@ import {
 import type { QuoteMarkupView } from "@/lib/quoteMarkupView";
 import { MIN_MARKUP_RATE, type RunSalePricing } from "@/lib/quoteRuns";
 
+import { SplitBar, type SplitPart } from "@/components/app/bento";
+
 import { formatCurrency } from "./config";
 
 /**
@@ -291,35 +293,29 @@ function EconomicsBreakdown({
   managerName?: string | null;
 }) {
   const off = pricing.costTotal <= 0;
-  const total = off ? 1 : pricing.saleTotal;
-  const width = (value: number) => (off ? 0 : Math.max(0, (value / total) * 100));
+
+  /**
+   * Смуга часток — КАНОНІЧНА `SplitBar` з bento.tsx, а не своя копія.
+   *
+   * Своя тут була, і вона розходилась із рештою CRM у дрібницях, які й роблять
+   * інтерфейс чужим: сегменти впритул замість зазору 3 px, рамка навколо смуги,
+   * квадратик легенди 8 px замість 10, текст 2xs замість xs. Та сама смуга
+   * стоїть в «Огляді», «Витратах» і «Стеку» — третьої редакції їй не треба.
+   */
+  const parts: SplitPart[] = [
+    { key: "cost", label: "собівартість", weight: pricing.costTotal, color: "bg-muted-foreground/55" },
+    { key: "profit", label: "прибуток", weight: pricing.requiredGrossProfit, color: "bg-primary" },
+    { key: "fixed", label: "постійні", weight: pricing.fixedCosts, color: "bg-primary/45" },
+    { key: "vat", label: "ПДВ", weight: pricing.vatAmount, color: "bg-primary/20" },
+  ].map((part) => ({ ...part, valueText: formatCurrency(part.weight, currency) }));
 
   return (
     <div className="mt-3">
-      <div
-        className={cn(
-          "flex h-2.5 overflow-hidden rounded-full border border-border/60 bg-muted",
-          off && "opacity-50"
-        )}
-      >
-        <span style={{ width: `${width(pricing.costTotal)}%` }} className="block h-full bg-muted-foreground/55" />
-        <span style={{ width: `${width(pricing.requiredGrossProfit)}%` }} className="block h-full bg-primary" />
-        <span style={{ width: `${width(pricing.fixedCosts)}%` }} className="block h-full bg-primary/45" />
-        <span style={{ width: `${width(pricing.vatAmount)}%` }} className="block h-full bg-primary/20" />
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-2xs text-muted-foreground">
-        {[
-          ["bg-muted-foreground/55", "собівартість", pricing.costTotal],
-          ["bg-primary", "прибуток", pricing.requiredGrossProfit],
-          ["bg-primary/45", "постійні", pricing.fixedCosts],
-          ["bg-primary/20", "ПДВ", pricing.vatAmount],
-        ].map(([dot, label, value]) => (
-          <span key={label as string} className="inline-flex items-center gap-1.5">
-            <span className={cn("h-2 w-2 shrink-0 rounded-sm", dot as string)} />
-            {label as string} {off ? "—" : formatCurrency(value as number, currency)}
-          </span>
-        ))}
-      </div>
+      {off ? (
+        <div className="flex h-2.5 overflow-hidden rounded-full bg-muted opacity-50" aria-hidden />
+      ) : (
+        <SplitBar parts={parts} />
+      )}
       {/* Накрутки й ціни за штуку тут навмисно немає: обидві стоять у полі
           вище й у великому числі поруч. Лишається те, чого більше ніде не видно. */}
       <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs">
@@ -421,7 +417,7 @@ export function QuoteRunMarkupPanel({
             вона впирається в неї й перестає читатись як наскрізна. */}
         <div className="h-1.5" aria-hidden />
         <div className="relative flex h-4 items-center">
-          <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted">
             {off ? null : (
               <div
                 className={cn(
@@ -437,7 +433,7 @@ export function QuoteRunMarkupPanel({
           {off ? null : (
             <div
               className={cn(
-                "pointer-events-none absolute top-1/2 z-20 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-background",
+                "pointer-events-none absolute top-1/2 z-20 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-background ring-2 ring-card",
                 canMove ? "shadow-sm" : "opacity-70",
                 doorsClosed ? "border-warning-solid" : "border-primary"
               )}
