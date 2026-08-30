@@ -2801,6 +2801,27 @@ export type Database = {
         }
         Relationships: []
       }
+      member_seen_modules: {
+        Row: {
+          module_key: string
+          seen_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          module_key: string
+          seen_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          module_key?: string
+          seen_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       memberships: {
         Row: {
           created_at: string
@@ -3537,9 +3558,10 @@ export type Database = {
           desired_manager_income: number | null
           fixed_cost_rate: number | null
           id: string
-          is_approved: boolean | null
+          is_approved: boolean
           logistics_cost: number | null
           manager_rate: number | null
+          markup_rate: number
           quantity: number
           quote_id: string
           quote_item_id: string | null
@@ -3553,9 +3575,10 @@ export type Database = {
           desired_manager_income?: number | null
           fixed_cost_rate?: number | null
           id?: string
-          is_approved?: boolean | null
+          is_approved?: boolean
           logistics_cost?: number | null
           manager_rate?: number | null
+          markup_rate?: number
           quantity: number
           quote_id: string
           quote_item_id?: string | null
@@ -3569,9 +3592,10 @@ export type Database = {
           desired_manager_income?: number | null
           fixed_cost_rate?: number | null
           id?: string
-          is_approved?: boolean | null
+          is_approved?: boolean
           logistics_cost?: number | null
           manager_rate?: number | null
+          markup_rate?: number
           quantity?: number
           quote_id?: string
           quote_item_id?: string | null
@@ -3751,6 +3775,76 @@ export type Database = {
           team_id?: string
         }
         Relationships: []
+      }
+      quote_run_markup_approvals: {
+        Row: {
+          cost_total: number
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          id: string
+          markup_rate: number
+          quote_id: string
+          request_note: string | null
+          requested_at: string
+          requested_by: string | null
+          run_id: string
+          status: string
+          team_id: string
+        }
+        Insert: {
+          cost_total: number
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          markup_rate: number
+          quote_id: string
+          request_note?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          run_id: string
+          status?: string
+          team_id: string
+        }
+        Update: {
+          cost_total?: number
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          markup_rate?: number
+          quote_id?: string
+          request_note?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          run_id?: string
+          status?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_run_markup_approvals_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_run_markup_approvals_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "v_quotes_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_run_markup_approvals_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "quote_item_runs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quote_set_items: {
         Row: {
@@ -4025,6 +4119,33 @@ export type Database = {
         }
         Relationships: []
       }
+      role_module_defaults: {
+        Row: {
+          enabled: boolean
+          job_role: string
+          module_key: string
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          enabled: boolean
+          job_role: string
+          module_key: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          enabled?: boolean
+          job_role?: string
+          module_key?: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       runtime_errors: {
         Row: {
           actor_name: string | null
@@ -4176,6 +4297,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      schema_migrations: {
+        Row: {
+          applied_at: string
+          applied_by: string | null
+          id: number
+          name: string
+          note: string | null
+          sha256: string
+        }
+        Insert: {
+          applied_at?: string
+          applied_by?: string | null
+          id?: never
+          name: string
+          note?: string | null
+          sha256: string
+        }
+        Update: {
+          applied_at?: string
+          applied_by?: string | null
+          id?: never
+          name?: string
+          note?: string | null
+          sha256?: string
+        }
+        Relationships: []
       }
       stack_versions: {
         Row: {
@@ -4780,6 +4928,42 @@ export type Database = {
           start_date?: string | null
           updated_at?: string
           updated_by?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      team_work_schedules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          days: Json
+          effective_from: string
+          effective_to: string | null
+          id: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          days?: Json
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          days?: Json
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          updated_at?: string
           user_id?: string
           workspace_id?: string
         }
@@ -5398,13 +5582,16 @@ export type Database = {
         Returns: Json
       }
       has_finance_access: { Args: { _team_id: string }; Returns: boolean }
+      has_payroll_access: { Args: { _team_id: string }; Returns: boolean }
       invite_account_state: { Args: { _email: string }; Returns: Json }
       is_last_owner: {
         Args: { p_user_id: string; p_workspace_id: string }
         Returns: boolean
       }
       is_owner_or_seo: { Args: never; Returns: boolean }
+      is_quote_markup_approver: { Args: { _user_id: string }; Returns: boolean }
       is_user_blocked: { Args: { _user_id: string }; Returns: boolean }
+      is_valid_work_schedule_days: { Args: { days: Json }; Returns: boolean }
       is_workspace_admin:
         | { Args: { p_workspace_id: string }; Returns: boolean }
         | {

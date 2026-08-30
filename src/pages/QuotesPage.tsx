@@ -85,6 +85,8 @@ import {
 } from "@/lib/toshoApi";
 import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import { DEFAULT_MARKUP_RATE, getRunSalePricingFromRun, mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
+import { MARKUP_GATE_MESSAGE, resolveQuoteMarkupGate } from "@/lib/quoteMarkupApproval";
+import { fetchMarkupApprovalsForQuotes } from "@/features/quotes/quote-details/markupApproval";
 import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
 import type { NewQuoteFormData, QuoteBatchBuilderFormData } from "@/components/quotes";
 import {
@@ -3988,6 +3990,30 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         runsByQuoteId.set(quoteId, await getQuoteRuns(quoteId));
       })
     );
+
+    // Двері назовні (REQ-149). Гейт стоїть тут, а не на кнопках «Друк» і
+    // «Експорт»: саме ця функція збирає документ, який бачить клієнт, і всі
+    // три дії — прев'ю, друк, вивантаження — ходять через неї. Окремі
+    // перевірки на кожній кнопці рано чи пізно розійшлися б, а прев'ю показує
+    // рівно те, що поїде.
+    const markupApprovals = await fetchMarkupApprovalsForQuotes(quoteIds);
+    const markupGate = resolveQuoteMarkupGate(
+      Array.from(runsByQuoteId.values())
+        .flat()
+        .filter((run): run is QuoteRun & { id: string } => !!run.id)
+        .map((run) => {
+          const pricing = getRunSalePricingFromRun(run);
+          return {
+            id: run.id,
+            costTotal: pricing.costTotal,
+            markupRate: Number(run.markup_rate) || 0,
+            approval: markupApprovals.get(run.id) ?? null,
+          };
+        })
+    );
+    if (markupGate.blocked) {
+      throw new Error(MARKUP_GATE_MESSAGE);
+    }
     const { data: visualizationRows, error: visualizationsError } = await supabase
       .schema("tosho")
       .from("quote_attachments")

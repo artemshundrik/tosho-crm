@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { notifyUsers } from "@/lib/designTaskActivity";
-import { pluralUk } from "@/lib/lastSeen";
+import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
+import { MIN_MARKUP_RATE } from "@/lib/quoteRuns";
 
 const isUuid = (value?: string | null) =>
   typeof value === "string" &&
@@ -21,6 +22,14 @@ type TeamMemberRoleRow = {
 };
 
 const normalizeRole = (value?: string | null) => (value ?? "").trim().toLowerCase();
+
+/**
+ * Відсоток у тексті сповіщення — округлений до сотих.
+ *
+ * У сховищі накрутка лежить без округлення (перенесені з історії значення на
+ * кшталт 30,840579710144926), і сирим числом сповіщення виглядало б як збій.
+ */
+const formatMarkupRate = (value: number) => String(Math.round((Number(value) || 0) * 100) / 100);
 
 async function resolveTeamMembers(teamId?: string | null): Promise<TeamMemberRoleRow[]> {
   if (!isUuid(teamId ?? null)) return [];
@@ -86,6 +95,27 @@ function pickOwnerAndSeoUserIds(rows: TeamMemberRoleRow[]) {
 // Approver pool for contract revisions: access_role='owner' OR job_role='seo'.
 // CEO users act as alternate contract approvers per project rule.
 const pickContractApproverUserIds = pickOwnerAndSeoUserIds;
+
+/**
+ * Хто отримує запит на погодження накрутки нижче дна 20 % (REQ-149).
+ *
+ * Рішення СЕО 30.08.2026: двоє СЕО і головний бухгалтер; підтвердити або
+ * відхилити може будь-хто з них. Власник тут не як окрема роль погоджувача, а
+ * як наскрізний доступ — він і так бачить усе.
+ *
+ * Дзеркала цього переліку: canApproveQuoteMarkup (src/lib/permissions.ts) і
+ * tosho.is_quote_markup_approver у базі.
+ */
+function pickMarkupApproverUserIds(rows: TeamMemberRoleRow[]) {
+  return rows
+    .filter((row) => {
+      const access = normalizeRole(row.access_role);
+      const job = normalizeRole(row.job_role);
+      return access === "owner" || job === "seo" || job === "chief_accountant";
+    })
+    .map((row) => row.user_id)
+    .filter((value): value is string => !!value);
+}
 
 function pickDesignerUserIds(rows: TeamMemberRoleRow[]) {
   return rows
@@ -542,6 +572,76 @@ export async function notifyCustomerLeadManagerAssigned(params: {
     body: `${actorName} передав(ла) вам ${entityLabel} «${name}».${previousSuffix}`,
     href: isLead ? `/orders/customers?tab=leads&leadId=${params.entityId}` : `/orders/customers?customerId=${params.entityId}`,
     type: "info",
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Погодження накрутки нижче дна (REQ-149)                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * ОДНЕ сповіщення на прорахунок, а не по одному на тираж.
+ *
+ * Поріг рахується в quote_item_runs, тобто запит живе на тиражі — але
+ * прорахунок із п'ятьма тиражами нижче дна прислав би погоджувачу п'ять пінгів
+ * про одну картку. Тому тиражі йдуть списком у тілі, а посилання одне.
+ */
+export async function notifyMarkupApprovalRequested(params: {
+  quoteId: string;
+  requesterName?: string | null;
+  runs: Array<{ label: string; markupRate: number }>;
+  actorUserId?: string | null;
+}) {
+  if (params.runs.length === 0) return;
+  const { teamId, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
+  const members = await resolveTeamMembers(teamId);
+  const recipients = new Set(pickMarkupApproverUserIds(members));
+  if (params.actorUserId) recipients.delete(params.actorUserId);
+  if (recipients.size === 0) return;
+
+  const quoteRef = quoteNumber ? `#${quoteNumber}` : "прорахунку";
+  const who = params.requesterName?.trim() || "Менеджер";
+  const list = params.runs
+    .map((run) => `${run.label} — ${formatMarkupRate(run.markupRate)} %`)
+    .join(", ");
+  const countLabel = pluralWordUk(params.runs.length, "тираж", "тиражі", "тиражів");
+
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: "Накрутка нижче дна — потрібне рішення",
+    body: `${who} просить погодити ${params.runs.length} ${countLabel} у ${quoteRef}: ${list}. Дно — ${MIN_MARKUP_RATE} %.`,
+    href: `/orders/estimates/${params.quoteId}`,
+    type: "warning",
+  });
+}
+
+export async function notifyMarkupApprovalDecided(params: {
+  quoteId: string;
+  decision: "approved" | "rejected";
+  markupRate: number;
+  runLabel: string;
+  requesterUserId?: string | null;
+  deciderName?: string | null;
+  note?: string | null;
+  actorUserId?: string | null;
+}) {
+  const recipient = params.requesterUserId?.trim();
+  if (!recipient || recipient === params.actorUserId) return;
+  const { quoteNumber } = await resolveQuoteInitiator(params.quoteId);
+  const quoteRef = quoteNumber ? `#${quoteNumber}` : "прорахунку";
+  const who = params.deciderName?.trim() || "Погоджувач";
+  const rate = formatMarkupRate(params.markupRate);
+  const note = params.note?.trim();
+  const approved = params.decision === "approved";
+
+  await notifyUsers({
+    userIds: [recipient],
+    title: approved ? `Накрутку ${rate} % погоджено` : `Накрутку ${rate} % відхилено`,
+    body: approved
+      ? `${who} підтвердив(ла) ${rate} % на тиражі ${params.runLabel} у ${quoteRef}.${note ? ` Коментар: ${note}` : ""}`
+      : `${who} відхилив(ла) ${rate} % на тиражі ${params.runLabel} у ${quoteRef}. Число лишається як є — підніміть накрутку або надішліть запит із поясненням.${note ? ` Коментар: ${note}` : ""}`,
+    href: `/orders/estimates/${params.quoteId}`,
+    type: approved ? "success" : "warning",
   });
 }
 

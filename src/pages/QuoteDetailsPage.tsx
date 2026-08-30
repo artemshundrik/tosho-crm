@@ -10,8 +10,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import { CurrencyAmountInput } from "@/features/quotes/components/CurrencyAmountInput";
-import { PercentAmountInput } from "@/features/quotes/components/PercentAmountInput";
 import { TimeInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
@@ -126,14 +124,23 @@ import {
   computeRunSalePricingFromMarkup,
   DEFAULT_MARKUP_RATE,
   MIN_MARKUP_RATE,
-  needsMarkupApproval,
 } from "@/lib/quoteRuns";
+import { isMarkupFrozen, MARKUP_GATE_MESSAGE } from "@/lib/quoteMarkupApproval";
+import { resolveQuoteMarkupView } from "@/lib/quoteMarkupView";
+import { useQuoteMarkupApprovals } from "@/features/quotes/quote-details/useQuoteMarkupApprovals";
+import { QuoteRunMarkupPanel } from "@/features/quotes/quote-details/QuoteRunMarkupPanel";
+import { QuoteRunPriceFields } from "@/features/quotes/quote-details/QuoteRunPriceFields";
+import {
+  QuoteMarkupDecisionDialog,
+  QuoteMarkupGateBanner,
+} from "@/features/quotes/quote-details/QuoteMarkupDecisionDialog";
 import { pluralUk } from "@/lib/lastSeen";
 import {
   canOpenQuoteDetails,
   canViewQuoteSummary,
   isDesignerJobRole,
   isLogisticsJobRole,
+  canApproveQuoteMarkup,
   isQuoteManagerJobRole,
   normalizeJobRole,
   resolveQuoteRunPriceFieldAccess,
@@ -1490,6 +1497,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
         logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
         desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
+        markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, DEFAULT_MARKUP_RATE)),
         manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
         fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
         vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
@@ -1522,6 +1530,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (!saved.ok) return fail(saved.message);
 
       await loadRuns();
+
+      // Менеджер підняв накрутку на дно або вище — запит стає безпредметним і
+      // гаситься. Передаємо ЗБЕРЕЖЕНІ рядки, а не стан форми: інакше запит
+      // гасився б під число, яке ще не поїхало в базу.
+      await withdrawSettledMarkupRef.current(
+        sanitized.map((run) => ({ id: run.id, markup_rate: run.markup_rate, costTotal: getRunTotal(run) }))
+      );
       if (!silent) {
         const logged = await logQuoteActivity(
           {
@@ -1551,6 +1566,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     saveRunsRef.current = saveRuns;
   });
 
+  // Оголошено ДО saveRuns навмисно, тим самим прийомом, що й saveRunsRef нижче:
+  // сам обробник живе в useQuoteMarkupApprovals, який кличеться нижче за
+  // saveRuns (йому потрібен memberById). Пряме звертання «вниз» React Compiler
+  // не приймає — «Cannot access variable before it is declared» — і мовчки
+  // пропускає всю сторінку разом із перевірками лінту (REQ-109).
+  const withdrawSettledMarkupRef = useRef<
+    (savedRuns: Array<{ id?: string | null; markup_rate?: number | null; costTotal: number }>) => Promise<void>
+  >(async () => {});
+
   const runsAutosaveSignature = useMemo(
     () =>
       JSON.stringify(
@@ -1562,6 +1586,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
           logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
           desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
+          // Без накрутки підпис не мінявся від правки САМОГО поля ціни: 40 → 25
+          // автозбереження не бачило, і число жило лише до переходу на іншу
+          // сторінку. Ціну веде саме воно — у підписі має бути першим ділом.
+          markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, DEFAULT_MARKUP_RATE)),
           manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
           fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
           vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
@@ -1582,6 +1610,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
           logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
           desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
+          // Без накрутки підпис не мінявся від правки САМОГО поля ціни: 40 → 25
+          // автозбереження не бачило, і число жило лише до переходу на іншу
+          // сторінку. Ціну веде саме воно — у підписі має бути першим ділом.
+          markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, DEFAULT_MARKUP_RATE)),
           manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
           fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
           vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
@@ -2090,6 +2122,36 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     () => new Map(teamMembers.map((member) => [member.id, member.avatarUrl ?? null])),
     [teamMembers]
   );
+
+  /**
+   * Погодження накрутки нижче дна 20 % (REQ-149): стан, орієнтири, двері й дві дії.
+   *
+   * Кличеться ТУТ, а не серед сусідів за змістом: йому потрібні і `saveRunsRef`
+   * (оголошений вище), і `memberById` (щойно вище) — а `saveRuns` натомість
+   * дістає його обробник через ref, оголошений ще вище. Кільце розірване рефами
+   * навмисно: пряме звертання «вниз» ламає збірку компілятором (REQ-109).
+   */
+  const markup = useQuoteMarkupApprovals({
+    quoteId,
+    teamId,
+    userId,
+    items,
+    runs,
+    getRunPricing,
+    memberById,
+    saveRuns: useCallback(async () => {
+      await saveRunsRef.current(undefined, { silent: true });
+    }, []),
+  });
+
+  useEffect(() => {
+    withdrawSettledMarkupRef.current = markup.withdrawSettledRequests;
+  }, [markup.withdrawSettledRequests]);
+
+  // Витягуємо окремо: обидві стабільні (useCallback), і саме вони їдуть у
+  // залежності ефекту скидання. Сам `markup` — новий об'єкт щорендеру, і в
+  // залежностях перезапускав би ефект на кожен рух повзунка.
+  const { reload: reloadMarkupApprovals, reset: resetMarkupApprovals } = markup;
   const hasRoleInfo = useMemo(() => teamMembers.some((member) => !!member.jobRole), [teamMembers]);
   const designerMembers = useMemo(() => {
     return teamMembers.filter(
@@ -2464,6 +2526,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       markup_rate: canEditRuns && byRole.markup_rate,
     };
   }, [canEditRuns, permissions, viewerJobRole]);
+
+  // Один блок ціни, шість виглядів за посадою (REQ-149 p11). Вигляд каже, ЩО
+  // видно; право на поле — чи можна рухати; заморозка — чи можна рухати ЗАРАЗ.
+  const markupView = useMemo(
+    () => resolveQuoteMarkupView({ viewerJobRole, permissions }),
+    [permissions, viewerJobRole]
+  );
+
+  const canApproveMarkup = useMemo(
+    () => canApproveQuoteMarkup({ viewerJobRole, permissions }),
+    [permissions, viewerJobRole]
+  );
+
 
   // Параметри виробу редагує той самий, хто редагує тиражі: право на вміст
   // прорахунку плюс незакритий статус. Окремого гейта свідомо не заводимо — друге
@@ -3970,13 +4045,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setActivityError(null);
     setActivityLoadedAll(false);
     filesTabLoadedQuoteRef.current = null;
+    resetMarkupApprovals();
     void loadQuote();
     void loadItems();
     void loadRuns();
+    void reloadMarkupApprovals();
     void loadComments();
     void loadDesignTask();
     void loadAttachments();
-  }, [loadAttachments, loadComments, loadDesignTask, loadItems, loadQuote, loadRuns, quoteId, teamId]);
+  }, [
+    loadAttachments,
+    loadComments,
+    loadDesignTask,
+    loadItems,
+    loadQuote,
+    loadRuns,
+    quoteId,
+    reloadMarkupApprovals,
+    resetMarkupApprovals,
+    teamId,
+  ]);
 
   useEffect(() => {
     if (!teamId || !quoteId) return;
@@ -4303,6 +4391,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // Quick status change
   const handleQuickStatusChange = async (newStatus: string, noteOverride?: string) => {
     const nextStatus = normalizeStatus(newStatus);
+    // Двері назовні. Один вузол на всі шляхи до «Затверджено» — швидка дія,
+    // вікно статусів і канбан-перемикач; окремі перевірки на кожному з них
+    // рано чи пізно розійшлися б, і саме через це поріг колись обходили.
+    if (nextStatus === "approved" && markup.gate.blocked) {
+      setStatusError(MARKUP_GATE_MESSAGE);
+      toast.error("Спершу погодження накрутки", { description: MARKUP_GATE_MESSAGE });
+      return;
+    }
     setStatusBusy(true);
     setStatusError(null);
     {
@@ -5644,7 +5740,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </TabBar>
           </div>
           <div className="space-y-6 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pb-8">
-            {quoteLockedByOther || quoteLock.releaseRequestedByName || quoteLock.idleSecondsLeft !== null || quoteLock.releasedReason || statusError || quoteRequirements.length > 0 ? (
+            {quoteLockedByOther || quoteLock.releaseRequestedByName || quoteLock.idleSecondsLeft !== null || quoteLock.releasedReason || statusError || quoteRequirements.length > 0 || markup.gate.blocked ? (
               <div className="space-y-3">
                 <EntityLockBanner
                   lock={quoteLock}
@@ -5701,6 +5797,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
                   </div>
                 ) : null}
+
+                <QuoteMarkupGateBanner blockingCount={markup.gate.blockingRunIds.length} />
 
               </div>
             ) : null}
@@ -6251,12 +6349,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 // Дно накрутки не БЛОКУЄ роботу: воно вмикає погодження.
                                 // Саме тверда заборона на попередньому порозі й
                                 // народжувала фіктивні суми (TS-0826-0039).
-                                const activeRunBelowFloor = activeItemRun
-                                  ? needsMarkupApproval({
-                                      costTotal: activePricing.costTotal,
-                                      markupRate: activePricing.markupRate,
-                                    })
-                                  : false;
+                                const activeRunMarkupState = markup.getRunState(activeItemRun);
+                                // Поки число на погодженні (і після підтвердження) воно не
+                                // рухається: інакше рішення стосувалося б не того, що поїде
+                                // клієнту. Дзеркало в базі — тригер freeze_quote_run_markup_while_pending.
+                                const activeRunMarkupFrozen = isMarkupFrozen(activeRunMarkupState);
+                                const activeItemBenchmark = markup.benchmarks.get(item.id) ?? null;
 
                                 return (
                                   <div className="space-y-4">
@@ -6390,176 +6488,60 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                           </div>
                                         ) : null}
 
-                                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                          <div className="space-y-2">
-                                            <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
-                                              Собівартість / од.
-                                            </Label>
-                                            <CurrencyAmountInput
-                                              value={activeItemRun.unit_price_model}
-                                              disabled={!runPriceFieldAccess.unit_price_model}
-                                              title={runFieldLockHint(runPriceFieldAccess.unit_price_model, "менеджер")}
-                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "unit_price_model", next)}
-                                              min={0}
-                                              aria-label="Собівартість за одиницю"
-                                              currency={quote.currency}
-                                            />
-                                          </div>
-                                          <div className="space-y-2">
-                                            <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
-                                              В-ть нанесення
-                                            </Label>
-                                            <CurrencyAmountInput
-                                              value={activeItemRun.unit_price_print}
-                                              disabled={!runPriceFieldAccess.unit_price_print}
-                                              title={runFieldLockHint(runPriceFieldAccess.unit_price_print, "проєктний менеджер")}
-                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "unit_price_print", next)}
-                                              min={0}
-                                              aria-label="Вартість нанесення"
-                                              currency={quote.currency}
-                                            />
-                                          </div>
-                                          <div className="space-y-2">
-                                            <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
-                                              Логістика
-                                            </Label>
-                                            <CurrencyAmountInput
-                                              value={activeItemRun.logistics_cost}
-                                              disabled={!runPriceFieldAccess.logistics_cost}
-                                              title={runFieldLockHint(runPriceFieldAccess.logistics_cost, "проєктний менеджер або логіст")}
-                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "logistics_cost", next)}
-                                              min={0}
-                                              aria-label="Логістика"
-                                              currency={quote.currency}
-                                            />
-                                          </div>
-                                          <div className="space-y-2">
-                                            <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
-                                              Накрутка на собівартість
-                                            </Label>
-                                            <PercentAmountInput
-                                              // У полі — округлене до сотих, у базі лишається повне.
-                                              // Перенесені з історії відсотки на кшталт
-                                              // 30,840579710144926 інакше виглядають як збій, а
-                                              // округлити їх У СХОВИЩІ не можна: на собівартості в
-                                              // 4 644 ₴ два знаки зсувають ціну на копійки, а на
-                                              // великих тиражах — на гривні (заміряно, до 8,39 ₴).
-                                              value={Math.round(Number(activeItemRun.markup_rate) * 100) / 100}
-                                              disabled={!runPriceFieldAccess.markup_rate}
-                                              title={runFieldLockHint(runPriceFieldAccess.markup_rate, "менеджер")}
-                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "markup_rate", next)}
-                                              className={cn(
-                                                activeRunBelowFloor && "border-warning-soft-border focus-visible:ring-warning-soft-border/40"
-                                              )}
-                                              placeholder={String(DEFAULT_MARKUP_RATE)}
-                                              min={0}
-                                            />
-                                            {/* Зв'язок між відсотком і грошима стоїть просто під полем і
-                                                рахується наживо: без нього «40 %» — абстракція, і саме
-                                                тому попереднє поле роками лишалось нулем. */}
-                                            {activePricing.costTotal > 0 ? (
-                                              <p
-                                                className={cn(
-                                                  "text-2xs leading-snug",
-                                                  activeRunBelowFloor ? "text-warning-copy" : "text-muted-foreground"
-                                                )}
-                                              >
-                                                дає націнку{" "}
-                                                <span className="font-semibold tabular-nums">
-                                                  {formatCurrency(activePricing.markupTotal, quote.currency)}
-                                                </span>
-                                                {activePricing.saleUnitPrice === null ? null : (
-                                                  <>
-                                                    {" · ціна "}
-                                                    <span className="font-semibold tabular-nums">
-                                                      {formatCurrency(activePricing.saleUnitPrice, quote.currency)}
-                                                    </span>
-                                                  </>
-                                                )}
-                                                {activeRunBelowFloor
-                                                  ? ` · нижче дна ${MIN_MARKUP_RATE} % — треба погодження СЕО або головного бухгалтера`
-                                                  : null}
-                                              </p>
-                                            ) : null}
-                                          </div>
-                                        </div>
+                                        <QuoteRunPriceFields
+                                          run={activeItemRun}
+                                          pricing={activePricing}
+                                          access={runPriceFieldAccess}
+                                          markupState={activeRunMarkupState}
+                                          markupFrozen={activeRunMarkupFrozen}
+                                          currency={quote.currency}
+                                          lockHint={runFieldLockHint}
+                                          onChange={(field, value) => updateRunValue(activeItemRunIndex, field, value)}
+                                        />
 
-                                        <div className="my-4 border-t border-border/60" />
-
-                                        <div className="grid gap-3 md:grid-cols-[1fr_1.2fr_1.2fr]">
-                                          <div className="rounded-xl border border-border/40 bg-muted/[0.02] p-4">
-                                            <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                              Собівартість
-                                            </div>
-                                            <div className="mt-2 whitespace-nowrap font-mono text-xl font-semibold tabular-nums text-foreground">
-                                              {formatCurrency(activePricing.costTotal, quote.currency)}
-                                            </div>
-                                          </div>
-                                          <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
-                                            <div className="text-2xs font-semibold uppercase tracking-wide text-primary/80">
-                                              Ціна продажу / од.
-                                            </div>
-                                            <div className="mt-2 whitespace-nowrap font-mono text-xl font-semibold tabular-nums text-primary">
-                                              {activePricing.saleUnitPrice === null
-                                                ? "—"
-                                                : formatCurrency(activePricing.saleUnitPrice, quote.currency)}
-                                            </div>
-                                          </div>
-                                          <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
-                                            <div className="text-2xs font-semibold uppercase tracking-wide text-primary/80">
-                                              Сума продажу
-                                            </div>
-                                            <div className="mt-2 whitespace-nowrap font-mono text-xl font-semibold tabular-nums text-primary">
-                                              {formatCurrency(activePricing.saleTotal, quote.currency)}
-                                            </div>
-                                          </div>
-                                        </div>
-
-                                        <details className="group mt-3 rounded-xl border border-border/50 bg-muted/[0.03] px-3 py-2">
-                                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
-                                            <div className="min-w-0">
-                                              <div className="text-xs font-semibold text-foreground">Деталі ціни</div>
-                                              <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                                                Надцінка {formatCurrency(activePricing.markupTotal, quote.currency)}
-                                              </div>
-                                            </div>
-                                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-                                          </summary>
-                                          <div className="mt-3 grid gap-2 border-t border-border/50 pt-3 sm:grid-cols-2 xl:grid-cols-4">
-                                            <div>
-                                              <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                Потрібний ВП
-                                              </div>
-                                              <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
-                                                {formatCurrency(activePricing.requiredGrossProfit, quote.currency)}
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                Сталі витрати
-                                              </div>
-                                              <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
-                                                {formatCurrency(activePricing.fixedCosts, quote.currency)}
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                ПДВ
-                                              </div>
-                                              <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
-                                                {formatCurrency(activePricing.vatAmount, quote.currency)}
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                Надцінка
-                                              </div>
-                                              <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
-                                                {formatCurrency(activePricing.markupTotal, quote.currency)}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </details>
+                                        {/* Один блок ціни, шість виглядів за посадою (REQ-149 p11).
+                                            Він СТАВ на місце трійки карток «Собівартість / Ціна за од. /
+                                            Сума» і згортки «Деталі ціни»: ті показували всім одне й те
+                                            саме, тоді як проджекту не можна бачити заробіток менеджера,
+                                            а менеджеру розклад ціни на прибуток/постійні/ПДВ — це не
+                                            його рішення. Тримати обидва означало б показувати ті самі
+                                            числа двічі, один раз повз матрицю доступу. */}
+                                        <QuoteRunMarkupPanel
+                                          view={markupView}
+                                          state={activeRunMarkupState}
+                                          pricing={activePricing}
+                                          markupRate={activePricing.markupRate}
+                                          currency={quote.currency}
+                                          benchmark={activeItemBenchmark}
+                                          benchmarkLoading={!markup.benchmarks.has(item.id)}
+                                          canEditMarkup={runPriceFieldAccess.markup_rate}
+                                          canApprove={canApproveMarkup}
+                                          managerName={
+                                            quote.assigned_to ? memberById.get(quote.assigned_to) ?? null : null
+                                          }
+                                          deciderName={
+                                            activeRunMarkupState.approval?.decidedBy
+                                              ? memberById.get(activeRunMarkupState.approval.decidedBy) ?? null
+                                              : null
+                                          }
+                                          busy={markup.busy || runsSaving}
+                                          onChangeMarkupRate={(next) =>
+                                            updateRunValue(activeItemRunIndex, "markup_rate", next)
+                                          }
+                                          onRequestApproval={() =>
+                                            activeItemRun.id
+                                              ? markup.openDialog("request", activeItemRun.id)
+                                              : undefined
+                                          }
+                                          onDecide={(decision) => {
+                                            if (!activeItemRun.id) return;
+                                            if (decision === "rejected") {
+                                              markup.openDialog("reject", activeItemRun.id);
+                                              return;
+                                            }
+                                            void markup.submitDecision(activeItemRun.id, "approved", "");
+                                          }}
+                                        />
                                       </div>
                                     ) : (
                                       <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
@@ -8651,6 +8633,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       </DialogContent>
 
     </Dialog>
+
+    <QuoteMarkupDecisionDialog
+      mode={markup.dialog?.mode ?? null}
+      note={markup.dialogNote}
+      busy={markup.busy}
+      onNoteChange={markup.setDialogNote}
+      onCancel={() => markup.setDialog(null)}
+      onSubmit={() => {
+        const target = markup.dialog;
+        if (!target) return;
+        const note = markup.dialogNote;
+        markup.setDialog(null);
+        if (target.mode === "reject") {
+          void markup.submitDecision(target.runId, "rejected", note);
+          return;
+        }
+        void markup.submitRequest(target.runId, note);
+      }}
+    />
 
     <Dialog open={briefEditorOpen} onOpenChange={setBriefEditorOpen}>
       <DialogContent className="h-[min(92dvh,860px)] sm:max-w-[min(920px,92vw)]">

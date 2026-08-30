@@ -237,6 +237,28 @@ export function canEditQuoteRunPriceField(
   }
 }
 
+/**
+ * Хто ухвалює рішення по накрутці нижче дна 20 % (REQ-149).
+ *
+ * Рішення СЕО 30.08.2026: запит іде трьом — двом СЕО і головному бухгалтеру,
+ * підтвердити або відхилити може будь-хто з них. Звичайний бухгалтер розклад
+ * ціни бачить, а кнопок не має: нарахування — його справа, ціна — ні.
+ *
+ * Дзеркало в базі: tosho.is_quote_markup_approver (scripts/quote-markup-approvals.sql).
+ * Тут і там перелік мусить збігатись дослівно — інтерфейс, який показує кнопку
+ * без права за нею, гірший за відсутню кнопку.
+ */
+export function canApproveQuoteMarkup({
+  viewerJobRole,
+  permissions,
+}: {
+  viewerJobRole?: string | null;
+  permissions: AppPermissions;
+}): boolean {
+  if (permissions.isSuperAdmin || permissions.isSeo) return true;
+  return normalizeJobRole(viewerJobRole) === "chief_accountant";
+}
+
 export function resolveQuoteRunPriceFieldAccess(context: {
   viewerJobRole?: string | null;
   permissions: AppPermissions;
