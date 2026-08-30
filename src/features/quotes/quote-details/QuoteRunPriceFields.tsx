@@ -108,19 +108,27 @@ export function QuoteRunPriceFields({
             наживо: без нього «40 %» — абстракція, і саме тому попереднє поле
             роками лишалось нулем. */}
         {pricing.costTotal > 0 ? (
-          <p className={cn("text-2xs leading-snug", belowFloor ? "text-warning-copy" : "text-muted-foreground")}>
-            дає націнку{" "}
-            <span className="font-semibold tabular-nums">{formatCurrency(pricing.markupTotal, currency)}</span>
+          /* Було одним реченням: «дає націнку 10 415,27 UAH · ціна 1 587,09
+             UAH». Воно перевалювало на другий рядок і читалось як фраза, хоч це
+             дві величини. Тепер це дві пари підпис → число, вирівняні по
+             правому краю, як у специфікації вище. */
+          <div className={cn("space-y-0.5 text-xs", belowFloor ? "text-warning-copy" : "text-muted-foreground")}>
+            <div className="flex items-baseline justify-between gap-3">
+              <span>Націнка</span>
+              <span className="font-semibold tabular-nums">{formatCurrency(pricing.markupTotal, currency)}</span>
+            </div>
             {pricing.saleUnitPrice === null ? null : (
-              <>
-                {" · ціна "}
+              <div className="flex items-baseline justify-between gap-3">
+                <span>Ціна / од.</span>
                 <span className="font-semibold tabular-nums">
                   {formatCurrency(pricing.saleUnitPrice, currency)}
                 </span>
-              </>
+              </div>
             )}
-            {markupFrozen ? ` · ${frozenLabel}` : belowFloor ? ` · нижче дна ${MIN_MARKUP_RATE} %` : null}
-          </p>
+            {markupFrozen || belowFloor ? (
+              <div>{markupFrozen ? frozenLabel : `нижче дна ${MIN_MARKUP_RATE} %`}</div>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>

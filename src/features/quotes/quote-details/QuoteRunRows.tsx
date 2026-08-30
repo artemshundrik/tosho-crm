@@ -1,5 +1,6 @@
 import { Check, Plus } from "lucide-react";
 
+import { currencyLabel } from "@/features/quotes/currencyLabel";
 import { cn } from "@/lib/utils";
 import type { RunSalePricing } from "@/lib/quoteRuns";
 import type { QuoteRun } from "@/lib/toshoApi";
@@ -31,7 +32,8 @@ import type { QuoteRun } from "@/lib/toshoApi";
  *
  * Найтісніше не на найширшому екрані, а рівно на xl (1280 px): там зʼявляється
  * права колонка справи, картці лишається 773 px, і вільного місця в рядку
- * тиражу — 33 px. Тому проміжок між колонками на lg — 12 px, а не 16.
+ * тиражу — 31 px. Тому проміжок між колонками на lg — 10 px, а не 16: колонки
+ * вирівняні по правому краю, і десяти пікселів між числами вистачає.
  *
  * Колонка рішення клієнта — 10rem: її ширину диктує не дані, а стан (бейдж
  * «Погоджено клієнтом» — 157 px проти 94 у кнопки «Погодити»), тож на `auto`
@@ -44,7 +46,8 @@ import type { QuoteRun } from "@/lib/toshoApi";
  */
 
 /** Шаблон колонок — спільний для шапки й рядків, інакше вони розʼїдуться. */
-const GRID_COLS = "lg:grid-cols-[4rem_6rem_5.25rem_4.25rem_4.5rem_minmax(0,1fr)_10rem_7rem]";
+const GRID_COLS =
+  "lg:grid-cols-[5.5rem_6rem_5.25rem_4.75rem_3.75rem_minmax(0,1fr)_10rem_6.75rem]";
 
 const num = (value: number, digits = 0) =>
   (Math.round(value * 100) / 100).toLocaleString("uk-UA", {
@@ -91,7 +94,7 @@ export function QuoteRunRows({
   onAddRun,
   onToggleApproved,
 }: QuoteRunRowsProps) {
-  const currencyLabel = currency ?? "UAH";
+  const money = currencyLabel(currency);
   // Шапка без жодного числа під собою обіцяла б колонки, яких немає: поки
   // собівартість не внесена, підписи ховаються разом із даними.
   const anyPriced = runs.some((run) => getPricing(run).costTotal > 0);
@@ -120,7 +123,7 @@ export function QuoteRunRows({
       {anyPriced ? (
         <div
           className={cn(
-            "-mx-3 hidden gap-x-3 border-b border-border/40 px-3 pb-1.5 text-2xs text-muted-foreground sm:-mx-4 sm:px-4 lg:grid",
+            "-mx-3 hidden gap-x-2.5 border-b border-border/40 px-3 pb-1.5 text-2xs text-muted-foreground sm:-mx-4 sm:px-4 lg:grid",
             GRID_COLS
           )}
           aria-hidden
@@ -150,29 +153,36 @@ export function QuoteRunRows({
           const priced = pricing.costTotal > 0;
           // Класи колонок — літералами: Tailwind читає вихідний код, а не
           // рантайм, тож зібраний з шматків `lg:col-start-${i}` не існував би.
+          // Одиниця стоїть біля числа, а не тільки в шапці: відсоток при
+          // накрутці був, а гривня при грошах — ні, і колонки читались як
+          // числа різного роду.
           const costCells = [
             {
               key: "model",
               label: "Собівартість",
               value: num(Number(run.unit_price_model) || 0, 2),
+              unit: money,
               col: "lg:col-start-2",
             },
             {
               key: "print",
               label: "Нанесення",
               value: num(Number(run.unit_price_print) || 0, 2),
+              unit: money,
               col: "lg:col-start-3",
             },
             {
               key: "logistics",
               label: "Логістика",
               value: num(Number(run.logistics_cost) || 0),
+              unit: money,
               col: "lg:col-start-4",
             },
             {
               key: "markup",
               label: "Накрутка",
-              value: `${num(Math.round((Number(run.markup_rate) || 0) * 100) / 100, 2)} %`,
+              value: num(Math.round((Number(run.markup_rate) || 0) * 100) / 100, 2),
+              unit: "%",
               col: "lg:col-start-5",
             },
           ];
@@ -192,7 +202,7 @@ export function QuoteRunRows({
               className={cn(
                 // Смужка стоїть на ВСІХ рядках, просто прозора: інакше вибір
                 // зсував би вміст рядка на 3 px убік.
-                "grid cursor-pointer items-center gap-x-4 gap-y-1.5 lg:gap-x-3 border-b border-l-[3px] border-border/40 border-l-transparent py-2.5 pl-[9px] pr-3 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:pl-[13px] sm:pr-4",
+                "grid cursor-pointer items-center gap-x-4 gap-y-1.5 lg:gap-x-2.5 border-b border-l-[3px] border-border/40 border-l-transparent py-2.5 pl-[9px] pr-3 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:pl-[13px] sm:pr-4",
                 "grid-cols-[minmax(0,1fr)_auto]",
                 GRID_COLS,
                 isSelected && "border-l-foreground bg-muted"
@@ -207,7 +217,7 @@ export function QuoteRunRows({
                 >
                   {qty}
                 </span>
-                <span className="ml-1 text-2xs text-muted-foreground lg:hidden">{unitLabel}</span>
+                <span className="ml-1 text-2xs text-muted-foreground">{unitLabel}</span>
               </span>
 
               {/*
@@ -222,6 +232,7 @@ export function QuoteRunRows({
                     <span key={cell.key} className={cn("whitespace-nowrap lg:row-start-1 lg:text-right", cell.col)}>
                       <span className="mr-1 text-2xs text-muted-foreground lg:hidden">{cell.label}</span>
                       <span className="text-sm tabular-nums text-foreground">{cell.value}</span>
+                      <span className="ml-1 text-2xs text-muted-foreground">{cell.unit}</span>
                     </span>
                   ))
                 ) : (
@@ -280,7 +291,7 @@ export function QuoteRunRows({
                     >
                       {amount(pricing.saleTotal)}
                     </span>
-                    <span className="ml-1 text-2xs font-medium text-muted-foreground">{currencyLabel}</span>
+                    <span className="ml-1 text-2xs font-medium text-muted-foreground">{money}</span>
                     {pricing.saleUnitPrice === null ? null : (
                       <span className="block text-2xs tabular-nums text-muted-foreground">
                         {`${num(pricing.saleUnitPrice, 2)} /${unitLabel}`}

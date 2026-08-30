@@ -71,7 +71,7 @@ import {
 } from "@/lib/printPackage";
 import { parsePrintSpecMetadata } from "@/lib/printSpec";
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
-import { QuoteItemFact } from "@/features/quotes/quote-details/QuoteItemFact";
+import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
 import { normalizeUnitLabel } from "@/lib/units";
 import {
   DESIGN_TASK_TYPE_ICONS,
@@ -4830,7 +4830,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       ...methodSections,
                     ].filter((section): section is { title: string; fields: Array<{ label: string; value: string }> } => Boolean(section));
                     const renderedSections = packageSections.length > 0 ? packageSections : defaultSpecSections;
-                    const printDetailFields = packageSections.flatMap((section) => section.fields);
 
                     return (
                       <div
@@ -5001,68 +5000,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               </div>
                             </div>
 
-                            {packageSections.length > 0 ? (
-                              /*
-                                Специфікацію показано ОДИН раз (REQ-175#p32).
-
-                                Над згорткою стояв ряд чипів із шістьма
-                                параметрами — і це буквально ті самі параметри,
-                                що всередині: список чипів брав
-                                `packageSections`, розплющував і відрізав перші
-                                шість. Два покажчики на одні дані, один над
-                                одним. Лишилась згортка, відкрита за
-                                замовчуванням: специфікацію видно з першого
-                                погляду, а згорнути її можна.
-
-                                Групи більше не коробки й не мають риски під
-                                заголовком: риска робила з групи «шапку
-                                таблиці», і око чекало таблиці, якої немає, а дві
-                                короткі риски поруч читались як обрізані. Групу
-                                тримає відступ між колонками й те, що заголовок
-                                ТИХІШИЙ за власні рядки.
-                              */
-                              <details open className="group mt-4">
-                                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-t border-border/50 pt-3 [&::-webkit-details-marker]:hidden">
-                                  <span className="text-sm font-semibold text-foreground">Специфікація</span>
-                                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                    <span className="tabular-nums">{printDetailFields.length}</span> параметрів
-                                    <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
-                                  </span>
-                                </summary>
-                                <div className="mt-3 grid gap-x-8 gap-y-4 sm:grid-cols-2">
-                                  {packageSections.map((section) => (
-                                    <div key={section.title}>
-                                      <div className="mb-2 text-xs text-muted-foreground">{section.title}</div>
-                                      {section.fields.map((field) => (
-                                        <div
-                                          key={`${section.title}:${field.label}`}
-                                          className="flex items-baseline justify-between gap-4 py-1 text-sm"
-                                        >
-                                          <span className="min-w-0 text-muted-foreground">{field.label}</span>
-                                          <span className="min-w-0 text-right font-medium tabular-nums text-foreground">
-                                            {field.value}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ))}
-                                </div>
-                              </details>
-                            ) : renderedSections.length > 0 ? (
-                              <div className="mt-4 flex flex-wrap gap-1.5">
-                                {renderedSections.map((section) => (
-                                  <div key={section.title} className="contents">
-                                    {section.fields.map((field) => (
-                                      <QuoteItemFact
-                                        key={`${section.title}:${field.label}`}
-                                        label={field.label}
-                                        value={field.value}
-                                      />
-                                    ))}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
+                            <QuoteItemSpec sections={renderedSections} />
 
                             <PrintSpecPanel
                               quoteItemId={item.id}

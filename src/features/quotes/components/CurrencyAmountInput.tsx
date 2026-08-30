@@ -1,4 +1,5 @@
 import { NumberInput, type NumberInputProps } from "@/components/ui/number-input";
+import { currencyLabel } from "@/features/quotes/currencyLabel";
 import { cn } from "@/lib/utils";
 
 type CurrencyAmountInputProps = NumberInputProps & {
@@ -32,7 +33,7 @@ export function CurrencyAmountInput({ currency, className, ...props }: CurrencyA
         className={cn("h-11 rounded-xl bg-background pr-14 text-lg tabular-nums", className)}
       />
       <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold text-muted-foreground">
-        {currency}
+        {currency ? currencyLabel(currency) : null}
       </span>
     </div>
   );

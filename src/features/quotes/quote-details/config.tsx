@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { renderInlineRichText } from "@/components/ui/rich-text-links";
 import { quoteStatusBadgeClass } from "@/lib/statusTones";
+import { currencyLabel } from "@/features/quotes/currencyLabel";
 
 export const ITEM_VISUAL_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
@@ -253,7 +254,7 @@ export function formatQuoteType(value: string | null | undefined) {
  */
 export function formatCurrency(value: number | null | undefined, currency?: string | null) {
   if (value === null || value === undefined) return "Не вказано";
-  const label = currency ?? "UAH";
+  const label = currencyLabel(currency);
   // `|| 0` прибирає мінус нуля: −0,004 округлюється до −0, і на екрані
   // з'являлось «-0 UAH» — число, якого не буває.
   const rounded = Math.round(value * 100) / 100 || 0;
