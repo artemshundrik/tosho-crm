@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Briefcase, Eye, Search } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
-import { writeViewAs, type ViewAsTarget } from "@/auth/viewAs";
+import { isOwnerViewAsTarget, writeViewAs, type ViewAsTarget } from "@/auth/viewAs";
 import { formatJobRole, JOB_ROLE_NAMES } from "@/lib/jobRoles";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
@@ -17,13 +17,14 @@ import { cn } from "@/lib/utils";
  * Вибір цілі для режиму «Дивитись як» — два різні входи, а не два списки
  * одного й того самого.
  *
- * «Людина» (owner) показує реальних людей із довідника: сенс саме в живих
- * даних — ставка, візуали, задачі, — тому екрани не порожні. Через це вхід і
- * закритий для решти, і через це він лише для перегляду.
+ * «Людина» показує реальних людей із довідника: сенс саме в живих даних —
+ * ставка, візуали, задачі, — тому екрани не порожні, і тому вхід лише для
+ * перегляду. У списку немає ні себе, ні власника: власника приміряє тільки
+ * власник, бо прапорець isSuperAdmin береться з цілі (isOwnerViewAsTarget).
  *
- * «Посада» (owner і CEO) не показує нічиїх даних узагалі — тільки інтерфейс
- * ролі. Тому тут можна працювати: діє людина від свого імені й у межах своїх
- * прав, просто екранами тієї посади.
+ * «Посада» не показує нічиїх даних узагалі — тільки інтерфейс ролі. Тому тут
+ * можна працювати: діє людина від свого імені й у межах своїх прав, просто
+ * екранами тієї посади.
  */
 
 type Tab = "person" | "role";
@@ -51,7 +52,7 @@ const ROLE_OPTIONS = Object.entries(JOB_ROLE_NAMES)
   .sort((a, b) => a.label.localeCompare(b.label, "uk"));
 
 export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { userId, canViewAsPerson, canViewAsRole, viewAs } = useAuth();
+  const { userId, canViewAsPerson, canViewAsRole, canViewAsOwner, viewAs } = useAuth();
   const [tab, setTab] = useState<Tab>(canViewAsPerson ? "person" : "role");
   const [members, setMembers] = useState<Member[]>([]);
   const [query, setQuery] = useState("");
@@ -73,7 +74,14 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       if (cancelled) return;
       setMembers(
         rows
-          .filter((row) => row.userId && row.userId !== userId)
+          .filter(
+            (row) =>
+              row.userId &&
+              row.userId !== userId &&
+              // Ціль-власник видала б не-власнику isSuperAdmin: у списку її
+              // немає, а не «є, але не спрацює».
+              (canViewAsOwner || !isOwnerViewAsTarget(row.accessRole))
+          )
           .map((row) => ({
             userId: row.userId,
             label: row.fullName || row.email || row.userId.slice(0, 8),
@@ -92,7 +100,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     return () => {
       cancelled = true;
     };
-  }, [open, userId, canViewAsPerson, tab]);
+  }, [open, userId, canViewAsPerson, canViewAsOwner, tab]);
 
   const needle = query.trim().toLowerCase();
 

@@ -44,7 +44,7 @@ let cachedUserData: UserState | null = null;
 
 export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMenuProps) {
   const navigate = useNavigate();
-  // Режим «Дивитись як» — лише для owner (canUseViewAs рахується від РЕАЛЬНИХ
+  // Режим «Дивитись як» — owner і CEO (canUseViewAs рахується від РЕАЛЬНИХ
   // прав, тож із увімкненого режиму його не можна «загубити»).
   const { canUseViewAs, viewAs } = useAuth();
   const [viewAsOpen, setViewAsOpen] = useState(false);

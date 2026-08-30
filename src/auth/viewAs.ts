@@ -1,14 +1,19 @@
+import { normalizeAccessRole } from "@/lib/permissions";
+
 /**
  * Режим «Дивитись як» — подивитись застосунок не своїми очима.
  *
  * Два входи, бо потреби різні:
- *  • «очима людини» (owner) — живі дані конкретного співробітника, ТІЛЬКИ
- *    перегляд: мета режиму — перевірити, як виглядає роль, а не працювати за
- *    когось;
- *  • «приміряти посаду» (owner і CEO) — інтерфейс посади без конкретної
- *    людини, дії дозволені: так CEO може проклацати CRM у шкірі продакта чи
- *    менеджера й одразу щось підправити. Чужих особистих даних тут немає в
- *    принципі, тож і ховати нічого не треба.
+ *  • «очима людини» — живі дані конкретного співробітника, ТІЛЬКИ перегляд:
+ *    мета режиму — побачити, що бачить людина, яка каже «у мене не видно», а не
+ *    працювати за неї;
+ *  • «приміряти посаду» — інтерфейс посади без конкретної людини, дії
+ *    дозволені: так CEO може проклацати CRM у шкірі продакта чи менеджера й
+ *    одразу щось підправити. Чужих особистих даних тут немає в принципі, тож і
+ *    ховати нічого не треба.
+ *
+ * Обидва входи має і owner, і CEO. Один виняток — ЛЮДИНА-ВЛАСНИК: її приміряє
+ * лише власник (див. `isOwnerViewAsTarget`).
  *
  * ⚠️ ЦЕ UI-РІВЕНЬ, А НЕ БЕЗПЕКА.
  * Сесія в Supabase лишається власною, тож RLS у базі не змінюється. Режим
@@ -55,6 +60,36 @@ export type ViewAsMode = "observe" | "act";
 
 export const isViewAsPerson = (target: ViewAsTarget | null | undefined): target is ViewAsPerson =>
   target?.kind === "person";
+
+/**
+ * Ціль — власник? Таку приміряє тільки власник.
+ *
+ * Прапорці «хто я» (`isSuperAdmin`, `isSeo`, `isDesigner`…) беруться з ЦІЛІ без
+ * перетину — інакше owner очима дизайнера не побачив би жодного
+ * дизайнерського екрана. Тому людина-власник видала б CEO справжній
+ * `isSuperAdmin`, а за цим прапорцем відкриваються owner-ські екрани: маржа у
+ * Фінансах, повне меню повз власні галочки. Режим має тільки ЗВУЖУВАТИ, тож
+ * такий вхід закритий — і в списку вибору, і на вході в застосунок.
+ */
+export const isOwnerViewAsTarget = (accessRole: string | null | undefined) =>
+  normalizeAccessRole(accessRole) === "owner";
+
+/**
+ * Ціль, яку цьому глядачеві справді дозволено, — або null.
+ *
+ * Живе тут, а не в AuthProvider, бо це інваріант, а не рендер: ціль лежить у
+ * sessionStorage, тобто переживає зміну прав і правиться руками, тож
+ * перевіряти її треба на кожному читанні.
+ */
+export function allowedViewAsTarget(
+  target: ViewAsTarget | null | undefined,
+  viewer: { canViewAsPerson: boolean; canViewAsRole: boolean; canViewAsOwner: boolean },
+): ViewAsTarget | null {
+  if (!target) return null;
+  if (!isViewAsPerson(target)) return viewer.canViewAsRole ? target : null;
+  if (!viewer.canViewAsPerson) return null;
+  return viewer.canViewAsOwner || !isOwnerViewAsTarget(target.accessRole) ? target : null;
+}
 
 export const viewAsModeOf = (target: ViewAsTarget | null | undefined): ViewAsMode | null => {
   if (!target) return null;

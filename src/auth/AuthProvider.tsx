@@ -13,6 +13,7 @@ import {
   type TeamRole,
 } from '@/lib/permissions';
 import {
+  allowedViewAsTarget,
   isViewAsPerson,
   readViewAs,
   VIEW_AS_CHANGED_EVENT,
@@ -74,10 +75,12 @@ type AuthState = {
   viewAsMode: ViewAsMode | null;
   /** Чи має право вмикати режим бодай якимось входом. */
   canUseViewAs: boolean;
-  /** Дивитись очима конкретної людини — лише owner. */
+  /** Дивитись очима конкретної людини — owner і CEO. */
   canViewAsPerson: boolean;
   /** Приміряти посаду — owner і CEO. */
   canViewAsRole: boolean;
+  /** Приміряти ЛЮДИНУ-ВЛАСНИКА — лише owner (див. isOwnerViewAsTarget). */
+  canViewAsOwner: boolean;
   /**
    * Чиї дані ПОКАЗУВАТИ. У режимі «Дивитись як» — id обраної людини, інакше
    * власний. Навмисно окремо від `userId`: той лишається справжнім, бо на ньому
@@ -526,20 +529,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [role, accessRole, jobRole],
   );
   /**
-   * Кому який вхід дозволено.
+   * Кому які входи дозволені.
    *
-   * «Очима людини» — тільки owner: там живі дані конкретного співробітника, аж
-   * до його заробітку. «Приміряти посаду» — ще й CEO: посада без людини чужих
-   * особистих даних не показує взагалі, а йому потрібне саме це — побути в
-   * шкірі продакта чи менеджера, проклацати й одразу щось підправити.
+   * Обидва — owner і CEO. «Приміряти посаду» показує інтерфейс без людини, тож
+   * чужих особистих даних там немає в принципі. «Очима людини» їх показує — і
+   * спершу цей вхід лишили тільки власнику, — але саме він відповідає на
+   * єдине питання, заради якого режим існує: «у мене цього не видно». CEO веде
+   * команду, бачить і виплати, і особисті картки, тож ховати від нього цей
+   * екран — це ховати відповідь, а не дані. Дії там усе одно вимкнені
+   * (viewOnlyGuard), тож нічиїм іменем нічого не станеться.
+   *
+   * ВИНЯТОК — людина-власник: її приміряє лише власник. Прапорці «хто я»
+   * беруться з цілі без перетину, тож така ціль видала б CEO справжній
+   * isSuperAdmin (див. isOwnerViewAsTarget).
    *
    * Рахується від РЕАЛЬНИХ прав, а не від підмінених: інакше, увійшовши «як
    * дизайнер», людина втратила б разом із правами й вихід із режиму.
    */
-  const canViewAsPerson = realPermissions.isSuperAdmin;
+  const canViewAsPerson = realPermissions.isSuperAdmin || realPermissions.isSeo;
   const canViewAsRole = realPermissions.isSuperAdmin || realPermissions.isSeo;
-  const activeViewAs =
-    viewAs && (isViewAsPerson(viewAs) ? canViewAsPerson : canViewAsRole) ? viewAs : null;
+  const canViewAsOwner = realPermissions.isSuperAdmin;
+  const activeViewAs = allowedViewAsTarget(viewAs, {
+    canViewAsPerson,
+    canViewAsRole,
+    canViewAsOwner,
+  });
   const viewAsMode = viewAsModeOf(activeViewAs);
 
   /**
@@ -733,6 +747,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       canUseViewAs: canViewAsPerson || canViewAsRole,
       canViewAsPerson,
       canViewAsRole,
+      canViewAsOwner,
       // Приміряна посада — це не чужі дані: показуємо свої, але чужим інтерфейсом.
       viewUserId: viewAsPersonId ?? userId,
     }),
@@ -752,6 +767,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       viewAsMode,
       canViewAsPerson,
       canViewAsRole,
+      canViewAsOwner,
       viewAsPersonId,
     ],
   );
