@@ -6230,6 +6230,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   });
                 }}
                 onDeleteFile={requestDeleteAttachment}
+                onOpenThread={() => setActiveQuoteTab("details")}
                 canLoadMore={!activityLoadedAll}
                 loadingMore={activityLoading}
                 onLoadMore={() => void loadActivityLog({ full: true })}

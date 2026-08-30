@@ -1,5 +1,14 @@
 import { useState, type DragEvent } from "react";
-import { ArrowRight, ChevronDown, Clock, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronDown,
+  Clock,
+  Loader2,
+  MessageSquare,
+  Paperclip,
+  Trash2,
+  Upload,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -257,6 +266,7 @@ export function QuoteFeed({
   canLoadMore,
   loadingMore,
   onLoadMore,
+  onOpenThread,
 }: {
   events: QuoteFeedEvent[];
   files: QuoteAttachment[];
@@ -274,6 +284,8 @@ export function QuoteFeed({
   canLoadMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Відкрити розмову справи — потрібне лише там, де права колонка схована. */
+  onOpenThread: () => void;
 }) {
   const [filter, setFilter] = useState<QuoteFeedKind | "all">("all");
   const [onlyImportant, setOnlyImportant] = useState(false);
@@ -384,6 +396,22 @@ export function QuoteFeed({
         </button>
       </div>
 
+      {/*
+        ПИСАТИ — У РОЗМОВІ, і кнопка тут стоїть рівно там, де до розмови інакше
+        не дотягтись. Права колонка з ниткою `quote:<id>` ховається нижче xl
+        (`max-xl:hidden` на <aside> сторінки) і живе на власній вкладці
+        «Деталі». На десктопі рейка стоїть поруч — там ця кнопка була б другим
+        входом в одну нитку на одному екрані, тобто тим самим дублем, заради
+        якого й прибирали список коментарів із центру.
+
+        Тому кнопка, а не друге поле вводу: поле означало б другий шлях запису
+        (свій стан, своя чернетка, свої згадки) у ту саму нитку.
+      */}
+      <Button variant="outline" size="sm" className="w-full gap-2 xl:hidden" onClick={onOpenThread}>
+        <MessageSquare className="h-4 w-4" />
+        Написати в розмову
+      </Button>
+
       {error ? <div className="text-xs text-destructive">{error}</div> : null}
 
       {loading ? (
@@ -429,7 +457,9 @@ export function QuoteFeed({
       ) : null}
 
       <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border/40 pt-3 text-2xs text-muted-foreground">
-        <span>Писати — у панелі праворуч: тут розмова показана як частина історії</span>
+        <span className="max-xl:hidden">
+          Писати — у панелі праворуч: тут розмова показана як частина історії
+        </span>
         <span className="ml-auto tabular-nums">
           {shown.length === events.length
             ? `${events.length} подій${canLoadMore ? " показано" : " від створення"}`
