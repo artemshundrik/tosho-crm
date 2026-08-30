@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { QuoteRunMarkupPanel } from "./QuoteRunMarkupPanel";
+import { QuoteRunMarkupPanel, snapMarkupRate } from "./QuoteRunMarkupPanel";
 import {
   resolveQuoteRunMarkupState,
   type QuoteMarkupApproval,
@@ -257,5 +257,40 @@ describe("відмітка-орієнтир", () => {
     // Чесна відповідь лишається одна — підпис на самій смузі.
     expect(screen.queryByText(/орієнтир на цій позиції/)).toBeNull();
     expect(screen.getByText("орієнтира немає")).toBeTruthy();
+  });
+});
+
+describe("прилипання повзунка накрутки", () => {
+  // Дно 20 % і орієнтир 43,3 % — єдині дві відмітки на смузі, що несуть зміст.
+  const marks = [20, 43.3];
+
+  it("без відміток поруч — цілий відсоток, жодних сотих", () => {
+    expect(snapMarkupRate(28.4, marks)).toBe(28);
+    expect(snapMarkupRate(28.6, marks)).toBe(29);
+    expect(snapMarkupRate(0.2, marks)).toBe(0);
+  });
+
+  it("біля дна прилипає до нього — саме тут вмикається погодження", () => {
+    expect(snapMarkupRate(19.5, marks)).toBe(20);
+    expect(snapMarkupRate(20.55, marks)).toBe(20);
+    // Точна межа зони: повзунок ходить кроком 0,1, і 20,6 − 20 у подвійній
+    // точності більше за 0,6. Без похибки в порівнянні зона коротшала на крок.
+    expect(snapMarkupRate(20.6, marks)).toBe(20);
+    expect(snapMarkupRate(19.4, marks)).toBe(20);
+  });
+
+  it("сусіди дна лишаються досяжні — інакше 19 % не поставити взагалі", () => {
+    expect(snapMarkupRate(19.3, marks)).toBe(19);
+    expect(snapMarkupRate(20.9, marks)).toBe(21);
+  });
+
+  it("до дробового орієнтира прилипає точно, без сотих", () => {
+    expect(snapMarkupRate(43.0, marks)).toBe(43.3);
+    expect(snapMarkupRate(43.27, [20, 43.27])).toBe(43.3);
+  });
+
+  it("без орієнтира магнітне лише дно", () => {
+    expect(snapMarkupRate(43.0, [20, null])).toBe(43);
+    expect(snapMarkupRate(19.6, [20, undefined])).toBe(20);
   });
 });

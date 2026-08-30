@@ -42,6 +42,44 @@ const TRACK_MAX = 120;
 
 const pctOfTrack = (value: number) => Math.min(100, Math.max(0, (value / TRACK_MAX) * 100));
 
+/**
+ * Наскільки близько до відмітки повзунок до неї прилипає, у відсотках накрутки.
+ *
+ * 0,6 — не смак, а межа: цілі числа стоять за 1 % одне від одного, тож зона
+ * прилипання ширша за 0,5 обов'язково з'їдає сусіда. При 0,6 біля дна 20 %
+ * зона — 19,4…20,6, і сусідні 19 та 21 лишаються досяжні; біля дробової
+ * відмітки (орієнтир 43,3 %) втрачається одне ціле — 43. Це свідома ціна:
+ * слайдер тут для прицілу, а точне число набирається в полі над ним.
+ */
+const SNAP_TOLERANCE = 0.6;
+
+/**
+ * Куди стає повзунок після драга.
+ *
+ * ЦІЛІ ВІДСОТКИ ЗА ЗАМОВЧУВАННЯМ — сотих у накрутці не буває на око, а «19,81»
+ * з'являлось лише тому, що крок був дробовий. Але дві відмітки на смузі несуть
+ * зміст, і повз них промазувати не можна: дно вмикає погодження, орієнтир — те,
+ * з чим порівнюють. Тому вони магнітні, а решта шкали кроком в один відсоток.
+ */
+export function snapMarkupRate(raw: number, marks: Array<number | null | undefined>): number {
+  const value = Number(raw) || 0;
+  const targets = marks
+    .filter((mark): mark is number => typeof mark === "number" && Number.isFinite(mark))
+    // Відмітку теж округлюємо до десятої: інакше «прилипло до орієнтира» дало б
+    // у полі 43,27 — рівно ті соті, від яких і йшли.
+    .map((mark) => Math.round(mark * 10) / 10);
+  const nearest = targets.reduce<number | null>(
+    (best, mark) => (best === null || Math.abs(value - mark) < Math.abs(value - best) ? mark : best),
+    null
+  );
+  // Похибка обов'язкова: повзунок ходить кроком 0,1, тож на межі зони
+  // виходить рівно 0,6 — а 20,6 − 20 у подвійній точності дає
+  // 0,6000000000000014 і зона мовчки коротшає на один крок. Заміряно живцем:
+  // без цього 20,55 віддавало 21 замість 20.
+  if (nearest !== null && Math.abs(value - nearest) <= SNAP_TOLERANCE + 1e-9) return nearest;
+  return Math.round(value);
+}
+
 const formatRate = (value: number) => {
   const rounded = Math.round((Number(value) || 0) * 100) / 100;
   return `${rounded.toLocaleString("uk-UA")} %`;
@@ -512,7 +550,9 @@ export function QuoteRunMarkupPanel({
               value={Math.min(TRACK_MAX, Math.max(0, Number(markupRate) || 0))}
               disabled={busy}
               onChange={(event) =>
-                onChangeMarkupRate(Math.round(Number(event.target.value) * 100) / 100)
+                onChangeMarkupRate(
+                  snapMarkupRate(Number(event.target.value), [MIN_MARKUP_RATE, benchmark?.rate])
+                )
               }
               className="absolute inset-0 z-30 m-0 h-full w-full cursor-grab opacity-0 active:cursor-grabbing [&::-moz-range-thumb]:h-full [&::-moz-range-thumb]:w-px [&::-moz-range-thumb]:border-0 [&::-webkit-slider-thumb]:h-full [&::-webkit-slider-thumb]:w-px [&::-webkit-slider-thumb]:appearance-none"
               aria-label="Накрутка на собівартість, відсотки"
