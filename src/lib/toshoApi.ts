@@ -69,7 +69,14 @@ export type QuoteRun = {
   unit_price_model: number;
   unit_price_print: number;
   logistics_cost: number;
+  /** Легасі-вхід ціни. Лишається до зняття поля — читають старі прорахунки. */
   desired_manager_income: number;
+  /**
+   * Накрутка на собівартість у відсотках — те, чим ціна задається з 30.08.2026.
+   * Ціна = собівартість × (1 + markup_rate/100); постійні витрати й ПДВ
+   * усередині накрутки (scripts/quote-run-markup-rate.sql).
+   */
+  markup_rate: number;
   manager_rate: number;
   fixed_cost_rate: number;
   vat_rate: number;
@@ -114,7 +121,7 @@ export type CatalogModelMetadataLookup = {
 };
 
 const QUOTE_RUN_SELECT =
-  "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,manager_rate,fixed_cost_rate,vat_rate,is_approved";
+  "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,markup_rate,manager_rate,fixed_cost_rate,vat_rate,is_approved";
 const QUOTE_RUN_LEGACY_SELECT =
   "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost";
 
@@ -1251,7 +1258,7 @@ export async function getQuoteRuns(quoteId: string) {
   if (
     error &&
     /column/i.test(error.message ?? "") &&
-    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
+    /(desired_manager_income|markup_rate|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
   ) {
     ({ data, error } = await runQuery(true));
   }
@@ -1265,6 +1272,9 @@ export async function getQuoteRuns(quoteId: string) {
     unit_price_print: Number(run.unit_price_print ?? 0) || 0,
     logistics_cost: Number(run.logistics_cost ?? 0) || 0,
     desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+    // Дефолт той самий, що в колонки (DEFAULT_MARKUP_RATE): рядок без накрутки
+    // означав би ціну, рівну собівартості — саме той стан, який ми й прибрали.
+    markup_rate: resolveNumericRate(run.markup_rate, 40),
     manager_rate: resolveNumericRate(run.manager_rate, 10),
     fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
     vat_rate: resolveNumericRate(run.vat_rate, 20),
@@ -1317,7 +1327,7 @@ export async function listQuoteRunsForQuotes(params: {
     if (
       error &&
       /column/i.test(error.message ?? "") &&
-      /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
+      /(desired_manager_income|markup_rate|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
     ) {
       ({ data, error } = await runQuery(ids, true));
     }
@@ -1357,6 +1367,9 @@ export async function listQuoteRunsForQuotes(params: {
       unit_price_print: Number(run.unit_price_print ?? 0) || 0,
       logistics_cost: Number(run.logistics_cost ?? 0) || 0,
       desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+      // Дефолт той самий, що в колонки (DEFAULT_MARKUP_RATE): рядок без накрутки
+      // означав би ціну, рівну собівартості — саме той стан, який ми й прибрали.
+      markup_rate: resolveNumericRate(run.markup_rate, 40),
       manager_rate: resolveNumericRate(run.manager_rate, 10),
       fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
       vat_rate: resolveNumericRate(run.vat_rate, 20),
@@ -1398,6 +1411,7 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
       unit_price_print: run.unit_price_print,
       logistics_cost: run.logistics_cost,
       desired_manager_income: run.desired_manager_income,
+      markup_rate: run.markup_rate,
       manager_rate: run.manager_rate,
       fixed_cost_rate: run.fixed_cost_rate,
       vat_rate: run.vat_rate,
@@ -1419,11 +1433,12 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
   if (
     error &&
     /column/i.test(error.message ?? "") &&
-    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
+    /(desired_manager_income|markup_rate|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
   ) {
     const fallbackPayload = payload.map((entry) => {
       const legacyPayload = { ...entry };
       delete legacyPayload.desired_manager_income;
+      delete legacyPayload.markup_rate;
       delete legacyPayload.manager_rate;
       delete legacyPayload.fixed_cost_rate;
       delete legacyPayload.vat_rate;
@@ -1446,6 +1461,9 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
     unit_price_print: Number(run.unit_price_print ?? 0) || 0,
     logistics_cost: Number(run.logistics_cost ?? 0) || 0,
     desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+    // Дефолт той самий, що в колонки (DEFAULT_MARKUP_RATE): рядок без накрутки
+    // означав би ціну, рівну собівартості — саме той стан, який ми й прибрали.
+    markup_rate: resolveNumericRate(run.markup_rate, 40),
     manager_rate: resolveNumericRate(run.manager_rate, 10),
     fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
     vat_rate: resolveNumericRate(run.vat_rate, 20),

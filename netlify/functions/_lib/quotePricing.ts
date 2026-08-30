@@ -15,16 +15,19 @@ export type QuoteRunPricingRow = {
   unit_price_print?: number | string | null;
   logistics_cost?: number | string | null;
   desired_manager_income?: number | string | null;
+  markup_rate?: number | string | null;
   manager_rate?: number | string | null;
   fixed_cost_rate?: number | string | null;
   vat_rate?: number | string | null;
 };
 
-// Ставки в БД можуть бути null (дефолти проставляє клієнт при записі рядка).
-// Ті самі fallback-значення, що в scripts/backfill-quote-totals.mjs.
-const DEFAULT_MANAGER_RATE = 10;
-const DEFAULT_FIXED_COST_RATE = 30;
-const DEFAULT_VAT_RATE = 20;
+// Дзеркало DEFAULT_MARKUP_RATE із src/lib/quoteRuns.ts і DEFAULT колонки
+// markup_rate. Рядок без накрутки означав би ціну, рівну собівартості.
+//
+// Ставок менеджера, постійних витрат і ПДВ тут більше немає: у формулі
+// «накрутка на собівартість» вони не впливають на СУМУ ціни, лише на розподіл
+// усередині націнки, а сервер рахує саме суму.
+const DEFAULT_MARKUP_RATE = 40;
 
 function num(value: number | string | null | undefined): number {
   const parsed = typeof value === "string" ? Number(value) : value;
@@ -36,19 +39,18 @@ function rate(value: number | string | null | undefined, fallback: number): numb
   return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : fallback;
 }
 
-/** Продажна сума одного run-у (собівартість + валовий прибуток + постійні + ПДВ). */
+/**
+ * Продажна сума одного run-у: собівартість плюс накрутка на неї.
+ *
+ * З 30.08.2026 ціна задається НАКРУТКОЮ НА СОБІВАРТІСТЬ, а не бажаним
+ * заробітком менеджера (рішення СЕО). Постійні витрати й податковий резерв
+ * лежать усередині накрутки, тому тут вони й не з'являються: сума ціни від них
+ * більше не залежить, від них залежить лише розподіл усередині націнки.
+ */
 export function runSaleTotal(run: QuoteRunPricingRow): number {
   const quantity = Math.max(0, num(run.quantity));
   const costTotal = (num(run.unit_price_model) + num(run.unit_price_print)) * quantity + num(run.logistics_cost);
+  const markupRate = Math.max(0, rate(run.markup_rate, DEFAULT_MARKUP_RATE));
 
-  const desiredManagerIncome = Math.max(0, num(run.desired_manager_income));
-  const managerRate = rate(run.manager_rate, DEFAULT_MANAGER_RATE);
-  const fixedCostRate = rate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE);
-  const vatRate = rate(run.vat_rate, DEFAULT_VAT_RATE);
-
-  const grossProfit = managerRate > 0 ? desiredManagerIncome / (managerRate / 100) : 0;
-  const fixedCosts = grossProfit * (fixedCostRate / 100);
-  const vatAmount = (grossProfit + fixedCosts) * (vatRate / 100);
-
-  return costTotal + grossProfit + fixedCosts + vatAmount;
+  return costTotal * (1 + markupRate / 100);
 }

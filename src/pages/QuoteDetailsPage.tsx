@@ -124,6 +124,7 @@ import {
   needsApprovedRunChoice,
   pickApprovedRun,
   validateRunEconomics,
+  DEFAULT_MARKUP_RATE,
   MIN_MANAGER_INCOME,
   MIN_RUN_MARKUP,
 } from "@/lib/quoteRuns";
@@ -1431,6 +1432,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         unit_price_print: 0,
         logistics_cost: 0,
         desired_manager_income: 0,
+        markup_rate: DEFAULT_MARKUP_RATE,
         manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
         fixed_cost_rate: companyRates.fixedCostRate,
         vat_rate: companyRates.vatRate,
@@ -3750,6 +3752,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_print: 0,
           logistics_cost: 0,
           desired_manager_income: 0,
+          markup_rate: DEFAULT_MARKUP_RATE,
           manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
           fixed_cost_rate: companyRates.fixedCostRate,
           vat_rate: companyRates.vatRate,

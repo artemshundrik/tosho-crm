@@ -84,7 +84,7 @@ import {
   type LeadSearchRow,
 } from "@/lib/toshoApi";
 import { useCompanyPricingRates } from "@/lib/companyPricingRates";
-import { getRunSalePricingFromRun, mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
+import { DEFAULT_MARKUP_RATE, getRunSalePricingFromRun, mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
 import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
 import type { NewQuoteFormData, QuoteBatchBuilderFormData } from "@/components/quotes";
 import {
@@ -4764,6 +4764,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             unit_price_print: Number(run.unit_price_print ?? 0) || 0,
             logistics_cost: Number(run.logistics_cost ?? 0) || 0,
             desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+            // Копія прорахунку успадковує рішення про ціну, а не стрибає на дефолт.
+            markup_rate: Number(run.markup_rate ?? DEFAULT_MARKUP_RATE) || DEFAULT_MARKUP_RATE,
             manager_rate: Number.isFinite(Number(run.manager_rate)) ? Number(run.manager_rate) : DEFAULT_MANAGER_RATE,
             fixed_cost_rate: Number.isFinite(Number(run.fixed_cost_rate)) ? Number(run.fixed_cost_rate) : companyRates.fixedCostRate,
             vat_rate: Number.isFinite(Number(run.vat_rate)) ? Number(run.vat_rate) : companyRates.vatRate,

@@ -162,6 +162,11 @@ export function needsMarkupApproval(params: { costTotal: number; markupRate: num
 /**
  * Продажна ціна для збереженого run-у — бере собівартість (model+print+логістика)
  * і ставки безпосередньо з самого run-у (вони вже дефолтяться у getQuoteRuns).
+ *
+ * З 30.08.2026 рахує від НАКРУТКИ, а не від бажаного заробітку. Переїзд не
+ * зрушив жодної історичної ціни: перенесення markup_rate робилось зворотним
+ * ходом тієї самої формули й перевірене на проді — розбіг 0,0000 ₴ на всіх 163
+ * тиражах із порахованою націнкою (scripts/quote-run-markup-rate-precision.sql).
  */
 export function getRunSalePricingFromRun(run: QuoteRun): RunSalePricing {
   const quantity = Math.max(0, Number(run.quantity) || 0);
@@ -169,10 +174,10 @@ export function getRunSalePricingFromRun(run: QuoteRun): RunSalePricing {
   const print = Number(run.unit_price_print) || 0;
   const logistics = Number(run.logistics_cost) || 0;
   const costTotal = (model + print) * quantity + logistics;
-  return computeRunSalePricing({
+  return computeRunSalePricingFromMarkup({
     quantity,
     costTotal,
-    desiredManagerIncome: Number(run.desired_manager_income) || 0,
+    markupRate: Number(run.markup_rate) || 0,
     managerRate: Number(run.manager_rate) || 0,
     fixedCostRate: Number(run.fixed_cost_rate) || 0,
     vatRate: Number(run.vat_rate) || 0,
@@ -294,6 +299,10 @@ export function mergeQuoteRunsWithExisting({
         unit_price_print: Math.max(0, Number(source?.unit_price_print) || 0),
         logistics_cost: Math.max(0, Number(source?.logistics_cost) || 0),
         desired_manager_income: Math.max(0, Number(source?.desired_manager_income) || 0),
+        // Накрутка наявного тиражу зберігається; новий стартує з підставленої.
+        // Числа не беруться зі ставки менеджера: накрутка — власне рішення про
+        // ціну, і воно має пережити будь-яку зміну ставок.
+        markup_rate: Math.max(0, resolveNumericRate(source?.markup_rate, DEFAULT_MARKUP_RATE)),
         // Наявний тираж тримає СВОЮ ставку. Прорахунок, надісланий клієнту при
         // 10 %, не має мовчки подорожчати, коли менеджеру піднімуть ставку до
         // 12 % — а саме це й відбувалось при кожному пересохраненні (рішення

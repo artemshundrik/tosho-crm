@@ -24,6 +24,11 @@ const run = (overrides: Partial<QuoteRun> = {}): QuoteRun => ({
   unit_price_print: 0,
   logistics_cost: 0,
   desired_manager_income: 350,
+  // Та сама угода, переказана мовою накрутки: заробіток 350 ₴ при ставці 15 %
+  // давав націнку рівно 3 640 ₴ на собівартості 4 644 ₴. Пишемо дробом, а не
+  // округленим відсотком — на 4 644 ₴ навіть два знаки зсувають ціну на копійки,
+  // і саме через це довелось виправляти перенесення історії на проді.
+  markup_rate: (3640 / 4644) * 100,
   manager_rate: 15,
   fixed_cost_rate: 30,
   vat_rate: 20,
@@ -42,14 +47,32 @@ describe("ціна тиражу в замовленні", () => {
     expect(getRunUnitPrice(run()) * 180).toBeCloseTo(getRunLineTotal(run()), 6);
   });
 
-  it("логістику розкидає по одиницях, а не додає до кожної", () => {
+  it("логістику додає разово, а не до кожної одиниці", () => {
     const withLogistics = run({ logistics_cost: 900 });
-    expect(getRunLineTotal(withLogistics)).toBeCloseTo(8284 + 900, 2);
-    expect(getRunUnitPrice(withLogistics)).toBeCloseTo((8284 + 900) / 180, 6);
+    // Логістика входить у собівартість ОДИН раз: 25,8 × 180 + 900 = 5 544.
+    const expected = 5544 * (1 + (3640 / 4644));
+    expect(getRunLineTotal(withLogistics)).toBeCloseTo(expected, 2);
+    expect(getRunUnitPrice(withLogistics)).toBeCloseTo(expected / 180, 6);
   });
 
-  it("тираж без заробітку менеджера дає ціну = собівартості (націнки немає)", () => {
-    expect(getRunLineTotal(run({ desired_manager_income: 0 }))).toBeCloseTo(4644, 2);
+  it("НАКРУТКА НАКРУЧУЄТЬСЯ І НА ЛОГІСТИКУ — це зміна проти старої моделі", () => {
+    // Доти націнка трималась на бажаному заробітку й від логістики не залежала:
+    // 900 ₴ доставки додавали до ціни рівно 900 ₴. Тепер логістика — частина
+    // собівартості, а накрутка береться від усієї собівартості, тож ті самі
+    // 900 ₴ додають 900 × (1 + накрутка). Так і має бути за рішенням СЕО
+    // 30.08.2026, але це саме зміна поведінки, а не побічний ефект.
+    const delta = getRunLineTotal(run({ logistics_cost: 900 })) - getRunLineTotal(run());
+    expect(delta).toBeGreaterThan(900);
+    expect(delta).toBeCloseTo(900 * (1 + 3640 / 4644), 2);
+  });
+
+  it("тираж без накрутки дає ціну = собівартості", () => {
+    expect(getRunLineTotal(run({ markup_rate: 0 }))).toBeCloseTo(4644, 2);
+  });
+
+  it("ціну веде накрутка, а не ставка менеджера", () => {
+    // Раніше підняття ставки переписувало ціну, вже показану клієнту.
+    expect(getRunLineTotal(run({ manager_rate: 30 }))).toBeCloseTo(getRunLineTotal(run()), 6);
   });
 });
 

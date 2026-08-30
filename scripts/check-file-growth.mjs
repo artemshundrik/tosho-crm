@@ -96,6 +96,11 @@ const GIANT_THRESHOLD = 2000;
  * позиції (QuoteDetailsPage), два ранні виходи в обробниках дошки
  * (QuotesPage) і блокер готовності поруч із рештою блокерів (orderRecords).
  *
+ * ПІДНЯТО 30.08.2026 для toshoApi (+18) — поле накрутки (картка 149). Той самий
+ * випадок, що описаний нижче: ОДНЕ поле, протягнуте крізь чотири мапери читання
+ * й запису, перелік колонок і запасний шлях на старішу схему. Виносити нема
+ * чого — мапер рядка тиражу не існує окремо від запиту, який його читає.
+ *
  * ПІДНЯТО 25.08.2026 ще раз, і лише для toshoApi (+19): рецензія знайшла, що
  * перенесення позначки «погоджено клієнтом» валило весь запис (частковий
  * унікальний індекс перевіряється порядково й не буває DEFERRABLE). Виправлення
@@ -191,7 +196,7 @@ const CEILINGS = {
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
   "src/components/design/DesignersDashboard.tsx": 2702,
   "src/features/orders/orderRecords.ts": 2614,
-  "src/lib/toshoApi.ts": 2608,
+  "src/lib/toshoApi.ts": 2626,
   "src/pages/TeamPage.tsx": 2427,
   "src/pages/ProfilePage.tsx": 2156,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,

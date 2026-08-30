@@ -72,7 +72,7 @@ async function sumByQuote(admin: SupabaseClient, quoteIds: string[]): Promise<Ma
     .schema("tosho")
     .from("quote_item_runs")
     .select(
-      "quote_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,manager_rate,fixed_cost_rate,vat_rate"
+      "quote_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,markup_rate,manager_rate,fixed_cost_rate,vat_rate"
     )
     .in("quote_id", quoteIds)
     .limit(20000);

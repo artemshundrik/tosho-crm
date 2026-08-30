@@ -45,6 +45,7 @@ const run = (quantity: number, isApproved: boolean) => ({
   unit_price_print: 0,
   logistics_cost: 0,
   desired_manager_income: 350,
+  markup_rate: 0,
   manager_rate: 15,
   fixed_cost_rate: 30,
   vat_rate: 20,
