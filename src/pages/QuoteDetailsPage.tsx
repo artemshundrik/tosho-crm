@@ -4517,7 +4517,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:mb-0 xl:shrink-0 2xl:-mx-8 2xl:px-8">
             <TabBar value={activeQuoteTab}>
               {quotePageTabs.map((tab) => {
-                const isActive = activeQuoteTab === tab.value;
                 return (
                   <TabBarItem
                     key={tab.value}
@@ -4526,22 +4525,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     className={cn(tab.mobileOnly && "xl:hidden")}
                   >
                     <span>{tab.label}</span>
+                    {/*
+                      Приписка біля вкладки — ОДНА форма на всі (REQ-175#p53).
+
+                      Було чотири різні: голе число «3», слово «Задача» сірим,
+                      кольоровий «−4 дн» і фіолетова пігулка капсом «СКОРО». Чотири
+                      способи сказати «а тут ще щось є» в одному ряду з пʼяти —
+                      рядок вкладок читався як набір різнорідних наліпок.
+                      Тепер це одна тиха плашка; колір лишається тільки там, де він
+                      означає стан (прострочений дедлайн), а не просто наявність.
+                    */}
                     {tab.badge ? (
                       <span
                         className={cn(
-                          "max-w-[96px] truncate text-2xs tabular-nums",
-                          tab.badgeToneClass
-                            ? tab.badgeToneClass
-                            : isActive
-                              ? "text-muted-foreground"
-                              : "text-muted-foreground/75"
+                          "inline-flex h-[18px] min-w-[18px] max-w-[104px] items-center justify-center truncate rounded-md bg-muted px-1.5 text-2xs tabular-nums",
+                          tab.badgeToneClass ?? "text-muted-foreground"
                         )}
                       >
                         {tab.badge}
                       </span>
                     ) : null}
                     {tab.soon ? (
-                      <span className="rounded-[5px] bg-accent-tone-soft px-1.5 py-px text-3xs font-bold uppercase tracking-caps-tight text-accent-tone-foreground">
+                      <span className="inline-flex h-[18px] items-center rounded-md bg-muted px-1.5 text-2xs text-muted-foreground">
                         скоро
                       </span>
                     ) : null}
@@ -5169,9 +5174,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     {/* Поки вибору немає, замовлення з прорахунку не зробити —
                                         краще сказати це тут, ніж за три кроки у вікні створення. */}
                                     {needsApprovedRunChoice(itemRuns) ? (
-                                      <div className="mb-4 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-xs text-warning-copy">
-                                        Тиражів кілька — позначте той, який погодив клієнт. Саме з нього
-                                        підуть кількість і ціна в замовлення.
+                                      <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-2xs leading-relaxed text-warning-copy">
+                                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                        <div>
+                                          <span className="font-semibold">Тиражів кілька.</span> Позначте той,
+                                          який погодив клієнт: саме з нього підуть кількість і ціна в
+                                          замовлення.
+                                        </div>
                                       </div>
                                     ) : null}
 

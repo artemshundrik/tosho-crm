@@ -92,23 +92,26 @@ export function QuoteMarkupDecisionDialog({
 export function QuoteMarkupGateBanner({ blockingCount }: { blockingCount: number }) {
   if (blockingCount <= 0) return null;
   return (
-    <div className="tone-warning-subtle rounded-xl border px-3.5 py-3">
-      <div className="flex items-start gap-3">
-        <span className="tone-warning grid h-7 w-7 shrink-0 place-items-center rounded-lg border" aria-hidden>
-          <Lock className="h-3.5 w-3.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium leading-relaxed">
-            КП клієнту й перехід у «Затверджено» замкнені
-          </p>
-          <p className="mt-1 text-2xs leading-relaxed opacity-90">
-            {blockingCount === 1
-              ? "Один тираж стоїть нижче дна "
-              : `${blockingCount} тиражі стоять нижче дна `}
-            {MIN_MARKUP_RATE} % — потрібне підтвердження СЕО або головного бухгалтера. Рахувати,
-            редагувати й зберігати прорахунок це не заважає.
-          </p>
-        </div>
+    /*
+      Рядком, а не плакатом (REQ-175#p52).
+
+      Було: коробка з полем 14 px, значок у власній рамці 28×28 і два абзаци —
+      заголовок 14 px та пояснення під ним. На повну ширину колонки це давало
+      жовтий прямокутник заввишки 76 px над самим прорахунком, хоч сказати треба
+      одне речення, і воно нічого не блокує в роботі.
+
+      Тепер це та сама записка, що під ціною тиражу: жирний зачин, далі текст,
+      значок 14 px без рамки. Один вигляд для всіх попереджень справи.
+    */
+    <div className="flex items-start gap-2 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-2xs leading-relaxed text-warning-copy">
+      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <div>
+        <span className="font-semibold">КП клієнту й перехід у «Затверджено» замкнені.</span>{" "}
+        {blockingCount === 1
+          ? "Один тираж стоїть нижче дна "
+          : `${blockingCount} тиражі стоять нижче дна `}
+        {MIN_MARKUP_RATE} % — потрібне підтвердження СЕО або головного бухгалтера. Рахувати,
+        редагувати й зберігати прорахунок це не заважає.
       </div>
     </div>
   );
