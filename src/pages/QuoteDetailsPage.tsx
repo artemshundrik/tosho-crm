@@ -4337,7 +4337,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           і в неї своя нижня межа. Дві горизонтальні лінії за 40 px одна від
           одної читались як порожня перекладина між номером справи й вкладками. */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur xl:static xl:shrink-0 xl:bg-transparent xl:backdrop-blur-none">
-        <div className="px-4 py-2 md:px-5 lg:px-6">
+        {/*
+          Поле шапки — те саме, що в <main> (REQ-175#p50).
+
+          Було px-4/5/6 проти px-2/2.5/3 у тіла: на широкому екрані кнопка
+          «назад» і номер справи стояли за 24 px від краю колонки, а вкладки,
+          заголовок секції й картка — за 12. Тобто ліва межа сторінки ламалась
+          рівно там, де закінчується шапка, і симетрично ламалась права.
+        */}
+        <div className="px-2 py-2 md:px-2.5 lg:px-3 2xl:px-4">
           {/*
             Один ряд і на телефоні теж.
             Було: колонка до lg — тобто на телефоні номер стояв окремим рядком,
@@ -6175,7 +6183,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
         <aside
           className={cn(
-            "self-start px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:flex xl:min-h-0 xl:h-full xl:flex-col xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:bg-[hsl(var(--design-task-details-bg))] xl:px-0 xl:pb-0 xl:pt-0",
+            // Без власного тла (REQ-175#p51): колонка розмови стоїть на тому ж
+            // тлі, що й середина, а межу тримає волосінь ліворуч. Своя заливка
+            // робила з неї третю поверхню поруч із карткою й сторінкою.
+            "self-start px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:flex xl:min-h-0 xl:h-full xl:flex-col xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:px-0 xl:pb-0 xl:pt-0",
             activeQuoteTab !== "details" && "max-xl:hidden"
           )}
         >
