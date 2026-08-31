@@ -13,11 +13,11 @@ describe("isDesignStatusAlreadyApplied", () => {
 
   it("другий кидок картки з тим самим застарілим знімком не проходить", () => {
     // Дошка тримає знімок задачі; після першого кидка він каже "pm_review", хоча
-    // база вже "client_review". Вирішує база — інакше подія і сповіщення пишуться
-    // вдруге (31.08.2026: п'ять повідомлень замість трьох).
-    const staleSnapshotStatus = "pm_review";
+    // база вже "client_review". Старий гейт питав знімок і пропускав другий запис;
+    // новий питає базу (31.08.2026: п'ять повідомлень замість трьох).
+    const staleSnapshot: { status: string } = { status: "pm_review" };
     const liveMetadata = { status: "client_review" };
-    expect(staleSnapshotStatus === "client_review").toBe(false);
+    expect(isDesignStatusAlreadyApplied(staleSnapshot, "client_review")).toBe(false);
     expect(isDesignStatusAlreadyApplied(liveMetadata, "client_review")).toBe(true);
   });
 
