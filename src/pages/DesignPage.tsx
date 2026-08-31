@@ -3143,6 +3143,27 @@ export default function DesignPage() {
       toast.error("Ви не можете перевести задачу в цей статус");
       return;
     }
+    // КАРТКА СІДАЄ ОДРАЗУ, ЩЕ ДО ПОХОДУ В БАЗУ (REQ-230).
+    //
+    // Рушій перетягування дає картці на посадку рівно LANDING_WAIT_FRAMES = 15
+    // кадрів (~250 мс) і, не дочекавшись її в новій колонці, повертає на місце.
+    // Читання metadata нижче стільки й коштує: заміряно 145, 156, 193, 208, 258,
+    // 324 мс — дві спроби з шести не вкладаються навіть на дротовому зв'язку з
+    // машини поруч із базою. Людина бачила «не спрацювало» і кидала ще раз; саме
+    // так 31.08.2026 дві задачі з трьох поїхали двічі.
+    //
+    // Тому спершу СТАТУС, і тільки він: metadata тут ще застарілі, і мазати ними
+    // картку не можна — повний знімок приїде нижче, коли база відповість. Той
+    // самий порядок, що вже стоїть у картці задачі (DesignTaskPage).
+    //
+    // Кожен вихід ПІСЛЯ цього рядка мусить повернути картку назад — інакше вона
+    // застрягне в колонці, куди її не пустили. Це робить revertCard().
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: next } : t)));
+    const revertCard = () =>
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, status: task.status, metadata: task.metadata ?? {} } : t))
+      );
+
     // Дошка не має realtime, тож у її стані лежить знімок на момент завантаження.
     // Читаємо актуальні metadata ОДИН раз — і для гейтів, і як базу для запису.
     // Без цього update нижче писав би застарілий знімок цілою колонкою і затирав
@@ -3157,7 +3178,8 @@ export default function DesignPage() {
       ((freshRow?.metadata as Record<string, unknown> | null) ?? task.metadata ?? {}) as Record<string, unknown>;
 
     // Гейт на вході дивився на знімок дошки — а він застаріває за одне мережеве
-    // коло: див. src/lib/designStatusIdempotency.ts.
+    // коло: див. src/lib/designStatusIdempotency.ts. Картку не повертаємо: база
+    // каже, що вона вже в цьому статусі, тобто показане — правда.
     if (isDesignStatusAlreadyApplied(currentMetadata, next)) return;
 
     const statusChangedAt =
@@ -3168,6 +3190,7 @@ export default function DesignPage() {
       !!deadlineUpdatedAt &&
       (!statusChangedAt || new Date(deadlineUpdatedAt).getTime() > new Date(statusChangedAt).getTime());
     if (next === "changes" && !deadlineWasUpdatedAfterCurrentStatus) {
+      revertCard();
       toast.error("Щоб повернути задачу в «Правки», спочатку оновіть дедлайн у самій дизайн-задачі.");
       return;
     }
@@ -3183,6 +3206,7 @@ export default function DesignPage() {
         statusChangedAt: statusChangedAt ?? null,
       });
       if (!fresh) {
+        revertCard();
         toast.error("Без правки повертати нема з чим", { description: CHANGES_GATE_HINT });
         return;
       }
@@ -3197,6 +3221,7 @@ export default function DesignPage() {
         hasLayoutOutputs: readHasLayoutOutputs(currentMetadata, task.designTaskType),
       });
       if (blockers.length > 0) {
+        revertCard();
         toast.error(`Щоб затвердити дизайн, закрийте блокери: ${blockers.join(", ")}.`, {
           description: APPROVAL_GATE_HINT,
         });
@@ -3205,6 +3230,10 @@ export default function DesignPage() {
     }
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
     if (next === "in_progress" && !existingEstimateMinutes && !options?.estimateMinutes) {
+      // Картку повертаємо: діалог естімейту можуть і закрити, а тоді вона
+      // застрягла б у «В роботі», куди її ще не пустили. Погодяться — обробник
+      // покличеться вдруге вже з естімейтом і посадить її знову.
+      revertCard();
       requestEstimateBeforeAction({ mode: "status", task, nextStatus: next });
       return;
     }
@@ -3233,17 +3262,6 @@ export default function DesignPage() {
       estimated_by_user_id: estimatedByUserId,
     };
     try {
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === task.id
-            ? {
-                ...t,
-                status: next,
-                metadata: { ...(t.metadata ?? {}), ...baseMetadata },
-              }
-            : t
-        )
-      );
       // ЗАПИС ЗІ ЗВІРКОЮ. Перевірка вище читає статус, а пише — рядком нижче, і в
       // цю щілину пролазить дуже швидкий другий виклик (подвійний клік по пункту
       // меню). Умова «статус досі той, який я читав» їде в сам UPDATE, тож другий
@@ -3254,7 +3272,16 @@ export default function DesignPage() {
         supabase.from("activity_log").update({ metadata: baseMetadata }).eq("id", task.id).eq("team_id", effectiveTeamId),
         readStatusWitness(currentMetadata)
       );
+      // Рядок перехопив хтось інший — найчастіше наш власний другий кидок, який
+      // віз той самий статус. Картку НЕ повертаємо: вона вже там, куди її вели,
+      // і база каже те саме.
       if (!applied) return;
+
+      // Статус картка показує з самого початку; тепер, коли запис справді
+      // пройшов, добираємо решту metadata.
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, metadata: { ...(t.metadata ?? {}), ...baseMetadata } } : t))
+      );
 
       if (shouldPauseTimerForStatusChange(previousStatus, next)) {
         await pauseDesignTaskTimer({ teamId: effectiveTeamId, taskId: task.id });
@@ -3347,9 +3374,7 @@ export default function DesignPage() {
       }
     } catch (e: unknown) {
       setError(getErrorMessage(e, "Не вдалося оновити статус"));
-      setTasks((prev) =>
-        prev.map((t) => (t.id === task.id ? { ...t, status: task.status, metadata: task.metadata ?? {} } : t))
-      );
+      revertCard();
     }
   };
 
