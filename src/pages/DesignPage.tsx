@@ -107,7 +107,7 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
-import { isDesignStatusAlreadyApplied } from "@/lib/designStatusIdempotency";
+import { applyDesignStatusWrite, isDesignStatusAlreadyApplied, readStatusWitness } from "@/lib/designStatusIdempotency";
 import { DesignTaskProductPicker } from "@/components/design/DesignTaskProductPicker";
 import {
   createEmptyDesignTaskProduct,
@@ -3244,12 +3244,17 @@ export default function DesignPage() {
             : t
         )
       );
-      const { error: updateError } = await supabase
-        .from("activity_log")
-        .update({ metadata: baseMetadata })
-        .eq("id", task.id)
-        .eq("team_id", effectiveTeamId);
-      if (updateError) throw updateError;
+      // ЗАПИС ЗІ ЗВІРКОЮ. Перевірка вище читає статус, а пише — рядком нижче, і в
+      // цю щілину пролазить дуже швидкий другий виклик (подвійний клік по пункту
+      // меню). Умова «статус досі той, який я читав» їде в сам UPDATE, тож другий
+      // не знаходить свого рядка й тихо йде — без події та без сповіщення.
+      // Чому саме так і чому цього не зробити двома перевірками:
+      // src/lib/designStatusIdempotency.ts.
+      const { applied } = await applyDesignStatusWrite(
+        supabase.from("activity_log").update({ metadata: baseMetadata }).eq("id", task.id).eq("team_id", effectiveTeamId),
+        readStatusWitness(currentMetadata)
+      );
+      if (!applied) return;
 
       if (shouldPauseTimerForStatusChange(previousStatus, next)) {
         await pauseDesignTaskTimer({ teamId: effectiveTeamId, taskId: task.id });

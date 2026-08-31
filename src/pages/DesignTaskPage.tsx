@@ -190,7 +190,7 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
-import { isDesignStatusAlreadyApplied } from "@/lib/designStatusIdempotency";
+import { applyDesignStatusWrite, isDesignStatusAlreadyApplied, readStatusWitness } from "@/lib/designStatusIdempotency";
 import {
   normalizeQuoteAttachmentAudience,
   type QuoteAttachmentAudience,
@@ -5399,12 +5399,12 @@ export default function DesignTaskPage() {
         estimated_by_user_id: estimatedByUserId,
       };
 
-      const { error: updateError } = await supabase
-        .from("activity_log")
-        .update({ metadata: nextMetadata as Json })
-        .eq("id", task.id)
-        .eq("team_id", effectiveTeamId);
-      if (updateError) throw updateError;
+      // Запис зі звіркою: хто перший, той і змінив рядок (designStatusIdempotency.ts).
+      const { applied } = await applyDesignStatusWrite(
+        supabase.from("activity_log").update({ metadata: nextMetadata as Json }).eq("id", task.id).eq("team_id", effectiveTeamId),
+        readStatusWitness(liveMetadata)
+      );
+      if (!applied) return;
 
       setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
 

@@ -31,3 +31,54 @@ export function isDesignStatusAlreadyApplied(
 ): boolean {
   return (liveMetadata?.status ?? null) === nextStatus;
 }
+
+/**
+ * Статус, на який ми спираємось, збираючись писати. `null` — у рядку статусу
+ * немає (легасі-записи), звірятись нема з чим.
+ */
+export function readStatusWitness(liveMetadata: Record<string, unknown> | null | undefined): string | null {
+  const value = liveMetadata?.status;
+  return typeof value === "string" && value ? value : null;
+}
+
+/**
+ * ЗАПИС СТАТУСУ ЗІ ЗВІРКОЮ — ОСТАННІЙ РУБІЖ ПРОТИ ДУБЛІВ.
+ *
+ * Перевірки вище (`isDesignStatusAlreadyApplied`) читають статус, а потім пишуть —
+ * і між читанням та записом лишається щілина. Спостережені дублі мали розрив
+ * 2.7–8.8 секунди й у неї не пролазять, але подвійний клік по пункту меню — цілком:
+ * обидва виклики встигають прочитати старий статус, обидва проходять гейт, і обидва
+ * пишуть подію та сповіщення.
+ *
+ * Тому запис іде з умовою «статус досі той, який я читав»: у сам UPDATE додається
+ * фільтр `metadata->>status`. Хто перший — той і змінив рядок; другий не знаходить
+ * свого рядка, отримує порожній список і НЕ пише ні події, ні сповіщення. Це вже не
+ * домовленість між двома перевірками, а властивість запису: між `WHERE` і `SET`
+ * усередині одного UPDATE влізти нема куди.
+ *
+ * `applied: false` означає рівно одне: рядок змінив хтось інший (найчастіше — наш
+ * власний другий клік). Це НЕ помилка, і кричати про неї не треба.
+ */
+/**
+ * Мінімум від PostgREST-білдера, який тут потрібен.
+ *
+ * Типи згенеровані зі схеми й не знають про JSON-шляхи, тож `.eq("metadata->>status")`
+ * вони відхиляють — хоча для сервера це звичайний фільтр (перевірено на проді:
+ * `metadata->>status=eq.client_review` віддає рядок, `=eq.pm_review` — порожньо).
+ * Звужуємо саме тут, одним місцем, а не розсипаємо `as any` по сторінках.
+ */
+type StatusWriteBuilder = {
+  eq: (column: string, value: unknown) => StatusWriteBuilder;
+  select: (columns: string) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+};
+
+export async function applyDesignStatusWrite(
+  update: unknown,
+  witnessStatus: string | null
+): Promise<{ applied: boolean }> {
+  let query = update as StatusWriteBuilder;
+  if (witnessStatus !== null) query = query.eq("metadata->>status", witnessStatus);
+  const { data, error } = await query.select("id");
+  if (error) throw new Error(error.message);
+  return { applied: (data ?? []).length > 0 };
+}
