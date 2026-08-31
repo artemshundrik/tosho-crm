@@ -887,13 +887,19 @@ export async function logQuoteActivity(
   }
 }
 
-/** Зміна статусу прорахунку. Аудит статусу веде тригер у базі, не цей виклик. */
+/**
+ * Зміна статусу прорахунку. Аудит статусу веде тригер у базі, не цей виклик.
+ *
+ * `data` — чи статус СПРАВДІ змінився. За ним викликач вирішує, слати сповіщення
+ * чи ні: холостий перехід база ковтає мовчки, і сповіщати про нього нема про що
+ * (REQ-231).
+ */
 export async function changeQuoteStatus(
   params: Parameters<typeof setStatus>[0]
-): Promise<QueryResult<null>> {
+): Promise<QueryResult<boolean>> {
   try {
-    await setStatus(params);
-    return { ok: true, data: null };
+    const changed = await setStatus(params);
+    return { ok: true, data: changed };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Помилка зміни статусу") };
   }

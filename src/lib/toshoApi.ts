@@ -1498,29 +1498,10 @@ export async function listStatusHistory(quoteId: string, teamId?: string | null)
   return (data as QuoteStatusRow[]) ?? [];
 }
 
-export async function setStatus(params: { quoteId: string; status: string; note?: string }) {
-  try {
-    const { data, error } = await supabase.schema("tosho").rpc("set_quote_status", {
-      p_quote_id: params.quoteId,
-      p_new_status: params.status as Database["tosho"]["Enums"]["quote_status"],
-      p_note: params.note ?? undefined,
-    });
-    handleError(error);
-    return data;
-  } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    if (message.includes("set_quote_status")) {
-      const { error: updateError } = await supabase
-        .schema("tosho")
-        .from("quotes")
-        .update({ status: params.status as Database["tosho"]["Enums"]["quote_status"] })
-        .eq("id", params.quoteId);
-      handleError(updateError);
-      return true;
-    }
-    throw error;
-  }
-}
+// Зміна статусу прорахунку живе окремо: разом із поясненням, чому вона
+// повертає «чи справді змінилось», вона більша за себе саму (REQ-231).
+// Ім'я `setStatus` лишаємо — його імпортують сторінки прорахунків.
+export { setQuoteStatus as setStatus } from "./setQuoteStatus";
 
 export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> {
   try {

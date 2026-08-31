@@ -27,11 +27,15 @@ export async function restoreQuoteToBoard(
   const nextStatus = boardColumnStatuses("quotes")[0];
   if (!nextStatus) throw new Error("У реєстрі канбанів немає жодної колонки прорахунків");
 
-  await setQuoteStatus({ quoteId, status: nextStatus });
-  try {
-    await notifyQuoteInitiatorOnStatusChange({ quoteId, toStatus: nextStatus, actorUserId });
-  } catch (notifyError) {
-    console.warn("Failed to notify quote initiator about status change", notifyError);
+  // Повернення вже поверненого прорахунку — не подія: база такий перехід
+  // ігнорує, тож і сповіщати нема про що (REQ-231).
+  const statusChanged = await setQuoteStatus({ quoteId, status: nextStatus });
+  if (statusChanged) {
+    try {
+      await notifyQuoteInitiatorOnStatusChange({ quoteId, toStatus: nextStatus, actorUserId });
+    } catch (notifyError) {
+      console.warn("Failed to notify quote initiator about status change", notifyError);
+    }
   }
 
   return { status: nextStatus, label: statusLabels[nextStatus] ?? nextStatus };

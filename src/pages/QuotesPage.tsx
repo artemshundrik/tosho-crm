@@ -4623,15 +4623,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     // назад і кажемо про це вголос.
     setRows((prev) => prev.map((row) => (row.id === quoteId ? { ...row, status } : row)));
     try {
-      await setQuoteStatus({ quoteId, status });
-      try {
-        await notifyQuoteInitiatorOnStatusChange({
-          quoteId,
-          toStatus: status,
-          actorUserId: currentUserId ?? null,
-        });
-      } catch (notifyError) {
-        console.warn("Failed to notify quote initiator about status change", notifyError);
+      // Перевірка вище дивиться у власний стан вкладки й не бачить ні сусідньої
+      // вкладки, ні іншої людини. Останнє слово — за базою: `set_quote_status`
+      // міняє рядок з умовою й повертає, чи справді щось змінилось (REQ-231).
+      const statusChanged = await setQuoteStatus({ quoteId, status });
+      if (statusChanged) {
+        try {
+          await notifyQuoteInitiatorOnStatusChange({
+            quoteId,
+            toStatus: status,
+            actorUserId: currentUserId ?? null,
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify quote initiator about status change", notifyError);
+        }
       }
     } catch (e: unknown) {
       setRows((prev) =>

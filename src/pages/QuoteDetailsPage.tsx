@@ -3439,11 +3439,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       // try/catch React Compiler не вміє й через нього пропускає всю сторінку
       // разом із перевірками лінту (REQ-109).
       const statusNotifyActorUserId = userId ?? null;
-      // Сповіщаємо лише про СПРАВЖНІЙ перехід. Той самий статус (наприклад,
-      // повторне «Затверджено» або збереження нотатки без зміни стану) база
-      // ігнорує — і в історію статусів, і в аудит нічого не пише. Сповіщення
-      // ж досі летіло щоразу, і в Telegram сипались однакові повідомлення.
-      const statusActuallyChanged = previousStatus !== nextStatus;
+      // Сповіщаємо лише про СПРАВЖНІЙ перехід — і питаємо про це БАЗУ, а не свій
+      // знімок. Той самий статус (повторне «Затверджено», збереження нотатки без
+      // зміни стану) база ігнорує: ні в історію, ні в аудит нічого не пише.
+      // Порівняння `previousStatus !== nextStatus` знімало лише свій випадок і не
+      // бачило, що встигла зробити сусідня вкладка чи інша людина — саме так
+      // 25.08.2026 прилетіли чотири однакові повідомлення при одному рядку
+      // історії. Тепер `set_quote_status` сам каже, чи змінився рядок (REQ-231).
+      const statusActuallyChanged = changed.data;
       if (statusActuallyChanged) {
         try {
           await notifyQuoteInitiatorOnStatusChange({

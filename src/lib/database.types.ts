@@ -472,7 +472,7 @@ export type Database = {
           p_note?: string
           p_quote_id: string
         }
-        Returns: undefined
+        Returns: boolean
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
@@ -5641,7 +5641,7 @@ export type Database = {
           p_note?: string
           p_quote_id: string
         }
-        Returns: undefined
+        Returns: boolean
       }
       swap_method_id: {
         Args: { p_from: string; p_methods: Json; p_to: string }
