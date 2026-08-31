@@ -190,6 +190,7 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
+import { isDesignStatusAlreadyApplied } from "@/lib/designStatusIdempotency";
 import {
   normalizeQuoteAttachmentAudience,
   type QuoteAttachmentAudience,
@@ -5370,6 +5371,10 @@ export default function DesignTaskPage() {
 
     try {
       const liveMetadata = await fetchDesignTaskMetadata(task.id, effectiveTeamId, task.metadata);
+
+      // Оптимістичний фліп вище лишається чинним: база каже те саме.
+      if (isDesignStatusAlreadyApplied(liveMetadata, nextStatus)) return;
+
       const estimateSetAt =
         options?.estimateMinutes != null
           ? new Date().toISOString()
@@ -5477,6 +5482,7 @@ export default function DesignTaskPage() {
           designTaskId: task.id,
           toStatus: nextStatus,
           actorUserId: userId ?? null,
+          taskLabel: task.title ?? null,
         });
         await notifyDesignTaskCollaboratorsOnStatusChange({
           designTaskId: task.id,
@@ -6104,6 +6110,7 @@ export default function DesignTaskPage() {
             designTaskId: task.id,
             toStatus: "changes",
             actorUserId: userId ?? null,
+            taskLabel: task.title ?? null,
           });
           await notifyDesignTaskCollaboratorsOnStatusChange({
             designTaskId: task.id,

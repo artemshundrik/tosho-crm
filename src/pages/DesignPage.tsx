@@ -107,6 +107,7 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
+import { isDesignStatusAlreadyApplied } from "@/lib/designStatusIdempotency";
 import { DesignTaskProductPicker } from "@/components/design/DesignTaskProductPicker";
 import {
   createEmptyDesignTaskProduct,
@@ -3155,6 +3156,10 @@ export default function DesignPage() {
     const currentMetadata =
       ((freshRow?.metadata as Record<string, unknown> | null) ?? task.metadata ?? {}) as Record<string, unknown>;
 
+    // Гейт на вході дивився на знімок дошки — а він застаріває за одне мережеве
+    // коло: див. src/lib/designStatusIdempotency.ts.
+    if (isDesignStatusAlreadyApplied(currentMetadata, next)) return;
+
     const statusChangedAt =
       typeof currentMetadata.status_changed_at === "string" ? currentMetadata.status_changed_at : null;
     const deadlineUpdatedAt =
@@ -3322,6 +3327,7 @@ export default function DesignPage() {
           designTaskId: task.id,
           toStatus: next,
           actorUserId: userId ?? null,
+          taskLabel: task.productName ?? task.title ?? null,
         });
         await notifyDesignTaskCollaboratorsOnStatusChange({
           designTaskId: task.id,

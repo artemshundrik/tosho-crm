@@ -409,11 +409,31 @@ const DESIGN_STATUS_ALERTS: Record<string, { title: string; body: (quoteRef: str
   },
 };
 
+/**
+ * Назва позиції для тіла сповіщення.
+ *
+ * НАВІЩО. Один прорахунок несе кілька дизайн-задач — по одній на позицію. Доки
+ * тіло називало лише номер прорахунку, переведення трьох задач підряд давало
+ * ТРИ повідомлення, однакові до літери: «Дизайн для прорахунку #TS-0826-0041
+ * передано на погодження.» Прочитати їх як різні події було неможливо, і вони
+ * читались як здубльоване одне (31.08.2026: три куртки одного прорахунку).
+ *
+ * Заголовок задачі приходить у вигляді «Дизайн: Куртка «NARVIK» чоловіча» —
+ * слово «Дизайн» у сповіщенні про дизайн зайве, тож префікс знімаємо.
+ */
+function normalizeDesignTaskLabel(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/^Дизайн:\s*/i, "").trim() || null;
+}
+
 export async function notifyQuoteInitiatorOnDesignStatusChange(params: {
   quoteId: string;
   designTaskId: string;
   toStatus: string;
   actorUserId?: string | null;
+  /** Назва позиції (`productName` або заголовок задачі) — щоб задачі одного прорахунку різнились. */
+  taskLabel?: string | null;
 }) {
   const alert = DESIGN_STATUS_ALERTS[params.toStatus];
   if (!alert) return;
@@ -450,11 +470,13 @@ export async function notifyQuoteInitiatorOnDesignStatusChange(params: {
   if (params.actorUserId) recipients.delete(params.actorUserId);
   if (recipients.size === 0) return;
   const quoteRef = quoteNumber ? `прорахунку #${quoteNumber}` : "прорахунку";
+  const taskLabel = normalizeDesignTaskLabel(params.taskLabel);
+  const body = taskLabel ? `${taskLabel} · ${alert.body(quoteRef)}` : alert.body(quoteRef);
 
   await notifyUsers({
     userIds: Array.from(recipients),
     title: alert.title,
-    body: alert.body(quoteRef),
+    body,
     href: `/design/${params.designTaskId}`,
     type: alert.type,
   });
