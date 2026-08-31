@@ -8,6 +8,8 @@ import {
   RELEASABLE_STATUSES,
   releaseDevRequests,
   shaMatches,
+  cardShas,
+  isPapercutCard,
 } from "./devRequestReleases.mjs";
 
 /**
@@ -306,5 +308,72 @@ describe("releaseDevRequests — крок цілком", () => {
     const calls = stubFetch([card({ commit_shas: [] }), card({ commit_shas: null })]);
     await expect(releaseDevRequests(["dfe481f2"], env)).resolves.toEqual([]);
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("велика картка, закрита самими пунктами", () => {
+  // Коміт із трейлером «Закриває: REQ-155#p3» кладе sha НА ПУНКТ, а не в
+  // commit_shas. Доти така картка не доходила навіть до відбору — саме так
+  // застрягли REQ-149 і REQ-155 з 12/12 (31.08.2026).
+  const bigCard = (overrides = {}) => ({
+    id: "c1",
+    number: 155,
+    title: "Оновити центральну частину картки прорахунку",
+    status: "done_local",
+    commit_shas: [],
+    checklist: [
+      { id: "p1", state: "done", sha: "04c9a4d0" },
+      { id: "p2", state: "done", sha: "962b7b4e" },
+    ],
+    ...overrides,
+  });
+
+  it("sha пунктів рахуються нарівні з commit_shas", () => {
+    expect(cardShas(bigCard())).toEqual(["04c9a4d0", "962b7b4e"]);
+    expect(cardShas({ commit_shas: ["aaa1234"], checklist: [{ state: "done", sha: "bbb5678" }] })).toEqual([
+      "aaa1234",
+      "bbb5678",
+    ]);
+  });
+
+  it("короткі й порожні sha пунктів відкидаються", () => {
+    expect(cardShas({ checklist: [{ sha: "abc" }, { sha: null }, {}] })).toEqual([]);
+  });
+
+  it("реліз із тим самим sha забирає картку", () => {
+    expect(pickCardsToRelease([bigCard()], ["04c9a4d0"])).toHaveLength(1);
+  });
+
+  it("картка, чиї коміти вже в проді, наздоганяє наступним деплоєм", () => {
+    const picked = pickCardsToCatchUp([bigCard()], ["ffff1111"], (sha) => sha === "962b7b4e");
+    expect(picked).toHaveLength(1);
+  });
+
+  it("незакритий пункт і далі тримає картку", () => {
+    const held = bigCard({ checklist: [{ id: "p1", state: "done", sha: "04c9a4d0" }, { id: "p2", state: "todo" }] });
+    expect(pickCardsToRelease([held], ["04c9a4d0"])).toEqual([]);
+    expect(pickCardsToCatchUp([held], [], () => true)).toEqual([]);
+  });
+});
+
+describe("накопичувач дрібниць не викочується ніколи", () => {
+  const shelf = {
+    id: "c2",
+    number: 175,
+    title: "Дрібниці: інтерфейс",
+    status: "done_local",
+    commit_shas: [],
+    checklist: [{ id: "p1", state: "done", sha: "04c9a4d0" }],
+  };
+
+  it("розпізнається за назвою, без огляду на регістр і пробіли", () => {
+    expect(isPapercutCard(shelf)).toBe(true);
+    expect(isPapercutCard({ title: "  ДРІБНИЦІ: мова інтерфейсу" })).toBe(true);
+    expect(isPapercutCard({ title: "Оновити картку" })).toBe(false);
+  });
+
+  it("не потрапляє ні в основний прохід, ні в наздоганяння", () => {
+    expect(pickCardsToRelease([shelf], ["04c9a4d0"])).toEqual([]);
+    expect(pickCardsToCatchUp([shelf], [], () => true)).toEqual([]);
   });
 });

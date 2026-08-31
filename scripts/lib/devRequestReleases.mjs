@@ -58,6 +58,42 @@ const SELECT_COLUMNS = "id,number,title,status,commit_shas,checklist";
 /** Стеля вибірки: відкритих карток стільки не буває, це запобіжник від «усієї таблиці». */
 const FETCH_LIMIT = 200;
 
+/** Дзеркало PAPERCUT_PREFIX із src/features/devRequests/papercuts.ts. */
+const PAPERCUT_PREFIX = "дрібниці:";
+
+/**
+ * Накопичувач дрібниць — картка, яку деплой не закриває НІКОЛИ.
+ *
+ * Це полиця напряму, а не справа: у неї дописують роками. «Викочено» на ній
+ * означало б, що напрям закінчено, і забрало б із черги всі невирішені рядки.
+ */
+export function isPapercutCard(card) {
+  return String(card?.title ?? "").trim().toLowerCase().startsWith(PAPERCUT_PREFIX);
+}
+
+/**
+ * Усі sha, якими картка тримається за реліз.
+ *
+ * ЧОМУ НЕ ЛИШЕ `commit_shas`. Коміт із трейлером `Закриває: REQ-155#p3` кладе
+ * sha НА ПУНКТ, а не в `commit_shas` картки — так зроблено навмисно, щоб деплой
+ * не викотив накопичувач дрібниць. Але під це правило потрапила й звичайна
+ * велика картка: якщо всю її роботу закрили пунктами (а так закривають майже
+ * завжди), `commit_shas` лишається порожнім, картку відсіює ще
+ * `fetchCardsWithCommits`, і вона висить у «Готово локально» вічно — навіть із
+ * 12/12. Саме так застрягли REQ-149 і REQ-155 (31.08.2026).
+ *
+ * Тому дивимось і на пункти. Накопичувач від цього не постраждає: він виключений
+ * окремо, за назвою, а не за тим, куди лягли sha.
+ */
+export function cardShas(card) {
+  const fromCard = Array.isArray(card?.commit_shas) ? card.commit_shas : [];
+  const items = Array.isArray(card?.checklist) ? card.checklist : [];
+  const fromItems = items.map((item) => (item && typeof item === "object" ? item.sha : null));
+  return [...fromCard, ...fromItems].filter(
+    (sha) => typeof sha === "string" && sha.trim().length >= SHA_MIN_LENGTH
+  );
+}
+
 /**
  * Чи лишився в картці незакритий хвіст.
  *
@@ -94,9 +130,9 @@ export function pickCardsToRelease(cards, shas) {
 
   return (cards ?? []).filter((card) => {
     if (!RELEASABLE_STATUSES.includes(card?.status)) return false;
+    if (isPapercutCard(card)) return false;
     if (hasOpenChecklist(card)) return false;
-    const known = Array.isArray(card?.commit_shas) ? card.commit_shas : [];
-    return known.some((sha) => wanted.some((candidate) => shaMatches(sha, candidate)));
+    return cardShas(card).some((sha) => wanted.some((candidate) => shaMatches(sha, candidate)));
   });
 }
 
@@ -122,6 +158,7 @@ export function pickCardsToCatchUp(cards, shas, isInProd) {
     // Лише «Готово локально»: саме там опиняється картка, яку затримав гейт —
     // її туди поставив коміт, а деплой не зрушив.
     if (card?.status !== "done_local") return false;
+    if (isPapercutCard(card)) return false;
     // Хвіст ще живий — затримка чинна, наздоганяти нічого.
     if (hasOpenChecklist(card)) return false;
     // Картка без чекліста гейтом ніколи не затримувалась, тож і наздоганяти їй
@@ -129,7 +166,7 @@ export function pickCardsToCatchUp(cards, shas, isInProd) {
     // ще НЕ ЗАПУШЕНА картка — і поїхала б у «Викочено» чужим деплоєм.
     if (!Array.isArray(card?.checklist) || card.checklist.length === 0) return false;
 
-    const known = Array.isArray(card?.commit_shas) ? card.commit_shas : [];
+    const known = cardShas(card);
     if (known.length === 0) return false;
     // Те, що приїхало цим релізом, уже забрав основний прохід.
     if (known.some((sha) => wanted.some((candidate) => shaMatches(sha, candidate)))) return false;
@@ -165,7 +202,9 @@ export async function fetchCardsWithCommits(env) {
   if (!response.ok) throw new Error(`Supabase ${response.status}: ${await response.text()}`);
 
   const rows = await response.json();
-  return rows.filter((row) => Array.isArray(row.commit_shas) && row.commit_shas.length > 0);
+  // Фільтр по sha картки АБО її пунктів: див. cardShas — інакше велика картка,
+  // закрита самими пунктами, не доходить навіть до відбору.
+  return rows.filter((row) => cardShas(row).length > 0);
 }
 
 /**
