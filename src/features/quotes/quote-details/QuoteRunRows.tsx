@@ -22,12 +22,12 @@ import type { QuoteRun } from "@/lib/toshoApi";
  *
  * Тепер підписи стоять У ШАПЦІ ОДИН РАЗ, а кожен тираж — рядок вирівняних
  * чисел. Це дає те, заради чого перелік і робили: тиражі порівнюються ПО
- * ВЕРТИКАЛІ — видно, що собівартість однакова, а різниця в нанесенні й
+ * ВЕРТИКАЛІ — видно, що вартість товару однакова, а різниця в нанесенні й
  * накрутці.
  *
  * ШИРИНИ КОЛОНОК ФІКСОВАНІ, і тепер це не діра, а таблиця: ширину задає
- * найдовше з двох — підпис у шапці чи типове значення (заміряно: «Собівартість
- * /од.» — 96 px, «47 612,67 UAH» — 109). Шапка й рядки — окремі гріди, тож
+ * найдовше з двох — підпис у шапці чи типове значення (заміряно: «Вартість
+ * товару/од.» — 113 px, «47 612,67 UAH» — 109). Шапка й рядки — окремі гріди, тож
  * `auto` в них розʼїхався б; спільний шаблон тримає колонки на спільній
  * вертикалі.
  *
@@ -48,7 +48,7 @@ import type { QuoteRun } from "@/lib/toshoApi";
 
 /** Шаблон колонок — спільний для шапки й рядків, інакше вони розʼїдуться. */
 const GRID_COLS =
-  "lg:grid-cols-[5.5rem_6rem_5.25rem_4.75rem_3.75rem_minmax(0,1fr)_10rem_6.75rem]";
+  "lg:grid-cols-[5.5rem_7.25rem_5.25rem_4.75rem_3.75rem_minmax(0,1fr)_10rem_6.75rem]";
 
 const num = (value: number, digits = 0) =>
   (Math.round(value * 100) / 100).toLocaleString("uk-UA", {
@@ -160,7 +160,7 @@ export function QuoteRunRows({
           aria-hidden
         >
           <span>Тираж</span>
-          <span className="text-right">Собівартість/од.</span>
+          <span className="text-right">Вартість товару/од.</span>
           <span className="text-right">Нанесення/од.</span>
           <span className="text-right">Логістика</span>
           <span className="text-right">Накрутка</span>
@@ -194,7 +194,7 @@ export function QuoteRunRows({
           const costCells = [
             {
               key: "model",
-              label: "Собівартість",
+              label: "Вартість товару",
               value: num(Number(run.unit_price_model) || 0, 2),
               unit: money,
               col: "lg:col-start-2",

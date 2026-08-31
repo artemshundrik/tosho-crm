@@ -9,7 +9,7 @@ import {
 
 /**
  * Чотири поля ціни в тиражі раніше висіли на одному прапорці canEditRuns, тож
- * будь-хто, хто редагував вміст прорахунку, міняв і собівартість, і логістику.
+ * будь-хто, хто редагував вміст прорахунку, міняв і вартість товару, і логістику.
  * Матриця нижче — це домовленість з картки REQ-37, а не здогад.
  */
 const permissionsFor = (jobRole: string | null, accessRole = "member") =>
@@ -22,10 +22,13 @@ const accessFor = (jobRole: string | null, accessRole = "member") =>
   });
 
 describe("resolveQuoteRunPriceFieldAccess", () => {
-  it("менеджер веде собівартість і власний заробіток, але не нанесення й не логістику", () => {
+  it("менеджер веде накрутку й власний заробіток, але не вартість товару", () => {
+    // REQ-229: вартість товару пішла до проєктного менеджера. Менеджер
+    // домовляється про ціну ДЛЯ КЛІЄНТА — це накрутка, а не закупівельна сума.
     const access = accessFor("manager");
 
-    expect(access.unit_price_model).toBe(true);
+    expect(access.unit_price_model).toBe(false);
+    expect(access.markup_rate).toBe(true);
     expect(access.desired_manager_income).toBe(true);
     expect(access.unit_price_print).toBe(false);
     expect(access.logistics_cost).toBe(false);
@@ -48,11 +51,24 @@ describe("resolveQuoteRunPriceFieldAccess", () => {
     expect(accessFor("head_of_logistics")).toEqual(accessFor("logistics"));
   });
 
-  it("проєктний менеджер веде нанесення й логістику", () => {
+  it("проєктний менеджер веде вартість товару, нанесення й логістику", () => {
     const access = accessFor("pm");
 
+    expect(access.unit_price_model).toBe(true);
     expect(access.unit_price_print).toBe(true);
     expect(access.logistics_cost).toBe(true);
+  });
+
+  it("вартість товару — тільки проєктний менеджер (плюс owner і seo)", () => {
+    // Дзеркало тригера scripts/quote-run-price-field-access-pm-cost.sql: якщо
+    // цей перелік розійдеться з базою, інтерфейс покаже поле, яке база не дасть
+    // зберегти, — а це гірше за замкнене поле.
+    for (const role of ["manager", "sales_manager", "junior_sales_manager", "logistics", "accountant", "chief_accountant"]) {
+      expect(accessFor(role).unit_price_model).toBe(false);
+    }
+    expect(accessFor("pm").unit_price_model).toBe(true);
+    expect(accessFor(null, "owner").unit_price_model).toBe(true);
+    expect(accessFor("seo").unit_price_model).toBe(true);
   });
 
   it("накрутку веде менеджер, а проєктний менеджер — НІ", () => {
