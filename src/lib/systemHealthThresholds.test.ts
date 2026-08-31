@@ -23,12 +23,23 @@ describe("classifyStorageUsage", () => {
 });
 
 describe("classifyBackupAge", () => {
-  it("впалий останній run — одразу червоний, хай навіть свіжий", () => {
-    expect(classifyBackupAge({ ageHours: 1, lastRunFailed: true })).toBe("danger");
+  it("свіжий архів прикриває впалу спробу: наступний годинний запуск її добере", () => {
+    expect(classifyBackupAge({ ageHours: 1, lastRunFailed: true })).toBe("good");
+    expect(classifyBackupAge({ ageHours: 30, lastRunFailed: true })).toBe("good");
   });
 
-  it("жодного успішного бекапу — жовтий, а не червоний", () => {
+  it("спроби падають, а успіху немає більш ніж добу з гаком — це вже жовтий", () => {
+    expect(classifyBackupAge({ ageHours: 40, lastRunFailed: true })).toBe("warning");
+  });
+
+  it("вікно поблажливості задається окремо: файли бекапляться раз на тиждень", () => {
+    expect(classifyBackupAge({ ageHours: 40, lastRunFailed: true, staleAfterHours: 8 * 24 })).toBe("good");
+    expect(classifyBackupAge({ ageHours: 40, lastRunFailed: true, staleAfterHours: 24 })).toBe("warning");
+  });
+
+  it("жодного успішного бекапу — жовтий, а з впалою спробою вже червоний", () => {
     expect(classifyBackupAge({ ageHours: null, lastRunFailed: false })).toBe("warning");
+    expect(classifyBackupAge({ ageHours: null, lastRunFailed: true })).toBe("danger");
   });
 
   it("свіжий — зелений, тиждень — зелений, понад 8 днів — жовтий, понад 16 — червоний", () => {

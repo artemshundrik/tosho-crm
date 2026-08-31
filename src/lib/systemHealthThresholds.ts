@@ -34,12 +34,45 @@ export function classifyStorageUsage(percentOfLimit: number): HealthTone {
 export const BACKUP_WARN_HOURS = 8 * 24;
 export const BACKUP_DANGER_HOURS = 16 * 24;
 
+/**
+ * Скільки годин свіжий успішний бекап прикриває впалу спробу.
+ *
+ * ЧОМУ ВЗАГАЛІ ПРИКРИВАЄ. Бекап бази ходить ГОДИННИМ циклом і зупиняється, щойно
+ * архів за сьогодні є («Database archive for ... already exists. Skipping»). Дамп
+ * тягне ~130 МБ через пулер із ноутбука, тож обрив зв'язку посеред нього — не
+ * поломка, а погода: наступна спроба доїжджає. За 22 дні (10–31.08.2026) таких
+ * обривів було вісім, і ЩОДНЯ, включно з кожним із цих восьми, архів усе одно
+ * з'являвся — жодного пропущеного дня.
+ *
+ * ЩО ЛАМАЛОСЯ. Правило «впала остання спроба → червоний» дивилось на СПРОБУ, а
+ * не на результат. Дайджест виходить об 11:20 за Києвом; 31.08 спроба впала о
+ * 08:00 UTC, а вдалий архів записався о 20:19 UTC — тобто рівно у вікні між ними
+ * і приїхало «🔴 Проблема в системі». Червоне щодня при живому бекапі — це
+ * рівно та біда, від якої вище берегли dead tuples: постійний сигнал привчає не
+ * дивитись, і справжню поломку так само проґавлять.
+ *
+ * ЧОМУ 36, А НЕ 24. Добу з запасом: архів робиться раз на UTC-добу, і два
+ * сусідні можуть законно розійтися більш ніж на 24 години (наприклад, учора о
+ * 01:54, сьогодні о 20:19). 36 годин — це вже точно «сьогодні не вийшло».
+ *
+ * ЧОГО ЦЕ НЕ ХОВАЄ. Якщо бекап зламався по-справжньому, успішного архіву не
+ * стане — вік поповзе вгору й сам перетне 36 годин, а далі звичайні пороги.
+ * Тиша тут коштує щонайбільше півтори доби, і лише поки бекап реально живий.
+ */
+export const BACKUP_STALE_AFTER_HOURS = 36;
+
 /** `ageHours = null` — успішного бекапу ще не було. */
-export function classifyBackupAge(params: { ageHours: number | null; lastRunFailed: boolean }): HealthTone {
-  if (params.lastRunFailed) return "danger";
-  if (params.ageHours === null) return "warning";
+export function classifyBackupAge(params: {
+  ageHours: number | null;
+  lastRunFailed: boolean;
+  /** Через скільки годин без успіху впала спроба перестає бути «погодою». */
+  staleAfterHours?: number;
+}): HealthTone {
+  if (params.ageHours === null) return params.lastRunFailed ? "danger" : "warning";
   if (params.ageHours > BACKUP_DANGER_HOURS) return "danger";
   if (params.ageHours > BACKUP_WARN_HOURS) return "warning";
+  const staleAfterHours = params.staleAfterHours ?? BACKUP_STALE_AFTER_HOURS;
+  if (params.lastRunFailed && params.ageHours > staleAfterHours) return "warning";
   return "good";
 }
 

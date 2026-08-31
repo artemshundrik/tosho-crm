@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // Тримати їх тут власною копією означало б, що сторінка, звіт і бот з часом
 // почнуть давати різні оцінки одному стану — а це вбиває довіру до всіх трьох.
 import {
+  BACKUP_STALE_AFTER_HOURS,
+  BACKUP_WARN_HOURS,
   CRON_HTTP_TIMEOUT_WARN,
   PRO_STORAGE_LIMIT_BYTES,
   classifyAiBudget,
@@ -98,7 +100,13 @@ type BackupRunRow = {
   error_message?: string | null;
 };
 
-function backupSignal(runs: BackupRunRow[], section: string, label: string, now: Date): Signal {
+function backupSignal(
+  runs: BackupRunRow[],
+  section: string,
+  label: string,
+  now: Date,
+  staleAfterHours?: number
+): Signal {
   const sectionRuns = runs
     .filter((r) => r.section === section)
     .sort((a, b) => new Date(b.finished_at).getTime() - new Date(a.finished_at).getTime());
@@ -108,12 +116,16 @@ function backupSignal(runs: BackupRunRow[], section: string, label: string, now:
     ? Math.max(0, (now.getTime() - new Date(latestSuccess.finished_at).getTime()) / 3_600_000)
     : null;
 
-  const tone = classifyBackupAge({ ageHours, lastRunFailed: latest?.status === "failed" });
-  if (latest?.status === "failed") {
+  const lastRunFailed = latest?.status === "failed";
+  const tone = classifyBackupAge({ ageHours, lastRunFailed, staleAfterHours });
+  // Про впалу спробу говоримо ЛИШЕ тоді, коли вона щось означає. Поки свіжий
+  // архів на місці, обірваний дамп — це не новина: наступний годинний запуск
+  // його добере. Інакше зведення щодня показувало б червоне при живому бекапі.
+  if (lastRunFailed && tone !== "good") {
     return {
       tone,
       code: "backup" as const,
-      text: `Backup ${label}: останній run впав${latest.error_message ? ` — ${latest.error_message}` : ""}`,
+      text: `Backup ${label}: останній run впав${latest?.error_message ? ` — ${latest.error_message}` : ""}`,
     };
   }
   if (ageHours === null) return { tone, code: "backup", text: `Backup ${label}: жодного успішного run-у ще не записано` };
@@ -403,8 +415,13 @@ export async function collectSystemSignals(
   const signals: Signal[] = [];
 
   // 1. Бекапи.
-  const dbBackup = backupSignal(backups, "database", "база", now);
-  const filesBackup = backupSignal(backups, "storage", "файли", now);
+  //
+  // Різні каденції — різне вікно поблажливості до впалої спроби. База ходить раз
+  // на UTC-добу (`backup-database-if-needed.sh`), файли — по неділях і першого,
+  // із самополагодженням на 8 днів (`STORAGE_MAX_AGE_DAYS`). Тримати обом одну
+  // мірку означало б або щоденний галас на файлах, або сліпоту на базі.
+  const dbBackup = backupSignal(backups, "database", "база", now, BACKUP_STALE_AFTER_HOURS);
+  const filesBackup = backupSignal(backups, "storage", "файли", now, BACKUP_WARN_HOURS);
   if (dbBackup.tone === "good" && filesBackup.tone === "good") {
     signals.push({ tone: "good", code: "backup", text: `Бекапи: ${dbBackup.text} · ${filesBackup.text}` });
   } else {

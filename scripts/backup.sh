@@ -51,14 +51,49 @@ if [[ "${BACKUP_SKIP_DB}" != "1" ]]; then
   # --exclude-table-data, а НЕ --exclude-table: сама таблиця (і розклад у
   # cron.job поруч) лишається в дампі, тож відновлена база має і структуру, і
   # список джобів — без непотрібної історії їхніх запусків.
-  PGOPTIONS="-c idle_in_transaction_session_timeout=300000 -c statement_timeout=0 ${PGOPTIONS:-}" \
-  pg_dump \
-    --format=custom \
-    --no-owner \
-    --no-privileges \
-    --exclude-table-data='cron.job_run_details' \
-    --file "${WORK_DIR}/db/postgres.dump" \
-    "${DB_URL}"
+  #
+  # ОБРИВ ЗВ'ЯЗКУ — ПОГОДА, А НЕ ПОЛОМКА: ПЕРЕПИТУЄМО В ТОМУ САМОМУ ЗАПУСКУ.
+  #
+  # Дамп іде з ноутбука через пулер і триває хвилини, тож сервер час від часу
+  # закриває з'єднання посеред роботи. Місце обриву щоразу інше — то COPY на
+  # refresh_tokens чи quote_status_history, то взагалі копійчаний запит до
+  # каталогу (`SELECT pg_catalog.format_type(...)`), — тобто це не «важка
+  # таблиця», а саме зв'язок. За 10–31.08.2026 таких обривів вісім на 22 дні.
+  #
+  # Досі одна спроба = один запуск: обірвався дамп — чекай наступного годинного
+  # тику, а на сплячому ноутбуці він буває нескоро. 31.08 через це між невдачею
+  # (08:00 UTC) і архівом (20:19 UTC) минуло 12 годин без свіжої копії.
+  #
+  # Три спроби з паузою: мережа з такого встигає повернутись, а вартість нуль —
+  # при вдалій першій спробі цикл не робить нічого. Не мовчимо: кожна невдала
+  # спроба лишає свій слід у логу, тож почастішання обривів буде видно.
+  DB_DUMP_ATTEMPTS="${DB_DUMP_ATTEMPTS:-3}"
+  DB_DUMP_RETRY_DELAY="${DB_DUMP_RETRY_DELAY:-60}"
+  dump_attempt=1
+  while :; do
+    if PGOPTIONS="-c idle_in_transaction_session_timeout=300000 -c statement_timeout=0 ${PGOPTIONS:-}" \
+      pg_dump \
+        --format=custom \
+        --no-owner \
+        --no-privileges \
+        --exclude-table-data='cron.job_run_details' \
+        --file "${WORK_DIR}/db/postgres.dump" \
+        "${DB_URL}"
+    then
+      break
+    fi
+    if (( dump_attempt >= DB_DUMP_ATTEMPTS )); then
+      echo "pg_dump failed ${dump_attempt} time(s) in a row — giving up on this run." >&2
+      rm -rf "${WORK_DIR}"
+      exit 1
+    fi
+    echo "pg_dump attempt ${dump_attempt}/${DB_DUMP_ATTEMPTS} failed; retrying in ${DB_DUMP_RETRY_DELAY}s..." >&2
+    # Обірваний дамп лишає по собі недописаний файл: pg_dump не починає поверх
+    # наявного, тож без прибирання друга спроба впала б уже на цьому.
+    rm -f "${WORK_DIR}/db/postgres.dump"
+    sleep "${DB_DUMP_RETRY_DELAY}"
+    dump_attempt=$((dump_attempt + 1))
+  done
 fi
 
 cat > "${WORK_DIR}/meta.txt" <<EOF
