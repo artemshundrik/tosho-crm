@@ -44,6 +44,11 @@ dropbox-inbox-*.json
 inbox-plan.csv
 
 
+# Дизайн-канваси Claude Design: чернетки макетів із назвами справжніх
+# замовників, до того ж по два з половиною мегабайти згенерованого HTML.
+# Репозиторій публічний, а користі від них у ньому нуль — живуть локально.
+.design/
+
 # design-sync: staged converter + generated bundle + machine state.
 # Довговічне (config.json, NOTES.md, conventions.md, previews/, overrides/) — комітиться.
 .ds-sync/
