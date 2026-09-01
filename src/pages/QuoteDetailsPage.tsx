@@ -99,6 +99,7 @@ import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import {
+  updateQuote,
   type TeamMemberRow,
   type QuoteStatusRow,
   type QuoteSummaryRow,
@@ -118,6 +119,7 @@ import {
   type QuoteRunModelPriceVat,
 } from "@/lib/quoteRuns";
 import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatGateMessage, MODEL_PRICE_VAT_ROW_HINT } from "@/features/quotes/quote-details/quoteRunModelPriceVat";
+import { QuoteDealTypeBadge } from "@/features/quotes/quote-details/QuoteDealTypeBadge";
 import { isMarkupFrozen, markupGateMessage } from "@/lib/quoteMarkupApproval";
 import {
   defaultMarkupRateFor,
@@ -126,6 +128,7 @@ import {
   normalizeQuoteDealType,
   QUOTE_DEAL_TYPES,
   resolveQuoteDealType,
+  type QuoteDealType,
 } from "@/lib/quoteDealType";
 import { resolveQuoteMarkupView } from "@/lib/quoteMarkupView";
 import { useQuoteMarkupApprovals } from "@/features/quotes/quote-details/useQuoteMarkupApprovals";
@@ -2026,6 +2029,35 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    * замовчати запасного означало б, що менеджер чекатиме тиждень замість того,
    * щоб попросити другого СЕО.
    */
+  /**
+   * Зміна типу міняє ДНО, але не переписує вже поставлені накрутки.
+   *
+   * Ціна, яку менеджер порахував і, можливо, вже назвав клієнту, не має
+   * поповзти від зміни умови угоди. Змінюється лише те, з чим її порівнюють, —
+   * і саме це людина й хоче виправити, коли з'ясувалось, що це тендер.
+   */
+  const [savingDealType, setSavingDealType] = useState(false);
+  const handleDealTypeChange = useCallback(
+    async (next: QuoteDealType) => {
+      if (!quote || next === dealType) return;
+      setSavingDealType(true);
+      const previous = quote.deal_type ?? null;
+      setQuote((current) => (current ? { ...current, deal_type: next } : current));
+      try {
+        await updateQuote({ quoteId, teamId, dealType: next });
+        toast.success(`Тип угоди — «${QUOTE_DEAL_TYPES[next].label}»`);
+      } catch (error) {
+        setQuote((current) => (current ? { ...current, deal_type: previous } : current));
+        toast.error("Не вдалося змінити тип угоди", {
+          description: error instanceof Error ? error.message : undefined,
+        });
+      } finally {
+        setSavingDealType(false);
+      }
+    },
+    [dealType, quote, quoteId, teamId]
+  );
+
   const markupSignerLabel = useMemo(
     () => (markupApproverLabel ? `${markupApproverLabel} або другий СЕО` : null),
     [markupApproverLabel]
@@ -4502,6 +4534,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             <div className="order-3 w-full lg:order-none lg:w-auto">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <QuoteTypeBadge quoteType={quote.quote_type} />
+                  {/* Тип УГОДИ поруч із типом ТОВАРУ: два типи однієї картки,
+                      і поруч око їх зв'язує (REQ-182). Тільки на поліграфії —
+                      на мерчі шкала не діє. */}
+                  {dealType ? (
+                    <QuoteDealTypeBadge
+                      value={dealType}
+                      disabled={!canEditQuoteContent || savingDealType}
+                      onChange={handleDealTypeChange}
+                    />
+                  ) : null}
                   {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
                     <>
                       {quoteSetMembership.kp_names.map((name) => (

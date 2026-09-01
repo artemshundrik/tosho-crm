@@ -201,13 +201,16 @@ const GIANT_THRESHOLD = 2000;
  * стоїть у ряду чіпів шапки поруч із валютою й дедлайном, бо описує ту саму
  * сутність, що й вони: замовлення цілком. Наступним заходом там же додалось
  * іменне погодження поліграфії: пам'ятка `markupApproverLabel` і два пропи —
- * це знову протягування, самої логіки в сторінці немає.
+ * це знову протягування, самої логіки в сторінці немає. Далі туди ж лягли
+ * бейдж типу угоди в шапці (сам бейдж — окремий `QuoteDealTypeBadge`, у
+ * сторінці лишився обробник зміни з відкотом на помилці) і рядок про тип під
+ * смугою накрутки.
  *
  */
 
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12874,
-  "src/pages/QuoteDetailsPage.tsx": 7516,
+  "src/pages/QuoteDetailsPage.tsx": 7558,
   "src/pages/QuotesPage.tsx": 8476,
   "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
@@ -216,7 +219,7 @@ const CEILINGS = {
   "src/pages/OrdersCustomersPage.tsx": 4277,
   "src/pages/TeamMembersPage.tsx": 2633,
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
-  "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2936,
+  "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2956,
   "src/features/finances/FinanceExpenses.tsx": 2439,
   "src/layout/AppLayout.tsx": 3000,
   "src/components/quotes/NewQuoteDialog.tsx": 2758,

@@ -17,6 +17,7 @@ import type { QuoteMarkupView } from "@/lib/quoteMarkupView";
 import {
   formatRatePercent,
   minMarkupRateFor,
+  QUOTE_DEAL_TYPES,
   type QuoteDealType,
 } from "@/lib/quoteDealType";
 import { type RunSalePricing } from "@/lib/quoteRuns";
@@ -846,7 +847,17 @@ export function QuoteRunMarkupPanel({
             </span>
           </span>
         ) : null}
-        <span>Дно {floorLabel} % вмикає погодження, а не блокує збереження</span>
+        {/* Тип угоди стоїть поруч із дном, бо він і є ВІДПОВІДЬ на питання
+            «чому 53,8». Питають його рівно тут, дивлячись на смугу, а не в
+            шапці картки, де бейдж відповідає на інше — «яка це угода». */}
+        {dealType ? (
+          <span>
+            Тип угоди <span className="font-medium text-foreground">{QUOTE_DEAL_TYPES[dealType].label}</span> —
+            звідси дно {floorLabel} %
+          </span>
+        ) : (
+          <span>Дно {floorLabel} % вмикає погодження, а не блокує збереження</span>
+        )}
       </div>
     </div>
   );

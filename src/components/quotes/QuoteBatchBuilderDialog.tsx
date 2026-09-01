@@ -56,7 +56,6 @@ import {
 import { cn } from "@/lib/utils";
 import {
   DEAL_TYPE_ORDER,
-  DEFAULT_DEAL_TYPE,
   defaultMarkupRateFor,
   formatRatePercent,
   QUOTE_DEAL_TYPES,
@@ -196,7 +195,7 @@ export type QuoteBatchBuilderFormData = {
    * Тип угоди (REQ-182) — визначає підставлену накрутку й дно ціни. Один на всі
    * прорахунки, створені за цей захід: білдер робить їх однією угодою.
    */
-  dealType: QuoteDealType;
+  dealType: QuoteDealType | null;
   comment: string;
   notes: string;
   products: QuoteBatchProductSubmitData[];
@@ -827,7 +826,14 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const [deadlineAt, setDeadlineAt] = React.useState("");
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = React.useState(false);
   const [currency, setCurrency] = React.useState("UAH");
-  const [dealType, setDealType] = React.useState<QuoteDealType>(DEFAULT_DEAL_TYPE);
+  /**
+   * Порожньо на старті — навмисно (рішення Артема 01.09.2026).
+   *
+   * Дефолт «Стандартний виробничий» був підказкою, повз яку проскакують не
+   * думаючи: між ним і «малим тиражем» 28 пунктів накрутки, і мовчазний вибір
+   * щоразу коштував би саме їх. Тепер це обов'язкове поле, як замовник.
+   */
+  const [dealType, setDealType] = React.useState<QuoteDealType | null>(null);
   const [notes, setNotes] = React.useState("");
   const [products, setProducts] = React.useState<ProductDraft[]>(() => [createProductDraft()]);
   const [activeProductId, setActiveProductId] = React.useState(products[0]?.id ?? "");
@@ -875,7 +881,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     setDeadlineAt("");
     setDeadlinePopoverOpen(false);
     setCurrency("UAH");
-    setDealType(DEFAULT_DEAL_TYPE);
+    setDealType(null);
     setNotes("");
     setProducts([firstProduct]);
     setActiveProductId(firstProduct.id);
@@ -1578,6 +1584,12 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       showValidationError("Вкажіть дедлайн прорахунку.");
       return;
     }
+    // Тип угоди питаємо лише там, де він щось означає, — на поліграфії. На
+    // мерчі шкала не діє, і вимагати вибір було б порожньою формальністю.
+    if (hasPrintProduct && !dealType) {
+      showValidationError("Оберіть тип угоди — від нього залежить дно ціни.");
+      return;
+    }
     if (quoteGroupCount > 1 && customerType !== "customer") {
       showValidationError("КП з кількох прорахунків зараз можна створити тільки для замовника, не ліда.");
       return;
@@ -1999,11 +2011,19 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     змінює. */}
                 {hasPrintProduct ? (
                 <Select
-                  value={dealType}
+                  value={dealType ?? ""}
                   onValueChange={(next) => setDealType(next as QuoteDealType)}
                 >
-                  <SelectTrigger className="h-9 w-[248px] rounded-full">
-                    <SelectValue placeholder="Тип угоди" />
+                  <SelectTrigger
+                    className={cn(
+                      "h-9 w-[248px] rounded-full",
+                      // Порожнє обов'язкове поле показуємо так само, як інші
+                      // незаповнені обов'язкові, — інакше воно виглядає як
+                      // необов'язкове й лишається порожнім до кінця.
+                      !dealType && "border-destructive/50 text-destructive"
+                    )}
+                  >
+                    <SelectValue placeholder="Тип угоди *" />
                   </SelectTrigger>
                   <SelectContent>
                     {DEAL_TYPE_ORDER.map((key) => (

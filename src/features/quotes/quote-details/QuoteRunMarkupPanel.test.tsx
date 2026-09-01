@@ -289,7 +289,9 @@ describe("відмітка-орієнтир", () => {
       />
     );
     expect(screen.queryByText("орієнтира немає")).toBeNull();
-    expect(screen.getByText(/дно 53,8 %/)).toBeTruthy();
+    // Саме підпис ПОЗНАЧКИ на смузі: у виносці внизу дно теж названо, але там
+    // воно частина фрази про тип угоди.
+    expect(screen.getByText("дно 53,8 %")).toBeTruthy();
   });
 });
 
