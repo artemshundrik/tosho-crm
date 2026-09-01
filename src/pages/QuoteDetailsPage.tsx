@@ -3839,6 +3839,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             defaultManagerRate: DEFAULT_MANAGER_RATE,
             defaultFixedCostRate: companyRates.fixedCostRate,
             defaultVatRate: companyRates.vatRate,
+            // Новий тираж бере підстановку типу угоди, а не дефолт колонки.
+            defaultMarkupRate: defaultMarkupRateFor(dealType),
           });
           const savedRuns = await persistQuoteRuns(quoteId, payload, idsToDelete);
           if (!savedRuns.ok) return fail(savedRuns.message);

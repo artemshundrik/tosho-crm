@@ -54,6 +54,14 @@ type MergeQuoteRunsParams = {
   defaultManagerRate: number;
   defaultFixedCostRate: number;
   defaultVatRate: number;
+  /**
+   * Накрутка для НОВОГО тиражу — з типу угоди (REQ-182).
+   *
+   * Обов'язковий параметр навмисно: доти новий рядок мовчки брав дефолт
+   * колонки (40), і на поліграфії народжувався одразу нижче дна 53,8 %,
+   * просячи погодження на порожньому місці.
+   */
+  defaultMarkupRate: number;
 };
 
 function resolveNumericRate(value: unknown, fallback: number) {
@@ -364,6 +372,7 @@ export function mergeQuoteRunsWithExisting({
   defaultManagerRate,
   defaultFixedCostRate,
   defaultVatRate,
+  defaultMarkupRate,
 }: MergeQuoteRunsParams) {
   const normalizedExistingRuns = existingRuns.filter((run) => Number(run.quantity) > 0);
   const existingById = new Map(
@@ -425,11 +434,10 @@ export function mergeQuoteRunsWithExisting({
         // Накрутка наявного тиражу зберігається; новий стартує з підставленої.
         // Числа не беруться зі ставки менеджера: накрутка — власне рішення про
         // ціну, і воно має пережити будь-яку зміну ставок.
-        // Тут читання збереженого рядка, а не пропозиція менеджеру: підмінюємо
-        // дефолтом КОЛОНКИ. Число типу угоди підставляє картка прорахунку, коли
-        // тираж справді створюють (QuoteDetailsPage), і воно вже лежить у
-        // `source`.
-        markup_rate: Math.max(0, resolveNumericRate(source?.markup_rate, COLUMN_MARKUP_FALLBACK)),
+        // Збережений рядок несе своє число; НОВИЙ бере підстановку типу угоди.
+        // Дефолт колонки тут був би помилкою: на поліграфії він дав би 40 при
+        // дні 53,8 — тираж одразу «нижче дна» без жодної дії людини.
+        markup_rate: Math.max(0, resolveNumericRate(source?.markup_rate, defaultMarkupRate)),
         // Наявний тираж тримає СВОЮ ставку. Прорахунок, надісланий клієнту при
         // 10 %, не має мовчки подорожчати, коли менеджеру піднімуть ставку до
         // 12 % — а саме це й відбувалось при кожному пересохраненні (рішення

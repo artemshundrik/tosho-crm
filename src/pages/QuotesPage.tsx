@@ -92,6 +92,7 @@ import {
 } from "@/lib/quoteRuns";
 import { markupGateMessage, resolveQuoteMarkupGate } from "@/lib/quoteMarkupApproval";
 import {
+  defaultMarkupRateFor,
   normalizeQuoteDealType,
   resolveQuoteDealType,
   type QuoteDealType,
@@ -2655,6 +2656,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           }
           if (itemError) throw itemError;
 
+          // Накрутку СТАВИМО ЯВНО, а не лишаємо колонці (REQ-182).
+          //
+          // Доти рядок ішов без markup_rate, і база підставляла свій default 40.
+          // На поліграфії це давало картку, у якої підставлено 40 при дні 53,8 —
+          // тобто новий прорахунок одразу народжувався «нижче дна» й просив
+          // погодження на порожньому місці. Помічено Артемом на проді 01.09.2026
+          // на прорахунку «Поліграфія брошюра».
+          //
+          // На мерчі значення те саме, що й було (шкала туди не поширюється), тож
+          // для нього нічого не змінюється.
+          const runMarkupRate = defaultMarkupRateFor(
+            resolveQuoteDealType(group.quoteType, data.dealType)
+          );
           const runRows = product.runs.map((run) => ({
             id: crypto.randomUUID(),
             quote_id: created.id,
@@ -2664,6 +2678,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             unit_price_print: 0,
             logistics_cost: 0,
             desired_manager_income: 0,
+            markup_rate: runMarkupRate,
             manager_rate: managerRate,
             fixed_cost_rate: companyRates.fixedCostRate,
             vat_rate: companyRates.vatRate,
@@ -5099,6 +5114,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             defaultManagerRate: DEFAULT_MANAGER_RATE,
             defaultFixedCostRate: companyRates.fixedCostRate,
             defaultVatRate: companyRates.vatRate,
+            // Новий тираж бере підстановку типу угоди, а не дефолт колонки.
+            defaultMarkupRate: defaultMarkupRateFor(resolveQuoteDealType(editTarget?.quote_type, editTarget?.deal_type)),
           });
           if (idsToDelete.length > 0) {
             const { error: deleteRunsError } = await supabase

@@ -235,7 +235,34 @@ describe("mergeQuoteRunsWithExisting", () => {
     defaultManagerRate: 30,
     defaultFixedCostRate: 15,
     defaultVatRate: 20,
+    defaultMarkupRate: 40,
   };
+
+  it("НОВИЙ тираж бере підстановку типу угоди, а не дефолт колонки", () => {
+    // Помічено Артемом на проді 01.09.2026: щойно створений поліграфічний
+    // прорахунок показував накрутку 40 % при дні 53,8 % — тобто народжувався
+    // одразу «нижче дна» й просив погодження, хоч ніхто нічого не робив.
+    // Причина: рядок ішов без markup_rate, і його підставляла колонка.
+    const { payload } = mergeQuoteRunsWithExisting({
+      ...defaults,
+      defaultMarkupRate: 53.846153846153847,
+      existingRuns: [],
+      nextRuns: [{ quantity: 100 }],
+    });
+
+    expect(payload[0].markup_rate).toBeCloseTo(53.846, 3);
+  });
+
+  it("ЗБЕРЕЖЕНИЙ тираж своє число тримає — підстановка його не переписує", () => {
+    const { payload } = mergeQuoteRunsWithExisting({
+      ...defaults,
+      defaultMarkupRate: 53.846153846153847,
+      existingRuns: [run({ id: "a", quantity: 10, markup_rate: 20 })],
+      nextRuns: [{ id: "a", quantity: 10 }],
+    });
+
+    expect(payload[0].markup_rate).toBe(20);
+  });
 
   it("новий тираж успадковує позначку ПДВ від сусіда по позиції", () => {
     // Тиражі однієї позиції — той самий товар у того самого постачальника.
