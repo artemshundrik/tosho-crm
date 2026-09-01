@@ -503,6 +503,8 @@ export default defineConfig(({ command, mode }) => {
               "/.netlify/functions/quote-import-parse": () => import("./netlify/functions/quote-import-parse"),
               "/.netlify/functions/quote-import-research-background": () =>
                 import("./netlify/functions/quote-import-research-background"),
+              "/.netlify/functions/quote-import-link-preview": () =>
+                import("./netlify/functions/quote-import-link-preview"),
             };
             server.middlewares.use(async (req, res, next) => {
               const load = routes[req.url?.split("?")[0] ?? ""];

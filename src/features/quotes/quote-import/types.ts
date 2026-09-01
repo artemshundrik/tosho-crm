@@ -7,27 +7,19 @@
  * узгодити, бути не повинно.
  */
 
-/** Що саме в рядку файлу було брудним — беджі прев'ю ростуть звідси. */
-export type QuoteImportFlag =
-  | "price_missing"
-  | "ask_supplier"
-  | "quantity_range"
-  | "alternative";
-
 /**
- * Тираж, як його побачила модель.
+ * Що саме в рядку файлу було брудним — беджі прев'ю ростуть звідси.
  *
- * Ціни тут описують ВІДПОВІДЬ ФУНКЦІЇ, а не те, що доїде в прорахунок: із
- * REQ-235 імпорт собівартості не приносить узагалі, і `toDraftItems` ці поля
- * відкидає. Лишаються вони тому, що модель і далі їх повертає — саме з них
- * росте бедж «без ціни».
+ * Лишилась одна позначка (REQ-236). «Без ціни» й «спитати підрядника» пішли
+ * разом із цінами: перша повідомляла про відсутність того, чого імпорт і не
+ * бере, а друга ховала в бедж текст, який тепер їде в коментар.
+ * «Альтернатива» перетворилась на `variantGroup` — зв'язок, а не позначку.
  */
+export type QuoteImportFlag = "quantity_range";
+
+/** Тираж, як його побачила модель. Цін тут немає: їх не витягує вже й функція. */
 export type QuoteImportRun = {
   quantity: number;
-  unitPriceModel?: number | null;
-  /** «(без ПДВ)» у тексті ціни → false, «з ПДВ» → true, мовчання → null. */
-  modelPriceIncludesVat?: boolean | null;
-  unitPricePrint?: number | null;
 };
 
 export type QuoteImportItem = {
@@ -39,6 +31,14 @@ export type QuoteImportItem = {
   runs: QuoteImportRun[];
   flags: QuoteImportFlag[];
   notes?: string | null;
+  /**
+   * Спільний ключ варіантів одного товару — номер позиції з файлу.
+   *
+   * У файлі KMZ під номером 30 лежать два різних дзен-сади з різними
+   * посиланнями. Це не два товари, а вибір із двох, і прев'ю каже це словами:
+   * «варіант 1 з 2». `null` — у позиції немає пари.
+   */
+  variantGroup?: string | null;
 };
 
 export type QuoteImportParseResponse = {
@@ -71,6 +71,8 @@ export type QuoteImportDraftItem = {
   flags: QuoteImportFlag[];
   sourceRows: number[];
   notes: string | null;
+  /** Порядковий номер варіанта в межах групи — уже порахований, для підпису. */
+  variant: { index: number; total: number } | null;
 };
 
 /** Слід імпорту на позиції — щоб відрізнити її на картці й дебажити розбір. */
@@ -79,3 +81,9 @@ export type QuoteImportTrace = {
   importedAt: string;
   sourceRows: number[];
 };
+
+/** Чим закінчилась розвідка посилання для прев'ю (REQ-236). */
+export type QuoteImportLinkPreview =
+  | { status: "pending" }
+  | { status: "done"; imageUrl: string; title: string | null }
+  | { status: "no_image" | "blocked" | "failed"; reason: string };

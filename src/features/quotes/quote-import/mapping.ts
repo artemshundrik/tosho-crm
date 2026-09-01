@@ -60,8 +60,21 @@ function positiveNumber(value: unknown, fallback = 0): number {
  * тиражі, `javascript:` у посиланні, позиція без назви. Ціни відкидаються
  * цілком — не як «брудні дані», а свідомо (див. шапку модуля). Прев'ю має
  * показувати вже безпечні дані: менеджер підтверджує, а не вичищає.
+ *
+ * ВАРІАНТИ РАХУЮТЬСЯ ТУТ, а не в рендері. Модель віддає лише спільний ключ
+ * (`variantGroup`), а «варіант 2 з 2» — похідне від усього списку, і рахувати
+ * його всередині рендера означало б робити це на кожну перемальовку прев'ю з
+ * тридцяти позицій.
  */
 export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
+  const groupSizes = new Map<string, number>();
+  for (const item of items) {
+    const group = (item.variantGroup ?? "").trim();
+    if (!group) continue;
+    groupSizes.set(group, (groupSizes.get(group) ?? 0) + 1);
+  }
+  const seenInGroup = new Map<string, number>();
+
   return items
     .map((item, index): QuoteImportDraftItem | null => {
       const name = (item.name ?? "").replace(/\s+/g, " ").trim();
@@ -81,6 +94,17 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
           quantity: Math.round(positiveNumber(run.quantity, 1)),
         }));
 
+      // Група з одного — це не вибір, а звичайна позиція: підпис «варіант 1 з 1»
+      // нічого не пояснює, лише додає шуму в і без того щільний рядок.
+      const group = (item.variantGroup ?? "").trim();
+      const groupSize = group ? (groupSizes.get(group) ?? 0) : 0;
+      let variant: QuoteImportDraftItem["variant"] = null;
+      if (group && groupSize > 1) {
+        const position = (seenInGroup.get(group) ?? 0) + 1;
+        seenInGroup.set(group, position);
+        variant = { index: position, total: groupSize };
+      }
+
       return {
         key: `import-${index}`,
         selected: true,
@@ -93,6 +117,7 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
         flags: Array.isArray(item.flags) ? item.flags : [],
         sourceRows: (item.sourceRows ?? []).filter((row) => Number.isFinite(row)).map((row) => Math.trunc(row)),
         notes: (item.notes ?? "").trim() || null,
+        variant,
       };
     })
     .filter((item): item is QuoteImportDraftItem => item !== null);

@@ -23,7 +23,7 @@ const items: QuoteImportItem[] = [
     name: "Футболка бавовна",
     comment: null,
     links: [],
-    runs: [{ quantity: 100, unitPriceModel: 250, modelPriceIncludesVat: false, unitPricePrint: 80 }],
+    runs: [{ quantity: 100 }],
     flags: [],
     notes: null,
   },

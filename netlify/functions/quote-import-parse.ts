@@ -47,7 +47,17 @@ const requestSchema = z
 
 type RequestBody = z.infer<typeof requestSchema>;
 
-const FLAGS = ["price_missing", "ask_supplier", "quantity_range", "alternative"] as const;
+/**
+ * Що лишилось від позначок після REQ-236.
+ *
+ * `price_missing` і `ask_supplier` пішли разом із цінами: імпорт собівартості
+ * не приносить (REQ-235), тож «без ціни» на картці означало б відсутність
+ * того, чого ми й не збирались брати, — а текст «прохання запитати підрядника»
+ * тепер їде туди, де від нього є користь, у коментар позиції.
+ * `alternative` замінив `variantGroup`: бедж лише повідомляв, що щось не так,
+ * а група дозволяє сказати прямо — «варіант 2 з 2 того самого товару».
+ */
+const FLAGS = ["quantity_range"] as const;
 
 const OPENAI_SCHEMA = {
   type: "object",
@@ -59,7 +69,7 @@ const OPENAI_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["sourceRows", "name", "comment", "links", "runs", "flags", "notes"],
+        required: ["sourceRows", "name", "comment", "links", "runs", "flags", "notes", "variantGroup"],
         properties: {
           sourceRows: { type: "array", items: { type: "integer" } },
           name: { type: "string" },
@@ -70,17 +80,15 @@ const OPENAI_SCHEMA = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["quantity", "unitPriceModel", "modelPriceIncludesVat", "unitPricePrint"],
+              required: ["quantity"],
               properties: {
                 quantity: { type: "number" },
-                unitPriceModel: { type: ["number", "null"] },
-                modelPriceIncludesVat: { type: ["boolean", "null"] },
-                unitPricePrint: { type: ["number", "null"] },
               },
             },
           },
           flags: { type: "array", items: { type: "string", enum: FLAGS } },
           notes: { type: ["string", "null"] },
+          variantGroup: { type: ["string", "null"] },
         },
       },
     },
@@ -91,21 +99,22 @@ const OPENAI_SCHEMA = {
 /**
  * Правила розбору — погоджені в docs/QUOTE_IMPORT_DESIGN.md §4.
  *
- * Головне тут — заборона вигадувати ціну. У референсному файлі KMZ є рядки
- * «прохання запитати підрядника», і саме вони найдорожчі: підставлена моделлю
- * правдоподібна цифра поїхала б клієнту як наша ціна.
+ * ЦІН МОДЕЛЬ БІЛЬШЕ НЕ ВИТЯГУЄ ВЗАГАЛІ (REQ-235/236). Раніше тут стояла
+ * заборона їх вигадувати; тепер вони просто не потрібні — собівартість веде
+ * той, чия це справа, а не файл клієнта. Натомість найцінніше з тієї ж
+ * колонки — текст на кшталт «прохання запитати підрядника вартість, якщо
+ * робимо індивідуально» — має доїхати в коментар: раніше він перетворювався
+ * на бедж і губився.
  */
 const DEVELOPER_PROMPT = [
   "You extract quote line items from a spreadsheet dump of a client's request (Ukrainian print/merch industry).",
   "Each dump line starts with the row number from the file, then tab-separated cell values.",
   "A section '=== Посилання (рядок → адреса)' maps row numbers to hyperlinks found in that row.",
   "Return ONE item per product. sourceRows must list the dump row numbers the item came from.",
-  "PRICES: use only numbers present in the file. Never invent or estimate a price.",
-  "If the price cell holds text instead of a number (e.g. 'прохання запитати підрядника'), leave the price null and set flag 'ask_supplier'.",
-  "If there is no price at all, leave it null and set flag 'price_missing'.",
+  "PRICES: ignore every price and cost in the file — they are never imported. Do not put numbers from price columns anywhere.",
+  "If a price cell holds a request or condition instead of a number (e.g. 'прохання запитати підрядника вартість, якщо робимо індивідуально'), copy that text into comment — it is the most valuable thing in the row.",
   "QUANTITIES: '300-500 шт.' means two runs of the same item (300 and 500) — runs are mutually exclusive variants, not a sum. Set flag 'quantity_range'.",
-  "VAT: 'без ПДВ' next to a price → modelPriceIncludesVat false; 'з ПДВ' → true; a column header like 'Вартість виробу (з ПДВ)' is the default for that column; otherwise null.",
-  "ALTERNATIVES: a neighbouring row with the same item number but a different product/link/price is a separate item with flag 'alternative'.",
+  "VARIANTS: when one item number covers several products (neighbouring rows with different links or specs), return each as its own item and give them the SAME variantGroup — use the item number from the file, e.g. '30'. Items with no sibling get variantGroup null.",
   "comment = the client's own comment for that row, verbatim and short. notes = your remark about what was unclear.",
   "links: every hyperlink that belongs to the item's rows, most relevant first.",
   "Skip header, total and empty rows entirely, and mention what you skipped in warnings.",

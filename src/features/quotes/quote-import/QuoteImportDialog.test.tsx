@@ -23,6 +23,9 @@ const parsed = (items: QuoteImportItem[]) => ({
   json: async () => ({ items, warnings: [], model: "test", costUsd: 0, fileName: "zapyt.xlsx" }),
 });
 
+/** Відповідь розвідки посилання — те, що функція віддає на кожне фото окремо. */
+const linkPreview = (payload: Record<string, unknown>) => ({ ok: true, json: async () => payload });
+
 vi.mock("./readWorkbook", async () => {
   const actual = await vi.importActual<typeof import("./readWorkbook")>("./readWorkbook");
   return {
@@ -42,15 +45,22 @@ const importItem = (overrides: Partial<QuoteImportItem> = {}): QuoteImportItem =
   name: "Кухоль керамічний",
   comment: null,
   links: [],
-  runs: [{ quantity: 300, unitPriceModel: 119.5, modelPriceIncludesVat: null, unitPricePrint: 45 }],
+  runs: [{ quantity: 300 }],
   flags: [],
   notes: null,
   ...overrides,
 });
 
-async function openWith(items: QuoteImportItem[]) {
+async function openWith(items: QuoteImportItem[], photo?: Record<string, unknown>) {
   const user = userEvent.setup();
-  vi.stubGlobal("fetch", vi.fn(async () => parsed(items) as unknown as Response));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) =>
+      (String(url).includes("link-preview")
+        ? linkPreview(photo ?? { status: "no_image", reason: "На сторінці немає фото товару" })
+        : parsed(items)) as unknown as Response
+    )
+  );
 
   render(
     <QuoteImportDialog
@@ -94,15 +104,50 @@ describe("прев'ю імпорту: тираж без собівартості
     expect(screen.getByRole("button", { name: /Створити/ })).toBeEnabled();
   });
 
-  it("бедж «без ціни» лишається: він про файл, а не про наші дані", async () => {
+  it("прохання запитати підрядника доїжджає коментарем, а не беджем", async () => {
     await openWith([
-      importItem({
-        runs: [{ quantity: 100, unitPriceModel: null, modelPriceIncludesVat: null, unitPricePrint: 0 }],
-        flags: ["price_missing"],
-      }),
+      importItem({ runs: [{ quantity: 100 }], comment: "Тут прохання запитати підрядника вартість" }),
     ]);
 
-    expect(screen.getByText("без ціни")).toBeInTheDocument();
+    // Раніше цей текст перетворювався на бедж «спитати підрядника» — тобто
+    // найцінніше в рядку губилось, лишалась сама позначка.
+    expect(screen.getByRole("textbox", { name: "Коментар замовника" })).toHaveValue(
+      "Тут прохання запитати підрядника вартість"
+    );
+    expect(screen.queryByText("спитати підрядника")).not.toBeInTheDocument();
+    expect(screen.queryByText("без ціни")).not.toBeInTheDocument();
+  });
+
+  it("два варіанти одного номера підписані зв'язком, а не беджем «альтернатива»", async () => {
+    await openWith([
+      importItem({ name: "Дзен сад 9 см", variantGroup: "30", links: ["https://tree-story.com.ua/a"] }),
+      importItem({ name: "Дзен сад 10 см", variantGroup: "30", links: ["https://tree-story.com.ua/b"] }),
+    ]);
+
+    expect(screen.getByText("варіант 1 з 2 того самого товару")).toBeInTheDocument();
+    expect(screen.getByText("варіант 2 з 2 того самого товару")).toBeInTheDocument();
+    expect(screen.queryByText("альтернатива")).not.toBeInTheDocument();
+  });
+
+  it("фото з посилання стає картинкою позиції", async () => {
+    await openWith([importItem({ links: ["https://totobi.com.ua/mug"] })], {
+      status: "done",
+      imageUrl: "https://totobi.com.ua/img/mug.jpg",
+      title: "Кухоль Stella",
+    });
+
+    const photo = await screen.findByRole("img", { name: "Кухоль керамічний" });
+    expect(photo).toHaveAttribute("src", "https://totobi.com.ua/img/mug.jpg");
+  });
+
+  it("коли сайт не пустив — причина словами, а не мовчазний квадрат", async () => {
+    await openWith([importItem({ links: ["https://rozetka.com.ua/x"] })], {
+      status: "blocked",
+      reason: "Сайт не пускає роботів",
+    });
+
+    expect(await screen.findByText("Сайт не пускає роботів")).toBeInTheDocument();
+    // Позиція від цього не страждає: створити її можна й без фото.
     expect(screen.getByRole("button", { name: /Створити/ })).toBeEnabled();
   });
 

@@ -13,7 +13,7 @@ const item = (patch: Partial<QuoteImportItem> = {}): QuoteImportItem => ({
   name: "Кухоль",
   comment: null,
   links: [],
-  runs: [{ quantity: 300, unitPriceModel: 119.5, modelPriceIncludesVat: true, unitPricePrint: 12 }],
+  runs: [{ quantity: 300 }],
   flags: [],
   notes: null,
   ...patch,
@@ -42,7 +42,7 @@ describe("розшифровка → рядки прев'ю", () => {
   });
 
   it("позиція без тиражу все одно імпортується — з одним порожнім рядком", () => {
-    const [empty] = toDraftItems([item({ runs: [], flags: ["price_missing"] })]);
+    const [empty] = toDraftItems([item({ runs: [] })]);
 
     expect(empty.runs).toEqual([{ key: "0-0", quantity: 1 }]);
   });
@@ -51,9 +51,26 @@ describe("розшифровка → рядки прев'ю", () => {
     expect(toDraftItems([item({ name: "   " })])).toHaveLength(0);
 
     const [fixed] = toDraftItems([
-      item({ runs: [{ quantity: -5, unitPriceModel: -100, unitPricePrint: Number.NaN }] }),
+      item({ runs: [{ quantity: -5 }] }),
     ]);
     expect(fixed.runs).toEqual([{ key: "0-0", quantity: 1 }]);
+  });
+
+  it("варіанти одного номера рахуються зв'язком, а поодинокі — ні", () => {
+    const drafts = toDraftItems([
+      item({ name: "Дзен сад 9 см", variantGroup: "30" }),
+      item({ name: "Дзен сад 10 см", variantGroup: "30" }),
+      item({ name: "Мультитул", variantGroup: null }),
+      // Група з одного — це не вибір: підпис «варіант 1 з 1» лише шумів би.
+      item({ name: "Ліхтар", variantGroup: "20" }),
+    ]);
+
+    expect(drafts.map((draft) => draft.variant)).toEqual([
+      { index: 1, total: 2 },
+      { index: 2, total: 2 },
+      null,
+      null,
+    ]);
   });
 
   it("лишає тільки http(s) посилання й прибирає дублі", () => {

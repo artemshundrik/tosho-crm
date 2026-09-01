@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { AlertTriangle, FileSpreadsheet, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, FileSpreadsheet, ImageOff, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -27,13 +27,19 @@ import {
   type QuoteImportRunDefaults,
 } from "./mapping";
 import { buildSheetDump } from "./sheetDump";
+import { countSettledPreviews, useLinkPreviews } from "./useLinkPreviews";
 import {
   QUOTE_IMPORT_ACCEPT,
   QUOTE_IMPORT_MAX_FILE_BYTES,
   isSupportedImportFile,
   readWorkbookSheets,
 } from "./readWorkbook";
-import type { QuoteImportDraftItem, QuoteImportFlag, QuoteImportParseResponse } from "./types";
+import type {
+  QuoteImportDraftItem,
+  QuoteImportFlag,
+  QuoteImportLinkPreview,
+  QuoteImportParseResponse,
+} from "./types";
 
 /**
  * Імпорт позицій прорахунку з ексельки (REQ-233, docs/QUOTE_IMPORT_DESIGN.md).
@@ -62,11 +68,59 @@ import type { QuoteImportDraftItem, QuoteImportFlag, QuoteImportParseResponse } 
  */
 
 const FLAG_LABELS: Record<QuoteImportFlag, string> = {
-  price_missing: "без ціни",
-  ask_supplier: "спитати підрядника",
   quantity_range: "діапазон → два тиражі",
-  alternative: "альтернатива",
 };
+
+/**
+ * Фото товару в рядку прев'ю.
+ *
+ * ТРИ СТАНИ, І ЖОДЕН ІЗ НИХ НЕ МОВЧИТЬ. Поки їде — пульсує, тобто видно, що
+ * воно ще буде. Доїхало — фото. Не вийшло — перекреслена картинка з причиною
+ * поруч, бо «сайт не пускає роботів» і «на сторінці немає фото» це різні
+ * новини: у першому випадку менеджер відкриє посилання сам, у другому й
+ * відкривати нема сенсу.
+ */
+function ImportItemPhoto({ preview, name }: { preview: QuoteImportLinkPreview | undefined; name: string }) {
+  const base = "h-16 w-16 shrink-0 overflow-hidden rounded-[var(--radius-lg)] border border-border/60";
+
+  if (!preview) {
+    return (
+      <div className={cn(base, "flex items-center justify-center bg-muted/40")} aria-hidden>
+        <ImageOff className="h-4 w-4 text-muted-foreground/40" />
+      </div>
+    );
+  }
+
+  if (preview.status === "pending") {
+    return <div className={cn(base, "animate-pulse bg-muted/60")} aria-label={`Фото «${name}» ще їде`} />;
+  }
+
+  if (preview.status === "done") {
+    return (
+      <img
+        src={preview.imageUrl}
+        alt={name}
+        loading="lazy"
+        className={cn(base, "bg-background object-contain")}
+        // Сайт міг віддати адресу, за якою вже нічого немає: тоді замість
+        // порваної картинки лишається та сама сіра плитка, що й до доїзду.
+        onError={(event) => {
+          event.currentTarget.style.visibility = "hidden";
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={cn(base, "flex items-center justify-center bg-muted/40")}
+      title={preview.reason}
+      aria-label={`Фото «${name}» не доїхало: ${preview.reason}`}
+    >
+      <ImageOff className="h-4 w-4 text-muted-foreground/50" />
+    </div>
+  );
+}
 
 type Stage = "pick" | "parsing" | "preview" | "saving";
 
@@ -113,6 +167,7 @@ export function QuoteImportDialog({
   const [drafts, setDrafts] = useState<QuoteImportDraftItem[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { previews, start: startLinkPreviews, reset: resetLinkPreviews } = useLinkPreviews();
 
   const reset = useCallback(() => {
     setStage("pick");
@@ -121,9 +176,11 @@ export function QuoteImportDialog({
     setWarnings([]);
     setDrafts([]);
     setSavedCount(0);
-  }, []);
+    resetLinkPreviews();
+  }, [resetLinkPreviews]);
 
   const selected = useMemo(() => drafts.filter((draft) => draft.selected), [drafts]);
+  const photoProgress = useMemo(() => countSettledPreviews(previews), [previews]);
 
   const patchDraft = (key: string, patch: Partial<QuoteImportDraftItem>) => {
     setDrafts((prev) => prev.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)));
@@ -197,6 +254,10 @@ export function QuoteImportDialog({
       setDrafts(parsedDrafts);
       setWarnings(parsedWarnings);
       setStage("preview");
+      // Список уже на екрані — фото сідають на свої місця слідом. Await тут
+      // немає навмисно: чекати на тридцять магазинів означало б тримати
+      // менеджера перед крутилкою заради картинок, які він, може, й не гляне.
+      void startLinkPreviews(parsedDrafts);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не вдалося прочитати файл.");
       setStage("pick");
@@ -317,7 +378,10 @@ export function QuoteImportDialog({
         if (!next) reset();
       }}
     >
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-4xl" isDirty={stage === "preview"}>
+      {/* Скролиться САМЕ СПИСОК, а не вікно цілком: інакше на двадцяти семи
+          позиціях шапка з лічильником і кнопка «Створити» їдуть за край, і щоб
+          натиснути її, треба прокрутити весь файл назад (REQ-236). */}
+      <DialogContent className="flex max-h-[88vh] flex-col overflow-hidden sm:max-w-4xl" isDirty={stage === "preview"}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -391,28 +455,57 @@ export function QuoteImportDialog({
         ) : null}
 
         {stage === "preview" || stage === "saving" ? (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <div className="text-muted-foreground">
-                {fileName} · знайдено {drafts.length}{" "}
-                {pluralWordUk(drafts.length, "позицію", "позиції", "позицій")}, обрано {selected.length}
+          <>
+            <div className="shrink-0 space-y-2 border-b border-border/60 pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <div className="text-muted-foreground">
+                  {fileName} · знайдено {drafts.length}{" "}
+                  {pluralWordUk(drafts.length, "позицію", "позиції", "позицій")}, обрано {selected.length}
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={stage === "saving"}
+                  onClick={() =>
+                    setDrafts((prev) => {
+                      const allOn = prev.every((draft) => draft.selected);
+                      return prev.map((draft) => ({ ...draft, selected: !allOn }));
+                    })
+                  }
+                >
+                  {drafts.every((draft) => draft.selected) ? "Зняти всі" : "Обрати всі"}
+                </Button>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={stage === "saving"}
-                onClick={() =>
-                  setDrafts((prev) => {
-                    const allOn = prev.every((draft) => draft.selected);
-                    return prev.map((draft) => ({ ...draft, selected: !allOn }));
-                  })
-                }
-              >
-                {drafts.every((draft) => draft.selected) ? "Зняти всі" : "Обрати всі"}
-              </Button>
+
+              {/* Смуга доїзду фото. Стоїть у шапці, а не біля позицій, бо
+                  відповідає на питання «чи це вже все» — а його ставлять,
+                  дивлячись на весь список, а не на окремий рядок. */}
+              {photoProgress.total > 0 ? (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-2xs text-muted-foreground">
+                    <span>
+                      {photoProgress.settled < photoProgress.total
+                        ? `Фото товарів: ${photoProgress.settled} з ${photoProgress.total}`
+                        : `Фото знайшлись у ${photoProgress.withPhoto} ${pluralWordUk(photoProgress.withPhoto, "позиції", "позиціях", "позиціях")} з ${photoProgress.total}`}
+                    </span>
+                    {photoProgress.settled < photoProgress.total ? (
+                      <span>можна не чекати — усе інше вже редагується</span>
+                    ) : null}
+                  </div>
+                  <div className="h-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-foreground/30 transition-[width] duration-500"
+                      style={{ width: `${Math.round((photoProgress.settled / photoProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
 
+            {/* Помилки й попередження їдуть разом зі списком: вони про конкретні
+                рядки файлу, і тримати їх перед очима весь скрол не треба. */}
+            <div className="-mx-4 flex-1 space-y-3 overflow-y-auto px-4 py-1 sm:-mx-5 sm:px-5">
             {warnings.length > 0 ? (
               <div className="rounded-xl border border-warning-soft-border bg-warning-soft px-3 py-2.5 text-sm text-warning-copy">
                 <div className="font-medium">Що не вдалося розібрати</div>
@@ -439,19 +532,51 @@ export function QuoteImportDialog({
                       disabled={stage === "saving"}
                       aria-label={`Імпортувати «${draft.name}»`}
                       onCheckedChange={(checked) => patchDraft(draft.key, { selected: checked === true })}
-                      className="mt-2"
+                      className="mt-1.5"
                     />
+                    <ImportItemPhoto preview={previews[draft.key]} name={draft.name} />
                     <div className="min-w-0 flex-1 space-y-2">
-                      <Input
-                        value={draft.name}
-                        disabled={stage === "saving"}
-                        aria-label="Назва позиції"
-                        onChange={(event) => patchDraft(draft.key, { name: event.target.value })}
-                      />
+                      {/* Назва й тираж — в одному рядку: тираж це коротке число,
+                          а власний рядок під нього коштував би на двадцяти семи
+                          позиціях цілого екрана прокрутки. */}
+                      <div className="flex flex-wrap items-start gap-2">
+                        <Input
+                          value={draft.name}
+                          disabled={stage === "saving"}
+                          aria-label="Назва позиції"
+                          className="min-w-[12rem] flex-1"
+                          onChange={(event) => patchDraft(draft.key, { name: event.target.value })}
+                        />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Тираж</span>
+                          {draft.runs.map((run) => (
+                            <NumberInput
+                              key={run.key}
+                              value={run.quantity}
+                              min={1}
+                              emptyValue={1}
+                              className="w-24"
+                              disabled={stage === "saving"}
+                              aria-label="Кількість тиражу"
+                              onValueChange={(next) => patchRun(draft.key, run.key, { quantity: Math.max(1, next ?? 1) })}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
                       <div className="flex flex-wrap items-center gap-1.5 text-2xs">
                         {draft.sourceRows.length > 0 ? (
                           <span className="rounded-full border border-border/60 px-2 py-0.5 text-muted-foreground">
                             рядок {draft.sourceRows.join(", ")}
+                          </span>
+                        ) : null}
+                        {/* Зв'язок варіантів — словами. Бедж «альтернатива» казав,
+                            що щось не так, але не казав що саме: під номером 30 у
+                            файлі лежать два різних дзен-сади, і це вибір із двох,
+                            а не два товари в замовлення. */}
+                        {draft.variant ? (
+                          <span className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 font-medium text-muted-foreground">
+                            варіант {draft.variant.index} з {draft.variant.total} того самого товару
                           </span>
                         ) : null}
                         {draft.flags.map((flag) => (
@@ -473,7 +598,16 @@ export function QuoteImportDialog({
                             {link.replace(/^https?:\/\//, "")}
                           </a>
                         ))}
+                        {/* Причина відсутнього фото стоїть саме тут, поруч із
+                            посиланням: «сайт не пускає роботів» — це підказка
+                            відкрити його руками, а не повідомлення про поломку. */}
+                        {(() => {
+                          const preview = previews[draft.key];
+                          if (!preview || preview.status === "pending" || preview.status === "done") return null;
+                          return <span className="text-muted-foreground/70">{preview.reason}</span>;
+                        })()}
                       </div>
+
                       {draft.comment || draft.notes ? (
                         <Input
                           value={draft.comment}
@@ -483,37 +617,17 @@ export function QuoteImportDialog({
                           onChange={(event) => patchDraft(draft.key, { comment: event.target.value })}
                         />
                       ) : null}
-
-                      {/* Тираж — єдине число позиції. Діапазон із файлу приходить
-                          двома тиражами, тож поля стоять поруч в одному рядку. */}
-                      <div className="flex flex-wrap items-end gap-2">
-                        {draft.runs.map((run, runIndex) => (
-                          <div key={run.key} className="space-y-1">
-                            {runIndex === 0 ? (
-                              <div className="text-xs text-muted-foreground">Тираж</div>
-                            ) : null}
-                            <NumberInput
-                              value={run.quantity}
-                              min={1}
-                              emptyValue={1}
-                              className="w-28"
-                              disabled={stage === "saving"}
-                              aria-label="Кількість тиражу"
-                              onValueChange={(next) => patchRun(draft.key, run.key, { quantity: Math.max(1, next ?? 1) })}
-                            />
-                          </div>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+            </div>
+          </>
         ) : null}
 
         {stage === "preview" || stage === "saving" ? (
-          <DialogFooter className="gap-2">
+          <DialogFooter className="shrink-0 gap-2 border-t border-border/60 pt-3">
             <Button type="button" variant="ghost" disabled={stage === "saving"} onClick={() => onOpenChange(false)}>
               Скасувати
             </Button>
