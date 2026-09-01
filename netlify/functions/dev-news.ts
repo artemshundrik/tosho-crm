@@ -209,7 +209,7 @@ async function collectStack(admin: AdminClient): Promise<DevNewsItem[]> {
 
 // --- Блок «Claude» ----------------------------------------------------------
 
-async function collectClaude(now: Date, signal: AbortSignal): Promise<DevNewsItem[]> {
+async function collectClaude(now: Date, freshHours: number, signal: AbortSignal): Promise<DevNewsItem[]> {
   const [releases, notes] = await Promise.all([
     fetchText(atomUrl(CLAUDE_CODE_REPO), signal),
     fetchText(CLAUDE_PLATFORM_NOTES, signal),
@@ -217,7 +217,7 @@ async function collectClaude(now: Date, signal: AbortSignal): Promise<DevNewsIte
 
   const items: DevNewsItem[] = [];
   if (releases) {
-    const item = claudeCodeItem(parseFeed(releases), now, FRESH_HOURS);
+    const item = claudeCodeItem(parseFeed(releases), now, freshHours);
     if (item) items.push(item);
   }
   if (notes) {
@@ -229,11 +229,11 @@ async function collectClaude(now: Date, signal: AbortSignal): Promise<DevNewsIte
 
 // --- Блок «Варте уваги» -----------------------------------------------------
 
-async function collectCandidates(now: Date, signal: AbortSignal): Promise<WatchCandidate[]> {
+async function collectCandidates(now: Date, freshHours: number, signal: AbortSignal): Promise<WatchCandidate[]> {
   const feeds = await mapWithConcurrency(WATCH_REPOS, CONCURRENCY, async (source) => {
     const xml = await fetchText(atomUrl(source.repo), signal);
     if (!xml) return [];
-    const entry = bestEntry(parseFeed(xml), now, FRESH_HOURS);
+    const entry = bestEntry(parseFeed(xml), now, freshHours);
     if (!entry) return [];
     return [
       {
@@ -280,8 +280,8 @@ async function collectReading(now: Date, signal: AbortSignal): Promise<WatchCand
  * TypeScript, а ми якраз на oxlint. Один самородок на добу вартий того, щоб
  * модель прочитала два десятки заголовків: це третина копійки.
  */
-async function collectWideNet(signal: AbortSignal): Promise<WatchCandidate[]> {
-  const dayAgo = Math.floor(Date.now() / 1000) - 86_400;
+async function collectWideNet(days: number, signal: AbortSignal): Promise<WatchCandidate[]> {
+  const dayAgo = Math.floor(Date.now() / 1000) - days * 86_400;
   const since = new Date(Date.now() - GITHUB_FRESH_DAYS * 86_400_000).toISOString().slice(0, 10);
 
   const [hn, gh] = await Promise.all([
@@ -471,6 +471,17 @@ export const handler = async (event: HttpEvent) => {
 
   const query = event.queryStringParameters ?? {};
   const dryRun = query.dry === "1" || query.dry === "true";
+
+  /**
+   * ?days=N — надолуження. Перший справжній запуск має підняти не одну добу, а
+   * тиждень: інакше все, що вийшло, поки розсилки не існувало, просто
+   * провалиться в минуле й ніколи не приїде. Далі щоденний крон ходить без
+   * цього параметра, тобто з добовим вікном.
+   *
+   * Статей це не стосується — у них вікно й так місяць (див. READING_FRESH_HOURS).
+   */
+  const catchUpDays = Math.min(30, Math.max(0, Number(query.days) || 0));
+  const freshHours = catchUpDays > 0 ? catchUpDays * 24 : FRESH_HOURS;
   const force = query.force === "1" || query.force === "true";
 
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -488,10 +499,10 @@ export const handler = async (event: HttpEvent) => {
 
     const [stack, claude, releases, reading, wide, seen, members] = await Promise.all([
       collectStack(admin),
-      collectClaude(now, controller.signal),
-      collectCandidates(now, controller.signal),
+      collectClaude(now, freshHours, controller.signal),
+      collectCandidates(now, freshHours, controller.signal),
       collectReading(now, controller.signal),
-      collectWideNet(controller.signal),
+      collectWideNet(catchUpDays || 1, controller.signal),
       loadSeen(admin),
       loadMembers(admin),
     ]);
@@ -554,6 +565,7 @@ export const handler = async (event: HttpEvent) => {
         items: message.items.length,
         candidates: candidates.length,
         tookMs: Date.now() - startedAt,
+        catchUpDays: catchUpDays || null,
         message: message.text,
       });
     }

@@ -384,6 +384,37 @@ describe("складання повідомлення", () => {
     expect(message.items).toHaveLength(12);
   });
 
+  it("під обраним читвом дає кнопки, а не лише посилання в тексті", () => {
+    const message = renderDevNews(
+      [
+        { source: "stack", key: "s", title: "vite 8.1 → 8.2", url: "https://e/v" },
+        { source: "apply", key: "a1", title: "Supabase — Connect traces", url: "https://e/1" },
+        { source: "apply", key: "a2", title: "LogRocket — Dependency graph", url: "https://e/2" },
+        { source: "apply", key: "a3", title: "GitHub — anti-slop", url: "https://e/3" },
+      ],
+      "2 вересня"
+    )!;
+
+    // По дві в ряд, підпис — джерело, і останнім рядком постійна кнопка.
+    expect(message.keyboard).toEqual([
+      [
+        { text: "📖 Supabase", url: "https://e/1" },
+        { text: "📖 LogRocket", url: "https://e/2" },
+      ],
+      [{ text: "📖 GitHub", url: "https://e/3" }],
+      [{ text: "Стек у CRM", url: "https://tosho.pro/dev/stack" }],
+    ]);
+  });
+
+  it("без обраного читва лишається сама постійна кнопка", () => {
+    const message = renderDevNews(
+      [{ source: "stack", key: "s", title: "vite 8.1 → 8.2", url: "https://e/v" }],
+      "2 вересня"
+    )!;
+
+    expect(message.keyboard).toEqual([[{ text: "Стек у CRM", url: "https://tosho.pro/dev/stack" }]]);
+  });
+
   it("той самий ключ двічі показується один раз", () => {
     const items = dedupe([
       { source: "stack" as const, key: "stack:vite@8.2.0", title: "перший", url: "https://example.com/1" },

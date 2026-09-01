@@ -544,12 +544,13 @@ export function buildPickPrompt(candidates: WatchCandidate[]): string {
     "Ти добираєш читво для розробника, який САМ веде CRM друкарні. Ось вона:",
     "",
     "• React 19, чотири сторінки-гіганти (6–13 тис. рядків), головний біль —",
-    "  зайві проходи рендеру; React Compiler ще не ввімкнено.",
+    "  зайві проходи рендеру; React Compiler ще не ввімкнено, борг перед ним",
+    "  тримається ратчетом.",
     "• Vite 8 на Rolldown, TypeScript 7, лінт — oxlint, тести — Vitest.",
     "• Дані — Supabase з RLS; уся логіка доступу тримається на політиках.",
     "• Стилі — Tailwind 4 і власна дизайн-система на Radix.",
-    "• Сервер — функції Netlify, крони — pg_cron із самої бази.",
-    "• Є бот у Telegram і кілька інтеграцій: Нова Пошта, Dropbox, OpenAI.",
+    "• Сервер — функції Netlify зі стелею 10 секунд, крони — pg_cron із бази.",
+    "• Є бот у Telegram і інтеграції: Нова Пошта, Dropbox, Vchasno, OpenAI.",
     "• Працює він здебільшого сам, разом із кодовим агентом.",
     "",
     "Нижче — свіжі релізи, статті й інструменти. Питання до кожного НЕ «чи це",
@@ -561,9 +562,23 @@ export function buildPickPrompt(candidates: WatchCandidate[]): string {
     "цікаво почитати. Якщо вартого немає ЖОДНОГО — поверни порожній список:",
     "це нормальна й часта відповідь.",
     "",
+    "ПРО ПОЛЕ why — це найважливіше в усій відповіді.",
+    "Це не переказ заголовка й не реклама. Це твоя чесна думка одним реченням:",
+    "що САМЕ він зробить у своїй CRM і що це йому дасть. Пиши так, ніби радиш",
+    "колезі, який тобі довіряє й у якого мало часу.",
+    "",
+    "Добре: «Замінить власний парсер дат у прорахунках — мінус залежність і",
+    "менше коду».",
+    "Добре: «Нічого не зекономить, але пояснює, чому DesignTaskPage",
+    "перемальовується двічі».",
+    "Погано: «Корисна стаття про React» — це не думка, це переказ.",
+    "Якщо чесна відповідь — «користь невелика», так і напиши. Це цінніше за",
+    "вигаданий ентузіазм: він читає це щоранку й швидко зрозуміє, коли його",
+    "вмовляють.",
+    "",
     list,
     "",
-    'Відповідь — JSON: {"picks":[{"n":<номер>,"why":"<що саме він з цим зробить, до 90 символів, українською>"}]}',
+    'Відповідь — JSON: {"picks":[{"n":<номер>,"why":"<одне речення українською, до 110 символів>"}]}',
   ].join("\n");
 }
 
@@ -602,7 +617,7 @@ export function applyPicks(
       key: `${candidate.kind === "release" ? "watch" : "apply"}:${candidate.url}`,
       title: `${candidate.label} — ${candidate.title}`,
       url: candidate.url,
-      note: pick.why ? trimSentence(String(pick.why), 90) : undefined,
+      note: pick.why ? trimSentence(String(pick.why), 110) : undefined,
       publishedAt: candidate.updated,
     });
   }
@@ -674,11 +689,23 @@ export function renderDevNews(items: DevNewsItem[], dateLabel: string): DevNewsM
     if (hidden > 0) lines.push(`• <i>…і ще ${hidden} — весь відрив видно на сторінці «Стек»</i>`);
   }
 
-  return {
-    text: lines.join("\n"),
-    keyboard: [[{ text: "Стек у CRM", url: "https://tosho.pro/dev/stack" }]],
-    items: fresh,
-  };
+  // Кнопки — на те, що обрала модель у «Можна застосувати». Посилання є і в
+  // тексті, але там воно в рядку, а тут — окрема ціль під палець: у Telegram
+  // це різниця між «дочитаю потім» і «відкрив одразу». Максимум чотири, по дві
+  // в ряд: більше перетворює підпис повідомлення на клавіатуру.
+  const readable = fresh.filter((item) => item.source === "apply").slice(0, 4);
+  const keyboard: Array<Array<{ text: string; url: string }>> = [];
+  for (let i = 0; i < readable.length; i += 2) {
+    keyboard.push(
+      readable.slice(i, i + 2).map((item) => ({
+        text: `📖 ${item.title.split(" — ")[0]}`,
+        url: item.url,
+      }))
+    );
+  }
+  keyboard.push([{ text: "Стек у CRM", url: "https://tosho.pro/dev/stack" }]);
+
+  return { text: lines.join("\n"), keyboard, items: fresh };
 }
 
 /** Той самий ключ двічі — лишаємо перший. Порядок блоків від цього не залежить. */
