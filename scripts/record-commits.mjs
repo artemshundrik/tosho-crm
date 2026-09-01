@@ -51,6 +51,15 @@ if (DRY) {
   process.exit(0);
 }
 
+// Скільки з цієї пачки база вже знає. Потрібне рівно для чесного рядка у
+// виводі гака: без нього він казав «записано 200» на кожному пуші, хоча
+// двісті — це розмір вікна, яке скрипт перечитує ЩОРАЗУ, а нових комітів
+// там буває півтора. Одного разу з цього почалась ціла розмова «звідки
+// взялись двісті комітів за вісім днів».
+const knownBefore = process.env.TOSHO_COMMITS_VERBOSE
+  ? Number(psql(`select count(*) from tosho.commits where sha in (${commits.map((c) => q(c.sha)).join(",")})`)) || 0
+  : 0;
+
 // Один запит на всю пачку: гак не має права коштувати секунди.
 const values = commits
   .map(
@@ -76,5 +85,10 @@ psql(
 );
 
 if (process.env.TOSHO_COMMITS_VERBOSE) {
-  console.log(`[коміти] записано ${commits.length}`);
+  const fresh = commits.length - knownBefore;
+  console.log(
+    fresh > 0
+      ? `переглянуто ${commits.length} останніх, нових ${fresh}`
+      : `переглянуто ${commits.length} останніх, нових немає`
+  );
 }
