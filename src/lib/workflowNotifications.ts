@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
-import { MIN_MARKUP_RATE } from "@/lib/quoteRuns";
+import { formatRatePercent, minMarkupRateFor, type QuoteDealType } from "@/lib/quoteDealType";
 
 const isUuid = (value?: string | null) =>
   typeof value === "string" &&
@@ -611,6 +611,8 @@ export async function notifyCustomerLeadManagerAssigned(params: {
 export async function notifyMarkupApprovalRequested(params: {
   quoteId: string;
   requesterName?: string | null;
+  /** Тип угоди: дно в тілі листа має бути дном САМЕ цього прорахунку (REQ-182). */
+  dealType: QuoteDealType | null | undefined;
   runs: Array<{ label: string; markupRate: number }>;
   actorUserId?: string | null;
 }) {
@@ -631,7 +633,9 @@ export async function notifyMarkupApprovalRequested(params: {
   await notifyUsers({
     userIds: Array.from(recipients),
     title: "Накрутка нижче дна — потрібне рішення",
-    body: `${who} просить погодити ${params.runs.length} ${countLabel} у ${quoteRef}: ${list}. Дно — ${MIN_MARKUP_RATE} %.`,
+    body:
+      `${who} просить погодити ${params.runs.length} ${countLabel} у ${quoteRef}: ${list}. ` +
+      `Дно — ${formatRatePercent(minMarkupRateFor(params.dealType))} %.`,
     href: `/orders/estimates/${params.quoteId}`,
     type: "warning",
     category: "quote_markup_request",

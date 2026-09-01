@@ -9,6 +9,7 @@ import {
   type QuoteRunMarkupState,
 } from "@/lib/quoteMarkupApproval";
 import { resolveMarkupBenchmark, type MarkupBenchmark } from "@/lib/quoteMarkupBenchmark";
+import type { QuoteDealType } from "@/lib/quoteDealType";
 import { needsMarkupApproval } from "@/lib/quoteRuns";
 import type { QuoteRun } from "@/lib/toshoApi";
 import { normalizeUnitLabel } from "@/lib/units";
@@ -52,6 +53,8 @@ export type UseQuoteMarkupApprovalsParams = {
   quoteId: string;
   teamId: string;
   userId?: string | null;
+  /** Тип угоди прорахунку — від нього дно накрутки (REQ-182). Один на всі тиражі. */
+  dealType: QuoteDealType | null | undefined;
   /** Позиції прорахунку — по них рахується орієнтир. */
   items: BenchmarkSubject[];
   runs: QuoteRun[];
@@ -65,6 +68,7 @@ export function useQuoteMarkupApprovals({
   quoteId,
   teamId,
   userId,
+  dealType,
   items,
   runs,
   getRunPricing,
@@ -156,10 +160,11 @@ export function useQuoteMarkupApprovals({
       return resolveQuoteRunMarkupState({
         costTotal: pricing.costTotal,
         markupRate: pricing.markupRate,
+        dealType,
         approval: run?.id ? approvals.get(run.id) ?? null : null,
       });
     },
-    [approvals, getRunPricing]
+    [approvals, dealType, getRunPricing]
   );
 
   /**
@@ -181,9 +186,10 @@ export function useQuoteMarkupApprovals({
               markupRate: pricing.markupRate,
               approval: approvals.get(run.id) ?? null,
             };
-          })
+          }),
+        dealType
       ),
-    [approvals, getRunPricing, runs]
+    [approvals, dealType, getRunPricing, runs]
   );
 
   const runLabel = useCallback(
@@ -224,6 +230,7 @@ export function useQuoteMarkupApprovals({
     await reload();
     const notified = await notifyMarkupApprovalRequested({
       quoteId,
+      dealType,
       requesterName: viewerName,
       runs: [{ label: runLabel(run), markupRate: pricing.markupRate }],
       actorUserId: userId ?? null,
@@ -295,7 +302,11 @@ export function useQuoteMarkupApprovals({
         if (!run.id) return false;
         const approval = approvals.get(run.id);
         if (!approval || approval.status !== "pending") return false;
-        return !needsMarkupApproval({ costTotal: run.costTotal, markupRate: Number(run.markup_rate) || 0 });
+        return !needsMarkupApproval({
+          costTotal: run.costTotal,
+          markupRate: Number(run.markup_rate) || 0,
+          dealType,
+        });
       });
       if (stale.length === 0) return;
       await Promise.all(
@@ -303,7 +314,7 @@ export function useQuoteMarkupApprovals({
       );
       await reload();
     },
-    [approvals, reload]
+    [approvals, dealType, reload]
   );
 
   const openDialog = (mode: MarkupDialog["mode"], runId: string) => {

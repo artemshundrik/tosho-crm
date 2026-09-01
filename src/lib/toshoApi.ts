@@ -39,6 +39,12 @@ export type QuoteListRow = {
   design_brief?: string | null;
   title?: string | null;
   quote_type?: string | null;
+  /**
+   * Тип УГОДИ (tender / standard / design / custom) — від нього підставлена
+   * накрутка й дно ціни (REQ-182). Не плутати з `quote_type` вище: той про
+   * категорію ТОВАРУ (merch / print / other).
+   */
+  deal_type?: string | null;
   print_type?: string | null;
   delivery_type?: string | null;
   delivery_details?: Record<string, unknown> | null;
@@ -412,25 +418,25 @@ export async function listQuotes(params: ListQuotesParams) {
     }> = [
       {
         columns:
-          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+          "id,team_id,customer_id,number,status,title,quote_type,deal_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
         optionalColumns: ["customer_name", "customer_logo_url"],
         searchableColumns: [...baseSearchableColumns, "customer_name", "design_brief"],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+          "id,team_id,customer_id,number,status,title,quote_type,deal_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
         optionalColumns: ["customer_name", "customer_logo_url"],
         searchableColumns: [...baseSearchableColumns, "customer_name", "design_brief"],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+          "id,team_id,customer_id,number,status,title,quote_type,deal_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
         optionalColumns: ["customer_name", "customer_logo_url"],
         searchableColumns: [...baseSearchableColumns, "customer_name"],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+          "id,team_id,customer_id,number,status,title,quote_type,deal_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
         optionalColumns: ["customer_name", "customer_logo_url"],
         searchableColumns: [...baseSearchableColumns, "customer_name"],
       },
@@ -868,6 +874,8 @@ export async function createQuote(params: {
   customerLogoUrl?: string | null;
   title?: string | null;
   quoteType?: string | null;
+  /** Тип УГОДИ (REQ-182): визначає підставлену накрутку й дно. Не `quoteType`. */
+  dealType?: string | null;
   printType?: string | null;
   deliveryType?: string | null;
   deliveryDetails?: Record<string, unknown> | null;
@@ -905,6 +913,10 @@ export async function createQuote(params: {
     deadline_reminder_comment: params.deadlineReminderComment ?? null,
     notes: params.notes ?? null,
   };
+  // Тип угоди пишемо, лише якщо його справді обрали: у колонки є DEFAULT
+  // 'standard', і `null` замість нього означав би прорахунок без дна.
+  if (params.dealType) payload.deal_type = params.dealType;
+
   const monthCode = getQuoteMonthCode();
   let quoteSequence = await getNextQuoteSequence(params.teamId, monthCode);
   payload.number = formatQuoteNumber(monthCode, quoteSequence);
@@ -1231,7 +1243,7 @@ export async function listQuotesByIds(teamId: string, quoteIds: string[]): Promi
     .schema("tosho")
     .from("quotes")
     .select(
-      "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url"
+      "id,team_id,customer_id,number,status,title,quote_type,deal_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url"
     )
     .eq("team_id", teamId)
     .in("id", uniqueQuoteIds);
@@ -1661,6 +1673,8 @@ export async function updateQuote(params: {
   deadlineReminderComment?: string | null;
   status?: Database["tosho"]["Enums"]["quote_status"];
   quoteType?: string | null;
+  /** Тип УГОДИ (REQ-182). Зміна рухає дно ціни, але НЕ переписує вже поставлені накрутки. */
+  dealType?: string | null;
   deliveryType?: string | null;
   deliveryDetails?: Json | null;
   notes?: string | null;
@@ -1685,6 +1699,8 @@ export async function updateQuote(params: {
   }
   if (params.status !== undefined) payload.status = params.status;
   if (params.quoteType !== undefined) payload.quote_type = params.quoteType;
+  // Порожній тип не записуємо: він означав би прорахунок без дна, а не «скинути».
+  if (params.dealType) payload.deal_type = params.dealType;
   if (params.deliveryType !== undefined) payload.delivery_type = params.deliveryType;
   if (params.deliveryDetails !== undefined) payload.delivery_details = params.deliveryDetails;
   if (params.notes !== undefined) payload.notes = params.notes;

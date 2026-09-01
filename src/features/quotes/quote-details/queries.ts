@@ -1482,6 +1482,9 @@ export async function duplicateQuoteWithContents(input: {
       customerLogoUrl: input.source.customer_logo_url ?? null,
       title: input.source.title ?? null,
       quoteType: input.source.quote_type ?? null,
+      // Копія несе той самий тип угоди — інакше вона тихо їхала б на дно
+      // «стандартного», хоч оригінал був тендером (REQ-182).
+      dealType: input.source.deal_type ?? null,
       printType: input.source.print_type ?? null,
       deliveryType: input.source.delivery_type ?? null,
       deliveryDetails: input.source.delivery_details ?? null,

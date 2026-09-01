@@ -189,12 +189,24 @@ const GIANT_THRESHOLD = 2000;
  * ЧЕРНЕТКИ полів дати (вони живуть у стані цієї ж сторінки), стан керованої
  * підвкладки й монтування компонента.
  *
+ * ПІДНЯТО 01.09.2026 — REQ-182, тип угоди й дно накрутки за ним. Спершу винесено
+ * все, що виноситься: правило шкали живе в `src/lib/quoteDealType.ts` (з
+ * тестами), а вибір типу — окремим компонентом `QuoteDealTypePicker`, бо він і
+ * так потрібен двічі: при створенні прорахунку й при його редагуванні з картки.
+ * Те, що лишилось у цих чотирьох файлах, окремо жити не може — це протягування
+ * `dealType` крізь наявні виклики: параметр гука, проп трьох компонентів, поле
+ * в payload створення й правки, гілка гейта на кожен прорахунок комплекту.
+ * Виносити «протягування» немає куди: воно за визначенням лежить там, де стоїть
+ * виклик. У білдері прорахунків до нього додався контрол вибору типу — він
+ * стоїть у ряду чіпів шапки поруч із валютою й дедлайном, бо описує ту саму
+ * сутність, що й вони: замовлення цілком.
+ *
  */
 
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12874,
-  "src/pages/QuoteDetailsPage.tsx": 7435,
-  "src/pages/QuotesPage.tsx": 8445,
+  "src/pages/QuoteDetailsPage.tsx": 7477,
+  "src/pages/QuotesPage.tsx": 8459,
   "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
@@ -202,14 +214,14 @@ const CEILINGS = {
   "src/pages/OrdersCustomersPage.tsx": 4277,
   "src/pages/TeamMembersPage.tsx": 2633,
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
-  "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,
+  "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2936,
   "src/features/finances/FinanceExpenses.tsx": 2439,
   "src/layout/AppLayout.tsx": 3000,
-  "src/components/quotes/NewQuoteDialog.tsx": 2732,
+  "src/components/quotes/NewQuoteDialog.tsx": 2758,
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
   "src/components/design/DesignersDashboard.tsx": 2702,
   "src/features/orders/orderRecords.ts": 2614,
-  "src/lib/toshoApi.ts": 2626,
+  "src/lib/toshoApi.ts": 2634,
   "src/pages/TeamPage.tsx": 2427,
   "src/pages/ProfilePage.tsx": 2156,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,

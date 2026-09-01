@@ -113,13 +113,20 @@ import {
   pickApprovedRun,
   computeRunSalePricingFromMarkup,
   findRunsNeedingModelPriceVat,
-  DEFAULT_MARKUP_RATE,
-  MIN_MARKUP_RATE,
+  COLUMN_MARKUP_FALLBACK,
   normalizeQuoteRunModelPriceVat,
   type QuoteRunModelPriceVat,
 } from "@/lib/quoteRuns";
 import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatGateMessage, MODEL_PRICE_VAT_ROW_HINT } from "@/features/quotes/quote-details/quoteRunModelPriceVat";
-import { isMarkupFrozen, MARKUP_GATE_MESSAGE } from "@/lib/quoteMarkupApproval";
+import { isMarkupFrozen, markupGateMessage } from "@/lib/quoteMarkupApproval";
+import {
+  defaultMarkupRateFor,
+  formatRatePercent,
+  minMarkupRateFor,
+  normalizeQuoteDealType,
+  QUOTE_DEAL_TYPES,
+  resolveQuoteDealType,
+} from "@/lib/quoteDealType";
 import { resolveQuoteMarkupView } from "@/lib/quoteMarkupView";
 import { useQuoteMarkupApprovals } from "@/features/quotes/quote-details/useQuoteMarkupApprovals";
 import { QuoteRunMarkupPanel } from "@/features/quotes/quote-details/QuoteRunMarkupPanel";
@@ -527,6 +534,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const initialCache = useMemo(() => readQuoteDetailsCache(teamId, quoteId), [teamId, quoteId]);
 
   const [quote, setQuote] = useState<QuoteSummaryRow | null>(() => initialCache?.quote ?? null);
+  /**
+   * Тип угоди — один на весь прорахунок, і від нього залежать ДВА числа:
+   * що підставляється в новий тираж і де стоїть дно (REQ-182).
+   *
+   * `null` тут означає «шкала сюди не поширюється» — мерч і «інше» лишаються
+   * на старих 40 / 20. Шкала Олени виросла з поліграфії, і мерч про неї ніхто
+   * не питав.
+   */
+  const dealType = resolveQuoteDealType(quote?.quote_type, quote?.deal_type);
   const [loading, setLoading] = useState(() => !initialCache?.quote);
   const [error, setError] = useState<string | null>(null);
 
@@ -952,7 +968,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         costPerUnit: null as number | null,
         desiredManagerIncome: 0,
         managerIncome: 0,
-        markupRate: DEFAULT_MARKUP_RATE,
+        markupRate: defaultMarkupRateFor(dealType),
         managerRate: currentManagerRate,
         fixedCostRate: companyRates.fixedCostRate,
         vatRate: companyRates.vatRate,
@@ -976,7 +992,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     // Ціну веде НАКРУТКА, а не бажаний заробіток: заробіток тепер похідний і
     // тому не входить у розрахунок, лише читається з результату. Через це
     // зміна ставки менеджера більше не переписує вже показану клієнту ціну.
-    const markupRate = Math.max(0, resolveNumericRate(run.markup_rate, DEFAULT_MARKUP_RATE));
+    const markupRate = Math.max(0, resolveNumericRate(run.markup_rate, defaultMarkupRateFor(dealType)));
     const pricing = computeRunSalePricingFromMarkup({
       quantity,
       costTotal,
@@ -994,7 +1010,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       fixedCostRate,
       vatRate,
     };
-  }, [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, effectiveManagerId]);
+  }, [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, dealType, effectiveManagerId]);
 
   // ── Оголошено ТУТ, а не серед сусідів за змістом ──────────────────────
   //
@@ -1079,7 +1095,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         unit_price_print: 0,
         logistics_cost: 0,
         desired_manager_income: 0,
-        markup_rate: DEFAULT_MARKUP_RATE,
+        markup_rate: defaultMarkupRateFor(dealType),
         manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
         fixed_cost_rate: companyRates.fixedCostRate,
         vat_rate: companyRates.vatRate,
@@ -1170,7 +1186,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
         logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
         desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
-        markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, DEFAULT_MARKUP_RATE)),
+        markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, defaultMarkupRateFor(dealType))),
         manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
         fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
         vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
@@ -1260,7 +1276,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           // Без накрутки підпис не мінявся від правки САМОГО поля ціни: 40 → 25
           // автозбереження не бачило, і число жило лише до переходу на іншу
           // сторінку. Ціну веде саме воно — у підписі має бути першим ділом.
-          markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, DEFAULT_MARKUP_RATE)),
+          // Дефолт КОЛОНКИ, а не типу угоди: це підпис уже збереженого рядка.
+          // З числом типу зміна типу угоди сама переписувала б підпис і
+          // смикала автозбереження на тиражах, яких ніхто не чіпав.
+          markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, COLUMN_MARKUP_FALLBACK)),
           manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
           fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
           vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
@@ -1285,7 +1304,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           // Без накрутки підпис не мінявся від правки САМОГО поля ціни: 40 → 25
           // автозбереження не бачило, і число жило лише до переходу на іншу
           // сторінку. Ціну веде саме воно — у підписі має бути першим ділом.
-          markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, DEFAULT_MARKUP_RATE)),
+          // Дефолт КОЛОНКИ, а не типу угоди: це підпис уже збереженого рядка.
+          // З числом типу зміна типу угоди сама переписувала б підпис і
+          // смикала автозбереження на тиражах, яких ніхто не чіпав.
+          markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, COLUMN_MARKUP_FALLBACK)),
           manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
           fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
           vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
@@ -1752,6 +1774,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     quoteId,
     teamId,
     userId,
+    dealType,
     items,
     runs,
     getRunPricing,
@@ -2893,7 +2916,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_print: 0,
           logistics_cost: 0,
           desired_manager_income: 0,
-          markup_rate: DEFAULT_MARKUP_RATE,
+          markup_rate: defaultMarkupRateFor(dealType),
           manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
           fixed_cost_rate: companyRates.fixedCostRate,
           vat_rate: companyRates.vatRate,
@@ -2901,7 +2924,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       ]);
       setSelectedRunId(newId);
     }
-  }, [companyRates.fixedCostRate, companyRates.vatRate, runsLoaded, runs.length, items, currentManagerRate]);
+  }, [companyRates.fixedCostRate, companyRates.vatRate, runsLoaded, runs.length, items, currentManagerRate, dealType]);
 
   useEffect(() => {
     if (!runsLoaded || !effectiveManagerId || runs.length === 0) return;
@@ -3453,8 +3476,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     // вікно статусів і канбан-перемикач; окремі перевірки на кожному з них
     // рано чи пізно розійшлися б, і саме через це поріг колись обходили.
     if (nextStatus === "approved" && markup.gate.blocked) {
-      setStatusError(MARKUP_GATE_MESSAGE);
-      toast.error("Спершу погодження накрутки", { description: MARKUP_GATE_MESSAGE });
+      const gateMessage = markupGateMessage(dealType);
+      setStatusError(gateMessage);
+      toast.error("Спершу погодження накрутки", { description: gateMessage });
       return;
     }
     setStatusBusy(true);
@@ -3648,6 +3672,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       deadlineReminderComment: quote.deadline_reminder_comment ?? "",
       currency: quote.currency ?? "UAH",
       quoteType: quote.quote_type ?? "merch",
+      dealType: normalizeQuoteDealType(quote.deal_type),
       deliveryType: quote.delivery_type ?? quote.print_type ?? "",
       deliveryDetails: {
         region: String((quote.delivery_details as Record<string, unknown> | null)?.region ?? ""),
@@ -3724,6 +3749,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         deadlineReminderOffsetMinutes: data.deadlineReminderOffsetMinutes ?? null,
         deadlineReminderComment: data.deadlineReminderComment?.trim() || null,
         quoteType: data.quoteType?.trim() ? data.quoteType : null,
+        // Зміна типу рухає ДНО, але вже поставлені накрутки не переписує:
+        // ціна, яку менеджер порахував, не має мовчки поповзти (REQ-182).
+        dealType: data.dealType,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
         deliveryDetails: data.deliveryDetails ?? null,
         },
@@ -4452,7 +4480,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
 
             <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5 lg:order-none">
-              <QuoteMarkupGateChip blocking={markupGateRuns} onFocus={(id) => focusOnPage(`quote-run-${id}`)} />
+              <QuoteMarkupGateChip blocking={markupGateRuns} dealType={dealType} onFocus={(id) => focusOnPage(`quote-run-${id}`)} />
               <QuoteRunChoiceChip items={runChoiceItems} onFocus={(id) => focusOnPage(`quote-item-${id}`)} />
               {currentStatus === "approved" ? (
                 <Button
@@ -5232,6 +5260,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         краще сказати це тут, ніж за три кроки у вікні створення. */}
                                     <QuoteRunPriceFields
                                       run={activeItemRun}
+                                      dealType={dealType}
                                       pricing={activePricing}
                                       access={runPriceFieldAccess}
                                       markupState={activeRunMarkupState}
@@ -5257,6 +5286,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     <QuoteRunMarkupPanel
                                       view={markupView}
                                       state={activeRunMarkupState}
+                                      dealType={dealType}
                                       pricing={activePricing}
                                       markupRate={activePricing.markupRate}
                                       currency={quote.currency}
@@ -6368,21 +6398,33 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
           <p>
 
-            Система підставляє{" "}
+            {dealType ? (
+              <>
+                На поліграфії відсоток залежить від{" "}
+                <b className="font-semibold text-foreground">типу угоди</b>: тендер, стандартний
+                виробничий, з дизайном і координацією, малий тираж або кастом. У цього прорахунку
+                тип — «{QUOTE_DEAL_TYPES[dealType].label}», тож система підставляє{" "}
+                <b className="font-semibold text-foreground">{formatRatePercent(defaultMarkupRateFor(dealType))} %</b>.
+              </>
+            ) : (
+              <>
+                Система підставляє{" "}
+                <b className="font-semibold text-foreground">{formatRatePercent(defaultMarkupRateFor(dealType))} %</b>.
+              </>
+            )}{" "}
+            Це не стеля: піднімати відсоток можна й треба, на дрібних замовленнях компанія
 
-            <b className="font-semibold text-foreground">{DEFAULT_MARKUP_RATE} %</b> — це
-
-            рекомендований мінімум, а не стеля: на дрібних замовленнях компанія зазвичай заробляє
-
-            значно більше, і піднімати відсоток можна й треба.
+            зазвичай заробляє значно більше.
 
           </p>
 
           <p>
 
-            Нижче <b className="font-semibold text-foreground">{MIN_MARKUP_RATE} %</b> ціну погоджує
+            А от нижче цього числа ціну погоджує СЕО або головний бухгалтер — тут дно
 
-            СЕО або головний бухгалтер. Зберігати й рахувати це не заважає — закритими будуть лише
+            стоїть на <b className="font-semibold text-foreground">{formatRatePercent(minMarkupRateFor(dealType))} %</b>.
+
+            Зберігати й рахувати це не заважає — закритими будуть лише
 
             КП клієнту й перехід у «Затверджено».
 
@@ -6412,6 +6454,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       mode={markup.dialog?.mode ?? null}
       note={markup.dialogNote}
       busy={markup.busy}
+      dealType={dealType}
       onNoteChange={markup.setDialogNote}
       onCancel={() => markup.setDialog(null)}
       onSubmit={() => {

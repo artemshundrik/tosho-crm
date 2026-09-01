@@ -31,6 +31,12 @@ import { Separator } from "@/components/ui/separator";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
 import { cn } from "@/lib/utils";
+import { QuoteDealTypePicker } from "@/features/quotes/components/QuoteDealTypePicker";
+import {
+  DEFAULT_DEAL_TYPE,
+  normalizeQuoteDealType,
+  type QuoteDealType,
+} from "@/lib/quoteDealType";
 import { MAX_ATTACHMENTS } from "@/features/quotes/quotes-page/config";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
@@ -537,6 +543,7 @@ export type NewQuoteFormData = {
   deadlineReminderComment?: string;
   currency: string;
   quoteType: string;
+  dealType: QuoteDealType;
   deliveryType?: string;
   deliveryDetails?: DeliveryDetails;
   categoryId?: string;
@@ -601,6 +608,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [deadlineReminderComment, setDeadlineReminderComment] = React.useState("");
   const [currency, setCurrency] = React.useState("UAH");
   const [quoteType, setQuoteType] = React.useState("merch");
+  // Тип УГОДИ (REQ-182) — від нього підставлена накрутка й дно. Це не
+  // `quoteType` вище: той про категорію товару, цей про характер угоди.
+  const [dealType, setDealType] = React.useState<QuoteDealType>(DEFAULT_DEAL_TYPE);
   const [deliveryType, setDeliveryType] = React.useState("");
   const [deliveryDetails, setDeliveryDetails] = React.useState<DeliveryDetails>(() =>
     createEmptyQuoteDeliveryDetails()
@@ -853,6 +863,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setDeadlineReminderComment(initialValues?.deadlineReminderComment ?? "");
     setCurrency(initialValues?.currency ?? "UAH");
     setQuoteType(initialValues?.quoteType ?? "merch");
+    setDealType(normalizeQuoteDealType(initialValues?.dealType));
     setDeliveryType(initialValues?.deliveryType ?? "");
     setDeliveryDetails({
       region: initialValues?.deliveryDetails?.region ?? "",
@@ -955,6 +966,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     deadlineReminderComment?: string;
     currency?: string;
     quoteType?: string;
+    dealType?: string;
     deliveryType?: string;
     deliveryDetails?: DeliveryDetails;
     designAssigneeId?: string | null;
@@ -1000,6 +1012,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     if (typeof draft.deadlineReminderComment === "string") setDeadlineReminderComment(draft.deadlineReminderComment);
     if (typeof draft.currency === "string") setCurrency(draft.currency);
     if (typeof draft.quoteType === "string") setQuoteType(draft.quoteType);
+    if (typeof draft.dealType === "string") setDealType(normalizeQuoteDealType(draft.dealType));
     if (typeof draft.deliveryType === "string") setDeliveryType(draft.deliveryType);
     if (draft.deliveryDetails && typeof draft.deliveryDetails === "object") setDeliveryDetails(draft.deliveryDetails);
     if (typeof draft.designAssigneeId === "string" || draft.designAssigneeId === null)
@@ -1040,6 +1053,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       deadlineReminderComment,
       currency,
       quoteType,
+      dealType,
       deliveryType,
       deliveryDetails,
       designAssigneeId,
@@ -1072,6 +1086,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       deadlineReminderComment,
       currency,
       quoteType,
+      dealType,
       deliveryType,
       deliveryDetails,
       designAssigneeId,
@@ -1580,6 +1595,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       deadlineReminderComment,
       currency,
       quoteType,
+      dealType,
       deliveryType,
       deliveryDetails: sanitizedDeliveryDetails,
       categoryId,
@@ -1961,6 +1977,16 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 {deadline ? format(deadline, "d MMMM yyyy, HH:mm", { locale: uk }) : "Потрібно вказати дату та час дедлайну"}
               </div>
             </div>
+            {/* Тільки на поліграфії: шкала Олени виросла з неї, на мерчі лишається
+                старе дно 20 % (REQ-182). Показувати перемикач на мерчі означало б
+                просити рішення, яке ні на що не впливає. */}
+            {quoteType === "print" ? (
+              <div className="space-y-2 md:col-span-2">
+                <div className="text-sm text-muted-foreground">Тип угоди</div>
+                <QuoteDealTypePicker value={dealType} onChange={setDealType} />
+              </div>
+            ) : null}
+
             <div className="space-y-2 md:col-span-2">
               <div className="text-sm text-muted-foreground">Коментар до дедлайну / текст нагадування</div>
               <Input

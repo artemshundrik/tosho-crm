@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { QuoteMarkupApproval, QuoteMarkupApprovalStatus } from "@/lib/quoteMarkupApproval";
 import type { MarkupBenchmarkSamples } from "@/lib/quoteMarkupBenchmark";
-import { DEFAULT_MARKUP_RATE } from "@/lib/quoteRuns";
+import { COLUMN_MARKUP_FALLBACK } from "@/lib/quoteRuns";
 
 import { getErrorMessage } from "./config";
 import type { QueryResult } from "./queries";
@@ -216,7 +216,11 @@ export async function fetchMarkupBenchmarkSamples(params: {
       .eq(`quote_items.${column}`, value)
       .neq("quote_id", params.quoteId)
       .gt("quantity", 0)
-      .or(`desired_manager_income.gt.0,markup_rate.neq.${DEFAULT_MARKUP_RATE}`)
+      // Відсіюємо рядки, що лишились на дефолті КОЛОНКИ (40): у них накрутку
+      // ніхто не задавав, і орієнтир з них вийшов би рівний сорока незалежно
+      // від того, як компанія насправді торгує. Число типу угоди тут ні до
+      // чого — воно з'явилось пізніше й у старих рядках його немає.
+      .or(`desired_manager_income.gt.0,markup_rate.neq.${COLUMN_MARKUP_FALLBACK}`)
       .limit(500);
     if (error) throw error;
     return ((data as Array<{ markup_rate: number | string | null }> | null) ?? [])

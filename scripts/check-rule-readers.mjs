@@ -70,6 +70,20 @@ const RULES = [
     },
     fix: "Погоджений тираж один на прорахунок, і перенесення позначки має йти через applyApprovedRunToggle із @/lib/quoteRuns — інакше на прорахунку опиняється два погоджених тиражі або жодного, а замовлення бере не ту ціну.",
   },
+  {
+    name: "тип угоди й дно накрутки",
+    module: "quoteDealType",
+    /** Колонка, що визначає підставлену накрутку й дно ціни (REQ-182). */
+    raw: /\bdeal_type\b/,
+    scope: /quote|прорахун|накрут/i,
+    allow: {
+      "src/lib/quoteDealType.ts": "сам модуль правила",
+      "src/lib/toshoApi.ts": "запис колонки при створенні та правці прорахунку",
+      "src/lib/database.types.ts": "згенеровані типи бази",
+      "src/features/quotes/quote-details/queries.ts": "копія прорахунку ПЕРЕДАЄ тип далі, а не тлумачить його",
+    },
+    fix: "Дно й підставлена накрутка залежать від типу угоди: бери їх через minMarkupRateFor / defaultMarkupRateFor із @/lib/quoteDealType, а сире значення колонки проганяй крізь normalizeQuoteDealType. Число в коді означало б чуже дно на екрані — рівно те, від чого шкала й рятує.",
+  },
 ];
 
 const SCAN_DIRS = ["src", "netlify"];

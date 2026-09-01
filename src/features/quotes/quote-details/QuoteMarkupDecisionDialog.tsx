@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { MIN_MARKUP_RATE } from "@/lib/quoteRuns";
+import { formatRatePercent, minMarkupRateFor, type QuoteDealType } from "@/lib/quoteDealType";
 
 /**
  * Одне вікно на дві дії: менеджер пояснює, чому просить нижче дна, погоджувач —
@@ -22,6 +22,7 @@ export function QuoteMarkupDecisionDialog({
   mode,
   note,
   busy,
+  dealType,
   onNoteChange,
   onCancel,
   onSubmit,
@@ -29,6 +30,8 @@ export function QuoteMarkupDecisionDialog({
   mode: "request" | "reject" | null;
   note: string;
   busy: boolean;
+  /** Дно цього прорахунку — заголовок має назвати те саме число, що й смуга. */
+  dealType: QuoteDealType | null | undefined;
   onNoteChange: (next: string) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -44,7 +47,9 @@ export function QuoteMarkupDecisionDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {rejecting ? "Відхилити накрутку" : `Погодження накрутки нижче ${MIN_MARKUP_RATE} %`}
+            {rejecting
+              ? "Відхилити накрутку"
+              : `Погодження накрутки нижче ${formatRatePercent(minMarkupRateFor(dealType))} %`}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">

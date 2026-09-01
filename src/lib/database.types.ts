@@ -3994,6 +3994,7 @@ export type Database = {
           deadline_note: string | null
           deadline_reminder_comment: string | null
           deadline_reminder_offset_minutes: number | null
+          deal_type: string
           decided_at: string | null
           decided_reason: string | null
           delivery_details: Json | null
@@ -4029,6 +4030,7 @@ export type Database = {
           deadline_note?: string | null
           deadline_reminder_comment?: string | null
           deadline_reminder_offset_minutes?: number | null
+          deal_type?: string
           decided_at?: string | null
           decided_reason?: string | null
           delivery_details?: Json | null
@@ -4064,6 +4066,7 @@ export type Database = {
           deadline_note?: string | null
           deadline_reminder_comment?: string | null
           deadline_reminder_offset_minutes?: number | null
+          deal_type?: string
           decided_at?: string | null
           decided_reason?: string | null
           delivery_details?: Json | null

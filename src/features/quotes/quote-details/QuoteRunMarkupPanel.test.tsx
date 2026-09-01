@@ -55,6 +55,7 @@ function renderPanel(options: {
   canApprove?: boolean;
 }) {
   const state = resolveQuoteRunMarkupState({
+        dealType: null,
     costTotal: COST,
     markupRate: RATE,
     approval: options.approval ?? null,
@@ -63,6 +64,7 @@ function renderPanel(options: {
   const onRequestApproval = vi.fn();
   render(
     <QuoteRunMarkupPanel
+        dealType={null}
       view={QUOTE_MARKUP_VIEWS[options.view]}
       state={state}
       pricing={pricing}
@@ -184,8 +186,10 @@ describe("колір заливки несе стан дверей, а не «н
     for (const status of ["pending", "rejected"] as const) {
       const { container, unmount } = render(
         <QuoteRunMarkupPanel
+        dealType={null}
           view={QUOTE_MARKUP_VIEWS.manager}
           state={resolveQuoteRunMarkupState({
+        dealType: null,
             costTotal: COST,
             markupRate: RATE,
             approval: approval({ status }),
@@ -212,8 +216,10 @@ describe("колір заливки несе стан дверей, а не «н
   it("підтверджена накрутка — синя, хоч і нижче дна: бити тривогу вже нема за що", () => {
     const { container } = render(
       <QuoteRunMarkupPanel
+        dealType={null}
         view={QUOTE_MARKUP_VIEWS.manager}
         state={resolveQuoteRunMarkupState({
+        dealType: null,
           costTotal: COST,
           markupRate: RATE,
           approval: approval({ status: "approved" }),
@@ -239,8 +245,10 @@ describe("відмітка-орієнтир", () => {
   it("орієнтира немає — сказано один раз, на смузі, а не двічі", () => {
     render(
       <QuoteRunMarkupPanel
+        dealType={null}
         view={QUOTE_MARKUP_VIEWS.seo}
-        state={resolveQuoteRunMarkupState({ costTotal: COST, markupRate: 40 })}
+        state={resolveQuoteRunMarkupState({
+        dealType: null, costTotal: COST, markupRate: 40 })}
         pricing={pricing}
         markupRate={40}
         currency="UAH"
@@ -257,6 +265,31 @@ describe("відмітка-орієнтир", () => {
     // Чесна відповідь лишається одна — підпис на самій смузі.
     expect(screen.queryByText(/орієнтир на цій позиції/)).toBeNull();
     expect(screen.getByText("орієнтира немає")).toBeTruthy();
+  });
+
+  it("на поліграфії нотатка поступається підпису дна — вони стоять в одному місці", () => {
+    // Дно 53,8 % падає на 44,9 % смуги, а «орієнтира немає» приколочене до
+    // середини: підписи наїжджали один на одного (помічено в прев'ю
+    // 01.09.2026). Ховається саме нотатка: дно — правило, за яким ціна йде на
+    // погодження, а відсутність орієнтира вже видно з порожньої смуги.
+    render(
+      <QuoteRunMarkupPanel
+        dealType="standard"
+        view={QUOTE_MARKUP_VIEWS.seo}
+        state={resolveQuoteRunMarkupState({ dealType: "standard", costTotal: COST, markupRate: 60 })}
+        pricing={pricing}
+        markupRate={60}
+        currency="UAH"
+        benchmark={null}
+        canEditMarkup
+        canApprove
+        onChangeMarkupRate={vi.fn()}
+        onRequestApproval={vi.fn()}
+        onDecide={vi.fn()}
+      />
+    );
+    expect(screen.queryByText("орієнтира немає")).toBeNull();
+    expect(screen.getByText(/дно 53,8 %/)).toBeTruthy();
   });
 });
 

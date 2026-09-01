@@ -54,6 +54,14 @@ import {
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
 import { cn } from "@/lib/utils";
+import {
+  DEAL_TYPE_ORDER,
+  DEFAULT_DEAL_TYPE,
+  defaultMarkupRateFor,
+  formatRatePercent,
+  QUOTE_DEAL_TYPES,
+  type QuoteDealType,
+} from "@/lib/quoteDealType";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MAX_ATTACHMENTS } from "@/features/quotes/quotes-page/config";
 import {
@@ -184,6 +192,11 @@ export type QuoteBatchBuilderFormData = {
   deadlineAt: string | null;
   deadlineNote: string;
   currency: string;
+  /**
+   * Тип угоди (REQ-182) — визначає підставлену накрутку й дно ціни. Один на всі
+   * прорахунки, створені за цей захід: білдер робить їх однією угодою.
+   */
+  dealType: QuoteDealType;
   comment: string;
   notes: string;
   products: QuoteBatchProductSubmitData[];
@@ -814,6 +827,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const [deadlineAt, setDeadlineAt] = React.useState("");
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = React.useState(false);
   const [currency, setCurrency] = React.useState("UAH");
+  const [dealType, setDealType] = React.useState<QuoteDealType>(DEFAULT_DEAL_TYPE);
   const [notes, setNotes] = React.useState("");
   const [products, setProducts] = React.useState<ProductDraft[]>(() => [createProductDraft()]);
   const [activeProductId, setActiveProductId] = React.useState(products[0]?.id ?? "");
@@ -861,6 +875,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     setDeadlineAt("");
     setDeadlinePopoverOpen(false);
     setCurrency("UAH");
+    setDealType(DEFAULT_DEAL_TYPE);
     setNotes("");
     setProducts([firstProduct]);
     setActiveProductId(firstProduct.id);
@@ -962,6 +977,9 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
 
 
   const activeProduct = products.find((product) => product.id === activeProductId) ?? products[0];
+  // Шкала типів угоди діє лише на поліграфії, тож і питати про неї є сенс,
+  // лише коли в заході є хоч один поліграфічний товар (REQ-182).
+  const hasPrintProduct = products.some((product) => product.quoteType === "print");
   const activeIndex = Math.max(0, products.findIndex((product) => product.id === activeProduct?.id));
 
   const getConfiguratorPresetForSelection = React.useCallback(
@@ -1622,6 +1640,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       deadlineAt: normalizeDeadlineInput(deadlineAt),
       deadlineNote: "",
       currency,
+      dealType,
       comment: "",
       notes: notes.trim(),
       products: normalizedProducts,
@@ -1970,6 +1989,36 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     </Chip>
                   }
                 />
+                {/* Тип угоди стоїть тут, а не в товарі: він описує УГОДУ, і від
+                    нього залежить дно ціни на тиражах ПОЛІГРАФІЧНИХ прорахунків
+                    цього заходу (REQ-182). Відсоток у підписі — щоб вибір не
+                    читався як довідкове поле.
+
+                    З'являється лише коли в заході є поліграфія: на мерчі шкала
+                    не діє, і постійний контрол просив би рішення, яке нічого не
+                    змінює. */}
+                {hasPrintProduct ? (
+                <Select
+                  value={dealType}
+                  onValueChange={(next) => setDealType(next as QuoteDealType)}
+                >
+                  <SelectTrigger className="h-9 w-[248px] rounded-full">
+                    <SelectValue placeholder="Тип угоди" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEAL_TYPE_ORDER.map((key) => (
+                      <SelectItem key={key} value={key}>
+                        <span className="flex w-full items-center justify-between gap-3">
+                          <span>{QUOTE_DEAL_TYPES[key].label}</span>
+                          <span className="tabular-nums text-2xs text-muted-foreground">
+                            {formatRatePercent(defaultMarkupRateFor(key))} %
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                ) : null}
                 <Select value={currency} onValueChange={setCurrency}>
                   <SelectTrigger className="h-9 w-[104px] rounded-full">
                     <SelectValue placeholder="Валюта" />

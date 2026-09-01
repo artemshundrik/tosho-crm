@@ -33,7 +33,8 @@ import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/contro
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
-import { computeRunSalePricingFromMarkup, DEFAULT_MARKUP_RATE } from "@/lib/quoteRuns";
+import { computeRunSalePricingFromMarkup } from "@/lib/quoteRuns";
+import { defaultMarkupRateFor } from "@/lib/quoteDealType";
 import {
   loadCompanyPricingRates,
   loadCompanyPricingRateHistory,
@@ -1029,7 +1030,15 @@ function PricingRatesPanel() {
   // Показувати тут зростання ціни означало б лякати керівництво наслідком,
   // якого не буде, і ховати той, який буде.
   const preview = React.useMemo(() => {
-    const sample = { quantity: 180, costTotal: 8172, markupRate: DEFAULT_MARKUP_RATE, managerRate: 10 };
+    // Зразок для прев'ю ставок: беремо звичайний виробничий прорахунок, бо саме
+    // таких у роботі більшість. Число тут ілюстративне — на самі ставки воно
+    // не впливає, показує лише, як вони ділять ту саму накрутку.
+    const sample = {
+      quantity: 180,
+      costTotal: 8172,
+      markupRate: defaultMarkupRateFor("standard"),
+      managerRate: 10,
+    };
     const was = computeRunSalePricingFromMarkup({ ...sample, fixedCostRate: savedFixed, vatRate: savedVat });
     const now = computeRunSalePricingFromMarkup({
       ...sample,

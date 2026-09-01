@@ -1,10 +1,19 @@
-import { MIN_MARKUP_RATE, needsMarkupApproval } from "@/lib/quoteRuns";
+import {
+  formatRatePercent,
+  minMarkupRateFor,
+  type QuoteDealType,
+} from "@/lib/quoteDealType";
+import { needsMarkupApproval } from "@/lib/quoteRuns";
 
 /**
- * Стан погодження накрутки нижче дна 20 % (REQ-149).
+ * Стан погодження накрутки нижче дна (REQ-149).
+ *
+ * Дно з 01.09.2026 залежить від типу угоди (REQ-182), тож кожен вхід сюди
+ * несе `dealType`. Раніше це була константа 20 %, однакова на тендер і на
+ * кастомну сотню блокнотів.
  *
  * ГОЛОВНЕ ПРАВИЛО, З ЯКОГО ВИРІС ЦЕЙ ФАЙЛ: дно не блокує роботу. Прорахунок
- * нижче 20 % редагується й зберігається як завжди — замикаються тільки двері
+ * нижче дна редагується й зберігається як завжди — замикаються тільки двері
  * назовні (КП клієнту й перехід у «Затверджено»). Тверда заборона на
  * попередньому порозі не прибирала потребу, а переносила її в цифри: у
  * TS-0826-0039 проджект вписав 1000 ₴ о 08:13 лише щоб зняти блокування, і
@@ -87,12 +96,17 @@ export function isMarkupApprovalStillBinding(
 export function resolveQuoteRunMarkupState(params: {
   costTotal: number;
   markupRate: number;
+  /** Тип угоди прорахунку — від нього дно (REQ-182). */
+  dealType: QuoteDealType | null | undefined;
   approval?: QuoteMarkupApproval | null;
 }): QuoteRunMarkupState {
   const costTotal = Number(params.costTotal) || 0;
   const markupRate = Number(params.markupRate) || 0;
+  const dealType = params.dealType;
   if (costTotal <= 0) return { kind: "draft", approval: null };
-  if (!needsMarkupApproval({ costTotal, markupRate })) return { kind: "ok", approval: null };
+  if (!needsMarkupApproval({ costTotal, markupRate, dealType })) {
+    return { kind: "ok", approval: null };
+  }
 
   const approval = params.approval ?? null;
   if (!approval) return { kind: "under", approval: null };
@@ -148,14 +162,30 @@ export type QuoteMarkupGate = {
  * і саме тому «позначу інший тираж» не має бути обхідним шляхом.
  */
 export function resolveQuoteMarkupGate(
-  runs: Array<{ id: string; costTotal: number; markupRate: number; approval?: QuoteMarkupApproval | null }>
+  runs: Array<{
+    id: string;
+    costTotal: number;
+    markupRate: number;
+    approval?: QuoteMarkupApproval | null;
+  }>,
+  /** Тип угоди один на весь прорахунок, тож і дно в усіх тиражів одне. */
+  dealType: QuoteDealType | null | undefined
 ): QuoteMarkupGate {
   const blockingRunIds = runs
-    .filter((run) => isMarkupBlockingRelease(resolveQuoteRunMarkupState(run)))
+    .filter((run) => isMarkupBlockingRelease(resolveQuoteRunMarkupState({ ...run, dealType })))
     .map((run) => run.id);
   return { blockingRunIds, blocked: blockingRunIds.length > 0 };
 }
 
-export const MARKUP_GATE_MESSAGE =
-  `Накрутка нижче дна ${MIN_MARKUP_RATE} % — спершу погодження СЕО або головного бухгалтера. ` +
-  "Рахувати й зберігати прорахунок це не заважає.";
+/**
+ * Чому функція, а не константа: дно залежить від типу угоди, і повідомлення з
+ * чужим числом гірше за відсутнє — менеджер піде шукати помилку в ціні, якої
+ * там немає.
+ */
+export function markupGateMessage(dealType: QuoteDealType | null | undefined): string {
+  return (
+    `Накрутка нижче дна ${formatRatePercent(minMarkupRateFor(dealType))} % — ` +
+    "спершу погодження СЕО або головного бухгалтера. " +
+    "Рахувати й зберігати прорахунок це не заважає."
+  );
+}

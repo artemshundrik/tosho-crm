@@ -55,10 +55,12 @@ function renderFields(options: {
   });
   render(
     <QuoteRunPriceFields
+      dealType="standard"
       run={target}
       pricing={pricing}
       access={{ ...fullAccess, ...options.access }}
       markupState={resolveQuoteRunMarkupState({
+        dealType: "standard",
         costTotal: pricing.costTotal,
         markupRate: target.markup_rate,
         approval: null,

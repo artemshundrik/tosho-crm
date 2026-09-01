@@ -1,7 +1,7 @@
 import { AlertTriangle, Lock } from "lucide-react";
 
 import { HoverTip } from "@/components/ui/hover-tip";
-import { MIN_MARKUP_RATE } from "@/lib/quoteRuns";
+import { formatRatePercent, minMarkupRateFor, type QuoteDealType } from "@/lib/quoteDealType";
 
 /**
  * Прапорці біля статусу прорахунку — те, що тримає двері назовні зачиненими.
@@ -33,9 +33,12 @@ const LIST_CLASS = "mt-2 flex flex-col gap-1 border-t border-border/40 pt-2";
 /** Тиражі нижче дна без чинного погодження: КП клієнту й «Затверджено» замкнені. */
 export function QuoteMarkupGateChip({
   blocking,
+  dealType,
   onFocus,
 }: {
   blocking: QuoteMarkupGateRun[];
+  /** Дно називаємо числом цього прорахунку, а не спільним для всіх (REQ-182). */
+  dealType: QuoteDealType | null | undefined;
   /** Довезти до першого винуватця: сам лічильник не каже, де він на сторінці. */
   onFocus?: (runId: string) => void;
 }) {
@@ -52,7 +55,8 @@ export function QuoteMarkupGateChip({
           {blocking.length === 1
             ? "Один тираж стоїть нижче дна "
             : `${blocking.length} тиражі стоять нижче дна `}
-          {MIN_MARKUP_RATE} % — потрібне підтвердження СЕО або головного бухгалтера. Рахувати,
+          {formatRatePercent(minMarkupRateFor(dealType))} % — потрібне підтвердження СЕО або
+          головного бухгалтера. Рахувати,
           редагувати й зберігати прорахунок це не заважає.
           <span className={LIST_CLASS}>
             {blocking.map((run) => (

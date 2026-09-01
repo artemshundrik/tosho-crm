@@ -6,12 +6,16 @@ import { PercentAmountInput } from "@/features/quotes/components/PercentAmountIn
 import { cn } from "@/lib/utils";
 import type { QuoteRunMarkupState } from "@/lib/quoteMarkupApproval";
 import {
-  DEFAULT_MARKUP_RATE,
   MODEL_PRICE_VAT_LABEL,
   normalizeQuoteRunModelPriceVat,
   type QuoteRunModelPriceVat,
   type RunSalePricing,
 } from "@/lib/quoteRuns";
+import {
+  defaultMarkupRateFor,
+  formatRatePercent,
+  type QuoteDealType,
+} from "@/lib/quoteDealType";
 import type { QuoteRunPriceFieldAccess } from "@/lib/permissions";
 import type { QuoteRun } from "@/lib/toshoApi";
 
@@ -55,6 +59,7 @@ export function QuoteRunPriceFields({
   access,
   markupState,
   markupFrozen,
+  dealType,
   currency,
   lockHint,
   onChange,
@@ -66,6 +71,8 @@ export function QuoteRunPriceFields({
   access: QuoteRunPriceFieldAccess;
   markupState: QuoteRunMarkupState;
   markupFrozen: boolean;
+  /** Тип угоди — з нього підказка в порожньому полі накрутки (REQ-182). */
+  dealType: QuoteDealType | null | undefined;
   currency?: string | null;
   /** Підказка «це поле заповнює …» зі сторінки — вона знає статусний гейт. */
   lockHint: (allowed: boolean, who: string) => string | undefined;
@@ -162,7 +169,7 @@ export function QuoteRunPriceFields({
           }
           onValueChange={(next) => onChange("markup_rate", next)}
           className={cn(belowFloor && "border-warning-soft-border focus-visible:ring-warning-soft-border/40")}
-          placeholder={String(DEFAULT_MARKUP_RATE)}
+          placeholder={formatRatePercent(defaultMarkupRateFor(dealType))}
           min={0}
         />
         {/* Зв'язок між відсотком і грошима стоїть просто під полем і рахується

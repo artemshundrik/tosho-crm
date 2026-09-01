@@ -7,9 +7,8 @@ import {
   getRunSalePricingFromRun,
   mergeQuoteRunsWithExisting,
   needsMarkupApproval,
-  DEFAULT_MARKUP_RATE,
-  MIN_MARKUP_RATE,
 } from "./quoteRuns";
+import { defaultMarkupRateFor, minMarkupRateFor } from "@/lib/quoteDealType";
 
 /**
  * Це — ГРОШІ. computeRunSalePricing — єдине джерело правди продажної ціни
@@ -145,7 +144,7 @@ describe("findRunsNeedingModelPriceVat", () => {
     unit_price_print: 0,
     logistics_cost: 0,
     desired_manager_income: 0,
-    markup_rate: DEFAULT_MARKUP_RATE,
+    markup_rate: defaultMarkupRateFor("standard"),
     manager_rate: 10,
     fixed_cost_rate: 30,
     vat_rate: 20,
@@ -491,20 +490,20 @@ describe("computeRunSalePricingFromMarkup", () => {
 
 describe("needsMarkupApproval", () => {
   it("нижче дна — на погодження", () => {
-    expect(needsMarkupApproval({ costTotal: 12400, markupRate: MIN_MARKUP_RATE - 0.1 })).toBe(true);
+    expect(needsMarkupApproval({ costTotal: 12400, markupRate: minMarkupRateFor("standard") - 0.1, dealType: "standard" })).toBe(true);
   });
 
   it("рівно дно — без погодження", () => {
-    expect(needsMarkupApproval({ costTotal: 12400, markupRate: MIN_MARKUP_RATE })).toBe(false);
+    expect(needsMarkupApproval({ costTotal: 12400, markupRate: minMarkupRateFor("standard"), dealType: "standard" })).toBe(false);
   });
 
   it("підставлене за замовчуванням значення проходить саме", () => {
-    expect(needsMarkupApproval({ costTotal: 12400, markupRate: DEFAULT_MARKUP_RATE })).toBe(false);
+    expect(needsMarkupApproval({ costTotal: 12400, markupRate: defaultMarkupRateFor("standard"), dealType: "standard" })).toBe(false);
   });
 
   it("тираж без собівартості не питаємо — це заготовка", () => {
     // Те саме правило, що у validateRunEconomics: поріг вмикається, коли
     // з'являються гроші, а не коли створили рядок.
-    expect(needsMarkupApproval({ costTotal: 0, markupRate: 0 })).toBe(false);
+    expect(needsMarkupApproval({ costTotal: 0, markupRate: 0, dealType: "standard" })).toBe(false);
   });
 });

@@ -14,7 +14,12 @@ import {
   type QuoteRunMarkupState,
 } from "@/lib/quoteMarkupApproval";
 import type { QuoteMarkupView } from "@/lib/quoteMarkupView";
-import { MIN_MARKUP_RATE, type RunSalePricing } from "@/lib/quoteRuns";
+import {
+  formatRatePercent,
+  minMarkupRateFor,
+  type QuoteDealType,
+} from "@/lib/quoteDealType";
+import { type RunSalePricing } from "@/lib/quoteRuns";
 
 import { SplitBar, type SplitPart } from "@/components/app/bento";
 
@@ -126,6 +131,8 @@ const DOT_CLASS: Record<BadgeTone, string> = {
 export type QuoteRunMarkupPanelProps = {
   view: QuoteMarkupView;
   state: QuoteRunMarkupState;
+  /** Тип угоди прорахунку — дно смуги й тексти беруться з нього (REQ-182). */
+  dealType: QuoteDealType | null | undefined;
   pricing: RunSalePricing;
   markupRate: number;
   currency?: string | null;
@@ -182,6 +189,8 @@ function markupNote(params: {
   canApprove: boolean;
   pricing: RunSalePricing;
   markupRate: number;
+  /** Дно цієї угоди у відсотках — рахує викликач, тут воно вже число. */
+  floorRate: number;
   benchmark: MarkupBenchmark | null;
   currency?: string | null;
   managerName?: string | null;
@@ -192,7 +201,8 @@ function markupNote(params: {
   /** Те, що не влазить у рядок, але потрібне, щоб ухвалити рішення. */
   details: Array<{ label: string; value: string }>;
 } | null {
-  const { state, view, canApprove, pricing, markupRate, benchmark, currency } = params;
+  const { state, view, canApprove, pricing, markupRate, benchmark, currency, floorRate } = params;
+  const floorLabel = formatRatePercent(floorRate);
   const who = params.managerName?.trim() || "Менеджер";
   const decider = params.deciderName?.trim() || "Погоджувач";
   const money = (value: number) => formatCurrency(value, currency);
@@ -211,11 +221,11 @@ function markupNote(params: {
     const sent = formatDateTime(state.approval.requestedAt);
     // Ціну на дні й ціну запиту рахуємо тут-таки, щоб ніхто не тримав
     // арифметику в голові: рішення ухвалюють про гроші, а не про відсотки.
-    const floorSale = state.approval.costTotal * (1 + MIN_MARKUP_RATE / 100);
+    const floorSale = state.approval.costTotal * (1 + floorRate / 100);
     const askedSale = state.approval.costTotal * (1 + state.approval.markupRate / 100);
     const pendingDetails = [
       { label: "Просить", value: sent ? `${who} · ${sent}` : who },
-      { label: "Просить накрутку", value: `${formatRate(state.approval.markupRate)} замість ${MIN_MARKUP_RATE} %` },
+      { label: "Просить накрутку", value: `${formatRate(state.approval.markupRate)} замість ${floorLabel} %` },
       { label: "Ціна на дні", value: money(floorSale) },
       { label: "Ціна за запитом", value: `${money(askedSale)} · нижче на ${money(floorSale - askedSale)}` },
       { label: "Собівартість, при якій рахували", value: money(state.approval.costTotal) },
@@ -232,7 +242,7 @@ function markupNote(params: {
         text: (
           <>
             <b className="font-semibold text-foreground">
-              {who} просить {formatRate(state.approval.markupRate)} замість {MIN_MARKUP_RATE} %.
+              {who} просить {formatRate(state.approval.markupRate)} замість {floorLabel} %.
             </b>{" "}
             {sent ? `Надіслано ${sent}. ` : ""}
             Ціна впаде з {formatCurrency(floorSale, currency)} до{" "}
@@ -307,9 +317,9 @@ function markupNote(params: {
   }
 
   if (state.kind === "under") {
-    const floorSale = pricing.costTotal * (1 + MIN_MARKUP_RATE / 100);
+    const floorSale = pricing.costTotal * (1 + floorRate / 100);
     const underDetails = [
-      { label: "Накрутка зараз", value: `${formatRate(markupRate)} · дно ${MIN_MARKUP_RATE} %` },
+      { label: "Накрутка зараз", value: `${formatRate(markupRate)} · дно ${floorLabel} %` },
       { label: "Ціна на дні", value: money(floorSale) },
       { label: "Ціна зараз", value: `${money(pricing.saleTotal)} · нижче на ${money(floorSale - pricing.saleTotal)}` },
       { label: "Підписати можуть", value: WHO_SIGNS },
@@ -323,7 +333,7 @@ function markupNote(params: {
         text: (
           <>
             <b className="font-semibold text-foreground">
-              {who} веде ціну нижче дна {MIN_MARKUP_RATE} %.
+              {who} веде ціну нижче дна {floorLabel} %.
             </b>{" "}
             Запит прийде вам, щойно його надішлють.
           </>
@@ -335,7 +345,7 @@ function markupNote(params: {
       details: underDetails,
       text: (
         <>
-          <b className="font-semibold text-foreground">Нижче дна {MIN_MARKUP_RATE} %.</b> Рахувати й зберігати можна далі,
+          <b className="font-semibold text-foreground">Нижче дна {floorLabel} %.</b> Рахувати й зберігати можна далі,
           але КП клієнту й перехід у «Затверджено» відкриються після підтвердження СЕО або головного
           бухгалтера.
         </>
@@ -428,6 +438,7 @@ function PriceSplit({
 export function QuoteRunMarkupPanel({
   view,
   state,
+  dealType,
   pricing,
   markupRate,
   currency,
@@ -456,6 +467,10 @@ export function QuoteRunMarkupPanel({
   // дна». Підтверджена накрутка теж нижче дна, але вона вже дозволена, і
   // тривожити нею око нема за що: бейдж на ній зелений, заливка синя.
   const doorsClosed = !off && isMarkupBlockingRelease(state);
+  // Дно рахуємо один раз на рендер: його називають підпис смуги, позначка,
+  // текст стану й підказка — і всі чотири мають сказати те саме число.
+  const floorRate = minMarkupRateFor(dealType);
+  const floorLabel = formatRatePercent(floorRate);
   const canMove = view.hasSlider && canEditMarkup && !off && !frozen;
   const note = markupNote({
     state,
@@ -463,6 +478,7 @@ export function QuoteRunMarkupPanel({
     canApprove,
     pricing,
     markupRate,
+    floorRate,
     benchmark,
     currency,
     managerName,
@@ -475,7 +491,17 @@ export function QuoteRunMarkupPanel({
   // дно й так видно червоною зоною, і його число повторене в розкладі нижче.
   // Поріг у 9 пунктів шкали — це приблизно ширина «дно 20 %» на цій смузі.
   const showFloorLabel =
-    !benchmark || Math.abs(pctOfTrack(benchmark.rate) - pctOfTrack(MIN_MARKUP_RATE)) > 9;
+    !benchmark || Math.abs(pctOfTrack(benchmark.rate) - pctOfTrack(floorRate)) > 9;
+  /**
+   * «Орієнтира немає» приколочене до середини смуги, і з дном 53,8 % воно
+   * почало наїжджати на підпис дна — раніше дно стояло на 20 % біля лівого краю
+   * й вони не перетинались. Помічено в прев'ю 01.09.2026.
+   *
+   * Ховаємо саме нотатку, а не підпис дна: дно — правило, за яким ціна йде на
+   * погодження, а відсутність орієнтира — довідка, і вона вже сказана тим, що
+   * зеленої риски на смузі немає.
+   */
+  const missingBenchmarkNoteFits = Math.abs(pctOfTrack(floorRate) - 50) > 9;
 
   const track = (
     <>
@@ -563,7 +589,7 @@ export function QuoteRunMarkupPanel({
               */
               onChange={(event) =>
                 onChangeMarkupRate(
-                  snapMarkupRate(Number(event.target.value), [MIN_MARKUP_RATE, benchmark?.rate])
+                  snapMarkupRate(Number(event.target.value), [floorRate, benchmark?.rate])
                 )
               }
               className="absolute inset-0 z-30 m-0 h-full w-full cursor-grab opacity-0 active:cursor-grabbing [&::-moz-range-thumb]:h-full [&::-moz-range-thumb]:w-px [&::-moz-range-thumb]:border-0 [&::-webkit-slider-thumb]:h-full [&::-webkit-slider-thumb]:w-px [&::-webkit-slider-thumb]:appearance-none"
@@ -583,7 +609,7 @@ export function QuoteRunMarkupPanel({
             кружечок виглядав би поламаним. */}
         <span
           className="pointer-events-none absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 rounded-full bg-destructive/70"
-          style={{ left: `${pctOfTrack(MIN_MARKUP_RATE)}%` }}
+          style={{ left: `${pctOfTrack(floorRate)}%` }}
           aria-hidden
         />
         {benchmark ? (
@@ -605,9 +631,9 @@ export function QuoteRunMarkupPanel({
         {showFloorLabel ? (
           <span
             className="absolute -translate-x-1/2 whitespace-nowrap text-destructive/80"
-            style={{ left: `${pctOfTrack(MIN_MARKUP_RATE)}%` }}
+            style={{ left: `${pctOfTrack(floorRate)}%` }}
           >
-            дно {MIN_MARKUP_RATE} %
+            дно {floorLabel} %
           </span>
         ) : null}
         {benchmark ? (
@@ -617,11 +643,11 @@ export function QuoteRunMarkupPanel({
           >
             орієнтир {formatRate(benchmark.rate)}
           </span>
-        ) : (
+        ) : missingBenchmarkNoteFits ? (
           <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
             {benchmarkLoading ? "рахуємо орієнтир…" : "орієнтира немає"}
           </span>
-        )}
+        ) : null}
         <span className="absolute right-0 whitespace-nowrap">{TRACK_MAX} %</span>
       </div>
     </>
@@ -808,7 +834,7 @@ export function QuoteRunMarkupPanel({
             </span>
           </span>
         ) : null}
-        <span>Дно {MIN_MARKUP_RATE} % вмикає погодження, а не блокує збереження</span>
+        <span>Дно {floorLabel} % вмикає погодження, а не блокує збереження</span>
       </div>
     </div>
   );

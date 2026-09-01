@@ -85,12 +85,17 @@ import {
 } from "@/lib/toshoApi";
 import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import {
-  DEFAULT_MARKUP_RATE,
+  COLUMN_MARKUP_FALLBACK,
   getRunSalePricingFromRun,
   mergeQuoteRunsWithExisting,
   normalizeQuoteRunModelPriceVat,
 } from "@/lib/quoteRuns";
-import { MARKUP_GATE_MESSAGE, resolveQuoteMarkupGate } from "@/lib/quoteMarkupApproval";
+import { markupGateMessage, resolveQuoteMarkupGate } from "@/lib/quoteMarkupApproval";
+import {
+  normalizeQuoteDealType,
+  resolveQuoteDealType,
+  type QuoteDealType,
+} from "@/lib/quoteDealType";
 import { fetchMarkupApprovalsForQuotes } from "@/features/quotes/quote-details/markupApproval";
 import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
 import type { NewQuoteFormData, QuoteBatchBuilderFormData } from "@/components/quotes";
@@ -2491,6 +2496,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           customerLogoUrl,
           title: quoteTitleFromLead,
           quoteType: group.quoteType,
+          dealType: data.dealType,
           deliveryType: groupDelivery.deliveryType,
           deliveryDetails: groupDelivery.deliveryDetails,
           comment: quoteComment,
@@ -4002,22 +4008,49 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     // перевірки на кожній кнопці рано чи пізно розійшлися б, а прев'ю показує
     // рівно те, що поїде.
     const markupApprovals = await fetchMarkupApprovalsForQuotes(quoteIds);
-    const markupGate = resolveQuoteMarkupGate(
-      Array.from(runsByQuoteId.values())
-        .flat()
-        .filter((run): run is QuoteRun & { id: string } => !!run.id)
-        .map((run) => {
-          const pricing = getRunSalePricingFromRun(run);
-          return {
-            id: run.id,
-            costTotal: pricing.costTotal,
-            markupRate: Number(run.markup_rate) || 0,
-            approval: markupApprovals.get(run.id) ?? null,
-          };
-        })
+    // Дно залежить від типу УГОДИ, а в комплект їх входить кілька — тому гейт
+    // рахуємо по кожному прорахунку окремо (REQ-182). Спільний прохід по всіх
+    // тиражах брав би дно навмання з першого-ліпшого.
+    const { data: dealTypeRows } = await supabase
+      .schema("tosho")
+      .from("quotes")
+      .select("id,quote_type,deal_type")
+      .in("id", quoteIds);
+    const dealTypeByQuoteId = new Map<string, QuoteDealType | null>(
+      (
+        (dealTypeRows as Array<{
+          id: string;
+          quote_type: string | null;
+          deal_type: string | null;
+        }> | null) ?? []
+      ).map((row) => [row.id, resolveQuoteDealType(row.quote_type, row.deal_type)])
     );
-    if (markupGate.blocked) {
-      throw new Error(MARKUP_GATE_MESSAGE);
+    // `undefined` — «жоден не заблокований». Саме `undefined`, а не `null`:
+    // null — повноцінне значення шкали, воно означає мерч зі старим дном 20 %.
+    let blockedDealType: QuoteDealType | null | undefined;
+    for (const [quoteId, quoteRuns] of runsByQuoteId) {
+      const dealType = dealTypeByQuoteId.get(quoteId) ?? null;
+      const gate = resolveQuoteMarkupGate(
+        quoteRuns
+          .filter((run): run is QuoteRun & { id: string } => !!run.id)
+          .map((run) => {
+            const pricing = getRunSalePricingFromRun(run);
+            return {
+              id: run.id,
+              costTotal: pricing.costTotal,
+              markupRate: Number(run.markup_rate) || 0,
+              approval: markupApprovals.get(run.id) ?? null,
+            };
+          }),
+        dealType
+      );
+      if (gate.blocked) {
+        blockedDealType = dealType;
+        break;
+      }
+    }
+    if (blockedDealType !== undefined) {
+      throw new Error(markupGateMessage(blockedDealType));
     }
     const { data: visualizationRows, error: visualizationsError } = await supabase
       .schema("tosho")
@@ -4727,6 +4760,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         customerLogoUrl: sourceQuote.customer_logo_url ?? null,
         title: sourceQuote.title ?? null,
         quoteType: sourceQuote.quote_type ?? null,
+        // Копія лишається тією ж угодою — тип, а отже й дно, переїжджає з нею.
+        dealType: sourceQuote.deal_type ?? null,
         printType: sourceQuote.print_type ?? null,
         deliveryType: sourceQuote.delivery_type ?? null,
         deliveryDetails: sourceQuote.delivery_details ?? null,
@@ -4803,7 +4838,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             logistics_cost: Number(run.logistics_cost ?? 0) || 0,
             desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
             // Копія прорахунку успадковує рішення про ціну, а не стрибає на дефолт.
-            markup_rate: Number(run.markup_rate ?? DEFAULT_MARKUP_RATE) || DEFAULT_MARKUP_RATE,
+            markup_rate: Number(run.markup_rate ?? COLUMN_MARKUP_FALLBACK) || COLUMN_MARKUP_FALLBACK,
             manager_rate: Number.isFinite(Number(run.manager_rate)) ? Number(run.manager_rate) : DEFAULT_MANAGER_RATE,
             fixed_cost_rate: Number.isFinite(Number(run.fixed_cost_rate)) ? Number(run.fixed_cost_rate) : companyRates.fixedCostRate,
             vat_rate: Number.isFinite(Number(run.vat_rate)) ? Number(run.vat_rate) : companyRates.vatRate,
@@ -4857,6 +4892,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       deadlineReminderComment: row.deadline_reminder_comment ?? "",
       currency: row.currency ?? "UAH",
       quoteType: row.quote_type ?? "merch",
+      dealType: normalizeQuoteDealType(row.deal_type),
       deliveryType: row.delivery_type ?? row.print_type ?? "",
       deliveryDetails: emptyDeliveryDetails(),
     });
@@ -4897,6 +4933,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         deadlineReminderComment: fresh.deadline_reminder_comment ?? "",
         currency: fresh.currency ?? row.currency ?? "UAH",
         quoteType: fresh.quote_type ?? "merch",
+        dealType: normalizeQuoteDealType(fresh.deal_type),
         deliveryType: fresh.delivery_type ?? fresh.print_type ?? "",
         deliveryDetails: {
           ...emptyDeliveryDetails(),
@@ -5000,6 +5037,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         deadlineReminderOffsetMinutes: data.deadlineReminderOffsetMinutes ?? null,
         deadlineReminderComment: data.deadlineReminderComment?.trim() || null,
         quoteType: data.quoteType?.trim() ? data.quoteType : null,
+        dealType: data.dealType,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
         deliveryDetails: data.deliveryDetails ?? null,
       });
