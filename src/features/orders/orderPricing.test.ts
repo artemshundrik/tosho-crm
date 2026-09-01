@@ -35,12 +35,22 @@ const run = (overrides: Partial<QuoteRun> = {}): QuoteRun => ({
   ...overrides,
 });
 
+/**
+ * Ціну веде ШТУКА, округлена до копійок, а сума множиться назад із неї
+ * (рішення Артема 01.09.2026, roundUnitPrice у src/lib/quoteRuns.ts). Тому
+ * очікування нижче проганяємо крізь те саме правило: інакше вони перевіряли б
+ * не склад ціни, а те, що округлення не існує.
+ */
+const asPriced = (rawTotal: number, quantity: number) =>
+  (Math.round((rawTotal / quantity) * 100) / 100) * quantity;
+
 describe("ціна тиражу в замовленні", () => {
   it("несе продажну ціну з націнкою, а не собівартість", () => {
     // Собівартість тут 25,8 × 180 = 4 644. Продаж — 8 284: саме це число
     // показує картка прорахунку, і саме воно має піти в рахунок.
-    expect(getRunLineTotal(run())).toBeCloseTo(8284, 2);
-    expect(getRunUnitPrice(run())).toBeCloseTo(46.0222, 3);
+    expect(getRunLineTotal(run())).toBeCloseTo(asPriced(8284, 180), 2);
+    // За штуку — рівно два знаки, і це вже не «приблизно».
+    expect(getRunUnitPrice(run())).toBe(46.02);
   });
 
   it("не плутає ціну за одиницю із сумою тиражу", () => {
@@ -50,7 +60,7 @@ describe("ціна тиражу в замовленні", () => {
   it("логістику додає разово, а не до кожної одиниці", () => {
     const withLogistics = run({ logistics_cost: 900 });
     // Логістика входить у собівартість ОДИН раз: 25,8 × 180 + 900 = 5 544.
-    const expected = 5544 * (1 + (3640 / 4644));
+    const expected = asPriced(5544 * (1 + 3640 / 4644), 180);
     expect(getRunLineTotal(withLogistics)).toBeCloseTo(expected, 2);
     expect(getRunUnitPrice(withLogistics)).toBeCloseTo(expected / 180, 6);
   });
@@ -63,7 +73,8 @@ describe("ціна тиражу в замовленні", () => {
     // 30.08.2026, але це саме зміна поведінки, а не побічний ефект.
     const delta = getRunLineTotal(run({ logistics_cost: 900 })) - getRunLineTotal(run());
     expect(delta).toBeGreaterThan(900);
-    expect(delta).toBeCloseTo(900 * (1 + 3640 / 4644), 2);
+    // Допуск — копійка на штуку × 180: рівно стільки може з'їсти округлення.
+    expect(delta).toBeCloseTo(900 * (1 + 3640 / 4644), 0);
   });
 
   it("тираж без накрутки дає ціну = собівартості", () => {

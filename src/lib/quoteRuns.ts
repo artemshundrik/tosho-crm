@@ -9,6 +9,23 @@ import type { QuoteRun } from "@/lib/toshoApi";
 const MARKUP_EPSILON = 1e-9;
 
 /**
+ * Ціна за штуку округлюється до КОПІЙОК, і сума тиражу рахується вже з неї.
+ *
+ * Рішення Артема 01.09.2026: «до двох знаків після коми за штуку». Порядок тут
+ * не косметика — він визначає, яке з двох чисел збігається на екрані. Раніше
+ * сума ділилась на кількість «як вийде», і в КП штука × кількість не давало
+ * підсумок: 504,847… ₴ × 20 показувалось як 504,85 × 20 = 10 097,00, а в
+ * підсумку стояло 10 096,94. Клієнт бачить обидва числа в одному рядку, і
+ * розбіг у копійки читається як помилка в рахунку.
+ *
+ * Тому округлюємо ціну за штуку, а суму множимо назад із неї — тоді сходиться
+ * саме те, що людина перевіряє очима.
+ */
+function roundUnitPrice(value: number): number {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+/**
  * Чи включає вартість товару ПДВ. Три стани, і `null` — повноцінний із них:
  * «ще не обрано». Дефолту немає навмисно (scripts/quote-run-model-price-vat.sql).
  *
@@ -88,9 +105,13 @@ export function computeRunSalePricing(params: {
   const requiredGrossProfit = managerRate > 0 ? desiredManagerIncome / (managerRate / 100) : 0;
   const fixedCosts = requiredGrossProfit * (fixedCostRate / 100);
   const vatAmount = (requiredGrossProfit + fixedCosts) * (vatRate / 100);
-  const markupTotal = requiredGrossProfit + fixedCosts + vatAmount;
-  const saleTotal = costTotal + markupTotal;
-  const saleUnitPrice = quantity > 0 ? saleTotal / quantity : null;
+  const rawMarkupTotal = requiredGrossProfit + fixedCosts + vatAmount;
+  // Те саме округлення, що й у формі з накрутки: інакше тест, який доводить
+  // рівність двох форм, ловив би розбіг у копійки на порожньому місці.
+  const saleUnitPrice =
+    quantity > 0 ? roundUnitPrice((costTotal + rawMarkupTotal) / quantity) : null;
+  const saleTotal = saleUnitPrice === null ? costTotal + rawMarkupTotal : saleUnitPrice * quantity;
+  const markupTotal = saleTotal - costTotal;
   return {
     costTotal,
     costPerUnit,
@@ -164,12 +185,16 @@ export function computeRunSalePricingFromMarkup(params: {
   const fixedCostRate = Math.max(0, Number(params.fixedCostRate) || 0);
   const vatRate = Math.max(0, Number(params.vatRate) || 0);
 
-  const markupTotal = costTotal * (markupRate / 100);
+  // Ціну веде ШТУКА: округлюємо її, а суму множимо назад — див. roundUnitPrice.
+  // Тираж без кількості ціни за штуку не має, тож там лишається сира сума.
+  const saleUnitPrice = quantity > 0 ? roundUnitPrice((costTotal * (1 + markupRate / 100)) / quantity) : null;
+  const saleTotal = saleUnitPrice === null ? costTotal * (1 + markupRate / 100) : saleUnitPrice * quantity;
+  // Накрутку беремо з ОКРУГЛЕНОЇ суми, інакше «собівартість + накрутка» на
+  // екрані не дорівнювало б ціні на ті самі копійки.
+  const markupTotal = saleTotal - costTotal;
   const requiredGrossProfit = markupTotal / ((1 + fixedCostRate / 100) * (1 + vatRate / 100));
   const fixedCosts = requiredGrossProfit * (fixedCostRate / 100);
   const vatAmount = (requiredGrossProfit + fixedCosts) * (vatRate / 100);
-  const saleTotal = costTotal + markupTotal;
-  const saleUnitPrice = quantity > 0 ? saleTotal / quantity : null;
 
   return {
     costTotal,

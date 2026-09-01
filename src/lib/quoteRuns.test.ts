@@ -486,6 +486,46 @@ describe("computeRunSalePricingFromMarkup", () => {
     expect(Number.isFinite(pricing.saleTotal)).toBe(true);
     expect(pricing.saleTotal).toBe(14000);
   });
+
+  it("ціна за штуку округлена до копійок, і сума множиться назад із неї", () => {
+    // Рішення Артема 01.09.2026. Реальний випадок із TS-0826-0043: собівартість
+    // 6552,20 при накрутці 54,1 % на 20 шт. давала 504,847… ₴ за штуку — у КП
+    // стояло 504,85 × 20, а в підсумку 10 096,94, і рядок сам собі суперечив.
+    const pricing = computeRunSalePricingFromMarkup({
+      quantity: 20, costTotal: 6552.2, markupRate: 54.1,
+      managerRate: 10, fixedCostRate: 30, vatRate: 20,
+    });
+
+    expect(pricing.saleUnitPrice).toBe(504.85);
+    expect(pricing.saleTotal).toBe(10097);
+    // Головне: те, що людина перемножує очима, сходиться до копійки.
+    expect((pricing.saleUnitPrice ?? 0) * 20).toBe(pricing.saleTotal);
+  });
+
+  it("собівартість плюс накрутка дорівнює ціні ПІСЛЯ округлення", () => {
+    // Накрутку беремо з округленої суми, інакше розклад під ціною не сходився б
+    // із самою ціною на ті самі копійки.
+    const pricing = computeRunSalePricingFromMarkup({
+      quantity: 20, costTotal: 6552.2, markupRate: 54.1,
+      managerRate: 10, fixedCostRate: 30, vatRate: 20,
+    });
+
+    expect(pricing.costTotal + pricing.markupTotal).toBeCloseTo(pricing.saleTotal, 9);
+    expect(pricing.requiredGrossProfit + pricing.fixedCosts + pricing.vatAmount).toBeCloseTo(
+      pricing.markupTotal,
+      9
+    );
+  });
+
+  it("тираж без кількості округлювати нема чого", () => {
+    const pricing = computeRunSalePricingFromMarkup({
+      quantity: 0, costTotal: 6552.2, markupRate: 54.1,
+      managerRate: 10, fixedCostRate: 30, vatRate: 20,
+    });
+
+    expect(pricing.saleUnitPrice).toBeNull();
+    expect(pricing.saleTotal).toBeCloseTo(6552.2 * 1.541, 9);
+  });
 });
 
 describe("needsMarkupApproval", () => {

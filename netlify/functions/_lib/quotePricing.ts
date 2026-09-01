@@ -56,6 +56,12 @@ export function runSaleTotal(run: QuoteRunPricingRow): number {
   const quantity = Math.max(0, num(run.quantity));
   const costTotal = (num(run.unit_price_model) + num(run.unit_price_print)) * quantity + num(run.logistics_cost);
   const markupRate = Math.max(0, rate(run.markup_rate, DEFAULT_MARKUP_RATE));
+  const raw = costTotal * (1 + markupRate / 100);
 
-  return costTotal * (1 + markupRate / 100);
+  // Дзеркало roundUnitPrice із src/lib/quoteRuns.ts (рішення Артема 01.09.2026):
+  // ціну веде ШТУКА, округлена до копійок, а сума множиться назад із неї.
+  // Без цього дайджест і відповіді ToSho AI розходились би з карткою на копійки
+  // — саме на тих числах, які людина потім звіряє руками.
+  if (quantity <= 0) return raw;
+  return (Math.round((raw / quantity) * 100) / 100) * quantity;
 }
