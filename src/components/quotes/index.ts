@@ -6,5 +6,10 @@ export type {
   QuoteBatchBuilderFormData,
   QuoteBatchProductSubmitData,
 } from "./QuoteBatchBuilderDialog";
-export { QuoteKindPickerDialog, TestQuoteEntryButton } from "./QuoteKindPickerDialog";
-export type { QuoteKindPickerDialogProps, QuoteKindValue, TestQuoteEntryButtonProps } from "./QuoteKindPickerDialog";
+export { QuoteKindPickerDialog } from "./QuoteKindPickerDialog";
+export type {
+  QuoteKindPickerDialogProps,
+  QuoteKindValue,
+  QuoteSourceValue,
+  QuoteWizardChoice,
+} from "./QuoteKindPickerDialog";

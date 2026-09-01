@@ -58,9 +58,7 @@ import {
   deleteQuoteSet,
   removeQuoteSetItem,
   addQuotesToQuoteSet,
-  listCustomersBySearch,
   listCatalogModelsByIds,
-  listLeadsBySearch,
   createQuote,
   createQuoteSet,
   deleteQuote,
@@ -80,8 +78,6 @@ import {
   type QuoteRunPreviewRow,
   type QuoteRun,
   type TeamMemberRow,
-  type CustomerRow,
-  type LeadSearchRow,
 } from "@/lib/toshoApi";
 import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import {
@@ -98,8 +94,11 @@ import {
   type QuoteDealType,
 } from "@/lib/quoteDealType";
 import { fetchMarkupApprovalsForQuotes } from "@/features/quotes/quote-details/markupApproval";
-import { NewQuoteDialog, QuoteBatchBuilderDialog, TestQuoteEntryButton } from "@/components/quotes";
+import { searchQuoteParties, type QuotePartyOption } from "@/features/quotes/quoteParties";
+import { DEFAULT_MANAGER_RATE, getManagerRateForUser } from "@/lib/managerRate";
+import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
 import type { NewQuoteFormData, QuoteBatchBuilderFormData, QuoteKindValue } from "@/components/quotes";
+import { TestQuoteWizardButton } from "@/features/quotes/quote-wizard/TestQuoteWizard";
 import {
   getCreatedCustomerLeadLabel,
   toQuotePartyOption,
@@ -210,7 +209,6 @@ type QuotesPageProps = {
 };
 
 const ALL_MANAGERS_FILTER = "__all__";
-const DEFAULT_MANAGER_RATE = 10;
 const QUOTES_TABLE_PAGE_SIZE = 50;
 const QUOTES_TABLE_PAGE_INCREMENT = 50;
 const QUOTES_KANBAN_INITIAL_PAGE_SIZE = 120;
@@ -231,10 +229,6 @@ const isManagerFilterMember = (member: Pick<TeamMemberRow, "accessRole" | "jobRo
   normalizeJobRole(member.jobRole) === "seo" ||
   normalizeAccessRole(member.accessRole) === "owner" ||
   normalizeAccessRole(member.accessRole) === "admin";
-
-type QuotePartyOption = CustomerRow & {
-  entityType?: "customer" | "lead";
-};
 
 type CatalogMethod = { id: string; name: string; price?: number };
 type CatalogModel = {
@@ -913,35 +907,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setCurrentUserManagerLabel(presenceLabel);
     }
   }, [currentUserId, memberById, presenceLabelById, workspaceMemberLabelById]);
-  const getManagerRateForUser = useCallback(async (targetUserId?: string | null) => {
-    const normalizedUserId = targetUserId?.trim();
-    if (!normalizedUserId) return DEFAULT_MANAGER_RATE;
-
-    try {
-      const workspaceId = await resolveWorkspaceId(normalizedUserId);
-      if (!workspaceId) return DEFAULT_MANAGER_RATE;
-
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("team_member_manager_rates")
-        .select("manager_rate")
-        .eq("workspace_id", workspaceId)
-        .eq("user_id", normalizedUserId)
-        .maybeSingle<{ manager_rate?: number | null }>();
-
-      if (error) {
-        if (!/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
-          throw error;
-        }
-        return DEFAULT_MANAGER_RATE;
-      }
-
-      return Math.max(0, Number(data?.manager_rate) || DEFAULT_MANAGER_RATE);
-    } catch (error) {
-      console.error("Failed to load manager rate", error);
-      return DEFAULT_MANAGER_RATE;
-    }
-  }, []);
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
     if (permissions.isDesigner) return;
@@ -1301,24 +1266,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const id = window.setTimeout(async () => {
       setCustomersLoading(true);
       try {
-        const [customerRows, leadRows] = await Promise.all([
-          listCustomersBySearch(teamId, customerSearch),
-          listLeadsBySearch(teamId, customerSearch).catch(() => [] as LeadSearchRow[]),
-        ]);
-        const leadOptions: QuotePartyOption[] = leadRows.map((lead) => ({
-          id: lead.id,
-          name: lead.company_name ?? lead.legal_name ?? null,
-          legal_name: lead.legal_name ?? null,
-          logo_url: lead.logo_url ?? null,
-          manager: lead.manager ?? null,
-          manager_user_id: lead.manager_user_id ?? null,
-          entityType: "lead",
-        }));
-        const customerOptions: QuotePartyOption[] = customerRows.map((customer) => ({
-          ...customer,
-          entityType: "customer",
-        }));
-        setCustomers([...customerOptions, ...leadOptions]);
+        setCustomers(await searchQuoteParties(teamId, customerSearch));
       } catch {
         setCustomers(EMPTY_PARTY_OPTIONS);
       } finally {
@@ -2319,24 +2267,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
     setCustomersLoading(true);
     try {
-      const [customerRows, leadRows] = await Promise.all([
-        listCustomersBySearch(teamId, search),
-        listLeadsBySearch(teamId, search).catch(() => [] as LeadSearchRow[]),
-      ]);
-      const leadOptions: QuotePartyOption[] = leadRows.map((lead) => ({
-        id: lead.id,
-        name: lead.company_name ?? lead.legal_name ?? null,
-        legal_name: lead.legal_name ?? null,
-        logo_url: lead.logo_url ?? null,
-        manager: lead.manager ?? null,
-        manager_user_id: lead.manager_user_id ?? null,
-        entityType: "lead",
-      }));
-      const customerOptions: QuotePartyOption[] = customerRows.map((customer) => ({
-        ...customer,
-        entityType: "customer",
-      }));
-      setCustomers([...customerOptions, ...leadOptions]);
+      setCustomers(await searchQuoteParties(teamId, search));
     } catch {
       setCustomers(EMPTY_PARTY_OPTIONS);
     } finally {
@@ -5850,8 +5781,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
             {/* Полігон нового способу створення (REQ-134): стоїть ПОРУЧ, а не
                 замість, — робочий шлях менеджерів не чіпаємо, поки візард не визріє. */}
-            <TestQuoteEntryButton
-              onPick={handleQuoteKindPick}
+            <TestQuoteWizardButton
+              teamId={teamId}
+              currentUserId={currentUserId}
+              onManual={handleQuoteKindPick}
+              onCreated={(quoteId) => navigate(`/orders/estimates/${quoteId}`)}
               className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
             />
             <Button onClick={openBatchBuilder} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
@@ -6014,6 +5948,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     getManagerLabel,
     handleQuoteKindPick,
     hasActiveFilters,
+    navigate,
+    teamId,
     isManagerInactive,
     isManagerUser,
     loading,

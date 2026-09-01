@@ -51,6 +51,13 @@ import type { QuoteImportDraftItem, QuoteImportFlag, QuoteImportParseResponse } 
  *
  * Файл читається В БРАУЗЕРІ, на сервер їде текстовий дамп. Запис роблять
  * НАЯВНІ мутації картки під RLS користувача — привілейованих записів тут немає.
+ *
+ * ДВА РЕЖИМИ. З `quoteId` — імпорт у наявний прорахунок (кнопка в картці).
+ * Без нього — вхід тестового візарда (REQ-134): прорахунку ще немає, і його
+ * створює `onPrepareQuote` РІВНО в мить натиску «Створити», тобто вже після
+ * прев'ю. Порядок тут не деталь: створення до прев'ю лишало б у базі порожній
+ * прорахунок щоразу, коли менеджер передумав, — саме та хвороба, від якої
+ * візард і йде.
  */
 
 const FLAG_LABELS: Record<QuoteImportFlag, string> = {
@@ -70,17 +77,34 @@ export function QuoteImportDialog({
   currency,
   nextPosition,
   runDefaults,
+  title = "Імпорт позицій з файлу",
+  description = "Excel від клієнта → позиції з тиражами й цінами. Нічого не записується, поки ви не подивитесь прев'ю.",
+  header,
+  canPick = true,
+  pickBlockedHint,
+  onPrepareQuote,
   onImported,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  quoteId: string;
+  /** Прорахунок, у який імпортуємо. `null` — його ще немає, див. `onPrepareQuote`. */
+  quoteId?: string | null;
   teamId: string;
   currency: string | null | undefined;
   /** Наступна вільна позиція в прорахунку — щоб імпорт не сів на чужі номери. */
   nextPosition: number;
   runDefaults: QuoteImportRunDefaults;
-  onImported: (itemIds: string[]) => void | Promise<void>;
+  /** У візарді це не «імпорт позицій», а створення прорахунку — назва інша. */
+  title?: string;
+  description?: string;
+  /** Шапка майбутнього прорахунку у візарді: замовник, менеджер, дедлайн, валюта. */
+  header?: React.ReactNode;
+  /** Поки шапка не заповнена, файл брати нема куди. */
+  canPick?: boolean;
+  pickBlockedHint?: string;
+  /** Створити прорахунок і віддати його id. Викликається ПІСЛЯ прев'ю. */
+  onPrepareQuote?: () => Promise<string | null>;
+  onImported: (itemIds: string[], quoteId: string) => void | Promise<void>;
 }) {
   const [stage, setStage] = useState<Stage>("pick");
   const [fileName, setFileName] = useState("");
@@ -150,7 +174,7 @@ export function QuoteImportDialog({
       const response = await fetch("/.netlify/functions/quote-import-parse", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ quoteId, fileName: file.name, sheetDump: dump.text }),
+        body: JSON.stringify({ quoteId: quoteId ?? undefined, fileName: file.name, sheetDump: dump.text }),
       });
       const payload = (await response.json().catch(() => null)) as
         | (QuoteImportParseResponse & { error?: string })
@@ -189,6 +213,23 @@ export function QuoteImportDialog({
 
     setStage("saving");
     setError(null);
+
+    // Прорахунок з'являється ТУТ — не раніше. До цього рядка людина могла
+    // закрити вікно, і в базі не лишилось би нічого.
+    let targetQuoteId = quoteId ?? null;
+    if (!targetQuoteId) {
+      try {
+        targetQuoteId = (await onPrepareQuote?.()) ?? null;
+      } catch (cause) {
+        targetQuoteId = null;
+        setError(cause instanceof Error ? cause.message : "Не вдалося створити прорахунок.");
+      }
+      if (!targetQuoteId) {
+        setStage("preview");
+        return;
+      }
+    }
+
     const importedAt = new Date().toISOString();
     const createdIds: string[] = [];
     const runPayloads: QuoteRun[] = [];
@@ -199,7 +240,7 @@ export function QuoteImportDialog({
         `Позиції створено (${createdIds.length}), а тиражі до них — ні. ${message.replace(/[.\s]*$/, "")}. Впишіть тиражі руками або приберіть позиції.`
       );
       setStage("preview");
-      await onImported(createdIds);
+      if (targetQuoteId) await onImported(createdIds, targetQuoteId);
     };
 
     for (const [index, draft] of selected.entries()) {
@@ -208,7 +249,7 @@ export function QuoteImportDialog({
         draft,
         itemId,
         teamId,
-        quoteId,
+        quoteId: targetQuoteId,
         position: nextPosition + index,
         trace: { fileName, importedAt },
       });
@@ -216,13 +257,13 @@ export function QuoteImportDialog({
       if (!inserted.ok) {
         setError(inserted.message);
         setStage("preview");
-        if (createdIds.length > 0) await onImported(createdIds);
+        if (createdIds.length > 0) await onImported(createdIds, targetQuoteId);
         return;
       }
       const rowId = ((inserted.data as { id?: string } | null)?.id ?? itemId) as string;
       createdIds.push(rowId);
       setSavedCount(createdIds.length);
-      const runs = buildImportRunPayloads({ draft, quoteId, quoteItemId: rowId, defaults: runDefaults });
+      const runs = buildImportRunPayloads({ draft, quoteId: targetQuoteId, quoteItemId: rowId, defaults: runDefaults });
 
       // ПЕРША ПОЗИЦІЯ ПИШЕ ТИРАЖІ ОДРАЗУ, решта — гуртом наприкінці.
       //
@@ -232,7 +273,7 @@ export function QuoteImportDialog({
       // товарів без жодного тиражу (побачено живим прогоном 01.09.2026).
       // Тепер найгірше, що буває, — одна зайва позиція.
       if (index === 0) {
-        const probe = await persistQuoteRuns(quoteId, runs, []);
+        const probe = await persistQuoteRuns(targetQuoteId, runs, []);
         if (!probe.ok) {
           await failRuns(probe.message);
           return;
@@ -245,7 +286,7 @@ export function QuoteImportDialog({
     // Решта — одним записом: двадцять п'ять окремих запитів на кожен клік
     // «Створити» це чверть хвилини очікування без жодної користі.
     if (runPayloads.length > 0) {
-      const savedRuns = await persistQuoteRuns(quoteId, runPayloads, []);
+      const savedRuns = await persistQuoteRuns(targetQuoteId, runPayloads, []);
       if (!savedRuns.ok) {
         await failRuns(savedRuns.message);
         return;
@@ -253,8 +294,8 @@ export function QuoteImportDialog({
     }
 
     setSavedCount(createdIds.length);
-    await startResearch(quoteId, createdIds);
-    await onImported(createdIds);
+    await startResearch(targetQuoteId, createdIds);
+    await onImported(createdIds, targetQuoteId);
     toast.success(
       `Створено ${createdIds.length} ${pluralWordUk(createdIds.length, "позицію", "позиції", "позицій")}. Картинки й назви доїжджають фоном.`
     );
@@ -273,11 +314,8 @@ export function QuoteImportDialog({
     >
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-4xl" isDirty={stage === "preview"}>
         <DialogHeader>
-          <DialogTitle>Імпорт позицій з файлу</DialogTitle>
-          <DialogDescription>
-            Excel від клієнта → позиції з тиражами й цінами. Нічого не записується, поки ви не
-            подивитесь прев'ю.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         {error ? (
@@ -287,12 +325,19 @@ export function QuoteImportDialog({
           </div>
         ) : null}
 
+        {stage === "pick" && header ? header : null}
+
         {stage === "pick" ? (
           <div
-            className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center"
+            className={cn(
+              "flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center",
+              !canPick && "pointer-events-none opacity-50"
+            )}
+            aria-disabled={!canPick}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
+              if (!canPick) return;
               const file = event.dataTransfer.files?.[0];
               if (file) void handleFile(file);
             }}
@@ -313,11 +358,21 @@ export function QuoteImportDialog({
                 if (file) void handleFile(file);
               }}
             />
-            <Button type="button" variant="outline" className="gap-2" onClick={() => inputRef.current?.click()}>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              disabled={!canPick}
+              onClick={() => inputRef.current?.click()}
+            >
               <Upload className="h-4 w-4" />
               Обрати файл
             </Button>
           </div>
+        ) : null}
+
+        {stage === "pick" && !canPick && pickBlockedHint ? (
+          <p className="text-center text-sm text-muted-foreground">{pickBlockedHint}</p>
         ) : null}
 
         {stage === "parsing" ? (

@@ -1,12 +1,10 @@
 import * as React from "react";
-import { FlaskConical, Package, Printer, Shirt } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { FileSpreadsheet, Package, PencilLine, Printer, Shirt } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
 import { cn } from "@/lib/utils";
 
 /**
- * Перший крок тестового візарда створення прорахунку (REQ-134).
+ * Перший — і єдиний — екран вибору в тестовому візарді (REQ-134).
  *
  * ЩО ЦЕ ЛІКУЄ. Імпорт ексельки поїхав кнопкою ВСЕРЕДИНІ вже створеного
  * прорахунку, тобто способом його доробити. Задум був інший: імпорт — це вхід,
@@ -15,9 +13,21 @@ import { cn } from "@/lib/utils";
  *
  * ЧОМУ ОКРЕМА КНОПКА, А НЕ ЗАМІНА «Новому прорахунку». Робочий шлях
  * менеджерів не чіпаємо, поки візард не визріє: поки що це полігон.
+ *
+ * ЧОМУ РОЗВИЛКА МЕРЧУ ЖИВЕ ПРЯМО НА ПЛАШЦІ. Спершу вона була окремим другим
+ * кроком — і на ньому ж і зламалась: щоб дійти до ексельки, треба було три
+ * кліки й дві зміни екрана заради вибору з двох варіантів. Тепер обидві двері
+ * стоять на самій плашці мерчу, і глибина вибору лишається одним екраном.
+ * Наведення підсвічує їх, але НЕ ховає: підказка, якої немає з клавіатури й на
+ * планшеті, — це не підказка.
  */
 
 export type QuoteKindValue = "print" | "merch" | "other";
+
+/** Звідки беруться позиції: людина вводить їх руками чи їх дістають із файлу. */
+export type QuoteSourceValue = "manual" | "excel";
+
+export type QuoteWizardChoice = { kind: QuoteKindValue; source: QuoteSourceValue };
 
 type QuoteKindOption = {
   value: QuoteKindValue;
@@ -30,6 +40,16 @@ type QuoteKindOption = {
    * поставити сюди його шлях; решта розмітки не міняється.
    */
   art: string | null;
+  /**
+   * Дві двері замість однієї. Поки що лише в мерчу: імпорт навчений розбирати
+   * саме такі запити, а поліграфію клієнти надсилають не таблицею.
+   */
+  sources?: Array<{
+    value: QuoteSourceValue;
+    label: string;
+    fullLabel: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }>;
 };
 
 const QUOTE_KINDS: QuoteKindOption[] = [
@@ -46,6 +66,10 @@ const QUOTE_KINDS: QuoteKindOption[] = [
     hint: "Одяг, аксесуари, сувеніри з нанесенням",
     icon: Shirt,
     art: null,
+    sources: [
+      { value: "manual", label: "Руками", fullLabel: "Мерч: ввести позиції руками", icon: PencilLine },
+      { value: "excel", label: "Excel", fullLabel: "Мерч: імпорт позицій з Excel", icon: FileSpreadsheet },
+    ],
   },
   {
     value: "other",
@@ -56,10 +80,23 @@ const QUOTE_KINDS: QuoteKindOption[] = [
   },
 ];
 
+const TILE = cn(
+  "group flex flex-col gap-3 rounded-3xl border border-border/60 bg-background p-3 text-left transition-colors",
+  "focus-within:border-primary/40 hover:border-primary/40 hover:bg-primary/[0.04]",
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+);
+
+const ART = "relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-muted/50";
+
+const ART_ICON = cn(
+  "h-14 w-14 text-muted-foreground/40 transition-transform duration-slow ease-out",
+  "group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+);
+
 export interface QuoteKindPickerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onPick: (kind: QuoteKindValue) => void;
+  onPick: (choice: QuoteWizardChoice) => void;
 }
 
 export const QuoteKindPickerDialog: React.FC<QuoteKindPickerDialogProps> = ({ open, onOpenChange, onPick }) => (
@@ -77,30 +114,58 @@ export const QuoteKindPickerDialog: React.FC<QuoteKindPickerDialogProps> = ({ op
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {QUOTE_KINDS.map((option) => {
           const Icon = option.icon;
+          const art = option.art ? (
+            <img src={option.art} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <Icon className={ART_ICON} />
+          );
+
+          // Плашка з двома дверима не може бути кнопкою: кнопка в кнопці —
+          // недійсна розмітка, і клавіатура в неї не заходить.
+          if (option.sources) {
+            return (
+              <div key={option.value} className={TILE}>
+                <div className={ART}>{art}</div>
+                <div className="flex-1 space-y-0.5 px-1">
+                  <div className="text-sm font-semibold text-foreground">{option.label}</div>
+                  <div className="text-xs text-muted-foreground">{option.hint}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 px-1 pb-1">
+                  {option.sources.map((source) => {
+                    const SourceIcon = source.icon;
+                    return (
+                      <button
+                        key={source.value}
+                        type="button"
+                        aria-label={source.fullLabel}
+                        onClick={() => onPick({ kind: option.value, source: source.value })}
+                        className={cn(
+                          "inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-border/50 px-2",
+                          "text-xs font-medium text-muted-foreground transition-colors",
+                          "hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+                          "group-hover:text-foreground",
+                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+                        )}
+                      >
+                        <SourceIcon className="h-3.5 w-3.5" />
+                        {source.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }
+
           return (
             <button
               key={option.value}
               type="button"
-              onClick={() => onPick(option.value)}
-              className={cn(
-                "group flex flex-col gap-3 rounded-3xl border border-border/60 bg-background p-3 text-left transition-colors",
-                "hover:border-primary/40 hover:bg-primary/[0.04]",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-              )}
+              onClick={() => onPick({ kind: option.value, source: "manual" })}
+              className={TILE}
             >
-              <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-muted/50">
-                {option.art ? (
-                  <img src={option.art} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <Icon
-                    className={cn(
-                      "h-14 w-14 text-muted-foreground/40 transition-transform duration-slow ease-out",
-                      "group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                    )}
-                  />
-                )}
-              </div>
-              <div className="space-y-0.5 px-1 pb-1">
+              <div className={ART}>{art}</div>
+              <div className="flex-1 space-y-0.5 px-1 pb-1">
                 <div className="text-sm font-semibold text-foreground">{option.label}</div>
                 <div className="text-xs text-muted-foreground">{option.hint}</div>
               </div>
@@ -111,40 +176,3 @@ export const QuoteKindPickerDialog: React.FC<QuoteKindPickerDialogProps> = ({ op
     </DialogContent>
   </Dialog>
 );
-
-export interface TestQuoteEntryButtonProps {
-  className?: string;
-  /** Що робити з обраним типом виробу. Вікно до цього моменту вже зачинене. */
-  onPick: (kind: QuoteKindValue) => void;
-}
-
-/**
- * Кнопка «Тестовий прорахунок» разом із власним вікном вибору.
- *
- * Разом, а не двома шматками в сторінці: `QuotesPage` і так тримає 8,5 тисячі
- * рядків, і кожен рядок, який може жити поруч із кнопкою, має жити тут.
- * `ModalMount` усередині — з тієї ж причини, що й у сторінки: прапорець вікна
- * не має рендерити нічого, крім себе (REQ-75).
- */
-export const TestQuoteEntryButton: React.FC<TestQuoteEntryButtonProps> = ({ className, onPick }) => {
-  const picker = useModalMount();
-  const handlePick = React.useCallback(
-    (kind: QuoteKindValue) => {
-      picker.close();
-      onPick(kind);
-    },
-    [onPick, picker]
-  );
-
-  return (
-    <>
-      <Button onClick={picker.open} variant="outline" className={className}>
-        <FlaskConical className="h-4 w-4" />
-        Тестовий прорахунок
-      </Button>
-      <ModalMount ref={picker.ref}>
-        {(open, setOpen) => <QuoteKindPickerDialog open={open} onOpenChange={setOpen} onPick={handlePick} />}
-      </ModalMount>
-    </>
-  );
-};

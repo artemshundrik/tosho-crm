@@ -34,7 +34,12 @@ const MAX_ITEMS = 200;
 
 const requestSchema = z
   .object({
-    quoteId: z.string().uuid(),
+    /**
+     * Прорахунку може ще НЕ БУТИ: у тестовому візарді (REQ-134) файл читають
+     * до створення картки — саме щоб не лишати порожній прорахунок, якщо
+     * менеджер передумає на прев'ю.
+     */
+    quoteId: z.string().uuid().optional(),
     fileName: z.string().min(1).max(200),
     sheetDump: z.string().min(10).max(MAX_DUMP_CHARS),
   })
@@ -169,14 +174,22 @@ export const handler = async (event: HttpEvent) => {
   // Доступ до прорахунку перевіряє САМА БАЗА: запит іде клієнтом користувача,
   // тож RLS віддасть рядок лише тому, хто його й так бачить у CRM. Порожньо —
   // прорахунку для цієї людини не існує, і розшифровку замовляти нема для чого.
-  const { data: quoteRow, error: quoteError } = await userClient
-    .schema("tosho")
-    .from("quotes")
-    .select("id, team_id")
-    .eq("id", body.quoteId)
-    .maybeSingle<{ id: string; team_id: string | null }>();
-  if (quoteError) return jsonResponse(500, { error: quoteError.message });
-  if (!quoteRow) return jsonResponse(403, { error: "Прорахунок недоступний." });
+  //
+  // Без `quoteId` перевіряти нічого: прорахунок ще не створений. Тоді дозвіл
+  // тримається на членстві в команді нижче — тобто на тому ж, що дає право
+  // завести прорахунок і імпортувати в нього той самий файл.
+  let quoteTeamId: string | null = null;
+  if (body.quoteId) {
+    const { data: quoteRow, error: quoteError } = await userClient
+      .schema("tosho")
+      .from("quotes")
+      .select("id, team_id")
+      .eq("id", body.quoteId)
+      .maybeSingle<{ id: string; team_id: string | null }>();
+    if (quoteError) return jsonResponse(500, { error: quoteError.message });
+    if (!quoteRow) return jsonResponse(403, { error: "Прорахунок недоступний." });
+    quoteTeamId = quoteRow.team_id;
+  }
 
   const { data: membershipRows } = await userClient
     .schema("tosho")
@@ -186,8 +199,10 @@ export const handler = async (event: HttpEvent) => {
     .limit(1);
   const workspaceId =
     ((membershipRows ?? []) as Array<{ workspace_id?: string | null }>)[0]?.workspace_id ??
-    quoteRow.team_id ??
+    quoteTeamId ??
     null;
+  // Без членства не пускаємо навіть із живим токеном: розшифровка коштує
+  // грошей, і платить за неї команда, до якої людина має належати.
   if (!workspaceId) return jsonResponse(403, { error: "Workspace not found" });
 
   const model = (process.env.QUOTE_IMPORT_OPENAI_MODEL ?? "").trim() || "gpt-5.6-terra";
@@ -255,7 +270,7 @@ export const handler = async (event: HttpEvent) => {
     costUsd,
     metadata: {
       source: "quote-import-parse",
-      quoteId: body.quoteId,
+      quoteId: body.quoteId ?? null,
       fileName: body.fileName,
       dumpChars: body.sheetDump.length,
       latencyMs: Date.now() - startedAt,

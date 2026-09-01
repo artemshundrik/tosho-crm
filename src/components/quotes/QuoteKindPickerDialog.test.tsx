@@ -3,49 +3,57 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { QuoteKindPickerDialog, TestQuoteEntryButton } from "@/components/quotes/QuoteKindPickerDialog";
+import { QuoteKindPickerDialog } from "@/components/quotes/QuoteKindPickerDialog";
 
 /**
- * Перший крок тестового візарда (REQ-134#p1).
+ * Єдиний екран вибору в тестовому візарді (REQ-134#p1, #p2).
  *
  * Перевіряється не наявність коду, а те, що бачить і натискає людина: три
- * плашки з підписами й те, що клік по плашці віддає СВІЙ тип виробу — саме
- * від нього далі залежить, з чим відкриється білдер.
+ * плашки типу виробу, обидві двері мерчу — прямо на плашці, без другого
+ * екрана, — і що кожен клік віддає СВІЙ вибір. Від нього далі залежить, чи
+ * відкриється білдер, чи вікно імпорту.
  */
 describe("QuoteKindPickerDialog", () => {
   it("показує три типи виробу", () => {
     render(<QuoteKindPickerDialog open onOpenChange={() => {}} onPick={() => {}} />);
 
     expect(screen.getByRole("button", { name: /Поліграфія/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Мерч/ })).toBeTruthy();
+    expect(screen.getByText("Мерч")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Інше/ })).toBeTruthy();
   });
 
-  it("віддає обраний тип, а не перший-ліпший", async () => {
+  it("поліграфія й інше ведуть у білдер одним кліком", async () => {
     const onPick = vi.fn();
     render(<QuoteKindPickerDialog open onOpenChange={() => {}} onPick={onPick} />);
 
     await userEvent.click(screen.getByRole("button", { name: /Поліграфія/ }));
-    expect(onPick).toHaveBeenCalledWith("print");
+    expect(onPick).toHaveBeenCalledWith({ kind: "print", source: "manual" });
 
     await userEvent.click(screen.getByRole("button", { name: /Інше/ }));
-    expect(onPick).toHaveBeenLastCalledWith("other");
+    expect(onPick).toHaveBeenLastCalledWith({ kind: "other", source: "manual" });
   });
-});
 
-describe("TestQuoteEntryButton", () => {
-  it("відкриває вибір і закриває його разом із вибором", async () => {
+  it("обидві двері мерчу стоять на першому ж екрані", async () => {
     const onPick = vi.fn();
-    render(<TestQuoteEntryButton onPick={onPick} />);
+    render(<QuoteKindPickerDialog open onOpenChange={() => {}} onPick={onPick} />);
 
-    // До кліку вікна немає — саме заради цього кнопка й вікно живуть разом.
-    expect(screen.queryByText("Що рахуємо?")).toBeNull();
+    // Без жодного проміжного кроку: обидві кнопки видно одразу.
+    const manual = screen.getByRole("button", { name: "Мерч: ввести позиції руками" });
+    const excel = screen.getByRole("button", { name: "Мерч: імпорт позицій з Excel" });
 
-    await userEvent.click(screen.getByRole("button", { name: /Тестовий прорахунок/ }));
-    expect(screen.getByText("Що рахуємо?")).toBeTruthy();
+    await userEvent.click(excel);
+    expect(onPick).toHaveBeenCalledWith({ kind: "merch", source: "excel" });
 
-    await userEvent.click(screen.getByRole("button", { name: /Мерч/ }));
-    expect(onPick).toHaveBeenCalledWith("merch");
-    expect(screen.queryByText("Що рахуємо?")).toBeNull();
+    await userEvent.click(manual);
+    expect(onPick).toHaveBeenLastCalledWith({ kind: "merch", source: "manual" });
+  });
+
+  it("до ексельки — один клік, а не три", async () => {
+    const onPick = vi.fn();
+    render(<QuoteKindPickerDialog open onOpenChange={() => {}} onPick={onPick} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Мерч: імпорт позицій з Excel" }));
+
+    expect(onPick).toHaveBeenCalledTimes(1);
   });
 });
