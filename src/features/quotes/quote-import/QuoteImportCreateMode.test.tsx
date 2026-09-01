@@ -23,7 +23,7 @@ const items: QuoteImportItem[] = [
     name: "Футболка бавовна",
     comment: null,
     links: [],
-    runs: [{ quantity: 100, unitPriceModel: 250, modelPriceIncludesVat: false, unitPricePrint: 0 }],
+    runs: [{ quantity: 100, unitPriceModel: 250, modelPriceIncludesVat: false, unitPricePrint: 80 }],
     flags: [],
     notes: null,
   },
@@ -84,7 +84,6 @@ describe("імпорт як спосіб СТВОРИТИ прорахунок",
         onOpenChange={() => {}}
         quoteId={null}
         teamId="team-1"
-        currency="UAH"
         nextPosition={1}
         runDefaults={{ markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 }}
         header={<div>шапка прорахунку</div>}
@@ -120,7 +119,6 @@ describe("імпорт як спосіб СТВОРИТИ прорахунок",
         onOpenChange={() => {}}
         quoteId={null}
         teamId="team-1"
-        currency="UAH"
         nextPosition={1}
         runDefaults={{ markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 }}
         canPick={false}
@@ -134,12 +132,18 @@ describe("імпорт як спосіб СТВОРИТИ прорахунок",
     expect(screen.getByText("Спершу оберіть замовника")).toBeInTheDocument();
   });
 
-  it("відмова за посадою не валить імпорт: тиражі йдуть без собівартості", async () => {
+  /**
+   * Собівартість не доїжджає в базу — і саме тому імпорт більше не впирається
+   * в право за посадою (REQ-235).
+   *
+   * Тригер `quote_item_runs_price_field_access` лається лише на НЕНУЛЬОВЕ
+   * значення в чужому полі. Поки імпорт віз ціни з файлу, власник і СЕО —
+   * тобто ті, хто найчастіше й імпортує, — діставали відмову, і з тридцяти
+   * позицій у прорахунку лишалась одна. Тепер запис іде нулями, і питання
+   * посади на ньому не виникає взагалі: одна спроба, без запасного шляху.
+   */
+  it("ціни з файлу не доїжджають у базу: тираж пишеться самою кількістю", async () => {
     const user = userEvent.setup();
-    persistQuoteRuns.mockImplementationOnce(async () => ({
-      ok: false as const,
-      message: "Собівартість заповнює менеджер або проєктний менеджер",
-    }) as never);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -155,7 +159,6 @@ describe("імпорт як спосіб СТВОРИТИ прорахунок",
         onOpenChange={() => {}}
         quoteId={null}
         teamId="team-1"
-        currency="UAH"
         nextPosition={1}
         runDefaults={{ markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 }}
         onPrepareQuote={async () => "quote-1"}
@@ -169,9 +172,20 @@ describe("імпорт як спосіб СТВОРИТИ прорахунок",
     await user.click(screen.getByRole("button", { name: /Створити/ }));
 
     await waitFor(() => expect(onImported).toHaveBeenCalledWith(["item-1"], "quote-1", true));
-    // Друга спроба — ті самі тиражі, але з обнуленою собівартістю.
-    const retried = persistQuoteRuns.mock.calls[1][1] as Array<Record<string, unknown>>;
-    expect(retried[0]).toMatchObject({ quantity: 100, unit_price_model: 0, unit_price_print: 0 });
+
+    // У файлі 250 за товар і 80 за нанесення — у базу не їде жодне з них.
+    const written = persistQuoteRuns.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(written[0]).toMatchObject({
+      quantity: 100,
+      unit_price_model: 0,
+      unit_price_model_vat: null,
+      unit_price_print: 0,
+      logistics_cost: 0,
+    });
+    // Позиція теж без ціни: unit_price — та сама собівартість, тільки збоку.
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({ qty: 100, unit_price: 0, line_total: 0 });
+    // Одна спроба запису: запасного шляху «те саме без собівартості» немає.
+    expect(persistQuoteRuns).toHaveBeenCalledTimes(1);
   });
 
   it("невдале створення лишає людину на прев'ю, а не ковтає клік", async () => {
@@ -190,7 +204,6 @@ describe("імпорт як спосіб СТВОРИТИ прорахунок",
         onOpenChange={() => {}}
         quoteId={null}
         teamId="team-1"
-        currency="UAH"
         nextPosition={1}
         runDefaults={{ markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 }}
         onPrepareQuote={async () => {

@@ -6,15 +6,16 @@ import { QuoteImportDialog } from "./QuoteImportDialog";
 import type { QuoteImportItem } from "./types";
 
 /**
- * Стан, якого не побачити в браузері: розшифровка без відповіді про ПДВ.
+ * Прев'ю не приносить собівартості (REQ-235).
  *
- * Прев'ю з живим файлом перевірене очима (05 — усі п'ять позицій, беджі,
- * діапазон двома тиражами). А от «модель не сказала, з ПДВ ціна чи без» на
- * реальному файлі не відтворити — там колонка підписана, — і водночас саме цей
- * стан тримає кнопку «Створити». Плюс перемикач ПДВ можна лише поставити, не
- * зняти, тож із прев'ю в цей стан не повернутись.
+ * ЧОМУ ЦЕ ТЕСТ, А НЕ ОКО. Довести браузером, що число НЕ доїхало, можна лише
+ * одним способом — імпортувавши по-справжньому в робочий прорахунок і
+ * подивившись на тираж. Тест ставить те саме питання задарма: чи є в прев'ю
+ * поля, куди ціна з файлу могла б лягти.
  *
- * Ціна перевірки очима тут — справжні позиції в робочому прорахунку.
+ * Фікстура навмисно «жирна»: модель повертає і вартість товару, і нанесення.
+ * Саме на такому файлі імпорт колись поклав ціну товару ще й у нанесення —
+ * прорахунок вийшов удвічі дорожчим, і з цього виросла картка.
  */
 
 const parsed = (items: QuoteImportItem[]) => ({
@@ -41,7 +42,7 @@ const importItem = (overrides: Partial<QuoteImportItem> = {}): QuoteImportItem =
   name: "Кухоль керамічний",
   comment: null,
   links: [],
-  runs: [{ quantity: 300, unitPriceModel: 119.5, modelPriceIncludesVat: null, unitPricePrint: 0 }],
+  runs: [{ quantity: 300, unitPriceModel: 119.5, modelPriceIncludesVat: null, unitPricePrint: 45 }],
   flags: [],
   notes: null,
   ...overrides,
@@ -57,7 +58,6 @@ async function openWith(items: QuoteImportItem[]) {
       onOpenChange={() => {}}
       quoteId="00000000-0000-0000-0000-000000000001"
       teamId="team-1"
-      currency="UAH"
       nextPosition={1}
       runDefaults={{ markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 }}
       onImported={() => {}}
@@ -70,27 +70,31 @@ async function openWith(items: QuoteImportItem[]) {
   return user;
 }
 
-describe("прев'ю імпорту: гейт ПДВ", () => {
+describe("прев'ю імпорту: тираж без собівартості", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("не дає створити, поки не сказано, з ПДВ вартість товару чи без", async () => {
+  it("показує кількість і жодного поля ціни", async () => {
     await openWith([importItem()]);
 
-    expect(screen.getByRole("button", { name: /Створити/ })).toBeDisabled();
-    expect(screen.getByText(/не сказано, з\s*ПДВ вартість товару чи без/)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Кількість тиражу" })).toHaveValue("300");
+    expect(screen.queryByLabelText("Вартість товару за штуку")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Вартість нанесення за штуку")).not.toBeInTheDocument();
+    expect(screen.queryByText("Нанесення")).not.toBeInTheDocument();
   });
 
-  it("відповідь у прев'ю відмикає кнопку", async () => {
-    const user = await openWith([importItem()]);
+  it("не питає про ПДВ і не тримає через нього кнопку", async () => {
+    await openWith([importItem()]);
 
-    await user.click(screen.getByRole("button", { name: "Вартість товару без ПДВ" }));
-
-    await waitFor(() => expect(screen.getByRole("button", { name: /Створити/ })).toBeEnabled());
+    expect(screen.queryByText("З ПДВ чи без")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Вартість товару (з|без) ПДВ/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/не сказано, з\s*ПДВ вартість товару чи без/)).not.toBeInTheDocument();
+    // Раніше саме тут кнопка була заблокована, поки не оберуть ПДВ.
+    expect(screen.getByRole("button", { name: /Створити/ })).toBeEnabled();
   });
 
-  it("позиція без ціни ПДВ не питає — там ще нема від чого", async () => {
+  it("бедж «без ціни» лишається: він про файл, а не про наші дані", async () => {
     await openWith([
       importItem({
         runs: [{ quantity: 100, unitPriceModel: null, modelPriceIncludesVat: null, unitPricePrint: 0 }],
@@ -98,16 +102,15 @@ describe("прев'ю імпорту: гейт ПДВ", () => {
       }),
     ]);
 
-    expect(screen.getByRole("button", { name: /Створити/ })).toBeEnabled();
     expect(screen.getByText("без ціни")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Створити/ })).toBeEnabled();
   });
 
-  it("знята галочка виводить позицію з-під гейта", async () => {
+  it("знята галочка виводить позицію з-під створення", async () => {
     const user = await openWith([importItem()]);
 
     await user.click(screen.getByRole("checkbox", { name: /Імпортувати/ }));
 
     expect(screen.getByRole("button", { name: /Створити 0/ })).toBeDisabled();
-    expect(screen.queryByText(/не сказано, з\s*ПДВ вартість товару чи без/)).not.toBeInTheDocument();
   });
 });

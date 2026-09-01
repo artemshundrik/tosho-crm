@@ -158,8 +158,6 @@ export function TestQuoteWizardButton({
           teamId={teamId}
           title="Новий прорахунок з ексельки"
           description="Спершу шапка, потім файл. Прорахунок з'явиться лише після того, як ви подивитесь прев'ю й натиснете «Створити»."
-
-          currency={header.currency}
           nextPosition={1}
           runDefaults={runDefaults}
           canPick={!headerIssue}

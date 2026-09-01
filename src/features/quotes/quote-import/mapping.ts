@@ -14,6 +14,16 @@ import type {
  * `insertQuoteItemRow` і `persistQuoteRuns`, під RLS користувача. Тут тільки
  * чиста підготовка payload'ів: усе, що можна перевірити тестом, а не оком на
  * живому прорахунку, де кожен клік — це запис у прод.
+ *
+ * ІМПОРТ НЕ ПРИНОСИТЬ СОБІВАРТОСТІ (REQ-235). Модель і далі витягує з файлу
+ * числа, але сюди вони не доходять: тираж їде самою кількістю, а вартість
+ * товару, нанесення й логістику вписує в прорахунку той, чия це справа.
+ * Причина не в правах, а в тому, що колонка ціни в клієнтській ексельці
+ * означає будь-що: ціну постачальника, ціну з минулого замовлення, бажану ціну
+ * клієнта. Одного разу вона доїхала в «нанесення» — тобто ціна товару стала ще
+ * й ціною друку, і прорахунок вийшов удвічі дорожчим на рівному місці. Число,
+ * сенсу якого ми не знаємо, у собівартості гірше за порожнє поле: порожнє
+ * видно, а неправильне рахується далі як своє.
  */
 
 /** Скільки посилань узагалі тримаємо на позиції. Більше — це вже не паспорт товару. */
@@ -43,18 +53,13 @@ function positiveNumber(value: unknown, fallback = 0): number {
   return parsed;
 }
 
-function nonNegativeNumber(value: unknown): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return parsed;
-}
-
 /**
  * Відповідь моделі → рядки прев'ю.
  *
- * Усе, що модель могла вигадати або зіпсувати, гаситься саме тут: від'ємні
- * ціни, нульові тиражі, `javascript:` у посиланні, позиція без назви. Прев'ю
- * має показувати вже безпечні дані — менеджер підтверджує, а не вичищає.
+ * Усе, що модель могла вигадати або зіпсувати, гаситься саме тут: нульові
+ * тиражі, `javascript:` у посиланні, позиція без назви. Ціни відкидаються
+ * цілком — не як «брудні дані», а свідомо (див. шапку модуля). Прев'ю має
+ * показувати вже безпечні дані: менеджер підтверджує, а не вичищає.
  */
 export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
   return items
@@ -74,14 +79,6 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
         .map((run, runIndex) => ({
           key: `${index}-${runIndex}`,
           quantity: Math.round(positiveNumber(run.quantity, 1)),
-          unitPriceModel: nonNegativeNumber(run.unitPriceModel),
-          modelPriceVat:
-            run.modelPriceIncludesVat === true
-              ? ("incl" as const)
-              : run.modelPriceIncludesVat === false
-                ? ("excl" as const)
-                : null,
-          unitPricePrint: nonNegativeNumber(run.unitPricePrint),
         }));
 
       return {
@@ -92,7 +89,7 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
         links,
         // Позиція без тиражу все одно потрібна: у файлі KMZ такі рядки є, і
         // менеджер дописує тираж руками вже в прорахунку.
-        runs: runs.length > 0 ? runs : [{ key: `${index}-0`, quantity: 1, unitPriceModel: 0, modelPriceVat: null, unitPricePrint: 0 }],
+        runs: runs.length > 0 ? runs : [{ key: `${index}-0`, quantity: 1 }],
         flags: Array.isArray(item.flags) ? item.flags : [],
         sourceRows: (item.sourceRows ?? []).filter((row) => Number.isFinite(row)).map((row) => Math.trunc(row)),
         notes: (item.notes ?? "").trim() || null,
@@ -113,16 +110,15 @@ export type QuoteImportItemPayloadInput = {
 /**
  * Рядок `quote_items`.
  *
- * `qty`/`unit_price` беруться з ПЕРШОГО тиражу: колонки позиції в нашій моделі
- * — це вітрина («скільки й почім»), а рахує ціну все одно `quote_item_runs`
- * (docs/DB_MAP.md). Лишити їх нулями означало б порожню картку там, де в файлі
- * усе було.
+ * `qty` береться з ПЕРШОГО тиражу — колонка позиції в нашій моделі це вітрина
+ * («скільки»), а рахує ціну все одно `quote_item_runs` (docs/DB_MAP.md).
+ * `unit_price` лишається нулем: це та сама собівартість, тільки збоку, і
+ * імпорт її не приносить (REQ-235).
  */
 export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Record<string, unknown> {
   const { draft } = input;
   const firstRun = draft.runs[0];
   const qty = Math.max(1, firstRun?.quantity ?? 1);
-  const unitPrice = firstRun?.unitPriceModel ?? 0;
 
   const metadata: Record<string, unknown> = {
     import: {
@@ -148,8 +144,8 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
     metadata,
     qty,
     unit: "шт.",
-    unit_price: unitPrice,
-    line_total: qty * unitPrice,
+    unit_price: 0,
+    line_total: 0,
     catalog_type_id: null,
     catalog_kind_id: null,
     catalog_model_id: null,
@@ -166,7 +162,12 @@ export type QuoteImportRunDefaults = {
 };
 
 /**
- * Тиражі позиції.
+ * Тиражі позиції — кількість і ставки прорахунку, більше нічого.
+ *
+ * Усі чотири поля собівартості йдуть нулями (REQ-235), а `unit_price_model_vat`
+ * порожнім: позначка «з ПДВ чи без» описує суму, якої тут немає. Ставки —
+ * не собівартість, а налаштування прорахунку, тож вони приходять як у будь-
+ * якому новому тиражі.
  *
  * `is_approved` завжди false: погоджений тираж — це рішення клієнта, а не факт
  * з ексельки, і частковий унікальний індекс «один погоджений на позицію» тут
@@ -182,9 +183,9 @@ export function buildImportRunPayloads(input: {
     quote_id: input.quoteId,
     quote_item_id: input.quoteItemId,
     quantity: Math.max(1, run.quantity),
-    unit_price_model: run.unitPriceModel,
-    unit_price_model_vat: run.modelPriceVat,
-    unit_price_print: run.unitPricePrint,
+    unit_price_model: 0,
+    unit_price_model_vat: null,
+    unit_price_print: 0,
     logistics_cost: 0,
     desired_manager_income: 0,
     markup_rate: input.defaults.markupRate,
@@ -193,43 +194,4 @@ export function buildImportRunPayloads(input: {
     vat_rate: input.defaults.vatRate,
     is_approved: false,
   }));
-}
-
-/**
- * Чи це відмова бази саме за посадою, а не будь-яка інша.
- *
- * ЗВІДКИ ВЗЯЛОСЬ. На `quote_item_runs` стоїть тригер: собівартість заповнює
- * менеджер або проєктний менеджер. Власник і СЕО в цей перелік не входять —
- * і саме вони частіше за всіх пробують імпорт. Раніше така відмова зупиняла
- * весь імпорт, і з тридцяти позицій у прорахунку лишалась одна: людина
- * втрачала всю роботу через право, якого їй і не потрібно.
- */
-export function isCostPermissionError(message: string | null | undefined): boolean {
-  return /собівартість заповнює/i.test(message ?? "");
-}
-
-/** Той самий тираж, але без жодної цифри собівартості — його база пропустить. */
-export function stripRunCost(run: QuoteRun): QuoteRun {
-  return {
-    ...run,
-    unit_price_model: 0,
-    unit_price_model_vat: null,
-    unit_price_print: 0,
-    logistics_cost: 0,
-  };
-}
-
-/**
- * Чи можна взагалі писати цей набір.
- *
- * Гейт ПДВ (REQ-232) стоїть на збереженні тиражу з ненульовою вартістю товару,
- * і мовчазний імпорт його б обійшов — тираж просто не зберігся б, а позиція
- * лишилась. Тому питаємо в прев'ю, ДО запису.
- */
-export function findDraftsNeedingModelPriceVat(drafts: QuoteImportDraftItem[]): QuoteImportDraftItem[] {
-  return drafts.filter(
-    (draft) =>
-      draft.selected &&
-      draft.runs.some((run) => run.unitPriceModel > 0 && run.modelPriceVat === null)
-  );
 }

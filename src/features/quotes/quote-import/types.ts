@@ -14,7 +14,14 @@ export type QuoteImportFlag =
   | "quantity_range"
   | "alternative";
 
-/** Тираж, як його побачила модель. Ціни необов'язкові: їх у файлі може не бути. */
+/**
+ * Тираж, як його побачила модель.
+ *
+ * Ціни тут описують ВІДПОВІДЬ ФУНКЦІЇ, а не те, що доїде в прорахунок: із
+ * REQ-235 імпорт собівартості не приносить узагалі, і `toDraftItems` ці поля
+ * відкидає. Лишаються вони тому, що модель і далі їх повертає — саме з них
+ * росте бедж «без ціни».
+ */
 export type QuoteImportRun = {
   quantity: number;
   unitPriceModel?: number | null;
@@ -43,14 +50,15 @@ export type QuoteImportParseResponse = {
   fileName: string;
 };
 
-/** Позиція в прев'ю: те саме, що прийшло, плюс правки менеджера. */
+/**
+ * Позиція в прев'ю: те саме, що прийшло, плюс правки менеджера.
+ *
+ * Тираж — це САМА КІЛЬКІСТЬ (REQ-235). Полів собівартості тут немає навмисно:
+ * поки вони існували в чернетці, ціна з файлу мала куди доїхати.
+ */
 export type QuoteImportDraftRun = {
   key: string;
   quantity: number;
-  unitPriceModel: number;
-  /** `null` — модель не побачила відповіді; менеджер дає її перемикачем. */
-  modelPriceVat: "incl" | "excl" | null;
-  unitPricePrint: number;
 };
 
 export type QuoteImportDraftItem = {

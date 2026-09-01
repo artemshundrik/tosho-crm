@@ -7548,7 +7548,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           onOpenChange={setImportOpen}
           quoteId={quoteId}
           teamId={quote?.team_id ?? teamId ?? ""}
-          currency={quote?.currency}
           nextPosition={items.length === 0 ? 1 : Math.max(...items.map((item) => item.position ?? 0)) + 1}
           runDefaults={{
             markupRate: defaultMarkupRateFor(dealType),

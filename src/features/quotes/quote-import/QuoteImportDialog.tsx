@@ -13,12 +13,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
-import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { NumberInput } from "@/components/ui/number-input";
-import { CurrencyAmountInput } from "@/features/quotes/components/CurrencyAmountInput";
 import { insertQuoteItemRow, persistQuoteRuns } from "@/features/quotes/quote-details/queries";
-import { MODEL_PRICE_VAT_LABEL, type QuoteRunModelPriceVat } from "@/lib/quoteRuns";
 import { supabase } from "@/lib/supabaseClient";
 import type { QuoteRun } from "@/lib/toshoApi";
 import { cn } from "@/lib/utils";
@@ -27,9 +23,6 @@ import { pluralWordUk } from "@/lib/lastSeen";
 import {
   buildImportItemPayload,
   buildImportRunPayloads,
-  findDraftsNeedingModelPriceVat,
-  isCostPermissionError,
-  stripRunCost,
   toDraftItems,
   type QuoteImportRunDefaults,
 } from "./mapping";
@@ -45,11 +38,17 @@ import type { QuoteImportDraftItem, QuoteImportFlag, QuoteImportParseResponse } 
 /**
  * Імпорт позицій прорахунку з ексельки (REQ-233, docs/QUOTE_IMPORT_DESIGN.md).
  *
- * ПРЕВ'Ю — ОБОВ'ЯЗКОВИЙ КРОК, і це не ввічливість. Вхідні дані брудні (ціни
- * текстом, діапазони тиражу, альтернативи в сусідніх рядках), а тиражі в CRM
- * автозберігаються: мовчазний запис зіпсував би прорахунок швидше, ніж його
- * встигли б відкрити. Тому людина бачить усе, що піде в базу, і знімає зайве
- * галочкою.
+ * ПРЕВ'Ю — ОБОВ'ЯЗКОВИЙ КРОК, і це не ввічливість. Вхідні дані брудні
+ * (діапазони тиражу, альтернативи в сусідніх рядках, назва на три рядки), а
+ * тиражі в CRM автозберігаються: мовчазний запис зіпсував би прорахунок
+ * швидше, ніж його встигли б відкрити. Тому людина бачить усе, що піде в базу,
+ * і знімає зайве галочкою.
+ *
+ * СОБІВАРТОСТІ ТУТ НЕМАЄ ЖОДНОЇ (REQ-235). Імпорт приносить назву, тираж,
+ * коментар і посилання; вартість товару, нанесення й логістику вписує в
+ * прорахунку той, чия це справа. Тому в прев'ю немає ні полів ціни, ні питання
+ * про ПДВ — питати про суму, якої не буде, означало б тримати кнопку
+ * «Створити» заради нічого.
  *
  * Файл читається В БРАУЗЕРІ, на сервер їде текстовий дамп. Запис роблять
  * НАЯВНІ мутації картки під RLS користувача — привілейованих записів тут немає.
@@ -76,11 +75,10 @@ export function QuoteImportDialog({
   onOpenChange,
   quoteId,
   teamId,
-  currency,
   nextPosition,
   runDefaults,
   title = "Імпорт позицій з файлу",
-  description = "Excel від клієнта → позиції з тиражами й цінами. Нічого не записується, поки ви не подивитесь прев'ю.",
+  description = "Excel від клієнта → позиції з тиражами. Ціни вписуються вже в прорахунку. Нічого не записується, поки ви не подивитесь прев'ю.",
   header,
   canPick = true,
   pickBlockedHint,
@@ -92,7 +90,6 @@ export function QuoteImportDialog({
   /** Прорахунок, у який імпортуємо. `null` — його ще немає, див. `onPrepareQuote`. */
   quoteId?: string | null;
   teamId: string;
-  currency: string | null | undefined;
   /** Наступна вільна позиція в прорахунку — щоб імпорт не сів на чужі номери. */
   nextPosition: number;
   runDefaults: QuoteImportRunDefaults;
@@ -127,7 +124,6 @@ export function QuoteImportDialog({
   }, []);
 
   const selected = useMemo(() => drafts.filter((draft) => draft.selected), [drafts]);
-  const missingVat = useMemo(() => findDraftsNeedingModelPriceVat(drafts), [drafts]);
 
   const patchDraft = (key: string, patch: Partial<QuoteImportDraftItem>) => {
     setDrafts((prev) => prev.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)));
@@ -209,10 +205,6 @@ export function QuoteImportDialog({
 
   const handleCreate = async () => {
     if (selected.length === 0) return;
-    if (missingVat.length > 0) {
-      toast.error("Вкажіть, з ПДВ вартість товару чи без — інакше тираж не збережеться.");
-      return;
-    }
 
     setStage("saving");
     setError(null);
@@ -236,25 +228,18 @@ export function QuoteImportDialog({
     const importedAt = new Date().toISOString();
     const createdIds: string[] = [];
     const runPayloads: QuoteRun[] = [];
-    let costBlocked = false;
 
     /**
-     * Записати тиражі, а якщо база відмовила ЗА ПОСАДОЮ — записати їх без
-     * собівартості.
+     * Записати тиражі.
      *
-     * ЧОМУ НЕ ПРОСТО ЗУПИНИТИСЬ. Собівартість у CRM заповнює менеджер або
-     * проєктний менеджер; власник і СЕО такого права не мають — а імпорт
-     * пробують саме вони. Зупинка коштувала б усієї роботи: з тридцяти позицій
-     * у прорахунку лишалась одна. Тепер позиції й тиражі доїжджають, а ціни з
-     * файлу впише той, чия це справа. Мовчки це не робиться: у вікні
-     * з'являється рядок про те, що собівартість не записана.
+     * Запасного шляху «те саме, але без собівартості» тут більше немає, і це
+     * не спрощення заради краси. Тригер прав на поля ціни лається лише на
+     * НЕНУЛЬОВЕ значення в чужому полі, а імпорт відтепер шле самі нулі
+     * (REQ-235) — тобто відмовити за посадою базі вже нема на що. Раніше цей
+     * шлях рятував власника й СЕО, яким собівартість писати не можна; тепер її
+     * не пише ніхто, і рятувати нема від чого.
      */
-    const saveRuns = async (runs: QuoteRun[]) => {
-      const attempt = await persistQuoteRuns(targetQuoteId, runs, []);
-      if (attempt.ok || !isCostPermissionError(attempt.message)) return attempt;
-      costBlocked = true;
-      return persistQuoteRuns(targetQuoteId, runs.map(stripRunCost), []);
-    };
+    const saveRuns = (runs: QuoteRun[]) => persistQuoteRuns(targetQuoteId, runs, []);
 
     /** Позиції створені, тиражі — ні. Кажемо це прямо, а не самою помилкою бази. */
     const failRuns = async (message: string) => {
@@ -289,11 +274,10 @@ export function QuoteImportDialog({
 
       // ПЕРША ПОЗИЦІЯ ПИШЕ ТИРАЖІ ОДРАЗУ, решта — гуртом наприкінці.
       //
-      // На тиражах стоїть тригер прав за посадою: хто не веде собівартість,
-      // тому база відмовляє. Без цієї перевірки відмова прилітала б ПІСЛЯ
-      // створення всіх позицій — і в прорахунку лишалось двадцять п'ять
-      // товарів без жодного тиражу (побачено живим прогоном 01.09.2026).
-      // Тепер найгірше, що буває, — одна зайва позиція.
+      // Будь-яка відмова на тиражах (RLS, зникла сесія, блокування картки)
+      // прилітала б інакше ПІСЛЯ створення всіх позицій — і в прорахунку
+      // лишалось двадцять п'ять товарів без жодного тиражу (побачено живим
+      // прогоном 01.09.2026). Тепер найгірше, що буває, — одна зайва позиція.
       if (index === 0) {
         const probe = await saveRuns(runs);
         if (!probe.ok) {
@@ -319,13 +303,7 @@ export function QuoteImportDialog({
     await startResearch(targetQuoteId, createdIds);
     await onImported(createdIds, targetQuoteId, true);
     const created = `Створено ${createdIds.length} ${pluralWordUk(createdIds.length, "позицію", "позиції", "позицій")}`;
-    if (costBlocked) {
-      toast.warning(
-        `${created}, але БЕЗ собівартості: її заповнює менеджер або проєктний менеджер. Ціни з файлу треба внести вручну.`
-      );
-    } else {
-      toast.success(`${created}. Картинки й назви доїжджають фоном.`);
-    }
+    toast.success(`${created}. Ціни впишіть у прорахунку; картинки й назви доїжджають фоном.`);
     onOpenChange(false);
     reset();
   };
@@ -506,63 +484,26 @@ export function QuoteImportDialog({
                         />
                       ) : null}
 
-                      {draft.runs.map((run) => (
-                        <div key={run.key} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                          <div className="space-y-1">
-                            <div className="text-xs text-muted-foreground">Тираж</div>
+                      {/* Тираж — єдине число позиції. Діапазон із файлу приходить
+                          двома тиражами, тож поля стоять поруч в одному рядку. */}
+                      <div className="flex flex-wrap items-end gap-2">
+                        {draft.runs.map((run, runIndex) => (
+                          <div key={run.key} className="space-y-1">
+                            {runIndex === 0 ? (
+                              <div className="text-xs text-muted-foreground">Тираж</div>
+                            ) : null}
                             <NumberInput
                               value={run.quantity}
                               min={1}
+                              emptyValue={1}
+                              className="w-28"
                               disabled={stage === "saving"}
                               aria-label="Кількість тиражу"
                               onValueChange={(next) => patchRun(draft.key, run.key, { quantity: Math.max(1, next ?? 1) })}
                             />
                           </div>
-                          <div className="space-y-1">
-                            <div className="text-xs text-muted-foreground">Вартість товару</div>
-                            <CurrencyAmountInput
-                              value={run.unitPriceModel}
-                              min={0}
-                              currency={currency ?? undefined}
-                              disabled={stage === "saving"}
-                              aria-label="Вартість товару за штуку"
-                              onValueChange={(next) => patchRun(draft.key, run.key, { unitPriceModel: next ?? 0 })}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            {/* Та сама трійця станів, що й у картці тиражу (REQ-232):
-                                поки не обрали, тираж не збережеться, і сказати про це
-                                треба ТУТ, а не після невдалого запису. */}
-                            <div className="text-xs text-muted-foreground">З ПДВ чи без</div>
-                            <SegmentedGroup className={cn("inline-flex w-full", SEGMENTED_GROUP_SM)}>
-                              {(["incl", "excl"] as QuoteRunModelPriceVat[]).map((value) => (
-                                <button
-                                  key={value}
-                                  type="button"
-                                  disabled={stage === "saving"}
-                                  className={cn(SEGMENTED_TRIGGER_SM, "whitespace-nowrap px-2")}
-                                  data-state={run.modelPriceVat === value ? "active" : "inactive"}
-                                  aria-label={`Вартість товару ${MODEL_PRICE_VAT_LABEL[value]}`}
-                                  onClick={() => patchRun(draft.key, run.key, { modelPriceVat: value })}
-                                >
-                                  {MODEL_PRICE_VAT_LABEL[value]}
-                                </button>
-                              ))}
-                            </SegmentedGroup>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="text-xs text-muted-foreground">Нанесення</div>
-                            <CurrencyAmountInput
-                              value={run.unitPricePrint}
-                              min={0}
-                              currency={currency ?? undefined}
-                              disabled={stage === "saving"}
-                              aria-label="Вартість нанесення за штуку"
-                              onValueChange={(next) => patchRun(draft.key, run.key, { unitPricePrint: next ?? 0 })}
-                            />
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -573,19 +514,12 @@ export function QuoteImportDialog({
 
         {stage === "preview" || stage === "saving" ? (
           <DialogFooter className="gap-2">
-            {missingVat.length > 0 ? (
-              <div className="mr-auto text-xs text-warning-copy">
-                У {missingVat.length}{" "}
-                {pluralWordUk(missingVat.length, "позиції", "позиціях", "позиціях")} не сказано, з
-                ПДВ вартість товару чи без.
-              </div>
-            ) : null}
             <Button type="button" variant="ghost" disabled={stage === "saving"} onClick={() => onOpenChange(false)}>
               Скасувати
             </Button>
             <Button
               type="button"
-              disabled={stage === "saving" || selected.length === 0 || missingVat.length > 0}
+              disabled={stage === "saving" || selected.length === 0}
               onClick={() => void handleCreate()}
               className="gap-2"
             >
