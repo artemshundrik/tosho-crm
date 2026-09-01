@@ -613,13 +613,22 @@ export async function notifyMarkupApprovalRequested(params: {
   requesterName?: string | null;
   /** Тип угоди: дно в тілі листа має бути дном САМЕ цього прорахунку (REQ-182). */
   dealType: QuoteDealType | null | undefined;
+  /**
+   * Призначений погоджувач поліграфії. На поліграфії запит іде ЙОМУ одному, а
+   * не трьом: інакше двоє інших отримували б пінг про рішення, якого ухвалити
+   * не можуть (REQ-182).
+   */
+  printApproverUserId?: string | null;
   runs: Array<{ label: string; markupRate: number }>;
   actorUserId?: string | null;
 }) {
   if (params.runs.length === 0) return;
   const { teamId, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
   const members = await resolveTeamMembers(teamId);
-  const recipients = new Set(pickMarkupApproverUserIds(members));
+  const printApprover = params.dealType ? params.printApproverUserId ?? null : null;
+  const recipients = new Set(
+    printApprover ? [printApprover] : pickMarkupApproverUserIds(members)
+  );
   if (params.actorUserId) recipients.delete(params.actorUserId);
   if (recipients.size === 0) return;
 

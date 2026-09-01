@@ -23,6 +23,7 @@ export function QuoteMarkupDecisionDialog({
   note,
   busy,
   dealType,
+  approverLabel,
   onNoteChange,
   onCancel,
   onSubmit,
@@ -32,6 +33,8 @@ export function QuoteMarkupDecisionDialog({
   busy: boolean;
   /** Дно цього прорахунку — заголовок має назвати те саме число, що й смуга. */
   dealType: QuoteDealType | null | undefined;
+  /** Хто підписує: на поліграфії — ім'я однієї людини, на мерчі — ролі. */
+  approverLabel?: string | null;
   onNoteChange: (next: string) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -56,7 +59,9 @@ export function QuoteMarkupDecisionDialog({
           <p className="text-sm leading-relaxed text-muted-foreground">
             {rejecting
               ? "Число менеджера лишиться як є з міткою «відхилено» — автоматичного відкату до дна немає. Напишіть, чого бракує, щоб було з чим повернутись."
-              : "Запит побачать двоє СЕО і головний бухгалтер; відповісти може будь-хто з них. До відповіді закриті лише КП клієнту й перехід у «Затверджено» — рахувати й зберігати можна далі."}
+              : `Запит побачить ${
+                  approverLabel?.trim() || "двоє СЕО і головний бухгалтер"
+                }. До відповіді закриті лише КП клієнту й перехід у «Затверджено» — рахувати й зберігати можна далі.`}
           </p>
           <div className="space-y-2">
             <Label className="text-sm">{rejecting ? "Причина" : "Пояснення"} (необов'язково)</Label>

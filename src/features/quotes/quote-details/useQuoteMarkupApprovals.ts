@@ -55,6 +55,8 @@ export type UseQuoteMarkupApprovalsParams = {
   userId?: string | null;
   /** Тип угоди прорахунку — від нього дно накрутки (REQ-182). Один на всі тиражі. */
   dealType: QuoteDealType | null | undefined;
+  /** Кому йде запит на поліграфії — там правило іменне, а не за роллю. */
+  printApproverUserId?: string | null;
   /** Позиції прорахунку — по них рахується орієнтир. */
   items: BenchmarkSubject[];
   runs: QuoteRun[];
@@ -69,6 +71,7 @@ export function useQuoteMarkupApprovals({
   teamId,
   userId,
   dealType,
+  printApproverUserId,
   items,
   runs,
   getRunPricing,
@@ -231,6 +234,7 @@ export function useQuoteMarkupApprovals({
     const notified = await notifyMarkupApprovalRequested({
       quoteId,
       dealType,
+      printApproverUserId,
       requesterName: viewerName,
       runs: [{ label: runLabel(run), markupRate: pricing.markupRate }],
       actorUserId: userId ?? null,

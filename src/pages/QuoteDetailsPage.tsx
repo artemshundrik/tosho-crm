@@ -1775,6 +1775,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     teamId,
     userId,
     dealType,
+    printApproverUserId: companyRates.printMarkupApproverUserId,
     items,
     runs,
     getRunPricing,
@@ -2004,9 +2005,30 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     [permissions, viewerJobRole]
   );
 
+  /**
+   * Хто підписує ціну нижче дна — рядком для показу.
+   *
+   * На поліграфії це одна ЛЮДИНА (REQ-182), і назвати її на ім'я важливіше за
+   * назву ролі: менеджер має розуміти, кого чекати. Не знайшли імені в
+   * довіднику — кажемо роль, а не порожнечу.
+   */
+  const markupApproverLabel = useMemo(() => {
+    const approverId = dealType ? companyRates.printMarkupApproverUserId : null;
+    if (!approverId) return null;
+    return memberById.get(approverId) ?? "Погоджувач поліграфії";
+  }, [companyRates.printMarkupApproverUserId, dealType, memberById]);
+
   const canApproveMarkup = useMemo(
-    () => canApproveQuoteMarkup({ viewerJobRole, permissions }),
-    [permissions, viewerJobRole]
+    () =>
+      canApproveQuoteMarkup({
+        viewerJobRole,
+        permissions,
+        viewerUserId: userId,
+        // На поліграфії правило іменне (REQ-182): dealType не null саме там.
+        isPrintQuote: dealType !== null,
+        printApproverUserId: companyRates.printMarkupApproverUserId,
+      }),
+    [companyRates.printMarkupApproverUserId, dealType, permissions, userId, viewerJobRole]
   );
 
 
@@ -5287,6 +5309,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       view={markupView}
                                       state={activeRunMarkupState}
                                       dealType={dealType}
+                                      approverLabel={markupApproverLabel}
                                       pricing={activePricing}
                                       markupRate={activePricing.markupRate}
                                       currency={quote.currency}
@@ -6455,6 +6478,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       note={markup.dialogNote}
       busy={markup.busy}
       dealType={dealType}
+      approverLabel={markupApproverLabel}
       onNoteChange={markup.setDialogNote}
       onCancel={() => markup.setDialog(null)}
       onSubmit={() => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildPermissions,
+  canApproveQuoteMarkup,
   canEditQuoteDelivery,
   permissionsForViewAs,
   resolveQuoteRunPriceFieldAccess,
@@ -162,5 +163,54 @@ describe("permissionsForViewAs", () => {
     const asDesigner = permissionsForViewAs(owner, designer);
     expect(owner.canManageDesignStatuses).toBe(true);
     expect(asDesigner.canManageDesignStatuses).toBe(false);
+  });
+});
+
+/**
+ * Погодження накрутки: два різні правила, і плутати їх не можна (REQ-182).
+ * Мерч — за роллю, поліграфія — іменем однієї людини.
+ */
+describe("canApproveQuoteMarkup", () => {
+  const OLENA = "olena-user-id";
+  const SLAVA = "slava-user-id";
+  const approve = (
+    jobRole: string | null,
+    userId: string | null,
+    extra: { isPrintQuote?: boolean; printApproverUserId?: string | null } = {}
+  ) =>
+    canApproveQuoteMarkup({
+      viewerJobRole: jobRole,
+      permissions: permissionsFor(jobRole),
+      viewerUserId: userId,
+      ...extra,
+    });
+
+  it("на мерчі підписує будь-хто з трьох — як домовлялись 30.08.2026", () => {
+    expect(approve("seo", SLAVA)).toBe(true);
+    expect(approve("seo", OLENA)).toBe(true);
+    expect(approve("chief_accountant", "buh")).toBe(true);
+    expect(approve("manager", "manager-id")).toBe(false);
+  });
+
+  it("на поліграфії підписує ЛИШЕ призначена людина", () => {
+    // Артем 01.09.2026: «тільки СЕО Олена, саме Олена». Роль тут не годиться —
+    // СЕО в компанії двоє, і другий не має ставити рішення за неї.
+    const print = { isPrintQuote: true, printApproverUserId: OLENA };
+
+    expect(approve("seo", OLENA, print)).toBe(true);
+    expect(approve("seo", SLAVA, print)).toBe(false);
+    expect(approve("chief_accountant", "buh", print)).toBe(false);
+  });
+
+  it("порожнє налаштування повертає загальне правило, а не глухий кут", () => {
+    // Інакше поліграфічний запит не міг би погодити НІХТО й висів би вічно.
+    const print = { isPrintQuote: true, printApproverUserId: null };
+
+    expect(approve("seo", SLAVA, print)).toBe(true);
+    expect(approve("chief_accountant", "buh", print)).toBe(true);
+  });
+
+  it("невідомий глядач не підписує поліграфію навіть із правильним налаштуванням", () => {
+    expect(approve("seo", null, { isPrintQuote: true, printApproverUserId: OLENA })).toBe(false);
   });
 });

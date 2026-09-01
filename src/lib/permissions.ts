@@ -248,23 +248,46 @@ export function canEditQuoteRunPriceField(
 }
 
 /**
- * Хто ухвалює рішення по накрутці нижче дна 20 % (REQ-149).
+ * Хто ухвалює рішення по накрутці нижче дна (REQ-149, звужено REQ-182).
  *
- * Рішення СЕО 30.08.2026: запит іде трьом — двом СЕО і головному бухгалтеру,
- * підтвердити або відхилити може будь-хто з них. Звичайний бухгалтер розклад
- * ціни бачить, а кнопок не має: нарахування — його справа, ціна — ні.
+ * ДВА РІЗНІ ПРАВИЛА, і плутати їх не можна.
  *
- * Дзеркало в базі: tosho.is_quote_markup_approver (scripts/quote-markup-approvals.sql).
- * Тут і там перелік мусить збігатись дослівно — інтерфейс, який показує кнопку
- * без права за нею, гірший за відсутню кнопку.
+ * МЕРЧ І «ІНШЕ» — як домовлялись 30.08.2026: запит іде трьом (двом СЕО і
+ * головному бухгалтеру), рішення ставить будь-хто з них. Звичайний бухгалтер
+ * розклад ціни бачить, а кнопок не має: нарахування — його справа, ціна — ні.
+ *
+ * ПОЛІГРАФІЯ — одна людина, а не роль. Шкала типів угоди прийшла від Олени,
+ * дно — її домовленість, і Артем 01.09.2026 сказав прямо: затверджує саме
+ * вона. Роль тут не годиться, бо СЕО в компанії двоє. Хто саме — лежить
+ * налаштуванням `print_markup_approver_user_id`, а не константою в коді:
+ * репозиторій публічний, та й людина на цій ролі колись зміниться.
+ *
+ * Порожнє налаштування повертає загальне правило — інакше поліграфічний запит
+ * не міг би погодити НІХТО й висів би вічно.
+ *
+ * Дзеркало в базі: tosho.is_quote_markup_approver(uuid, uuid)
+ * (scripts/quote-print-markup-approver.sql). Тут і там правило мусить збігатись
+ * дослівно — кнопка без права за нею гірша за відсутню кнопку.
  */
 export function canApproveQuoteMarkup({
   viewerJobRole,
   permissions,
+  viewerUserId,
+  isPrintQuote,
+  printApproverUserId,
 }: {
   viewerJobRole?: string | null;
   permissions: AppPermissions;
+  /** Хто дивиться — потрібен лише поліграфії, де правило іменне. */
+  viewerUserId?: string | null;
+  /** Чи це поліграфічний прорахунок (quote_type = 'print'). */
+  isPrintQuote?: boolean;
+  /** Призначений погоджувач поліграфії; `null` — налаштування не заповнене. */
+  printApproverUserId?: string | null;
 }): boolean {
+  if (isPrintQuote && printApproverUserId) {
+    return Boolean(viewerUserId) && viewerUserId === printApproverUserId;
+  }
   if (permissions.isSuperAdmin || permissions.isSeo) return true;
   return normalizeJobRole(viewerJobRole) === "chief_accountant";
 }

@@ -133,6 +133,12 @@ export type QuoteRunMarkupPanelProps = {
   state: QuoteRunMarkupState;
   /** Тип угоди прорахунку — дно смуги й тексти беруться з нього (REQ-182). */
   dealType: QuoteDealType | null | undefined;
+  /**
+   * Хто підписує — рядком для показу. На поліграфії це ІМ'Я однієї людини, на
+   * мерчі — перелік ролей. Приходить готовим: панель не знає ні довідника
+   * учасників, ні налаштувань (REQ-182).
+   */
+  approverLabel?: string | null;
   pricing: RunSalePricing;
   markupRate: number;
   currency?: string | null;
@@ -191,6 +197,8 @@ function markupNote(params: {
   markupRate: number;
   /** Дно цієї угоди у відсотках — рахує викликач, тут воно вже число. */
   floorRate: number;
+  /** Хто підписує — готовий рядок; на поліграфії це ім'я, на мерчі ролі. */
+  approverLabel: string;
   benchmark: MarkupBenchmark | null;
   currency?: string | null;
   managerName?: string | null;
@@ -206,7 +214,7 @@ function markupNote(params: {
   const who = params.managerName?.trim() || "Менеджер";
   const decider = params.deciderName?.trim() || "Погоджувач";
   const money = (value: number) => formatCurrency(value, currency);
-  const WHO_SIGNS = "Двоє СЕО або головний бухгалтер";
+  const WHO_SIGNS = params.approverLabel;
   const OPENS = "КП клієнту й перехід у «Затверджено»";
 
   if (state.kind === "draft") {
@@ -439,6 +447,7 @@ export function QuoteRunMarkupPanel({
   view,
   state,
   dealType,
+  approverLabel,
   pricing,
   markupRate,
   currency,
@@ -479,6 +488,9 @@ export function QuoteRunMarkupPanel({
     pricing,
     markupRate,
     floorRate,
+    // Порожній підпис означав би, що ніхто не підписує, — а підписує завжди
+    // хтось. Загальне правило й лишається текстовим запасним варіантом.
+    approverLabel: approverLabel?.trim() || "Двоє СЕО або головний бухгалтер",
     benchmark,
     currency,
     managerName,

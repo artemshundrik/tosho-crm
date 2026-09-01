@@ -21,6 +21,14 @@ export const FALLBACK_VAT_RATE = 20;
 export type CompanyPricingRates = {
   fixedCostRate: number;
   vatRate: number;
+  /**
+   * Хто затверджує накрутку нижче дна на ПОЛІГРАФІЧНИХ прорахунках (REQ-182).
+   *
+   * `null` — налаштування не заповнене, і тоді діє загальне правило
+   * (owner / СЕО / головбух). Порожнеча тут не має означати «поліграфію не
+   * може погодити ніхто»: запит завис би назавжди.
+   */
+  printMarkupApproverUserId: string | null;
 };
 
 export type CompanyPricingRateChange = {
@@ -35,6 +43,7 @@ export type CompanyPricingRateChange = {
 const DEFAULTS: CompanyPricingRates = {
   fixedCostRate: FALLBACK_FIXED_COST_RATE,
   vatRate: FALLBACK_VAT_RATE,
+  printMarkupApproverUserId: null,
 };
 
 /**
@@ -61,9 +70,13 @@ export async function loadCompanyPricingRates(userId?: string | null): Promise<C
   const { data, error } = await supabase
     .schema("tosho")
     .from("company_pricing_rates")
-    .select("fixed_cost_rate,vat_rate")
+    .select("fixed_cost_rate,vat_rate,print_markup_approver_user_id")
     .eq("workspace_id", workspaceId)
-    .maybeSingle<{ fixed_cost_rate?: number | null; vat_rate?: number | null }>();
+    .maybeSingle<{
+      fixed_cost_rate?: number | null;
+      vat_rate?: number | null;
+      print_markup_approver_user_id?: string | null;
+    }>();
 
   // Немає таблиці або рядка — працюємо на дефолтах. Прорахунки важливіші за
   // налаштування: краще порахувати старими ставками, ніж не порахувати зовсім.
@@ -77,15 +90,25 @@ export async function loadCompanyPricingRates(userId?: string | null): Promise<C
   const rates: CompanyPricingRates = {
     fixedCostRate: toRate(data?.fixed_cost_rate, FALLBACK_FIXED_COST_RATE),
     vatRate: toRate(data?.vat_rate, FALLBACK_VAT_RATE),
+    printMarkupApproverUserId: data?.print_markup_approver_user_id ?? null,
   };
   cached = { workspaceId, rates };
   return { ...rates };
 }
 
+/**
+ * Екран ставок редагує рівно два числа, тож і приймає рівно їх.
+ *
+ * Погоджувач поліграфії (REQ-182) живе в тій самій таблиці, але не в цьому
+ * екрані: повний `CompanyPricingRates` на вході означав би, що зберігач може
+ * його випадково затерти.
+ */
+export type EditableCompanyPricingRates = Pick<CompanyPricingRates, "fixedCostRate" | "vatRate">;
+
 export async function saveCompanyPricingRates(
-  rates: CompanyPricingRates,
+  rates: EditableCompanyPricingRates,
   userId?: string | null
-): Promise<CompanyPricingRates> {
+): Promise<EditableCompanyPricingRates> {
   const workspaceId = await resolveWorkspaceId(userId);
   if (!workspaceId) throw new Error("Не вдалося визначити воркспейс.");
 
