@@ -13,12 +13,16 @@ import { resolvePageSurface } from "@/layout/pageSurfaces";
  * собою рендер. Гасити дії треба лише тоді, коли сторінка справді йде зі сцени,
  * — а це демонтаж, і для нього є окремий ефект без залежностей.
  *
- * ЧОМУ СЕТТЕР ЧИТАЄТЬСЯ ЧЕРЕЗ РЕФ. Історична причина, яка лишається чинною:
- * колись провайдер віддавав новий об'єкт на кожен свій рендер, і виходило коло
- * `setActions` → рендер провайдера → новий контекст → ефект знову. Сторінці, яка
- * забула `useMemo` на своєму вузлі (це були «Замовлення»), діставався
- * нескінченний цикл із «Maximum update depth exceeded» по 9 разів на відкриття.
- * Тепер кола немає й за побудовою: контекст сеттера незмінний.
+ * ЧОМУ СЕТТЕР ЧИТАЄТЬСЯ ЧЕРЕЗ РЕФ — І ЛИШЕ В ОДНОМУ МІСЦІ. Колись провайдер
+ * віддавав новий об'єкт на кожен свій рендер, і виходило коло `setActions` →
+ * рендер провайдера → новий контекст → ефект знову. Сторінці, яка забула
+ * `useMemo` на своєму вузлі (це були «Замовлення»), діставався нескінченний цикл
+ * із «Maximum update depth exceeded» по 9 разів на відкриття. Кола немає вже за
+ * побудовою: контекст сеттера незмінний, а залежності цього хука задає сторінка
+ * і `setActions` до них не входить. Тому основний ефект читає сеттер прямо із
+ * замикання — воно й так перестворюється щорендеру. Реф лишився там, де без
+ * нього не обійтись: у прибиранні при демонтажі, чиє замикання заморожене
+ * першим рендером.
  *
  * ЧОМУ ПОРУЧ ЇДЕ ПОВЕРХНЯ (REQ-19). Дії знімає прибирання ефекту, а воно
  * виконується вже ПІСЛЯ того, як новий маршрут відрендерився, — тож існує кадр,
@@ -28,13 +32,24 @@ import { resolvePageSurface } from "@/layout/pageSurfaces";
 export function usePageHeaderActions(actions: React.ReactNode, deps: React.DependencyList = []) {
   const setActions = React.useContext(PageHeaderActionsSetterContext);
   const location = useLocation();
-  const setActionsRef = React.useRef(setActions);
-  setActionsRef.current = setActions;
-  const surfaceIdRef = React.useRef<string | null>(null);
-  surfaceIdRef.current = resolvePageSurface(location.pathname)?.id ?? null;
+  const surfaceId = resolvePageSurface(location.pathname)?.id ?? null;
 
+  // Реф потрібен ОДНОМУ ефекту — тому, що знімає дії при демонтажі: його
+  // замикання заморожене першим рендером, і без рефа воно гасило б сеттер,
+  // якого вже немає. Синхронізуємо реф ефектом, а не присвоєнням у тілі:
+  // запис у `ref.current` під час рендеру робить сам рендер нечистим, і
+  // ратчет боргу компілятора (`react-hooks/refs`) на це справедливо свариться.
+  // Цей ефект оголошений ПЕРШИМ, тож у кожному коміті він відпрацьовує до
+  // ефекту нижче — той бачить уже свіжий сеттер.
+  const setActionsRef = React.useRef(setActions);
   React.useEffect(() => {
-    setActionsRef.current?.({ node: actions, surfaceId: surfaceIdRef.current });
+    setActionsRef.current = setActions;
+  });
+
+  // Поверхня рефа не потребує: замикання цього ефекту перестворюється щорендеру,
+  // тож `surfaceId` тут завжди з того самого рендеру, що й був у старому рефі.
+  React.useEffect(() => {
+    setActions?.({ node: actions, surfaceId });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 

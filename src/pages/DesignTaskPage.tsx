@@ -190,6 +190,7 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
+import { toLocalDate, isValidDeadlineTime } from "@/lib/designTaskDeadline";
 import { applyDesignStatusWrite, isDesignStatusAlreadyApplied, readStatusWitness } from "@/lib/designStatusIdempotency";
 import {
   normalizeQuoteAttachmentAudience,
@@ -1322,6 +1323,19 @@ const getTaskOwnerRole = (
   if (raw === "manager") return "manager";
   if (creatorUserId && isDesignerRole(memberRoleById[creatorUserId] ?? null)) return "designer";
   return "manager";
+};
+
+// На рівні модуля, а не всередині компонента: всередині воно оголошувалось
+// нижче за виклик, і компілятор React читав це як звертання до змінної до
+// оголошення (`react-hooks/immutability` у ратчеті боргу).
+const parseJsonSafe = async <T,>(response: Response): Promise<T | null> => {
+  const raw = await response.text();
+  if (!raw.trim()) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
 };
 
 export default function DesignTaskPage() {
@@ -3410,15 +3424,6 @@ export default function DesignTaskPage() {
       ? date.toLocaleString("uk-UA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
       : date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" });
   };
-  const parseJsonSafe = async <T,>(response: Response): Promise<T | null> => {
-    const raw = await response.text();
-    if (!raw.trim()) return null;
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      return null;
-    }
-  };
 
 
   const formatDeadlineDateTime = (value: string | null | undefined) => {
@@ -3437,22 +3442,8 @@ export default function DesignTaskPage() {
       : date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  const toLocalDate = (value: string | null | undefined) => {
-    if (!value) return undefined;
-    const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (dateOnlyMatch) {
-      const year = Number(dateOnlyMatch[1]);
-      const month = Number(dateOnlyMatch[2]) - 1;
-      const day = Number(dateOnlyMatch[3]);
-      return new Date(year, month, day);
-    }
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return undefined;
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  };
 
 
-  const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 
 
 
