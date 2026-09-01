@@ -2018,6 +2018,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return memberById.get(approverId) ?? "Погоджувач поліграфії";
   }, [companyRates.printMarkupApproverUserId, dealType, memberById]);
 
+  /**
+   * Кого ЧЕКАЮТЬ і хто МОЖЕ підписати — різні відповіді, і панель показує другу.
+   *
+   * Олена на питання «а якщо тебе немає» відповіла: «будуть чекати або СЕО
+   * номер 2». Сповіщення адресоване їй, а от у рядку «хто може підписати»
+   * замовчати запасного означало б, що менеджер чекатиме тиждень замість того,
+   * щоб попросити другого СЕО.
+   */
+  const markupSignerLabel = useMemo(
+    () => (markupApproverLabel ? `${markupApproverLabel} або другий СЕО` : null),
+    [markupApproverLabel]
+  );
+
   const canApproveMarkup = useMemo(
     () =>
       canApproveQuoteMarkup({
@@ -5309,7 +5322,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       view={markupView}
                                       state={activeRunMarkupState}
                                       dealType={dealType}
-                                      approverLabel={markupApproverLabel}
+                                      approverLabel={markupSignerLabel}
                                       pricing={activePricing}
                                       markupRate={activePricing.markupRate}
                                       currency={quote.currency}

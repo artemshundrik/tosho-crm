@@ -192,14 +192,24 @@ describe("canApproveQuoteMarkup", () => {
     expect(approve("manager", "manager-id")).toBe(false);
   });
 
-  it("на поліграфії підписує ЛИШЕ призначена людина", () => {
-    // Артем 01.09.2026: «тільки СЕО Олена, саме Олена». Роль тут не годиться —
-    // СЕО в компанії двоє, і другий не має ставити рішення за неї.
+  it("на поліграфії підписує призначена людина, а другий СЕО — запасний", () => {
+    // Артем: «тільки СЕО Олена, саме Олена». Сама Олена на питання «а якщо
+    // тебе немає» відповіла: «будуть чекати або СЕО номер 2». Тому запит
+    // адресований їй, але право підписати має й другий СЕО — інакше її
+    // відпустка зупиняла б усю поліграфію.
     const print = { isPrintQuote: true, printApproverUserId: OLENA };
 
     expect(approve("seo", OLENA, print)).toBe(true);
-    expect(approve("seo", SLAVA, print)).toBe(false);
+    expect(approve("seo", SLAVA, print)).toBe(true);
+  });
+
+  it("на поліграфії головбух і решта не підписують", () => {
+    // Їх у поліграфії не називав ні Артем, ні Олена.
+    const print = { isPrintQuote: true, printApproverUserId: OLENA };
+
     expect(approve("chief_accountant", "buh", print)).toBe(false);
+    expect(approve("manager", "manager-id", print)).toBe(false);
+    expect(approve("pm", "pm-id", print)).toBe(false);
   });
 
   it("порожнє налаштування повертає загальне правило, а не глухий кут", () => {
@@ -210,7 +220,10 @@ describe("canApproveQuoteMarkup", () => {
     expect(approve("chief_accountant", "buh", print)).toBe(true);
   });
 
-  it("невідомий глядач не підписує поліграфію навіть із правильним налаштуванням", () => {
-    expect(approve("seo", null, { isPrintQuote: true, printApproverUserId: OLENA })).toBe(false);
+  it("сповіщення все одно адресоване одній людині — праву це не суперечить", () => {
+    // Хто ОТРИМУЄ запит і хто МОЖЕ його підписати — різні питання. Перше
+    // вирішує notifyMarkupApprovalRequested (тільки призначений погоджувач),
+    // друге — ця функція. Глядач без посади СЕО не підписує в жодному разі.
+    expect(approve("manager", null, { isPrintQuote: true, printApproverUserId: OLENA })).toBe(false);
   });
 });
