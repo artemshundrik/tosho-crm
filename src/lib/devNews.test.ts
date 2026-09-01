@@ -11,7 +11,7 @@ import {
   dedupe,
   htmlToLines,
   isRecent,
-  parseAtomFeed,
+  parseFeed,
   parseClaudeNotes,
   releaseNotesUrl,
   renderDevNews,
@@ -58,7 +58,7 @@ const NOW = new Date("2026-09-01T20:00:00Z");
 
 describe("розбір стрічки релізів", () => {
   it("дістає заголовок, адресу й дату кожного релізу", () => {
-    const entries = parseAtomFeed(ATOM);
+    const entries = parseFeed(ATOM);
 
     expect(entries).toHaveLength(2);
     expect(entries[0].title).toBe("v2.1.257");
@@ -67,7 +67,7 @@ describe("розбір стрічки релізів", () => {
   });
 
   it("розгортає тіло релізу в рядки без розмітки", () => {
-    const entries = parseAtomFeed(ATOM);
+    const entries = parseFeed(ATOM);
 
     expect(entries[0].body.split("\n")).toEqual([
       "• Added /rewind to restore a previous checkpoint. It works everywhere.",
@@ -83,12 +83,44 @@ describe("розбір стрічки релізів", () => {
   });
 
   it("порожню або чужу стрічку віддає порожнім списком, а не падає", () => {
-    expect(parseAtomFeed("")).toEqual([]);
-    expect(parseAtomFeed("<html><body>404</body></html>")).toEqual([]);
+    expect(parseFeed("")).toEqual([]);
+    expect(parseFeed("<html><body>404</body></html>")).toEqual([]);
   });
 
   it("пункти списку стають рядками з маркером", () => {
     expect(htmlToLines("<ul><li>перше</li><li>друге</li></ul>")).toEqual(["• перше", "• друге"]);
+  });
+});
+
+const RSS = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Articles on Smashing Magazine</title>
+    <item>
+      <title><![CDATA[Rendering Tables Without Killing The Main Thread]]></title>
+      <link>https://smashingmagazine.com/2026/09/tables/</link>
+      <pubDate>Mon, 01 Sep 2026 11:00:00 GMT</pubDate>
+      <description><![CDATA[A practical look at virtualising long tables. It goes deep on measurement.]]></description>
+    </item>
+  </channel>
+</rss>`;
+
+describe("розбір RSS — дванадцять із тринадцяти джерел саме такі", () => {
+  it("бере заголовок із CDATA, посилання з тіла тега й дату з pubDate", () => {
+    const entries = parseFeed(RSS);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].title).toBe("Rendering Tables Without Killing The Main Thread");
+    expect(entries[0].url).toBe("https://smashingmagazine.com/2026/09/tables/");
+    expect(entries[0].updated).toBe("Mon, 01 Sep 2026 11:00:00 GMT");
+  });
+
+  it("опис зі стрічки доїжджає — саме його читає модель при відборі", () => {
+    expect(parseFeed(RSS)[0].summary).toBe("A practical look at virtualising long tables.");
+  });
+
+  it("дату у форматі RSS вікно свіжості розуміє нарівні з ISO", () => {
+    expect(isRecent(parseFeed(RSS)[0].updated, new Date("2026-09-01T20:00:00Z"), 30)).toBe(true);
   });
 });
 
@@ -140,7 +172,7 @@ describe("вікно свіжості", () => {
 
 describe("блок Claude", () => {
   it("згортає кілька релізів Claude Code в один пункт із найновішим", () => {
-    const item = claudeCodeItem(parseAtomFeed(ATOM), NOW, 48);
+    const item = claudeCodeItem(parseFeed(ATOM), NOW, 48);
 
     expect(item?.title).toBe("Claude Code v2.1.257");
     expect(item?.url).toContain("/releases/tag/v2.1.257");
@@ -149,12 +181,12 @@ describe("блок Claude", () => {
   });
 
   it("мовчить, коли за добу релізів не було", () => {
-    expect(claudeCodeItem(parseAtomFeed(ATOM), new Date("2026-09-20T00:00:00Z"), 24)).toBeNull();
+    expect(claudeCodeItem(parseFeed(ATOM), new Date("2026-09-20T00:00:00Z"), 24)).toBeNull();
   });
 
   it("ключ не містить дати — той самий реліз двічі не пройде", () => {
-    const first = claudeCodeItem(parseAtomFeed(ATOM), NOW, 48);
-    const later = claudeCodeItem(parseAtomFeed(ATOM), new Date("2026-09-02T09:00:00Z"), 48);
+    const first = claudeCodeItem(parseFeed(ATOM), NOW, 48);
+    const later = claudeCodeItem(parseFeed(ATOM), new Date("2026-09-02T09:00:00Z"), 48);
 
     expect(first?.key).toBe(later?.key);
   });
@@ -209,8 +241,8 @@ describe("блок «Стек»", () => {
 
 describe("відбір моделлю", () => {
   const candidates: WatchCandidate[] = [
-    { label: "React", title: "v19.3.0", url: "https://github.com/facebook/react/releases/tag/v19.3.0", updated: null },
-    { label: "Vite", title: "v8.2.0", url: "https://github.com/vitejs/vite/releases/tag/v8.2.0", updated: null },
+    { kind: "release", label: "React", title: "v19.3.0", url: "https://github.com/facebook/react/releases/tag/v19.3.0", updated: null },
+    { kind: "release", label: "Vite", title: "v8.2.0", url: "https://github.com/vitejs/vite/releases/tag/v8.2.0", updated: null },
   ];
 
   it("бере заголовок і адресу з кандидата, а не з відповіді моделі", () => {
@@ -235,15 +267,33 @@ describe("відбір моделлю", () => {
     expect(items.map((i) => i.title)).toEqual(["React — v19.3.0", "Vite — v8.2.0"]);
   });
 
-  it("не пропускає більше за ліміт", () => {
-    const many = Array.from({ length: 6 }, (_, i) => ({
-      label: `Пакет ${i}`,
-      title: `v${i}`,
-      url: `https://example.com/${i}`,
-      updated: null,
-    }));
+  it("тримає стелю окремо на релізи й окремо на читво", () => {
+    const many: WatchCandidate[] = [
+      ...Array.from({ length: 5 }, (_, i) => ({
+        kind: "release" as const, label: `Пакет ${i}`, title: `v${i}`, url: `https://example.com/r${i}`, updated: null,
+      })),
+      ...Array.from({ length: 6 }, (_, i) => ({
+        kind: "reading" as const, label: `Блог ${i}`, title: `Стаття ${i}`, url: `https://example.com/a${i}`, updated: null,
+      })),
+    ];
 
-    expect(applyPicks(many, many.map((_, i) => ({ n: i + 1 })), 3)).toHaveLength(3);
+    const items = applyPicks(many, many.map((_, i) => ({ n: i + 1 })));
+
+    expect(items.filter((i) => i.source === "watch")).toHaveLength(3);
+    expect(items.filter((i) => i.source === "apply")).toHaveLength(4);
+  });
+
+  it("блок вирішує ґатунок кандидата, а не думка моделі", () => {
+    // Модель не має жодного способу сказати «поклади це в інший блок»: вона
+    // повертає лише номер, а ґатунок приїхав із джерела.
+    const mixed: WatchCandidate[] = [
+      { kind: "reading", label: "web.dev", title: "Нова техніка", url: "https://web.dev/x", updated: null },
+    ];
+
+    const items = applyPicks(mixed, [{ n: 1, why: "спробувати в картці прорахунку" }]);
+
+    expect(items[0].source).toBe("apply");
+    expect(items[0].key).toBe("apply:https://web.dev/x");
   });
 
   it("порожній вибір — нормальна відповідь, а не помилка", () => {

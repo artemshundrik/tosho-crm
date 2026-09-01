@@ -1,8 +1,8 @@
 import { describe, it } from "vitest";
 import {
   applyPicks, atomUrl, buildPickPrompt, claudeCodeItem, claudePlatformItem, bestEntry, cleanReleaseTitle,
-  parseAtomFeed, parseClaudeNotes, renderDevNews, stackItems,
-  CLAUDE_CODE_REPO, CLAUDE_PLATFORM_NOTES, WATCH_REPOS,
+  parseFeed, parseClaudeNotes, renderDevNews, stackItems, isRecent,
+  CLAUDE_CODE_REPO, CLAUDE_PLATFORM_NOTES, WATCH_REPOS, READING_FEEDS, HN_MIN_POINTS, GITHUB_MIN_STARS, GITHUB_FRESH_DAYS,
   type DevNewsItem, type WatchCandidate,
 } from "@/lib/devNews";
 import { STACK_SNAPSHOT } from "@/data/stackSnapshot.generated";
@@ -35,16 +35,33 @@ describe("живий прогін", () => {
 
     const [cc, notes] = await Promise.all([get(atomUrl(CLAUDE_CODE_REPO)), get(CLAUDE_PLATFORM_NOTES)]);
     const claude: DevNewsItem[] = [];
-    if (cc) { const i = claudeCodeItem(parseAtomFeed(cc), now, H); if (i) claude.push(i); }
+    if (cc) { const i = claudeCodeItem(parseFeed(cc), now, H); if (i) claude.push(i); }
     if (notes) { const i = claudePlatformItem(parseClaudeNotes(notes)); if (i) claude.push(i); }
 
     const feeds = await Promise.all(WATCH_REPOS.map(async (s) => {
       const xml = await get(atomUrl(s.repo));
       if (!xml) return [] as WatchCandidate[];
-      const e = bestEntry(parseAtomFeed(xml), now, H);
-      return e ? [{ label: s.label, title: cleanReleaseTitle(e.title), url: e.url, updated: e.updated }] : [];
+      const e = bestEntry(parseFeed(xml), now, H);
+      return e ? [{ kind: "release" as const, label: s.label, title: cleanReleaseTitle(e.title), url: e.url, updated: e.updated }] : [];
     }));
-    const candidates = feeds.flat();
+
+    const reading = await Promise.all(READING_FEEDS.map(async (src) => {
+      const xml = await get(src.url);
+      if (!xml) { console.log("  ✖ мовчить:", src.label); return [] as WatchCandidate[]; }
+      const items = parseFeed(xml).filter((e) => isRecent(e.updated, now, 30 * 24)).slice(0, 3);
+      console.log(`  ${src.label}: ${parseFeed(xml).length} записів, свіжих ${items.length}`);
+      return items.map((e) => ({ kind: "reading" as const, label: src.label, title: e.title, url: e.url, updated: e.updated, summary: e.summary }));
+    }));
+
+    const dayAgo = Math.floor(Date.now() / 1000) - 86400;
+    const since = new Date(Date.now() - GITHUB_FRESH_DAYS * 86400000).toISOString().slice(0, 10);
+    const hnRaw = await get(`https://hn.algolia.com/api/v1/search_by_date?tags=story&numericFilters=${encodeURIComponent(`points>${HN_MIN_POINTS},created_at_i>${dayAgo}`)}`);
+    const ghRaw = await get(`https://api.github.com/search/repositories?q=${encodeURIComponent(`language:TypeScript created:>${since} stars:>${GITHUB_MIN_STARS}`)}&sort=stars&order=desc&per_page=8`);
+    const wide: WatchCandidate[] = [];
+    for (const h of (JSON.parse(hnRaw ?? "{}").hits ?? []).slice(0, 12)) if (h.title) wide.push({ kind: "reading", label: "HN", title: h.title, url: h.url || `https://news.ycombinator.com/item?id=${h.objectID}`, updated: null, summary: h.points ? `${h.points} балів` : undefined });
+    for (const r of (JSON.parse(ghRaw ?? "{}").items ?? [])) if (r.full_name) wide.push({ kind: "reading", label: "GitHub", title: r.full_name, url: r.html_url, updated: null, summary: [r.description, r.stargazers_count ? `${r.stargazers_count}★` : null].filter(Boolean).join(" · ") });
+
+    const candidates = [...feeds.flat(), ...reading.flat(), ...wide];
 
     // Стек: симулюємо відповідь бази — нехай три пакети відстали.
     const stack = stackItems([
@@ -57,8 +74,8 @@ describe("живий прогін", () => {
     const picked = applyPicks(candidates, candidates.slice(0, 3).map((_, i) => ({ n: i + 1, why: "перевірка" })));
 
     console.log("\n=== КАНДИДАТИ (" + candidates.length + ") ===");
-    for (const c of candidates) console.log(`  [${c.label}] ${c.title}  ${c.updated}`);
-    console.log("\n=== ПРОМПТ (перші 400) ===\n" + buildPickPrompt(candidates, ["react", "vite"]).slice(0, 400));
+    for (const c of candidates) console.log(`  [${c.label}] ${c.title.slice(0, 70)}${c.summary ? " — " + c.summary.slice(0, 50) : ""}`);
+    console.log("\n=== ПРОМПТ: " + buildPickPrompt(candidates).length + " символів ===");
 
     const msg = renderDevNews([...stack, ...claude, ...picked], "1 вересня");
     console.log("\n=== ПОВІДОМЛЕННЯ ===\n" + (msg?.text ?? "(порожньо — нічого не шлемо)"));

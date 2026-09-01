@@ -24,7 +24,7 @@
  */
 
 /** Звідки прийшов пункт. Визначає блок у повідомленні й префікс ключа. */
-export type DevNewsSource = "stack" | "claude" | "watch";
+export type DevNewsSource = "stack" | "claude" | "watch" | "apply";
 
 export type DevNewsItem = {
   source: DevNewsSource;
@@ -93,6 +93,44 @@ export const WATCH_REPOS: Array<{ repo: string; label: string }> = [
   { repo: "nodejs/node", label: "Node" },
 ];
 
+/**
+ * Блоги, які пишуть по суті. Одне джерело — окремі статті, а не дайджест.
+ *
+ * ЧОМУ ТУТ НЕМАЄ РОЗСИЛОК (Frontend Focus, JavaScript Weekly, React Status).
+ * Перевірено 02.09.2026: усі три віддають ОДИН запис на тиждень — цілий випуск
+ * листа, з тілом у вигляді HTML-таблиць і заголовком-заманухою («The asteroid
+ * hitting frontend development»). Це обкладинка журналу, а не техніка, яку
+ * можна застосувати в понеділок, і на питання «чи міг би він це зробити
+ * цього тижня» вона не відповідає ніколи.
+ */
+export const READING_FEEDS: Array<{ url: string; label: string }> = [
+  { url: "https://web.dev/static/blog/feed.xml", label: "web.dev" },
+  { url: "https://developer.chrome.com/static/blog/feed.xml", label: "Chrome" },
+  { url: "https://developer.mozilla.org/en-US/blog/rss.xml", label: "MDN" },
+  { url: "https://react.dev/rss.xml", label: "React" },
+  { url: "https://tailwindcss.com/feeds/feed.xml", label: "Tailwind" },
+  { url: "https://supabase.com/rss.xml", label: "Supabase" },
+  { url: "https://v8.dev/blog.atom", label: "V8" },
+  { url: "https://nodejs.org/en/feed/blog.xml", label: "Node" },
+  { url: "https://www.smashingmagazine.com/feed/", label: "Smashing" },
+  { url: "https://css-tricks.com/feed/", label: "CSS-Tricks" },
+];
+
+/**
+ * Широкий улов. Пороги підібрані так, щоб за добу приходило кілька десятків
+ * рядків, а не кілька сотень: далі їх звужує модель, і платити токенами за
+ * очевидне сміття немає сенсу.
+ *
+ * Заміряно 02.09.2026: HN від 80 балів дає ~35 історій за добу, з них
+ * фронтендових одиниці; GitHub за цим запитом — п'ять репозиторіїв, серед яких
+ * трапляється точне влучання (`anti-slop`, правила oxlint — а ми на oxlint).
+ * Тобто обидва джерела дають приблизно один самородок на добу, і саме заради
+ * нього вони тут.
+ */
+export const HN_MIN_POINTS = 80;
+export const GITHUB_MIN_STARS = 400;
+export const GITHUB_FRESH_DAYS = 30;
+
 export const CLAUDE_CODE_REPO = "anthropics/claude-code";
 export const CLAUDE_PLATFORM_NOTES = "https://docs.claude.com/en/release-notes/api.md";
 
@@ -137,11 +175,21 @@ export type AtomEntry = {
   updated: string | null;
   /** Тіло релізу як текст: HTML уже знято, лишились рядки. */
   body: string;
+  /** Короткий опис зі стрічки, якщо він там був. Підказка для відбору. */
+  summary?: string;
 };
 
+/**
+ * Вміст тега — разом із розгортанням CDATA.
+ *
+ * CDATA тут не екзотика: Smashing і CSS-Tricks кладуть у неї КОЖЕН заголовок,
+ * і без цього рядка підбірка мовчки лишалась би без половини джерел.
+ */
 const tagContent = (block: string, tag: string): string | null => {
   const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
-  return match ? match[1] : null;
+  if (!match) return null;
+  const cdata = match[1].match(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/);
+  return cdata ? cdata[1] : match[1];
 };
 
 /** HTML тіла релізу → плаский текст. Нас цікавлять рядки, а не розмітка. */
@@ -157,25 +205,36 @@ export function htmlToLines(html: string): string[] {
 }
 
 /**
- * Атом GitHub → перелік релізів.
+ * Стрічка → перелік записів. РОЗУМІЄ ОБИДВА ДІАЛЕКТИ.
+ *
+ * ЧОМУ ОБИДВА, А НЕ ЛИШЕ ATOM. GitHub віддає Atom (`<entry>`, посилання
+ * атрибутом `href`), а майже всі блоги — RSS 2.0 (`<item>`, посилання текстом
+ * тега, дата в `pubDate`). Заміряно 02.09.2026: з тринадцяти джерел, які ми
+ * читаємо, дванадцять — RSS. Парсер «тільки для Atom» мовчки повертав би
+ * порожньо, а порожньо тут виглядає як «сьогодні нічого нового».
  *
  * Свідомо на регулярках, а не на XML-парсері: у проєкті його немає, тягнути
- * залежність заради двох тегів дорожче за сам розбір, а формат стрічки GitHub
- * стабільний роками. Зламається — тести нижче це покажуть на сталому рядку.
+ * залежність заради чотирьох тегів дорожче за сам розбір. Зламається — тести
+ * покажуть на сталому рядку, а живий прогін (devNewsLive.test.ts) — на справжніх.
  */
-export function parseAtomFeed(xml: string): AtomEntry[] {
+export function parseFeed(xml: string): AtomEntry[] {
   const entries: AtomEntry[] = [];
-  for (const match of xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
-    const block = match[1];
+  for (const match of xml.matchAll(/<(entry|item)[\s>]([\s\S]*?)<\/\1>/g)) {
+    const block = match[2];
     const title = tagContent(block, "title");
-    const href = block.match(/<link[^>]*href="([^"]+)"/);
+    // Atom кладе адресу в атрибут, RSS — у тіло тега. Пробуємо в тому порядку,
+    // бо в Atom тіло `<link>` порожнє й перевірка «непорожній рядок» його б
+    // не врятувала.
+    const href = block.match(/<link[^>]*href="([^"]+)"/)?.[1] ?? tagContent(block, "link")?.trim();
     if (!title || !href) continue;
-    const content = tagContent(block, "content") ?? "";
+    const content = tagContent(block, "content") ?? tagContent(block, "content:encoded") ?? "";
+    const summary = tagContent(block, "description") ?? tagContent(block, "summary") ?? "";
     entries.push({
       title: decodeXmlText(title).trim(),
-      url: decodeXmlText(href[1]),
-      updated: tagContent(block, "updated"),
+      url: decodeXmlText(href),
+      updated: tagContent(block, "updated") ?? tagContent(block, "pubDate"),
       body: htmlToLines(content).join("\n"),
+      summary: trimSentence(htmlToLines(summary).join(" "), 200),
     });
   }
   return entries;
@@ -340,7 +399,22 @@ export function stackItems(bumps: StackBumpInput[]): DevNewsItem[] {
 
 // ─────────────────────────── блок «Варте уваги» ───────────────────────────
 
-export type WatchCandidate = { label: string; title: string; url: string; updated: string | null };
+/**
+ * Ґатунок кандидата вирішує, у який блок він потрапить, — і вирішує це КОД, а
+ * не модель. Модель обирає лише «варте / не варте»; куди це покласти, вона не
+ * знає й знати не має.
+ */
+export type CandidateKind = "release" | "reading";
+
+export type WatchCandidate = {
+  kind: CandidateKind;
+  label: string;
+  title: string;
+  url: string;
+  updated: string | null;
+  /** Один рядок опису, якщо джерело його дало. Модель читає саме його. */
+  summary?: string;
+};
 
 /**
  * Найсвіжіший НЕпередрелізний запис репозиторію — і не більше одного.
@@ -365,22 +439,34 @@ export function bestEntry(entries: AtomEntry[], now: Date, hours: number): AtomE
  * дають писати текст: заголовок і посилання беруться з кандидата за номером.
  * Помилитись вона може лише у виборі — не у номері версії й не в адресі.
  */
-export function buildPickPrompt(candidates: WatchCandidate[], stack: string[]): string {
+export function buildPickPrompt(candidates: WatchCandidate[]): string {
   const list = candidates
-    .map((c, i) => `${i + 1}. [${c.label}] ${c.title}`)
+    .map((c, i) => `${i + 1}. [${c.label}] ${c.title}${c.summary ? ` — ${c.summary}` : ""}`)
     .join("\n");
   return [
-    "Ти добираєш новини для розробника, який веде CRM на такому стеку:",
-    stack.join(", ") + ".",
+    "Ти добираєш читво для розробника, який САМ веде CRM друкарні. Ось вона:",
     "",
-    "Нижче — свіжі релізи. Обери НЕ БІЛЬШЕ ТРЬОХ, які справді варті його уваги:",
-    "щось, що він міг би застосувати, або що зламає йому код при оновленні.",
-    "Патчі, релізи документації й дрібні виправлення не варті — їх пропускай.",
-    "Якщо вартого немає ЖОДНОГО, поверни порожній список: це нормальна відповідь.",
+    "• React 19, чотири сторінки-гіганти (6–13 тис. рядків), головний біль —",
+    "  зайві проходи рендеру; React Compiler ще не ввімкнено.",
+    "• Vite 8 на Rolldown, TypeScript 7, лінт — oxlint, тести — Vitest.",
+    "• Дані — Supabase з RLS; уся логіка доступу тримається на політиках.",
+    "• Стилі — Tailwind 4 і власна дизайн-система на Radix.",
+    "• Сервер — функції Netlify, крони — pg_cron із самої бази.",
+    "• Є бот у Telegram і кілька інтеграцій: Нова Пошта, Dropbox, OpenAI.",
+    "• Працює він здебільшого сам, разом із кодовим агентом.",
+    "",
+    "Нижче — свіжі релізи, статті й інструменти. Питання до кожного НЕ «чи це",
+    "цікава новина», а «чи міг би він застосувати це у СВОЇЙ CRM найближчим",
+    "часом» — або «чи зламає це його код при оновленні».",
+    "",
+    "Бери щонайбільше шість. Не бери: патчі без змісту, релізи документації,",
+    "новини про ШІ-моделі взагалі, стартапи, залізо, політику, все, що просто",
+    "цікаво почитати. Якщо вартого немає ЖОДНОГО — поверни порожній список:",
+    "це нормальна й часта відповідь.",
     "",
     list,
     "",
-    'Відповідь — JSON: {"picks":[{"n":<номер>,"why":"<чим цікаво, до 90 символів, українською>"}]}',
+    'Відповідь — JSON: {"picks":[{"n":<номер>,"why":"<що саме він з цим зробить, до 90 символів, українською>"}]}',
   ].join("\n");
 }
 
@@ -394,24 +480,34 @@ export type ModelPick = { n: number; why?: string };
  * моделі лишається тільки `why` — і те обрізане. Тобто вигадати посилання або
  * переписати номер версії вона не може за побудовою, а не за домовленістю.
  */
-export function applyPicks(candidates: WatchCandidate[], picks: ModelPick[], limit = 3): DevNewsItem[] {
+export function applyPicks(
+  candidates: WatchCandidate[],
+  picks: ModelPick[],
+  limits: Record<CandidateKind, number> = { release: 3, reading: 4 }
+): DevNewsItem[] {
   const seen = new Set<number>();
+  const taken: Record<CandidateKind, number> = { release: 0, reading: 0 };
   const items: DevNewsItem[] = [];
+
   for (const pick of picks) {
     const index = Math.trunc(Number(pick?.n)) - 1;
     if (!Number.isInteger(index) || index < 0 || index >= candidates.length) continue;
     if (seen.has(index)) continue;
     seen.add(index);
+
     const candidate = candidates[index];
+    if (taken[candidate.kind] >= limits[candidate.kind]) continue;
+    taken[candidate.kind] += 1;
+
     items.push({
-      source: "watch",
-      key: `watch:${candidate.url}`,
+      // Ґатунок кандидата — а не думка моделі — вирішує блок.
+      source: candidate.kind === "release" ? "watch" : "apply",
+      key: `${candidate.kind === "release" ? "watch" : "apply"}:${candidate.url}`,
       title: `${candidate.label} — ${candidate.title}`,
       url: candidate.url,
       note: pick.why ? trimSentence(String(pick.why), 90) : undefined,
       publishedAt: candidate.updated,
     });
-    if (items.length >= limit) break;
   }
   return items;
 }
@@ -422,9 +518,10 @@ const BLOCK_TITLES: Record<DevNewsSource, string> = {
   stack: "📦 Наш стек",
   claude: "🤖 Claude",
   watch: "🌐 Варте уваги",
+  apply: "💡 Можна застосувати",
 };
 
-const BLOCK_ORDER: DevNewsSource[] = ["stack", "claude", "watch"];
+const BLOCK_ORDER: DevNewsSource[] = ["stack", "claude", "watch", "apply"];
 
 /**
  * Стеля на блок.

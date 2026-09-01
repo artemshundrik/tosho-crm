@@ -14,13 +14,17 @@ import {
   claudePlatformItem,
   bestEntry,
   cleanReleaseTitle,
-  parseAtomFeed,
+  parseFeed,
   parseClaudeNotes,
   renderDevNews,
   stackItems,
   CLAUDE_CODE_REPO,
   CLAUDE_PLATFORM_NOTES,
   WATCH_REPOS,
+  READING_FEEDS,
+  HN_MIN_POINTS,
+  GITHUB_MIN_STARS,
+  GITHUB_FRESH_DAYS,
   type DevNewsItem,
   type ModelPick,
   type WatchCandidate,
@@ -55,11 +59,41 @@ const COLLECT_DEADLINE_MS = 7_000;
 /** Скільки часу лишити моделі. Менше — не викликаємо її взагалі. */
 const MODEL_BUDGET_MS = 3_000;
 
-/** Скільки стрічок тягнемо одночасно. Стільки ж, скільки в stack-versions. */
-const CONCURRENCY = 8;
+/**
+ * Скільки стрічок тягнемо одночасно.
+ *
+ * Було вісім, як у stack-versions. Стало дванадцять, бо джерел тепер не десять,
+ * а двадцять п'ять: релізи сусідів, десять блогів і два широкі улови. Усі
+ * запити — до різних доменів, тож це не шквал на чужий сервер, а рівно те
+ * розпаралелювання, без якого збір не влазить у дедлайн.
+ */
+const CONCURRENCY = 12;
 
 /** Реліз, старший за це, у підбірку не потрапляє. Доба + запас на збій крона. */
 const FRESH_HOURS = 30;
+
+/**
+ * А для статей вікно МІСЯЦЬ, і це не недогляд, а замір.
+ *
+ * ЖИВИЙ ПРОГІН 02.09.2026, двічі. З вікном 30 годин із десяти блогів не
+ * потрапив ЖОДЕН запис; з тижневим — три блоги з десяти. Пішов дивитись, чи це
+ * не баг розбору дат, і виявилось, що ні: у react.dev найсвіжіший запис за
+ * лютий, у web.dev — за травень, у Supabase — за 24 серпня. Вони просто пишуть
+ * рідко, і це нормально для якісних джерел.
+ *
+ * ЧОМУ ШИРОКЕ ВІКНО НЕ ДАЄ ПОВТОРІВ. Те, що вже показували, відсіює пам'ять
+ * (tosho.dev_news_seen), тож кожна стаття приїде рівно один раз за всю історію.
+ * Для статей мірою новизни є саме дедуплікація, а не вік — на відміну від
+ * релізів, де новина це власне поява версії, і там вікно лишається добовим.
+ *
+ * ЧИМ ПЛАТИМО: у блок може потрапити стаття тритижневої давнини. Але «можна
+ * застосувати» — питання про придатність, а не про свіжість, і для блогу, який
+ * пише чотири рази на рік, тримісячна стаття і є найновішим, що в нього є.
+ */
+const READING_FRESH_HOURS = 30 * 24;
+
+/** Скільки історій HN беремо за прохід. Далі — лише довший промпт без користі. */
+const HN_LIMIT = 12;
 
 /** Скільки днів пам'ятаємо, що вже надсилали. */
 const SEEN_RETENTION_DAYS = 60;
@@ -165,7 +199,7 @@ async function collectClaude(now: Date, signal: AbortSignal): Promise<DevNewsIte
 
   const items: DevNewsItem[] = [];
   if (releases) {
-    const item = claudeCodeItem(parseAtomFeed(releases), now, FRESH_HOURS);
+    const item = claudeCodeItem(parseFeed(releases), now, FRESH_HOURS);
     if (item) items.push(item);
   }
   if (notes) {
@@ -181,10 +215,11 @@ async function collectCandidates(now: Date, signal: AbortSignal): Promise<WatchC
   const feeds = await mapWithConcurrency(WATCH_REPOS, CONCURRENCY, async (source) => {
     const xml = await fetchText(atomUrl(source.repo), signal);
     if (!xml) return [];
-    const entry = bestEntry(parseAtomFeed(xml), now, FRESH_HOURS);
+    const entry = bestEntry(parseFeed(xml), now, FRESH_HOURS);
     if (!entry) return [];
     return [
       {
+        kind: "release" as const,
         label: source.label,
         title: cleanReleaseTitle(entry.title),
         url: entry.url,
@@ -193,6 +228,101 @@ async function collectCandidates(now: Date, signal: AbortSignal): Promise<WatchC
     ];
   });
   return feeds.flat();
+}
+
+// --- Блок «Можна застосувати» -----------------------------------------------
+
+/** Статті з блогів, які пишуть по суті. Одне джерело — один найсвіжіший запис. */
+async function collectReading(now: Date, signal: AbortSignal): Promise<WatchCandidate[]> {
+  const feeds = await mapWithConcurrency(READING_FEEDS, CONCURRENCY, async (source) => {
+    const xml = await fetchText(source.url, signal);
+    if (!xml) return [];
+    return parseFeed(xml)
+      .filter((entry) => isRecent(entry.updated, now, READING_FRESH_HOURS))
+      .slice(0, 3)
+      .map((entry) => ({
+        kind: "reading" as const,
+        label: source.label,
+        title: entry.title,
+        url: entry.url,
+        updated: entry.updated,
+        summary: entry.summary,
+      }));
+  });
+  return feeds.flat();
+}
+
+/**
+ * Широкий улов: Hacker News і свіжі репозиторії GitHub.
+ *
+ * ЧОМУ ЦЕ ТУТ, ПОПРИ ШУМ. Заміряно 02.09.2026: HN від 80 балів дає за добу
+ * ~35 історій, з яких фронтендових одиниці, а GitHub — п'ять репозиторіїв,
+ * здебільшого чужої тематики. Але саме в цьому шумі трапилось те, чого не було
+ * в жодному кураторському блозі: `anti-slop` — правила oxlint проти слабкого
+ * TypeScript, а ми якраз на oxlint. Один самородок на добу вартий того, щоб
+ * модель прочитала два десятки заголовків: це третина копійки.
+ */
+async function collectWideNet(signal: AbortSignal): Promise<WatchCandidate[]> {
+  const dayAgo = Math.floor(Date.now() / 1000) - 86_400;
+  const since = new Date(Date.now() - GITHUB_FRESH_DAYS * 86_400_000).toISOString().slice(0, 10);
+
+  const [hn, gh] = await Promise.all([
+    fetchText(
+      "https://hn.algolia.com/api/v1/search_by_date?tags=story&numericFilters=" +
+        encodeURIComponent(`points>${HN_MIN_POINTS},created_at_i>${dayAgo}`),
+      signal
+    ),
+    fetchText(
+      "https://api.github.com/search/repositories?q=" +
+        encodeURIComponent(`language:TypeScript created:>${since} stars:>${GITHUB_MIN_STARS}`) +
+        "&sort=stars&order=desc&per_page=8",
+      signal
+    ),
+  ]);
+
+  const candidates: WatchCandidate[] = [];
+
+  try {
+    const payload = JSON.parse(hn ?? "{}") as {
+      hits?: Array<{ title?: string; url?: string; objectID?: string; points?: number }>;
+    };
+    for (const hit of (payload.hits ?? []).slice(0, HN_LIMIT)) {
+      if (!hit.title) continue;
+      candidates.push({
+        kind: "reading",
+        label: "HN",
+        title: hit.title,
+        url: hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,
+        updated: null,
+        summary: hit.points ? `${hit.points} балів` : undefined,
+      });
+    }
+  } catch {
+    // Чужий JSON зламався — блок просто бідніший, решта підбірки ціла.
+  }
+
+  try {
+    const payload = JSON.parse(gh ?? "{}") as {
+      items?: Array<{ full_name?: string; html_url?: string; description?: string; stargazers_count?: number }>;
+    };
+    for (const repo of payload.items ?? []) {
+      if (!repo.full_name || !repo.html_url) continue;
+      candidates.push({
+        kind: "reading",
+        label: "GitHub",
+        title: repo.full_name,
+        url: repo.html_url,
+        updated: null,
+        summary: [repo.description, repo.stargazers_count ? `${repo.stargazers_count}★` : null]
+          .filter(Boolean)
+          .join(" · "),
+      });
+    }
+  } catch {
+    // Те саме.
+  }
+
+  return candidates;
 }
 
 type PickResult = { items: DevNewsItem[]; usage: { model: string; input: number; output: number } | null };
@@ -216,7 +346,6 @@ async function pickWorthReading(
   if (!apiKey || candidates.length === 0 || msLeft < MODEL_BUDGET_MS) return { items: [], usage: null };
 
   const model = (process.env.OPENAI_MODEL || "").trim() || "gpt-5.6-luna";
-  const stack = STACK_SNAPSHOT.packages.slice(0, 40).map((pkg) => pkg.name);
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -225,8 +354,8 @@ async function pickWorthReading(
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
-        input: [{ role: "user", content: buildPickPrompt(candidates, stack) }],
-        max_output_tokens: 500,
+        input: [{ role: "user", content: buildPickPrompt(candidates) }],
+        max_output_tokens: 900,
         text: {
           format: {
             type: "json_schema",
@@ -339,17 +468,22 @@ export const handler = async (event: HttpEvent) => {
     const now = new Date();
     const todayKey = kievDayKey(now);
 
-    const [stack, claude, candidates, seen, members] = await Promise.all([
+    const [stack, claude, releases, reading, wide, seen, members] = await Promise.all([
       collectStack(admin),
       collectClaude(now, controller.signal),
       collectCandidates(now, controller.signal),
+      collectReading(now, controller.signal),
+      collectWideNet(controller.signal),
       loadSeen(admin),
       loadMembers(admin),
     ]);
+    const candidates = [...releases, ...reading, ...wide];
 
     // Відсіюємо вже надіслане ДО моделі: інакше вона щоранку обирала б із того
     // самого списку й витрачала токени на відбір, який ми потім викинемо.
-    const freshCandidates = candidates.filter((candidate) => !seen.has(`watch:${candidate.url}`));
+    const freshCandidates = candidates.filter(
+      (candidate) => !seen.has(`watch:${candidate.url}`) && !seen.has(`apply:${candidate.url}`)
+    );
     const picked = await pickWorthReading(
       freshCandidates,
       COLLECT_DEADLINE_MS - (Date.now() - startedAt),
