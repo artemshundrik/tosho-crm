@@ -4809,7 +4809,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       type="button"
                       variant="outline"
                       disabled={!canManageItems}
-                      title={itemsLockedHint ?? "Excel від клієнта → позиції з тиражами й цінами"}
+                      title={itemsLockedHint ?? "Excel від клієнта → позиції з тиражами. Ціни вписуються тут, у прорахунку"}
                       onClick={() => setImportOpen(true)}
                       className="h-10 gap-2 rounded-xl"
                     >
