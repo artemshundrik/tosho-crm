@@ -214,12 +214,28 @@ const GIANT_THRESHOLD = 2000;
  * даними прорахунку (ставки, валюта, наступна позиція). Це +42 нових проти
  * −36 винесених.
  *
+ * ПІДНЯТО 01.09.2026 — перший крок тестового візарда створення прорахунку
+ * (REQ-134#p1): кнопка «Тестовий прорахунок» і вікно з трьома плашками.
+ *
+ * QuotesPage (+23). Спершу винесено все, що виноситься, і вийшло навіть більше
+ * за розмітку вікна: `QuoteKindPickerDialog` тримає і саме вікно, і кнопку
+ * поруч із ним (`TestQuoteEntryButton`) разом із власним `ModalMount` — тобто
+ * сторінка не бачить ні прапорця вікна, ні його монтування. Те, що лишилось,
+ * окремо жити не може: ref з обраним типом (його читає білдер, який монтує
+ * сторінка), обробник на три рядки, один компонент у тулбарі, скидання типу
+ * на закритті білдера й новий проп у виклику. Це протягування, а воно за
+ * визначенням лежить там, де стоїть виклик.
+ *
+ * QuoteBatchBuilderDialog (+7) — рівно один проп `initialQuoteType` з
+ * поясненням, навіщо він: людина вже відповіла «поліграфія» чи «мерч» на
+ * першому кроці, і питати те саме вдруге всередині білдера — марна робота.
+ *
  */
 
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12874,
   "src/pages/QuoteDetailsPage.tsx": 7565,
-  "src/pages/QuotesPage.tsx": 8476,
+  "src/pages/QuotesPage.tsx": 8499,
   "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
@@ -227,7 +243,7 @@ const CEILINGS = {
   "src/pages/OrdersCustomersPage.tsx": 4277,
   "src/pages/TeamMembersPage.tsx": 2633,
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
-  "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2956,
+  "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2963,
   "src/features/finances/FinanceExpenses.tsx": 2439,
   "src/layout/AppLayout.tsx": 3000,
   "src/components/quotes/NewQuoteDialog.tsx": 2758,

@@ -132,7 +132,7 @@ const DELIVERY_OPTIONS = [
 ] as const;
 
 
-type QuoteTypeValue = (typeof QUOTE_TYPES)[number]["value"];
+export type QuoteTypeValue = (typeof QUOTE_TYPES)[number]["value"];
 
 type ProductRunDraft = {
   id: string;
@@ -278,6 +278,12 @@ export interface QuoteBatchBuilderDialogProps {
   currentUserId?: string;
   restrictPartySelectionToOwn?: boolean;
   currentManagerLabel?: string;
+  /**
+   * Тип першого товару, з яким відкривається вікно. Ним користується тестовий
+   * візард (REQ-134): людина вже відповіла «поліграфія» чи «мерч» на першому
+   * кроці, і питати те саме вдруге всередині білдера — марна робота.
+   */
+  initialQuoteType?: QuoteTypeValue;
 }
 
 type QuickAvanprintProduct = {
@@ -815,6 +821,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   currentUserId,
   restrictPartySelectionToOwn = false,
   currentManagerLabel,
+  initialQuoteType,
 }) => {
   const [customerId, setCustomerId] = React.useState("");
   const [customerType, setCustomerType] = React.useState<"customer" | "lead">("customer");
@@ -870,7 +877,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       return;
     }
     wasOpenRef.current = true;
-    const firstProduct = createProductDraft();
+    const firstProduct = createProductDraft(initialQuoteType ? { quoteType: initialQuoteType } : undefined);
     setCustomerId("");
     setCustomerType("customer");
     setSavedDeliveryPoints([]);
@@ -898,7 +905,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     setQuickModelError(null);
     setQuickModelPopoverOpen(false);
     setContentReady(true);
-  }, [contentReady, currentUserId, open]);
+  }, [contentReady, currentUserId, initialQuoteType, open]);
 
   // Книга адрес обраного замовника/ліда — для пікера збережених адрес у «Логістиці».
   React.useEffect(() => {

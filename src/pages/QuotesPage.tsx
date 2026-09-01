@@ -98,8 +98,8 @@ import {
   type QuoteDealType,
 } from "@/lib/quoteDealType";
 import { fetchMarkupApprovalsForQuotes } from "@/features/quotes/quote-details/markupApproval";
-import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
-import type { NewQuoteFormData, QuoteBatchBuilderFormData } from "@/components/quotes";
+import { NewQuoteDialog, QuoteBatchBuilderDialog, TestQuoteEntryButton } from "@/components/quotes";
+import type { NewQuoteFormData, QuoteBatchBuilderFormData, QuoteKindValue } from "@/components/quotes";
 import {
   getCreatedCustomerLeadLabel,
   toQuotePartyOption,
@@ -657,6 +657,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    * замовників і довантаження каталогу.
    */
   const [batchBuilderOpen, setBatchBuilderOpen] = useState(false);
+  // Тип виробу з першого кроку тестового візарда (REQ-134). Ref, а не стан:
+  // стан цієї сторінки коштує перемальовки списку (REQ-75), а значення
+  // потрібне рівно тоді, коли ModalMount рендерить білдер, — після кліку.
+  const pendingQuoteTypeRef = useRef<QuoteKindValue | null>(null);
   const batchBuilder = useModalMount();
   const [batchBuilderError, setBatchBuilderError] = useState<string | null>(null);
   const [batchCreating, setBatchCreating] = useState(false);
@@ -2297,6 +2301,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setAttachmentsError(null);
     });
   }, [batchBuilder]);
+
+  // Поліграфія й «інше» ведуть просто в нинішній білдер; мерч отримає розвилку
+  // «руками / з ексельки» окремим кроком (REQ-134#p2).
+  const handleQuoteKindPick = useCallback(
+    (kind: QuoteKindValue) => {
+      pendingQuoteTypeRef.current = kind;
+      openBatchBuilder();
+    },
+    [openBatchBuilder]
+  );
 
   const handleCustomerSearchChange = async (search: string) => {
     if (!search.trim()) {
@@ -5834,6 +5848,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         topRight={
           <>
             <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
+            {/* Полігон нового способу створення (REQ-134): стоїть ПОРУЧ, а не
+                замість, — робочий шлях менеджерів не чіпаємо, поки візард не визріє. */}
+            <TestQuoteEntryButton
+              onPick={handleQuoteKindPick}
+              className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
+            />
             <Button onClick={openBatchBuilder} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
               <PlusIcon className="h-4 w-4" />
               Новий прорахунок
@@ -5992,6 +6012,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     foundCount,
     getManagerAvatar,
     getManagerLabel,
+    handleQuoteKindPick,
     hasActiveFilters,
     isManagerInactive,
     isManagerUser,
@@ -7475,6 +7496,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             // рендер, що прилітає посеред анімації зникання, видно як блимання.
             setBatchBuilderError(null);
             setCustomerSearch("");
+            pendingQuoteTypeRef.current = null;
           }
         }}
         onSubmit={handleBatchBuilderSubmit}
@@ -7495,6 +7517,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         currentUserId={currentUserId}
         restrictPartySelectionToOwn={isManagerUser}
         currentManagerLabel={currentUserManagerLabel}
+        initialQuoteType={pendingQuoteTypeRef.current ?? undefined}
       />
         )}
       </ModalMount>
