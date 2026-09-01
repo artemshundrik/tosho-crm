@@ -1,5 +1,5 @@
 import { Label } from "@/components/ui/label";
-import { SEGMENTED_GROUP_XS, SEGMENTED_TRIGGER_XS } from "@/components/ui/controlStyles";
+import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { CurrencyAmountInput } from "@/features/quotes/components/CurrencyAmountInput";
 import { PercentAmountInput } from "@/features/quotes/components/PercentAmountInput";
@@ -8,7 +8,6 @@ import type { QuoteRunMarkupState } from "@/lib/quoteMarkupApproval";
 import {
   DEFAULT_MARKUP_RATE,
   MODEL_PRICE_VAT_LABEL,
-  MODEL_PRICE_VAT_SHORT_LABEL,
   normalizeQuoteRunModelPriceVat,
   type QuoteRunModelPriceVat,
   type RunSalePricing,
@@ -37,9 +36,7 @@ const COST_FIELDS: Array<{ field: PriceField; label: string; who: string; aria: 
     // товар + нанесення + логістика — та сама, на яку йде накрутка й на якій
     // стоїть дно 20 %. Одне слово на дві різні величини читалось так, ніби
     // накрутка рахується від закупівельної ціни моделі.
-    // Без «/ од.» — сусіднє «В-ть нанесення» теж за одиницю й теж мовчить
-    // про це; додаток тут лише ламав підпис на три рядки під перемикачем.
-    label: "В-ть товару",
+    label: "Вартість товару за одиницю",
     who: "проєктний менеджер",
     aria: "Вартість товару за одиницю",
   },
@@ -91,40 +88,10 @@ export function QuoteRunPriceFields({
               ярусів ціни й назви груп специфікації малювались однаково —
               text-2xs uppercase tracking-wide, — тож жоден рівень не мав рангу.
               Український текст капсом на 10 px до того ж найважчий для читання
-              з усього, що є на сторінці.
-
-              Рядок підпису став flex, бо позначка ПДВ живе САМЕ ТУТ (REQ-232):
-              праворуч у ньому вже було порожньо, тож перемикач не коштує блоку
-              жодного пікселя висоти. Під полем він з'їдав цілий ярус і розсував
-              усю сітку з чотирьох цін. Звідси ж дефіс у підписі: «В-ть товару»
-              замість «Вартість товару» звільняє місце під перемикач і ставить
-              поле в один ряд із сусіднім «В-ть нанесення». */}
-          <div className="flex min-h-5 items-center justify-between gap-2">
-            <Label className="text-xs font-normal leading-tight text-muted-foreground">
-              {label}
-            </Label>
-            {field === "unit_price_model" ? (
-              <SegmentedGroup className={SEGMENTED_GROUP_XS}>
-                {(["incl", "excl"] as QuoteRunModelPriceVat[]).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={SEGMENTED_TRIGGER_XS}
-                    data-state={modelPriceVat === value ? "active" : "inactive"}
-                    aria-label={`Вартість товару ${MODEL_PRICE_VAT_LABEL[value]}`}
-                    disabled={!access.unit_price_model}
-                    title={
-                      lockHint(access.unit_price_model, who) ??
-                      `Вартість товару ${MODEL_PRICE_VAT_LABEL[value]}`
-                    }
-                    onClick={() => onModelPriceVatChange(value)}
-                  >
-                    {MODEL_PRICE_VAT_SHORT_LABEL[value]}
-                  </button>
-                ))}
-              </SegmentedGroup>
-            ) : null}
-          </div>
+              з усього, що є на сторінці. */}
+          <Label className="block min-h-5 text-xs font-normal leading-tight text-muted-foreground">
+            {label}
+          </Label>
           <CurrencyAmountInput
             value={run[field]}
             disabled={!access[field]}
@@ -139,12 +106,37 @@ export function QuoteRunPriceFields({
                 "border-warning-soft-border focus-visible:ring-warning-soft-border/40"
             )}
           />
-          {/* Три стани, і жодна кнопка не натиснута, поки не обрали — саме цей
-              стан тримає збереження. Чекбокс тут не годиться: його «вимкнено»
-              неможливо відрізнити від «ще не дивився» (REQ-232). */}
-          {field === "unit_price_model" && modelPriceVatMissing ? (
-            <div className="text-xs leading-tight text-warning-copy">
-              Оберіть, з ПДВ ця сума чи без — інакше тираж не збережеться.
+          {/* Позначка ПДВ стоїть ПІД сумою, а не в її підписі: це не уточнення
+              назви поля, а окреме рішення, яке треба ухвалити (REQ-232). Три
+              стани, і жодна кнопка не натиснута, поки не обрали, — саме цей стан
+              тримає збереження. Чекбокс тут не годиться: його «вимкнено»
+              неможливо відрізнити від «ще не дивився». */}
+          {field === "unit_price_model" ? (
+            <div className="space-y-1">
+              <SegmentedGroup className={cn("inline-flex w-full", SEGMENTED_GROUP_SM)}>
+                {(["incl", "excl"] as QuoteRunModelPriceVat[]).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    // `whitespace-nowrap` — не косметика: колонка вужча за
+                    // 200 px, і «без ПДВ» ламалось на два рядки, роздуваючи
+                    // групу вдвічі (побачено в прев'ю, не тестом).
+                    className={cn(SEGMENTED_TRIGGER_SM, "whitespace-nowrap px-2")}
+                    data-state={modelPriceVat === value ? "active" : "inactive"}
+                    aria-label={`Вартість товару ${MODEL_PRICE_VAT_LABEL[value]}`}
+                    disabled={!access.unit_price_model}
+                    title={lockHint(access.unit_price_model, who)}
+                    onClick={() => onModelPriceVatChange(value)}
+                  >
+                    {MODEL_PRICE_VAT_LABEL[value]}
+                  </button>
+                ))}
+              </SegmentedGroup>
+              {modelPriceVatMissing ? (
+                <div className="text-xs leading-tight text-warning-copy">
+                  Оберіть, з ПДВ ця сума чи без — інакше тираж не збережеться.
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
