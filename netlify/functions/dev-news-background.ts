@@ -83,8 +83,22 @@ const COLLECT_DEADLINE_MS = 20_000;
 /** Стеля на ОДНЕ джерело. Повільний не має права забрати з собою решту. */
 const SOURCE_TIMEOUT_MS = 6_000;
 
-/** Скільки часу лишити моделі. Менше — не викликаємо її взагалі. */
-const MODEL_BUDGET_MS = 5_000;
+/**
+ * Стеля на відбір моделлю — ВЛАСНА, не рештка від дедлайну збору.
+ *
+ * СПІЙМАНО НА ПЕРШІЙ ЖЕ СПРАВЖНІЙ ВІДПРАВЦІ 02.09.2026. Раніше тут стояла
+ * умова «викликати модель, лише якщо від дедлайну збору лишилось ≥2,5 с» —
+ * правило з тих часів, коли функція була синхронною зі стелею в десять секунд.
+ * Функція давно фонова й живе п'ятнадцять хвилин, а умова лишилась: збір того
+ * разу забрав майже всі двадцять секунд (джерела пригальмували після кількох
+ * прогонів поспіль), і підбірка МОВЧКИ поїхала без двох найкращих блоків —
+ * «Варте уваги» й «Можна застосувати». У журналі AI за той запуск немає жодного
+ * рядка, тобто модель не викликали взагалі.
+ *
+ * Урок ширший за цей баг: обмеження, успадковане від старої архітектури, не
+ * зникає саме — воно тихо продовжує різати те, що різати вже не треба.
+ */
+const PICK_DEADLINE_MS = 60_000;
 
 /**
  * Скільки стрічок тягнемо одночасно.
@@ -375,11 +389,10 @@ type PickResult = { items: DevNewsItem[]; usage: { model: string; input: number;
  */
 async function pickWorthReading(
   candidates: WatchCandidate[],
-  msLeft: number,
   signal: AbortSignal
 ): Promise<PickResult> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || candidates.length === 0 || msLeft < MODEL_BUDGET_MS) return { items: [], usage: null };
+  if (!apiKey || candidates.length === 0) return { items: [], usage: null };
 
   const model = (process.env.OPENAI_MODEL || "").trim() || "gpt-5.6-luna";
 
@@ -656,11 +669,22 @@ export const handler = async (event: HttpEvent) => {
     const freshCandidates = candidates.filter(
       (candidate) => !seen.has(`watch:${candidate.url}`) && !seen.has(`apply:${candidate.url}`)
     );
-    const picked = await pickWorthReading(
-      freshCandidates,
-      COLLECT_DEADLINE_MS - (Date.now() - startedAt),
-      controller.signal
-    );
+    // Свій годинник, не рештка від збору: збір міг забрати весь свій дедлайн,
+    // але це не причина лишати підбірку без двох найкращих блоків.
+    const pickController = new AbortController();
+    const pickTimer = setTimeout(() => pickController.abort(), PICK_DEADLINE_MS);
+    let picked: PickResult;
+    try {
+      picked = await pickWorthReading(freshCandidates, pickController.signal);
+    } finally {
+      clearTimeout(pickTimer);
+    }
+    if (freshCandidates.length > 0 && picked.items.length === 0) {
+      // Порожній вибір при живих кандидатах буває чесним («сьогодні нічого
+      // вартого»), але буває й збоєм — і зовні вони НЕРОЗРІЗНЕННІ. Тому слід
+      // у логах лишаємо завжди.
+      console.log(`dev-news: із ${freshCandidates.length} кандидатів не обрано жодного`);
+    }
 
     const items = [...stack, ...claude, ...picked.items].filter((item) => !seen.has(item.key));
 
