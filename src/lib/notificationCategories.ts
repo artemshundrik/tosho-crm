@@ -154,8 +154,10 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // свідомо немає: він і так знає, що щойно завів прорахунок.
     case "quote_created":
       return isPrivileged || job === "pm";
-    // Запит на знижену накрутку бачать ТІЛЬКИ ті, хто його вирішує, — той самий
-    // перелік, що в canApproveQuoteMarkup і tosho.is_quote_markup_approver.
+    // Запит на знижену накрутку бачать ТІЛЬКИ ті, хто його вирішує. Це перелік
+    // для МЕРЧУ; на поліграфії коло вужче — призначений погоджувач або СЕО, і
+    // головбух туди не входить (REQ-182). Тут лишається ширший, бо перемикач
+    // керує категорією загалом, а головбух і далі вирішує мерчеві запити.
     // Менеджеру перемикач на це був би брехнею: запити йому не шлють.
     case "quote_markup_request":
       return access === "owner" || job === "seo" || job === "chief_accountant";

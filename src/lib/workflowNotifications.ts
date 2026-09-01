@@ -97,11 +97,13 @@ function pickOwnerAndSeoUserIds(rows: TeamMemberRoleRow[]) {
 const pickContractApproverUserIds = pickOwnerAndSeoUserIds;
 
 /**
- * Хто отримує запит на погодження накрутки нижче дна 20 % (REQ-149).
+ * Хто отримує запит на погодження накрутки нижче дна — НА МЕРЧІ (REQ-149).
  *
  * Рішення СЕО 30.08.2026: двоє СЕО і головний бухгалтер; підтвердити або
  * відхилити може будь-хто з них. Власник тут не як окрема роль погоджувача, а
  * як наскрізний доступ — він і так бачить усе.
+ *
+ * На ПОЛІГРАФІЇ перелік інший і вужчий — див. виклик нижче (REQ-182).
  *
  * Дзеркала цього переліку: canApproveQuoteMarkup (src/lib/permissions.ts) і
  * tosho.is_quote_markup_approver у базі.
@@ -113,6 +115,14 @@ function pickMarkupApproverUserIds(rows: TeamMemberRoleRow[]) {
       const job = normalizeRole(row.job_role);
       return access === "owner" || job === "seo" || job === "chief_accountant";
     })
+    .map((row) => row.user_id)
+    .filter((value): value is string => !!value);
+}
+
+/** Лише посада СЕО — запасні погоджувачі поліграфії (REQ-182). */
+function pickSeoUserIds(rows: TeamMemberRoleRow[]) {
+  return rows
+    .filter((row) => normalizeRole(row.job_role) === "seo")
     .map((row) => row.user_id)
     .filter((value): value is string => !!value);
 }
@@ -625,9 +635,16 @@ export async function notifyMarkupApprovalRequested(params: {
   if (params.runs.length === 0) return;
   const { teamId, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
   const members = await resolveTeamMembers(teamId);
-  const printApprover = params.dealType ? params.printApproverUserId ?? null : null;
+  // На поліграфії адресат вужчий: призначений погоджувач, а якщо його не
+  // призначили — СЕО. Падати на загальний перелік не можна: у ньому головбух,
+  // а він поліграфію не затверджує (вимога Артема 01.09.2026), тож лист про
+  // рішення, якого він не може ухвалити, був би просто шумом.
   const recipients = new Set(
-    printApprover ? [printApprover] : pickMarkupApproverUserIds(members)
+    params.dealType
+      ? params.printApproverUserId
+        ? [params.printApproverUserId]
+        : pickSeoUserIds(members)
+      : pickMarkupApproverUserIds(members)
   );
   if (params.actorUserId) recipients.delete(params.actorUserId);
   if (recipients.size === 0) return;

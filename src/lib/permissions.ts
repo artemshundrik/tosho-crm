@@ -271,8 +271,9 @@ export function canEditQuoteRunPriceField(
  * називав ні Артем, ні Олена, а «щоб хтось міг» — не підстава роздавати право
  * на ціну.
  *
- * Порожнє налаштування повертає загальне правило — інакше поліграфічний запит
- * не міг би погодити НІХТО й висів би вічно.
+ * Порожнє налаштування НЕ повертає загальне правило: у ньому є головбух, а він
+ * поліграфію не затверджує в жодному разі. Без призначеного погоджувача діє
+ * «будь-який СЕО» — глухого кута це не створює, бо СЕО двоє.
  *
  * Дзеркало в базі: tosho.is_quote_markup_approver(uuid, uuid)
  * (scripts/quote-print-markup-approver.sql). Тут і там правило мусить збігатись
@@ -294,9 +295,14 @@ export function canApproveQuoteMarkup({
   /** Призначений погоджувач поліграфії; `null` — налаштування не заповнене. */
   printApproverUserId?: string | null;
 }): boolean {
-  if (isPrintQuote && printApproverUserId) {
-    if (viewerUserId && viewerUserId === printApproverUserId) return true;
-    // Запасний: другий СЕО. Саме СЕО, а не «будь-хто з керівництва».
+  if (isPrintQuote) {
+    if (printApproverUserId && viewerUserId && viewerUserId === printApproverUserId) return true;
+    // Запасний — САМЕ СЕО, і більше ніхто.
+    //
+    // Гілка спрацьовує й тоді, коли погоджувача не призначено: падати на
+    // загальне правило тут не можна, бо в ньому є головбух, а на поліграфії
+    // він відхилення від накрутки не затверджує (вимога Артема 01.09.2026).
+    // Глухого кута це не створює — СЕО в компанії двоє.
     return normalizeJobRole(viewerJobRole) === "seo";
   }
   if (permissions.isSuperAdmin || permissions.isSeo) return true;

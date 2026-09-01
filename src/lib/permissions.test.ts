@@ -212,12 +212,15 @@ describe("canApproveQuoteMarkup", () => {
     expect(approve("pm", "pm-id", print)).toBe(false);
   });
 
-  it("порожнє налаштування повертає загальне правило, а не глухий кут", () => {
-    // Інакше поліграфічний запит не міг би погодити НІХТО й висів би вічно.
+  it("без призначеного погоджувача підписує будь-який СЕО — але не головбух", () => {
+    // Падати на загальне правило тут не можна: у ньому є головбух, а на
+    // поліграфії він відхилення від накрутки не затверджує взагалі.
+    // Глухого кута немає — СЕО двоє.
     const print = { isPrintQuote: true, printApproverUserId: null };
 
     expect(approve("seo", SLAVA, print)).toBe(true);
-    expect(approve("chief_accountant", "buh", print)).toBe(true);
+    expect(approve("seo", OLENA, print)).toBe(true);
+    expect(approve("chief_accountant", "buh", print)).toBe(false);
   });
 
   it("сповіщення все одно адресоване одній людині — праву це не суперечить", () => {
