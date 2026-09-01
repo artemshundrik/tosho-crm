@@ -17,7 +17,8 @@ export type NotificationCategoryKey =
   | "finance_payment"
   | "finance_month_close"
   | "admin_digest"
-  | "business_digest";
+  | "business_digest"
+  | "dev_news";
 
 export type NotificationCategory = {
   key: NotificationCategoryKey;
@@ -41,6 +42,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "finance_month_close", label: "Закриття місяця" },
   { key: "admin_digest", label: "Системний дайджест" },
   { key: "business_digest", label: "Бізнес-дайджест" },
+  { key: "dev_news", label: "Підбірка для розробки" },
 ];
 
 // Видимість категорій за роллю — копія src/lib/notificationCategories.ts (тримати синхронно).
@@ -68,6 +70,9 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
       return access === "owner";
     case "business_digest":
       return isPrivileged;
+    // Підбірка для розробки — лише власник (див. src/lib/notificationCategories.ts).
+    case "dev_news":
+      return access === "owner";
     case "design":
       return isQuoteWorker || isDesigner;
     // Нові прорахунки: власник, адміністратор, CEO і PM

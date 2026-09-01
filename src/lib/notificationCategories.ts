@@ -19,7 +19,8 @@ export type NotificationCategoryKey =
   | "finance_payment"
   | "finance_month_close"
   | "admin_digest"
-  | "business_digest";
+  | "business_digest"
+  | "dev_news";
 
 export type NotificationCategory = {
   key: NotificationCategoryKey;
@@ -112,6 +113,12 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     description: "Ранковий план на день і вечірній підсумок продажів та дизайну",
     telegramOnly: true,
   },
+  {
+    key: "dev_news",
+    label: "Підбірка для розробки",
+    description: "Нові версії наших пакетів, релізи Claude і те, що варте уваги",
+    telegramOnly: true,
+  },
 ];
 
 // Видимість категорій за роллю. Чиста функція від рядків ролей —
@@ -147,6 +154,10 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // Бізнес-дайджест — власник/адмін + CEO.
     case "business_digest":
       return isPrivileged;
+    // Підбірка для розробки — лише власник. Це не звіт про CRM, а читво про
+    // інструменти, якими її пишуть: усім іншим у команді воно ні до чого.
+    case "dev_news":
+      return access === "owner";
     // Дизайн-задачі — дизайнери + ті, хто з прорахунками/дизайном.
     case "design":
       return isQuoteWorker || isDesigner;
