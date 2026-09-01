@@ -103,11 +103,47 @@ export const WATCH_REPOS: Array<{ repo: string; label: string }> = [
  * можна застосувати в понеділок, і на питання «чи міг би він це зробити
  * цього тижня» вона не відповідає ніколи.
  */
+/**
+ * Блоги й стрічки, які читаємо заради «що з цим можна зробити».
+ *
+ * СПИСОК ПЕРЕРОБЛЕНО 02.09.2026, і ось чому. Спершу я набрав самі офіційні
+ * блоги — react.dev, web.dev, MDN, V8, Tailwind. Перший же живий прогін дав із
+ * них НУЛЬ записів навіть за місяць: у react.dev найсвіжіше було за лютий, у
+ * web.dev за травень, у MDN за червень. Офіційні блоги пишуть рідко саме тому,
+ * що офіційні, і будувати на них щоденну підбірку — це будувати тишу.
+ *
+ * Тому міряв не «чи віддає 200», а СКІЛЬКИ ЗАПИСІВ ЗА ТИЖДЕНЬ. Числа в
+ * коментарях нижче — з того заміру. Відкинуто те, що мовчить: TkDodo (15 днів
+ * без запису), Josh Comeau (57), CSS Weekly (99), Builder.io (404).
+ *
+ * ПОВІЛЬНІ ЛИШИЛИСЬ, і це не суперечність. Один запит коштує ~100 мс, а коли
+ * react.dev нарешті заговорить, це буде найважливіший рядок місяця. Помилка
+ * була не в тому, що вони в списку, а в тому, що вони були ЄДИНИМИ.
+ *
+ * РОЗСИЛОК НЕМАЄ (Frontend Focus, JavaScript Weekly, React Status). Усі три
+ * живі, але віддають один запис на тиждень — цілий випуск листа із заголовком
+ * на кшталт «The asteroid hitting frontend development». Це обкладинка
+ * журналу: на питання «чи можна це застосувати в понеділок» вона не відповідає.
+ */
 export const READING_FEEDS: Array<{ url: string; label: string }> = [
+  // ── Ті, у кого є пульс. Заміряно 02.09.2026 (записів за тиждень) ──
+  { url: "https://lobste.rs/rss", label: "Lobsters" },                              // 26
+  { url: "https://thenewstack.io/feed/", label: "The New Stack" },                  // 26
+  { url: "https://simonwillison.net/atom/everything/", label: "Simon Willison" },   // 25
+  { url: "https://vercel.com/atom", label: "Vercel" },                              // 23
+  { url: "https://www.infoq.com/feed/", label: "InfoQ" },                           // 15
+  { url: "https://openai.com/news/rss.xml", label: "OpenAI" },                      // 14
+  { url: "https://dev.to/feed", label: "dev.to" },                                  // 12
+  { url: "https://github.blog/changelog/feed/", label: "GitHub" },                  // 10
+  { url: "https://www.reddit.com/r/reactjs/top/.rss?t=day", label: "r/reactjs" },   // 7
+  { url: "https://blog.cloudflare.com/rss/", label: "Cloudflare" },                 // 4
+  { url: "https://blog.logrocket.com/feed/", label: "LogRocket" },                  // 4
+
+  // ── Ті, що мовчать місяцями, але саме вони кажуть головне, коли говорять ──
+  { url: "https://react.dev/rss.xml", label: "React" },
   { url: "https://web.dev/static/blog/feed.xml", label: "web.dev" },
   { url: "https://developer.chrome.com/static/blog/feed.xml", label: "Chrome" },
   { url: "https://developer.mozilla.org/en-US/blog/rss.xml", label: "MDN" },
-  { url: "https://react.dev/rss.xml", label: "React" },
   { url: "https://tailwindcss.com/feeds/feed.xml", label: "Tailwind" },
   { url: "https://supabase.com/rss.xml", label: "Supabase" },
   { url: "https://v8.dev/blog.atom", label: "V8" },
@@ -386,15 +422,76 @@ export type StackBumpInput = {
  * «мажор це чи патч» тут не ставиться навмисно — воно живе на сторінці Стек,
  * а в підбірці зайве: рішення оновлюватись ухвалюється не о дев'ятій ранку.
  */
+/** patch / minor / major, або null якщо версії однакові чи нерозбірливі. */
+export function classifyBump(installed: string, latest: string): "patch" | "minor" | "major" | null {
+  const parse = (v: string) => (v.match(/(\d+)\.(\d+)\.(\d+)/)?.slice(1, 4) ?? []).map(Number);
+  const a = parse(installed);
+  const b = parse(latest);
+  if (a.length !== 3 || b.length !== 3) return installed === latest ? null : "minor";
+  if (b[0] !== a[0]) return "major";
+  if (b[1] !== a[1]) return "minor";
+  if (b[2] !== a[2]) return "patch";
+  return null;
+}
+
+/** `@tiptap/react` → `@tiptap`. Для не-скоупних пакетів — власне ім'я. */
+export function packageFamily(name: string): string {
+  return name.startsWith("@") ? name.split("/")[0] : name;
+}
+
+/**
+ * Пакети, у яких з'явилась версія, ВАРТА ЗГАДКИ.
+ *
+ * ДВА ФІЛЬТРИ, і обидва з'явились після того, як я подивився на справжній
+ * результат 02.09.2026. Без них блок виглядав так:
+ *
+ *   @tiptap/extension-link      3.30.2 → 3.30.6
+ *   @tiptap/extension-underline 3.30.2 → 3.30.6
+ *   @tiptap/pm                  3.30.2 → 3.30.6
+ *   @tiptap/react               3.30.2 → 3.30.6
+ *
+ * Чотири рядки про одне й те саме, і жоден із них не новина, а пункт списку
+ * справ. Тому:
+ *
+ *   ПАТЧІ НЕ ПОКАЗУЄМО. «Вийшов 3.30.6 замість 3.30.2» — це не подія, про яку
+ *   варто читати за кавою; відрив по патчах видно на сторінці Стек, коли по
+ *   нього приходять свідомо. Лишаються мінор і мажор — тобто те, де або
+ *   з'явилось щось нове, або щось зламається.
+ *
+ *   РОДИНУ ЗГОРТАЄМО В РЯДОК. Скоупні пакети (@tiptap, @tanstack, @radix-ui)
+ *   виходять пачкою й однією версією. Показуємо `@tiptap/* — 4 пакети`.
+ */
 export function stackItems(bumps: StackBumpInput[]): DevNewsItem[] {
-  return bumps
+  const worthy = bumps
     .filter((bump) => bump.latest && bump.latest !== bump.installed)
-    .map((bump) => ({
-      source: "stack" as const,
-      key: `stack:${bump.name}@${bump.latest}`,
-      title: `${bump.name} ${bump.installed} → ${bump.latest}`,
-      url: releaseNotesUrl(bump.name),
-    }));
+    .filter((bump) => {
+      const kind = classifyBump(bump.installed, bump.latest!);
+      return kind === "minor" || kind === "major";
+    });
+
+  const byFamily = new Map<string, StackBumpInput[]>();
+  for (const bump of worthy) {
+    const family = packageFamily(bump.name);
+    const list = byFamily.get(family);
+    if (list) list.push(bump);
+    else byFamily.set(family, [bump]);
+  }
+
+  const items: DevNewsItem[] = [];
+  for (const [family, list] of byFamily) {
+    const head = list[0];
+    const many = list.length > 1;
+    items.push({
+      source: "stack",
+      key: `stack:${many ? `${family}/*` : head.name}@${head.latest}`,
+      title: many
+        ? `${family}/* ${head.installed} → ${head.latest} · ${list.length} пакети`
+        : `${head.name} ${head.installed} → ${head.latest}`,
+      url: releaseNotesUrl(head.name),
+      note: classifyBump(head.installed, head.latest!) === "major" ? "мажор — може зламати" : undefined,
+    });
+  }
+  return items;
 }
 
 // ─────────────────────────── блок «Варте уваги» ───────────────────────────

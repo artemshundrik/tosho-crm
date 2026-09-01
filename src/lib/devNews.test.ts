@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyPicks,
   bestEntry,
+  classifyBump,
+  packageFamily,
   cleanReleaseTitle,
   isPrerelease,
   claudeCodeItem,
@@ -231,6 +233,34 @@ describe("блок «Стек»", () => {
     expect(items).toHaveLength(1);
     expect(items[0].title).toBe("vite 8.1.0 → 8.2.0");
     expect(items[0].key).toBe("stack:vite@8.2.0");
+  });
+
+  it("патчі не показує — це список справ, а не новина", () => {
+    // Справжній результат прогону 02.09.2026 без цього фільтра: чотири рядки
+    // @tiptap/* 3.30.2 → 3.30.6 і жодного слова про те, що змінилось.
+    expect(stackItems([{ name: "vitest", installed: "4.1.11", latest: "4.1.12" }])).toEqual([]);
+    expect(classifyBump("4.1.11", "4.1.12")).toBe("patch");
+    expect(classifyBump("8.1.0", "8.2.0")).toBe("minor");
+    expect(classifyBump("3.6.0", "4.4.0")).toBe("major");
+  });
+
+  it("родину скоупних пакетів згортає в один рядок", () => {
+    const items = stackItems([
+      { name: "@tiptap/react", installed: "3.30.2", latest: "3.31.0" },
+      { name: "@tiptap/pm", installed: "3.30.2", latest: "3.31.0" },
+      { name: "@tiptap/extension-link", installed: "3.30.2", latest: "3.31.0" },
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe("@tiptap/* 3.30.2 → 3.31.0 · 3 пакети");
+    expect(packageFamily("@tiptap/react")).toBe("@tiptap");
+    expect(packageFamily("vite")).toBe("vite");
+  });
+
+  it("мажор підписує як такий, що може зламати", () => {
+    const items = stackItems([{ name: "date-fns", installed: "3.6.0", latest: "4.4.0" }]);
+
+    expect(items[0].note).toBe("мажор — може зламати");
   });
 
   it("веде на репозиторій, коли його знаємо, і на npm, коли ні", () => {
