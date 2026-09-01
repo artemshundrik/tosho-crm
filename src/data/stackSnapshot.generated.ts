@@ -9,15 +9,18 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-29T11:01:23.340Z",
+  "generatedAt": "2026-09-01T13:48:28.755Z",
   "packages": [
     {
       "name": "@babel/core",
       "version": "8.0.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-08-29T14:12:19+03:00",
+      "bumpCommit": {
+        "sha": "1a7cd2c1",
+        "subject": "Перевірки перед пушем стали за 11 секунд замість двох хвилин"
+      },
       "description": "Двигун обох розборів вище.",
       "homepage": "https://babel.dev/docs/en/next/babel-core",
       "usedIn": 0,
@@ -29,8 +32,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "8.0.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-08-29T14:12:19+03:00",
+      "bumpCommit": {
+        "sha": "1a7cd2c1",
+        "subject": "Перевірки перед пушем стали за 11 секунд замість двох хвилин"
+      },
       "description": "Дає тій одній перевірці читати TypeScript. Стоїть замість typescript-eslint, який тримав нас на шостій версії TypeScript.",
       "homepage": "https://babel.dev/",
       "usedIn": 1,
@@ -41,8 +47,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "8.0.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-08-29T14:12:19+03:00",
+      "bumpCommit": {
+        "sha": "1a7cd2c1",
+        "subject": "Перевірки перед пушем стали за 11 секунд замість двох хвилин"
+      },
       "description": "Розбір JSX для парсера вище. Без нього перевірка бачить одну знахідку з п'ятнадцяти.",
       "homepage": "https://babel.dev/docs/en/next/babel-preset-react",
       "usedIn": 1,
@@ -53,8 +62,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "8.0.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-08-29T14:12:19+03:00",
+      "bumpCommit": {
+        "sha": "1a7cd2c1",
+        "subject": "Перевірки перед пушем стали за 11 секунд замість двох хвилин"
+      },
       "description": "Розбір TypeScript для парсера вище.",
       "homepage": "https://babel.dev/docs/en/next/babel-preset-typescript",
       "usedIn": 1,
@@ -297,7 +309,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 89,
+      "usedIn": 91,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -372,7 +384,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 14,
+      "usedIn": 19,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -387,7 +399,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Клікає й друкує в тестах так, як це робить людина, — з наведенням, фокусом і клавіатурою, а не одним синтетичним кліком.",
       "homepage": null,
-      "usedIn": 6,
+      "usedIn": 7,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -698,7 +710,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
       "homepage": "https://lucide.dev",
-      "usedIn": 201,
+      "usedIn": 211,
       "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
     },
     {
@@ -721,8 +733,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.80.0",
       "layer": "build",
       "dev": true,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-08-29T14:12:19+03:00",
+      "bumpCommit": {
+        "sha": "1a7cd2c1",
+        "subject": "Перевірки перед пушем стали за 11 секунд замість двох хвилин"
+      },
       "description": "Лінт: шукає підозрілі місця в коді за правилами. Написаний на Rust — увесь проєкт за 2 с замість 98,6 в ESLint.",
       "homepage": "https://oxc.rs/docs/guide/usage/linter",
       "usedIn": 0,
@@ -755,7 +770,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 289,
+      "usedIn": 298,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -786,7 +801,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Частина React, яка власне малює в браузері.",
       "homepage": "https://react.dev/",
-      "usedIn": 10,
+      "usedIn": 9,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -862,7 +877,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Обробка зображень на сервері: стискає й переганяє у webp картинки каталогу.",
       "homepage": "https://sharp.pixelplumbing.com",
-      "usedIn": 7,
+      "usedIn": 8,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sharp.pixelplumbing.com&sz=128"
     },
     {
@@ -877,7 +892,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Спливні повідомлення в кутку: «Збережено», «Не вийшло».",
       "homepage": "https://sonner.emilkowal.ski/",
-      "usedIn": 60,
+      "usedIn": 62,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
     },
     {
@@ -931,10 +946,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "7.0.2",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-08-25T18:48:42+03:00",
+      "bumpedAt": "2026-08-29T14:12:19+03:00",
       "bumpCommit": {
-        "sha": "5519d3f5",
-        "subject": "Проєкт переїхав на TypeScript 6 — місток перед стрибком на сімку"
+        "sha": "1a7cd2c1",
+        "subject": "Перевірки перед пушем стали за 11 секунд замість двох хвилин"
       },
       "description": "Перевіряє типи: ловить помилки до запуску, а не в проді. Версія 7 — перевірка за 2,6 с замість 16.",
       "homepage": "https://www.typescriptlang.org/",
@@ -969,7 +984,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 117,
+      "usedIn": 133,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -989,6 +1004,18 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": "https://github.com/web-push-libs.png?size=64"
     },
     {
+      "name": "xlsx",
+      "version": "0.20.3",
+      "layer": "screen",
+      "dev": false,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Читає ексельки клієнтів прямо в браузері: з них імпортуються позиції прорахунку. Береться з офіційного CDN SheetJS, а не з npm, — у npm лишилась версія 2022 року з дірками розбору, а розбираємо ми саме чужі файли.",
+      "homepage": "https://sheetjs.com/",
+      "usedIn": 1,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=sheetjs.com&sz=128"
+    },
+    {
       "name": "zod",
       "version": "4.4.3",
       "layer": "platform",
@@ -1000,7 +1027,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Перевіряє, що дані, які прийшли ззовні, справді такі, як ми чекаємо: серверні функції звіряють із нею тіло запиту.",
       "homepage": "https://zod.dev",
-      "usedIn": 24,
+      "usedIn": 26,
       "iconUrl": "https://www.google.com/s2/favicons?domain=zod.dev&sz=128"
     }
   ],
@@ -1015,12 +1042,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 1658,
-  "testFiles": 116,
+  "tests": 1852,
+  "testFiles": 132,
   "lintStubs": 29,
   "node": "24",
-  "netlifyFunctions": 42,
-  "sourceLines": 255433,
+  "netlifyFunctions": 44,
+  "sourceLines": 264302,
   "automation": {
     "workflows": [
       {
