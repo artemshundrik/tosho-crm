@@ -4,7 +4,9 @@ import {
   applyPicks,
   bestEntry,
   classifyBump,
+  extractArticleText,
   packageFamily,
+  readableSourceUrl,
   cleanReleaseTitle,
   isPrerelease,
   claudeCodeItem,
@@ -328,6 +330,52 @@ describe("відбір моделлю", () => {
 
   it("порожній вибір — нормальна відповідь, а не помилка", () => {
     expect(applyPicks(candidates, [])).toEqual([]);
+  });
+});
+
+describe("читання статті", () => {
+  it("бере README для репозиторію і JSON для гілки Reddit", () => {
+    expect(readableSourceUrl("https://github.com/dmmulroy/anti-slop")).toBe(
+      "https://raw.githubusercontent.com/dmmulroy/anti-slop/HEAD/README.md"
+    );
+    expect(readableSourceUrl("https://www.reddit.com/r/reactjs/comments/abc/x/")).toBe(
+      "https://www.reddit.com/r/reactjs/comments/abc/x.json"
+    );
+    expect(readableSourceUrl("https://blog.logrocket.com/x/")).toBe("https://blog.logrocket.com/x/");
+  });
+
+  it("глибоке посилання в репозиторій читається як звичайна сторінка", () => {
+    // README підставляємо лише для кореня. Для файлу чи issue це була б інша
+    // сторінка, ніж та, яку ми показуємо в підбірці.
+    const deep = "https://github.com/vitejs/vite/releases/tag/v8.2.0";
+    expect(readableSourceUrl(deep)).toBe(deep);
+  });
+
+  it("викидає розмітку й службові блоки, лишаючи текст", () => {
+    const html = `<html><head><style>.a{color:red}</style></head><body>
+      <nav>Головна Про нас Контакти</nav>
+      <article><p>${"Перший абзац статті, у якому справді щось написано. ".repeat(12)}</p></article>
+      <footer>Всі права застережено</footer></body></html>`;
+
+    const text = extractArticleText(html);
+
+    expect(text).toContain("Перший абзац статті");
+    expect(text).not.toContain("Контакти");
+    expect(text).not.toContain("color:red");
+    expect(text).not.toContain("права застережено");
+  });
+
+  it("порожньо, якщо витягти нічого — краще без розбору, ніж переказ невидимого", () => {
+    // Сторінка на JS або пейволл: тексту майже немає. Викликач у такому разі
+    // лишає пункт із реченням від відбору, а не вигадує зміст.
+    expect(extractArticleText("<html><body><div id=root></div></body></html>")).toBe("");
+    expect(extractArticleText("<p>Короткий анонс.</p>")).toBe("");
+  });
+
+  it("ріже дуже довгу сторінку до стелі", () => {
+    const long = `<article><p>${"Довгий осмислений абзац тексту статті. ".repeat(400)}</p></article>`;
+
+    expect(extractArticleText(long, 1000)).toHaveLength(1000);
   });
 });
 

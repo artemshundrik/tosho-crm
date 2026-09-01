@@ -8,6 +8,8 @@ import { loadMembers, sendDigest, type AdminClient, type MemberRow } from "./_li
 import { STACK_SNAPSHOT } from "../../src/data/stackSnapshot.generated";
 import {
   applyPicks,
+  extractArticleText,
+  readableSourceUrl,
   atomUrl,
   buildPickPrompt,
   claudeCodeItem,
@@ -37,36 +39,51 @@ import {
 //   ?only=<email> — надіслати по-справжньому, але одній людині;
 //   ?force=1      — не займати добовий слот у digest_log.
 //
-// ЧОМУ СИНХРОННА, А НЕ ФОНОВА. Фонова віддає 202 і викидає тіло відповіді —
-// тобто ?dry=1 не показав би нічого, а саме він тут головний інструмент: підбірку
-// треба вміти подивитись очима, перш ніж вона піде живій людині. Ціна рішення —
-// десятисекундна стеля, і нижче з нею живуть тим самим способом, що й
-// stack-versions: дедлайн на збір, після якого шлемо те, що встигли.
+// ЧОМУ ФОНОВА, ХОЧА СПЕРШУ БУЛА СИНХРОННОЮ. Синхронна функція Netlify живе 10
+// секунд, і в них уміщався збір із моделлю-відбором — ледве, з дедлайном на 5 с.
+// Але тепер підбірка ще й ЧИТАЄ обрані статті й переказує їх людською мовою: це
+// чотири завантаження сторінок плюс другий виклик моделі, тобто ще секунд
+// п'ять-вісім. У десять не влазить ніяк, а різати розбір заради стелі означало б
+// викинути те, заради чого підбірку й переробляли.
+//
+// ЦІНА РІШЕННЯ: фонова функція віддає 202 і ВИКИДАЄ тіло відповіді, тож ?dry=1
+// більше нічого не показав би у відповіді. Тому готовий текст лягає в
+// tosho.dev_news_last — звідти його видно і psql-ем, і майбутньою сторінкою.
+// Тобто «подивитись очима, перш ніж піде людині» лишилось, просто дивимось не
+// у відповідь, а в базу.
 //
 // РОЗКЛАД ТУТ НЕ ОГОЛОШУЄТЬСЯ. Планувальник Netlify у нас мертвий, усі крони
 // запускає pg_cron із самої бази — розклад лежить у scripts/dev-news-cron.sql.
 
 const TIME_ZONE = "Europe/Kiev";
 
+/** Стеля на весь етап читання статей. Фонова функція живе 15 хвилин. */
+const EXPLAIN_DEADLINE_MS = 45_000;
+
+/** Скільки статей читаємо вглиб. Стільки ж, скільки вміщає блок. */
+const EXPLAIN_LIMIT = 4;
+
+/** Стеля на одну статтю. Довші все одно обрізає extractArticleText. */
+const ARTICLE_TIMEOUT_MS = 6_000;
+
 /**
  * Дедлайн на збір. Синхронна функція Netlify живе 10 секунд, і впертись у цю
- * межу означало б не надіслати НІЧОГО. Тому на п'ятій секунді припиняємо
- * питати й складаємо повідомлення з того, що вже маємо: підбірка без блоку
- * «варте уваги» — це трохи бідніша підбірка, а не зламана.
+ * межу означало б не надіслати НІЧОГО. Тому після дедлайну припиняємо питати
+ * й складаємо повідомлення з того, що вже маємо: підбірка без блоку «варте
+ * уваги» — це трохи бідніша підбірка, а не зламана.
  *
- * ЧОМУ П'ЯТЬ, А НЕ СІМ. Заміряно 02.09.2026 на справжньому прогоні: збір
- * тридцяти п'яти джерел зайняв 6,8 с, а модель після нього — ще ~3 с. Разом
- * майже рівно стеля, тобто перший же повільний ранок обірвав би розсилку. П'ять
- * секунд на збір і 2,5 на модель лишають запас, а типовий прохід і так
- * укладається у дві секунди.
+ * У фоновій функції стеля 15 хвилин, тож числа тут щедріші за колишні (5 с на
+ * збір, 2,5 на джерело). Але дедлайн лишається: чужа стрічка, яка висить
+ * хвилину, не має права затримати розсилку, а типовий збір і так укладається
+ * у дві секунди.
  */
-const COLLECT_DEADLINE_MS = 5_000;
+const COLLECT_DEADLINE_MS = 20_000;
 
 /** Стеля на ОДНЕ джерело. Повільний не має права забрати з собою решту. */
-const SOURCE_TIMEOUT_MS = 2_500;
+const SOURCE_TIMEOUT_MS = 6_000;
 
 /** Скільки часу лишити моделі. Менше — не викликаємо її взагалі. */
-const MODEL_BUDGET_MS = 2_500;
+const MODEL_BUDGET_MS = 5_000;
 
 /**
  * Скільки стрічок тягнемо одночасно.
@@ -134,7 +151,7 @@ const kievDayLabel = (now: Date) =>
  * блоки складаються незалежно, і мовчання React-репозиторію не може забрати
  * рядок про наш власний стек.
  */
-async function fetchText(url: string, signal: AbortSignal): Promise<string | null> {
+async function fetchText(url: string, signal: AbortSignal, timeoutMs = SOURCE_TIMEOUT_MS): Promise<string | null> {
   try {
     // ВЛАСНИЙ ТАЙМАУТ НА КОЖЕН ЗАПИТ, а не лише спільний дедлайн на весь збір.
     // Заміряно 02.09.2026: тридцять п'ять джерел зібрались за 9,1 с при стелі
@@ -143,7 +160,7 @@ async function fetchText(url: string, signal: AbortSignal): Promise<string | nul
     // він обриває ВСЕ разом, тобто через одного мовчуна втрачаються і ті, що
     // вже майже відповіли. Три секунди на джерело — і повільний випадає сам.
     const response = await fetch(url, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(SOURCE_TIMEOUT_MS)]),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
       headers: { "User-Agent": "tosho-crm-dev-news" },
     });
     if (!response.ok) return null;
@@ -373,7 +390,7 @@ async function pickWorthReading(
       body: JSON.stringify({
         model,
         input: [{ role: "user", content: buildPickPrompt(candidates) }],
-        max_output_tokens: 900,
+        max_output_tokens: 1_800,
         text: {
           format: {
             type: "json_schema",
@@ -414,6 +431,14 @@ async function pickWorthReading(
       payload.output_text ??
       payload.output?.flatMap((part) => part.content ?? []).map((part) => part.text ?? "").join("") ??
       "";
+    // Обрізана відповідь — найпідступніший збій цього етапу: JSON не
+    // розбереться, вибір стане порожнім, і підбірка мовчки втратить найкращий
+    // блок, не сказавши ні слова. Спіймано 02.09.2026, коли довший промпт
+    // штовхнув відповідь рівно в стелю max_output_tokens.
+    if (!raw.trim().endsWith("}")) {
+      console.error("dev-news: відповідь відбору обрізано — підніми max_output_tokens");
+      return { items: [], usage: null };
+    }
     const parsed = JSON.parse(raw) as { picks?: ModelPick[] };
 
     return {
@@ -428,6 +453,123 @@ async function pickWorthReading(
     // Зіпсований JSON, обрив, дедлайн — усе це означає рівно «блоку не буде».
     console.error("dev-news: відбір не вдався:", error instanceof Error ? error.message : error);
     return { items: [], usage: null };
+  }
+}
+
+// --- Розбір: прочитати статтю й пояснити, що вона дає ---------------------
+
+/**
+ * Кожен обраний пункт — прочитаний і переказаний людською мовою.
+ *
+ * НАВІЩО ЦЕ ПОНАД РЕЧЕННЯ-ВЕРДИКТ. Речення від відбору відповідає на «чи це
+ * варте уваги». Але щоб вирішити, чи витрачати на статтю пів години, треба
+ * знати, ПРО ЩО вона й що конкретно змінить у нас, — а цього із заголовка не
+ * видно. Тому обрані чотири читаються насправді: сторінка → текст → модель
+ * переказує суть, користь для НАШОЇ CRM і чесний вердикт.
+ *
+ * ОДИН ВИКЛИК НА ВСІ ЧОТИРИ, а не чотири виклики. Так дешевше й швидше, і
+ * головне — модель бачить їх поруч і не повторює той самий висновок чотири
+ * рази різними словами.
+ *
+ * Ціна: ~24 тис. вхідних токенів і ~800 вихідних на добу, тобто менше за цент.
+ *
+ * Не вдалось (пейволл, сторінка на JS, обрив) — пункт лишається з реченням від
+ * відбору. Порожній розбір краще за переказ тексту, якого ми не бачили.
+ */
+async function explainPicks(
+  items: DevNewsItem[],
+  signal: AbortSignal
+): Promise<Map<string, string>> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const targets = items.filter((item) => item.source === "apply").slice(0, EXPLAIN_LIMIT);
+  if (!apiKey || targets.length === 0) return new Map();
+
+  const texts = await mapWithConcurrency(targets, EXPLAIN_LIMIT, async (item) => {
+    const html = await fetchText(readableSourceUrl(item.url), signal, ARTICLE_TIMEOUT_MS);
+    return html ? extractArticleText(html) : "";
+  });
+
+  const readable = targets
+    .map((item, i) => ({ item, text: texts[i] }))
+    .filter((row) => row.text.length > 0);
+  if (readable.length === 0) return new Map();
+
+  const prompt = [
+    "Нижче — статті, які ти щойно обрав для розробника CRM друкарні (React 19 з",
+    "чотирма сторінками-гігантами й боротьбою за рендер, Vite на Rolldown,",
+    "Supabase з RLS, Tailwind 4, oxlint, функції Netlify, бот у Telegram).",
+    "",
+    "Про КОЖНУ напиши три-чотири речення живою українською, ніби переказуєш",
+    "колезі за кавою:",
+    "  1) про що вона насправді — суть, а не заголовок;",
+    "  2) що це дало б САМЕ в його CRM, якомога конкретніше;",
+    "  3) чесний вердикт: варто читати цілком, глянути по діагоналі чи забити.",
+    "",
+    "Пиши просто. Без «у сучасному вебі», без «важливо зазначити», без переліку",
+    "буллетів. Якщо стаття виявилась слабкою або не про те — так і скажи, це",
+    "нормальна відповідь і вона цінніша за ввічливість.",
+    "",
+    ...readable.map((row, i) => `--- ${i + 1}. ${row.item.title}\n${row.text}`),
+    "",
+    'Відповідь — JSON: {"writeups":[{"n":<номер>,"text":"<три-чотири речення>"}]}',
+  ].join("\n");
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      signal,
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: (process.env.OPENAI_MODEL || "").trim() || "gpt-5.6-luna",
+        input: [{ role: "user", content: prompt }],
+        max_output_tokens: 2000,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "dev_news_writeups",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["writeups"],
+              properties: {
+                writeups: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["n", "text"],
+                    properties: { n: { type: "integer" }, text: { type: "string" } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    });
+    if (!response.ok) return new Map();
+
+    const payload = (await response.json()) as {
+      output_text?: string;
+      output?: Array<{ content?: Array<{ text?: string }> }>;
+    };
+    const raw =
+      payload.output_text ??
+      payload.output?.flatMap((part) => part.content ?? []).map((part) => part.text ?? "").join("") ??
+      "";
+    const parsed = JSON.parse(raw) as { writeups?: Array<{ n: number; text: string }> };
+
+    const byKey = new Map<string, string>();
+    for (const writeup of parsed.writeups ?? []) {
+      const row = readable[Math.trunc(Number(writeup.n)) - 1];
+      if (!row || typeof writeup.text !== "string") continue;
+      byKey.set(row.item.key, writeup.text.replace(/\s+/g, " ").trim().slice(0, 700));
+    }
+    return byKey;
+  } catch (error) {
+    console.error("dev-news: розбір не вдався:", error instanceof Error ? error.message : error);
+    return new Map();
   }
 }
 
@@ -520,6 +662,23 @@ export const handler = async (event: HttpEvent) => {
     );
 
     const items = [...stack, ...claude, ...picked.items].filter((item) => !seen.has(item.key));
+
+    // Читання статей — окремий годинник. Дедлайн збору вже міг спрацювати, а
+    // цей етап найдовший і найцінніший: обривати його тим самим сигналом
+    // означало б регулярно втрачати саме те, заради чого підбірку переробляли.
+    const readController = new AbortController();
+    const readTimer = setTimeout(() => readController.abort(), EXPLAIN_DEADLINE_MS);
+    let explained = new Map<string, string>();
+    try {
+      explained = await explainPicks(items, readController.signal);
+    } finally {
+      clearTimeout(readTimer);
+    }
+    for (const item of items) {
+      const writeup = explained.get(item.key);
+      if (writeup) item.note = writeup;
+    }
+
     const message = renderDevNews(items, kievDayLabel(now));
 
     if (picked.usage) {
@@ -555,6 +714,16 @@ export const handler = async (event: HttpEvent) => {
       recipients = recipients.filter((member) => (member.email ?? "").trim().toLowerCase() === only);
       if (recipients.length === 0) return jsonResponse(404, { error: `No recipient of dev_news matches ${only}` });
     }
+
+    // Готовий текст завжди лягає в базу: фонова функція не віддає тіло, тож це
+    // єдине місце, де підбірку можна побачити очима до того, як вона піде людям.
+    await admin
+      .schema("tosho")
+      .from("dev_news_last")
+      .upsert(
+        { id: 1, body: message.text, items: message.items.length, dry: dryRun, built_at: new Date().toISOString() },
+        { onConflict: "id" }
+      );
 
     if (dryRun) {
       return jsonResponse(200, {

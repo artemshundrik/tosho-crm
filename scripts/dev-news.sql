@@ -48,8 +48,30 @@ alter table tosho.dev_news_seen enable row level security;
 revoke all on tosho.dev_news_seen from anon, authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 3. Останній зібраний текст
+-- ---------------------------------------------------------------------------
+-- НАВІЩО. Функція фонова, а фонова віддає 202 і викидає тіло відповіді — тобто
+-- ?dry=1 більше не може показати текст у відповіді. Один рядок тут — це те
+-- саме «подивитись очима, перш ніж піде людині», просто дивимось у базу.
+-- Заразом видно, що саме пішло вчора, коли підбірка здалась дивною.
+create table if not exists tosho.dev_news_last (
+  id        smallint primary key default 1 check (id = 1),
+  body      text not null,
+  items     integer not null default 0,
+  dry       boolean not null default false,
+  built_at  timestamptz not null default now()
+);
+
+comment on table tosho.dev_news_last is
+  'Останній зібраний текст ранкової підбірки. Один рядок; ?dry=1 теж пише сюди.';
+
+alter table tosho.dev_news_last enable row level security;
+revoke all on tosho.dev_news_last from anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Перевірка:
 --   select conname, pg_get_constraintdef(oid) from pg_constraint
 --     where conrelid = 'tosho.digest_log'::regclass and contype = 'c';
 --   select count(*) from tosho.dev_news_seen;
+--   select built_at, items, dry, left(body, 400) from tosho.dev_news_last;
 -- ---------------------------------------------------------------------------

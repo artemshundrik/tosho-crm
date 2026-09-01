@@ -27,7 +27,7 @@ select cron.schedule(
   'dev-news',
   '0 6 * * *',
   $$ select net.http_post(
-       url := 'https://tosho.pro/.netlify/functions/dev-news',
+       url := 'https://tosho.pro/.netlify/functions/dev-news-background',
        headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
        timeout_milliseconds := 30000) $$
 );

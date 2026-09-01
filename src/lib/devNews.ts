@@ -494,6 +494,48 @@ export function stackItems(bumps: StackBumpInput[]): DevNewsItem[] {
   return items;
 }
 
+// ─────────────────────────── читання статті ───────────────────────────
+
+/**
+ * Звідки брати ТЕКСТ, а не сторінку.
+ *
+ * Два джерела віддають по своїй адресі щось незрівнянно чистіше за HTML:
+ * репозиторій GitHub — README сирим маркдауном, а гілка Reddit — JSON із
+ * самим дописом. Решту читаємо як є.
+ */
+export function readableSourceUrl(url: string): string {
+  const gh = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/?#]+)\/?$/);
+  if (gh) return `https://raw.githubusercontent.com/${gh[1]}/${gh[2]}/HEAD/README.md`;
+  if (/^https:\/\/(www\.)?reddit\.com\//.test(url)) return `${url.replace(/\/$/, "")}.json`;
+  return url;
+}
+
+/**
+ * Сторінка → читабельний текст для моделі.
+ *
+ * ЧОМУ БЕЗ БІБЛІОТЕКИ. Readability тягне за собою DOM, а нам не потрібна
+ * точність: моделі досить суті, і зайвий пункт меню в тексті їй не завадить.
+ * Тому просто викидаємо те, що ГАРАНТОВАНО не текст (скрипти, стилі, навігація,
+ * підвал), а далі беремо <article> чи <main>, якщо вони є.
+ *
+ * Повертає порожній рядок, якщо витягти нічого — сторінка на JS, пейволл або
+ * взагалі не стаття. Викликач у такому разі просто не робить розбір: краще
+ * коротший пункт, ніж вигадана переказка неіснуючого тексту.
+ */
+export function extractArticleText(html: string, limit = 6000): string {
+  const cleaned = html
+    .replace(/<(script|style|nav|header|footer|aside|form|svg)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ");
+  const main =
+    cleaned.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1] ??
+    cleaned.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ??
+    cleaned;
+  const text = htmlToLines(main)
+    .filter((line) => line.length > 40)
+    .join("\n");
+  return text.length < 400 ? "" : text.slice(0, limit);
+}
+
 // ─────────────────────────── блок «Варте уваги» ───────────────────────────
 
 /**
@@ -680,6 +722,18 @@ export function renderDevNews(items: DevNewsItem[], dateLabel: string): DevNewsM
     const limit = BLOCK_LIMITS[source] ?? block.length;
     const hidden = Math.max(0, block.length - limit);
     for (const item of block.slice(0, limit)) {
+      // «Можна застосувати» читається інакше за решту: спершу назва, далі
+      // кілька рядків людською мовою про те, що це дає саме нам, і аж у кінці
+      // посилання. Решта блоків — це факти («вийшла версія»), там достатньо
+      // рядка-посилання; тут же головне не факт, а розбір.
+      if (source === "apply") {
+        lines.push("", `<b>${escapeHtml(item.title)}</b>`);
+        for (const noteLine of (item.note ?? "").split("\n").filter(Boolean)) {
+          lines.push(escapeHtml(noteLine));
+        }
+        lines.push(`<a href="${escapeHtml(item.url)}">→ читати</a>`);
+        continue;
+      }
       lines.push(`• <a href="${escapeHtml(item.url)}">${escapeHtml(item.title)}</a>`);
       if (!item.note) continue;
       for (const noteLine of item.note.split("\n")) {
