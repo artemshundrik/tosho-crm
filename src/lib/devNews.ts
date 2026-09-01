@@ -709,17 +709,62 @@ export type DevNewsMessage = {
  * `null` тут не помилка й не порожній стан, а штатна відповідь: у такий день
  * підбірка мовчить. Див. головне правило в шапці файлу.
  */
+/**
+ * Стеля повідомлення в Telegram — 4096 символів, і вона ЖОРСТКА: довше
+ * повідомлення не обрізається, а відхиляється цілком.
+ *
+ * СПІЙМАНО НА ПРОДІ 02.09.2026, за крок до першої відправки: перший же справжній
+ * збір дав 4384 символи. Тобто підбірка, яку щойно полагодили, не доїхала б
+ * узагалі — і Telegram сказав би про це лише кодом помилки в логах.
+ *
+ * Ріжемо з запасом: 3900. Двісті символів різниці — це місце під те, чого ми
+ * не передбачили в чужому тексті.
+ */
+const TELEGRAM_LIMIT = 3_900;
+
+/**
+ * Що чим жертвуємо, коли не влазить. Порядок не випадковий: першими коротшають
+ * цитати з нотаток Claude (їх завжди можна дочитати за посиланням), далі
+ * ріжеться довжина розборів, і аж потім зникають рядки стеку — бо весь відрив
+ * усе одно видно на сторінці «Стек», а от розбір статті більше ніде не взяти.
+ */
+const FIT_STEPS: Array<{ stack: number; claudeNotes: number; writeup: number }> = [
+  { stack: 8, claudeNotes: 3, writeup: 700 },
+  { stack: 8, claudeNotes: 2, writeup: 700 },
+  { stack: 6, claudeNotes: 1, writeup: 600 },
+  { stack: 4, claudeNotes: 1, writeup: 400 },
+  { stack: 3, claudeNotes: 0, writeup: 300 },
+];
+
 export function renderDevNews(items: DevNewsItem[], dateLabel: string): DevNewsMessage | null {
   const fresh = dedupe(items);
   if (fresh.length === 0) return null;
 
+  let built = renderAt(fresh, dateLabel, FIT_STEPS[0]);
+  for (const step of FIT_STEPS.slice(1)) {
+    if (built.text.length <= TELEGRAM_LIMIT) break;
+    built = renderAt(fresh, dateLabel, step);
+  }
+  // Останній запобіжник: навіть найжорсткіший крок може не врятувати, якщо
+  // чужий текст виявився надто довгим. Краще обрізане повідомлення, ніж жодного.
+  if (built.text.length > TELEGRAM_LIMIT) {
+    built = { ...built, text: `${built.text.slice(0, TELEGRAM_LIMIT - 1)}…` };
+  }
+  return built;
+}
+
+function renderAt(
+  fresh: DevNewsItem[],
+  dateLabel: string,
+  step: { stack: number; claudeNotes: number; writeup: number }
+): DevNewsMessage {
   const lines: string[] = [`<b>Підбірка для розробки — ${escapeHtml(dateLabel)}</b>`];
 
   for (const source of BLOCK_ORDER) {
     const block = fresh.filter((item) => item.source === source);
     if (block.length === 0) continue;
     lines.push("", `<b>${BLOCK_TITLES[source]}</b>`);
-    const limit = BLOCK_LIMITS[source] ?? block.length;
+    const limit = source === "stack" ? step.stack : (BLOCK_LIMITS[source] ?? block.length);
     const hidden = Math.max(0, block.length - limit);
     for (const item of block.slice(0, limit)) {
       // «Можна застосувати» читається інакше за решту: спершу назва, далі
@@ -728,7 +773,8 @@ export function renderDevNews(items: DevNewsItem[], dateLabel: string): DevNewsM
       // рядка-посилання; тут же головне не факт, а розбір.
       if (source === "apply") {
         lines.push("", `<b>${escapeHtml(item.title)}</b>`);
-        for (const noteLine of (item.note ?? "").split("\n").filter(Boolean)) {
+        const writeup = (item.note ?? "").slice(0, step.writeup);
+        for (const noteLine of writeup.split("\n").filter(Boolean)) {
           lines.push(escapeHtml(noteLine));
         }
         lines.push(`<a href="${escapeHtml(item.url)}">→ читати</a>`);
@@ -736,7 +782,8 @@ export function renderDevNews(items: DevNewsItem[], dateLabel: string): DevNewsM
       }
       lines.push(`• <a href="${escapeHtml(item.url)}">${escapeHtml(item.title)}</a>`);
       if (!item.note) continue;
-      for (const noteLine of item.note.split("\n")) {
+      const noteLines = source === "claude" ? item.note.split("\n").slice(0, step.claudeNotes) : item.note.split("\n");
+      for (const noteLine of noteLines) {
         lines.push(`  <i>${escapeHtml(noteLine)}</i>`);
       }
     }

@@ -463,6 +463,40 @@ describe("складання повідомлення", () => {
     expect(message.keyboard).toEqual([[{ text: "Стек у CRM", url: "https://tosho.pro/dev/stack" }]]);
   });
 
+  it("не віддає повідомлення, довше за стелю Telegram", () => {
+    // Спіймано на проді 02.09.2026 за крок до першої відправки: справжній збір
+    // дав 4384 символи при стелі 4096, і Telegram відхилив би його ЦІЛКОМ —
+    // не обрізав, а саме відхилив.
+    const huge = [
+      ...Array.from({ length: 20 }, (_, i) => ({
+        source: "stack" as const, key: `s${i}`, title: `пакет-${i} 1.0.0 → 2.0.0`, url: `https://e/s${i}`,
+      })),
+      ...Array.from({ length: 4 }, (_, i) => ({
+        source: "apply" as const, key: `a${i}`, title: `Джерело ${i} — довга назва статті про щось важливе`,
+        url: `https://e/a${i}`, note: "Дуже докладний розбір статті. ".repeat(30),
+      })),
+      { source: "claude" as const, key: "c", title: "Claude Code v9", url: "https://e/c",
+        note: ["перший рядок нотатки ".repeat(6), "другий рядок нотатки ".repeat(6), "третій рядок ".repeat(6)].join("\n") },
+    ];
+
+    const message = renderDevNews(huge, "2 вересня")!;
+
+    expect(message.text.length).toBeLessThanOrEqual(3900);
+    // Розбори статей — останнє, чим жертвуємо: їх більше ніде не взяти.
+    expect(message.text).toContain("💡 Можна застосувати");
+    // А в пам'ять усе одно лягають УСІ пункти, не лише показані.
+    expect(message.items).toHaveLength(25);
+  });
+
+  it("короткому повідомленню нічого не ріже", () => {
+    const message = renderDevNews(
+      [{ source: "apply", key: "a", title: "Джерело — стаття", url: "https://e/a", note: "Короткий розбір." }],
+      "2 вересня"
+    )!;
+
+    expect(message.text).toContain("Короткий розбір.");
+  });
+
   it("той самий ключ двічі показується один раз", () => {
     const items = dedupe([
       { source: "stack" as const, key: "stack:vite@8.2.0", title: "перший", url: "https://example.com/1" },
