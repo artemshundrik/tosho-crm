@@ -112,9 +112,13 @@ import {
   needsApprovedRunChoice,
   pickApprovedRun,
   computeRunSalePricingFromMarkup,
+  findRunsNeedingModelPriceVat,
   DEFAULT_MARKUP_RATE,
   MIN_MARKUP_RATE,
+  normalizeQuoteRunModelPriceVat,
+  type QuoteRunModelPriceVat,
 } from "@/lib/quoteRuns";
+import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatGateMessage, MODEL_PRICE_VAT_ROW_HINT } from "@/features/quotes/quote-details/quoteRunModelPriceVat";
 import { isMarkupFrozen, MARKUP_GATE_MESSAGE } from "@/lib/quoteMarkupApproval";
 import { resolveQuoteMarkupView } from "@/lib/quoteMarkupView";
 import { useQuoteMarkupApprovals } from "@/features/quotes/quote-details/useQuoteMarkupApprovals";
@@ -1071,6 +1075,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         quote_item_id: resolvedQuoteItemId,
         quantity: 1,
         unit_price_model: 0,
+        unit_price_model_vat: inheritModelPriceVat(runs, resolvedQuoteItemId),
         unit_price_print: 0,
         logistics_cost: 0,
         desired_manager_income: 0,
@@ -1120,6 +1125,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     );
   };
 
+  // Окремо від `updateRunValue`: там число, тут перелік із двох слів. Повторний
+  // клік позначку НЕ знімає — «не обрано» це стан старту, а не рішення (REQ-232).
+  const updateRunModelPriceVat = (index: number, value: QuoteRunModelPriceVat) => {
+    if (index < 0) return;
+    setRuns((prev) =>
+      prev.map((run, i) => (i === index ? { ...run, unit_price_model_vat: value } : run))
+    );
+  };
+
   /** Позначка «погоджено клієнтом» — правило живе в lib/quoteRuns і накрите тестами. */
   const toggleApprovedRun = (runId: string | null | undefined, quoteItemId?: string | null) => {
     setRuns((prev) => applyApprovedRunToggle(prev, runId, quoteItemId));
@@ -1134,6 +1148,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       return;
     }
     const targetRuns = Array.isArray(nextRuns) ? nextRuns : runs;
+
+    // Гейт ПДВ (REQ-232) — ПЕРЕД `setRunsSaving(true)`: інакше ранній вихід
+    // лишив би сторінку в стані «зберігаю» назавжди.
+    const runsNeedingVat = findRunsNeedingModelPriceVat(targetRuns, runsOriginal);
+    if (runsNeedingVat.length > 0) {
+      const message = modelPriceVatGateMessage(runsNeedingVat.length);
+      setRunsError(message);
+      if (!silent) toast.error(message);
+      return;
+    }
+
     setRunsSaving(true);
     setRunsError(null);
     {
@@ -1141,6 +1166,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         ...run,
         quantity: Math.max(1, Number(run.quantity) || 1),
         unit_price_model: Math.max(0, Number(run.unit_price_model) || 0),
+        unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
         unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
         logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
         desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
@@ -1227,6 +1253,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           quote_item_id: run.quote_item_id ?? "",
           quantity: Math.max(1, Number(run.quantity) || 1),
           unit_price_model: Math.max(0, Number(run.unit_price_model) || 0),
+          unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
           unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
           logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
           desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
@@ -1251,6 +1278,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           quote_item_id: run.quote_item_id ?? "",
           quantity: Math.max(1, Number(run.quantity) || 1),
           unit_price_model: Math.max(0, Number(run.unit_price_model) || 0),
+          unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
           unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
           logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
           desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
@@ -1265,6 +1293,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }))
       ),
     [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, runsOriginal]
+  );
+
+  // Той самий гейт, що й у `saveRuns`, але для показу: підсвітка поля в трьох
+  // місцях вводу і зупинка автозбереження (REQ-232).
+  const runIdsNeedingModelPriceVat = useMemo(
+    () => collectRunIdsNeedingModelPriceVat(runs, runsOriginal),
+    [runs, runsOriginal]
   );
 
   const removeRun = async (index: number) => {
@@ -1796,6 +1831,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   useEffect(() => {
     if (!runsLoaded || runsSaving || quoteRequirements.length > 0) return;
     if (runsAutosaveSignature === runsOriginalAutosaveSignature) return;
+    // Гейт ПДВ зупиняє саме АВТОзбереження, а не сипле помилками на кожну
+    // клавішу: поле вже підсвічене, причина стоїть під ним (REQ-232).
+    if (runIdsNeedingModelPriceVat.size > 0) return;
 
     const timer = window.setTimeout(() => {
       void saveRunsRef.current(undefined, { silent: true });
@@ -1804,6 +1842,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return () => window.clearTimeout(timer);
   }, [
     quoteRequirements.length,
+    runIdsNeedingModelPriceVat.size,
     runsAutosaveSignature,
     runsLoaded,
     runsOriginalAutosaveSignature,
@@ -5200,6 +5239,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       currency={quote.currency}
                                       lockHint={runFieldLockHint}
                                       onChange={(field, value) => updateRunValue(activeItemRunIndex, field, value)}
+                                      modelPriceVatMissing={
+                                        !!activeItemRun.id && runIdsNeedingModelPriceVat.has(activeItemRun.id)
+                                      }
+                                      onModelPriceVatChange={(value) =>
+                                        updateRunModelPriceVat(activeItemRunIndex, value)
+                                      }
                                     />
 
                                     {/* Один блок ціни, шість виглядів за посадою (REQ-149 p11).
@@ -5389,6 +5434,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             {section.runs.map(({ run, index: idx }, sectionRunIndex) => {
                       const qty = Number(run.quantity) || 0;
                       const modelPrice = Number(run.unit_price_model) || 0;
+                      const modelPriceVatMissing = !!run.id && runIdsNeedingModelPriceVat.has(run.id);
+                      const modelPriceVatHint = modelPriceVatMissing ? MODEL_PRICE_VAT_ROW_HINT : undefined;
+                      const modelPriceVatRing = modelPriceVatMissing ? "border-warning-soft-border" : undefined;
                       const printPrice = Number(run.unit_price_print) || 0;
                       const logistics = Number(run.logistics_cost) || 0;
                       const total = (modelPrice + printPrice) * qty + logistics;
@@ -5449,9 +5497,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Модель · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background"
+                                  className={cn("h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background", modelPriceVatRing)}
                                   value={run.unit_price_model}
                                   disabled={disabled}
+                                  title={modelPriceVatHint}
                                   onClick={(e) => e.stopPropagation()}
                                   onValueChange={(next) => updateRunValue(idx, "unit_price_model", next)}
                                   min={0}
@@ -5539,9 +5588,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background"
+                                    className={cn("cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background", modelPriceVatRing)}
                                     value={run.unit_price_model}
                                     disabled={disabled}
+                                    title={modelPriceVatHint}
                                     onClick={(e) => e.stopPropagation()}
                                     onValueChange={(next) => updateRunValue(idx, "unit_price_model", next)}
                                     min={0}

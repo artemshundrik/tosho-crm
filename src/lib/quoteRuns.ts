@@ -1,5 +1,20 @@
 import type { QuoteRun } from "@/lib/toshoApi";
 
+/**
+ * Чи включає вартість товару ПДВ. Три стани, і `null` — повноцінний із них:
+ * «ще не обрано». Дефолту немає навмисно (scripts/quote-run-model-price-vat.sql).
+ *
+ * ЖИВЕ САМЕ ТУТ, А НЕ В `toshoApi`, і це не смак: `toshoApi` тягне за собою
+ * клієнт Supabase, який на імпорті чіпає `window`. Варто цьому модулю взяти
+ * звідти хоч одне ЗНАЧЕННЯ (а не тип, який стирається), як усі тести правил
+ * тиражу падають на «window is not defined» ще до першого `it`.
+ */
+export type QuoteRunModelPriceVat = "incl" | "excl";
+
+export function normalizeQuoteRunModelPriceVat(value: unknown): QuoteRunModelPriceVat | null {
+  return value === "incl" || value === "excl" ? value : null;
+}
+
 export type QuoteRunDraftValue = {
   id?: string | null;
   quantity: number;
@@ -150,6 +165,47 @@ export function computeRunSalePricingFromMarkup(params: {
   };
 }
 
+/** Підписи позначки ПДВ — одні на всі три місця, де редагується вартість товару. */
+export const MODEL_PRICE_VAT_LABEL: Record<QuoteRunModelPriceVat, string> = {
+  incl: "з ПДВ",
+  excl: "без ПДВ",
+};
+
+/**
+ * Тиражі, у яких вартість товару щойно змінили, але не сказали, з ПДВ вона чи
+ * без (REQ-232). Саме на цьому списку стоїть відмова зберегти.
+ *
+ * ГЕЙТ ДИВИТЬСЯ НА ЗМІНУ, А НЕ НА ПОРОЖНЕЧУ ПРАПОРЦЯ, і це головне рішення тут.
+ * Прапорця немає в жодного з 465 наявних тиражів — бекфілу свідомо не було, бо
+ * відповіді ми не знаємо. Якби гейт вмикався від самої порожнечі, кожна стара
+ * картка стала б незберігаємою при першому дотику до будь-чого сусіднього:
+ * поправив дедлайн — і автозбереження тиражів мовчки стало. Тому питаємо лише
+ * там, де людина щойно вписала суму й відповідь у неї перед очима.
+ *
+ * Нульова вартість не питається: тираж без товару — це заготовка, яку щойно
+ * додали, і ПДВ на ній питати нема від чого. Те саме правило, що й у
+ * `needsMarkupApproval`: поріг вмикається, коли з'являються гроші.
+ */
+export function findRunsNeedingModelPriceVat(
+  nextRuns: QuoteRun[],
+  savedRuns: QuoteRun[]
+): QuoteRun[] {
+  const savedById = new Map(
+    savedRuns
+      .filter((run): run is QuoteRun & { id: string } => Boolean(run.id))
+      .map((run) => [run.id, run])
+  );
+  return nextRuns.filter((run) => {
+    const price = Math.max(0, Number(run.unit_price_model) || 0);
+    if (price <= 0) return false;
+    if (normalizeQuoteRunModelPriceVat(run.unit_price_model_vat)) return false;
+    const saved = run.id ? savedById.get(run.id) : undefined;
+    // Тираж, якого в збереженому ще немає, — це щойно введена сума.
+    if (!saved) return true;
+    return Math.max(0, Number(saved.unit_price_model) || 0) !== price;
+  });
+}
+
 /**
  * Чи треба на цю ціну погодження СЕО або головного бухгалтера.
  *
@@ -290,6 +346,11 @@ export function mergeQuoteRunsWithExisting({
     return nextUnusedRun ?? null;
   };
 
+  const inheritedModelPriceVat =
+    normalizedExistingRuns
+      .map((run) => normalizeQuoteRunModelPriceVat(run.unit_price_model_vat))
+      .find((value): value is QuoteRunModelPriceVat => value !== null) ?? null;
+
   const payload = nextRuns
     .filter((run) => Number(run.quantity) > 0)
     .map((run, index) => {
@@ -300,6 +361,11 @@ export function mergeQuoteRunsWithExisting({
         quote_item_id: quoteItemId,
         quantity: Math.max(1, Number(run.quantity) || 1),
         unit_price_model: Math.max(0, Number(source?.unit_price_model) || 0),
+        // Новий тираж успадковує позначку ПДВ від сусіда по позиції: тиражі
+        // одної позиції — це той самий товар у того самого постачальника, і
+        // питати про нього вдруге означало б питати про очевидне (REQ-232).
+        unit_price_model_vat:
+          normalizeQuoteRunModelPriceVat(source?.unit_price_model_vat) ?? inheritedModelPriceVat,
         unit_price_print: Math.max(0, Number(source?.unit_price_print) || 0),
         logistics_cost: Math.max(0, Number(source?.logistics_cost) || 0),
         desired_manager_income: Math.max(0, Number(source?.desired_manager_income) || 0),

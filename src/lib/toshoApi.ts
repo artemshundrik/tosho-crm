@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { normalizeQuoteRunModelPriceVat, type QuoteRunModelPriceVat } from "@/lib/quoteRuns";
 import type { Database, Json } from "@/lib/database.types";
 import { removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import {
@@ -67,6 +68,11 @@ export type QuoteRun = {
   quote_item_id?: string | null;
   quantity: number;
   unit_price_model: number;
+  /**
+   * Позначка сенсу `unit_price_model` — і ТІЛЬКИ позначка (REQ-232).
+   * У розрахунок ціни не входить: `getRunSalePricingFromRun` її не читає.
+   */
+  unit_price_model_vat?: QuoteRunModelPriceVat | null;
   unit_price_print: number;
   logistics_cost: number;
   /** Легасі-вхід ціни. Лишається до зняття поля — читають старі прорахунки. */
@@ -121,7 +127,7 @@ export type CatalogModelMetadataLookup = {
 };
 
 const QUOTE_RUN_SELECT =
-  "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,markup_rate,manager_rate,fixed_cost_rate,vat_rate,is_approved";
+  "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_model_vat,unit_price_print,logistics_cost,desired_manager_income,markup_rate,manager_rate,fixed_cost_rate,vat_rate,is_approved";
 const QUOTE_RUN_LEGACY_SELECT =
   "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost";
 
@@ -1258,7 +1264,7 @@ export async function getQuoteRuns(quoteId: string) {
   if (
     error &&
     /column/i.test(error.message ?? "") &&
-    /(desired_manager_income|markup_rate|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
+    /(desired_manager_income|markup_rate|manager_rate|fixed_cost_rate|vat_rate|is_approved|unit_price_model_vat)/i.test(error.message ?? "")
   ) {
     ({ data, error } = await runQuery(true));
   }
@@ -1269,6 +1275,7 @@ export async function getQuoteRuns(quoteId: string) {
     quote_item_id: run.quote_item_id ?? null,
     quantity: Number(run.quantity ?? 0) || 0,
     unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+    unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
     unit_price_print: Number(run.unit_price_print ?? 0) || 0,
     logistics_cost: Number(run.logistics_cost ?? 0) || 0,
     desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
@@ -1327,7 +1334,7 @@ export async function listQuoteRunsForQuotes(params: {
     if (
       error &&
       /column/i.test(error.message ?? "") &&
-      /(desired_manager_income|markup_rate|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
+      /(desired_manager_income|markup_rate|manager_rate|fixed_cost_rate|vat_rate|is_approved|unit_price_model_vat)/i.test(error.message ?? "")
     ) {
       ({ data, error } = await runQuery(ids, true));
     }
@@ -1364,6 +1371,7 @@ export async function listQuoteRunsForQuotes(params: {
       quote_item_id: run.quote_item_id ?? null,
       quantity: Number(run.quantity ?? 0) || 0,
       unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+      unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
       unit_price_print: Number(run.unit_price_print ?? 0) || 0,
       logistics_cost: Number(run.logistics_cost ?? 0) || 0,
       desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
@@ -1408,6 +1416,7 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
       quote_item_id: run.quote_item_id ?? null,
       quantity: run.quantity,
       unit_price_model: run.unit_price_model,
+      unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
       unit_price_print: run.unit_price_print,
       logistics_cost: run.logistics_cost,
       desired_manager_income: run.desired_manager_income,
@@ -1433,10 +1442,11 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
   if (
     error &&
     /column/i.test(error.message ?? "") &&
-    /(desired_manager_income|markup_rate|manager_rate|fixed_cost_rate|vat_rate|is_approved)/i.test(error.message ?? "")
+    /(desired_manager_income|markup_rate|manager_rate|fixed_cost_rate|vat_rate|is_approved|unit_price_model_vat)/i.test(error.message ?? "")
   ) {
     const fallbackPayload = payload.map((entry) => {
       const legacyPayload = { ...entry };
+      delete legacyPayload.unit_price_model_vat;
       delete legacyPayload.desired_manager_income;
       delete legacyPayload.markup_rate;
       delete legacyPayload.manager_rate;
@@ -1458,6 +1468,7 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
     quote_item_id: run.quote_item_id ?? null,
     quantity: Number(run.quantity ?? 0) || 0,
     unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+    unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
     unit_price_print: Number(run.unit_price_print ?? 0) || 0,
     logistics_cost: Number(run.logistics_cost ?? 0) || 0,
     desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,

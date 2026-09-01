@@ -84,7 +84,12 @@ import {
   type LeadSearchRow,
 } from "@/lib/toshoApi";
 import { useCompanyPricingRates } from "@/lib/companyPricingRates";
-import { DEFAULT_MARKUP_RATE, getRunSalePricingFromRun, mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
+import {
+  DEFAULT_MARKUP_RATE,
+  getRunSalePricingFromRun,
+  mergeQuoteRunsWithExisting,
+  normalizeQuoteRunModelPriceVat,
+} from "@/lib/quoteRuns";
 import { MARKUP_GATE_MESSAGE, resolveQuoteMarkupGate } from "@/lib/quoteMarkupApproval";
 import { fetchMarkupApprovalsForQuotes } from "@/features/quotes/quote-details/markupApproval";
 import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
@@ -4792,6 +4797,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             quote_item_id: run.quote_item_id ? itemIdMap.get(run.quote_item_id) ?? null : null,
             quantity: Number(run.quantity ?? 0) || 0,
             unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+            // Копія несе не лише суму, а й те, що вона означає (REQ-232).
+            unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
             unit_price_print: Number(run.unit_price_print ?? 0) || 0,
             logistics_cost: Number(run.logistics_cost ?? 0) || 0,
             desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,

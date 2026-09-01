@@ -3566,6 +3566,7 @@ export type Database = {
           quote_id: string
           quote_item_id: string | null
           unit_price_model: number | null
+          unit_price_model_vat: string | null
           unit_price_print: number | null
           updated_at: string | null
           vat_rate: number | null
@@ -3583,6 +3584,7 @@ export type Database = {
           quote_id: string
           quote_item_id?: string | null
           unit_price_model?: number | null
+          unit_price_model_vat?: string | null
           unit_price_print?: number | null
           updated_at?: string | null
           vat_rate?: number | null
@@ -3600,6 +3602,7 @@ export type Database = {
           quote_id?: string
           quote_item_id?: string | null
           unit_price_model?: number | null
+          unit_price_model_vat?: string | null
           unit_price_print?: number | null
           updated_at?: string | null
           vat_rate?: number | null

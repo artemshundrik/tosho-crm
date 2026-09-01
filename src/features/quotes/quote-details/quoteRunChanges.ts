@@ -1,4 +1,5 @@
 import type { QuoteRun } from "@/lib/toshoApi";
+import { MODEL_PRICE_VAT_LABEL, normalizeQuoteRunModelPriceVat } from "@/lib/quoteRuns";
 
 /**
  * ЩО САМЕ ЗМІНИЛОСЬ У ТИРАЖАХ — рядками для стрічки справи (REQ-155 p10).
@@ -9,8 +10,9 @@ import type { QuoteRun } from "@/lib/toshoApi";
  * опустив накрутку з 40 до 28» картка не відповідала ніяк.
  *
  * ЩО ЛОГУЄМО: собівартість (ціна моделі + нанесення + логістика одним фактом,
- * бо міняють їх разом) і накрутку. Кількість не логуємо: вона видно в самій
- * назві тиражу, і зміна тиражу — це радше нова позиція, ніж правка ціни.
+ * бо міняють їх разом), накрутку і позначку ПДВ на вартості товару. Кількість
+ * не логуємо: вона видно в самій назві тиражу, і зміна тиражу — це радше нова
+ * позиція, ніж правка ціни.
  *
  * ПОРІВНЮЄМО ЗБЕРЕЖЕНЕ ЗІ ЗБЕРЕЖЕНИМ. На вхід іде знімок `runsOriginal` (те, що
  * лежало в базі) і те, що щойно записали. Порівнювати зі станом форми не можна:
@@ -41,6 +43,16 @@ const costLabel = (run: QuoteRun) => {
 
 const markupLabel = (run: QuoteRun) => `${money(num(run.markup_rate))} %`;
 
+/**
+ * Позначка ПДВ логується окремо від собівартості, хоч і стосується тієї самої
+ * суми (REQ-232): цифра не змінилась, змінилось те, ЩО ВОНА ОЗНАЧАЄ. Склеєні в
+ * один рядок, ці дві події читались би як «ціна та сама, нічого не сталось».
+ */
+const modelPriceVatLabel = (run: QuoteRun) => {
+  const value = normalizeQuoteRunModelPriceVat(run.unit_price_model_vat);
+  return value ? MODEL_PRICE_VAT_LABEL[value] : "не вказано";
+};
+
 const runTitle = (run: QuoteRun) => `тиражу ${num(run.quantity) || 0} шт`;
 
 export function describeRunChanges(previous: QuoteRun[], next: QuoteRun[]): QuoteRunChange[] {
@@ -55,6 +67,12 @@ export function describeRunChanges(previous: QuoteRun[], next: QuoteRun[]): Quot
     const prevCost = old ? costLabel(old) : "не внесена";
     if (prevCost !== nextCost) {
       changes.push({ label: `Собівартість ${runTitle(run)}`, from: prevCost, to: nextCost });
+    }
+
+    const nextVat = modelPriceVatLabel(run);
+    const prevVat = old ? modelPriceVatLabel(old) : "не вказано";
+    if (prevVat !== nextVat) {
+      changes.push({ label: `Вартість товару ${runTitle(run)}`, from: prevVat, to: nextVat });
     }
 
     const nextMarkup = markupLabel(run);

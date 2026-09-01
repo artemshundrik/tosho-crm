@@ -3,6 +3,7 @@ import type { QuoteRun } from "@/lib/toshoApi";
 import {
   computeRunSalePricing,
   computeRunSalePricingFromMarkup,
+  findRunsNeedingModelPriceVat,
   getRunSalePricingFromRun,
   mergeQuoteRunsWithExisting,
   needsMarkupApproval,
@@ -132,6 +133,88 @@ describe("getRunSalePricingFromRun", () => {
   });
 });
 
+/**
+ * ГЕЙТ ПДВ (REQ-232). Тут стережеться саме межа «питаємо / не питаємо»: гейт,
+ * який спрацьовує ширше, зробить 465 наявних тиражів незберігаємими, а вужчий
+ * пропустить суму без сенсу.
+ */
+describe("findRunsNeedingModelPriceVat", () => {
+  const run = (overrides: Partial<QuoteRun>): QuoteRun => ({
+    quantity: 10,
+    unit_price_model: 0,
+    unit_price_print: 0,
+    logistics_cost: 0,
+    desired_manager_income: 0,
+    markup_rate: DEFAULT_MARKUP_RATE,
+    manager_rate: 10,
+    fixed_cost_rate: 30,
+    vat_rate: 20,
+    ...overrides,
+  });
+
+  it("щойно вписана вартість без позначки — питаємо", () => {
+    const saved = [run({ id: "a", unit_price_model: 0 })];
+    const next = [run({ id: "a", unit_price_model: 100 })];
+    expect(findRunsNeedingModelPriceVat(next, saved).map((r) => r.id)).toEqual(["a"]);
+  });
+
+  it("позначку обрали — не питаємо", () => {
+    const saved = [run({ id: "a", unit_price_model: 0 })];
+    const next = [run({ id: "a", unit_price_model: 100, unit_price_model_vat: "incl" })];
+    expect(findRunsNeedingModelPriceVat(next, saved)).toEqual([]);
+  });
+
+  it("СТАРИЙ ТИРАЖ БЕЗ ПОЗНАЧКИ, ЯКИЙ НЕ ЧІПАЛИ, зберігається як був", () => {
+    // Це головний тест файлу для REQ-232: бекфілу немає, і якби гейт дивився на
+    // саму порожнечу прапорця, кожна з 465 карток стала б незберігаємою від
+    // правки будь-чого сусіднього.
+    const saved = [run({ id: "a", unit_price_model: 631.4 })];
+    const next = [run({ id: "a", unit_price_model: 631.4, unit_price_print: 219.5 })];
+    expect(findRunsNeedingModelPriceVat(next, saved)).toEqual([]);
+  });
+
+  it("правка суми на старому тиражі без позначки — питаємо", () => {
+    const saved = [run({ id: "a", unit_price_model: 631.4 })];
+    const next = [run({ id: "a", unit_price_model: 640 })];
+    expect(findRunsNeedingModelPriceVat(next, saved).map((r) => r.id)).toEqual(["a"]);
+  });
+
+  it("нульова вартість не питається: тираж-заготовка без товару", () => {
+    expect(findRunsNeedingModelPriceVat([run({ id: "a", unit_price_model: 0 })], [])).toEqual([]);
+  });
+
+  it("новий тираж із сумою питається, хоч його в збереженому ще немає", () => {
+    expect(
+      findRunsNeedingModelPriceVat([run({ id: "new", unit_price_model: 100 })], []).map((r) => r.id)
+    ).toEqual(["new"]);
+  });
+});
+
+/**
+ * ПОЗНАЧКА НЕ ЧІПАЄ ЦІНУ — обіцянка, на якій стоїть уся задача (REQ-232):
+ * жодна з уже порахованих карток не має зрушити ні на копійку.
+ */
+describe("позначка ПДВ і продажна ціна", () => {
+  it("три стани прапорця дають ту саму ціну", () => {
+    const base: QuoteRun = {
+      quantity: 20,
+      unit_price_model: 631.4,
+      unit_price_print: 219.5,
+      logistics_cost: 500,
+      desired_manager_income: 0,
+      markup_rate: 40,
+      manager_rate: 10,
+      fixed_cost_rate: 30,
+      vat_rate: 20,
+    };
+    const withoutFlag = getRunSalePricingFromRun(base);
+    const incl = getRunSalePricingFromRun({ ...base, unit_price_model_vat: "incl" });
+    const excl = getRunSalePricingFromRun({ ...base, unit_price_model_vat: "excl" });
+    expect(incl).toEqual(withoutFlag);
+    expect(excl).toEqual(withoutFlag);
+  });
+});
+
 describe("mergeQuoteRunsWithExisting", () => {
   const run = (overrides: Partial<QuoteRun>): QuoteRun => ({
     quantity: 10,
@@ -154,6 +237,26 @@ describe("mergeQuoteRunsWithExisting", () => {
     defaultFixedCostRate: 15,
     defaultVatRate: 20,
   };
+
+  it("новий тираж успадковує позначку ПДВ від сусіда по позиції", () => {
+    // Тиражі однієї позиції — той самий товар у того самого постачальника.
+    const existing = [run({ id: "a", quantity: 10, unit_price_model_vat: "excl" })];
+    const { payload } = mergeQuoteRunsWithExisting({
+      ...defaults,
+      existingRuns: existing,
+      nextRuns: [{ id: "a", quantity: 10 }, { quantity: 50 }],
+    });
+    expect(payload[1].unit_price_model_vat).toBe("excl");
+  });
+
+  it("немає в кого успадкувати — прапорець лишається порожнім", () => {
+    const { payload } = mergeQuoteRunsWithExisting({
+      ...defaults,
+      existingRuns: [],
+      nextRuns: [{ quantity: 50 }],
+    });
+    expect(payload[0].unit_price_model_vat).toBeNull();
+  });
 
   it("оновлення тиражів зберігає id і ЦІНИ наявних ранів (кількість — єдине, що міняється)", () => {
     const existing = [run({ id: "a", quantity: 10 }), run({ id: "b", quantity: 20, unit_price_model: 999 })];

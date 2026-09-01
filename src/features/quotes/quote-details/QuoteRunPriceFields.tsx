@@ -1,9 +1,17 @@
 import { Label } from "@/components/ui/label";
+import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { CurrencyAmountInput } from "@/features/quotes/components/CurrencyAmountInput";
 import { PercentAmountInput } from "@/features/quotes/components/PercentAmountInput";
 import { cn } from "@/lib/utils";
 import type { QuoteRunMarkupState } from "@/lib/quoteMarkupApproval";
-import { DEFAULT_MARKUP_RATE, type RunSalePricing } from "@/lib/quoteRuns";
+import {
+  DEFAULT_MARKUP_RATE,
+  MODEL_PRICE_VAT_LABEL,
+  normalizeQuoteRunModelPriceVat,
+  type QuoteRunModelPriceVat,
+  type RunSalePricing,
+} from "@/lib/quoteRuns";
 import type { QuoteRunPriceFieldAccess } from "@/lib/permissions";
 import type { QuoteRun } from "@/lib/toshoApi";
 
@@ -50,6 +58,8 @@ export function QuoteRunPriceFields({
   currency,
   lockHint,
   onChange,
+  modelPriceVatMissing,
+  onModelPriceVatChange,
 }: {
   run: QuoteRun;
   pricing: RunSalePricing;
@@ -60,7 +70,11 @@ export function QuoteRunPriceFields({
   /** Підказка «це поле заповнює …» зі сторінки — вона знає статусний гейт. */
   lockHint: (allowed: boolean, who: string) => string | undefined;
   onChange: (field: PriceField | "markup_rate", value: number | null) => void;
+  /** Вартість товару щойно змінили, а з ПДВ вона чи без — не сказали (REQ-232). */
+  modelPriceVatMissing: boolean;
+  onModelPriceVatChange: (value: QuoteRunModelPriceVat) => void;
 }) {
+  const modelPriceVat = normalizeQuoteRunModelPriceVat(run.unit_price_model_vat);
   const belowFloor = markupState.kind !== "draft" && markupState.kind !== "ok";
   const canEditMarkup = access.markup_rate && !markupFrozen;
   const frozenLabel =
@@ -86,7 +100,47 @@ export function QuoteRunPriceFields({
             min={0}
             aria-label={aria}
             currency={currency ?? undefined}
+            className={cn(
+              field === "unit_price_model" &&
+                modelPriceVatMissing &&
+                "border-warning-soft-border focus-visible:ring-warning-soft-border/40"
+            )}
           />
+          {/*
+            Позначка ПДВ стоїть ПІД сумою, а не в її підписі, бо це не уточнення
+            назви поля, а окреме рішення, яке треба ухвалити (REQ-232). Три
+            стани: жодна кнопка не натиснута, поки не обрали, — і саме цей стан
+            тримає збереження. Чекбокс тут не годиться: його «вимкнено»
+            неможливо відрізнити від «ще не дивився».
+          */}
+          {field === "unit_price_model" ? (
+            <div className="space-y-1">
+              <SegmentedGroup className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
+                {(["incl", "excl"] as QuoteRunModelPriceVat[]).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    // `whitespace-nowrap` — не косметика: колонка вужча за
+                    // 200 px, і «без ПДВ» ламалось на два рядки, роздуваючи
+                    // групу вдвічі (побачено в прев'ю, не тестом).
+                    className={cn(SEGMENTED_TRIGGER_SM, "whitespace-nowrap px-2.5")}
+                    data-state={modelPriceVat === value ? "active" : "inactive"}
+                    aria-label={`Вартість товару ${MODEL_PRICE_VAT_LABEL[value]}`}
+                    disabled={!access.unit_price_model}
+                    title={lockHint(access.unit_price_model, who)}
+                    onClick={() => onModelPriceVatChange(value)}
+                  >
+                    {MODEL_PRICE_VAT_LABEL[value]}
+                  </button>
+                ))}
+              </SegmentedGroup>
+              {modelPriceVatMissing ? (
+                <div className="text-xs leading-tight text-warning-copy">
+                  Оберіть, з ПДВ ця сума чи без — інакше тираж не збережеться.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ))}
       <div className="space-y-1.5">

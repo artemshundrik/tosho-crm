@@ -20,6 +20,7 @@ import {
   type QuoteStatusRow,
   type QuoteSummaryRow,
 } from "@/lib/toshoApi";
+import { normalizeQuoteRunModelPriceVat } from "@/lib/quoteRuns";
 import { canOpenQuoteDetails } from "@/lib/permissions";
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
@@ -1561,6 +1562,8 @@ export async function duplicateQuoteWithContents(input: {
           quote_item_id: run.quote_item_id ? itemIdMap.get(run.quote_item_id) ?? null : null,
           quantity: Number(run.quantity ?? 1) || 1,
           unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+          // Копія несе не лише суму, а й те, що вона означає (REQ-232).
+          unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
           unit_price_print: Number(run.unit_price_print ?? 0) || 0,
           logistics_cost: Number(run.logistics_cost ?? 0) || 0,
           desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
