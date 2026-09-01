@@ -28,6 +28,8 @@ import {
   buildImportItemPayload,
   buildImportRunPayloads,
   findDraftsNeedingModelPriceVat,
+  isCostPermissionError,
+  stripRunCost,
   toDraftItems,
   type QuoteImportRunDefaults,
 } from "./mapping";
@@ -104,7 +106,8 @@ export function QuoteImportDialog({
   pickBlockedHint?: string;
   /** Створити прорахунок і віддати його id. Викликається ПІСЛЯ прев'ю. */
   onPrepareQuote?: () => Promise<string | null>;
-  onImported: (itemIds: string[], quoteId: string) => void | Promise<void>;
+  /** `ok` — чи дійшло до кінця. Виклик є і на невдачі: створене вже створене. */
+  onImported: (itemIds: string[], quoteId: string, ok: boolean) => void | Promise<void>;
 }) {
   const [stage, setStage] = useState<Stage>("pick");
   const [fileName, setFileName] = useState("");
@@ -233,6 +236,25 @@ export function QuoteImportDialog({
     const importedAt = new Date().toISOString();
     const createdIds: string[] = [];
     const runPayloads: QuoteRun[] = [];
+    let costBlocked = false;
+
+    /**
+     * Записати тиражі, а якщо база відмовила ЗА ПОСАДОЮ — записати їх без
+     * собівартості.
+     *
+     * ЧОМУ НЕ ПРОСТО ЗУПИНИТИСЬ. Собівартість у CRM заповнює менеджер або
+     * проєктний менеджер; власник і СЕО такого права не мають — а імпорт
+     * пробують саме вони. Зупинка коштувала б усієї роботи: з тридцяти позицій
+     * у прорахунку лишалась одна. Тепер позиції й тиражі доїжджають, а ціни з
+     * файлу впише той, чия це справа. Мовчки це не робиться: у вікні
+     * з'являється рядок про те, що собівартість не записана.
+     */
+    const saveRuns = async (runs: QuoteRun[]) => {
+      const attempt = await persistQuoteRuns(targetQuoteId, runs, []);
+      if (attempt.ok || !isCostPermissionError(attempt.message)) return attempt;
+      costBlocked = true;
+      return persistQuoteRuns(targetQuoteId, runs.map(stripRunCost), []);
+    };
 
     /** Позиції створені, тиражі — ні. Кажемо це прямо, а не самою помилкою бази. */
     const failRuns = async (message: string) => {
@@ -240,7 +262,7 @@ export function QuoteImportDialog({
         `Позиції створено (${createdIds.length}), а тиражі до них — ні. ${message.replace(/[.\s]*$/, "")}. Впишіть тиражі руками або приберіть позиції.`
       );
       setStage("preview");
-      if (targetQuoteId) await onImported(createdIds, targetQuoteId);
+      if (targetQuoteId) await onImported(createdIds, targetQuoteId, false);
     };
 
     for (const [index, draft] of selected.entries()) {
@@ -257,7 +279,7 @@ export function QuoteImportDialog({
       if (!inserted.ok) {
         setError(inserted.message);
         setStage("preview");
-        if (createdIds.length > 0) await onImported(createdIds, targetQuoteId);
+        if (createdIds.length > 0) await onImported(createdIds, targetQuoteId, false);
         return;
       }
       const rowId = ((inserted.data as { id?: string } | null)?.id ?? itemId) as string;
@@ -273,7 +295,7 @@ export function QuoteImportDialog({
       // товарів без жодного тиражу (побачено живим прогоном 01.09.2026).
       // Тепер найгірше, що буває, — одна зайва позиція.
       if (index === 0) {
-        const probe = await persistQuoteRuns(targetQuoteId, runs, []);
+        const probe = await saveRuns(runs);
         if (!probe.ok) {
           await failRuns(probe.message);
           return;
@@ -286,7 +308,7 @@ export function QuoteImportDialog({
     // Решта — одним записом: двадцять п'ять окремих запитів на кожен клік
     // «Створити» це чверть хвилини очікування без жодної користі.
     if (runPayloads.length > 0) {
-      const savedRuns = await persistQuoteRuns(targetQuoteId, runPayloads, []);
+      const savedRuns = await saveRuns(runPayloads);
       if (!savedRuns.ok) {
         await failRuns(savedRuns.message);
         return;
@@ -295,10 +317,15 @@ export function QuoteImportDialog({
 
     setSavedCount(createdIds.length);
     await startResearch(targetQuoteId, createdIds);
-    await onImported(createdIds, targetQuoteId);
-    toast.success(
-      `Створено ${createdIds.length} ${pluralWordUk(createdIds.length, "позицію", "позиції", "позицій")}. Картинки й назви доїжджають фоном.`
-    );
+    await onImported(createdIds, targetQuoteId, true);
+    const created = `Створено ${createdIds.length} ${pluralWordUk(createdIds.length, "позицію", "позиції", "позицій")}`;
+    if (costBlocked) {
+      toast.warning(
+        `${created}, але БЕЗ собівартості: її заповнює менеджер або проєктний менеджер. Ціни з файлу треба внести вручну.`
+      );
+    } else {
+      toast.success(`${created}. Картинки й назви доїжджають фоном.`);
+    }
     onOpenChange(false);
     reset();
   };

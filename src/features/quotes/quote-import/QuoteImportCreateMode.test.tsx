@@ -134,6 +134,46 @@ describe("імпорт як спосіб СТВОРИТИ прорахунок",
     expect(screen.getByText("Спершу оберіть замовника")).toBeInTheDocument();
   });
 
+  it("відмова за посадою не валить імпорт: тиражі йдуть без собівартості", async () => {
+    const user = userEvent.setup();
+    persistQuoteRuns.mockImplementationOnce(async () => ({
+      ok: false as const,
+      message: "Собівартість заповнює менеджер або проєктний менеджер",
+    }) as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ items, warnings: [], model: "test", costUsd: 0, fileName: "zapyt.csv" }),
+      })) as unknown as typeof fetch
+    );
+    const onImported = vi.fn();
+
+    render(
+      <QuoteImportDialog
+        open
+        onOpenChange={() => {}}
+        quoteId={null}
+        teamId="team-1"
+        currency="UAH"
+        nextPosition={1}
+        runDefaults={{ markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 }}
+        onPrepareQuote={async () => "quote-1"}
+        onImported={onImported}
+      />
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, new File(["x"], "zapyt.csv", { type: "text/csv" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Створити/ })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: /Створити/ }));
+
+    await waitFor(() => expect(onImported).toHaveBeenCalledWith(["item-1"], "quote-1", true));
+    // Друга спроба — ті самі тиражі, але з обнуленою собівартістю.
+    const retried = persistQuoteRuns.mock.calls[1][1] as Array<Record<string, unknown>>;
+    expect(retried[0]).toMatchObject({ quantity: 100, unit_price_model: 0, unit_price_print: 0 });
+  });
+
   it("невдале створення лишає людину на прев'ю, а не ковтає клік", async () => {
     const user = userEvent.setup();
     vi.stubGlobal(
@@ -167,6 +207,7 @@ describe("імпорт як спосіб СТВОРИТИ прорахунок",
     await user.click(screen.getByRole("button", { name: /Створити/ }));
 
     await waitFor(() => expect(screen.getByText("Оберіть менеджера прорахунку.")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /Створити/ })).toBeEnabled();
     expect(insertQuoteItemRow).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /Створити/ })).toBeEnabled();
   });

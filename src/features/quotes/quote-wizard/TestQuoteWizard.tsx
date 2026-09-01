@@ -1,6 +1,5 @@
 import * as React from "react";
 import { FlaskConical } from "lucide-react";
-import { toast } from "sonner";
 
 import {
   QuoteKindPickerDialog,
@@ -93,7 +92,11 @@ export function TestQuoteWizardButton({
 
     const created = await createQuote({
       teamId,
+      // Ліда в `customer_id` не пишуть — там зовнішній ключ на замовників;
+      // ім'я лишається в `customer_name`, а назва прорахунку бере його на себе.
+      // Рівно так само це робить білдер.
       customerId: header.partyType === "customer" ? header.partyId : null,
+      title: header.partyType === "lead" ? header.partyLabel || null : null,
       customerName: header.partyLabel || null,
       customerLogoUrl: header.partyLogoUrl,
       quoteType: "merch",
@@ -170,9 +173,11 @@ export function TestQuoteWizardButton({
             />
           }
           onPrepareQuote={prepareQuote}
-          onImported={(itemIds, quoteId) => {
-            if (itemIds.length === 0) return;
-            toast.success("Прорахунок створено з ексельки.");
+          onImported={(itemIds, quoteId, ok) => {
+            // Тільки на успіху: на невдачі людина має лишитись у вікні й
+            // побачити, ЩО саме не записалось, — а не поїхати на картку з
+            // бадьорим тостом. Саме так я й помилився першого разу.
+            if (!ok || itemIds.length === 0) return;
             onCreated(quoteId);
           }}
         />
