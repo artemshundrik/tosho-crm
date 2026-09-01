@@ -25,9 +25,20 @@ import { extractOgTags } from "./_lib/ogTags";
  * функції, а менеджер не має чекати на них, щоб побачити позиції: вони вже
  * створені, картинки доїжджають слідом.
  *
- * ПОРЯДОК ПЕРЕВІРОК — «auth first, privileged write second» (AGENTS.md):
- * спершу клієнтом користувача переконуємось, що прорахунок і позиції його, і
- * лише потім службовим клієнтом пишемо metadata.
+ * ПИШЕ КЛІЄНТОМ КОРИСТУВАЧА, А НЕ СЛУЖБОВИМ, і це не стиль, а єдиний робочий
+ * шлях. На `quote_items` висить `trg_quote_items_recalc_upd`, який звіряє
+ * `is_team_member()`, — а службове зʼєднання членом команди не є, бо в нього
+ * немає `auth.uid()`. Тому будь-який адмінський update позиції падає з «Not
+ * allowed» (це вже описано в scripts/catalog-method-directory.sql, де тригер
+ * довелось глушити на час міграції).
+ *
+ * Знайдено живим прогоном: функція звітувала «researched: 4», а в metadata не
+ * зʼявлялось нічого — помилку запису вона лише писала в консоль. Тепер невдалі
+ * записи рахуються окремо й повертаються у відповіді.
+ *
+ * Службовий клієнт лишається рівно на одне — покласти стиснуту картинку в
+ * Storage за шляхом, зібраним із значень бази (teamId/quoteId/itemId), уже
+ * після перевірки доступу. У саму таблицю пишемо тільки під RLS.
  */
 
 type HttpEvent = {
@@ -173,16 +184,16 @@ export const handler = async (event: HttpEvent) => {
   const items = ((itemRows ?? []) as ItemRow[]).filter((row) => row.quote_id === body.quoteId);
   if (items.length === 0) return jsonResponse(200, { researched: 0, skipped: 0 });
 
-  let researched = 0;
-  let skipped = 0;
+  const outcomes: Array<"done" | "skipped" | "failed" | "not_saved"> = [];
 
   for (const item of items) {
     const supplierUrl = readSupplierUrl(item.metadata);
     const metadata: Record<string, unknown> = { ...(item.metadata ?? {}) };
     const fetchedAt = new Date().toISOString();
+    let outcome: "done" | "skipped" | "failed" = "failed";
 
     if (!supplierUrl || !item.team_id) {
-      skipped += 1;
+      outcome = "skipped";
       metadata.research = { status: "skipped", fetchedAt };
     } else {
       try {
@@ -209,7 +220,7 @@ export const handler = async (event: HttpEvent) => {
             imageUrl,
           };
           metadata.research = { status: "done", fetchedAt };
-          researched += 1;
+          outcome = "done";
         } else {
           metadata.research = { status: "failed", fetchedAt, error: "Сторінка не віддала ні назви, ні картинки." };
         }
@@ -223,7 +234,7 @@ export const handler = async (event: HttpEvent) => {
       }
     }
 
-    const { error: updateError } = await adminClient
+    const { error: updateError } = await userClient
       .schema("tosho")
       .from("quote_items")
       .update({ metadata } as never)
@@ -231,8 +242,19 @@ export const handler = async (event: HttpEvent) => {
       .eq("quote_id", body.quoteId);
     if (updateError) {
       console.error("quote-import-research: metadata update failed", updateError.message);
+      outcomes.push("not_saved");
+      continue;
     }
+    outcomes.push(outcome);
   }
 
-  return jsonResponse(200, { researched, skipped, total: items.length });
+  const count = (value: string) => outcomes.filter((entry) => entry === value).length;
+
+  return jsonResponse(200, {
+    researched: count("done"),
+    skipped: count("skipped"),
+    failed: count("failed"),
+    notSaved: count("not_saved"),
+    total: items.length,
+  });
 };

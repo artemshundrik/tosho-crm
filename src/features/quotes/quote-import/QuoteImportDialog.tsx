@@ -193,6 +193,15 @@ export function QuoteImportDialog({
     const createdIds: string[] = [];
     const runPayloads: QuoteRun[] = [];
 
+    /** Позиції створені, тиражі — ні. Кажемо це прямо, а не самою помилкою бази. */
+    const failRuns = async (message: string) => {
+      setError(
+        `Позиції створено (${createdIds.length}), а тиражі до них — ні. ${message.replace(/[.\s]*$/, "")}. Впишіть тиражі руками або приберіть позиції.`
+      );
+      setStage("preview");
+      await onImported(createdIds);
+    };
+
     for (const [index, draft] of selected.entries()) {
       const itemId = crypto.randomUUID();
       const payload = buildImportItemPayload({
@@ -212,19 +221,35 @@ export function QuoteImportDialog({
       }
       const rowId = ((inserted.data as { id?: string } | null)?.id ?? itemId) as string;
       createdIds.push(rowId);
-      runPayloads.push(
-        ...buildImportRunPayloads({ draft, quoteId, quoteItemId: rowId, defaults: runDefaults })
-      );
+      setSavedCount(createdIds.length);
+      const runs = buildImportRunPayloads({ draft, quoteId, quoteItemId: rowId, defaults: runDefaults });
+
+      // ПЕРША ПОЗИЦІЯ ПИШЕ ТИРАЖІ ОДРАЗУ, решта — гуртом наприкінці.
+      //
+      // На тиражах стоїть тригер прав за посадою: хто не веде собівартість,
+      // тому база відмовляє. Без цієї перевірки відмова прилітала б ПІСЛЯ
+      // створення всіх позицій — і в прорахунку лишалось двадцять п'ять
+      // товарів без жодного тиражу (побачено живим прогоном 01.09.2026).
+      // Тепер найгірше, що буває, — одна зайва позиція.
+      if (index === 0) {
+        const probe = await persistQuoteRuns(quoteId, runs, []);
+        if (!probe.ok) {
+          await failRuns(probe.message);
+          return;
+        }
+        continue;
+      }
+      runPayloads.push(...runs);
     }
 
-    // Тиражі — одним записом на весь імпорт: 25 окремих запитів на кожен клік
-    // «Створити» це чверть хвилини очікування й 25 шансів упасти посередині.
-    const savedRuns = await persistQuoteRuns(quoteId, runPayloads, []);
-    if (!savedRuns.ok) {
-      setError(savedRuns.message);
-      setStage("preview");
-      await onImported(createdIds);
-      return;
+    // Решта — одним записом: двадцять п'ять окремих запитів на кожен клік
+    // «Створити» це чверть хвилини очікування без жодної користі.
+    if (runPayloads.length > 0) {
+      const savedRuns = await persistQuoteRuns(quoteId, runPayloads, []);
+      if (!savedRuns.ok) {
+        await failRuns(savedRuns.message);
+        return;
+      }
     }
 
     setSavedCount(createdIds.length);
