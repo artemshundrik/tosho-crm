@@ -206,11 +206,19 @@ const GIANT_THRESHOLD = 2000;
  * сторінці лишився обробник зміни з відкотом на помилці) і рядок про тип під
  * смугою накрутки.
  *
+ * ПІДНЯТО 01.09.2026 для QuoteDetailsPage (+7) — імпорт ексельки (REQ-233).
+ * Спершу винесли: `parseQuoteItemMetadata` поїхав у власний модуль
+ * (`quote-details/quoteItemMetadata.ts`, −36 рядків), а вся фіча живе окремо в
+ * `features/quotes/quote-import/`. У сторінці лишилось рівно те, що не має де
+ * бути ще: кнопка поруч із «Додати товар», стан вікна й монтування діалогу з
+ * даними прорахунку (ставки, валюта, наступна позиція). Це +42 нових проти
+ * −36 винесених.
+ *
  */
 
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12874,
-  "src/pages/QuoteDetailsPage.tsx": 7558,
+  "src/pages/QuoteDetailsPage.tsx": 7565,
   "src/pages/QuotesPage.tsx": 8476,
   "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,

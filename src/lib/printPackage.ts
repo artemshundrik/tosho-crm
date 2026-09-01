@@ -108,6 +108,12 @@ export type QuoteItemMetadata = {
   /** Carried over from the catalog model so quote cards can link out. */
   supplierUrl?: string | null;
   avantprintUrl?: string | null;
+  /** Усі посилання з рядка ексельки — перше з них і стає `supplierUrl` (REQ-233). */
+  importLinks?: string[] | null;
+  /** Слід імпорту: звідки позиція взялася й з яких рядків файлу зібрана. */
+  import?: { fileName: string; importedAt: string; sourceRows: number[] } | null;
+  /** Стан фонового дослідження лінка — з нього росте бедж «не вдалося підтягнути». */
+  research?: { status: "done" | "failed" | "skipped"; fetchedAt: string; error?: string | null } | null;
 };
 
 export type PrintPackageDetailField = {

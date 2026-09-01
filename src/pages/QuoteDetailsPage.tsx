@@ -66,12 +66,13 @@ import {
   formatPrintProductSummary,
   getPrintProductConfig,
   getPrintProductDetailSections,
-  isPrintPackageMetadata,
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
-import { parsePrintSpecMetadata } from "@/lib/printSpec";
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
 import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
+import { parseQuoteItemMetadata } from "@/features/quotes/quote-details/quoteItemMetadata";
+import { QuoteImportDialog } from "@/features/quotes/quote-import/QuoteImportDialog";
+import { useQuoteImportResearch } from "@/features/quotes/quote-import/useQuoteImportResearch";
 import { normalizeUnitLabel } from "@/lib/units";
 import {
   DESIGN_TASK_TYPE_ICONS,
@@ -174,6 +175,7 @@ import {
   Banknote,
   Copy,
   FileDown,
+  FileSpreadsheet,
   FileText,
   Pencil,
   MoreHorizontal,
@@ -448,40 +450,6 @@ const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
   }
   if (typeof value === "object") return value as Record<string, unknown>;
   return {};
-};
-
-const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  if (isPrintPackageMetadata(value)) return value;
-
-  const record = value as Record<string, unknown>;
-  const metadata: QuoteItemMetadata = {};
-  if (typeof record.sku === "string" && record.sku.trim()) {
-    metadata.sku = record.sku.trim();
-  }
-
-  const rawVariant = record.catalogVariant;
-  if (rawVariant && typeof rawVariant === "object" && !Array.isArray(rawVariant)) {
-    const variantRecord = rawVariant as Record<string, unknown>;
-    const id = typeof variantRecord.id === "string" ? variantRecord.id.trim() : "";
-    const name = typeof variantRecord.name === "string" ? variantRecord.name.trim() : "";
-    if (id && name) {
-      metadata.catalogVariant = {
-        id,
-        name,
-        sku: typeof variantRecord.sku === "string" ? variantRecord.sku.trim() || null : null,
-        imageUrl: typeof variantRecord.imageUrl === "string" ? variantRecord.imageUrl.trim() || null : null,
-      };
-    }
-  }
-
-  // Параметри описових видів. Без цього рядка вони тихо зникали б на читанні:
-  // парсер вище перебирає БІЛИЙ СПИСОК ключів, а не копіює обʼєкт, тож «просто
-  // дописати новий ключ у metadata» недостатньо — його ще треба тут пропустити.
-  const printSpec = parsePrintSpecMetadata(record.printSpec);
-  if (printSpec) metadata.printSpec = printSpec;
-
-  return metadata.sku || metadata.catalogVariant || metadata.printSpec ? metadata : null;
 };
 
 /**
@@ -3943,6 +3911,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
   void saveQtyEdit;
 
+  // Імпорт ексельки (REQ-233): стан вікна тут, уся робота — в модулі
+  // `quote-import`. Сторінка лише каже, куди писати й що перечитати після.
+  const [importOpen, setImportOpen] = useState(false);
+  const reloadAfterImport = useCallback(async () => {
+    await Promise.all([loadItems(), loadRuns()]);
+  }, [loadItems, loadRuns]);
+  const handleImportResearch = useQuoteImportResearch(reloadAfterImport);
+
   const openNewItem = () => {
     setEditingItemId(null);
     setItemTitle("");
@@ -4826,6 +4802,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <Plus className="h-4 w-4" />
                       Додати товар
+                    </Button>
+                  ) : null}
+                  {canEditQuoteContent ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!canManageItems}
+                      title={itemsLockedHint ?? "Excel від клієнта → позиції з тиражами й цінами"}
+                      onClick={() => setImportOpen(true)}
+                      className="h-10 gap-2 rounded-xl"
+                    >
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Імпорт з файлу
                     </Button>
                   ) : null}
                 </div>
@@ -7552,6 +7541,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         catalogTypes={catalogTypes}
         currentUserId={userId ?? undefined}
       />
+
+      {importOpen ? (
+        <QuoteImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          quoteId={quoteId}
+          teamId={quote?.team_id ?? teamId ?? ""}
+          currency={quote?.currency}
+          nextPosition={items.length === 0 ? 1 : Math.max(...items.map((item) => item.position ?? 0)) + 1}
+          runDefaults={{
+            markupRate: defaultMarkupRateFor(dealType),
+            managerRate: currentManagerRate || DEFAULT_MANAGER_RATE,
+            fixedCostRate: companyRates.fixedCostRate,
+            vatRate: companyRates.vatRate,
+          }}
+          onImported={handleImportResearch}
+        />
+      ) : null}
     </div>
   );
 }
