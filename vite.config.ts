@@ -20,6 +20,13 @@ type DevJsonResponse = {
   body: Record<string, unknown>;
 };
 
+/** Netlify-функція, підключена в дев-сервер: та сама форма, що й у проді. */
+type DevFunctionHandler = (event: {
+  httpMethod?: string;
+  headers?: Record<string, string | undefined>;
+  body?: string | null;
+}) => Promise<{ statusCode: number; body?: string }>;
+
 function sendJson(res: import("http").ServerResponse, statusCode: number, body: Record<string, unknown>) {
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -472,6 +479,47 @@ export default defineConfig(({ command, mode }) => {
               } catch (error) {
                 sendJson(res, 500, {
                   error: error instanceof Error ? error.message : "Telegram stats request failed",
+                });
+              }
+            });
+          },
+        }
+      : undefined,
+    command === "serve"
+      ? {
+          /**
+           * Імпорт ексельки (REQ-233) — обидві функції одним блоком.
+           *
+           * НАВІЩО. Сесія користувача живе на порту дев-сервера, а `netlify dev`
+           * підіймає інший origin — там порожній localStorage і екран входу.
+           * Тобто без цього шматка перевірити імпорт очима на живих даних не
+           * можна взагалі, а це поведінкова фіча: прев'ю, беджі, гейт ПДВ.
+           * Функції самі перевіряють токен і доступ до прорахунку, тож
+           * підключення їх у дев-сервер нічого зайвого не відкриває.
+           */
+          name: "dev-quote-import-functions",
+          configureServer(server) {
+            const routes: Record<string, () => Promise<{ handler: DevFunctionHandler }>> = {
+              "/.netlify/functions/quote-import-parse": () => import("./netlify/functions/quote-import-parse"),
+              "/.netlify/functions/quote-import-research-background": () =>
+                import("./netlify/functions/quote-import-research-background"),
+            };
+            server.middlewares.use(async (req, res, next) => {
+              const load = routes[req.url?.split("?")[0] ?? ""];
+              if (!load) return next();
+
+              try {
+                const { handler } = await load();
+                const response = await handler({
+                  httpMethod: req.method,
+                  headers: normalizeRequestHeaders(req.headers),
+                  body: req.method === "GET" || req.method === "HEAD" ? null : await readRawBody(req),
+                });
+
+                sendJson(res, response.statusCode, JSON.parse(response.body || "{}") as Record<string, unknown>);
+              } catch (error) {
+                sendJson(res, 500, {
+                  error: error instanceof Error ? error.message : "Quote import request failed",
                 });
               }
             });
