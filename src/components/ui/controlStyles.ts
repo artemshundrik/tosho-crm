@@ -182,3 +182,19 @@ const SEGMENTED_TRIGGER_BASE = cx(
 export const SEGMENTED_TRIGGER = cx(SEGMENTED_TRIGGER_BASE, "gap-2 h-9 rounded-lg px-4 text-sm");
 
 export const SEGMENTED_TRIGGER_SM = cx(SEGMENTED_TRIGGER_BASE, "gap-1.5 h-7 rounded-md px-3 text-xs");
+
+/**
+ * Найдрібніший розмір — рівно під рядок ПІДПИСУ поля (`min-h-5`).
+ *
+ * Потрібен там, де перемикач уточнює сусіднє поле й не має права додавати блоку
+ * висоти: у рядку підпису вільне місце вже є, а окремий ярус під полем розсував
+ * би сітку цін на цілий рядок (REQ-232).
+ */
+export const SEGMENTED_GROUP_XS = cx(
+  "inline-flex p-px h-5 items-center rounded-md border border-border/50 bg-muted/40"
+);
+
+export const SEGMENTED_TRIGGER_XS = cx(
+  SEGMENTED_TRIGGER_BASE,
+  "h-full rounded-[5px] px-1.5 text-2xs whitespace-nowrap"
+);
