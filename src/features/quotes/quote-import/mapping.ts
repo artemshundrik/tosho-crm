@@ -1,5 +1,6 @@
 import type { QuoteRun } from "@/lib/toshoApi";
 
+import { normalizeProductUrl } from "./productUrl";
 import type {
   QuoteImportDraftItem,
   QuoteImportDraftRun,
@@ -41,7 +42,10 @@ export function sanitizeExternalUrl(value: unknown): string | null {
     // `javascript:` і `data:` у metadata — це збережений XSS у кнопці
     // «Постачальник», яка рендериться як звичайне посилання.
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.toString();
+    // Рекламний хвіст зрізаємо ТУТ, до відсіювання дублів нижче: у файлі один
+    // товар часто трапляється двічі з різними `gclid`, і без цього він двічі ж
+    // і потрапляв у позицію як «різні» посилання.
+    return normalizeProductUrl(url.toString());
   } catch {
     return null;
   }

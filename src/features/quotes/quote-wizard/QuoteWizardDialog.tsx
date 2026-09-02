@@ -22,6 +22,7 @@ import {
   type ImportParseStep,
 } from "@/features/quotes/quote-import/importFlow";
 import type { QuoteImportRunDefaults } from "@/features/quotes/quote-import/mapping";
+import { normalizeProductUrl } from "@/features/quotes/quote-import/productUrl";
 import { QUOTE_IMPORT_ACCEPT } from "@/features/quotes/quote-import/readWorkbook";
 import type { QuoteImportDraftItem, QuoteImportLinkPreview } from "@/features/quotes/quote-import/types";
 import { countSettledPreviews, fetchLinkPreview, useLinkPreviews } from "@/features/quotes/quote-import/useLinkPreviews";
@@ -254,7 +255,13 @@ export function QuoteWizardDialog({
     const raw = linkUrl.trim();
     if (!raw) return;
 
-    const urls = raw.split(/[\s,]+/).map((part) => part.trim()).filter(Boolean);
+    // Рекламний хвіст зрізаємо ОДРАЗУ, до перевірки й до розвідки: далі ця
+    // адреса піде і в запит по фото, і в `metadata.supplierUrl`, звідки її вже
+    // ніхто не почистить — вона стане кнопкою «Постачальник» на картці позиції.
+    const urls = raw
+      .split(/[\s,]+/)
+      .map((part) => normalizeProductUrl(part))
+      .filter(Boolean);
     const bad = urls.find((url) => !isHttpUrl(url));
     if (bad) {
       setError(
