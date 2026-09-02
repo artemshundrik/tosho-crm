@@ -100,15 +100,19 @@ describe("QuoteRunPriceFields — позначка ПДВ", () => {
     expect(onModelPriceVatChange).toHaveBeenCalledWith("incl");
   });
 
-  it("поки гейт тримає — поле в рамці й причина написана словами", () => {
+  // Тон помилки, а не попередження, і теперішній час (REQ-242): бурштиновий
+  // не відрізнявся від нейтральних підказок поруч, а «не збережеться» читалось
+  // як умова на потім, хоч сума вже нікуди не поїхала.
+  it("поки гейт тримає — поле в рамці помилки, і сказано, що тираж НЕ збережено", () => {
     const { price } = renderFields({ missing: true });
-    expect(price.className).toContain("border-warning-soft-border");
+    expect(price.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByText(/Тираж не збережено/)).toBeTruthy();
     expect(screen.getByText(/Оберіть, з ПДВ ця сума чи без/)).toBeTruthy();
   });
 
   it("гейт не тримає — ні рамки, ні напису", () => {
     const { price } = renderFields({ modelPriceVat: "incl" });
-    expect(price.className).not.toContain("border-warning-soft-border");
+    expect(price.getAttribute("aria-invalid")).not.toBe("true");
     expect(screen.queryByText(/Оберіть, з ПДВ ця сума чи без/)).toBeNull();
   });
 

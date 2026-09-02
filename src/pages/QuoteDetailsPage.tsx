@@ -121,7 +121,8 @@ import {
 } from "@/lib/quoteRuns";
 import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatGateMessage, MODEL_PRICE_VAT_ROW_HINT } from "@/features/quotes/quote-details/quoteRunModelPriceVat";
 import { QuoteDealTypeBadge } from "@/features/quotes/quote-details/QuoteDealTypeBadge";
-import { isMarkupFrozen, markupGateMessage } from "@/lib/quoteMarkupApproval";
+import { isMarkupFrozen } from "@/lib/quoteMarkupApproval";
+import { resolveQuoteStatusGate, resolveStatusBlockReason } from "@/features/quotes/quote-details/quoteStatusGates";
 import {
   defaultMarkupRateFor,
   formatRatePercent,
@@ -1869,13 +1870,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    * (нічого не вдієш), потім чужий лок (можна попросити), потім поля (можна
    * заповнити самому).
    */
-  const statusBlockReason = !canEditQuoteContent
-    ? "Змінювати статус може менеджер цього прорахунку або керівник."
-    : quoteLockedByOther
-      ? `${quoteLock.holderName ?? "Інший користувач"} зараз редагує прорахунок — статус зміниться, коли редагування завершиться.`
-      : quoteRequirements.length > 0
-        ? `Спершу заповніть: ${quoteRequirements.join(", ")}.`
-        : null;
+  const statusBlockReason = resolveStatusBlockReason({
+    canEditContent: canEditQuoteContent,
+    lockHolderName: quoteLock.holderName,
+    lockedByOther: quoteLockedByOther,
+    requirements: quoteRequirements,
+    unsavedRunCount: runIdsNeedingModelPriceVat.size,
+  });
 
   const canEditRuns = useMemo(
     () =>
@@ -3507,13 +3508,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // Quick status change
   const handleQuickStatusChange = async (newStatus: string, noteOverride?: string) => {
     const nextStatus = normalizeStatus(newStatus);
-    // Двері назовні. Один вузол на всі шляхи до «Затверджено» — швидка дія,
-    // вікно статусів і канбан-перемикач; окремі перевірки на кожному з них
-    // рано чи пізно розійшлися б, і саме через це поріг колись обходили.
-    if (nextStatus === "approved" && markup.gate.blocked) {
-      const gateMessage = markupGateMessage(dealType);
-      setStatusError(gateMessage);
-      toast.error("Спершу погодження накрутки", { description: gateMessage });
+    // Двері назовні — усі гейти в одному вузлі: quote-details/quoteStatusGates.
+    const gate = resolveQuoteStatusGate(nextStatus, markup.gate.blocked, dealType, runIdsNeedingModelPriceVat.size);
+    if (gate) {
+      setStatusError(gate.message);
+      toast.error(gate.title, { description: gate.message });
       return;
     }
     setStatusBusy(true);
@@ -5259,6 +5258,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   }
                                   needsApprovedChoice={needsApprovedRunChoice(itemRuns)}
                                   blockingRunIds={blockingRunIdSet}
+                                  unsavedRunIds={runIdsNeedingModelPriceVat}
                                 />
 
                                 {itemRuns.length === 0 ? (

@@ -85,6 +85,16 @@ export type QuoteRunRowsProps = {
   needsApprovedChoice?: boolean;
   /** Тиражі, що тримають КП зачиненим: нижче дна без чинного погодження. */
   blockingRunIds?: ReadonlySet<string>;
+  /**
+   * Тиражі, чиї числа ЩЕ НЕ В БАЗІ: гейт ПДВ тримає їх у браузері.
+   *
+   * ЧОМУ ЦЕ ВЗАГАЛІ ТУТ (REQ-242). Перелік — підсумок, «як воно є», і саме він
+   * переконав проєктного менеджера, що все збережено: він малював щойно
+   * введені 336,41 ₴ тим самим кеглем і кольором, що й число з бази. Дрібне
+   * попередження під полем сперечалося з цим підсумком і програвало. Тепер
+   * підсумок каже те саме, що й поле.
+   */
+  unsavedRunIds?: ReadonlySet<string>;
 };
 
 export function QuoteRunRows({
@@ -100,11 +110,13 @@ export function QuoteRunRows({
   onToggleApproved,
   needsApprovedChoice = false,
   blockingRunIds,
+  unsavedRunIds,
 }: QuoteRunRowsProps) {
   const money = currencyLabel(currency);
   // Шапка без жодного числа під собою обіцяла б колонки, яких немає: поки
   // собівартість не внесена, підписи ховаються разом із даними.
   const anyPriced = runs.some((run) => getPricing(run).costTotal > 0);
+  const anyUnsaved = runs.some((run) => !!run.id && !!unsavedRunIds?.has(run.id));
 
   return (
     <div>
@@ -137,6 +149,12 @@ export function QuoteRunRows({
                 позначте погоджений клієнтом
               </span>
             </HoverTip>
+          ) : null}
+          {anyUnsaved ? (
+            <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2 text-2xs font-medium text-destructive">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              не збережено
+            </span>
           ) : null}
         </div>
         {canAddRun ? (
@@ -184,6 +202,7 @@ export function QuoteRunRows({
           // саме (REQ-175#p63). Без цього доводилось звіряти шість рядків із
           // підказкою вгорі сторінки.
           const isBlocking = !!run.id && !!blockingRunIds?.has(run.id);
+          const isUnsaved = !!run.id && !!unsavedRunIds?.has(run.id);
           const pricing = getPricing(run);
           const priced = pricing.costTotal > 0;
           // Класи колонок — літералами: Tailwind читає вихідний код, а не
@@ -267,8 +286,23 @@ export function QuoteRunRows({
                   costCells.map((cell) => (
                     <span key={cell.key} className={cn("whitespace-nowrap lg:row-start-1 lg:text-right", cell.col)}>
                       <span className="mr-1 text-2xs text-muted-foreground lg:hidden">{cell.label}</span>
-                      <span className="text-sm tabular-nums text-foreground">{cell.value}</span>
+                      <span
+                        className={cn(
+                          "text-sm tabular-nums",
+                          // Незбережене число — не факт, і виглядати як факт
+                          // воно не має (REQ-242).
+                          isUnsaved && cell.key === "model" ? "text-destructive" : "text-foreground"
+                        )}
+                      >
+                        {cell.value}
+                      </span>
                       <span className="ml-1 text-2xs text-muted-foreground">{cell.unit}</span>
+                      {isUnsaved && cell.key === "model" ? (
+                        <AlertTriangle
+                          className="ml-1 inline h-3 w-3 shrink-0 -translate-y-px text-destructive"
+                          aria-label="не збережено"
+                        />
+                      ) : null}
                       {isBlocking && cell.key === "markup" ? (
                         <Lock
                           className="ml-1 inline h-3 w-3 shrink-0 -translate-y-px text-warning-solid"

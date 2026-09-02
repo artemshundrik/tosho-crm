@@ -1,3 +1,5 @@
+import { AlertTriangle } from "lucide-react";
+
 import { Label } from "@/components/ui/label";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
@@ -110,11 +112,12 @@ export function QuoteRunPriceFields({
             min={0}
             aria-label={aria}
             currency={currency ?? undefined}
-            className={cn(
-              field === "unit_price_model" &&
-                modelPriceVatMissing &&
-                "border-warning-soft-border focus-visible:ring-warning-soft-border/40"
-            )}
+            // Тон помилки, а не попередження (REQ-242): бурштиновий тут не
+            // відрізнявся від нейтральних підказок поруч, а стан за ним — «сума
+            // НЕ збережена», тобто вже помилка, а не ризик. Своїх класів не
+            // додаємо: `aria-invalid` бере канонічний вигляд помилкового поля з
+            // дизайн-системи й заразом каже те саме скрінрідеру.
+            aria-invalid={field === "unit_price_model" && modelPriceVatMissing}
           />
           {/* Позначка ПДВ стоїть ПІД сумою, а не в її підписі: це не уточнення
               назви поля, а окреме рішення, яке треба ухвалити (REQ-232). Три
@@ -143,8 +146,12 @@ export function QuoteRunPriceFields({
                 ))}
               </SegmentedGroup>
               {modelPriceVatMissing ? (
-                <div className="text-xs leading-tight text-warning-copy">
-                  Оберіть, з ПДВ ця сума чи без — інакше тираж не збережеться.
+                <div className="flex items-start gap-1.5 text-xs font-medium leading-tight text-destructive">
+                  <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    <span className="font-semibold">Тираж не збережено.</span> Оберіть, з ПДВ ця сума чи
+                    без.
+                  </span>
                 </div>
               ) : null}
             </div>
