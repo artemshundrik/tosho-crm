@@ -1,4 +1,4 @@
-import { ImageOff, Plus, Trash2, X } from "lucide-react";
+import { ImageOff, Link2, Plus, Trash2, X } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,10 @@ import type { QuoteImportDraftItem, QuoteImportFlag, QuoteImportLinkPreview } fr
  * (REQ-237#p2). Що людина бачить і править: назва, тиражі, коментар; що лише
  * бачить: фото, рядок файлу, зв'язок варіантів, ознаки, посилання.
  */
+
+/** Гола іконка-дія в рядку позиції: та сама вага, що в кошика. */
+const ICON_ACTION =
+  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50";
 
 const FLAG_LABELS: Record<QuoteImportFlag, string> = {
   quantity_range: "діапазон → два тиражі",
@@ -135,17 +139,19 @@ export function ImportDraftRow({
               onChange={(event) => onPatch({ name: event.target.value })}
             />
             {/*
-              ТИРАЖІ — ОДИН КОНТРОЛ, А НЕ РОЗСИП. Були окремі поля з хрестиками,
-              що висіли на їхніх кутах, і на двох тиражах ряд ламався навпіл:
-              частина полів лишалась угорі, «+ тираж» їхав униз. Тепер це одна
-              рамка з міткою, полями й кнопкою всередині: вона не ділиться при
-              переносі, а їде на новий рядок цілою. Хрестик переїхав усередину
-              поля й показується лише під курсором — на кутах він читався як
-              значок помилки.
+              ТИРАЖІ Й ДІЇ — ОДНІЄЇ ВИСОТИ З НАЗВОЮ, БЕЗ ЗАЙВИХ РАМОК.
+
+              Спершу тут була окрема рамка з полями всередині — вона читалась
+              як другий блок у рядку й сперечалась із полем назви. Тепер поле
+              тиражу таке саме, як поле назви, а «плюс» і кошик — голі іконки,
+              як і належить діям. Обидва разом узяті в один блок, щоб при
+              переносі вони їхали на новий рядок цілими, а не порізно.
+
+              Хрестик прибирання тиражу живе ВСЕРЕДИНІ поля й показується під
+              курсором: на кутах він читався як значок помилки.
             */}
-            <div className="flex shrink-0 items-center gap-2">
-            <div className="inline-flex items-center gap-1 rounded-xl border border-border/60 bg-muted/20 p-1">
-              <span className="px-1.5 text-2xs font-medium uppercase tracking-caps text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">
                 {draft.runs.length > 1 ? "Тиражі" : "Тираж"}
               </span>
               {draft.runs.map((run) => (
@@ -154,10 +160,9 @@ export function ImportDraftRow({
                     value={run.quantity > 0 ? run.quantity : null}
                     min={0}
                     emptyValue={0}
-                    controlSize="md"
                     className={cn(
-                      "w-[5.5rem] border-transparent bg-background text-center shadow-none",
-                      onRemoveRun && draft.runs.length > 1 && "pr-5"
+                      "w-[5.5rem] text-center",
+                      onRemoveRun && draft.runs.length > 1 && "pr-6"
                     )}
                     placeholder="скільки"
                     disabled={disabled}
@@ -170,7 +175,7 @@ export function ImportDraftRow({
                       disabled={disabled}
                       aria-label="Прибрати тираж"
                       onClick={() => onRemoveRun(run.key)}
-                      className="absolute right-1 top-1/2 grid h-4 w-4 -translate-y-1/2 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/run:opacity-100"
+                      className="absolute right-1.5 top-1/2 grid h-4 w-4 -translate-y-1/2 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/run:opacity-100"
                     >
                       <X className="h-3 w-3" strokeWidth={2.5} />
                     </button>
@@ -184,38 +189,39 @@ export function ImportDraftRow({
                   aria-label="Додати ще тираж"
                   title="Клієнт просить порахувати кілька кількостей"
                   onClick={onAddRun}
-                  className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                  className={ICON_ACTION}
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  тираж
+                  <Plus className="h-4 w-4" />
+                </button>
+              ) : null}
+              {onRemove ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-label={`Прибрати «${draft.name || "позицію"}»`}
+                  onClick={onRemove}
+                  className={cn(ICON_ACTION, "hover:bg-danger-soft hover:text-danger-foreground")}
+                >
+                  <Trash2 className="h-4 w-4" />
                 </button>
               ) : null}
             </div>
-            {onRemove ? (
-              <button
-                type="button"
-                disabled={disabled}
-                aria-label={`Прибрати «${draft.name || "позицію"}»`}
-                onClick={onRemove}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted-foreground hover:bg-danger-soft hover:text-danger-foreground disabled:opacity-50"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            ) : null}
-            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 text-2xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
+            {/*
+              Мітки рядка й варіанта більше не пігулки: пігулка обіцяє дію або
+              стан, а це просто підпис звідки взялась позиція. Пігулка лишилась
+              там, де вона щось означає, — на попередженні про діапазон.
+            */}
             {draft.sourceRows.length > 0 ? (
-              <span className="rounded-full border border-border/60 px-2 py-0.5 text-muted-foreground">
-                рядок {draft.sourceRows.join(", ")}
-              </span>
+              <span className="text-muted-foreground">рядок {draft.sourceRows.join(", ")}</span>
             ) : null}
             {/* Зв'язок варіантів — словами. Бедж «альтернатива» казав, що щось
                 не так, але не казав що саме: під номером 30 у файлі лежать два
                 різних дзен-сади, і це вибір із двох, а не два товари. */}
             {draft.variant ? (
-              <span className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 font-medium text-muted-foreground">
+              <span className="font-medium text-muted-foreground">
                 варіант {draft.variant.index} з {draft.variant.total} того самого товару
               </span>
             ) : null}
@@ -233,9 +239,11 @@ export function ImportDraftRow({
                 href={link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="max-w-[220px] truncate rounded-full border border-border/60 px-2 py-0.5 text-muted-foreground underline underline-offset-2"
+                title={link}
+                className="inline-flex max-w-[260px] items-center gap-1 text-muted-foreground transition-colors hover:text-primary"
               >
-                {link.replace(/^https?:\/\//, "")}
+                <Link2 className="h-3 w-3 shrink-0" />
+                <span className="truncate underline underline-offset-2">{link.replace(/^https?:\/\//, "")}</span>
               </a>
             ))}
             {/* Причина відсутнього фото стоїть саме тут, поруч із посиланням:
