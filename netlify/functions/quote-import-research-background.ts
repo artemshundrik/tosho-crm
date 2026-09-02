@@ -5,7 +5,7 @@ import sharp from "sharp";
 
 import { parseBody } from "./_lib/parseBody";
 import {
-  HTML_ACCEPT_HEADER,
+  fetchProductPage,
   fetchWithLimits,
   getBrowserLikeHeaders,
   isAllowedImageContentType,
@@ -88,21 +88,27 @@ function readSupplierUrl(metadata: Record<string, unknown> | null): string | nul
   return typeof raw === "string" && raw.trim() ? raw.trim() : null;
 }
 
+/**
+ * Сторінку тягне `fetchProductPage`: прямо, а для сайтів із антибот-стіною
+ * (Розетка, midocean) — крізь читач-проксі (REQ-237#p15).
+ *
+ * ТУТ БЮДЖЕТ ШИРШИЙ, ніж у прев'ю: фонова функція живе п'ятнадцять хвилин, і
+ * на неї ніхто не дивиться. Тому другій спробі можна дати повний таймаут, не
+ * ділячи його з першою.
+ *
+ * САМЕ ФОТО проксі не потребує: перевірено 02.09.2026, `content*.rozetka.com.ua`
+ * і `cdn1.midocean.com` віддають картинки звичайному запиту. Стіна стоїть на
+ * сторінках, не на сховищі, тож `storeImage` лишається як був.
+ */
 async function fetchOgTags(url: string) {
-  // Сторожа кличе сам `fetchWithLimits` — і на кожному переході, не лише тут.
-  const { response, body } = await fetchWithLimits(url, {
+  const page = await fetchProductPage(url, {
     timeoutMs: SITE_TIMEOUT_MS,
+    proxyTimeoutMs: SITE_TIMEOUT_MS,
     maxBytes: MAX_HTML_BYTES,
-    headers: getBrowserLikeHeaders(url, { includeReferer: false, accept: HTML_ACCEPT_HEADER }),
   });
-  if (!response.ok) throw new Error(`Сайт відповів ${response.status}.`);
-  // Кодування беремо з відповіді: чимало українських магазинів досі віддає
-  // windows-1251, і в utf-8 назва перетворилась би на питання в ромбиках.
-  const charset = response.headers.get("content-type")?.match(/charset=([\w-]+)/i)?.[1];
-  const html = new TextDecoder(charset && charset.toLowerCase() !== "utf-8" ? charset : "utf-8", {
-    fatal: false,
-  }).decode(body);
-  return extractOgTags(html, response.url || url);
+  if (page.status === "blocked") throw new Error("Сайт не пускає роботів.");
+  if (page.status !== "ok") throw new Error(`Сайт відповів ${page.httpStatus}.`);
+  return extractOgTags(page.html, page.baseUrl);
 }
 
 async function storeImage(params: {

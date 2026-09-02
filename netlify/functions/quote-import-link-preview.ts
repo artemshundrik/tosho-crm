@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 
 import { parseBody } from "./_lib/parseBody";
-import { HTML_ACCEPT_HEADER, fetchWithLimits, getBrowserLikeHeaders } from "./_lib/externalFetch";
+import { fetchProductPage } from "./_lib/externalFetch";
 import { extractOgTags } from "./_lib/ogTags";
 
 /**
@@ -35,6 +35,16 @@ type HttpEvent = {
 };
 
 const SITE_TIMEOUT_MS = 8_000;
+/**
+ * Друга спроба крізь проксі. Сім секунд — із заміру 02.09.2026: холодна
+ * сторінка Розетки приїжджає за 4–7 с, тепла — за півсекунди.
+ */
+const PROXY_TIMEOUT_MS = 7_000;
+/**
+ * Стеля на обидві спроби разом: звичайна функція Netlify живе десять секунд, і
+ * останню лишаємо на те, щоб зібрати відповідь і чесно її віддати.
+ */
+const TOTAL_BUDGET_MS = 9_000;
 const MAX_HTML_BYTES = 5 * 1024 * 1024;
 
 const requestSchema = z.object({ url: z.string().url().max(2000) }).strict();
@@ -60,9 +70,12 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
  *
  * 403 від dok.ua, rozetka й midocean — це не наша поломка й не биті дані: три
  * магазини з референсного файлу KMZ тримають антибот, і повніший набір
- * браузерних заголовків його не обходить (перевірено 01.09.2026). Менеджеру
- * треба сказати саме це, щоб він відкрив сайт сам, а не чекав на картинку,
- * якої не буде.
+ * браузерних заголовків його не обходить (перевірено 01.09.2026).
+ *
+ * Із 02.09.2026 Розетку й midocean забирає читач-проксі (`fetchProductPage`),
+ * а от dok.ua тримає стіну й проти нього — тобто цей текст досі має кому
+ * показуватись. Менеджеру треба сказати саме це, щоб він відкрив сайт сам, а
+ * не чекав на картинку, якої не буде.
  */
 function describeHttpStatus(status: number): { status: PreviewStatus; reason: string } {
   if (status === 401 || status === 403 || status === 429) {
@@ -106,29 +119,25 @@ export const handler = async (event: HttpEvent) => {
   const url = parsed.data.url;
 
   try {
-    // Сторожа від SSRF кличе сам `fetchWithLimits` — і на кожному переході.
-    const { response, body } = await fetchWithLimits(url, {
+    // Сторожа від SSRF кличе сам `fetchProductPage` — і на кожному переході,
+    // і на адресі, яку віддаємо проксі.
+    const page = await fetchProductPage(url, {
       timeoutMs: SITE_TIMEOUT_MS,
+      proxyTimeoutMs: PROXY_TIMEOUT_MS,
       maxBytes: MAX_HTML_BYTES,
-      headers: getBrowserLikeHeaders(url, { includeReferer: false, accept: HTML_ACCEPT_HEADER }),
+      budgetMs: TOTAL_BUDGET_MS,
     });
 
-    if (!response.ok) {
+    if (page.status !== "ok") {
       return jsonResponse(200, {
         url,
-        ...describeHttpStatus(response.status),
+        ...describeHttpStatus(page.httpStatus),
         title: null,
         imageUrl: null,
       });
     }
 
-    // Кодування беремо з відповіді: чимало українських магазинів досі віддає
-    // windows-1251, і в utf-8 назва перетворилась би на питання в ромбиках.
-    const charset = response.headers.get("content-type")?.match(/charset=([\w-]+)/i)?.[1];
-    const html = new TextDecoder(charset && charset.toLowerCase() !== "utf-8" ? charset : "utf-8", {
-      fatal: false,
-    }).decode(body);
-    const tags = extractOgTags(html, response.url || url);
+    const tags = extractOgTags(page.html, page.baseUrl);
 
     if (!tags.imageUrl) {
       return jsonResponse(200, {
