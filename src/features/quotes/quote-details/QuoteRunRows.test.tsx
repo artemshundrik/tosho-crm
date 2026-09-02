@@ -106,6 +106,26 @@ describe("QuoteRunRows — рішення клієнта в рядку", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it("єдиний тираж кнопки не показує — вибирати нема з чого", () => {
+    renderRows({ runs: [run()] });
+
+    expect(screen.queryByRole("button", { name: /Погодити/ })).toBeNull();
+    expect(screen.queryByText("Погоджено клієнтом")).toBeNull();
+  });
+
+  it("єдиний тираж із позначкою з минулого показує бейдж, але не кнопку", () => {
+    renderRows({ runs: [run({ is_approved: true })] });
+
+    expect(screen.queryByRole("button", { name: /Погоджено клієнтом/ })).toBeNull();
+    expect(screen.getByText("Погоджено клієнтом")).toBeTruthy();
+  });
+
+  it("другий тираж повертає кнопки обом рядкам", () => {
+    renderRows({ runs: [run(), run({ id: "run-2", quantity: 50 })] });
+
+    expect(screen.getAllByRole("button", { name: /Погодити/ })).toHaveLength(2);
+  });
+
   it("клік повз кнопку робить тираж активним", () => {
     const onSelect = vi.fn();
     renderRows({ runs: [run(), run({ id: "run-2", quantity: 50 })], onSelect });
