@@ -381,8 +381,9 @@ export async function fetchWithLimits(
 
       const chunks: Buffer[] = [];
       let total = 0;
-      // @ts-expect-error — Node дає асинхронний ітератор на тілі відповіді.
-      for await (const chunk of response.body) {
+      // Node дає асинхронний ітератор на тілі відповіді; типи DOM його не
+      // описують, тож звужуємо самі.
+      for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
         const buffer = Buffer.from(chunk as Uint8Array);
         total += buffer.length;
         if (total > options.maxBytes) {

@@ -23,6 +23,23 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    // ШІСТЬ ПРАПОРЦІВ, ЯКІ ДО 02.09.2026 НЕ ДІЯЛИ НІКОЛИ.
+    //
+    // Вони стояли у tsconfig.app.json і tsconfig.node.json — конфігах, які
+    // давно видалено. Перевірка ходить лише сюди, тож жоден із них жодного
+    // разу нічого не перевірив. Увімкнення коштувало 15 правок на весь
+    // репозиторій, і всі механічні: 13 невикористаних `import React` (з
+    // jsx: "react-jsx" він не потрібен) і 2 типи, імпортовані як значення.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    // Заборона синтаксису, який не можна просто стерти при збірці (enum,
+    // parameter properties). Vite саме стирає типи, не компілюючи їх.
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    // `import { Type }` замість `import type { Type }` — при стиранні типів
+    // такий імпорт лишається в бандлі як справжній.
+    "verbatimModuleSyntax": true,
     "jsx": "react-jsx",
     "paths": {
       "@/*": [

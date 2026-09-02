@@ -1,4 +1,3 @@
-import * as React from "react";
 import { MapPin, PlusCircle, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";

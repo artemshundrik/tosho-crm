@@ -1,4 +1,3 @@
-import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 // Self-host Inter (variable, з cyrillic-сабсетами через unicode-range) замість

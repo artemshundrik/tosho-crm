@@ -51,8 +51,14 @@ export function canQueryOtherPeople(level: AccessLevel): boolean {
   return level === "full";
 }
 
-/** Внутрішня кухня: бекапи, cron, storage. */
-export function canSeeSystemHealth(level: AccessLevel, isOwner: boolean): boolean {
+/**
+ * Внутрішня кухня: бекапи, cron, storage.
+ *
+ * `_level` не читається навмисно: усі предикати цього модуля мають однакову
+ * сигнатуру, щоб викликач не тримав у голові, який із них чого просить. Тут
+ * вирішує лише власник — рівень доступу нічого не додає.
+ */
+export function canSeeSystemHealth(_level: AccessLevel, isOwner: boolean): boolean {
   return isOwner;
 }
 
