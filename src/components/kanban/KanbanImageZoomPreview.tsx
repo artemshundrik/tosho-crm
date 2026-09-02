@@ -208,7 +208,7 @@ export function KanbanImageZoomPreview({
       )}
       tabIndex={0}
     >
-      <div className="relative h-full w-full overflow-hidden rounded-lg">
+      <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
         {shouldRenderImage && !hasFailed ? (
           <img
             src={imageUrl}
@@ -247,12 +247,12 @@ export function KanbanImageZoomPreview({
           </div>
         ) : isLoaded ? null : shouldRenderImage ? (
           // Картинка вже їде — мерехтимо.
-          <Skeleton className="absolute inset-0 h-full w-full rounded-lg" />
+          <Skeleton className="absolute inset-0 h-full w-full rounded-[inherit]" />
         ) : (
           // Ще навіть не почали (картка поза видимою частиною колонки): тримаємо
           // те саме поле, але без анімації — блимати тим, що нікуди не поспішає,
           // немає сенсу, та й десятки пульсацій за кадром ні до чого.
-          <div className="absolute inset-0 rounded-lg bg-[hsl(var(--skeleton-bg))]" />
+          <div className="absolute inset-0 rounded-[inherit] bg-[hsl(var(--skeleton-bg))]" />
         )}
       </div>
       {isOpen && shouldRenderImage && typeof document !== "undefined"

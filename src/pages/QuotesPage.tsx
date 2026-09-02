@@ -137,7 +137,6 @@ import {
   Pencil,
   Eye,
   ListFilter,
-  Package,
   Printer,
   Download,
   FileDown,
@@ -197,6 +196,10 @@ import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeS
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { KanbanBoard, KanbanCard, KanbanCardList, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard, MobileStatusChips } from "@/components/kanban";
+import {
+  QuoteKanbanProducts,
+  type QuoteKanbanProductPreview as KanbanProductPreview,
+} from "@/features/quotes/components/QuoteKanbanProducts";
 import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
@@ -417,29 +420,6 @@ type CommercialDocument = {
   totalRange: MoneyRange;
 };
 
-type KanbanProductPreview = {
-  itemCount: number;
-  itemName: string;
-  itemNames?: string[];
-  qtyLabel: string;
-  imageUrl: string | null;
-  zoomImageUrl?: string | null;
-  products?: Array<{
-    id: string;
-    name: string;
-    sku?: string | null;
-    variantName?: string | null;
-    variantImageUrl?: string | null;
-    qtyLabel: string;
-    runLabels?: Array<{
-      id: string;
-      label: string;
-      active?: boolean;
-    }>;
-    imageUrl: string | null;
-    zoomImageUrl?: string | null;
-  }>;
-};
 
 type QuotesPageCachePayload = {
   rows: QuoteListRow[];
@@ -6083,101 +6063,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           </div>
         </div>
 
-        {productPreview || kanbanPreviewsLoading ? (
-          <div className="mt-3 rounded-inner border border-border/60 bg-secondary px-3 py-2.5">
-            <div className="mb-2 inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
-              <Package className="h-3.5 w-3.5" />
-              {productPreview && productPreview.itemCount > 1 ? "Товари" : "Товар"}
-            </div>
-            <div className="divide-y divide-border/50">
-              {(productPreview?.products?.length
-                ? productPreview.products
-                : [
-                    {
-                      id: "loading",
-                      name: productPreview?.itemName ?? "Завантаження товару...",
-                      sku: null,
-                      variantName: null,
-                      variantImageUrl: null,
-                      qtyLabel: productPreview?.qtyLabel ?? " ",
-                      runLabels: [],
-                      imageUrl: productPreview?.imageUrl ?? null,
-                      zoomImageUrl: productPreview?.zoomImageUrl ?? null,
-                    },
-                  ]
-              ).map((product, productIndex) => {
-                const displayName = product.variantName
-                  ? `${product.name} · ${product.variantName}`
-                  : product.name;
-                return (
-                  <div
-                    key={product.id}
-                    className={cn(
-                      "flex items-center gap-2.5",
-                      productIndex > 0 && "pt-2",
-                      productIndex < (productPreview?.products?.length ?? 1) - 1 && "pb-2"
-                    )}
-                  >
-                    {product.imageUrl ? (
-                      <KanbanImageZoomPreview
-                        imageUrl={product.imageUrl}
-                        zoomImageUrl={product.zoomImageUrl ?? undefined}
-                        alt={displayName}
-                        loadStrategy={
-                          index <
-                          (kanbanPreviewVisibleCountByColumn[columnId] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)
-                            ? "eager"
-                            : "visible"
-                        }
-                      />
-                    ) : (
-                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-secondary">
-                        {kanbanPreviewsLoading ? (
-                          // Каркас на весь квадрат, а не крапка посередині: крапка
-                          // читалась як зламане зображення, а не як очікування.
-                          <Skeleton className="h-full w-full rounded-lg" />
-                        ) : (
-                          <div className="grid h-full w-full place-items-center text-muted-foreground/60">
-                            <Package className="h-4 w-4" />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[14px] font-medium" title={displayName}>
-                        {displayName}
-                      </div>
-                      {product.sku ? (
-                        <div className="mt-0.5 truncate text-[12px] font-medium text-muted-foreground">
-                          Артикул: {product.sku}
-                        </div>
-                      ) : null}
-                      {product.runLabels?.length ? (
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
-                          {product.runLabels.map((runLabel) => (
-                            <span
-                              key={runLabel.id}
-                              className={cn(
-                                "inline-flex h-5 items-center rounded-full border px-2 text-2xs leading-none",
-                                runLabel.active
-                                  ? "border-foreground/25 bg-foreground/10 font-semibold text-foreground"
-                                  : "border-border/60 bg-muted/20 font-medium text-muted-foreground"
-                              )}
-                            >
-                              {runLabel.label}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="mt-0.5 text-[13px] font-normal text-muted-foreground">{product.qtyLabel}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
+        <QuoteKanbanProducts
+          preview={productPreview}
+          isLoading={kanbanPreviewsLoading}
+          imageLoadStrategy={
+            index < (kanbanPreviewVisibleCountByColumn[columnId] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)
+              ? "eager"
+              : "visible"
+          }
+        />
 
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
           <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
