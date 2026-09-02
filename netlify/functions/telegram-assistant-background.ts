@@ -174,54 +174,57 @@ const PERIODS: DesignPeriod[] = [
   "all",
 ];
 
-const TOOL = {
-  type: "function",
-  name: "answer_crm_question",
-  description:
-    "Перекласти питання користувача про CRM (дизайн-задачі, прорахунки, стан системи) у структуровані параметри. Використовувати ЗАВЖДИ. Якщо питання поза цими темами або незрозуміле — intent='help'.",
-  strict: true,
-  parameters: {
-    type: "object",
-    additionalProperties: false,
-    required: ["intent", "designer", "status", "period", "limit", "query"],
-    properties: {
-      intent: {
-        type: "string",
-        enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS, ...ORDERS_INTENTS, ...TEAM_INTENTS],
-        description:
-          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих (ЛИШЕ цифри по статусах, без переліку); quotes_list — просять ПОКАЗАТИ перелік прорахунків («список прорахунків», «які зараз прорахунки», «покажи прорахунки»); quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; orders_list — просять перелік ЗАМОВЛЕНЬ («список замовлень», «покажи замовлення», «що у виробництві», «які замовлення в роботі»); team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; who_is_absent — «хто відсутній», «хто у відпустці», «хто на лікарняному», «кого сьогодні немає»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; releases — «що викотили», «що нового в CRM», «скільки зробили за тиждень», «скільки годин працювали»; ai_usage — витрати на AI (OpenAI: розпізнавання, асистенти); hosting_usage — кредити Netlify: хостинг і викочування («скільки лишилось кредитів», «скільки коштує хостинг», «чи вистачить до кінця циклу», «скільки ще деплоїв можу зробити», «що по Netlify»); system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; explain_problem — просять ПОЯСНИТИ проблему чи сигнал: «що це значить», «що за помилка», «а це страшно?», «що робити з цим»; help — незрозуміло або поза цим списком.",
-      },
-      designer: {
-        type: ["string", "null"],
-        description:
-          "Ім'я людини (дизайнера, менеджера, будь-кого), якщо названа. Тільки ім'я, без слів «дизайнер», «менеджер», «у», «в».",
-      },
-      status: {
-        type: ["string", "null"],
-        description:
-          "Статус задачі, якщо названий: new, changes, in_progress, pm_review, client_review, approved, cancelled. «в роботі»/«в прогресі» → in_progress, «правки» → changes.",
-      },
-      period: {
-        type: ["string", "null"],
-        enum: [...PERIODS, null],
-        description: "Період. Якщо не названий — null (код візьме сьогодні там, де це має сенс).",
-      },
-      limit: {
-        type: ["integer", "null"],
-        description: "Скільки позицій показати в списку, якщо просять «топ N». Інакше null.",
-      },
-      query: {
-        type: ["string", "null"],
-        description:
-          "Вільний текст для пошукових інтентів: номер або назва задачі (task_details), назва клієнта (customer_summary). Інакше null.",
-      },
+// Розбір питання — структурована відповідь зі схемою, як у devRequestDraft.ts
+// і quote-import-parse.ts.
+//
+// ЧОМУ НЕ TOOL CALL, ЯК БУЛО. Функція тут не викликалась — вона лише вдавала
+// форму відповіді: `tool_choice: "required"` змушував модель «викликати»
+// answer_crm_question, а код одразу розпаковував її аргументи в DesignQuery.
+// Шлях назад коштував зайвого кроку: пройти масив output, знайти елемент
+// function_call, розпакувати arguments із РЯДКА окремим JSON.parse. Схема на
+// відповіді дає ту саму гарантію форми (strict + enum), але приїжджає
+// готовим JSON у output_text.
+const QUERY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["intent", "designer", "status", "period", "limit", "query"],
+  properties: {
+    intent: {
+      type: "string",
+      enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS, ...ORDERS_INTENTS, ...TEAM_INTENTS],
+      description:
+        "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих (ЛИШЕ цифри по статусах, без переліку); quotes_list — просять ПОКАЗАТИ перелік прорахунків («список прорахунків», «які зараз прорахунки», «покажи прорахунки»); quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; orders_list — просять перелік ЗАМОВЛЕНЬ («список замовлень», «покажи замовлення», «що у виробництві», «які замовлення в роботі»); team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; who_is_absent — «хто відсутній», «хто у відпустці», «хто на лікарняному», «кого сьогодні немає»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; releases — «що викотили», «що нового в CRM», «скільки зробили за тиждень», «скільки годин працювали»; ai_usage — витрати на AI (OpenAI: розпізнавання, асистенти); hosting_usage — кредити Netlify: хостинг і викочування («скільки лишилось кредитів», «скільки коштує хостинг», «чи вистачить до кінця циклу», «скільки ще деплоїв можу зробити», «що по Netlify»); system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; explain_problem — просять ПОЯСНИТИ проблему чи сигнал: «що це значить», «що за помилка», «а це страшно?», «що робити з цим»; help — незрозуміло або поза цим списком.",
+    },
+    designer: {
+      type: ["string", "null"],
+      description:
+        "Ім'я людини (дизайнера, менеджера, будь-кого), якщо названа. Тільки ім'я, без слів «дизайнер», «менеджер», «у», «в».",
+    },
+    status: {
+      type: ["string", "null"],
+      description:
+        "Статус задачі, якщо названий: new, changes, in_progress, pm_review, client_review, approved, cancelled. «в роботі»/«в прогресі» → in_progress, «правки» → changes.",
+    },
+    period: {
+      type: ["string", "null"],
+      enum: [...PERIODS, null],
+      description: "Період. Якщо не названий — null (код візьме сьогодні там, де це має сенс).",
+    },
+    limit: {
+      type: ["integer", "null"],
+      description: "Скільки позицій показати в списку, якщо просять «топ N». Інакше null.",
+    },
+    query: {
+      type: ["string", "null"],
+      description:
+        "Вільний текст для пошукових інтентів: номер або назва задачі (task_details), назва клієнта (customer_summary). Інакше null.",
     },
   },
 } as const;
 
 const SYSTEM_PROMPT = [
   "Ти — розбирач питань про CRM ToSho (дизайн, прорахунки, люди, стан системи).",
-  "Твоя ЄДИНА робота — викликати answer_crm_question з правильними параметрами. Ніколи не відповідай текстом і ніколи",
+  "Твоя ЄДИНА робота — перекласти питання в параметри за схемою відповіді. Ніколи не відповідай текстом і ніколи",
   "не вигадуй цифри — їх рахує код.",
   "",
   "Підказки:",
@@ -268,39 +271,54 @@ function json(statusCode: number, body: Record<string, unknown>) {
   };
 }
 
-function parseToolCall(payload: Record<string, unknown>): DesignQuery | null {
+/** Текст структурованої відповіді: спершу зручний output_text, потім структура. */
+function extractOutputText(payload: Record<string, unknown>): string {
+  const direct = payload.output_text;
+  if (typeof direct === "string" && direct.trim()) return direct;
   const output = Array.isArray(payload.output) ? payload.output : [];
-  for (const item of output) {
-    if (!item || typeof item !== "object") continue;
-    const typed = item as { type?: unknown; name?: unknown; arguments?: unknown };
-    if (typed.type !== "function_call" || typed.name !== TOOL.name) continue;
-    try {
-      const args = JSON.parse(typeof typed.arguments === "string" ? typed.arguments : "{}") as Record<string, unknown>;
-      const rawIntent = typeof args.intent === "string" ? args.intent : "";
-      const known =
-        // ВСІ сімейства інтентів мають бути тут. Забутий список не падає з
-        // помилкою — інтент мовчки стає «help», і виглядає це як «модель не
-        // зрозуміла питання», хоча вона зрозуміла все правильно.
-        INTENTS.includes(rawIntent as DesignIntent) ||
-        isAdminIntent(rawIntent) ||
-        isQuotesIntent(rawIntent) ||
-        isOrdersIntent(rawIntent) ||
-        isTeamIntent(rawIntent);
-      const intent = (known ? rawIntent : "help") as DesignIntent;
-      const period = PERIODS.includes(args.period as DesignPeriod) ? (args.period as DesignPeriod) : null;
-      return {
-        intent,
-        designer: typeof args.designer === "string" && args.designer.trim() ? args.designer.trim() : null,
-        status: typeof args.status === "string" && args.status.trim() ? args.status.trim() : null,
-        period,
-        limit: typeof args.limit === "number" && Number.isFinite(args.limit) ? args.limit : null,
-        query: typeof args.query === "string" && args.query.trim() ? args.query.trim() : null,
-      };
-    } catch {
-      return null;
-    }
+  return output
+    .flatMap((item) => {
+      const content = (item as { content?: unknown } | null)?.content;
+      return Array.isArray(content) ? content : [];
+    })
+    .filter((part) => (part as { type?: unknown } | null)?.type === "output_text")
+    .map((part) => String((part as { text?: unknown }).text ?? ""))
+    .join("")
+    .trim();
+}
+
+/**
+ * Відповідь моделі → DesignQuery.
+ *
+ * Перевіряти значення полів більше нема потреби: strict-схема не пропускає ні
+ * зайвого ключа, ні пропущеного, ні значення поза enum. Раніше тут стояла
+ * друга копія переліку інтентів — і саме вона була джерелом тихої поломки:
+ * забутий у ній список означав, що правильно розпізнаний інтент мовчки ставав
+ * «help». Тепер перелік один, у схемі, і розійтись йому нема з чим.
+ *
+ * Лишається розібрати JSON — на випадок, коли відповіді немає взагалі
+ * (відмова моделі або обрізання по max_output_tokens): тоді Telegram отримає
+ * довідку, а не порожнечу.
+ */
+function parseQuery(payload: Record<string, unknown>): DesignQuery | null {
+  const raw = extractOutputText(payload);
+  if (!raw) return null;
+  let args: Record<string, unknown>;
+  try {
+    args = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
   }
-  return null;
+  const trimmed = (value: unknown) =>
+    typeof value === "string" && value.trim() ? value.trim() : null;
+  return {
+    intent: args.intent as DesignIntent,
+    designer: trimmed(args.designer),
+    status: trimmed(args.status),
+    period: (args.period as DesignPeriod | null) ?? null,
+    limit: typeof args.limit === "number" && Number.isFinite(args.limit) ? args.limit : null,
+    query: trimmed(args.query),
+  };
 }
 
 export const handler = async (event: HttpEvent) => {
@@ -508,9 +526,15 @@ export const handler = async (event: HttpEvent) => {
           { role: "system", content: [{ type: "input_text", text: SYSTEM_PROMPT }] },
           { role: "user", content: [{ type: "input_text", text: userText }] },
         ],
-        tools: [TOOL],
-        tool_choice: "required",
         max_output_tokens: 300,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "crm_question",
+            strict: true,
+            schema: QUERY_SCHEMA,
+          },
+        },
       }),
     });
     const aiPayload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -538,13 +562,13 @@ export const handler = async (event: HttpEvent) => {
       return json(200, { ok: false, error: "openai request failed" });
     }
 
-    const query = parseToolCall(aiPayload);
+    const query = parseQuery(aiPayload);
     if (!query) {
       await sendTelegramMessage(chatId, helpText({ canUseQuotes: canUseQuotes(level), isFull: level === "full" }), {
         parseMode: "HTML",
         disablePreview: true,
       });
-      return json(200, { ok: true, note: "no tool call — sent help" });
+      return json(200, { ok: true, note: "no parsable answer — sent help" });
     }
 
     // 2. Детермінована відповідь.

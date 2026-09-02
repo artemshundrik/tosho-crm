@@ -79,6 +79,27 @@ export function needsRewrite(subject) {
   return TECHNICAL.test(subject);
 }
 
+const SUBJECTS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["items"],
+  properties: {
+    items: {
+      type: "array",
+      description: "По одному елементу на кожен рядок вхідного списку, у тому ж порядку.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["sha", "plain"],
+        properties: {
+          sha: { type: "string", description: "sha з відповідного рядка, дослівно." },
+          plain: { type: "string", description: "Переказ теми українською, до 90 символів." },
+        },
+      },
+    },
+  },
+};
+
 export async function rewriteSubjects(all, env = process.env) {
   const changes = all.filter((change) => needsRewrite(change.subject));
   if (changes.length === 0) return new Map();
@@ -108,7 +129,7 @@ export async function rewriteSubjects(all, env = process.env) {
     "- Без крапки в кінці, до 90 символів.",
     "- Зберігай назви розділів CRM і слова в лапках, якщо вони є.",
     "",
-    "Відповідь — JSON: {\"items\":[{\"sha\":\"...\",\"plain\":\"...\"}]}",
+    "На кожен рядок зі списку — рівно один елемент items з тим самим sha.",
     "",
     list,
   ].join("\n");
@@ -120,8 +141,23 @@ export async function rewriteSubjects(all, env = process.env) {
       body: JSON.stringify({
         model: env.OPENAI_MODEL || "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        temperature: 0.2,
+        // Схема, а не просто json_object: той лише обіцяв «це буде JSON», а які
+        // в ньому ключі — залишалось перевіряти руками на кожному елементі.
+        // Поламана форма при цьому мовчала: переказ просто не знаходився, теми
+        // лишались технічними, і в «Релізах» це виглядало як «модель не змогла».
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "release_subjects",
+            strict: true,
+            schema: SUBJECTS_SCHEMA,
+          },
+        },
+        // temperature НЕ передаємо. Поточна модель (gpt-5.6-luna) відповідає на
+        // будь-яке значення, крім типового, помилкою 400 — і переказ тем мовчки
+        // не працював узагалі: у 15 останніх релізах жодної переказаної теми.
+        // Помітно це не було лише тому, що теми комітів і так пишуться людською
+        // мовою: переказу за цей час потребувала 1 зміна з 206.
       }),
     });
 
@@ -130,9 +166,10 @@ export async function rewriteSubjects(all, env = process.env) {
     const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
     const map = new Map();
     for (const item of parsed.items ?? []) {
-      if (item?.sha && typeof item.plain === "string" && item.plain.trim()) {
-        map.set(item.sha, item.plain.trim());
-      }
+      // Ключі й типи гарантує схема; лишається відсіяти порожній переказ —
+      // мінімальної довжини strict-схема не вміє, а порожня тема гірша за
+      // технічну.
+      if (item.plain.trim()) map.set(item.sha, item.plain.trim());
     }
     return map;
   } catch (error) {
