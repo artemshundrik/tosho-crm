@@ -161,10 +161,13 @@ export function ImportDraftRow({
                     min={0}
                     emptyValue={0}
                     className={cn(
-                      "w-[5.5rem] text-center",
+                      // Підказка гасне, щойно в поле стали: стандартний
+                      // placeholder висить, поки не почнеш друкувати, і на
+                      // вузькому полі це читається як уже введене значення.
+                      "w-24 text-center focus:placeholder:text-transparent",
                       onRemoveRun && draft.runs.length > 1 && "pr-6"
                     )}
-                    placeholder="скільки"
+                    placeholder="к-ть"
                     disabled={disabled}
                     aria-label="Кількість тиражу"
                     onValueChange={(next) => onPatchRun(run.key, { quantity: Math.max(0, next ?? 0) })}
