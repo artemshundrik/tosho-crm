@@ -69,6 +69,42 @@ if [[ "${BACKUP_SKIP_DB}" != "1" ]]; then
   # спроба лишає свій слід у логу, тож почастішання обривів буде видно.
   DB_DUMP_ATTEMPTS="${DB_DUMP_ATTEMPTS:-3}"
   DB_DUMP_RETRY_DELAY="${DB_DUMP_RETRY_DELAY:-60}"
+  #
+  # ЧОМУ САМИХ ПОВТОРІВ БУЛО ЗАМАЛО: ОБРИВ ПОМІЧАЄТЬСЯ ЗА ЧВЕРТЬ ГОДИНИ.
+  #
+  # Замір по tosho.backup_runs за 12–31.08.2026: вдалий дамп триває 64–203 с,
+  # а невдалий — 927–1095 с, і так вісім разів поспіль. Розкид у сімнадцять
+  # секунд на чверть години — це не «мережа сьогодні гірша», це стала величина,
+  # тобто чийсь таймаут. Наш він бути не може: idle_in_transaction — 300 с,
+  # statement_timeout вимкнено, свого обмеження на спробу немає.
+  #
+  # Це стеля повторної передачі TCP у ядрі. Коли співрозмовник зникає, не
+  # надіславши RST (пулер перезапустили, NAT забув зʼєднання), ядро мовчки
+  # шле пакет знову й знову з подвоєнням паузи й здається аж хвилин через
+  # пʼятнадцять. Увесь цей час pg_dump просто чекає на розетці — тому місце
+  # обриву щоразу інше (то COPY на quote_status_history, то запит до каталогу):
+  # значення має момент, а не таблиця.
+  #
+  # keepalives перевертають це: за 30 с тиші ядро саме питає «ти живий?», три
+  # рази з паузою 10 с — і мертве зʼєднання видно приблизно за хвилину замість
+  # чверті години. Далі спрацьовує цикл повторів вище, і замість невдалого
+  # запуску на 17 хвилин виходить вдалий приблизно за три.
+  #
+  # connect_timeout відрізає другий бік тієї ж халепи: недоступний хост на
+  # прокинутому ноутбуці інакше висить на тій самій стелі ще до першого рядка.
+  #
+  # Параметри йдуть у САМУ адресу, бо змінних оточення для keepalives libpq не
+  # має (PGOPTIONS — це налаштування сервера, не зʼєднання). Чіпаємо лише
+  # posgres-URI: keyword-рядок ("host=… dbname=…") склеївся б неправильно.
+  DB_DUMP_CONN_PARAMS="${DB_DUMP_CONN_PARAMS:-keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=3&connect_timeout=15}"
+  DUMP_URL="${DB_URL}"
+  if [[ -n "${DB_DUMP_CONN_PARAMS}" && "${DUMP_URL}" =~ ^postgres(ql)?:// ]]; then
+    if [[ "${DUMP_URL}" == *"?"* ]]; then
+      DUMP_URL="${DUMP_URL}&${DB_DUMP_CONN_PARAMS}"
+    else
+      DUMP_URL="${DUMP_URL}?${DB_DUMP_CONN_PARAMS}"
+    fi
+  fi
   dump_attempt=1
   while :; do
     if PGOPTIONS="-c idle_in_transaction_session_timeout=300000 -c statement_timeout=0 ${PGOPTIONS:-}" \
@@ -78,7 +114,7 @@ if [[ "${BACKUP_SKIP_DB}" != "1" ]]; then
         --no-privileges \
         --exclude-table-data='cron.job_run_details' \
         --file "${WORK_DIR}/db/postgres.dump" \
-        "${DB_URL}"
+        "${DUMP_URL}"
     then
       break
     fi

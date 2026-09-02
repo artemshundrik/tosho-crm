@@ -75,6 +75,24 @@ Schedule behavior:
 - weekly copy every Sunday
 - monthly copy on the 1st day of the month
 
+### Dropped connections during the dump
+
+`pg_dump` runs from a laptop over the Supabase pooler, so the connection
+occasionally dies mid-dump ("server closed the connection unexpectedly", at a
+different table every time). Two guards in `scripts/backup.sh` handle it:
+
+- **TCP keepalives on the dump connection** (`DB_DUMP_CONN_PARAMS`, appended to
+  `BACKUP_DB_URL` as query parameters). Without them the kernel spends its full
+  retransmission budget before giving up: measured on `tosho.backup_runs` for
+  12–31.08.2026, every failed run took 927–1095 s while a healthy one takes
+  64–203 s. Keepalives surface a dead peer in about a minute instead.
+- **Three dump attempts** 60 s apart (`DB_DUMP_ATTEMPTS`, `DB_DUMP_RETRY_DELAY`).
+  Each failed attempt is logged, so a rise in drops stays visible.
+
+Together they turn a ~17-minute failed run into a ~3-minute successful one. Both
+knobs are env-overridable; setting `DB_DUMP_CONN_PARAMS=` empty leaves the URL
+untouched.
+
 ## 4. Run storage backup
 
 ```bash
