@@ -16,6 +16,23 @@ Purpose: practical schema and entity map for Codex. This is not a full DB dump. 
 - Frontend commonly uses `supabase.schema("tosho")`
 - Some compatibility code still probes both `tosho` and `public` for membership-related objects
 
+### Date and time columns — read this before writing one
+
+Every timestamp column in `tosho` is `timestamptz` (there is not a single
+`timestamp without time zone`), but they do NOT all mean the same thing:
+
+- `quotes.deadline_at`, `customer_deadline_at`, `design_deadline_at` hold a
+  **floating wall clock** — the number the user picked, labelled `+00`. The
+  offset is a label, not a value.
+- `*.reminder_at` (contractors, customers, leads) hold a **true UTC instant**.
+- Absences, birthdays, invoice dates and the rest of `finance_*` use plain
+  `date`.
+
+Picking the wrong one has already shipped a bug: the quote wizard wrote a
+deadline as a real UTC instant, so one deadline meant three different times.
+The conventions, the helpers to use, and how to choose between them:
+[docs/DATETIME.md](DATETIME.md).
+
 ## Tenancy And Access Model
 
 - `workspace_id`
