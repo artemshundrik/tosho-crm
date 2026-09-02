@@ -53,7 +53,6 @@ type Stage = "compose" | "parsing" | "saving";
 
 const LINK_TRACE = "за посиланням";
 const MANUAL_TRACE = "введено руками";
-const DEFAULT_RUN = 100;
 
 function makeDraft(partial: Partial<QuoteImportDraftItem> = {}): QuoteImportDraftItem {
   const key = crypto.randomUUID();
@@ -63,7 +62,12 @@ function makeDraft(partial: Partial<QuoteImportDraftItem> = {}): QuoteImportDraf
     name: "",
     comment: "",
     links: [],
-    runs: [{ key: `${key}-0`, quantity: DEFAULT_RUN }],
+    /*
+      ТИРАЖ ПОРОЖНІЙ, А НЕ 100. Підставлене число виглядає як відповідь: воно
+      стоїть у полі, і його легко лишити чужим. Тираж знає лише клієнт, тож
+      поле питає, а «Створити» не вмикається, поки на нього не відповіли.
+    */
+    runs: [{ key: `${key}-0`, quantity: 0 }],
     flags: [],
     sourceRows: [],
     notes: null,
@@ -136,8 +140,13 @@ export function QuoteWizardDialog({
 
   const selected = React.useMemo(() => drafts.filter((draft) => draft.selected), [drafts]);
   const nameless = React.useMemo(() => selected.filter((draft) => !draft.name.trim()).length, [selected]);
+  const runless = React.useMemo(
+    () => selected.filter((draft) => !draft.runs.some((run) => run.quantity > 0)).length,
+    [selected]
+  );
   const photoProgress = React.useMemo(() => countSettledPreviews(previews), [previews]);
-  const canCreate = stage === "compose" && !headerIssue && selected.length > 0 && nameless === 0;
+  const canCreate =
+    stage === "compose" && !headerIssue && selected.length > 0 && nameless === 0 && runless === 0;
 
   const patchDraft = (key: string, patch: Partial<QuoteImportDraftItem>) => {
     setDrafts((prev) => prev.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)));
@@ -152,6 +161,23 @@ export function QuoteWizardDialog({
     );
   };
   const removeDraft = (key: string) => setDrafts((prev) => prev.filter((draft) => draft.key !== key));
+  /** Тиражі взаємовиключні: це не «ще стільки», а «а скільки буде, якщо стільки». */
+  const addRun = (key: string) =>
+    setDrafts((prev) =>
+      prev.map((draft) =>
+        draft.key === key
+          ? { ...draft, runs: [...draft.runs, { key: `${key}-${draft.runs.length}`, quantity: 0 }] }
+          : draft
+      )
+    );
+  const removeRun = (key: string, runKey: string) =>
+    setDrafts((prev) =>
+      prev.map((draft) =>
+        draft.key === key && draft.runs.length > 1
+          ? { ...draft, runs: draft.runs.filter((run) => run.key !== runKey) }
+          : draft
+      )
+    );
 
   /**
    * Зміна джерела скидає чернетки: позиції з файлу й позиції руками — різні
@@ -245,19 +271,15 @@ export function QuoteWizardDialog({
         cursor += 1;
         const preview = await fetchLinkPreview(entry.url);
         const title = preview.status === "pending" ? null : preview.title ?? null;
-        const description = preview.status === "pending" ? null : preview.description ?? null;
         setLinkPreviews((prev) => ({ ...prev, [entry.draft.key]: preview }));
+        // Беремо ЛИШЕ назву й фото. Опис зі сторінки не тягнемо: у магазинів
+        // це рекламний абзац («замовляйте оптом для брендування»), який у
+        // прорахунку не значить нічого, а місце в рядку займає.
         // Правки менеджера не затираємо: він міг почати вписувати назву, поки
-        // сайт думав. Тому назва й коментар лягають лише в порожнє поле.
+        // сайт думав, тому назва лягає лише в порожнє поле.
         setDrafts((prev) =>
           prev.map((draft) =>
-            draft.key === entry.draft.key
-              ? {
-                  ...draft,
-                  name: draft.name || title || "",
-                  comment: draft.comment || description || "",
-                }
-              : draft
+            draft.key === entry.draft.key ? { ...draft, name: draft.name || title || "" } : draft
           )
         );
       }
@@ -322,6 +344,8 @@ export function QuoteWizardDialog({
   const footerIssue = headerIssue;
   const footerMeta = (() => {
     if (footerIssue) return footerIssue;
+    if (runless > 0) return `Впишіть тираж: без нього позицію нема з чого рахувати (${runless} із ${selected.length}).`;
+    if (nameless > 0) return "Впишіть назву позиції — сайт її не віддав.";
     if (source === "manual") return "Ціни й собівартість — уже в картці прорахунку.";
     if (drafts.length > 0)
       return `Прорахунок з’явиться в базі лише після «Створити» · ${selected.length} із ${drafts.length} ${pluralWordUk(drafts.length, "позиції", "позицій", "позицій")}`;
@@ -574,6 +598,8 @@ export function QuoteWizardDialog({
                     onPatch={(patch) => patchDraft(draft.key, patch)}
                     onPatchRun={(runKey, patch) => patchRun(draft.key, runKey, patch)}
                     onRemove={source === "excel" ? undefined : () => removeDraft(draft.key)}
+                    onAddRun={() => addRun(draft.key)}
+                    onRemoveRun={(runKey) => removeRun(draft.key, runKey)}
                   />
                 ))}
               </div>

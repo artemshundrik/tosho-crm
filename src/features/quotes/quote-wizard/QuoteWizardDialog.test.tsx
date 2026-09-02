@@ -152,12 +152,15 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(create).toBeDisabled();
 
     await user.type(screen.getByRole("textbox", { name: "Назва позиції" }), "Кепка six-panel");
+    // Тираж порожній навмисно — поки на нього не відповіли, створювати нема чого.
+    expect(create).toBeDisabled();
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "250");
     await user.click(screen.getByRole("radio", { name: /Поліграфія/ }));
     expect(create).toBeEnabled();
     await user.click(create);
 
     await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("print"));
-    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({ name: "Кепка six-panel", qty: 100 });
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({ name: "Кепка six-panel", qty: 250 });
   });
 
   it("за посиланням: назва й опис зі сторінки стають позицією", async () => {
@@ -168,8 +171,12 @@ describe("QuoteWizardDialog — один екран", () => {
     await user.type(screen.getByRole("textbox", { name: "Посилання на товар" }), "https://shop.example/hoodie{Enter}");
 
     await waitFor(() => expect(screen.getByDisplayValue("Худі оверсайз Classic")).toBeInTheDocument());
-    expect(screen.getByDisplayValue("Бавовна 80 %, начіс усередині.")).toBeInTheDocument();
+    // Опис зі сторінки не тягнемо: у магазинів це рекламний абзац.
+    expect(screen.queryByDisplayValue("Бавовна 80 %, начіс усередині.")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "shop.example/hoodie" })).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: /Створити прорахунок/ })).toBeDisabled();
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "300");
     expect(screen.getByRole("button", { name: /Створити прорахунок/ })).toBeEnabled();
   });
 

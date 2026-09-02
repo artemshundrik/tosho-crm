@@ -10,12 +10,6 @@
 
 export type OgTags = {
   title: string | null;
-  /**
-   * Опис товару з og:description / meta description (REQ-237#p4). Береться
-   * лише з мета-тегів: витягати абзаци з тіла сторінки регулярками — це вже
-   * не читання, а вгадування.
-   */
-  description: string | null;
   imageUrl: string | null;
   /** Звідки взялась картинка — щоб у логах було видно, який шлях працює. */
   imageSource: "og" | "link" | "json-ld" | "itemprop" | "img" | null;
@@ -103,6 +97,73 @@ function collectLinkHref(html: string, rel: string): string | null {
 }
 
 /** Перше рядкове `image` з будь-якого JSON-LD: у Schema.org воно і рядок, і масив, і об'єкт. */
+/**
+ * Хвіст, який магазини дописують у заголовок заради пошуку.
+ *
+ * Живий приклад із totobi.com.ua: og:title = «USB-хаб 5 в1 Gear, ТМ TEG —
+ * купити в TOTOBI», хоч сам товар зветься до тире. Такий хвіст їхав у назву
+ * позиції прорахунку, і менеджер мусив стирати його руками щоразу.
+ *
+ * Ріжемо ЛИШЕ за роздільником і лише коли далі стоїть торгове слово: назви на
+ * кшталт «Кухоль — 330 мл» мають лишитись цілими.
+ */
+const TITLE_TAIL =
+  /\s*[—–|·•]\s*(купити|купить|замовити|заказать|ціна|цена|опт|оптом|інтернет-?магазин|интернет-?магазин|магазин|shop|buy)(?![а-яіїєґa-z])[\s\S]*$/i;
+
+function cleanProductTitle(raw: string | null): string | null {
+  if (!raw) return null;
+  const text = decodeEntities(raw).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const cut = text.replace(TITLE_TAIL, "").trim();
+  // Захист від занадто жадібного різання: якщо від назви лишився недогризок,
+  // повертаємо як було — краще довга назва, ніж «USB».
+  return (cut.length >= 4 ? cut : text).slice(0, 200) || null;
+}
+
+/** `<h1>` сторінки товару — там лежить чиста назва без пошукового хвоста. */
+function findHeadingTitle(html: string): string | null {
+  const match = html.match(/<h1\b[^>]*>([\s\S]{1,400}?)<\/h1>/i);
+  return match?.[1] ?? null;
+}
+
+/** `name` з розмітки товару Schema.org — найточніше джерело, коли воно є. */
+function findJsonLdName(html: string): string | null {
+  for (const block of html.matchAll(JSON_LD_BLOCK)) {
+    const raw = block[1];
+    if (!raw || !/"name"/i.test(raw)) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw.trim());
+    } catch {
+      continue;
+    }
+    const found = walkForProductName(parsed, 0);
+    if (found) return found;
+  }
+  return null;
+}
+
+function walkForProductName(node: unknown, depth: number): string | null {
+  if (depth > 6 || node === null || typeof node !== "object") return null;
+  if (Array.isArray(node)) {
+    for (const entry of node) {
+      const found = walkForProductName(entry, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  const record = node as Record<string, unknown>;
+  const type = String(record["@type"] ?? "").toLowerCase();
+  if (type.includes("product") && typeof record.name === "string" && record.name.trim()) {
+    return record.name;
+  }
+  for (const value of Object.values(record)) {
+    const found = walkForProductName(value, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
 function findJsonLdImage(html: string): string | null {
   for (const block of html.matchAll(JSON_LD_BLOCK)) {
     const raw = block[1];
@@ -219,21 +280,15 @@ export function extractOgTags(html: string, baseUrl: string): OgTags {
   const body = html.slice(0, BODY_SCAN_LIMIT);
   const meta = collectMeta(head);
 
-  const rawTitle =
-    meta.get("og:title") ??
-    meta.get("twitter:title") ??
-    head.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ??
-    null;
-
-  const title = rawTitle ? decodeEntities(rawTitle).replace(/\s+/g, " ").trim() || null : null;
-
-  const rawDescription =
-    meta.get("og:description") ?? meta.get("twitter:description") ?? meta.get("description") ?? null;
-  // Стеля 600 знаків: магазини кладуть у description і характеристики, і
-  // умови доставки, а в коментар позиції має лягати те, що людина прочитає.
-  const description = rawDescription
-    ? decodeEntities(rawDescription).replace(/\s+/g, " ").trim().slice(0, 600) || null
-    : null;
+  // Порядок джерел назви — від найточнішого до найбруднішого (REQ-237#p11).
+  // og:title у магазинів майже завжди несе SEO-хвіст («… — купити в TOTOBI»),
+  // тоді як розмітка товару й заголовок сторінки містять саму назву.
+  const title =
+    cleanProductTitle(findJsonLdName(body)) ??
+    cleanProductTitle(findHeadingTitle(body)) ??
+    cleanProductTitle(meta.get("og:title") ?? null) ??
+    cleanProductTitle(meta.get("twitter:title") ?? null) ??
+    cleanProductTitle(head.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? null);
 
   const candidates: Array<[OgTags["imageSource"], string | null]> = [
     [
@@ -253,8 +308,8 @@ export function extractOgTags(html: string, baseUrl: string): OgTags {
 
   for (const [source, raw] of candidates) {
     const imageUrl = absoluteUrl(raw, baseUrl);
-    if (imageUrl) return { title, description, imageUrl, imageSource: source };
+    if (imageUrl) return { title, imageUrl, imageSource: source };
   }
 
-  return { title, description, imageUrl: null, imageSource: null };
+  return { title, imageUrl: null, imageSource: null };
 }

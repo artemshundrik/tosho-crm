@@ -31,7 +31,6 @@ type PreviewResponse = {
   status?: string;
   reason?: string | null;
   title?: string | null;
-  description?: string | null;
   imageUrl?: string | null;
 };
 
@@ -42,7 +41,6 @@ function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
       status: "done",
       imageUrl: payload.imageUrl,
       title: payload.title ?? null,
-      description: payload.description ?? null,
     };
   }
   if (status === "blocked" || status === "no_image" || status === "failed") {
@@ -50,7 +48,6 @@ function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
       status,
       reason: payload?.reason || "Фото дістати не вдалося",
       title: payload?.title ?? null,
-      description: payload?.description ?? null,
     };
   }
   return { status: "failed", reason: "Фото дістати не вдалося" };

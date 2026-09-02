@@ -15,7 +15,6 @@ describe("витяг og-тегів зі сторінки постачальни�
 
     expect(tags).toEqual({
       title: "Кухоль керамічний 330 мл",
-      description: null,
       imageUrl: "https://kmz.ua/img/mug.jpg",
       imageSource: "og",
     });
@@ -33,12 +32,7 @@ describe("витяг og-тегів зі сторінки постачальни�
       "https://kmz.ua/pen"
     );
 
-    expect(tags).toEqual({
-      title: "Ручка металева",
-      description: null,
-      imageUrl: "https://kmz.ua/pen.png",
-      imageSource: "og",
-    });
+    expect(tags).toEqual({ title: "Ручка металева", imageUrl: "https://kmz.ua/pen.png", imageSource: "og" });
   });
 
   it("розкодовує сутності в назві", () => {
@@ -57,29 +51,31 @@ describe("витяг og-тегів зі сторінки постачальни�
   });
 
   it("порожня сторінка дає порожні поля, а не падіння", () => {
-    expect(extractOgTags("", "https://kmz.ua/x")).toEqual({
-      title: null,
-      description: null,
-      imageUrl: null,
-      imageSource: null,
-    });
+    expect(extractOgTags("", "https://kmz.ua/x")).toEqual({ title: null, imageUrl: null, imageSource: null });
   });
 
-  it("бере опис з og:description, розкодовує й обрізає до 600 знаків (REQ-237#p4)", () => {
-    const long = "Б".repeat(700);
+  it("зрізає пошуковий хвіст магазину з назви (REQ-237#p11)", () => {
     const tags = extractOgTags(
-      page(`<meta property="og:description" content="Бавовна&nbsp;80 %,  начіс усередині. ${long}">`),
-      "https://kmz.ua/hoodie"
+      page('<meta property="og:title" content="USB-хаб 5 в1 Gear, ТМ TEG — купити в TOTOBI">'),
+      "https://totobi.com.ua/p"
     );
 
-    expect(tags.description?.startsWith("Бавовна 80 %, начіс усередині.")).toBe(true);
-    expect(tags.description).toHaveLength(600);
+    expect(tags.title).toBe("USB-хаб 5 в1 Gear, ТМ TEG");
   });
 
-  it("без og:description падає на meta description", () => {
-    const tags = extractOgTags(page('<meta name="description" content="Кепка six-panel, вишивка">'), "https://kmz.ua/cap");
+  it("назву з розмітки товару бере перед og:title", () => {
+    const html = `<!doctype html><html><head><meta property="og:title" content="Кухоль — купити оптом"></head><body><script type="application/ld+json">{"@type":"Product","name":"Кухоль керамічний Bari 330 мл"}</script></body></html>`;
+    expect(extractOgTags(html, "https://kmz.ua/x").title).toBe("Кухоль керамічний Bari 330 мл");
+  });
 
-    expect(tags.description).toBe("Кепка six-panel, вишивка");
+  it("падає на <h1>, коли розмітки товару немає", () => {
+    const html = `<!doctype html><html><head><meta property="og:title" content="Шопер | Інтернет-магазин"></head><body><h1>Шопер бавовна 38×42</h1></body></html>`;
+    expect(extractOgTags(html, "https://kmz.ua/x").title).toBe("Шопер бавовна 38×42");
+  });
+
+  it("тире всередині назви не ріже", () => {
+    const tags = extractOgTags(page('<meta property="og:title" content="Кухоль — 330 мл">'), "https://kmz.ua/x");
+    expect(tags.title).toBe("Кухоль — 330 мл");
   });
 
   it("перший og:image виграє в дубля під інший розмір", () => {

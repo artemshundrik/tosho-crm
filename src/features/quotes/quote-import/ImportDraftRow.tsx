@@ -1,4 +1,4 @@
-import { ImageOff, Trash2 } from "lucide-react";
+import { ImageOff, Plus, Trash2, X } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -75,6 +75,8 @@ export function ImportDraftRow({
   onPatch,
   onPatchRun,
   onRemove,
+  onAddRun,
+  onRemoveRun,
   namePlaceholder,
   autoFocusName,
 }: {
@@ -89,6 +91,12 @@ export function ImportDraftRow({
    * просто прибирають.
    */
   onRemove?: () => void;
+  /**
+   * Додати ще один тираж. Коли не задано — кнопки немає: в імпорті тиражі
+   * приходять із файлу, і дописувати їх руками там нема потреби.
+   */
+  onAddRun?: () => void;
+  onRemoveRun?: (runKey: string) => void;
   namePlaceholder?: string;
   autoFocusName?: boolean;
 }) {
@@ -127,19 +135,47 @@ export function ImportDraftRow({
               onChange={(event) => onPatch({ name: event.target.value })}
             />
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">Тираж</span>
+              <span className="text-xs text-muted-foreground">
+                {draft.runs.length > 1 ? "Тиражі" : "Тираж"}
+              </span>
               {draft.runs.map((run) => (
-                <NumberInput
-                  key={run.key}
-                  value={run.quantity}
-                  min={1}
-                  emptyValue={1}
-                  className="w-24"
-                  disabled={disabled}
-                  aria-label="Кількість тиражу"
-                  onValueChange={(next) => onPatchRun(run.key, { quantity: Math.max(1, next ?? 1) })}
-                />
+                <div key={run.key} className="relative">
+                  <NumberInput
+                    value={run.quantity > 0 ? run.quantity : null}
+                    min={0}
+                    emptyValue={0}
+                    className="w-24"
+                    placeholder="скільки"
+                    disabled={disabled}
+                    aria-label="Кількість тиражу"
+                    onValueChange={(next) => onPatchRun(run.key, { quantity: Math.max(0, next ?? 0) })}
+                  />
+                  {onRemoveRun && draft.runs.length > 1 ? (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      aria-label="Прибрати тираж"
+                      onClick={() => onRemoveRun(run.key)}
+                      className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-2.5 w-2.5" strokeWidth={3} />
+                    </button>
+                  ) : null}
+                </div>
               ))}
+              {onAddRun ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-label="Додати ще тираж"
+                  title="Клієнт просить порахувати кілька кількостей"
+                  onClick={onAddRun}
+                  className="inline-flex h-9 items-center gap-1 rounded-[var(--radius-md)] border border-dashed border-border px-2 text-xs text-muted-foreground hover:border-foreground/40 hover:text-foreground disabled:opacity-50"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  тираж
+                </button>
+              ) : null}
             </div>
             {onRemove ? (
               <button
