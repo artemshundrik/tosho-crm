@@ -19,11 +19,12 @@
  * ВХОДОМ у ці самі дані, а не другою копією.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
+  Camera,
   Check,
   KeyRound,
   Loader2,
@@ -37,8 +38,12 @@ import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { AvatarCropDialog } from "@/components/team/AvatarCropDialog";
+import { describeAvatarFileProblem } from "@/features/team/avatarUpload";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { MemberPaySection } from "@/components/team/MemberPaySection";
+import { RailRow, Row } from "@/components/team/PersonFactRow";
+import { PersonIdentityFields } from "@/components/team/PersonIdentityFields";
 import { MODULE_ICONS, MODULES_WITHOUT_MENU_ITEM } from "@/components/team/moduleIcons";
 import { PersonActivityHeatmap } from "@/components/team/PersonActivityHeatmap";
 import { PersonAccessHistorySection, PersonActivitySection } from "@/components/team/PersonDetailSections";
@@ -55,13 +60,13 @@ import {
   employmentStatusTone,
   formatEmploymentDate,
   formatEmploymentDuration,
-  getBirthdayInsight,
   getEmploymentStatusLabel,
   isInactiveEmployment,
   normalizeEmploymentStatus,
 } from "@/lib/employment";
 import { formatJobRole, JOB_ROLE_NAMES } from "@/lib/jobRoles";
 import { pluralUk } from "@/lib/lastSeen";
+import { getInitialsFromName } from "@/lib/userName";
 import {
   describeModuleLock,
   defaultModuleAccess,
@@ -111,52 +116,6 @@ const JOB_ROLE_OPTIONS = [
 const CAP = "text-3xs font-semibold uppercase tracking-widest text-muted-foreground";
 const CARD = "rounded-2xl border border-border/60 bg-card";
 
-/**
- * Рядок «підпис → значення» з трьома рівнями ваги.
- *
- * ЧОМУ САМЕ ТАК. Спершу підпис був великими літерами того ж кеглю, що й
- * значення, — око не знало, куди дивитись, і рядок читався як суцільна сіра
- * смуга. Тепер ваги три: підпис дрібний і приглушений, значення на 15 px
- * напівжирним, а `hint` — уточнення просто за ним («266 днів» після дати).
- * `meta` притискається праворуч: третій за важливістю факт, який не має
- * розривати пару підпис→значення.
- */
-function Row({
-  label,
-  value,
-  hint,
-  meta,
-}: {
-  label: string;
-  value: React.ReactNode;
-  hint?: React.ReactNode;
-  meta?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 border-t border-border/40 py-2 first:border-t-0">
-      <span className="w-[8.5rem] shrink-0 text-2xs leading-5 text-muted-foreground">{label}</span>
-      <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-foreground">
-        {value}
-        {hint ? <span className="ml-1.5 text-2xs font-normal text-muted-foreground">{hint}</span> : null}
-      </span>
-      {meta ? <span className="text-2xs text-muted-foreground">{meta}</span> : null}
-    </div>
-  );
-}
-
-/**
- * Компактний рядок рейки. Вужчий за `Row` у змісті: у 19 rem підпис на 9.5 rem
- * не лишає значенню місця, а обрізана пошта в рейці — це рейка без сенсу.
- */
-function RailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline gap-3 border-b border-border/40 py-1.5 last:border-b-0">
-      <span className="w-[5.5rem] shrink-0 text-2xs text-muted-foreground">{label}</span>
-      <span className="min-w-0 flex-1 text-[13px] font-medium text-foreground">{value}</span>
-    </div>
-  );
-}
-
 function SectionCard({
   title,
   audience,
@@ -202,6 +161,9 @@ export default function PersonProfilePage() {
    */
   const [employmentDecision, setEmploymentDecision] = useState<"inactive" | "reactivate" | null>(null);
   const [employmentBusy, setEmploymentBusy] = useState(false);
+  /** Обране фото до заливки: поки не `null`, відкрите вікно кадрування. */
+  const [avatarDraftUrl, setAvatarDraftUrl] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const isOwner = (accessRole ?? "").trim().toLowerCase() === "owner";
   const isAdmin = (accessRole ?? "").trim().toLowerCase() === "admin";
@@ -244,6 +206,19 @@ export default function PersonProfilePage() {
     [rows, routeUserId]
   );
 
+  /**
+   * Хто редагує дані людини — ім'я, прізвище, дату виходу, день народження,
+   * фото. Умова та сама, що вже стоїть на модулях доступу: власник і СЕО, і
+   * СЕО не чіпає картку власника. Адміністратор сюди навмисно не входить —
+   * він керує доступами, а не тим, як людину звати.
+   *
+   * RLS на `team_member_profiles` однаково пустить лише цих трьох (плюс саму
+   * людину в її профілі), тож галочка вирішує, кому показати поля, а не хто
+   * пройде до бази.
+   */
+  const targetIsOwner = (person?.accessRole ?? "").trim().toLowerCase() === "owner";
+  const canEditPerson = (isOwner || isSeo) && (isOwner || !targetIsOwner);
+
   const applyEmploymentDecision = useCallback(
     async (decision: "inactive" | "reactivate") => {
       if (!person || !workspaceId) return;
@@ -281,6 +256,50 @@ export default function PersonProfilePage() {
       }
     },
     [person, workspaceId]
+  );
+
+  const handlePickAvatarFile = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const problem = describeAvatarFileProblem(file);
+    if (problem) {
+      toast.error(problem.title, { description: problem.description });
+      return;
+    }
+    setAvatarDraftUrl(URL.createObjectURL(file));
+  }, []);
+
+  const closeAvatarDraft = useCallback(() => {
+    setAvatarDraftUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+  }, []);
+
+  /**
+   * Записуємо ЛИШЕ посилання на фото. Метадані сесії (`auth.updateUser`)
+   * лишаються недоторканими: чужі змінити неможливо, а свої тут і не потрібні —
+   * і меню, і курсори присутності читають аватарку спершу з довідника.
+   */
+  const handleAvatarUploaded = useCallback(
+    async (paths: { hero: string }) => {
+      if (!person || !workspaceId) return;
+      await upsertWorkspaceMemberProfile({
+        workspaceId,
+        userId: person.userId,
+        avatarUrl: null,
+        avatarPath: paths.hero,
+        updatedBy: viewerUserId ?? null,
+      });
+      invalidateWorkspaceMemberDirectory(workspaceId);
+      setRows((prev) =>
+        prev.map((row) =>
+          row.userId === person.userId ? { ...row, avatarUrl: null, avatarPath: paths.hero } : row
+        )
+      );
+    },
+    [person, workspaceId, viewerUserId]
   );
 
   /** Хто саме змінив доступ — імена беремо з довідника, а не з журналу. */
@@ -354,7 +373,6 @@ export default function PersonProfilePage() {
     : null;
   const worksFromHomeToday = todayKind !== null && isPresenceKind(todayKind);
   const awayToday = todayKind !== null && !isPresenceKind(todayKind);
-  const birthday = getBirthdayInsight(person.birthDate);
 
   return (
     /**
@@ -382,6 +400,7 @@ export default function PersonProfilePage() {
       */}
       <header className="flex flex-wrap items-start gap-x-5 gap-y-4">
         <div className="flex w-full min-w-0 items-start gap-4 sm:w-auto sm:flex-1">
+        <div className="relative shrink-0">
         <AvatarBase
           /**
            * ОБИДВА джерела. У частини людей заповнений `avatarUrl`, у частини —
@@ -402,6 +421,33 @@ export default function PersonProfilePage() {
           availability={person.availabilityStatus}
           inactive={inactive}
         />
+        {/*
+          Кнопка фото — на самій аватарці, як у власному профілі. Окрема кнопка
+          в ряду дій читалася б як дія над людиною («подзвонити», «написати»,
+          «змінити фото»), хоч це правка картки.
+        */}
+        {canEditPerson ? (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              size="iconSm"
+              className="absolute bottom-0 right-0 rounded-full border-[3px] border-card"
+              onClick={() => avatarInputRef.current?.click()}
+              aria-label={`Змінити фото: ${person.displayName}`}
+            >
+              <Camera className="h-3.5 w-3.5" />
+            </Button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePickAvatarFile}
+            />
+          </>
+        ) : null}
+        </div>
         <div className="min-w-0 flex-1">
           <h1
             className={cn(
@@ -500,55 +546,56 @@ export default function PersonProfilePage() {
                 скільки вона тут, коли в неї свято, у якому вона стані.
               */}
               <div className="flex flex-col">
-                <Row
-                  label="У команді з"
-                  value={
-                    person.startDate ? (
-                      <span className="tabular-nums">{formatEmploymentDate(person.startDate)}</span>
-                    ) : (
-                      <span className="font-normal text-muted-foreground">Не вказано</span>
-                    )
-                  }
-                  hint={person.startDate ? formatEmploymentDuration(person.startDate) : undefined}
-                />
-                <Row
-                  label="День народження"
-                  // Спершу дата, і лише потім «через скільки»: у довіднику
-                  // питання «коли в неї день народження», а не «скільки чекати».
-                  value={
-                    birthday ? (
-                      <span className="tabular-nums">{birthday.dateLabel}</span>
-                    ) : (
-                      <span className="font-normal text-muted-foreground">Не вказано</span>
-                    )
-                  }
-                  hint={
-                    birthday
-                      ? birthday.daysUntil === 0
-                        ? "сьогодні"
-                        : birthday.label.toLowerCase()
-                      : undefined
-                  }
-                />
-                <Row label="Посада" value={formatJobRole(person.jobRole) || "Без посади"} />
-                <Row
-                  label="Статус співпраці"
-                  value={
-                    <Badge tone={employmentStatusTone(employment)} size="sm">
-                      {getEmploymentStatusLabel(employment)}
-                    </Badge>
-                  }
-                />
-                {/*
-                  Графік — в «Огляді», а не в HR: питання «де вона у вівторок»
-                  стосується всієї команди, а не самих керівників. Редагувати
-                  його все одно можуть лише вони.
-                */}
-                <WorkScheduleCard
-                  workspaceId={workspaceId}
-                  userId={person.userId}
+                <PersonIdentityFields
+                  key={person.userId}
+                  person={person}
+                  workspaceId={workspaceId ?? ""}
+                  canEdit={canEditPerson && Boolean(workspaceId)}
                   actorUserId={viewerUserId ?? null}
-                  canManage={canManage}
+                  onSaved={(patch) => {
+                    setRows((prev) =>
+                      prev.map((row) =>
+                        row.userId === person.userId
+                          ? {
+                              ...row,
+                              ...patch,
+                              // Заголовок картки й ініціали читаються з
+                              // `displayName`: не перерахувавши його тут, ми б
+                              // показували старе ім'я до перезавантаження.
+                              displayName: patch.fullName || row.displayName,
+                              initials: getInitialsFromName(
+                                patch.fullName || row.displayName,
+                                row.email
+                              ),
+                            }
+                          : row
+                      )
+                    );
+                  }}
+                  trailingRows={
+                    <>
+                      <Row label="Посада" value={formatJobRole(person.jobRole) || "Без посади"} />
+                      <Row
+                        label="Статус співпраці"
+                        value={
+                          <Badge tone={employmentStatusTone(employment)} size="sm">
+                            {getEmploymentStatusLabel(employment)}
+                          </Badge>
+                        }
+                      />
+                      {/*
+                        Графік — в «Огляді», а не в HR: питання «де вона у вівторок»
+                        стосується всієї команди, а не самих керівників. Редагувати
+                        його все одно можуть лише вони.
+                      */}
+                      <WorkScheduleCard
+                        workspaceId={workspaceId}
+                        userId={person.userId}
+                        actorUserId={viewerUserId ?? null}
+                        canManage={canManage}
+                      />
+                    </>
+                  }
                 />
               </div>
             </SectionCard>
@@ -745,6 +792,15 @@ export default function PersonProfilePage() {
         onConfirm={() => {
           if (employmentDecision) void applyEmploymentDecision(employmentDecision);
         }}
+      />
+
+      <AvatarCropDialog
+        imageSrc={avatarDraftUrl}
+        targetUserId={person.userId}
+        personName={person.displayName}
+        previousAvatarPath={person.avatarPath}
+        onClose={closeAvatarDraft}
+        onUploaded={handleAvatarUploaded}
       />
     </div>
   );

@@ -109,12 +109,12 @@ import {
 } from "@/lib/workspaceMemberDirectory";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { getCurrentUser } from "@/lib/currentUser";
-
-const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
-const STORAGE_CACHE_CONTROL = "31536000, immutable";
-const AVATAR_XS_SIZE = 40;
-const AVATAR_MD_SIZE = 64;
-const AVATAR_HERO_SIZE = 192;
+import {
+  AVATAR_BUCKET,
+  cleanupPreviousAvatar,
+  describeAvatarFileProblem,
+  uploadAvatarVariants,
+} from "@/features/team/avatarUpload";
 
 type ProfileTab = "overview" | "absences" | "settings";
 
@@ -610,18 +610,9 @@ export function ProfilePage() {
     event.target.value = "";
     if (!file || !userId) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Потрібне зображення", {
-        description: "Оберіть файл зображення (JPG, PNG, WebP тощо).",
-      });
-      return;
-    }
-
-    const maxBytes = 5 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      toast.error("Занадто великий файл", {
-        description: "Максимальний розмір — 5 MB.",
-      });
+    const problem = describeAvatarFileProblem(file);
+    if (problem) {
+      toast.error(problem.title, { description: problem.description });
       return;
     }
 
@@ -635,97 +626,16 @@ export function ProfilePage() {
     setCroppedAreaPixels(areaPixels);
   };
 
-  const getCroppedBlob = async (imageSrc: string, cropArea: Area, outputSize: number): Promise<Blob | null> => {
-    const image = new Image();
-    image.src = imageSrc;
-    await new Promise((resolve, reject) => {
-      image.onload = resolve;
-      image.onerror = reject;
-    });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = outputSize;
-    canvas.height = outputSize;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-
-    ctx.drawImage(
-      image,
-      cropArea.x * scaleX,
-      cropArea.y * scaleY,
-      cropArea.width * scaleX,
-      cropArea.height * scaleY,
-      0,
-      0,
-      outputSize,
-      outputSize
-    );
-
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-        canvas.toBlob((fallbackBlob) => resolve(fallbackBlob), "image/png");
-      }, "image/webp", 0.86);
-    });
-  };
-
-  const getAvatarVariantPaths = (basePath: string) => {
-    const normalizedBase = basePath.replace(/\/+$/, "");
-    return {
-      xs: `${normalizedBase}/xs.webp`,
-      md: `${normalizedBase}/md.webp`,
-      hero: `${normalizedBase}/hero.webp`,
-    };
-  };
-
-  const getAvatarCleanupPaths = (path: string | null | undefined) => {
-    if (!path) return [] as string[];
-    if (/\/(xs|md|hero|sm|lg)\.[^/.]+$/i.test(path)) {
-      const basePath = path.replace(/\/(xs|md|hero|sm|lg)\.[^/.]+$/i, "");
-      const variants = getAvatarVariantPaths(basePath);
-      return [variants.xs, variants.md, variants.hero];
-    }
-    return [path];
-  };
-
   const uploadAvatarBlob = async () => {
     if (!userId) return;
     if (!avatarDraftUrl || !croppedAreaPixels) return;
     setAvatarUploading(true);
     try {
-      const xsBlob = await getCroppedBlob(avatarDraftUrl, croppedAreaPixels, AVATAR_XS_SIZE);
-      const mdBlob = await getCroppedBlob(avatarDraftUrl, croppedAreaPixels, AVATAR_MD_SIZE);
-      const heroBlob = await getCroppedBlob(avatarDraftUrl, croppedAreaPixels, AVATAR_HERO_SIZE);
-      if (!xsBlob || !mdBlob || !heroBlob) {
-        throw new Error("Не вдалося підготувати аватар.");
-      }
-
-      const basePath = `avatars/${userId}/${Date.now()}`;
-      const variantPaths = getAvatarVariantPaths(basePath);
-      for (const entry of [
-        { path: variantPaths.xs, blob: xsBlob },
-        { path: variantPaths.md, blob: mdBlob },
-        { path: variantPaths.hero, blob: heroBlob },
-      ]) {
-        const { error: uploadError } = await supabase.storage
-          .from(AVATAR_BUCKET)
-          .upload(entry.path, entry.blob, {
-            upsert: true,
-            contentType: entry.blob.type || "image/webp",
-            cacheControl: STORAGE_CACHE_CONTROL,
-          });
-
-        if (uploadError) throw uploadError;
-      }
+      const variantPaths = await uploadAvatarVariants({
+        userId,
+        imageSrc: avatarDraftUrl,
+        cropArea: croppedAreaPixels,
+      });
 
       const canonicalAvatarRef = getCanonicalAvatarReference(
         { avatarUrl: null, avatarPath: variantPaths.hero },
@@ -755,15 +665,7 @@ export function ProfilePage() {
       if (updateError) throw updateError;
       await supabase.auth.refreshSession();
 
-      const previousAvatarPath = avatarStoragePath;
-      const previousCleanupPaths = getAvatarCleanupPaths(previousAvatarPath).filter(
-        (path) => path !== variantPaths.xs && path !== variantPaths.md && path !== variantPaths.hero
-      );
-      if (previousCleanupPaths.length > 0) {
-        void supabase.storage.from(AVATAR_BUCKET).remove(previousCleanupPaths).catch(() => {
-          // ignore cleanup failures for old avatars
-        });
-      }
+      cleanupPreviousAvatar(avatarStoragePath, variantPaths);
 
       setAvatarUrl(canonicalAvatarRef);
       setAvatarStoragePath(variantPaths.hero);

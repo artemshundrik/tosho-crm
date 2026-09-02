@@ -23,6 +23,8 @@
 
 «Завершити співпрацю» живе в HR-секції картки людини (раніше — у правій панелі адмін-центру).
 
+**Дані людини редагують у самій картці (02.09.2026).** Ім'я, прізвище, дату «у команді з», день народження й фото правлять owner і CEO прямо в «Огляді» (`src/components/team/PersonIdentityFields.tsx`, фото — `src/components/team/AvatarCropDialog.tsx` над спільним `src/features/team/avatarUpload.ts`); CEO не редагує картку власника. У перегляді рядки лишаються текстом — поля бачить лише той, хто має право. Форма шле в `upsertWorkspaceMemberProfile` РІВНО ті п'ять полів, якими керує (тест `PersonIdentityFields.test.tsx` стереже саме це ): будь-яке «пронесене» поле — готовий lost update. Фото пише лише `avatar_path` у профіль, без `auth.updateUser`: чужі метадані сесії змінити неможливо, а всі поверхні читають аватарку спершу з довідника.
+
 Two orthogonal role axes drive everything: **`access_role`** (owner/admin/member → `mapAccessRoleToTeamRole`) and **`job_role`** (seo/manager/designer/pm/logistics/accountant…). `buildPermissions` (`permissions.ts:53`) folds both into `AppPermissions`. Module visibility (`overview/orders/design/finance/…`) is a third, independent axis stored per-user; `finance` additionally has a role fallback matching DB RLS (`App.tsx:546`).
 
 ## Data flow

@@ -1085,13 +1085,16 @@ export function TeamMembersPage() {
 
   // Row-action menu items, shared by the desktop master list and (potentially)
   // other member surfaces. Mirrors the previous inline table row menu.
+  // Підпис один на всіх, хто картку відкриває. «Відсоток менеджера» стояв тут
+  // для СЕО, поки це справді було єдине, що він у картці міг зробити; тепер він
+  // редагує там і дані людини, і доступи, — підпис обіцяв би менше, ніж є.
   const getMemberRowMenuItems = (m: Member, availability: string) => [
     { type: "label" as const, label: "Дії" },
     { type: "separator" as const },
     canOpenProfileCard
       ? (canManage ? memberProfileStorageAvailable : true)
         ? {
-            label: canManage ? "Відкрити картку" : "Відсоток менеджера",
+            label: "Відкрити картку",
             onSelect: () => navigate(`/team/${m.user_id}`),
           }
         : { label: "Профіль (read-only)", disabled: true, muted: true }
@@ -1801,7 +1804,7 @@ export function TeamMembersPage() {
                           canOpenProfileCard
                             ? (canManage ? memberProfileStorageAvailable : true)
                               ? {
-                                  label: canManage ? "Відкрити картку" : "Відсоток менеджера",
+                                  label: "Відкрити картку",
                                   onSelect: () => navigate(`/team/${m.user_id}`),
                                 }
                               : {
