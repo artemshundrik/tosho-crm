@@ -53,6 +53,7 @@ export const QUOTE_KINDS: QuoteKindOption[] = [
 
 export type QuoteSourceOption = {
   value: QuoteSourceValue;
+  /** Одне-два слова: підпис живе в сегментованому перемикачі, а не на плитці. */
   label: string;
   hint: string;
   icon: typeof PencilLine;
@@ -62,6 +63,6 @@ export type QuoteSourceOption = {
 
 export const QUOTE_SOURCES: QuoteSourceOption[] = [
   { value: "manual", label: "Руками", hint: "Одна-дві позиції, знаю що", icon: PencilLine, assisted: false },
-  { value: "excel", label: "З файлу Excel", hint: "Запит від клієнта таблицею", icon: FileSpreadsheet, assisted: true },
-  { value: "link", label: "За посиланням", hint: "Товар у постачальника", icon: Link2, assisted: true },
+  { value: "excel", label: "Excel", hint: "Запит від клієнта таблицею", icon: FileSpreadsheet, assisted: true },
+  { value: "link", label: "Посилання", hint: "Товар у постачальника", icon: Link2, assisted: true },
 ];

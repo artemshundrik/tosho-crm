@@ -56,9 +56,15 @@ export const createEmptyQuoteWizardHeader = (managerId: string): QuoteWizardHead
   currency: "UAH",
 });
 
-/** Чого бракує, щоб брати файл. Порожньо — можна. */
+/**
+ * Чого бракує, щоб СТВОРИТИ. Порожньо — можна.
+ *
+ * Текст без згадки файлу навмисно: цю причину видно в підвалі за будь-якого
+ * джерела позицій, і «позиції з файлу» звучало б дивно на позиції, введеній
+ * руками.
+ */
 export function getQuoteWizardHeaderIssue(value: QuoteWizardHeaderValue): string | null {
-  if (!value.partyId) return "Спершу оберіть замовника — позиції з файлу лягають у його прорахунок.";
+  if (!value.partyId) return "Оберіть замовника — прорахунок створюється на нього.";
   if (!value.managerId) return "Оберіть менеджера прорахунку.";
   return null;
 }
@@ -148,7 +154,13 @@ export function QuoteWizardHeader({
   const deadlineDate = value.deadlineAt ? new Date(value.deadlineAt) : null;
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-background p-3">
+    /*
+      БЕЗ ПІДЛОЖКИ (REQ-237#p8). Рамка з фоном обіцяла форму — розділ, у якому
+      щось заповнюють, — а всередині лежать чотири чіпи, кожен зі своїм
+      вікном. Разом із плитками нижче це давало три обведені прямокутники
+      поспіль перед вмістом. Чіпи самодостатні: вони й так видно.
+    */
+    <div>
       <div className="flex flex-wrap items-center gap-2">
         <CustomerLeadPicker
           open={partyPickerOpen}

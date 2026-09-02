@@ -11,7 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { ImportDraftRow } from "@/features/quotes/quote-import/ImportDraftRow";
 import {
   parseImportFile,
@@ -78,8 +80,6 @@ function isHttpUrl(value: string): boolean {
     return false;
   }
 }
-
-const SECTION_LABEL = "block text-2xs font-semibold uppercase tracking-caps text-muted-foreground";
 
 export function QuoteWizardDialog({
   open,
@@ -296,101 +296,68 @@ export function QuoteWizardDialog({
 
           {header}
 
-          <section className="space-y-2">
-            <span className={SECTION_LABEL}>Що рахуємо</span>
-            <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Тип виробу">
+          {/*
+            ОБИДВА ВИБОРИ — ОДНИМ РЯДКОМ (REQ-237#p8).
+
+            Було дві смуги плиток із великими підписами секцій: разом ~200 px
+            хрому перед вмістом, заради двох відповідей на три варіанти кожна.
+            Артем: «мені не подобається ця комбінація». Тепер це два
+            сегментовані перемикачі в один рядок — канонічні, ті самі, що в
+            тулбарі сторінок, — а підписи стали дрібними мітками поруч.
+
+            Секцій більше немає навмисно: підпис секції потрібен, коли з вигляду
+            контрола не видно, про що він. «Поліграфія · Мерч · Інше» і
+            «Руками · Excel · Посилання» кажуть це самі.
+          */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="text-xs text-muted-foreground">Рахуємо</span>
+            <SegmentedGroup className={SEGMENTED_GROUP_SM} role="radiogroup" aria-label="Тип виробу">
               {QUOTE_KINDS.map((option) => {
                 const Icon = option.icon;
-                const active = kind === option.value;
                 return (
-                  <button
+                  <Button
                     key={option.value}
-                    type="button"
+                    variant="segmented"
+                    size="xs"
                     role="radio"
-                    aria-checked={active}
+                    aria-pressed={kind === option.value}
+                    aria-checked={kind === option.value}
                     disabled={busy}
+                    title={option.hint}
                     onClick={() => setKind(option.value)}
-                    className={cn(
-                      "relative flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors",
-                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                      active
-                        ? "border-foreground/70 bg-muted/40 ring-[3px] ring-foreground/10"
-                        : "border-border/60 hover:border-border hover:bg-muted/40"
-                    )}
+                    className={SEGMENTED_TRIGGER_SM}
                   >
-                    <span className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-xl", option.tone)}>
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold">{option.label}</span>
-                      <span className="block text-xs leading-snug text-muted-foreground">{option.hint}</span>
-                    </span>
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "absolute right-2 top-2 grid h-[18px] w-[18px] place-items-center rounded-full bg-foreground text-background transition-all",
-                        active ? "scale-100 opacity-100" : "scale-50 opacity-0"
-                      )}
-                    >
-                      <Check className="h-3 w-3" strokeWidth={3} />
-                    </span>
-                  </button>
+                    <Icon className="h-3.5 w-3.5" />
+                    {option.label}
+                  </Button>
                 );
               })}
-            </div>
-          </section>
+            </SegmentedGroup>
 
-          <section className="space-y-2">
-            <span className={SECTION_LABEL}>Звідки позиції</span>
-            <div className="grid gap-2 sm:grid-cols-3" role="tablist" aria-label="Джерело позицій">
+            <span className="ml-1 text-xs text-muted-foreground">Позиції</span>
+            <SegmentedGroup className={SEGMENTED_GROUP_SM} role="tablist" aria-label="Джерело позицій">
               {QUOTE_SOURCES.map((option) => {
                 const Icon = option.icon;
-                const active = source === option.value;
                 return (
-                  <button
+                  <Button
                     key={option.value}
-                    type="button"
+                    variant="segmented"
+                    size="xs"
                     role="tab"
-                    aria-selected={active}
+                    aria-pressed={source === option.value}
+                    aria-selected={source === option.value}
                     disabled={busy}
+                    title={option.hint}
                     onClick={() => switchSource(option.value)}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors",
-                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                      active
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border/60 hover:bg-muted/40"
-                    )}
+                    className={SEGMENTED_TRIGGER_SM}
                   >
-                    <span
-                      className={cn(
-                        "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
-                        active ? "bg-background/15" : "bg-muted text-muted-foreground"
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold leading-tight">{option.label}</span>
-                      <span className={cn("block text-2xs leading-tight", active ? "opacity-70" : "text-muted-foreground")}>
-                        {option.hint}
-                      </span>
-                    </span>
-                    {option.assisted ? (
-                      <span
-                        className={cn(
-                          "rounded-full border px-1.5 text-3xs font-medium",
-                          active ? "border-transparent bg-background/15" : "border-border/60 bg-muted text-muted-foreground"
-                        )}
-                      >
-                        AI
-                      </span>
-                    ) : null}
-                  </button>
+                    <Icon className="h-3.5 w-3.5" />
+                    {option.label}
+                  </Button>
                 );
               })}
-            </div>
-          </section>
+            </SegmentedGroup>
+          </div>
 
           {source === "excel" ? (
             <ExcelPanel

@@ -130,10 +130,16 @@ describe("QuoteWizardDialog — один екран", () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith("quote-1"));
   });
 
-  it("без замовника файл брати нема куди", () => {
-    renderWizard({ headerIssue: "Спершу оберіть замовника — позиції з файлу лягають у його прорахунок." });
-    expect(screen.getByRole("button", { name: "Обрати файл Excel" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText(/Спершу оберіть замовника/)).toBeInTheDocument();
+  it("без замовника файл беруть, а створити не дають", () => {
+    // Дропзона відкрита навмисно: прорахунок з'являється лише на «Створити»,
+    // тож розібрати файл раніше нічим не шкодить. Замовника вимагає саме
+    // створення, і підвал каже про це словами — мовчазна сіра кнопка читалась
+    // би як поломка.
+    renderWizard({ headerIssue: "Оберіть замовника — прорахунок створюється на нього." });
+
+    expect(screen.getByRole("button", { name: "Обрати файл Excel" })).not.toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText(/Оберіть замовника/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Створити прорахунок/ })).toBeDisabled();
   });
 
   it("руками: порожній рядок одразу, створення тим самим шляхом", async () => {
@@ -158,7 +164,7 @@ describe("QuoteWizardDialog — один екран", () => {
     const user = userEvent.setup();
     renderWizard();
 
-    await user.click(screen.getByRole("tab", { name: /За посиланням/ }));
+    await user.click(screen.getByRole("tab", { name: /Посилання/ }));
     await user.type(screen.getByRole("textbox", { name: "Посилання на товар" }), "https://shop.example/hoodie{Enter}");
 
     await waitFor(() => expect(screen.getByDisplayValue("Худі оверсайз Classic")).toBeInTheDocument());
