@@ -252,7 +252,7 @@ const CEILINGS = {
   "src/features/orders/orderRecords.ts": 2614,
   "src/lib/toshoApi.ts": 2634,
   "src/pages/TeamPage.tsx": 2427,
-  "src/pages/ProfilePage.tsx": 2156,
+  "src/pages/ProfilePage.tsx": 2054,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,
 };
 
