@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Link2, Loader2, Plus, Upload } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Link2, Loader2, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -170,6 +170,13 @@ export function QuoteWizardDialog({
     setDrafts(next === "manual" ? [makeDraft()] : []);
   };
 
+  const clearFile = React.useCallback(() => {
+    setDrafts([]);
+    setWarnings([]);
+    setFileName("");
+    resetLinkPreviews();
+  }, [resetLinkPreviews]);
+
   const handleFile = async (file: File) => {
     setError(null);
     setWarnings([]);
@@ -286,7 +293,14 @@ export function QuoteWizardDialog({
           <DialogDescription>Один екран: що рахуємо, для кого і звідки беруться позиції.</DialogDescription>
         </DialogHeader>
 
-        <div className="-mx-4 flex-1 space-y-4 overflow-y-auto px-4 py-1 sm:-mx-5 sm:px-5">
+        {/*
+          Мінімальна висота — щоб вікно не стрибало. Порожній стан низький,
+          розібраний файл високий, і без цієї стелі знизу перехід читався як
+          ривок. Висоту НЕ анімуємо: анімація висоти вікна смикається, а
+          прибиті шапка з підвалом і прокрутка всередині дають те саме
+          відчуття сталості дешевше.
+        */}
+        <div className="-mx-4 min-h-[19rem] flex-1 space-y-4 overflow-y-auto px-4 py-1 sm:-mx-5 sm:px-5">
           {error ? (
             <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -367,12 +381,6 @@ export function QuoteWizardDialog({
               hasDrafts={drafts.length > 0}
               inputRef={fileInputRef}
               onFile={(file) => void handleFile(file)}
-              onAnotherFile={() => {
-                setDrafts([]);
-                setWarnings([]);
-                setFileName("");
-                resetLinkPreviews();
-              }}
             />
           ) : null}
 
@@ -418,30 +426,76 @@ export function QuoteWizardDialog({
           ) : null}
 
           {drafts.length > 0 ? (
-            <section className="space-y-2">
-              {source === "excel" ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <div>
-                    <div className="font-mono text-3xl font-semibold leading-none tabular-nums">{selected.length}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {pluralWordUk(selected.length, "позиція", "позиції", "позицій")} до прорахунку
+            <section className="space-y-3">
+              {/*
+                КАРТКА ФАЙЛУ. Була пігулка з повною назвою файлу в ряду інших
+                пігулок, а кнопка «Інший файл» висіла окремим рядком над
+                числом — саме вона й давала той дивний відступ. Тепер це одна
+                картка: піктограма, назва в один рядок, під нею факти розбору,
+                і дія при самому файлі.
+              */}
+              {source === "excel" && fileName ? (
+                <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/25 p-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground ring-1 ring-border/60">
+                    <FileSpreadsheet className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium" title={fileName}>
+                      {fileName}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {[
+                        `знайдено ${drafts.length} ${pluralWordUk(drafts.length, "позицію", "позиції", "позицій")}`,
+                        photoProgress.total > 0
+                          ? photoProgress.settled < photoProgress.total
+                            ? `фото: ${photoProgress.settled} з ${photoProgress.total}`
+                            : `фото у ${photoProgress.withPhoto} з ${photoProgress.total}`
+                          : null,
+                        drafts.some((draft) => draft.variant) ? "є варіанти одного товару" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 text-2xs">
-                    <span className="rounded-full border border-border/60 px-2 py-0.5 text-muted-foreground">{fileName}</span>
-                    {drafts.some((draft) => draft.variant) ? (
-                      <span className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 font-medium text-muted-foreground">
-                        є варіанти одного товару
-                      </span>
-                    ) : null}
-                    {photoProgress.total > 0 ? (
-                      <span className="rounded-full border border-border/60 px-2 py-0.5 text-muted-foreground">
-                        {photoProgress.settled < photoProgress.total
-                          ? `фото: ${photoProgress.settled} з ${photoProgress.total}`
-                          : `фото у ${photoProgress.withPhoto} з ${photoProgress.total}`}
-                      </span>
-                    ) : null}
+                  <Button type="button" variant="outline" size="sm" disabled={busy} onClick={clearFile}>
+                    Інший файл
+                  </Button>
+                </div>
+              ) : null}
+
+              {/*
+                ПРОПУЩЕНІ РЯДКИ. Була бурштинова плита з маркованим списком —
+                найважчий елемент вікна заради новини, яка нічого не вимагає.
+                Тепер це тиха картка тієї ж родини, що й картка файлу, а
+                заголовком стоїть ЧИСЛО: «4 рядки не стали позиціями» каже те
+                саме, що «Що не вдалося розібрати», але одразу з масштабом.
+                Жовтий лишається за тим, що потребує дії.
+              */}
+              {warnings.length > 0 ? (
+                <div className="overflow-hidden rounded-xl border border-border/60">
+                  <div className="flex items-center gap-2.5 border-b border-border/60 bg-muted/25 px-3 py-2">
+                    <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-sm font-medium">
+                      {warnings.length} {pluralWordUk(warnings.length, "рядок", "рядки", "рядків")} з файлу не{" "}
+                      {warnings.length === 1 ? "став позицією" : "стали позиціями"}
+                    </span>
                   </div>
+                  <ul className="divide-y divide-border/60">
+                    {warnings.map((warning) => (
+                      <li key={warning} className="px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                        {warning}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {source === "excel" ? (
+                <div className="flex items-end gap-2.5 pt-1">
+                  <span className="font-mono text-2xl font-semibold leading-none tabular-nums">{selected.length}</span>
+                  <span className="pb-0.5 text-xs text-muted-foreground">
+                    {pluralWordUk(selected.length, "позиція", "позиції", "позицій")} до прорахунку
+                  </span>
                   <Button
                     type="button"
                     variant="ghost"
@@ -457,17 +511,6 @@ export function QuoteWizardDialog({
                   >
                     {drafts.every((draft) => draft.selected) ? "Зняти всі" : "Обрати всі"}
                   </Button>
-                </div>
-              ) : null}
-
-              {warnings.length > 0 ? (
-                <div className="rounded-xl border border-warning-soft-border bg-warning-soft px-3 py-2.5 text-sm text-warning-copy">
-                  <div className="font-medium">Що не вдалося розібрати</div>
-                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                    {warnings.map((warning) => (
-                      <li key={warning}>{warning}</li>
-                    ))}
-                  </ul>
                 </div>
               ) : null}
 
@@ -505,7 +548,14 @@ export function QuoteWizardDialog({
         </div>
 
         <DialogFooter className="shrink-0 gap-2 border-t border-border/60 pt-3 sm:justify-between">
-          <span className={cn("text-xs", footerIssue ? "text-warning-copy" : "text-muted-foreground")}>{footerMeta}</span>
+          {/*
+            Причина — звичайним приглушеним кольором. Спершу тут стояв
+            `text-warning-copy`: він заведений для тексту ПОВЕРХ бурштинової
+            плашки, а на білій картці дає каламутно-коричневий у світлій темі
+            й вицвілий бежевий у темній. Тінтовий колір працює лише на своєму
+            тінті.
+          */}
+          <span className="text-xs text-muted-foreground">{footerMeta}</span>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
               Скасувати
@@ -536,7 +586,6 @@ function ExcelPanel({
   hasDrafts,
   inputRef,
   onFile,
-  onAnotherFile,
 }: {
   stage: Stage;
   parseStep: ImportParseStep;
@@ -544,7 +593,6 @@ function ExcelPanel({
   hasDrafts: boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onFile: (file: File) => void;
-  onAnotherFile: () => void;
 }) {
   const [over, setOver] = React.useState(false);
 
@@ -598,15 +646,9 @@ function ExcelPanel({
     );
   }
 
-  if (hasDrafts) {
-    return (
-      <div className="flex justify-end">
-        <Button type="button" variant="ghost" size="sm" disabled={stage !== "compose"} onClick={onAnotherFile}>
-          Інший файл
-        </Button>
-      </div>
-    );
-  }
+  // Файл розібрано — дропзони більше немає: її місце займає картка файлу в
+  // підсумку, і кнопка «Інший файл» стоїть саме там, при самому файлі.
+  if (hasDrafts) return null;
 
   return (
     <div className="space-y-2">
