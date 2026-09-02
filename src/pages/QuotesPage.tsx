@@ -93,6 +93,7 @@ import {
   resolveQuoteDealType,
   type QuoteDealType,
 } from "@/lib/quoteDealType";
+import { toWallClockValue } from "@/features/quotes/quote-details/deadlineLabels";
 import { fetchMarkupApprovalsForQuotes } from "@/features/quotes/quote-details/markupApproval";
 import { searchQuoteParties, type QuotePartyOption } from "@/features/quotes/quoteParties";
 import { DEFAULT_MANAGER_RATE, getManagerRateForUser } from "@/lib/managerRate";
@@ -4924,15 +4925,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     [editItems]
   );
 
-  const formatDeadlineValue = (date?: Date) => {
-    if (!date) return null;
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${y}-${m}-${d}T${hours}:${minutes}:00`;
-  };
+  // Четверта копія настінної конвенції, зведена до спільної (deadlineLabels.ts).
+  const formatDeadlineValue = (date?: Date) => toWallClockValue(date) || null;
 
   const handleEditSubmit = async (data: NewQuoteFormData) => {
     if (!editTarget) return;

@@ -9,6 +9,7 @@ import { Chip } from "@/components/ui/chip";
 import { DateTimePicker } from "@/components/ui/picker-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { parseDeadlineDate, toWallClockValue } from "@/features/quotes/quote-details/deadlineLabels";
 import { searchQuoteParties, type QuotePartyOption } from "@/features/quotes/quoteParties";
 import { isInactiveEmployment } from "@/lib/employment";
 import { cn } from "@/lib/utils";
@@ -158,7 +159,9 @@ export function QuoteWizardHeader({
   );
 
   const manager = members.find((member) => member.id === value.managerId) ?? null;
-  const deadlineDate = value.deadlineAt ? new Date(value.deadlineAt) : null;
+  // Читаємо тією самою конвенцією, якою пишемо: дедлайн — настінний час, і
+  // `new Date(...)` перерахував би його з фіктивного «+00» у зону браузера.
+  const deadlineDate = parseDeadlineDate(value.deadlineAt);
 
   return (
     /*
@@ -231,7 +234,11 @@ export function QuoteWizardHeader({
 
         <DateTimePicker
           value={deadlineDate}
-          onChange={(next) => patch({ deadlineAt: next ? next.toISOString() : "" })}
+          // НЕ toISOString(): дедлайни зберігаються настінним часом (див.
+          // шапку deadlineLabels.ts). Через toISOString() обраний менеджером
+          // час їхав у базу зсунутим на різницю поясів, і картка показувала
+          // не те, що він щойно поставив.
+          onChange={(next) => patch({ deadlineAt: toWallClockValue(next) })}
           open={deadlineOpen}
           onOpenChange={setDeadlineOpen}
           trigger={

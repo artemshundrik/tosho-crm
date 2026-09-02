@@ -43,6 +43,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { EconomicsComingSoon } from "@/features/quotes/quote-details/EconomicsComingSoon";
 import {
   buildDeadlineTabBadge,
+  combineWallClockValue,
   deadlineDiffDays,
   formatDeadlineLabel,
   parseDeadlineDate,
@@ -1501,12 +1502,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const quoteSectionsBootstrapping =
     (!itemsLoaded && items.length === 0) || (!runsLoaded && runs.length === 0);
 
-  const combineDeadlineValue = (date?: string | null, time?: string | null) => {
-    const normalizedDate = (date ?? "").trim();
-    if (!normalizedDate) return "";
-    const normalizedTime = (time ?? "").trim() || DEFAULT_DEADLINE_TIME;
-    return `${normalizedDate}T${normalizedTime}:00`;
-  };
+  // Конвенція настінного часу — одна на всі входи (див. deadlineLabels.ts).
+  // Тут вона й народилась, але жила власною копією, і візард від неї відійшов,
+  // не зачепивши жодного рядка цього файлу.
+  const combineDeadlineValue = (date?: string | null, time?: string | null) =>
+    combineWallClockValue(date, time, DEFAULT_DEADLINE_TIME);
 
   const formatDateInput = (value?: Date | null) => {
     if (!value) return "";

@@ -39,6 +39,7 @@ import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
+import { combineWallClockValue, parseDeadlineDate, toWallClockValue } from "@/features/quotes/quote-details/deadlineLabels";
 import {
   QuoteDeliveryFields,
   createEmptyQuoteDeliveryDetails,
@@ -358,16 +359,11 @@ const createProductDraft = (seed?: Partial<ProductDraft>): ProductDraft => ({
   designBrief: seed?.designBrief ?? "",
 });
 
-const formatDateTimeInput = (date: Date) => {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-};
+// Дедлайни — настінний час, конвенція одна на всі входи (deadlineLabels.ts).
+// Тут без секунд: у стані живе рівно те, що показує `datetime-local`.
+const formatDateTimeInput = (date: Date) => toWallClockValue(date).slice(0, 16);
 
-const parseDateTimeInput = (value: string) => {
-  if (!value.trim()) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
+const parseDateTimeInput = (value: string) => parseDeadlineDate(value);
 
 const createEmptyDeliveryDetails = createEmptyQuoteDeliveryDetails;
 
@@ -377,10 +373,10 @@ const sanitizeDeliveryDetails = sanitizeQuoteDeliveryDetails;
 
 const sanitizeQuantity = (value: string) => value.replace(/[^\d]/g, "");
 
+/** Значення з `datetime-local` → рядок для бази, спільною функцією. */
 const normalizeDeadlineInput = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  return trimmed.length === 16 ? `${trimmed}:00` : trimmed;
+  const [date, time] = value.trim().split("T");
+  return combineWallClockValue(date, time) || null;
 };
 
 const getCatalogRefs = (catalogTypes: CatalogType[], product: ProductDraft) => {

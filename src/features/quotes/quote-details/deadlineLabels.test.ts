@@ -2,10 +2,65 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildDeadlineTabBadge,
+  combineWallClockValue,
   deadlineDiffDays,
   isDesignDeadlineAfterAnswer,
   parseDeadlineDate,
+  toWallClockValue,
 } from "./deadlineLabels";
+
+/**
+ * КОНВЕНЦІЯ ДЕДЛАЙНІВ — НАСТІННИЙ ЧАС.
+ *
+ * Ці тести стережуть найдорожчий клас помилок у датах: коли новий вхід пише
+ * дедлайн «правильно, але інакше». Саме так 01.09.2026 зробив візард
+ * створення прорахунку — `toISOString()` замість настінного числа, — і той
+ * самий дедлайн отримав три різні відповіді: одну в картці, другу в базі,
+ * третю в нагадуванні.
+ *
+ * Головна властивість, яку тут перевіряємо: запис і читання — ПАРА. Що б не
+ * поставила людина, воно має повернутись тим самим числом.
+ */
+describe("настінна конвенція дедлайнів", () => {
+  it("запис бере те, що людина бачила, а не UTC", () => {
+    // 15:00 у зоні браузера. toISOString() дав би тут інше число.
+    const picked = new Date(2026, 8, 5, 15, 0, 0);
+    expect(toWallClockValue(picked)).toBe("2026-09-05T15:00:00");
+  });
+
+  it("запис і читання сходяться: скільки поставили, стільки й показали", () => {
+    const picked = new Date(2026, 8, 5, 15, 0, 0);
+    const stored = toWallClockValue(picked);
+    const readBack = parseDeadlineDate(stored);
+    expect(readBack?.getHours()).toBe(15);
+    expect(readBack?.getMinutes()).toBe(0);
+    expect(readBack?.getDate()).toBe(5);
+  });
+
+  it("хвіст із поясом із бази нічого не зсуває", () => {
+    // PostgREST повертає збережене значення з фіктивним «+00:00».
+    const readBack = parseDeadlineDate("2026-09-05T15:00:00+00:00");
+    expect(readBack?.getHours()).toBe(15);
+  });
+
+  it("порожня або зіпсована дата не стає сьогоднішньою", () => {
+    expect(toWallClockValue(null)).toBe("");
+    expect(toWallClockValue(new Date("не дата"))).toBe("");
+    expect(combineWallClockValue("", "15:00")).toBe("");
+    expect(combineWallClockValue(null, null)).toBe("");
+  });
+
+  it("час без секунд доповнюється, а вже повний лишається як є", () => {
+    expect(combineWallClockValue("2026-09-05", "15:00")).toBe("2026-09-05T15:00:00");
+    expect(combineWallClockValue("2026-09-05", "15:00:30")).toBe("2026-09-05T15:00:30");
+  });
+
+  it("час не вказали — береться запасний, і саме той, що просить викликач", () => {
+    expect(combineWallClockValue("2026-09-05", "")).toBe("2026-09-05T18:00:00");
+    expect(combineWallClockValue("2026-09-05", null, "09:00")).toBe("2026-09-05T09:00:00");
+  });
+});
+
 
 /**
  * Підпис вкладки «Дедлайни» — те місце, де раніше висіло обрізане
