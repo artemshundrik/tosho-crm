@@ -20,11 +20,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
 import { AppVersionWatcher } from "@/components/app/AppVersionWatcher";
-import { AppLayout } from "@/layout/AppLayout";
 import { RouteFallback } from "@/components/app/page-loading";
 import { AppShell } from "@/components/app/AppShell";
 import { BackendUnavailable } from "@/components/app/BackendUnavailable";
 import { migrateAndPruneSessionCaches } from "@/lib/sessionCache";
+import { preloadRoute } from "@/routes/routePreload";
 import {
   getModuleDefinition,
   hasDefaultFinanceAccess,
@@ -56,6 +56,68 @@ function lazyWithRetry<T extends { default: React.ComponentType<unknown> }>(
     }
   });
 }
+
+/**
+ * Оболонка застосунку — теж лінива, і це найбільша частина стартового коду.
+ *
+ * НАВІЩО (REQ-220). `AppLayout` статично тягне за собою весь авторизований
+ * інтерфейс: сайдбар, меню користувача, сповіщення, таймер дизайнера, віджет
+ * заробітку, присутність, нижню панель. Разом із ним у стартовий граф їхали
+ * `kanbanBoards`, `teamAbsences`, `designerPayrollMath`, `designWorkload`,
+ * `KanbanSkeleton` і половина Radix — на екрані ВХОДУ, де немає жодного з цих
+ * елементів. Заміряно 29.08.2026 на прод-збірці: /login тягнув 46 чанків, і
+ * 358 із 360 мс LCP припадало на розбір і виконання цього JavaScript.
+ *
+ * ЧОМУ ЦЕ НЕ РОБИТЬ ГІРШЕ ЗАЛОГІНЕНИМ. Лінива оболонка сама по собі додала б
+ * зайвий похід у мережу перед першим кадром CRM: спершу чанк оболонки, і лише
+ * потім — чанк сторінки з `<Outlet />`. Тому нижче `primeAuthenticatedShell()`
+ * стартує обидва завантаження ще на етапі обчислення модуля, паралельно з
+ * перевіркою сесії, — але тільки тим, у кого сесія в сховищі вже є.
+ */
+const AppLayout = lazyWithRetry(() =>
+  // Обгортка без пропсів навмисно: тут оболонка малюється порожньою, а вміст
+  // приходить через `<Outlet />`. Так тип збігається з рештою лінивих екранів.
+  import("@/layout/AppLayout").then(({ AppLayout: LoadedAppLayout }) => ({
+    default: () => <LoadedAppLayout />,
+  }))
+);
+
+/** Почати везти оболонку, не чекаючи на рендер. Повторний виклик безкоштовний. */
+function preloadAppShellChunk() {
+  void import("@/layout/AppLayout").catch(() => {
+    // Мовчки: це прогрів. Справжня помилка завантаження прилетить у
+    // `lazyWithRetry`, де є перезавантаження на застарілий чанк.
+  });
+}
+
+/**
+ * Чи є в цієї вкладки збережена сесія Supabase.
+ *
+ * Дешева синхронна перевірка сховища замість очікування на `getSession()`:
+ * потрібна саме тому, що рішення «везти оболонку чи ні» треба ухвалити ДО
+ * першого мережевого походу. Помилитись тут не страшно — це лише прогрів.
+ */
+function hasStoredSupabaseSession() {
+  try {
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith("sb-") && key.endsWith("-auth-token")) return true;
+    }
+  } catch {
+    // Приватний режим або заблоковане сховище — просто не прогріваємо.
+  }
+  return false;
+}
+
+function primeAuthenticatedShell() {
+  if (typeof window === "undefined") return;
+  if (!hasStoredSupabaseSession()) return;
+  preloadAppShellChunk();
+  // Чанк сторінки — паралельно з оболонкою, а не після неї.
+  preloadRoute(window.location.pathname);
+}
+
+primeAuthenticatedShell();
 
 const InvitePage = lazyWithRetry(() => import("./pages/InvitePage"));
 const EnterPage = lazyWithRetry(() => import("./pages/EnterPage"));
@@ -524,7 +586,12 @@ function ProtectedAppLayout({
 }) {
   return (
     <RequireAuth session={session} loading={loading}>
-      <AppLayout />
+      {/* Той самий екран запуску, що й доти показує `RequireAuth` під час
+          перевірки сесії: між ними немає порожнього кадру, бо `AppShell`
+          тримає естафету завантаження. */}
+      <Suspense fallback={<AppShell />}>
+        <AppLayout />
+      </Suspense>
     </RequireAuth>
   );
 }
@@ -634,6 +701,10 @@ function LoginPage() {
     setError(null);
     setMsg(null);
     setLoading(true);
+    // Оболонку веземо паралельно з перевіркою пароля: інакше після успішного
+    // входу людина чекала б на чанк оболонки окремим походом уже після відповіді
+    // сервера. Для того, хто просто відкрив /login, цей код так і не поїде.
+    preloadAppShellChunk();
 
     try {
       if (!email.trim()) {

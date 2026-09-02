@@ -1,5 +1,6 @@
 import path from "path";
 import { readFileSync, promises as fs } from "fs";
+import { gzipSync } from "zlib";
 import os from "os";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
@@ -287,17 +288,47 @@ export default defineConfig(({ command, mode }) => {
     buildId: `${packageJson.version ?? "0.0.0"}-${Date.now().toString(36)}`,
     builtAt,
   };
-  const manualChunks = (id: string) => {
-    if (!id.includes("node_modules")) return undefined;
-
-    if (id.includes("pdfjs-dist")) return "vendor-pdf";
-    if (id.includes("@supabase/")) return "vendor-supabase";
-    if (id.includes("date-fns")) return "vendor-date";
+  /**
+   * Розкладка вендорних чанків.
+   *
+   * НАВІЩО `advancedChunks`, А НЕ `manualChunks`. Тут довго стояв
+   * `output.manualChunks`, і на ньому не можна було полагодити головну ваду
+   * стартового графа: віртуальний хелпер модульного прелоада
+   * (`\0vite/preload-helper.js`, ~1 кБ) опинявся ВСЕРЕДИНІ vendor-pdf. Хелпер
+   * статично імпортує кожен чанк із динамічними імпортами — стартовий у тому
+   * числі, — тож разом із ним у `<link rel=modulepreload>` кожного холодного
+   * входу їхали 419 кБ pdfjs (123 кБ gzip): 28% усього стартового коду заради
+   * кілобайта. Сам pdfjs при цьому чесно лінивий, `attachmentPreview.ts` тягне
+   * його через `import()`.
+   *
+   * Перевірено 02.09.2026: rolldown ІГНОРУЄ значення, яке `manualChunks`
+   * повертає для віртуальних модулів (функція викликається, id приходить, але
+   * чанк vendor-pdf лишався байт-у-байт тим самим — навіть із
+   * `experimentalMinChunkSize: 0`). `advancedChunks.groups` віртуальні модулі
+   * розкладає. Обидва API разом не працюють: щойно з'являється
+   * `advancedChunks`, `manualChunks` вимикається цілком — тому сюди перенесені
+   * ВСІ правила, а не тільки нове.
+   *
+   * Що перевіряти, аби це не повернулось: у dist/index.html не має бути рядка
+   * `vendor-pdf`. Сторожем стоїть плагін `login-payload-budget` нижче — він
+   * рахує стартовий граф на кожній збірці й валить її, коли той росте.
+   */
+  const vendorChunkGroups = [
+    {
+      // React у тому ж чанку, що й хелпер: обидва потрібні кожному екрану,
+      // включно з входом, і разом дають чанк, який не має шансів злипнутись із
+      // випадковим сусідом.
+      name: "vendor-runtime",
+      test: /(?:vite[\\/]preload-helper|node_modules[\\/](?:react|react-dom|scheduler)[\\/])/u,
+      priority: 100,
+    },
+    { name: "vendor-pdf", test: /node_modules[\\/]pdfjs-dist[\\/]/u, priority: 50 },
+    { name: "vendor-supabase", test: /node_modules[\\/]@supabase[\\/]/u, priority: 50 },
+    { name: "vendor-date", test: /node_modules[\\/]date-fns[\\/]/u, priority: 50 },
     // Кожна іконка lucide — окремий модуль, і без цього рядка збірка робить із
     // них десятки окремих файлів по 300–600 байт. Один запит замість сорока.
-    if (id.includes("lucide-react")) return "vendor-icons";
-    return undefined;
-  };
+    { name: "vendor-icons", test: /node_modules[\\/]lucide-react[\\/]/u, priority: 50 },
+  ];
 
   /**
    * Порт дев-сервера: спершу PORT із оточення, інакше звичні 5199.
@@ -326,6 +357,78 @@ export default defineConfig(({ command, mode }) => {
     process.env.ANALYZE
       ? visualizer({ filename: "dist/stats.json", template: "raw-data", gzipSize: true })
       : undefined,
+    {
+      /**
+       * Бюджет стартового коду — сторож, а не звіт.
+       *
+       * НАВІЩО (REQ-220). Стартовий граф росте непомітно: досить статично
+       * імпортнути в App.tsx щось із авторизованої оболонки — і екран ВХОДУ
+       * знову тягне половину CRM. Саме так туди потрапили kanbanBoards,
+       * teamAbsences, designerPayrollMath і 419 кБ pdfjs; помітили це аж через
+       * заміри в DevTools, коли LCP /login став 360 мс майже цілком із розбору
+       * JavaScript.
+       *
+       * Рахуємо те саме, що бачить браузер: вхідний чанк плюс усе, що
+       * СТАТИЧНО з нього досяжне (`imports`, без `dynamicImports`). Це рівно
+       * той код, який іде в `<link rel=modulepreload>` і виконується до
+       * першого кадру.
+       *
+       * Стеля — не мета, а ратчет: якщо збірка тут падає, спершу шукай зайвий
+       * статичний імпорт, і лише свідомо піднімай число.
+       */
+      name: "login-payload-budget",
+      generateBundle(_options, bundle) {
+        const LIMIT_GZIP_KB = 240;
+        const entry = Object.values(bundle).find(
+          (item): item is import("rolldown").OutputChunk => item.type === "chunk" && item.isEntry
+        );
+        if (!entry) return;
+
+        const startup = new Set<string>([entry.fileName]);
+        const queue = [entry.fileName];
+        while (queue.length) {
+          const current = bundle[queue.shift()!];
+          if (!current || current.type !== "chunk") continue;
+          for (const next of current.imports) {
+            if (!startup.has(next)) {
+              startup.add(next);
+              queue.push(next);
+            }
+          }
+        }
+
+        let gzipBytes = 0;
+        for (const fileName of startup) {
+          const chunk = bundle[fileName];
+          if (chunk?.type !== "chunk") continue;
+          gzipBytes += gzipSync(Buffer.from(chunk.code)).length;
+        }
+
+        const gzipKb = gzipBytes / 1024;
+        console.log(
+          `[стартовий код] ${startup.size} чанків, ${gzipKb.toFixed(1)} кБ gzip (стеля ${LIMIT_GZIP_KB})`
+        );
+
+        if (gzipKb > LIMIT_GZIP_KB) {
+          const heaviest = [...startup]
+            .map((fileName) => {
+              const chunk = bundle[fileName];
+              const size = chunk?.type === "chunk" ? gzipSync(Buffer.from(chunk.code)).length : 0;
+              return { fileName, size };
+            })
+            .sort((a, b) => b.size - a.size)
+            .slice(0, 5)
+            .map((item) => `  ${(item.size / 1024).toFixed(1)} кБ  ${item.fileName}`)
+            .join("\n");
+          this.error(
+            `Стартовий код розрісся до ${gzipKb.toFixed(1)} кБ gzip при стелі ${LIMIT_GZIP_KB} кБ.\n` +
+              `Це те, що виконується до першого кадру екрана входу.\n` +
+              `Найважчі чанки в стартовому графі:\n${heaviest}\n` +
+              `Швидше за все, десь з'явився статичний імпорт замість lazy().`
+          );
+        }
+      },
+    },
     {
       name: "app-version-manifest",
       configureServer(server) {
@@ -532,7 +635,7 @@ export default defineConfig(({ command, mode }) => {
   build: {
     rollupOptions: {
       output: {
-        manualChunks,
+        advancedChunks: { groups: vendorChunkGroups },
         experimentalMinChunkSize: 8_000,
         /**
          * Схлопуємо мікрочанки.
