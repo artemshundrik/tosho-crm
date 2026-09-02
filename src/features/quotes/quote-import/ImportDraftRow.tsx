@@ -106,7 +106,9 @@ export function ImportDraftRow({
             disabled={disabled}
             aria-label={`Імпортувати «${draft.name}»`}
             onCheckedChange={(checked) => onPatch({ selected: checked === true })}
-            className="mt-1.5"
+            // Монохром: галочка тут не статус, а «беремо/не беремо» —
+            // синій робив із неї акцент сильніший за саму позицію.
+            className="mt-1.5 data-[state=checked]:border-foreground data-[state=checked]:bg-foreground data-[state=checked]:text-background"
           />
         )}
         <ImportItemPhoto preview={preview} name={draft.name} />

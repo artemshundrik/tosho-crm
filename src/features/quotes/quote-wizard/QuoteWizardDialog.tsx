@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Loader2, Plus, Sparkles, Upload } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Link2, Loader2, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -260,10 +260,9 @@ export function QuoteWizardDialog({
   const busy = stage !== "compose";
   const hasContent = drafts.some((draft) => draft.name.trim() || draft.links.length > 0);
 
-  // Підвал каже, ЧОМУ кнопка вимкнена: на ексельці це каже сама дропзона, а
-  // на посиланні й «руками» позиції вже є, і мовчазна сіра кнопка читалась би
-  // як поломка.
-  const footerIssue = headerIssue && (source !== "excel" || drafts.length > 0) ? headerIssue : null;
+  // Підвал каже, ЧОМУ кнопка вимкнена. Мовчазна сіра кнопка читається як
+  // поломка, а не як «дозаповніть шапку».
+  const footerIssue = headerIssue;
   const footerMeta = (() => {
     if (footerIssue) return footerIssue;
     if (source === "manual") return "Ціни й собівартість — уже в картці прорахунку.";
@@ -315,7 +314,7 @@ export function QuoteWizardDialog({
                       "relative flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                       active
-                        ? "border-primary ring-[3px] ring-primary/15"
+                        ? "border-foreground/70 bg-muted/40 ring-[3px] ring-foreground/10"
                         : "border-border/60 hover:border-border hover:bg-muted/40"
                     )}
                   >
@@ -329,7 +328,7 @@ export function QuoteWizardDialog({
                     <span
                       aria-hidden
                       className={cn(
-                        "absolute right-2 top-2 grid h-[18px] w-[18px] place-items-center rounded-full bg-primary text-primary-foreground transition-all",
+                        "absolute right-2 top-2 grid h-[18px] w-[18px] place-items-center rounded-full bg-foreground text-background transition-all",
                         active ? "scale-100 opacity-100" : "scale-50 opacity-0"
                       )}
                     >
@@ -381,7 +380,7 @@ export function QuoteWizardDialog({
                       <span
                         className={cn(
                           "rounded-full border px-1.5 text-3xs font-medium",
-                          active ? "border-transparent bg-background/15" : "border-ai-accent/30 bg-ai-accent/10 text-ai-accent"
+                          active ? "border-transparent bg-background/15" : "border-border/60 bg-muted text-muted-foreground"
                         )}
                       >
                         AI
@@ -398,8 +397,6 @@ export function QuoteWizardDialog({
               stage={stage}
               parseStep={parseStep}
               fileName={fileName}
-              gated={Boolean(headerIssue)}
-              gateHint={headerIssue}
               hasDrafts={drafts.length > 0}
               inputRef={fileInputRef}
               onFile={(file) => void handleFile(file)}
@@ -435,13 +432,13 @@ export function QuoteWizardDialog({
                   onClick={() => void handleLink()}
                   className="shrink-0 gap-2"
                 >
-                  {linkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {linkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
                   Прочитати сторінку
                 </Button>
               </div>
               {linkBusy ? (
-                <div className="flex items-center gap-3 rounded-xl border border-ai-accent/30 bg-ai-accent/10 px-3 py-2.5 text-sm font-medium text-ai-accent">
-                  <Sparkles className="h-4 w-4" />
+                <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/50 px-3 py-2.5 text-sm font-medium">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   Дивлюсь сторінку: фото, назва, опис…
                 </div>
               ) : drafts.length === 0 ? (
@@ -569,8 +566,6 @@ function ExcelPanel({
   stage,
   parseStep,
   fileName,
-  gated,
-  gateHint,
   hasDrafts,
   inputRef,
   onFile,
@@ -579,8 +574,6 @@ function ExcelPanel({
   stage: Stage;
   parseStep: ImportParseStep;
   fileName: string;
-  gated: boolean;
-  gateHint: string | null;
   hasDrafts: boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onFile: (file: File) => void;
@@ -599,7 +592,7 @@ function ExcelPanel({
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-success-soft text-success-foreground">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-muted text-muted-foreground">
             <FileSpreadsheet className="h-4 w-4" />
           </span>
           <div className="min-w-0">
@@ -622,8 +615,8 @@ function ExcelPanel({
                 <span
                   className={cn(
                     "grid h-5 w-5 shrink-0 place-items-center rounded-full border",
-                    done && "border-success-foreground bg-success-foreground text-background",
-                    running && "border-ai-accent border-t-transparent animate-spin",
+                    done && "border-foreground bg-foreground text-background",
+                    running && "border-foreground border-t-transparent animate-spin",
                     !done && !running && "border-border"
                   )}
                 >
@@ -650,22 +643,26 @@ function ExcelPanel({
 
   return (
     <div className="space-y-2">
+      {/*
+        ФАЙЛ БЕРЕТЬСЯ ДО ЗАМОВНИКА. Спершу дропзона була закрита, поки шапка
+        порожня («позиції з файлу лягають у ЙОГО прорахунок»), — і клік по ній
+        не робив нічого. Але прорахунок з'являється лише на «Створити», тож
+        розібрати файл раніше нічим не шкодить: менеджер бачить, що приїхало,
+        і дозаповнює шапку, дивлячись на позиції. Замовника вимагає САМЕ
+        створення, і підвал каже про це словами.
+      */}
       <div
         role="button"
-        tabIndex={gated ? -1 : 0}
-        aria-disabled={gated}
+        tabIndex={0}
         aria-label="Обрати файл Excel"
         className={cn(
-          "flex flex-col items-center gap-2 rounded-2xl border border-dashed px-6 py-8 text-center transition-colors",
+          "flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-dashed border-border px-6 py-8 text-center transition-colors",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-          gated ? "cursor-not-allowed border-border/60 opacity-60" : "cursor-pointer border-border hover:border-primary hover:bg-primary/[0.04]",
-          over && !gated && "border-primary bg-primary/[0.06]"
+          "hover:border-foreground/40 hover:bg-muted/50",
+          over && "border-foreground/60 bg-muted"
         )}
-        onClick={() => {
-          if (!gated) inputRef.current?.click();
-        }}
+        onClick={() => inputRef.current?.click()}
         onKeyDown={(event) => {
-          if (gated) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             inputRef.current?.click();
@@ -673,13 +670,12 @@ function ExcelPanel({
         }}
         onDragOver={(event) => {
           event.preventDefault();
-          if (!gated) setOver(true);
+          setOver(true);
         }}
         onDragLeave={() => setOver(false)}
         onDrop={(event) => {
           event.preventDefault();
           setOver(false);
-          if (gated) return;
           const file = event.dataTransfer.files?.[0];
           if (file) onFile(file);
         }}
@@ -711,12 +707,6 @@ function ExcelPanel({
           }}
         />
       </div>
-      {gated && gateHint ? (
-        <div className="flex items-center gap-2 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning-copy">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          {gateHint}
-        </div>
-      ) : null}
     </div>
   );
 }

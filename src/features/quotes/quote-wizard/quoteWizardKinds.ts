@@ -18,7 +18,12 @@ export type QuoteKindOption = {
   label: string;
   hint: string;
   icon: typeof Printer;
-  /** Тон плитки з піктограмою — токени бейджів, щоб три плашки читались як три різні речі. */
+  /**
+   * Тон плитки з піктограмою. Монохромний навмисно (02.09.2026): кольорові
+   * квадратики читались як статуси, хоч це просто категорії. Колір у картці
+   * прорахунку означає стан, і три різні тони поруч із синьою обводкою вибору
+   * робили з вікна вітрину.
+   */
   tone: string;
 };
 
@@ -28,21 +33,21 @@ export const QUOTE_KINDS: QuoteKindOption[] = [
     label: "Поліграфія",
     hint: "Щоденники, каталоги, блокноти, пакування",
     icon: Printer,
-    tone: "bg-info-soft text-info-foreground",
+    tone: "bg-muted text-muted-foreground",
   },
   {
     value: "merch",
     label: "Мерч",
     hint: "Одяг, аксесуари, сувеніри з нанесенням",
     icon: Shirt,
-    tone: "bg-accent-tone-soft text-accent-tone-foreground",
+    tone: "bg-muted text-muted-foreground",
   },
   {
     value: "other",
     label: "Інше",
     hint: "Усе, що не лягло в перші дві",
     icon: Package,
-    tone: "bg-warning-soft text-warning-foreground",
+    tone: "bg-muted text-muted-foreground",
   },
 ];
 
