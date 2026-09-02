@@ -135,7 +135,11 @@ export const handler = async (event: HttpEvent) => {
     const errorsHistoryFrom = new Date(now.getTime() - ERRORS_HISTORY_DAYS * 86_400_000).toISOString();
     const errorSelect = "created_at,actor_name,user_id,metadata";
 
-    const [recentErrorsResult, historyErrorsResult, errorsStateResult] = await Promise.all([
+    // Релізи за добу: вікно зіставлення — дві години, але помилка могла
+    // приїхати в кінці нашого годинного вікна, тож беремо з запасом.
+    const releasesFrom = new Date(now.getTime() - 86_400_000).toISOString();
+
+    const [recentErrorsResult, historyErrorsResult, errorsStateResult, releasesResult] = await Promise.all([
       teamIds.length > 0
         ? admin
             .schema("tosho")
@@ -161,6 +165,13 @@ export const handler = async (event: HttpEvent) => {
         .select("fingerprint,notified_at")
         .eq("key", ERRORS_ALERT_KEY)
         .maybeSingle(),
+      admin
+        .schema("tosho")
+        .from("releases")
+        .select("released_at,commit_ref,changes")
+        .gte("released_at", releasesFrom)
+        .order("released_at", { ascending: false })
+        .limit(50),
     ]);
 
     const errorAlerts = buildRuntimeErrorAlerts({
@@ -178,7 +189,13 @@ export const handler = async (event: HttpEvent) => {
     // просто тому, що ніхто не працював.
     const errorsMessage =
       errorAlerts.length > 0 && errorsPrint !== previousErrorsPrint
-        ? formatRuntimeErrorAlert(errorAlerts, { appUrl: APP_URL, escape: escapeTelegramHtml })
+        ? formatRuntimeErrorAlert(errorAlerts, {
+            appUrl: APP_URL,
+            escape: escapeTelegramHtml,
+            releases: (releasesResult.data ?? []) as Parameters<
+              typeof formatRuntimeErrorAlert
+            >[1]["releases"],
+          })
         : null;
 
     const messages = [message, errorsMessage].filter((value): value is string => Boolean(value));

@@ -38,6 +38,13 @@ import { supabase } from "@/lib/supabaseClient";
 import { NOTIFICATION_CATEGORIES } from "@/lib/notificationCategories";
 import { getInitialsFromName } from "@/lib/userName";
 import { runtimeErrorSignature } from "@/lib/runtimeErrorSignature";
+import {
+  findReleaseActiveAt,
+  findReleaseBefore,
+  formatMinutesAfter,
+  formatReleaseDateTime,
+  type ReleaseLike,
+} from "@/lib/releaseAttribution";
 
 export type ObservabilityTone = "good" | "warning" | "danger" | "neutral";
 export type ChartRange = "1d" | "7d" | "30d" | "all";
@@ -1457,6 +1464,7 @@ function formatErrorMoment(value: string): string {
 export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
   const [days, setDays] = useState<number>(30);
   const [rows, setRows] = useState<RuntimeErrorRow[]>([]);
+  const [releases, setReleases] = useState<ReleaseLike[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -1469,16 +1477,32 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
       setLoadError(null);
       try {
         const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        const { data, error } = await supabase
-          .schema("tosho")
-          .from("runtime_errors")
-          .select("id,created_at,actor_name,user_id,source,href,metadata")
-          .eq("team_id", teamId)
-          .gte("created_at", from)
-          .order("created_at", { ascending: false })
-          .limit(2000);
-        if (error) throw new Error(error.message);
-        if (active) setRows((data ?? []) as RuntimeErrorRow[]);
+        const [errors, releaseRows] = await Promise.all([
+          supabase
+            .schema("tosho")
+            .from("runtime_errors")
+            .select("id,created_at,actor_name,user_id,source,href,metadata")
+            .eq("team_id", teamId)
+            .gte("created_at", from)
+            .order("created_at", { ascending: false })
+            .limit(2000),
+          // Релізи беремо з ЗАПАСОМ у добу назад: помилка на початку періоду
+          // сталась на збірці, яку викотили ще до нього, і без цього запасу
+          // найстаріші групи лишились би без релізу.
+          supabase
+            .schema("tosho")
+            .from("releases")
+            .select("released_at,commit_ref,changes")
+            .gte("released_at", new Date(Date.parse(from) - 86_400_000).toISOString())
+            .order("released_at", { ascending: false })
+            .limit(500),
+        ]);
+        if (errors.error) throw new Error(errors.error.message);
+        if (active) {
+          setRows((errors.data ?? []) as RuntimeErrorRow[]);
+          // Релізи — не привід валити вкладку: без них журнал працює як раніше.
+          setReleases((releaseRows.data ?? []) as ReleaseLike[]);
+        }
       } catch (e) {
         if (active) setLoadError(e instanceof Error ? e.message : "Помилка завантаження");
       } finally {
@@ -1588,6 +1612,11 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
                 const meta = (group.sample.metadata ?? {}) as Record<string, unknown>;
                 const stack = typeof meta.stack === "string" ? meta.stack : null;
                 const componentStack = typeof meta.component_stack === "string" ? meta.component_stack : null;
+                // Дві різні відповіді: «на чому це сталось» (є завжди, якщо
+                // релізи взагалі відомі) і «чи почалось одразу після
+                // викочування» (лише в межах вікна).
+                const activeRelease = findReleaseActiveAt(group.firstAt, releases);
+                const startedAfter = findReleaseBefore(group.firstAt, releases);
                 return (
                   <div key={group.key}>
                     <button
@@ -1607,6 +1636,13 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
                           {[...group.routes].slice(0, 2).map((route) => (
                             <span key={route} className="tabular-nums">{route}</span>
                           ))}
+                          {/* Мітка лише коли реліз справді поруч: підказка, яка
+                              світиться завжди, перестає щось означати. */}
+                          {startedAfter ? (
+                            <span className="tone-text-warning">
+                              почалось {formatMinutesAfter(startedAfter.minutesAfter)} після релізу
+                            </span>
+                          ) : null}
                         </span>
                       </span>
                       <Badge variant="secondary" className="shrink-0 tabular-nums">
@@ -1624,6 +1660,26 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
                           <span>Джерело: {[...group.sources].join(", ") || "—"}</span>
                           <span>Адреса: {group.sample.href ?? "—"}</span>
                           {group.releases.size > 0 ? <span>Збірка: {[...group.releases].slice(0, 3).join(", ")}</span> : null}
+                        </div>
+                        {/* Реліз, що діяв на момент ПЕРШОЇ помилки групи: саме
+                            він відповідає на «після чого це почалось». Ідентифікатор
+                            збірки вище лишається — він точний, але людині нічого
+                            не каже. */}
+                        <div className="text-muted-foreground">
+                          {activeRelease ? (
+                            <>
+                              Реліз на момент помилки:{" "}
+                              <span className="text-foreground">{activeRelease.title}</span>{" "}
+                              <span className="tabular-nums">
+                                ({activeRelease.shortRef || "?"}, {formatReleaseDateTime(activeRelease.releasedAt)})
+                              </span>
+                              {startedAfter
+                                ? ` — почалось ${formatMinutesAfter(startedAfter.minutesAfter)} після нього`
+                                : " — викочування поруч не було"}
+                            </>
+                          ) : (
+                            "Реліз на момент помилки невідомий — записів про викочування за цей період немає."
+                          )}
                         </div>
                         {stack ? (
                           <div>

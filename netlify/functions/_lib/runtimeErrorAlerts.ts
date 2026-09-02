@@ -4,6 +4,11 @@ import {
   type RuntimeErrorGroup,
   type RuntimeErrorLike,
 } from "../../../src/lib/runtimeErrorSignature";
+import {
+  findReleaseBefore,
+  formatReleaseAttribution,
+  type ReleaseLike,
+} from "../../../src/lib/releaseAttribution";
 
 /**
  * Що саме вважати приводом написати в Telegram.
@@ -85,11 +90,25 @@ export function signaturesOf(rows: RuntimeErrorLike[]): Set<string> {
   return out;
 }
 
+/**
+ * Реліз поруч дописується лише до НОВИХ помилок і лише коли їх небагато.
+ *
+ * У «масових» перша поява була давно, і найближче викочування до неї нічого не
+ * пояснює. А в довгому списку рядок на кожен пункт перетворив би повідомлення
+ * на полотно — тож коли нових більше за одну, реліз показуємо тільки в тих,
+ * що вміщаються в перелік.
+ */
 export function formatRuntimeErrorAlert(
   alerts: RuntimeErrorAlert[],
-  options: { appUrl: string; escape: (value: string) => string }
+  options: {
+    appUrl: string;
+    escape: (value: string) => string;
+    /** Релізи за останню добу. Порожньо — рядок про реліз просто не з'явиться. */
+    releases?: ReleaseLike[];
+  }
 ): string {
   const { appUrl, escape } = options;
+  const releases = options.releases ?? [];
   const newOnes = alerts.filter((a) => a.kind === "new");
   const mass = alerts.filter((a) => a.kind === "mass");
 
@@ -110,6 +129,13 @@ export function formatRuntimeErrorAlert(
     if (group.people.length > 0) facts.push(group.people.slice(0, 3).join(", "));
     if (group.routes.length > 0) facts.push(group.routes.slice(0, 2).join(", "));
     lines.push(`  ${escape(facts.join(" · "))}`);
+
+    // Збіг у часі не робить реліз причиною — формулювання каже «почалось
+    // після», а не «через». Це привід глянути діф першим, не вирок.
+    if (alert.kind === "new" && releases.length > 0) {
+      const attributed = findReleaseBefore(group.firstAt, releases);
+      lines.push(`  ${escape(formatReleaseAttribution(attributed))}`);
+    }
   }
 
   const hidden = alerts.length - MAX_LISTED;
