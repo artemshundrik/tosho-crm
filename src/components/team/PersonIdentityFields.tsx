@@ -21,7 +21,7 @@
  * 27.07.2026 так затерли щойно завантажену аватарку.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type React from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -76,12 +76,24 @@ export function PersonIdentityFields({
   // Картка вміє перемикатись між людьми без перемонтування (роут той самий),
   // тож поля мають їхати за тим, кого показують, — інакше в чужу картку
   // потрапить чуже ім'я, і його ще й збережуть.
-  useEffect(() => {
+  //
+  // Синхронізація йде ПІД ЧАС рендеру, а не в ефекті. Ефект малює спочатку
+  // старі значення й лише потім замінює їх — на перемиканні між людьми це
+  // видимий кадр із чужим іменем у полях. React радить для «стан має піти за
+  // пропом» саме порівняння з попереднім значенням у тілі компонента: рендер
+  // переривається й повторюється ще до того, як щось потрапить на екран.
+  //
+  // Порівнюємо ВСІ поля, а не лише userId: та сама людина може приїхати з
+  // оновленими даними після рефетчу, і поля мусять це підхопити.
+  const identityKey = [person.userId, person.firstName, person.lastName, person.birthDate, person.startDate].join("|");
+  const [renderedKey, setRenderedKey] = useState(identityKey);
+  if (identityKey !== renderedKey) {
+    setRenderedKey(identityKey);
     setFirstName(person.firstName);
     setLastName(person.lastName);
     setBirthDate(person.birthDate);
     setStartDate(person.startDate);
-  }, [person.userId, person.firstName, person.lastName, person.birthDate, person.startDate]);
+  }
 
   const dirty =
     firstName.trim() !== person.firstName.trim() ||

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -60,12 +60,20 @@ export function AvatarCropDialog({
   // Нове фото — новий кадр. Без цього другий файл підряд відкривався з
   // масштабом і зсувом від попереднього, і людина не розуміла, чому обличчя
   // одразу обрізане.
-  useEffect(() => {
-    if (!imageSrc) return;
+  //
+  // Скидання йде ПІД ЧАС рендеру, а не в ефекті. Ефект тут спрацьовував би
+  // після того, як React уже намалював нове фото зі старим кадром, — тобто
+  // один зайвий кадр із чужим масштабом, який людина встигає побачити. React
+  // саме для цього випадку («поле має скинутись, коли змінився проп») радить
+  // порівняння з попереднім значенням просто в тілі компонента: рендер
+  // переривається й починається наново ще до малювання.
+  const [renderedSrc, setRenderedSrc] = useState(imageSrc);
+  if (imageSrc && imageSrc !== renderedSrc) {
+    setRenderedSrc(imageSrc);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCroppedAreaPixels(null);
-  }, [imageSrc]);
+  }
 
   const handleSave = async () => {
     if (!imageSrc || !croppedAreaPixels) return;

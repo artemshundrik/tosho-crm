@@ -86,6 +86,49 @@ describe("дані людини в картці", () => {
   });
 
   /**
+   * Картка перемикається між людьми БЕЗ перемонтування — роут той самий, і
+   * React лишає той самий компонент. Тому поля мусять піти за пропом самі;
+   * інакше в чужій картці стоїть чуже ім'я, і його ще й збережуть.
+   *
+   * Синхронізація робиться під час рендеру, а не в ефекті (ефект малює зайвий
+   * кадр зі старим іменем). Тест на це окремий саме тому, що механізм
+   * непомітний: прибери його — усі решта тестів лишаться зеленими.
+   */
+  it("перемикання на іншу людину переносить у поля її дані", () => {
+    const props = {
+      workspaceId: "ws-1",
+      canEdit: true,
+      actorUserId: "admin-1",
+      onSaved: () => {},
+    } as const;
+    const { rerender } = render(<PersonIdentityFields person={Person()} {...props} />);
+    expect(screen.getByLabelText("Ім'я")).toHaveValue("Дар'я");
+
+    rerender(
+      <PersonIdentityFields
+        person={Person({ userId: "user-2", firstName: "Антон", lastName: "Ковальчук" })}
+        {...props}
+      />
+    );
+    expect(screen.getByLabelText("Ім'я")).toHaveValue("Антон");
+    expect(screen.getByLabelText("Прізвище")).toHaveValue("Ковальчук");
+  });
+
+  it("оновлення тієї самої людини теж доїжджає в поля", () => {
+    const props = {
+      workspaceId: "ws-1",
+      canEdit: true,
+      actorUserId: "admin-1",
+      onSaved: () => {},
+    } as const;
+    const { rerender } = render(<PersonIdentityFields person={Person()} {...props} />);
+    // Той самий userId, свіже прізвище з рефетчу — поле має це підхопити,
+    // інакше синхронізація «лише за userId» тихо показувала б застаріле.
+    rerender(<PersonIdentityFields person={Person({ lastName: "Мезенцева-Коваль" })} {...props} />);
+    expect(screen.getByLabelText("Прізвище")).toHaveValue("Мезенцева-Коваль");
+  });
+
+  /**
    * Головний тест файлу. `upsertWorkspaceMemberProfile` пропускає `undefined`,
    * тож будь-яке зайве поле в payload затирає чуже свіже значення — саме так
    * 27.07.2026 зникла щойно завантажена аватарка. Форма редагує п'ять полів,
