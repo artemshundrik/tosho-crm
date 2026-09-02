@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Lightbulb, Loader2, Mic, Square } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -22,9 +22,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { MODULE_KEYS } from "@/lib/moduleAccess";
-import { isKnownModuleKey } from "@/lib/projectMap";
-import { supabase } from "@/lib/supabaseClient";
-import { useDictation } from "@/lib/useDictation";
 import { KNOWN_THEMES } from "./themeRegistry";
 import {
   KIND_LABELS,
@@ -80,8 +77,6 @@ export type NewDevRequestDialogProps = {
   onOpenChange: (open: boolean) => void;
   saving: boolean;
   error: string | null;
-  /** Відкриті картки — щоб модель підказала дубль. */
-  openTitles: Array<{ id: string; label: string; title: string }>;
   /**
    * Картка для правки. null (чи відсутній) — вікно працює як «Новий запит».
    *
@@ -93,36 +88,9 @@ export type NewDevRequestDialogProps = {
   onSubmit: (input: NewDevRequestInput) => void;
 };
 
-type DraftResponse = {
-  title?: string | null;
-  body?: string | null;
-  kind?: string | null;
-  duplicateOf?: string | null;
-  moduleKey?: string | null;
-  priority?: string | null;
-  existingFeature?: string | null;
-};
-
 /** Значення «немає напрямку»: Radix Select не приймає порожній рядок як value. */
 const NO_MODULE = "__none__";
 const NO_ZONE = "__none__";
-
-function asKind(value: unknown): RequestKind | null {
-  return typeof value === "string" && (REQUEST_KINDS as readonly string[]).includes(value)
-    ? (value as RequestKind)
-    : null;
-}
-
-function asPriority(value: unknown): RequestPriority | null {
-  return typeof value === "string" && (REQUEST_PRIORITIES as readonly string[]).includes(value)
-    ? (value as RequestPriority)
-    : null;
-}
-
-function formatElapsed(ms: number): string {
-  const total = Math.floor(ms / 1000);
-  return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, "0")}`;
-}
 
 /**
  * Вікно запиту: створення і правка одним компонентом.
@@ -143,7 +111,6 @@ export function NewDevRequestDialog({
   onOpenChange,
   saving,
   error,
-  openTitles,
   request = null,
   onSubmit,
 }: NewDevRequestDialogProps) {
@@ -156,10 +123,6 @@ export function NewDevRequestDialog({
   const [zone, setZone] = useState<RequestZone | null>(null);
   const [theme, setTheme] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
-  const [drafting, setDrafting] = useState(false);
-  const [duplicateOf, setDuplicateOf] = useState<string | null>(null);
-  const [existingFeature, setExistingFeature] = useState<string | null>(null);
-  const [draftError, setDraftError] = useState<string | null>(null);
   /**
    * Чи напрямок із пріоритетом так і лишились такими, як їх поставив розбір.
    * Правка руками гасить прапорець — інакше за цим полем не можна було б
@@ -172,83 +135,6 @@ export function NewDevRequestDialog({
   /** Те саме для напрямку й пріоритету: обране людиною розбір не затирає. */
   const classificationTouchedRef = useRef(false);
 
-  // Надиктоване ДОПИСУЄМО, а не затираємо: людина могла почати друкувати сама, і
-  // втратити це через голос було б гірше, ніж дописати зайвий абзац.
-  const appendBody = useCallback((text: string) => {
-    setBody((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${text}` : text));
-  }, []);
-
-  const draftFromSpeech = useCallback(
-    async (spokenText: string) => {
-      const spoken = spokenText.trim();
-      if (!spoken) return;
-      setDrafting(true);
-      setDraftError(null);
-      try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) throw new Error("Сесія протермінована");
-
-        const response = await fetch("/.netlify/functions/dev-request-draft", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ text: spoken, openTitles }),
-        });
-        if (!response.ok) throw new Error("Розбір не вдався");
-        const draft = (await response.json()) as DraftResponse;
-
-        const draftTitle = (draft.title ?? "").trim();
-        const draftBody = (draft.body ?? "").trim();
-        // Порожня відповідь = розбір нічого не дав. Кладемо сире надиктоване,
-        // щоб сказане не пропало.
-        if (!draftTitle && !draftBody) throw new Error("Порожній розбір");
-
-        if (draftTitle) setTitle((prev) => (prev.trim() ? prev : draftTitle));
-        if (draftBody) appendBody(draftBody);
-        const draftKind = asKind(draft.kind);
-        if (draftKind && !kindTouchedRef.current) setKind(draftKind);
-        setDuplicateOf((draft.duplicateOf ?? "").trim() || null);
-        setExistingFeature((draft.existingFeature ?? "").trim() || null);
-
-        // Напрямок функція вже звірила з реєстром, але відповідь приходить із
-        // мережі — перевіряємо ще раз тут, щоб у Select не потрапило значення,
-        // якого немає в списку.
-        if (!classificationTouchedRef.current) {
-          const draftModule = isKnownModuleKey(draft.moduleKey) ? draft.moduleKey : null;
-          const draftPriority = asPriority(draft.priority);
-          setModuleKey(draftModule);
-          setPriority(draftPriority ?? "normal");
-          // «Проставлено автоматично» — лише коли розбір справді щось вирішив.
-          // Аварійна відповідь (розбір упав) теж містить пріоритет "normal", і
-          // без цієї умови вона зараховувалась би в успішні класифікації —
-          // тобто саме та статистика, заради якої прапорець і заведено, брехала б.
-          setAutoClassified(
-            Boolean(draftModule) || (draftPriority !== null && draftPriority !== "normal")
-          );
-        }
-      } catch {
-        // Що б не сталося — мережа, сесія, поламана відповідь — надиктоване
-        // лишається в описі. Це єдине, що не можна втрачати.
-        appendBody(spoken);
-        setDraftError("Не вдалося розібрати сказане — текст поклав як є, назву допишіть самі.");
-      } finally {
-        setDrafting(false);
-      }
-    },
-    [appendBody, openTitles]
-  );
-
-  // useDictation тримає найсвіжіший onResult у ref, тож ця стрілка (нова на
-  // кожен рендер) завжди бачить актуальні пропси.
-  const dictation = useDictation({
-    context: "brief",
-    clean: false,
-    onResult: (text) => void draftFromSpeech(text),
-  });
-  const { cancel: cancelDictation } = dictation;
 
   /**
    * Що вже налито у форму: id картки або "new".
@@ -263,8 +149,6 @@ export function NewDevRequestDialog({
   useEffect(() => {
     if (!open) {
       filledForRef.current = null;
-      // Закрили посеред розповіді — мікрофон має згаснути разом із вікном.
-      cancelDictation();
       return;
     }
     const formKey = request?.id ?? "new";
@@ -281,26 +165,12 @@ export function NewDevRequestDialog({
     setZone(request?.zone ?? null);
     setTheme(request?.theme ?? "");
     setIsPrivate(request?.isPrivate ?? false);
-    setDuplicateOf(null);
-    setExistingFeature(null);
     setAutoClassified(request?.autoClassified ?? false);
-    setDraftError(null);
-    setDrafting(false);
     kindTouchedRef.current = false;
     classificationTouchedRef.current = false;
-  }, [open, request, cancelDictation]);
+  }, [open, request]);
 
   const isEdit = request !== null;
-
-  const isRecording = dictation.state === "recording";
-  // «Розбираю» для людини одне: і розпізнавання голосу, і розбір тексту.
-  const isBusy = dictation.state === "transcribing" || drafting;
-
-  const hint = isRecording
-    ? "Записую… розкажіть, що не так і як має бути"
-    : isBusy
-      ? "Розбираю сказане…"
-      : "Скажіть своїми словами — назву й опис зберу сам";
 
   const canSubmit = title.trim().length > 0 && !saving;
 
@@ -328,78 +198,11 @@ export function NewDevRequestDialog({
           <DialogDescription>
             {isEdit
               ? "Виправте, що не так: текст, тип, напрямок або пріоритет."
-              : "Що заважає в роботі або чого бракує. Формулювати не обов'язково — можна просто розказати."}
+              : "Що заважає в роботі або чого бракує."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
-          {/* ── Розповідь голосом (лише на створенні) ── */}
-          {isEdit ? null : (
-            <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3">
-              <div className="flex items-center gap-3">
-                <Button
-                  type="button"
-                  variant={isRecording ? "controlDestructive" : "control"}
-                  size="sm"
-                  className="shrink-0 gap-1.5"
-                  onClick={() => {
-                    if (isRecording) dictation.stop();
-                    else if (!isBusy) void dictation.start();
-                  }}
-                  disabled={!dictation.isSupported || isBusy}
-                  aria-pressed={isRecording}
-                >
-                  {isBusy ? (
-                    <>
-                      <Loader2 className="animate-spin" />
-                      Розбираю…
-                    </>
-                  ) : isRecording ? (
-                    <>
-                      <Square className="fill-current" />
-                      <span className="tabular-nums">Зупинити · {formatElapsed(dictation.elapsedMs)}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Mic />
-                      Розказати голосом
-                    </>
-                  )}
-                </Button>
-                <p className="text-xs text-muted-foreground">{hint}</p>
-              </div>
-              {!dictation.isSupported ? (
-                <p className="text-xs text-muted-foreground">
-                  Цей браузер не вміє записувати звук — залишається набрати текст руками.
-                </p>
-              ) : null}
-              {dictation.state === "error" && dictation.error ? (
-                <p className="text-xs tone-text-danger">{dictation.error}</p>
-              ) : null}
-              {draftError ? <p className="text-xs tone-text-warning">{draftError}</p> : null}
-            </div>
-          )}
-
-          {duplicateOf ? (
-            <p className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              Схоже на вже наявну картку {duplicateOf}. Якщо це вона — краще додати коментар туди.
-            </p>
-          ) : null}
-
-          {/* Підказка помітна, але нічого не блокує: впевнена неправильна
-              відповідь гірша за зайву картку, тож рішення лишається за людиною,
-              а мовчки не зникає нічого. */}
-          {existingFeature ? (
-            <div className="flex items-start gap-2 rounded-lg border tone-warning-subtle px-3 py-2 text-xs leading-5">
-              <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                <span className="font-medium">Схоже, це вже працює:</span> {existingFeature}
-                <br />
-                Якщо це не воно — створюйте картку, нічого страшного.
-              </span>
-            </div>
-          ) : null}
-
           <div className="space-y-2">
             <Label htmlFor={`${fieldId}-title`}>
               Суть <span className="text-destructive">*</span>

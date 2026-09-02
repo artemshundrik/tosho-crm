@@ -57,13 +57,9 @@ import {
   ARCHIVE_AFTER_DAYS,
   BOARD_COLUMNS,
   isArchivedRequest,
-  isOpenRequestStatus,
   type DevRequest,
   type RequestStatus,
 } from "@/features/devRequests/types";
-
-/** Скільки відкритих карток віддаємо моделі на звірку дублів. */
-const OPEN_TITLES_LIMIT = 50;
 
 /**
  * Що показано зараз. «Ідеї» та «Не робимо» — саме окремі ВИГЛЯДИ, а не
@@ -362,25 +358,6 @@ export default function DevRequestsPage() {
       archive: all.filter((r) => isArchivedRequest(r, now)).length,
     };
   }, [board.data]);
-
-  /**
-   * Звіряти дублі треба з усією дошкою, а не з тим, що лишилось після пошуку:
-   * інакше набраний у полі фільтр ховав би від моделі саме ту картку, на яку
-   * вона мала б показати.
-   *
-   * Що таке «відкрита» — вирішує isOpenRequestStatus (types.ts), а не список
-   * винятків тут. Раніше стояло віднімання («усе, крім released і wont_do»), і
-   * кожен новий стан мовчки потрапляв у звірку: «Ідеї» — це відкладене, і
-   * пропонувати дописати коментар туди так само безглуздо, як у викочене.
-   */
-  const openTitles = useMemo(
-    () =>
-      (board.data ?? [])
-        .filter((request) => isOpenRequestStatus(request.status))
-        .slice(0, OPEN_TITLES_LIMIT)
-        .map((request) => ({ id: request.id, label: request.label, title: request.title })),
-    [board.data]
-  );
 
   const handleMove = useCallback(
     (id: string, status: RequestStatus) => {
@@ -825,7 +802,6 @@ export default function DevRequestsPage() {
         onOpenChange={setDialogOpen}
         saving={editing ? updateRequest.isPending : createRequest.isPending}
         error={formError}
-        openTitles={openTitles}
         request={editing}
         onSubmit={handleSubmit}
       />

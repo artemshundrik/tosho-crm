@@ -109,7 +109,7 @@ export function escapeClamped(raw: string | null | undefined, maxEscaped: number
 }
 
 export const QUEUE_FORBIDDEN_MESSAGE =
-  "Черга запитів — для керівництва: у ній видно й приватні картки.\n\nЩоб завести задачу, перешли мені повідомлення або напиши /задача — це доступно всім.";
+  "Черга запитів — для керівництва: у ній видно й приватні картки.";
 
 /** Toast має ліміт ~200 знаків і показується поверх екрана — тут коротко. */
 export const QUEUE_FORBIDDEN_TOAST = "Черга доступна лише керівництву";
@@ -207,7 +207,6 @@ export function queueListScreen(input: { cards: BoardCard[]; hasMore?: boolean }
         "📋 <b>Черга запитів</b>",
         "",
         "Порожньо — жодної відкритої картки.",
-        "Нова з'явиться, щойно хтось перешле повідомлення або напише /задача.",
       ].join("\n"),
       keyboard: [],
     };

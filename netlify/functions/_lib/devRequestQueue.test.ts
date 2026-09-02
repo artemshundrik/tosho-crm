@@ -54,7 +54,7 @@ describe("isQueueCommand", () => {
   });
 
   it("чуже — ні", () => {
-    for (const command of ["/задача", "/settings", "черга", "", null, undefined]) {
+    for (const command of ["/settings", "/menu", "черга", "", null, undefined]) {
       expect(isQueueCommand(command)).toBe(false);
     }
   });

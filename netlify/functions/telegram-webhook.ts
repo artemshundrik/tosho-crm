@@ -37,13 +37,6 @@ import { canSeeAiCosts,
 import { collectDropboxHealth, formatDropboxHealthForTelegram } from "./_lib/dropboxHealth";
 import { buildAppUrl } from "./_lib/appUrl";
 import {
-  EMPTY_TASK_COMMAND_MESSAGE,
-  TASK_PROMPT_PLACEHOLDER,
-  isTaskPromptReply,
-  NON_TEXT_FORWARD_MESSAGE,
-  isTaskCommand,
-} from "./_lib/devRequestBot";
-import {
   BOARD_PATH,
   fetchBoardCard,
   fetchOpenBoardCards,
@@ -65,11 +58,8 @@ import {
   QUEUE_UNKNOWN_TOAST,
 } from "./_lib/devRequestQueue";
 import {
-  forwardOriginName,
-  isForwardedMessage,
   isPrivateChat,
   parseCommand,
-  telegramUserName,
   type TelegramChat,
   type TelegramMessage,
 } from "./_lib/telegramUpdate";
@@ -77,7 +67,6 @@ import {
 // Telegram webhook:
 //  - /start <nonce> — прив'язка акаунта, /stop — відписка (фаза 1)
 //  - /settings + callback-кнопки — налаштування каналів усередині бота (фаза 3)
-//  - переслане повідомлення або /задача — картка розділу «Запити»
 // Синхронізація з CRM безкоштовна: і бот, і CRM пишуть один рядок
 // tosho.user_notification_settings (channel_prefs / telegram_enabled).
 // Реєстрація: setWebhook з allowed_updates ["message","callback_query"] (див. §12).
@@ -207,28 +196,7 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
   if (!chatId) return;
 
   const text = message.text?.trim();
-  if (!text) {
-    // Переслали не текст — голосове, фото, стікер. Картку з цього не зробити:
-    // ланки «завантажити файл → розпізнати» в боті свідомо немає (диктувати
-    // можна просто в поле введення, і боту прийде звичайний текст). Мовчати не
-    // можна: людина щойно зробила дію й чекає слід.
-    if (isForwardedMessage(message)) {
-      await sendTelegramMessage(chatId, NON_TEXT_FORWARD_MESSAGE);
-    }
-    return;
-  }
-
-  /**
-   * Відповідь на наше «Слухаю. Що записати?» — це задача, без жодної команди.
-   *
-   * Стоїть ПЕРЕД розбором команди навмисно: людина відповідає вільним текстом,
-   * а він може початися з «/» (шляхом до файлу, наприклад), і тоді парсер
-   * прийняв би це за команду й мовчки з'їв.
-   */
-  if (isTaskPromptReply(message.reply_to_message?.text)) {
-    await handleDevRequestCapture(adminClient, message, { text, forwarded: false });
-    return;
-  }
+  if (!text) return;
 
   // Зрізає «@botname» — інакше скопійована з групи команда не спрацювала б.
   const { command, args } = parseCommand(text);
@@ -308,37 +276,6 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
         "\n⚙️ Що саме слати — /settings · вимкнути все — /stop",
       isAssistantAllowed(role) ? { parseMode: "HTML", replyMarkup: PERSISTENT_MENU } : { parseMode: "HTML" }
     );
-    return;
-  }
-
-  // Переслане повідомлення → картка. Сигнал однозначний і команди не потребує:
-  // пересилають, щоб зафіксувати, а не щоб спитати. Стоїть ПІСЛЯ /start
-  // навмисно — переслане посилання прив'язки має лишитись прив'язкою, а не
-  // осісти токеном у тілі командної картки.
-  if (isForwardedMessage(message)) {
-    await handleDevRequestCapture(adminClient, message, {
-      text,
-      forwarded: true,
-      forwardedFrom: forwardOriginName(message),
-    });
-    return;
-  }
-
-  // Власна думка: «/задача …» (або «/task …» латиницею).
-  if (isTaskCommand(command)) {
-    if (!args) {
-      // force_reply замість інструкції: тап по «task» у меню команд Telegram
-      // відправляє команду одразу й дописати до неї текст не дає, тож без
-      // цього єдиним шляхом лишалось набрати «/задача …» руками цілком.
-      await sendTelegramMessage(chatId, EMPTY_TASK_COMMAND_MESSAGE, {
-        replyMarkup: {
-          force_reply: true,
-          input_field_placeholder: TASK_PROMPT_PLACEHOLDER,
-        },
-      });
-      return;
-    }
-    await handleDevRequestCapture(adminClient, message, { text: args, forwarded: false });
     return;
   }
 
@@ -756,98 +693,6 @@ async function handleAssistantQuestion(
     });
   } catch {
     await sendTelegramMessage(chatId, "Не зміг прийняти питання. Спробуй ще раз.");
-  }
-}
-
-/**
- * Переслане повідомлення або «/задача …» → картка розділу «Запити».
- *
- * Тут лише те, що має статись швидко: резолв людини й ввічлива відмова, якщо
- * акаунт не підключено або доступ призупинено. Розбір моделлю (5–20 с) і запис
- * ідуть у -background функцію, бо Telegram чекає відповіді на вебхук секунди й
- * повторює запит — той самий контур, що в асистента.
- *
- * Обмежень за роллю немає навмисно: «нічого не губиться» — це мета фічі, і
- * найгучніше русло скарг тут якраз рядові співробітники. Картка з чату завжди
- * командна (is_private = false), тож нічого зайвого вона не відкриває.
- */
-async function handleDevRequestCapture(
-  adminClient: AdminClient,
-  message: NonNullable<TelegramUpdate["message"]>,
-  input: { text: string; forwarded: boolean; forwardedFrom?: string | null }
-) {
-  const chatId = message.chat?.id;
-  if (!chatId) return;
-
-  const settings = await loadSettingsByChat(adminClient, chatId);
-  if (!settings) {
-    await sendTelegramMessage(chatId, NOT_LINKED, { parseMode: "HTML" });
-    return;
-  }
-  if (!(await isActiveMember(adminClient, settings.user_id))) {
-    await sendTelegramMessage(chatId, DEACTIVATED_MESSAGE);
-    return;
-  }
-
-  // workspace_id для ролей і team_id для даних — це РІЗНІ ідентифікатори.
-  // Ім'я беремо з team_member_profiles: memberships_view.full_name порожній.
-  const [membership, profile, teamMember] = await Promise.all([
-    adminClient
-      .schema("tosho")
-      .from("memberships_view")
-      .select("workspace_id")
-      .eq("user_id", settings.user_id)
-      .maybeSingle(),
-    adminClient
-      .schema("tosho")
-      .from("team_member_profiles")
-      .select("first_name,last_name")
-      .eq("user_id", settings.user_id)
-      .maybeSingle(),
-    adminClient.from("team_members").select("team_id").eq("user_id", settings.user_id).maybeSingle(),
-  ]);
-
-  // team_id обов'язковий: на ньому і RLS картки, і лічильник номерів.
-  // workspace_id — ні: без нього картка жива, лише історія змін нечитабельна.
-  const teamId = (teamMember.data?.team_id as string | undefined) ?? null;
-  if (!teamId) {
-    await sendTelegramMessage(chatId, "Не можу визначити твою команду в CRM. Напиши адміну.");
-    return;
-  }
-  const actorName =
-    [profile.data?.first_name, profile.data?.last_name]
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
-      .filter(Boolean)
-      .join(" ") || null;
-
-  await sendTelegramChatAction(chatId, "typing");
-
-  const base = process.env.PUBLIC_APP_URL || "https://tosho.pro";
-  const secret = process.env.CRON_SHARED_SECRET ?? "";
-  try {
-    // Fire-and-forget: -background функція відповідає 202 одразу.
-    await fetch(`${base}/.netlify/functions/telegram-dev-request-background`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-cron-key": secret },
-      body: JSON.stringify({
-        chatId,
-        messageId: message.message_id,
-        userId: settings.user_id,
-        teamId,
-        workspaceId: (membership.data?.workspace_id as string | undefined) ?? null,
-        actorName,
-        // Ім'я з Telegram зберігаємо навіть для підключеної людини: у картці
-        // видно, хто саме її надіслав, тим самим підписом, що в чаті.
-        tgUserId: message.from?.id ?? null,
-        tgUsername: message.from?.username ?? null,
-        displayName: telegramUserName(message.from),
-        text: input.text,
-        forwarded: input.forwarded,
-        forwardedFrom: input.forwardedFrom ?? null,
-      }),
-    });
-  } catch {
-    await sendTelegramMessage(chatId, "Не зміг прийняти задачу. Спробуй ще раз.");
   }
 }
 

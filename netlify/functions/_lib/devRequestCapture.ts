@@ -17,7 +17,7 @@ import { clampDraftText, type DevRequestKind, type DevRequestPriority } from "./
  * Заголовок із персональним токеном.
  *
  * НЕ Authorization: у решті функцій цього проєкту Authorization означає рівно
- * одне — Supabase JWT живої людини (див. dev-request-draft.ts). Токен захоплення
+ * одне — Supabase JWT живої людини. Токен захоплення
  * — інша сутність (спільний секрет, не сесія), і сісти на той самий заголовок
  * означало б, що два різні гейти виглядають однаково.
  */

@@ -39,17 +39,17 @@ describe("parseCommand", () => {
   });
 
   it("зрізає @botname — скопійована з групи команда має спрацювати", () => {
-    expect(parseCommand("/задача@ToShoCRM_bot кнопка не тисне")).toEqual({
-      command: "/задача",
-      args: "кнопка не тисне",
+    expect(parseCommand("/черга@ToShoCRM_bot відкриті")).toEqual({
+      command: "/черга",
+      args: "відкриті",
     });
     expect(parseCommand("/settings@ToShoCRM_bot")).toEqual({ command: "/settings", args: "" });
   });
 
   it("кирилична команда розбирається так само, як латинська", () => {
-    expect(parseCommand("/задача не працює пошук")).toEqual({
-      command: "/задача",
-      args: "не працює пошук",
+    expect(parseCommand("/черга відкриті картки")).toEqual({
+      command: "/черга",
+      args: "відкриті картки",
     });
   });
 
