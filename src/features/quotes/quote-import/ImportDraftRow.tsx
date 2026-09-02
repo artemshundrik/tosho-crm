@@ -134,17 +134,31 @@ export function ImportDraftRow({
               className="min-w-[12rem] flex-1"
               onChange={(event) => onPatch({ name: event.target.value })}
             />
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">
+            {/*
+              ТИРАЖІ — ОДИН КОНТРОЛ, А НЕ РОЗСИП. Були окремі поля з хрестиками,
+              що висіли на їхніх кутах, і на двох тиражах ряд ламався навпіл:
+              частина полів лишалась угорі, «+ тираж» їхав униз. Тепер це одна
+              рамка з міткою, полями й кнопкою всередині: вона не ділиться при
+              переносі, а їде на новий рядок цілою. Хрестик переїхав усередину
+              поля й показується лише під курсором — на кутах він читався як
+              значок помилки.
+            */}
+            <div className="flex shrink-0 items-center gap-2">
+            <div className="inline-flex items-center gap-1 rounded-xl border border-border/60 bg-muted/20 p-1">
+              <span className="px-1.5 text-2xs font-medium uppercase tracking-caps text-muted-foreground">
                 {draft.runs.length > 1 ? "Тиражі" : "Тираж"}
               </span>
               {draft.runs.map((run) => (
-                <div key={run.key} className="relative">
+                <div key={run.key} className="group/run relative">
                   <NumberInput
                     value={run.quantity > 0 ? run.quantity : null}
                     min={0}
                     emptyValue={0}
-                    className="w-24"
+                    controlSize="md"
+                    className={cn(
+                      "w-[5.5rem] border-transparent bg-background text-center shadow-none",
+                      onRemoveRun && draft.runs.length > 1 && "pr-5"
+                    )}
                     placeholder="скільки"
                     disabled={disabled}
                     aria-label="Кількість тиражу"
@@ -156,9 +170,9 @@ export function ImportDraftRow({
                       disabled={disabled}
                       aria-label="Прибрати тираж"
                       onClick={() => onRemoveRun(run.key)}
-                      className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground"
+                      className="absolute right-1 top-1/2 grid h-4 w-4 -translate-y-1/2 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/run:opacity-100"
                     >
-                      <X className="h-2.5 w-2.5" strokeWidth={3} />
+                      <X className="h-3 w-3" strokeWidth={2.5} />
                     </button>
                   ) : null}
                 </div>
@@ -170,7 +184,7 @@ export function ImportDraftRow({
                   aria-label="Додати ще тираж"
                   title="Клієнт просить порахувати кілька кількостей"
                   onClick={onAddRun}
-                  className="inline-flex h-9 items-center gap-1 rounded-[var(--radius-md)] border border-dashed border-border px-2 text-xs text-muted-foreground hover:border-foreground/40 hover:text-foreground disabled:opacity-50"
+                  className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   тираж
@@ -183,11 +197,12 @@ export function ImportDraftRow({
                 disabled={disabled}
                 aria-label={`Прибрати «${draft.name || "позицію"}»`}
                 onClick={onRemove}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] text-muted-foreground hover:bg-danger-soft hover:text-danger-foreground disabled:opacity-50"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted-foreground hover:bg-danger-soft hover:text-danger-foreground disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
             ) : null}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 text-2xs">

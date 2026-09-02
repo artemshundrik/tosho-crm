@@ -98,8 +98,12 @@ export function QuoteWizardDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   teamId: string;
-  /** Шапка майбутнього прорахунку: замовник, менеджер, дедлайн, валюта. */
-  header: React.ReactNode;
+  /**
+   * Шапка майбутнього прорахунку: замовник, менеджер, дедлайн, валюта.
+   * Функція, а не вузол, бо вікно має чим показати, ЯКОГО поля бракує:
+   * лічильник зростає на натиску «Створити» без замовника.
+   */
+  header: (nudgeSignal: number) => React.ReactNode;
   /** Чого бракує в шапці, щоб створювати. Порожньо — можна. */
   headerIssue: string | null;
   runDefaultsFor: (kind: QuoteKindValue) => QuoteImportRunDefaults;
@@ -118,6 +122,8 @@ export function QuoteWizardDialog({
   const [savedCount, setSavedCount] = React.useState(0);
   const [linkUrl, setLinkUrl] = React.useState("");
   const [linkBusy, setLinkBusy] = React.useState(false);
+  /** Скільки разів людина натиснула «Створити», а шапка була неповна. */
+  const [headerNudge, setHeaderNudge] = React.useState(0);
   /** Фото й назви для позицій «за посиланням»: черга імпорту сюди не заходить. */
   const [linkPreviews, setLinkPreviews] = React.useState<Record<string, QuoteImportLinkPreview>>({});
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -134,6 +140,7 @@ export function QuoteWizardDialog({
     setSavedCount(0);
     setLinkUrl("");
     setLinkBusy(false);
+    setHeaderNudge(0);
     setLinkPreviews({});
     resetLinkPreviews();
   }, [resetLinkPreviews]);
@@ -145,8 +152,13 @@ export function QuoteWizardDialog({
     [selected]
   );
   const photoProgress = React.useMemo(() => countSettledPreviews(previews), [previews]);
-  const canCreate =
-    stage === "compose" && !headerIssue && selected.length > 0 && nameless === 0 && runless === 0;
+  /**
+   * Кнопка активна, щойно є хоч одна позиція, — навіть коли шапка неповна.
+   * Вимкнена кнопка мовчить: людина тисне, нічого не стається, і причину треба
+   * шукати очима внизу. Натомість натиск показує, ЧОГО бракує: хитає поле
+   * замовника або називає позицію без тиражу.
+   */
+  const canSubmit = stage === "compose" && selected.length > 0;
 
   const patchDraft = (key: string, patch: Partial<QuoteImportDraftItem>) => {
     setDrafts((prev) => prev.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)));
@@ -289,7 +301,19 @@ export function QuoteWizardDialog({
   };
 
   const handleCreate = async () => {
-    if (!canCreate) return;
+    if (!canSubmit) return;
+    if (headerIssue) {
+      setHeaderNudge((count) => count + 1);
+      return;
+    }
+    if (runless > 0 || nameless > 0) {
+      setError(
+        runless > 0
+          ? "Впишіть тираж — без нього позицію нема з чого рахувати."
+          : "Впишіть назву позиції: сайт її не віддав."
+      );
+      return;
+    }
     setStage("saving");
     setError(null);
 
@@ -344,8 +368,11 @@ export function QuoteWizardDialog({
   const footerIssue = headerIssue;
   const footerMeta = (() => {
     if (footerIssue) return footerIssue;
-    if (runless > 0) return `Впишіть тираж: без нього позицію нема з чого рахувати (${runless} із ${selected.length}).`;
-    if (nameless > 0) return "Впишіть назву позиції — сайт її не віддав.";
+    // Поки помилка вгорі не піднята, підвал підказує наперед. Коли піднята —
+    // мовчить: та сама фраза двічі на одному екрані читається як збій.
+    if (!error && runless > 0)
+      return `Впишіть тираж: без нього позицію нема з чого рахувати (${runless} із ${selected.length}).`;
+    if (!error && nameless > 0) return "Впишіть назву позиції — сайт її не віддав.";
     if (source === "manual") return "Ціни й собівартість — уже в картці прорахунку.";
     if (drafts.length > 0)
       return `Прорахунок з’явиться в базі лише після «Створити» · ${selected.length} із ${drafts.length} ${pluralWordUk(drafts.length, "позиції", "позицій", "позицій")}`;
@@ -382,7 +409,7 @@ export function QuoteWizardDialog({
             </div>
           ) : null}
 
-          {header}
+          {header(headerNudge)}
 
           {/*
             ОБИДВА ВИБОРИ — ОДНИМ РЯДКОМ (REQ-237#p8).
@@ -483,7 +510,9 @@ export function QuoteWizardDialog({
                   variant="secondary"
                   disabled={busy || !linkUrl.trim()}
                   onClick={() => void handleLink()}
-                  className="shrink-0 gap-2"
+                  // Поле вводу в CRM за замовчуванням `lg` (h-10, rounded-xl), а
+                  // кнопка `md` (h-9, rounded-lg): поруч це видно як сходинку.
+                  className="h-10 shrink-0 gap-2 rounded-xl"
                 >
                   {linkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   Додати товар
@@ -634,7 +663,7 @@ export function QuoteWizardDialog({
             <Button type="button" variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
               Скасувати
             </Button>
-            <Button type="button" disabled={!canCreate} onClick={() => void handleCreate()} className="gap-2">
+            <Button type="button" disabled={!canSubmit} onClick={() => void handleCreate()} className="gap-2">
               {stage === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {stage === "saving" ? `Створюю… ${savedCount}/${selected.length}` : "Створити прорахунок"}
               {stage === "saving" ? null : <ArrowRight className="h-4 w-4" />}

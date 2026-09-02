@@ -140,9 +140,15 @@ export function TestQuoteWizardButton({
             open={open}
             onOpenChange={setOpen}
             teamId={teamId}
-            header={
-              <QuoteWizardHeader teamId={teamId} currentUserId={currentUserId} value={header} onChange={setHeader} />
-            }
+            header={(nudgeSignal) => (
+              <QuoteWizardHeader
+                teamId={teamId}
+                currentUserId={currentUserId}
+                value={header}
+                onChange={setHeader}
+                nudgeSignal={nudgeSignal}
+              />
+            )}
             headerIssue={headerIssue}
             runDefaultsFor={runDefaultsFor}
             onPrepareQuote={prepareQuote}

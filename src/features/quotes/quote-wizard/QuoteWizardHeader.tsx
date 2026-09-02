@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { searchQuoteParties, type QuotePartyOption } from "@/features/quotes/quoteParties";
 import { isInactiveEmployment } from "@/lib/employment";
+import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 
@@ -79,12 +80,18 @@ export function QuoteWizardHeader({
   value,
   onChange,
   disabled,
+  nudgeSignal = 0,
 }: {
   teamId: string;
   currentUserId?: string | null;
   value: QuoteWizardHeaderValue;
   onChange: (next: QuoteWizardHeaderValue) => void;
   disabled?: boolean;
+  /**
+   * Лічильник «покажи, що бракує саме тут». Зростає, коли натиснули «Створити»
+   * без замовника; зміна значення перезапускає анімацію через `key`.
+   */
+  nudgeSignal?: number;
 }) {
   const [partySearch, setPartySearch] = React.useState("");
   const [parties, setParties] = React.useState<QuotePartyOption[]>([]);
@@ -162,6 +169,7 @@ export function QuoteWizardHeader({
     */
     <div>
       <div className="flex flex-wrap items-center gap-2">
+        <span key={nudgeSignal} className={cn("inline-flex", nudgeSignal > 0 && "animate-control-nudge")}>
         <CustomerLeadPicker
           open={partyPickerOpen}
           onOpenChange={setPartyPickerOpen}
@@ -184,6 +192,7 @@ export function QuoteWizardHeader({
             patch({ partyId: "", partyLabel: "", partyType: "customer", partyLogoUrl: null })
           }
         />
+        </span>
 
         <Popover open={managerPopoverOpen} onOpenChange={setManagerPopoverOpen}>
           <PopoverTrigger asChild>

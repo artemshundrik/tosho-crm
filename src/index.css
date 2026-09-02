@@ -1788,6 +1788,49 @@
 }
 
 /* === SHIMMER ANIMATION FOR IMAGE LOADING === */
+/*
+ * «Поле просить уваги» — коротке хитання контрола (REQ-237#p12).
+ *
+ * Навіщо. Кнопка «Створити», вимкнена без замовника, мовчить: людина тисне й
+ * нічого не стається, і причину доводиться шукати очима внизу вікна. Замість
+ * німої сірої кнопки — жест у бік того поля, якого бракує.
+ *
+ * Чому 0.42 с і згасаюча амплітуда: довше читається як поломка, рівна
+ * амплітуда — як тремтіння. Крива та сама, що в матеріальних рекомендаціях для
+ * помилки вводу.
+ */
+@keyframes control-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-5px);
+  }
+  30% {
+    transform: translateX(4px);
+  }
+  45% {
+    transform: translateX(-3px);
+  }
+  60% {
+    transform: translateX(2px);
+  }
+  75% {
+    transform: translateX(-1px);
+  }
+}
+
+.animate-control-nudge {
+  animation: control-nudge 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-control-nudge {
+    animation: none;
+  }
+}
+
 @keyframes shimmer {
   0% {
     background-position: -200% 0;

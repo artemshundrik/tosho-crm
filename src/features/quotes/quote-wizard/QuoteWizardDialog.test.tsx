@@ -63,7 +63,7 @@ function renderWizard(overrides: Partial<React.ComponentProps<typeof QuoteWizard
       open
       onOpenChange={() => {}}
       teamId="team-1"
-      header={<div>шапка прорахунку</div>}
+      header={() => <div>шапка прорахунку</div>}
       headerIssue={null}
       runDefaultsFor={() => runDefaults}
       onPrepareQuote={prepareQuote}
@@ -139,6 +139,8 @@ describe("QuoteWizardDialog — один екран", () => {
 
     expect(screen.getByRole("button", { name: "Обрати файл Excel" })).not.toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText(/Оберіть замовника/)).toBeInTheDocument();
+    // Кнопка не мовчить: без позицій вона вимкнена, а з позиціями натиск
+    // покаже, чого бракує, замість того щоб не робити нічого.
     expect(screen.getByRole("button", { name: /Створити прорахунок/ })).toBeDisabled();
   });
 
@@ -148,12 +150,14 @@ describe("QuoteWizardDialog — один екран", () => {
 
     await user.click(screen.getByRole("tab", { name: /Руками/ }));
     const create = screen.getByRole("button", { name: /Створити прорахунок/ });
-    // Рядок є, але без назви створювати нема чого.
-    expect(create).toBeDisabled();
 
     await user.type(screen.getByRole("textbox", { name: "Назва позиції" }), "Кепка six-panel");
-    // Тираж порожній навмисно — поки на нього не відповіли, створювати нема чого.
-    expect(create).toBeDisabled();
+    // Тираж порожній навмисно. Кнопка при цьому НЕ мовчить: натиск називає,
+    // чого бракує, замість того щоб не робити нічого.
+    await user.click(create);
+    expect(prepareQuote).not.toHaveBeenCalled();
+    expect(screen.getByText(/Впишіть тираж/)).toBeInTheDocument();
+
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "250");
     await user.click(screen.getByRole("radio", { name: /Поліграфія/ }));
     expect(create).toBeEnabled();
@@ -175,7 +179,6 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(screen.queryByDisplayValue("Бавовна 80 %, начіс усередині.")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "shop.example/hoodie" })).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: /Створити прорахунок/ })).toBeDisabled();
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "300");
     expect(screen.getByRole("button", { name: /Створити прорахунок/ })).toBeEnabled();
   });
