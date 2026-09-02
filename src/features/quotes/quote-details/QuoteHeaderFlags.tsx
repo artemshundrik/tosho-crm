@@ -1,6 +1,7 @@
 import { AlertTriangle, Lock } from "lucide-react";
 
 import { HoverTip } from "@/components/ui/hover-tip";
+import { cn } from "@/lib/utils";
 import { formatRatePercent, minMarkupRateFor, type QuoteDealType } from "@/lib/quoteDealType";
 
 /**
@@ -120,6 +121,65 @@ export function QuoteRunChoiceChip({
       <button type="button" className={CHIP_CLASS} onClick={() => onFocus?.(items[0].id)}>
         <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning-solid" />
         <span className="tabular-nums">{items.length}</span> без вибору
+      </button>
+    </HoverTip>
+  );
+}
+
+/**
+ * Тиражі, чиї числа ще не в базі: гейт ПДВ тримає їх у браузері.
+ *
+ * ТРЕТІ ДВЕРІ, і найпідступніші (REQ-242, REQ-243). Ті двоє хоч видно на місці
+ * — тут же людина бачить своє число в полі й у переліку, тож має всі підстави
+ * вважати, що зберегла. Тому прапорець стоїть поруч зі статусом, куди вона й
+ * піде натискати «Прораховано», і по кліку везе просто до незбереженого поля.
+ */
+export function QuoteUnsavedRunChip({
+  runs,
+  onFocus,
+}: {
+  runs: QuoteMarkupGateRun[];
+  onFocus?: (runId: string) => void;
+}) {
+  if (runs.length === 0) return null;
+  return (
+    <HoverTip
+      side="bottom"
+      contentClassName="max-w-[340px] px-3 py-2 text-2xs leading-relaxed"
+      label={
+        <span>
+          <span className="font-semibold text-foreground">
+            {runs.length === 1 ? "Тираж не збережено." : `${runs.length} тиражі не збережено.`}
+          </span>{" "}
+          Вартість товару введена, але не сказано, з ПДВ вона чи без, — і поки цього немає, сума
+          лишається в браузері й не їде в базу. Прорахунок не перевести в «Прораховано». Натисніть,
+          щоб перейти до тиражу.
+          <span className={LIST_CLASS}>
+            {runs.map((run) => (
+              <span key={run.id} className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate">{run.label}</span>
+                <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                  {run.rateLabel}
+                </span>
+              </span>
+            ))}
+          </span>
+        </span>
+      }
+    >
+      <button
+        type="button"
+        // cn, а не шаблонний рядок: без tailwind-merge переможця між
+        // text-foreground і text-destructive вирішував би порядок у зібраному
+        // CSS, тобто лотерея.
+        className={cn(
+          CHIP_CLASS,
+          "border-destructive/40 bg-danger-soft/40 text-destructive hover:border-destructive/60 hover:bg-danger-soft/60"
+        )}
+        onClick={() => onFocus?.(runs[0].id)}
+      >
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        <span className="tabular-nums">{runs.length}</span> не збережено
       </button>
     </HoverTip>
   );

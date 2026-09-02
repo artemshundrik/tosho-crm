@@ -123,6 +123,7 @@ import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatG
 import { QuoteDealTypeBadge } from "@/features/quotes/quote-details/QuoteDealTypeBadge";
 import { isMarkupFrozen } from "@/lib/quoteMarkupApproval";
 import { resolveQuoteStatusGate, resolveStatusBlockReason } from "@/features/quotes/quote-details/quoteStatusGates";
+import { buildRunsAutosaveSignature } from "@/features/quotes/quote-details/quoteRunAutosave";
 import {
   defaultMarkupRateFor,
   formatRatePercent,
@@ -153,6 +154,7 @@ import { QuoteMarkupDecisionDialog } from "@/features/quotes/quote-details/Quote
 import {
   QuoteMarkupGateChip,
   QuoteRunChoiceChip,
+  QuoteUnsavedRunChip,
 } from "@/features/quotes/quote-details/QuoteHeaderFlags";
 import { useQuoteHeaderFlags } from "@/features/quotes/quote-details/useQuoteHeaderFlags";
 import { pluralUk } from "@/lib/lastSeen";
@@ -1233,60 +1235,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     (savedRuns: Array<{ id?: string | null; markup_rate?: number | null; costTotal: number }>) => Promise<void>
   >(async () => {});
 
-  const runsAutosaveSignature = useMemo(
-    () =>
-      JSON.stringify(
-        runs.map((run) => ({
-          id: run.id ?? "",
-          quote_item_id: run.quote_item_id ?? "",
-          quantity: Math.max(1, Number(run.quantity) || 1),
-          unit_price_model: Math.max(0, Number(run.unit_price_model) || 0),
-          unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
-          unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
-          logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
-          desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
-          // Без накрутки підпис не мінявся від правки САМОГО поля ціни: 40 → 25
-          // автозбереження не бачило, і число жило лише до переходу на іншу
-          // сторінку. Ціну веде саме воно — у підписі має бути першим ділом.
-          // Дефолт КОЛОНКИ, а не типу угоди: це підпис уже збереженого рядка.
-          // З числом типу зміна типу угоди сама переписувала б підпис і
-          // смикала автозбереження на тиражах, яких ніхто не чіпав.
-          markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, COLUMN_MARKUP_FALLBACK)),
-          manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
-          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
-          vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
-          is_approved: run.is_approved === true,
-        }))
-      ),
-    [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, runs]
+  const autosaveRates = useMemo(
+    () => ({
+      markupFallback: COLUMN_MARKUP_FALLBACK,
+      managerRate: currentManagerRate || DEFAULT_MANAGER_RATE,
+      fixedCostRate: companyRates.fixedCostRate,
+      vatRate: companyRates.vatRate,
+    }),
+    [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate]
   );
-
+  const savedRunIdSet = useMemo(
+    () => new Set(runsOriginal.map((run) => run.id).filter((id): id is string => Boolean(id))),
+    [runsOriginal]
+  );
+  const runsAutosaveSignature = useMemo(
+    () => buildRunsAutosaveSignature(runs, autosaveRates, savedRunIdSet),
+    [autosaveRates, runs, savedRunIdSet]
+  );
   const runsOriginalAutosaveSignature = useMemo(
-    () =>
-      JSON.stringify(
-        runsOriginal.map((run) => ({
-          id: run.id ?? "",
-          quote_item_id: run.quote_item_id ?? "",
-          quantity: Math.max(1, Number(run.quantity) || 1),
-          unit_price_model: Math.max(0, Number(run.unit_price_model) || 0),
-          unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
-          unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
-          logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
-          desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
-          // Без накрутки підпис не мінявся від правки САМОГО поля ціни: 40 → 25
-          // автозбереження не бачило, і число жило лише до переходу на іншу
-          // сторінку. Ціну веде саме воно — у підписі має бути першим ділом.
-          // Дефолт КОЛОНКИ, а не типу угоди: це підпис уже збереженого рядка.
-          // З числом типу зміна типу угоди сама переписувала б підпис і
-          // смикала автозбереження на тиражах, яких ніхто не чіпав.
-          markup_rate: Math.max(0, resolveNumericRate(run.markup_rate, COLUMN_MARKUP_FALLBACK)),
-          manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
-          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
-          vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
-          is_approved: run.is_approved === true,
-        }))
-      ),
-    [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, runsOriginal]
+    () => buildRunsAutosaveSignature(runsOriginal, autosaveRates, savedRunIdSet),
+    [autosaveRates, runsOriginal, savedRunIdSet]
   );
 
   // Той самий гейт, що й у `saveRuns`, але для показу: підсвітка поля в трьох
@@ -1757,10 +1725,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }, []),
   });
 
-  const { blockingRunIdSet, markupGateRuns, runChoiceItems, focusOnPage } = useQuoteHeaderFlags({
+  const { blockingRunIdSet, markupGateRuns, unsavedRuns, runChoiceItems, focusOnPage } = useQuoteHeaderFlags({
     items,
     runs,
     blockingRunIds: markup.gate.blockingRunIds,
+    unsavedRunIds: runIdsNeedingModelPriceVat,
     onOpenProducts: useCallback(() => setActiveQuoteTab("products"), []),
   });
 
@@ -2941,6 +2910,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     if (!runsLoaded) return;
+    // Порожньо БО ЇХ НЕМАЄ — а не бо не прочитали (REQ-243): на помилці читання
+    // заготовка виглядала б як «собівартість не внесена», тобто брехала б про
+    // чужі числа. Тоді блок показує причину, а не вигадану заготовку.
+    if (runsError) return;
     if (runs.length === 0 && items.length > 0) {
       const firstQty = Number(items[0].qty) || 1;
       const newId = crypto.randomUUID();
@@ -2960,7 +2933,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       ]);
       setSelectedRunId(newId);
     }
-  }, [companyRates.fixedCostRate, companyRates.vatRate, runsLoaded, runs.length, items, currentManagerRate, dealType]);
+  }, [companyRates.fixedCostRate, companyRates.vatRate, runsLoaded, runsError, runs.length, items, currentManagerRate, dealType]);
 
   useEffect(() => {
     if (!runsLoaded || !effectiveManagerId || runs.length === 0) return;
@@ -4534,6 +4507,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
 
             <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5 lg:order-none">
+              <QuoteUnsavedRunChip runs={unsavedRuns} onFocus={(id) => focusOnPage(`quote-run-${id}`, "error")} />
               <QuoteMarkupGateChip blocking={markupGateRuns} dealType={dealType} onFocus={(id) => focusOnPage(`quote-run-${id}`)} />
               <QuoteRunChoiceChip items={runChoiceItems} onFocus={(id) => focusOnPage(`quote-item-${id}`)} />
               {currentStatus === "approved" ? (
@@ -4838,8 +4812,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <AppSectionLoader label="Завантаження..." />
               ) : itemsLoading ? (
                 <AppSectionLoader label="Завантаження..." />
-              ) : itemsError ? (
-                <div className="py-4 text-sm text-destructive">{itemsError}</div>
+              ) : itemsError || runsError ? (
+                // runsError сюди додано разом із REQ-243: він малювався ЛИШЕ в
+                // старій згортці «Тиражі», якої в цьому блоці немає, — тож
+                // непрочитані тиражі виглядали як «собівартість не внесена».
+                <div className="py-4 text-sm text-destructive">{itemsError || runsError}</div>
               ) : items.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center">
                   <Package className="h-10 w-10 text-muted-foreground/30" />

@@ -30,31 +30,57 @@ export function useQuoteHeaderFlags(params: {
   items: FlagItem[];
   runs: QuoteRun[];
   blockingRunIds: string[];
+  /** Тиражі, чиї числа гейт ПДВ тримає в браузері (REQ-242). */
+  unsavedRunIds: ReadonlySet<string>;
   /** Перемкнути сторінку на «Товари» перед прокруткою. */
   onOpenProducts: () => void;
 }) {
-  const { items, runs, blockingRunIds, onOpenProducts } = params;
+  const { items, runs, blockingRunIds, unsavedRunIds, onOpenProducts } = params;
 
   const blockingRunIdSet = useMemo(() => new Set(blockingRunIds), [blockingRunIds]);
 
+  /** «Куртка софтшел · 50 шт.» — щоб не шукати винуватця очима по сторінці. */
+  const describeRun = useCallback(
+    (run: QuoteRun, itemById: Map<string, FlagItem>) => {
+      const item = run.quote_item_id ? itemById.get(run.quote_item_id) : undefined;
+      const qty = Number(run.quantity) || 0;
+      return [item?.title, `${qty.toLocaleString("uk-UA")} ${normalizeUnitLabel(item?.unit)}`]
+        .filter(Boolean)
+        .join(" · ");
+    },
+    []
+  );
+
+  const itemById = useMemo(() => new Map(items.map((item) => [item.id, item] as const)), [items]);
+
   const markupGateRuns = useMemo<QuoteMarkupGateRun[]>(() => {
     if (blockingRunIdSet.size === 0) return [];
-    const itemById = new Map(items.map((item) => [item.id, item] as const));
     return runs
       .filter((run) => run.id && blockingRunIdSet.has(run.id))
-      .map((run) => {
-        const item = run.quote_item_id ? itemById.get(run.quote_item_id) : undefined;
-        const qty = Number(run.quantity) || 0;
-        const rate = Math.round((Number(run.markup_rate) || 0) * 100) / 100;
-        return {
-          id: run.id as string,
-          label: [item?.title, `${qty.toLocaleString("uk-UA")} ${normalizeUnitLabel(item?.unit)}`]
-            .filter(Boolean)
-            .join(" · "),
-          rateLabel: `${rate.toLocaleString("uk-UA")} %`,
-        };
-      });
-  }, [blockingRunIdSet, items, runs]);
+      .map((run) => ({
+        id: run.id as string,
+        label: describeRun(run, itemById),
+        rateLabel: `${(Math.round((Number(run.markup_rate) || 0) * 100) / 100).toLocaleString("uk-UA")} %`,
+      }));
+  }, [blockingRunIdSet, describeRun, itemById, runs]);
+
+  /**
+   * Незбережені тиражі — з тим самим ярликом, але замість накрутки показуємо
+   * САМЕ ТУ суму, що не доїхала: вона і є предметом розмови.
+   */
+  const unsavedRuns = useMemo<QuoteMarkupGateRun[]>(() => {
+    if (unsavedRunIds.size === 0) return [];
+    return runs
+      .filter((run) => run.id && unsavedRunIds.has(run.id))
+      .map((run) => ({
+        id: run.id as string,
+        label: describeRun(run, itemById),
+        rateLabel: `${(Number(run.unit_price_model) || 0).toLocaleString("uk-UA", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} ₴`,
+      }));
+  }, [describeRun, itemById, runs, unsavedRunIds]);
 
   const runChoiceItems = useMemo(
     () =>
@@ -79,7 +105,7 @@ export function useQuoteHeaderFlags(params: {
    * міряє схований елемент.
    */
   const focusOnPage = useCallback(
-    (elementId: string) => {
+    (elementId: string, tone: "warning" | "error" = "warning") => {
       onOpenProducts();
       window.setTimeout(() => {
         const node = document.getElementById(elementId);
@@ -91,7 +117,9 @@ export function useQuoteHeaderFlags(params: {
         node.scrollIntoView({ block: "center" });
         node.animate?.(
           [
-            { boxShadow: "inset 0 0 0 2px hsl(var(--warning-solid))" },
+            {
+              boxShadow: `inset 0 0 0 2px hsl(var(--${tone === "error" ? "destructive" : "warning-solid"}))`,
+            },
             { boxShadow: "inset 0 0 0 2px transparent" },
           ],
           { duration: 1500, easing: "ease-out" }
@@ -101,5 +129,5 @@ export function useQuoteHeaderFlags(params: {
     [onOpenProducts]
   );
 
-  return { blockingRunIdSet, markupGateRuns, runChoiceItems, focusOnPage };
+  return { blockingRunIdSet, markupGateRuns, unsavedRuns, runChoiceItems, focusOnPage };
 }
