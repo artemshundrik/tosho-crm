@@ -52,6 +52,7 @@
     "stack:snapshot": "node scripts/build-stack-snapshot.mjs",
     "check:stack-snapshot": "node scripts/check-stack-snapshot.mjs",
     "check:node-version": "node scripts/check-node-version.mjs",
+    "check:eval-cases": "node scripts/check-eval-cases.mjs",
     "db:apply": "node scripts/db-apply.mjs",
     "db:backfill-journal": "node scripts/backfill-sql-journal.mjs",
     "check:instruction-size": "node scripts/check-instruction-size.mjs"

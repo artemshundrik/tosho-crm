@@ -63,6 +63,7 @@ FULL_CHECKS='
 розростання файлів|node scripts/check-file-growth.mjs
 розмір інструкцій|node scripts/check-instruction-size.mjs
 знімок стеку|node scripts/check-stack-snapshot.mjs
+eval-сценарії|node scripts/check-eval-cases.mjs
 версія Node|node scripts/check-node-version.mjs
 адреси кронів|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-cron-endpoints.mjs
 захист БД|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-db-guards.mjs
