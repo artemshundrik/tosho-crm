@@ -16,7 +16,8 @@
  * Запуск: npm run check:functions (сам іде перед кожним npm run build).
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 const DIR = new URL("../netlify/functions/", import.meta.url);
 const SQL_DIR = new URL("../scripts/", import.meta.url);
@@ -142,3 +143,114 @@ if (brokenUrls.length > 0) {
 }
 
 console.log(`Адреси функцій у SQL звірені з файлами.`);
+
+// ---------------------------------------------------------------------------
+// ТРЕТЯ ПЕРЕВІРКА: жоден файл теки не лишився поза перевіркою типів (REQ-241).
+//
+// Перевірка типів для функцій — храповик зі списком `files[]`: у ньому лише те,
+// що вже чисте. Дірка була в тому, що список НЕ ЗНАЄ про файли, яких у ньому
+// немає: `npm run typecheck:functions` доповідав про успіх, чесно перевіривши
+// половину теки. Так у прод поїхала невизначена змінна `isRecent`, а фоновий
+// handler відповів 202 — два зайві деплої, поки шукали.
+//
+// Тому тут вимагається ПОКРИТТЯ: `files[]` і `legacy[]` разом мають назвати
+// кожен .ts у теці. Новий файл не потрапляє в жоден список сам собою, тож
+// забути його неможливо — перевірка спиняє пуш і питає, куди його віднести.
+//
+// Це не вимога зробити чистою всю теку: `legacy[]` існує саме для «поки що ні».
+// Ціна одна — сказати про це вголос, окремим рядком, який видно в діфі.
+// ---------------------------------------------------------------------------
+
+const TSCONFIG_URL = new URL("../netlify/functions/tsconfig.json", import.meta.url);
+const FUNCTIONS_ROOT = new URL("../netlify/functions/", import.meta.url);
+
+/** Рекурсивний перелік .ts у теці — шляхи відносно netlify/functions. */
+function collectTypescriptFiles(dir, prefix = "") {
+  const found = [];
+  for (const entry of readdirSync(new URL(dir, FUNCTIONS_ROOT), { withFileTypes: true })) {
+    if (entry.name.startsWith(".")) continue;
+    if (entry.isDirectory()) {
+      found.push(...collectTypescriptFiles(`${dir}${entry.name}/`, `${prefix}${entry.name}/`));
+      continue;
+    }
+    if (entry.name.endsWith(".ts")) found.push(`${prefix}${entry.name}`);
+  }
+  return found;
+}
+
+// tsconfig тут із коментарями-рядками, а JSON.parse їх не приймає. Знімаємо
+// лише ті, що стоять на власному рядку: «//» усередині значення (адреса) має
+// лишитись цілою.
+const tsconfigRaw = readFileSync(TSCONFIG_URL, "utf8").replace(/^\s*\/\/.*$/gm, "");
+let tsconfig;
+try {
+  tsconfig = JSON.parse(tsconfigRaw);
+} catch (error) {
+  console.error(`netlify/functions/tsconfig.json не читається як JSON: ${error.message}`);
+  process.exit(1);
+}
+
+const listed = Array.isArray(tsconfig.files) ? tsconfig.files : [];
+const legacy = Array.isArray(tsconfig.legacy) ? tsconfig.legacy : [];
+
+const coverageProblems = [];
+
+// Мертві записи: перейменували чи видалили файл, а в списку він лишився. Такий
+// запис — тиха брехня: список виглядає повним, а перевірка його пропускає.
+for (const [name, list] of [["files", listed], ["legacy", legacy]]) {
+  for (const file of list) {
+    if (!existsSync(new URL(file, FUNCTIONS_ROOT))) {
+      coverageProblems.push(`${name}[] називає «${file}», а такого файлу немає — прибери запис`);
+    }
+  }
+}
+
+const both = listed.filter((file) => legacy.includes(file));
+for (const file of both) {
+  coverageProblems.push(`«${file}» стоїть і у files[], і в legacy[] — лиши щось одне`);
+}
+
+const covered = new Set([...listed, ...legacy]);
+const uncovered = collectTypescriptFiles("").filter((file) => !covered.has(file));
+
+if (uncovered.length > 0 || coverageProblems.length > 0) {
+  console.error("\nПеревірка типів для функцій не покриває всю теку:\n");
+  for (const problem of coverageProblems) console.error(`  ${problem}`);
+  for (const file of uncovered) console.error(`  «${file}» немає ні у files[], ні в legacy[]`);
+  console.error("\nБез запису файл мовчки лишається поза `npm run typecheck:functions`,");
+  console.error("і той доповідає про успіх, перевіривши не все. Обери одне:");
+  console.error("  • файл чистий → додай його у files[] (перевір: npm run typecheck:functions)");
+  console.error("  • ще не чистий → додай у legacy[], і це буде видно в діфі");
+  console.error("\nФайл: netlify/functions/tsconfig.json");
+  process.exit(1);
+}
+
+// Зачепив легасі-файл — це слушна нагода спробувати винести його з legacy[].
+// Саме ПІДКАЗКА, а не падіння: картка прямо просить не вимагати чистоти від
+// старих файлів. Правка легасі не зобов'язана робити його чистим, але мовчати
+// теж не варто — так externalFetch.ts пролежав полагоджений і не переведений.
+const touchedLegacy = (() => {
+  if (legacy.length === 0) return [];
+  try {
+    const changed = execFileSync("git", ["diff", "--name-only", "origin/main...HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const changedSet = new Set(changed.split("\n").map((line) => line.trim()));
+    return legacy.filter((file) => changedSet.has(`netlify/functions/${file}`));
+  } catch {
+    // Немає git, немає origin/main, від'єднана гілка — підказка не критична.
+    return [];
+  }
+})();
+
+if (touchedLegacy.length > 0) {
+  console.log("Змінені файли з legacy[] — спробуй перенести їх у files[]:");
+  for (const file of touchedLegacy) console.log(`  ${file}`);
+  console.log("  (перевірити: додай у files[] і запусти npm run typecheck:functions)");
+}
+
+console.log(
+  `Перевірка типів покриває теку: ${listed.length} файлів у files[], ${legacy.length} у legacy[].`
+);
+

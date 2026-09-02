@@ -1,5 +1,5 @@
 {
-  "//": "Тут ХРАПОВИК: перевіряються лише файли, які вже чисті. 02.09.2026 перелік розширено з 48 файлів до 92 зі 105 — решта теки виявилась чистою й без жодної правки, бо помилки давно полагодили дорогою, а храповик за ними не рухався. Поза перевіркою лишились 12 файлів (tosho-ai.ts — 97 помилок, admin-attachment-audit.ts — 16, team-absence-request.ts — 12, create-workspace-invite.ts — 11, далі по дрібному) і _lib/requestSchemas.test.ts, який їх імпортує. Полагодив такий файл — дописуй його сюди. Запуск: npm run typecheck:functions",
+  "//": "Тут ХРАПОВИК: перевіряються лише файли, які вже чисті. 02.09.2026 перелік розширено з 48 файлів до 93 зі 105 — решта теки виявилась чистою й без жодної правки, бо помилки давно полагодили дорогою, а храповик за ними не рухався. Поза перевіркою лишились 12 файлів — вони перелічені в legacy[] нижче, і скрипт стежить, щоб files[] і legacy[] разом покривали ВСЮ теку. Полагодив легасі-файл — перенеси його в files[]. Запуск: npm run typecheck:functions",
   "compilerOptions": {
     "target": "ESNext",
     "lib": ["ESNext"],
@@ -24,6 +24,21 @@
     "noUncheckedSideEffectImports": true,
     "verbatimModuleSyntax": true
   },
+  "//legacy": "Файли, які типами ще НЕ перевіряються: 155 помилок, 97 із них в одному tosho-ai.ts. Перелік потрібен, щоб новий файл не міг тихо опинитись поза перевіркою — scripts/check-netlify-functions.mjs вимагає, щоб files[] і legacy разом покривали ВСЮ теку. Полагодив файл — перенеси його звідси в files[]. Дописувати сюди новий файл замість того, щоб зробити його чистим, — це навмисне рішення, а не замовчування.",
+  "legacy": [
+    "_lib/requestSchemas.test.ts",
+    "admin-attachment-audit.ts",
+    "attachment-preview-generate.ts",
+    "create-workspace-invite.ts",
+    "nova-poshta-marking.ts",
+    "nova-poshta.ts",
+    "quote-deadline-reminders.ts",
+    "team-absence-request.ts",
+    "team-member-employment.ts",
+    "team-member-probation.ts",
+    "tosho-ai.ts",
+    "vchasno-upload.ts"
+  ],
   "files": [
     "_absenceBotFlow.ts",
     "_adminAssistant.ts",
@@ -49,6 +64,7 @@
     "_lib/devRequestQueue.ts",
     "_lib/devRequestsDigest.test.ts",
     "_lib/devRequestsDigest.ts",
+    "_lib/externalFetch.ts",
     "_lib/digestDelivery.ts",
     "_lib/dropbox.service.ts",
     "_lib/dropboxHealth.test.ts",
