@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Link2, Loader2, Plus, Upload } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Loader2, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -197,27 +197,73 @@ export function QuoteWizardDialog({
   };
 
   /**
-   * Розвідка посилання: назва, опис і фото зі сторінки товару. Позиція
-   * з'являється навіть коли сайт не пустив: посилання — уже цінність, а назву
-   * менеджер допише. Причина стоїть поруч із фото, як і в імпорті.
+   * Розвідка посилань: назва, опис і фото зі сторінки товару.
+   *
+   * ПОЗИЦІЯ З'ЯВЛЯЄТЬСЯ ОДРАЗУ, ще до відповіді сайту, і доповнюється, коли
+   * та прийде. Спершу було навпаки: поле блокувалось, і людина чекала кілька
+   * секунд, перш ніж побачити бодай щось. Прорахунок на пʼять товарів давав
+   * пʼять таких пауз підряд.
+   *
+   * КІЛЬКА ПОСИЛАНЬ ЗА РАЗ. Приймається і список — з переносами рядка або
+   * пробілами: менеджери копіюють їх пачкою з листа чи чату. Ходимо по трьох
+   * сайтах заразом, решта чекає в черзі; більше не дає виграшу, бо магазини
+   * відповідають від пів секунди до восьми.
+   *
+   * ПОЗИЦІЯ ЛИШАЄТЬСЯ, НАВІТЬ КОЛИ САЙТ НЕ ПУСТИВ: посилання — уже цінність,
+   * а назву менеджер допише сам. Причина стоїть поруч із фото, як в імпорті.
    */
   const handleLink = async () => {
-    const url = linkUrl.trim();
-    if (!isHttpUrl(url)) {
-      setError("Це не схоже на посилання: потрібна адреса, що починається з http:// або https://.");
+    const raw = linkUrl.trim();
+    if (!raw) return;
+
+    const urls = raw.split(/[\s,]+/).map((part) => part.trim()).filter(Boolean);
+    const bad = urls.find((url) => !isHttpUrl(url));
+    if (bad) {
+      setError(
+        urls.length === 1
+          ? "Це не схоже на посилання: потрібна адреса, що починається з http:// або https://."
+          : `«${bad.slice(0, 60)}» не схоже на посилання — приберіть його зі списку.`
+      );
       return;
     }
-    setError(null);
-    setLinkBusy(true);
-    const preview = await fetchLinkPreview(url);
-    setLinkBusy(false);
 
-    const title = preview.status === "pending" ? null : preview.title ?? null;
-    const description = preview.status === "pending" ? null : preview.description ?? null;
-    const draft = makeDraft({ name: title ?? "", comment: description ?? "", links: [url] });
-    setDrafts((prev) => [...prev, draft]);
-    setLinkPreviews((prev) => ({ ...prev, [draft.key]: preview }));
+    setError(null);
     setLinkUrl("");
+
+    const fresh = urls.map((url) => ({ url, draft: makeDraft({ links: [url] }) }));
+    setDrafts((prev) => [...prev, ...fresh.map((entry) => entry.draft)]);
+    setLinkPreviews((prev) => ({
+      ...prev,
+      ...Object.fromEntries(fresh.map((entry) => [entry.draft.key, { status: "pending" as const }])),
+    }));
+
+    setLinkBusy(true);
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < fresh.length) {
+        const entry = fresh[cursor];
+        cursor += 1;
+        const preview = await fetchLinkPreview(entry.url);
+        const title = preview.status === "pending" ? null : preview.title ?? null;
+        const description = preview.status === "pending" ? null : preview.description ?? null;
+        setLinkPreviews((prev) => ({ ...prev, [entry.draft.key]: preview }));
+        // Правки менеджера не затираємо: він міг почати вписувати назву, поки
+        // сайт думав. Тому назва й коментар лягають лише в порожнє поле.
+        setDrafts((prev) =>
+          prev.map((draft) =>
+            draft.key === entry.draft.key
+              ? {
+                  ...draft,
+                  name: draft.name || title || "",
+                  comment: draft.comment || description || "",
+                }
+              : draft
+          )
+        );
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, fresh.length) }, worker));
+    setLinkBusy(false);
   };
 
   const handleCreate = async () => {
@@ -258,7 +304,11 @@ export function QuoteWizardDialog({
 
     await startImportResearch(quoteId, written.itemIds);
     const created = `Створено прорахунок з ${written.itemIds.length} ${pluralWordUk(written.itemIds.length, "позицією", "позиціями", "позиціями")}`;
-    toast.success(`${created}. Ціни впишіть у картці; картинки й назви доїжджають фоном.`);
+    // Дизайн-задачі візард не заводить НАВМИСНО: тип задачі обовʼязковий у всіх
+    // шляхах створення, а в мить «кинув посилання» менеджер ще не знає, що саме
+    // малювати. Плюс тираж задача бачить лише через позицію прорахунку, тобто
+    // позиції мають існувати раніше. Тому — вкладка «Дизайн» уже в картці.
+    toast.success(`${created}. Ціни впишіть у картці, дизайн-задачі — у вкладці «Дизайн».`);
     onCreated(quoteId);
     onOpenChange(false);
     reset();
@@ -389,9 +439,13 @@ export function QuoteWizardDialog({
               <div className="flex gap-2">
                 <Input
                   value={linkUrl}
-                  disabled={busy || linkBusy}
+                  disabled={busy}
                   aria-label="Посилання на товар"
-                  placeholder="Вставте посилання на товар — prom, rozetka, сайт постачальника"
+                  placeholder={
+                    drafts.length > 0
+                      ? "Ще одне посилання — позиція стане в список нижче"
+                      : "Вставте посилання на товар — prom, rozetka, сайт постачальника"
+                  }
                   onChange={(event) => setLinkUrl(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
@@ -403,25 +457,19 @@ export function QuoteWizardDialog({
                 <Button
                   type="button"
                   variant="secondary"
-                  disabled={busy || linkBusy || !linkUrl.trim()}
+                  disabled={busy || !linkUrl.trim()}
                   onClick={() => void handleLink()}
                   className="shrink-0 gap-2"
                 >
-                  {linkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-                  Прочитати сторінку
+                  {linkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Додати товар
                 </Button>
               </div>
-              {linkBusy ? (
-                <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/50 px-3 py-2.5 text-sm font-medium">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  Дивлюсь сторінку: фото, назва, опис…
-                </div>
-              ) : drafts.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Система прочитає сторінку постачальника — фото, назву й опис — і підготує позицію. Тираж і
-                  нанесення ви лише підтвердите.
-                </p>
-              ) : null}
+              <p className="text-xs text-muted-foreground">
+                {drafts.length === 0
+                  ? "Система прочитає сторінку постачальника — фото, назву й опис — і підготує позицію. Можна вставити одразу кілька посилань, кожне з нового рядка."
+                  : `Товарів у прорахунку: ${drafts.length}. Додавайте ще посилання — позиції накопичуються нижче.`}
+              </p>
             </div>
           ) : null}
 

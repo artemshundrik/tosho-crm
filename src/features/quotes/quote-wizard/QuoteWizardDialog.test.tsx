@@ -172,4 +172,26 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(screen.getByRole("link", { name: "shop.example/hoodie" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Створити прорахунок/ })).toBeEnabled();
   });
+
+  it("за посиланням: товари накопичуються, кілька посилань за раз", async () => {
+    // Прорахунок на кілька товарів — звичайна справа; те, що в базі їх мало,
+    // каже лише про те, що складне досі рахують у телеграмі.
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByRole("tab", { name: /Посилання/ }));
+    const input = screen.getByRole("textbox", { name: "Посилання на товар" });
+
+    await user.type(input, "https://shop.example/a{Enter}");
+    await waitFor(() => expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(1));
+
+    // Поле не блокується: наступне посилання вставляють, не чекаючи сайту.
+    expect(input).toBeEnabled();
+
+    // Два посилання одним рядком — дві позиції.
+    await user.type(input, "https://shop.example/b https://shop.example/c{Enter}");
+    await waitFor(() => expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(3));
+
+    expect(screen.getByRole("link", { name: "shop.example/c" })).toBeInTheDocument();
+  });
 });
