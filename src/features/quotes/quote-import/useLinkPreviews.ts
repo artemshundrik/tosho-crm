@@ -31,16 +31,27 @@ type PreviewResponse = {
   status?: string;
   reason?: string | null;
   title?: string | null;
+  description?: string | null;
   imageUrl?: string | null;
 };
 
 function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
   const status = payload?.status;
   if (status === "done" && payload?.imageUrl) {
-    return { status: "done", imageUrl: payload.imageUrl, title: payload.title ?? null };
+    return {
+      status: "done",
+      imageUrl: payload.imageUrl,
+      title: payload.title ?? null,
+      description: payload.description ?? null,
+    };
   }
   if (status === "blocked" || status === "no_image" || status === "failed") {
-    return { status, reason: payload?.reason || "Фото дістати не вдалося" };
+    return {
+      status,
+      reason: payload?.reason || "Фото дістати не вдалося",
+      title: payload?.title ?? null,
+      description: payload?.description ?? null,
+    };
   }
   return { status: "failed", reason: "Фото дістати не вдалося" };
 }
@@ -58,6 +69,18 @@ async function askForPreview(url: string, token: string): Promise<PreviewRespons
   } catch {
     return null;
   }
+}
+
+/**
+ * Розвідка ОДНОГО посилання — для входу «за посиланням» у візарді (REQ-237#p4).
+ * Той самий похід, що й у черги вище, лише без черги: посилання одне, і
+ * людина на нього чекає.
+ */
+export async function fetchLinkPreview(url: string): Promise<QuoteImportLinkPreview> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { status: "failed", reason: "Сесія застаріла — перезайдіть у CRM." };
+  return toPreview(await askForPreview(url, token));
 }
 
 export function useLinkPreviews() {

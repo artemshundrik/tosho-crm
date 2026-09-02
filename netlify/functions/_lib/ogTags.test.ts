@@ -15,6 +15,7 @@ describe("витяг og-тегів зі сторінки постачальни�
 
     expect(tags).toEqual({
       title: "Кухоль керамічний 330 мл",
+      description: null,
       imageUrl: "https://kmz.ua/img/mug.jpg",
       imageSource: "og",
     });
@@ -32,7 +33,12 @@ describe("витяг og-тегів зі сторінки постачальни�
       "https://kmz.ua/pen"
     );
 
-    expect(tags).toEqual({ title: "Ручка металева", imageUrl: "https://kmz.ua/pen.png", imageSource: "og" });
+    expect(tags).toEqual({
+      title: "Ручка металева",
+      description: null,
+      imageUrl: "https://kmz.ua/pen.png",
+      imageSource: "og",
+    });
   });
 
   it("розкодовує сутності в назві", () => {
@@ -51,7 +57,29 @@ describe("витяг og-тегів зі сторінки постачальни�
   });
 
   it("порожня сторінка дає порожні поля, а не падіння", () => {
-    expect(extractOgTags("", "https://kmz.ua/x")).toEqual({ title: null, imageUrl: null, imageSource: null });
+    expect(extractOgTags("", "https://kmz.ua/x")).toEqual({
+      title: null,
+      description: null,
+      imageUrl: null,
+      imageSource: null,
+    });
+  });
+
+  it("бере опис з og:description, розкодовує й обрізає до 600 знаків (REQ-237#p4)", () => {
+    const long = "Б".repeat(700);
+    const tags = extractOgTags(
+      page(`<meta property="og:description" content="Бавовна&nbsp;80 %,  начіс усередині. ${long}">`),
+      "https://kmz.ua/hoodie"
+    );
+
+    expect(tags.description?.startsWith("Бавовна 80 %, начіс усередині.")).toBe(true);
+    expect(tags.description).toHaveLength(600);
+  });
+
+  it("без og:description падає на meta description", () => {
+    const tags = extractOgTags(page('<meta name="description" content="Кепка six-panel, вишивка">'), "https://kmz.ua/cap");
+
+    expect(tags.description).toBe("Кепка six-panel, вишивка");
   });
 
   it("перший og:image виграє в дубля під інший розмір", () => {

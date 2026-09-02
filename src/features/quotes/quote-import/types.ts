@@ -85,5 +85,11 @@ export type QuoteImportTrace = {
 /** Чим закінчилась розвідка посилання для прев'ю (REQ-236). */
 export type QuoteImportLinkPreview =
   | { status: "pending" }
-  | { status: "done"; imageUrl: string; title: string | null }
-  | { status: "no_image" | "blocked" | "failed"; reason: string };
+  | { status: "done"; imageUrl: string; title: string | null; description: string | null }
+  | {
+      status: "no_image" | "blocked" | "failed";
+      reason: string;
+      /** Назва й опис бувають і без фото: сторінка жива, просто без картинки. */
+      title?: string | null;
+      description?: string | null;
+    };

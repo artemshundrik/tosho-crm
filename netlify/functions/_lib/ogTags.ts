@@ -10,6 +10,12 @@
 
 export type OgTags = {
   title: string | null;
+  /**
+   * Опис товару з og:description / meta description (REQ-237#p4). Береться
+   * лише з мета-тегів: витягати абзаци з тіла сторінки регулярками — це вже
+   * не читання, а вгадування.
+   */
+  description: string | null;
   imageUrl: string | null;
   /** Звідки взялась картинка — щоб у логах було видно, який шлях працює. */
   imageSource: "og" | "link" | "json-ld" | "itemprop" | "img" | null;
@@ -221,6 +227,14 @@ export function extractOgTags(html: string, baseUrl: string): OgTags {
 
   const title = rawTitle ? decodeEntities(rawTitle).replace(/\s+/g, " ").trim() || null : null;
 
+  const rawDescription =
+    meta.get("og:description") ?? meta.get("twitter:description") ?? meta.get("description") ?? null;
+  // Стеля 600 знаків: магазини кладуть у description і характеристики, і
+  // умови доставки, а в коментар позиції має лягати те, що людина прочитає.
+  const description = rawDescription
+    ? decodeEntities(rawDescription).replace(/\s+/g, " ").trim().slice(0, 600) || null
+    : null;
+
   const candidates: Array<[OgTags["imageSource"], string | null]> = [
     [
       "og",
@@ -239,8 +253,8 @@ export function extractOgTags(html: string, baseUrl: string): OgTags {
 
   for (const [source, raw] of candidates) {
     const imageUrl = absoluteUrl(raw, baseUrl);
-    if (imageUrl) return { title, imageUrl, imageSource: source };
+    if (imageUrl) return { title, description, imageUrl, imageSource: source };
   }
 
-  return { title, imageUrl: null, imageSource: null };
+  return { title, description, imageUrl: null, imageSource: null };
 }

@@ -114,7 +114,13 @@ export const handler = async (event: HttpEvent) => {
     });
 
     if (!response.ok) {
-      return jsonResponse(200, { url, ...describeHttpStatus(response.status), title: null, imageUrl: null });
+      return jsonResponse(200, {
+        url,
+        ...describeHttpStatus(response.status),
+        title: null,
+        description: null,
+        imageUrl: null,
+      });
     }
 
     // Кодування беремо з відповіді: чимало українських магазинів досі віддає
@@ -131,6 +137,7 @@ export const handler = async (event: HttpEvent) => {
         status: "no_image" satisfies PreviewStatus,
         reason: "На сторінці немає фото товару",
         title: tags.title,
+        description: tags.description,
         imageUrl: null,
       });
     }
@@ -140,6 +147,7 @@ export const handler = async (event: HttpEvent) => {
       status: "done" satisfies PreviewStatus,
       reason: null,
       title: tags.title,
+      description: tags.description,
       imageUrl: tags.imageUrl,
       imageSource: tags.imageSource,
     });
@@ -150,6 +158,7 @@ export const handler = async (event: HttpEvent) => {
       status: "failed" satisfies PreviewStatus,
       reason: /timeout|abort/i.test(message) ? "Сайт не відповів вчасно" : message,
       title: null,
+      description: null,
       imageUrl: null,
     });
   }

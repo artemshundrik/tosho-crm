@@ -97,7 +97,7 @@ import { fetchMarkupApprovalsForQuotes } from "@/features/quotes/quote-details/m
 import { searchQuoteParties, type QuotePartyOption } from "@/features/quotes/quoteParties";
 import { DEFAULT_MANAGER_RATE, getManagerRateForUser } from "@/lib/managerRate";
 import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
-import type { NewQuoteFormData, QuoteBatchBuilderFormData, QuoteKindValue } from "@/components/quotes";
+import type { NewQuoteFormData, QuoteBatchBuilderFormData } from "@/components/quotes";
 import { TestQuoteWizardButton } from "@/features/quotes/quote-wizard/TestQuoteWizard";
 import {
   getCreatedCustomerLeadLabel,
@@ -634,7 +634,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   // Тип виробу з першого кроку тестового візарда (REQ-134). Ref, а не стан:
   // стан цієї сторінки коштує перемальовки списку (REQ-75), а значення
   // потрібне рівно тоді, коли ModalMount рендерить білдер, — після кліку.
-  const pendingQuoteTypeRef = useRef<QuoteKindValue | null>(null);
   const batchBuilder = useModalMount();
   const [batchBuilderError, setBatchBuilderError] = useState<string | null>(null);
   const [batchCreating, setBatchCreating] = useState(false);
@@ -2232,14 +2231,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   // Поліграфія й «інше» ведуть просто в нинішній білдер; мерч отримає розвилку
   // «руками / з ексельки» окремим кроком (REQ-134#p2).
-  const handleQuoteKindPick = useCallback(
-    (kind: QuoteKindValue) => {
-      pendingQuoteTypeRef.current = kind;
-      openBatchBuilder();
-    },
-    [openBatchBuilder]
-  );
-
   const handleCustomerSearchChange = async (search: string) => {
     if (!search.trim()) {
       setCustomers(EMPTY_PARTY_OPTIONS);
@@ -5764,7 +5755,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <TestQuoteWizardButton
               teamId={teamId}
               currentUserId={currentUserId}
-              onManual={handleQuoteKindPick}
               onCreated={(quoteId) => navigate(`/orders/estimates/${quoteId}`)}
               className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
             />
@@ -5926,7 +5916,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     foundCount,
     getManagerAvatar,
     getManagerLabel,
-    handleQuoteKindPick,
     hasActiveFilters,
     navigate,
     teamId,
@@ -7326,7 +7315,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             // рендер, що прилітає посеред анімації зникання, видно як блимання.
             setBatchBuilderError(null);
             setCustomerSearch("");
-            pendingQuoteTypeRef.current = null;
           }
         }}
         onSubmit={handleBatchBuilderSubmit}
@@ -7347,7 +7335,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         currentUserId={currentUserId}
         restrictPartySelectionToOwn={isManagerUser}
         currentManagerLabel={currentUserManagerLabel}
-        initialQuoteType={pendingQuoteTypeRef.current ?? undefined}
       />
         )}
       </ModalMount>
