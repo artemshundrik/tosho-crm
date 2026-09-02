@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-09-01T13:48:28.755Z",
+  "generatedAt": "2026-09-02T20:50:27.655Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -114,7 +114,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Ганяє зібраний застосунок у справжньому браузері й клацає по ньому, як людина: відкриває дошки, закриває вікна, шукає. Ловить те, чого не бачить жоден тест коду, — наприклад блимання сторінки при закритті вікна.",
       "homepage": "https://playwright.dev",
-      "usedIn": 0,
+      "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=playwright.dev&sz=128"
     },
     {
@@ -309,7 +309,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 91,
+      "usedIn": 94,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -339,7 +339,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Памʼятає, що вже завантажено, і не питає базу двічі. Через нього ходять майже всі запити.",
       "homepage": "https://tanstack.com/query",
-      "usedIn": 18,
+      "usedIn": 19,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
@@ -354,7 +354,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Малює лише видимі рядки довгих списків. Без нього дошка з сотнями карток гальмувала б.",
       "homepage": "https://tanstack.com/virtual",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
@@ -384,7 +384,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 19,
+      "usedIn": 25,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -399,7 +399,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Клікає й друкує в тестах так, як це робить людина, — з наведенням, фокусом і клавіатурою, а не одним синтетичним кліком.",
       "homepage": null,
-      "usedIn": 7,
+      "usedIn": 11,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -414,7 +414,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Посилання в редакторі ТЗ.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
     {
@@ -444,7 +444,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Рушій ProseMirror, на якому побудований редактор ТЗ. У коді не викликається — його вимагають самі розширення tiptap.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 1,
+      "usedIn": 2,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
@@ -460,7 +460,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Редактор технічного завдання: жирний, списки, посилання.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
     {
@@ -623,7 +623,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "date-fns",
-      "version": "3.6.0",
+      "version": "4.4.0",
       "layer": "data",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -633,7 +633,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Робота з датами: дедлайни, періоди, «3 дні тому».",
       "homepage": null,
-      "usedIn": 10,
+      "usedIn": 11,
       "iconUrl": "https://github.com/date-fns.png?size=64"
     },
     {
@@ -710,7 +710,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
       "homepage": "https://lucide.dev",
-      "usedIn": 211,
+      "usedIn": 220,
       "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
     },
     {
@@ -770,7 +770,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 298,
+      "usedIn": 294,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -786,7 +786,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Календар вибору дати — той, що випадає в полях дедлайнів.",
       "homepage": "https://daypicker.dev",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=daypicker.dev&sz=128"
     },
     {
@@ -801,7 +801,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Частина React, яка власне малює в браузері.",
       "homepage": "https://react.dev/",
-      "usedIn": 9,
+      "usedIn": 10,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -817,7 +817,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Обрізання картинки при завантаженні аватарки чи лого.",
       "homepage": "https://ValentinH.github.io/react-easy-crop/",
-      "usedIn": 1,
+      "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=valentinh.github.io&sz=128"
     },
     {
@@ -832,7 +832,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Адреси сторінок: що показати на /orders/estimates і як переходити між розділами без перезавантаження.",
       "homepage": null,
-      "usedIn": 53,
+      "usedIn": 55,
       "iconUrl": "https://github.com/remix-run.png?size=64"
     },
     {
@@ -877,7 +877,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Обробка зображень на сервері: стискає й переганяє у webp картинки каталогу.",
       "homepage": "https://sharp.pixelplumbing.com",
-      "usedIn": 8,
+      "usedIn": 9,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sharp.pixelplumbing.com&sz=128"
     },
     {
@@ -892,7 +892,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Спливні повідомлення в кутку: «Збережено», «Не вийшло».",
       "homepage": "https://sonner.emilkowal.ski/",
-      "usedIn": 62,
+      "usedIn": 66,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
     },
     {
@@ -968,7 +968,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Складальник: перетворює сотні файлів коду на кілька, які розуміє браузер. Він же тримає локальний сервер для перевірок.",
       "homepage": "https://vite.dev",
-      "usedIn": 3,
+      "usedIn": 5,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vite.dev&sz=128"
     },
@@ -984,7 +984,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 133,
+      "usedIn": 147,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1008,8 +1008,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "0.20.3",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-09-01T16:59:30+03:00",
+      "bumpCommit": {
+        "sha": "af69a962",
+        "subject": "Ексельку від клієнта тепер читає модель, а не менеджер очима"
+      },
       "description": "Читає ексельки клієнтів прямо в браузері: з них імпортуються позиції прорахунку. Береться з офіційного CDN SheetJS, а не з npm, — у npm лишилась версія 2022 року з дірками розбору, а розбираємо ми саме чужі файли.",
       "homepage": "https://sheetjs.com/",
       "usedIn": 1,
@@ -1027,7 +1030,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Перевіряє, що дані, які прийшли ззовні, справді такі, як ми чекаємо: серверні функції звіряють із нею тіло запиту.",
       "homepage": "https://zod.dev",
-      "usedIn": 26,
+      "usedIn": 27,
       "iconUrl": "https://www.google.com/s2/favicons?domain=zod.dev&sz=128"
     }
   ],
@@ -1042,12 +1045,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 1852,
-  "testFiles": 132,
+  "tests": 1978,
+  "testFiles": 145,
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 44,
-  "sourceLines": 264302,
+  "sourceLines": 271243,
   "automation": {
     "workflows": [
       {
