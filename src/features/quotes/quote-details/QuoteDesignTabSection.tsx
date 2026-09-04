@@ -1,10 +1,9 @@
 import * as React from "react";
-import { Package, Palette } from "lucide-react";
 
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
-import { Button } from "@/components/ui/button";
 import type { DesignTaskType } from "@/lib/designTaskType";
 
+import { buildComposerImprint } from "./designComposerImprint";
 import { QuoteDesignTaskComposer } from "./QuoteDesignTaskComposer";
 import { QuoteDesignTasksPanel, type QuoteDesignTaskCard } from "./QuoteDesignTasksPanel";
 import type { QuoteAttachment } from "./queries";
@@ -25,7 +24,15 @@ import type { QuoteAttachment } from "./queries";
 export type QuoteDesignTabItem = {
   id: string;
   title: string;
-  methods?: unknown[] | null;
+  methods?: Array<{
+    methodId: string;
+    printPositionId?: string;
+    printWidthMm?: number | null;
+    printHeightMm?: number | null;
+  }> | null;
+  resolvedMethodNames?: Record<string, string>;
+  resolvedTypeId?: string;
+  resolvedKindId?: string;
 };
 
 export function QuoteDesignTabSection({
@@ -37,7 +44,8 @@ export function QuoteDesignTabSection({
   composerBrief,
   onComposerBriefChange,
   briefPlaceholder,
-  composerFiles,
+  attachments,
+  catalogTypes,
   attachmentsUploading,
   onAddComposerFiles,
   onRemoveComposerFile,
@@ -57,7 +65,6 @@ export function QuoteDesignTabSection({
   onPreviewVisual,
   onDownloadVisual,
   onAddMaterials,
-  onOpenProducts,
 }: {
   items: QuoteDesignTabItem[];
   designTaskItemIds: Set<string>;
@@ -67,9 +74,11 @@ export function QuoteDesignTabSection({
   composerBrief: string;
   onComposerBriefChange: (value: string) => void;
   briefPlaceholder?: string;
-  composerFiles: QuoteAttachment[];
+  /** Усі вкладення прорахунку — композер сам відбере файли своєї позиції. */
+  attachments: QuoteAttachment[];
+  catalogTypes: Parameters<typeof buildComposerImprint>[1];
   attachmentsUploading?: boolean;
-  onAddComposerFiles: (files: FileList | null) => void;
+  onAddComposerFiles: (files: FileList | null, itemId: string | null) => void;
   onRemoveComposerFile: (file: QuoteAttachment) => void;
   designTaskType: DesignTaskType | null;
   onDesignTaskTypeChange: (value: DesignTaskType) => void;
@@ -77,7 +86,7 @@ export function QuoteDesignTabSection({
   designTaskError?: string | null;
   designTaskLoading?: boolean;
   canEditQuoteContent?: boolean;
-  onCreateDesignTask: () => void;
+  onCreateDesignTask: (itemId: string | null, hasFiles: boolean) => void;
   designTaskCards: QuoteDesignTaskCard[];
   activeDesignTaskId: string | null;
   renderBrief: (text: string) => React.ReactNode;
@@ -87,9 +96,24 @@ export function QuoteDesignTabSection({
   onPreviewVisual: (file: QuoteAttachment) => void;
   onDownloadVisual: (file: QuoteAttachment) => void;
   onAddMaterials: (files: FileList | null) => void;
-  onOpenProducts: () => void;
 }) {
+  /*
+    Позиція, на яку націлений композер, і все, що з неї випливає, рахується
+    ТУТ, а не в картці прорахунку: інакше кожна така дрібниця дописувала б
+    рядки у файл на сім із половиною тисяч.
+  */
   const fallbackItemId = designTaskItemId ?? itemsWithoutDesignTask[0]?.id ?? items[0]?.id ?? null;
+  const composerFiles = React.useMemo(
+    () =>
+      fallbackItemId
+        ? attachments.filter((file) => file.audience === "design" && file.quoteItemId === fallbackItemId)
+        : [],
+    [attachments, fallbackItemId]
+  );
+  const composerImprint = React.useMemo(
+    () => buildComposerImprint(items.find((item) => item.id === fallbackItemId), catalogTypes),
+    [catalogTypes, fallbackItemId, items]
+  );
 
   return (
     <>
@@ -106,7 +130,6 @@ export function QuoteDesignTabSection({
             items={items.map((item) => ({
               id: item.id,
               title: item.title,
-              methodsCount: item.methods?.length ?? 0,
               hasTask: designTaskItemIds.has(item.id),
             }))}
             selectedItemId={fallbackItemId}
@@ -114,15 +137,16 @@ export function QuoteDesignTabSection({
             brief={composerBrief}
             onBriefChange={onComposerBriefChange}
             briefPlaceholder={briefPlaceholder}
+            imprint={composerImprint}
             files={composerFiles}
             uploading={attachmentsUploading}
-            onAddFiles={onAddComposerFiles}
+            onAddFiles={(files) => onAddComposerFiles(files, fallbackItemId)}
             onRemoveFile={onRemoveComposerFile}
             taskType={designTaskType}
             onTaskTypeChange={onDesignTaskTypeChange}
             saving={designTaskSaving}
             error={designTaskError}
-            onCreate={onCreateDesignTask}
+            onCreate={() => onCreateDesignTask(fallbackItemId, composerFiles.length > 0)}
           />
         </div>
       ) : null}
@@ -143,32 +167,8 @@ export function QuoteDesignTabSection({
             onDownloadVisual={onDownloadVisual}
           onAddMaterials={onAddMaterials}
         />
-      ) : (
-        /*
-          ЗАДАЧА НАРОДЖУЄТЬСЯ РАЗОМ ІЗ ПРОРАХУНКОМ (REQ-155 p5), і тут її
-          не створюють. Аварійний шлях лишився в меню «⋮» шапки: виняток
-          має жити в меню, а не займати екран замість типового стану.
-        */
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center">
-          <Palette className="h-9 w-9 text-muted-foreground/30" />
-          <div>
-            <p className="font-medium text-foreground">Дизайн-задач у цьому прорахунку немає</p>
-            <p className="mx-auto mt-1.5 max-w-[56ch] text-sm leading-relaxed text-muted-foreground">
-              Задача створюється разом із прорахунком — по одній на кожен товар із нанесенням.
-              Щоб вона тут зʼявилась, додайте нанесення в товарі.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-1 gap-2"
-            onClick={onOpenProducts}
-          >
-            <Package className="h-4 w-4" />
-            Відкрити «Товари»
-          </Button>
-        </div>
-      )}
+      ) : null}
+
     </>
   );
 }

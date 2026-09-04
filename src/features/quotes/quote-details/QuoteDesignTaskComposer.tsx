@@ -1,8 +1,10 @@
 import * as React from "react";
-import { Check, Loader2, Package, Paperclip, Plus, X } from "lucide-react";
+import { Loader2, Paperclip, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_OPTIONS, type DesignTaskType } from "@/lib/designTaskType";
 import { cn } from "@/lib/utils";
 
@@ -31,8 +33,14 @@ import type { QuoteAttachment } from "./queries";
 export type DesignComposerItem = {
   id: string;
   title: string;
-  methodsCount: number;
   hasTask: boolean;
+};
+
+/** Нанесення позиції, вже перекладене на людські назви сторінкою. */
+export type DesignComposerImprint = {
+  method: string;
+  place: string;
+  size: string | null;
 };
 
 export function QuoteDesignTaskComposer({
@@ -42,6 +50,7 @@ export function QuoteDesignTaskComposer({
   brief,
   onBriefChange,
   briefPlaceholder,
+  imprint,
   files,
   uploading,
   onAddFiles,
@@ -60,6 +69,8 @@ export function QuoteDesignTaskComposer({
   onBriefChange: (value: string) => void;
   /** Текст ТЗ, який успадкується з прорахунку, якщо своє не написали. */
   briefPlaceholder?: string;
+  /** Нанесення обраної позиції: тип і місце ставлять при створенні прорахунку. */
+  imprint: DesignComposerImprint[];
   files: QuoteAttachment[];
   uploading?: boolean;
   onAddFiles: (files: FileList | null) => void;
@@ -71,8 +82,7 @@ export function QuoteDesignTaskComposer({
   disabled?: boolean;
   onCreate: () => void;
 }) {
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const selected = items.find((item) => item.id === selectedItemId) ?? null;
+  const [dragOver, setDragOver] = React.useState(false);
   const busy = Boolean(saving || uploading);
 
   return (
@@ -83,48 +93,50 @@ export function QuoteDesignTaskComposer({
       </div>
 
       {/*
-        ТОВАР — ПЕРШИЙ КРОК. Задача заводиться НА ПОЗИЦІЮ: від неї беруться
-        нанесення, тираж і фото, і саме її бачить дизайнер. Тому вибір стоїть
-        угорі, а не ховається в діалозі.
+        ТОВАР — ПЕРШИЙ КРОК, і вибирається він тим самим селектом, що й раніше
+        в діалозі: перевинаходити для цього власні чипи не було потреби.
+        Задача заводиться НА ПОЗИЦІЮ: від неї беруться нанесення, тираж і фото.
       */}
-      <div className="space-y-1.5">
-        <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Товар</span>
-        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Товар для дизайн-задачі">
-          {items.map((item) => {
-            const active = item.id === selectedItemId;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                disabled={disabled || busy}
-                onClick={() => onSelectItem(item.id)}
-                className={cn(
-                  "inline-flex max-w-[22rem] items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium",
-                  "transition-[background-color,border-color,color] duration-base ease-out motion-reduce:transition-none",
-                  "disabled:pointer-events-none disabled:opacity-50",
-                  active
-                    ? "border-foreground/35 bg-muted text-foreground"
-                    : "border-border/50 text-muted-foreground hover:border-border hover:text-foreground"
-                )}
-              >
-                <Package className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{item.title || "Позиція"}</span>
-                {/* Позначка «задача вже є» — не заборона, а факт: другу задачу
-                    на той самий товар заводять свідомо (візуал і макет різні). */}
-                {item.hasTask ? <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : null}
-              </button>
-            );
-          })}
-        </div>
-        {selected ? (
+      <div className="space-y-2">
+        <Label>Товар</Label>
+        <Select
+          value={selectedItemId ?? ""}
+          onValueChange={onSelectItem}
+          disabled={disabled || busy}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Оберіть товар" />
+          </SelectTrigger>
+          <SelectContent>
+            {items.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {item.title || "Позиція"}
+                {item.hasTask ? " — задача вже є" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/*
+          НАНЕСЕННЯ ПОКАЗУЄМО, АЛЕ НЕ РЕДАГУЄМО. Тип і місце ставлять при
+          створенні прорахунку, а розмір дизайнер бере з ТЗ. Тут це довідка:
+          видно, з чим людина заводить задачу, і не треба відкривати «Товари».
+        */}
+        {imprint.length > 0 ? (
+          <ul className="space-y-1 pt-0.5">
+            {imprint.map((line, index) => (
+              <li key={`${line.method}-${index}`} className="flex flex-wrap items-center gap-x-2 text-2xs">
+                <span className="font-medium text-foreground">{line.method}</span>
+                <span className="text-muted-foreground">{line.place}</span>
+                {line.size ? <span className="text-muted-foreground">{line.size}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
           <p className="text-2xs text-muted-foreground">
-            {selected.methodsCount > 0
-              ? `Нанесення з позиції поїде в задачу: ${selected.methodsCount}`
-              : "У цій позиції нанесення не вказано — дизайнер побачить задачу без нього."}
+            У цій позиції нанесення не вказано — його ставлять у товарі, при створенні прорахунку.
           </p>
-        ) : null}
+        )}
       </div>
 
       <div className="space-y-1.5">
@@ -176,10 +188,55 @@ export function QuoteDesignTaskComposer({
         ) : null}
       </div>
 
-      <div className="space-y-1.5">
-        <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-          Файли замовника для цього товару
-        </span>
+      {/*
+        ФАЙЛИ — ПЕРЕТЯГУВАННЯМ І КЛІКОМ, тією самою зоною, що в конструкторі
+        наборів: пунктирна рамка, підсвітка під час перетягування, прозорий
+        <input> поверх усієї площі. Своя кнопка «Додати файли» тут була
+        зайвою — у застосунку вже є звичний спосіб.
+      */}
+      <div className="space-y-2">
+        <Label>Файли замовника для цього товару</Label>
+        <div
+          className={cn(
+            "relative flex min-h-[92px] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors",
+            dragOver ? "border-primary/70 bg-primary/10" : "border-border/50 hover:border-border/80",
+            (disabled || busy || !selectedItemId) && "pointer-events-none opacity-50"
+          )}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragOver(false);
+            onAddFiles(event.dataTransfer.files);
+          }}
+        >
+          <input
+            type="file"
+            multiple
+            aria-label="Додати файли замовника"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            onChange={(event) => {
+              const list = event.target.files;
+              event.target.value = "";
+              onAddFiles(list);
+            }}
+          />
+          <div className="flex flex-col items-center gap-1.5">
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : (
+              <Upload className={cn("h-4 w-4", dragOver ? "text-primary" : "text-muted-foreground")} />
+            )}
+            <div className={cn("text-sm", dragOver ? "font-medium text-primary" : "text-foreground")}>
+              {dragOver ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
+            </div>
+            <div className="text-xs text-muted-foreground">Побачить дизайнер саме в цій задачі.</div>
+          </div>
+        </div>
+
         {files.length > 0 ? (
           <ul className="space-y-1">
             {files.map((file) => (
@@ -205,28 +262,6 @@ export function QuoteDesignTaskComposer({
             ))}
           </ul>
         ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled || busy || !selectedItemId}
-          className="gap-2"
-          onClick={() => inputRef.current?.click()}
-        >
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          Додати файли
-        </Button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(event) => {
-            const list = event.target.files;
-            event.target.value = "";
-            onAddFiles(list);
-          }}
-        />
       </div>
 
       {error ? <p className="text-xs text-destructive">{error}</p> : null}

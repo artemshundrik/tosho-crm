@@ -2332,18 +2332,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     вже видно в панелі матеріалів нижче, і змішувати їх означало б обіцяти,
     що вони поїдуть саме в цю задачу.
   */
-  /** Позиція, на яку зараз націлений композер: обрана або перша без задачі. */
-  const designComposerItemId =
-    designTaskItemId ?? itemsWithoutDesignTask[0]?.id ?? items[0]?.id ?? null;
-
-  const designComposerFiles = useMemo(
-    () =>
-      designComposerItemId
-        ? attachments.filter((file) => file.audience === "design" && file.quoteItemId === designComposerItemId)
-        : [],
-    [attachments, designComposerItemId]
-  );
-
   const resolvedItemSelection = useMemo(
     () =>
       resolveCatalogSelection({
@@ -6242,9 +6230,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 composerBrief={designComposerBrief}
                 onComposerBriefChange={setDesignComposerBrief}
                 briefPlaceholder={briefSourceText || undefined}
-                composerFiles={designComposerFiles}
+                attachments={attachments}
+                catalogTypes={catalogTypes}
                 attachmentsUploading={attachmentsUploading}
-                onAddComposerFiles={(files) => void uploadAttachments(files, "design", designComposerItemId)}
+                onAddComposerFiles={(files, itemId) => void uploadAttachments(files, "design", itemId)}
                 onRemoveComposerFile={requestDeleteAttachment}
                 designTaskType={designTaskType}
                 onDesignTaskTypeChange={setDesignTaskType}
@@ -6252,13 +6241,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 designTaskError={designTaskError}
                 designTaskLoading={designTaskLoading}
                 canEditQuoteContent={canEditQuoteContent}
-                onCreateDesignTask={() => {
-                  if (designComposerItemId && designComposerItemId !== designTaskItemId) {
-                    setDesignTaskItemId(designComposerItemId);
-                  }
+                onCreateDesignTask={(itemId, hasFiles) => {
+                  if (itemId && itemId !== designTaskItemId) setDesignTaskItemId(itemId);
                   void createDesignTask({
                     designBrief: designComposerBrief.trim() || undefined,
-                    hasFiles: designComposerFiles.length > 0,
+                    hasFiles,
                   }).then(() => setDesignComposerBrief(""));
                 }}
                 designTaskCards={designTaskCards}
@@ -6283,7 +6270,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   });
                 }}
                 onAddMaterials={(files) => void uploadAttachments(files, "design")}
-                onOpenProducts={() => setActiveQuoteTab("products")}
               />
             </section>
 
