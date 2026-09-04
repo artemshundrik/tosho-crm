@@ -71,6 +71,7 @@ import {
 } from "@/lib/printPackage";
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
 import { QuoteItemImprints } from "@/features/quotes/quote-details/QuoteItemImprints";
+import { QuoteItemModelSwap } from "@/features/quotes/quote-details/QuoteItemModelSwap";
 import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
 import { parseQuoteItemMetadata } from "@/features/quotes/quote-details/quoteItemMetadata";
 import { QuoteImportDialog } from "@/features/quotes/quote-import/QuoteImportDialog";
@@ -5146,14 +5147,31 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             {/* Нанесення тепер РЕДАГУЄТЬСЯ тут, а не показується
                                 рядком специфікації (REQ-157#p4): вікно редагування
                                 прорахунку віддало продукцію цій вкладці. */}
-                            {teamId && resolvedKindId ? (
-                              <div className="mt-4 border-t border-border/50 pt-3">
-                                <div className="mb-2 text-xs text-muted-foreground">Нанесення</div>
-                                <QuoteItemImprints
+                            {/* Товар і нанесення правлять ТУТ (REQ-157#p2/p4/p5):
+                                вікно редагування прорахунку віддало продукцію цій
+                                вкладці, а вікно позиції лишилось для рідкісного —
+                                одиниці, артикула, коментаря, вкладення. */}
+                            {teamId ? (
+                              <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/50 pt-3">
+                                {resolvedKindId ? (
+                                  <>
+                                    <span className="text-xs text-muted-foreground">Нанесення</span>
+                                    <QuoteItemImprints
+                                      teamId={teamId}
+                                      itemId={item.id}
+                                      kindId={resolvedKindId}
+                                      methods={item.methods ?? []}
+                                      disabled={!canManageItems}
+                                      onSaved={() => void loadItems()}
+                                    />
+                                  </>
+                                ) : null}
+                                <span className="flex-1" />
+                                <QuoteItemModelSwap
                                   teamId={teamId}
                                   itemId={item.id}
-                                  kindId={resolvedKindId}
-                                  methods={item.methods ?? []}
+                                  currentModelId={resolvedModelId ?? null}
+                                  currentKindId={resolvedKindId ?? null}
                                   disabled={!canManageItems}
                                   onSaved={() => void loadItems()}
                                 />
