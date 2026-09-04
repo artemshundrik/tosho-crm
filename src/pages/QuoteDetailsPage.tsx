@@ -398,6 +398,11 @@ type ItemMethod = {
   methodId: string;
   count: number;
   printPositionId?: string;
+  /**
+   * Місце словами — коли рядка довідника немає (REQ-182#p24). Вікно створення
+   * прорахунку пише його поруч з id: id буває не заведеним, а місце сказаним.
+   */
+  printPositionLabel?: string | null;
   printWidthMm?: number | null;
   printHeightMm?: number | null;
 };
@@ -2839,6 +2844,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 printPositionId: (entry.print_position_id ?? entry.printPositionId ?? undefined) as
                   | string
                   | undefined,
+                printPositionLabel:
+                  typeof (entry.print_position_label ?? entry.printPositionLabel) === "string"
+                    ? String(entry.print_position_label ?? entry.printPositionLabel).trim() || null
+                    : null,
                 printWidthMm: Number.isNaN(width) ? null : width,
                 printHeightMm: Number.isNaN(height) ? null : height,
               };
@@ -4073,6 +4082,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           method_id: method.methodId,
           count: method.count,
           print_position_id: method.printPositionId ?? null,
+          print_position_label: method.printPositionLabel ?? null,
           print_width_mm: method.printWidthMm ?? null,
           print_height_mm: method.printHeightMm ?? null,
         }))
@@ -4962,7 +4972,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   resolvedTypeId,
                                   resolvedKindId,
                                   method.printPositionId
-                                ) ?? positionLabel ?? "Місце не вказано";
+                                ) ?? method.printPositionLabel ?? positionLabel ?? "Місце не вказано";
                               const size =
                                 method.printWidthMm && method.printHeightMm
                                   ? `${method.printWidthMm}×${method.printHeightMm} мм`

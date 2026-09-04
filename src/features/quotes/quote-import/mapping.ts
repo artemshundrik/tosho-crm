@@ -123,7 +123,7 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
         notes: (item.notes ?? "").trim() || null,
         variant,
         catalog: null,
-        methodIds: [],
+        imprints: [],
       };
     })
     .filter((item): item is QuoteImportDraftItem => item !== null);
@@ -172,9 +172,12 @@ export function describeDraftOrigin(draft: QuoteImportDraftItem, fileName: strin
  * бачать замовлення, КП, дизайн-задача й орієнтир накрутки — усі ті читачі,
  * які сліпі до `metadata.catalogVariant` посилання.
  *
- * Нанесення (REQ-182#p16) — тим самим рядком `{method_id, count, …}`, що пишуть
- * «Новий прорахунок» і картка позиції; місце й розмір порожні, бо у вікні їх
- * не питали. Порожній список — `null`, як і в решти шляхів: «без нанесення»
+ * Нанесення (REQ-182#p24) — тим самим рядком `{method_id, count, …}`, що пишуть
+ * «Новий прорахунок» і картка позиції: пара «метод + місце» лягає одним
+ * записом, розмір лишається порожнім (його питає ТЗ дизайн-задачі, не вікно).
+ * Поруч із `print_position_id` пишемо `print_position_label`: id є не завжди —
+ * рядок довідника міг не завестись, — а місце словами прочитають і КП, і
+ * картка. Порожній список — `null`, як і в решти шляхів: «без нанесення»
  * у базі виглядає однаково, звідки б позиція не прийшла.
  */
 export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Record<string, unknown> {
@@ -211,12 +214,14 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
     catalog_type_id: draft.catalog?.typeId ?? null,
     catalog_kind_id: draft.catalog?.kindId ?? null,
     catalog_model_id: draft.catalog?.modelId ?? null,
+    print_position_id: draft.imprints.find((imprint) => imprint.positionId)?.positionId ?? null,
     methods:
-      draft.methodIds.length > 0
-        ? draft.methodIds.map((methodId) => ({
-            method_id: methodId,
+      draft.imprints.length > 0
+        ? draft.imprints.map((imprint) => ({
+            method_id: imprint.methodId,
             count: 1,
-            print_position_id: null,
+            print_position_id: imprint.positionId,
+            print_position_label: imprint.positionLabel,
             print_width_mm: null,
             print_height_mm: null,
           }))

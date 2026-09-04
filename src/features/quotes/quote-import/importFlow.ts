@@ -1,4 +1,10 @@
-import { insertCatalogModelRow, insertQuoteItemRow, persistQuoteRuns } from "@/features/quotes/quote-details/queries";
+import {
+  fetchKindPrintPositions,
+  insertCatalogModelRow,
+  insertPrintPositionRow,
+  insertQuoteItemRow,
+  persistQuoteRuns,
+} from "@/features/quotes/quote-details/queries";
 import { supabase } from "@/lib/supabaseClient";
 import type { QuoteRun } from "@/lib/toshoApi";
 
@@ -119,6 +125,66 @@ async function bindCatalogModel(draft: QuoteImportDraftItem, teamId: string): Pr
   return { ...draft, catalog: { ...catalog, modelId: inserted.data.id, guessed: false } };
 }
 
+/**
+ * Вписане місце нанесення → рядок довідника виду (REQ-182#p24).
+ *
+ * ТА САМА ІДЕЯ, ЩО З ТОВАРОМ ЗА ПОСИЛАННЯМ (p18): те, що людина набрала у
+ * вікні, стає справжнім рядком бази на «Створити», а не мертвим текстом у
+ * json. Інакше всі шість читачів нанесення — картка, КП, замовлення,
+ * дизайн-задача, композер, вивантаження — показували б «Місце не вказано»,
+ * а список місць виду лишався б порожнім вічно.
+ *
+ * ДУБЛІВ НЕ ПЛОДИМО: перед записом читаємо місця виду й порівнюємо без
+ * регістру, а створене в цьому ж заїзді лежить у спільному кеші — десять
+ * однакових футболок дають одне «по центру спереду», а не десять.
+ *
+ * Не вийшло — місце лишається текстом у `print_position_label`: позиція від
+ * цього не пропадає, і читачі, які вміють підпис, його покажуть.
+ */
+async function bindPlaces(
+  draft: QuoteImportDraftItem,
+  cache: Map<string, Map<string, string>>
+): Promise<QuoteImportDraftItem> {
+  const kindId = draft.catalog?.kindId;
+  if (!kindId) return draft;
+  const pending = draft.imprints.filter((imprint) => !imprint.positionId && imprint.positionLabel?.trim());
+  if (pending.length === 0) return draft;
+
+  let known = cache.get(kindId);
+  if (!known) {
+    const existing = await fetchKindPrintPositions(kindId);
+    known = new Map(existing.ok ? existing.data.map((place) => [place.label.toLowerCase(), place.id]) : []);
+    cache.set(kindId, known);
+  }
+
+  const resolved = new Map<string, string>();
+  for (const imprint of pending) {
+    const label = (imprint.positionLabel ?? "").trim().slice(0, 60);
+    const lower = label.toLowerCase();
+    if (resolved.has(lower) || !label) continue;
+    const hit = known.get(lower);
+    if (hit) {
+      resolved.set(lower, hit);
+      continue;
+    }
+    const inserted = await insertPrintPositionRow({ kind_id: kindId, label });
+    if (!inserted.ok) continue;
+    known.set(lower, inserted.data.id);
+    resolved.set(lower, inserted.data.id);
+  }
+  if (resolved.size === 0) return draft;
+
+  return {
+    ...draft,
+    imprints: draft.imprints.map((imprint) => {
+      if (imprint.positionId) return imprint;
+      const label = (imprint.positionLabel ?? "").trim().slice(0, 60);
+      const id = resolved.get(label.toLowerCase());
+      return id ? { ...imprint, positionId: id, positionLabel: label } : imprint;
+    }),
+  };
+}
+
 export type ImportWriteOutcome =
   | { ok: true; itemIds: string[] }
   | { ok: false; itemIds: string[]; error: string };
@@ -150,6 +216,8 @@ export async function writeDraftsToQuote(input: {
 }): Promise<ImportWriteOutcome> {
   const itemIds: string[] = [];
   const runPayloads: QuoteRun[] = [];
+  /** Місця нанесення, заведені в цьому заїзді: вид → підпис → id рядка. */
+  const placeCache = new Map<string, Map<string, string>>();
 
   const saveRuns = (runs: QuoteRun[]) => persistQuoteRuns(input.quoteId, runs, []);
 
@@ -162,7 +230,7 @@ export async function writeDraftsToQuote(input: {
 
   for (const [index, rawDraft] of input.drafts.entries()) {
     const itemId = crypto.randomUUID();
-    const draft = await bindCatalogModel(rawDraft, input.teamId);
+    const draft = await bindPlaces(await bindCatalogModel(rawDraft, input.teamId), placeCache);
     const payload = buildImportItemPayload({
       draft,
       itemId,

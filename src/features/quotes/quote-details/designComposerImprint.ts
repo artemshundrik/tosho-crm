@@ -13,6 +13,10 @@ import type { DesignComposerImprint } from "./QuoteDesignTaskComposer";
  * Тип і місце ставлять у товарі, при створенні прорахунку; розмір дизайнер
  * бере з ТЗ. Композер їх ЛИШЕ показує — щоб не відкривати вкладку «Товари»
  * заради перевірки, з чим саме заводиться задача.
+ *
+ * Місце буває вписаним руками (REQ-182#p24): якщо рядка довідника немає,
+ * беремо підпис із самого нанесення, а не кажемо «Місце не вказано» про те,
+ * що менеджер якраз вказав.
  */
 export function buildComposerImprint(
   item:
@@ -20,6 +24,7 @@ export function buildComposerImprint(
         methods?: Array<{
           methodId: string;
           printPositionId?: string;
+          printPositionLabel?: string | null;
           printWidthMm?: number | null;
           printHeightMm?: number | null;
         }> | null;
@@ -48,6 +53,7 @@ export function buildComposerImprint(
         "Метод",
       place:
         getPrintPositionLabel(catalogTypes, item.resolvedTypeId, item.resolvedKindId, method.printPositionId) ??
+        method.printPositionLabel?.trim() ??
         "Місце не вказано",
       size,
     };

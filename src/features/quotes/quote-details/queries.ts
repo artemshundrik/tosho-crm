@@ -1196,6 +1196,57 @@ export async function insertCatalogModelRow(payload: {
   }
 }
 
+/**
+ * Місця нанесення одного виду — довідник, з якого вибирають у вікні прорахунку.
+ *
+ * Без `team_id`: колонки такої в `catalog_print_positions` немає, команду
+ * стереже RLS через вид (`catalog_kinds.team_id`).
+ */
+export async function fetchKindPrintPositions(kindId: string): Promise<QueryResult<Array<{ id: string; label: string }>>> {
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("catalog_print_positions")
+      .select("id,label")
+      .eq("kind_id", kindId);
+    if (error) throw error;
+    return {
+      ok: true,
+      data: ((data ?? []) as Array<{ id: string; label: string | null }>)
+        .filter((row) => Boolean(row.id && row.label?.trim()))
+        .map((row) => ({ id: row.id, label: (row.label ?? "").trim() })),
+    };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося прочитати місця нанесення.") };
+  }
+}
+
+/**
+ * Вписане руками місце — рядком довідника цього виду (REQ-182#p24).
+ *
+ * Довідник місць порожній у 89 видів із 92, тому менеджери роками ставили
+ * «Індивідуальний» із футболки на горнятка й кепки: іншого списку їм ніхто не
+ * давав. Вписане у вікні місце заводить рядок саме тому — щоб список виду
+ * наповнювався сам, як каталог наповнюється товарами за посиланням.
+ */
+export async function insertPrintPositionRow(payload: {
+  kind_id: string;
+  label: string;
+}): Promise<QueryResult<{ id: string }>> {
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("catalog_print_positions")
+      .insert(payload as never)
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { ok: true, data: { id: (data as { id: string }).id } };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося записати місце нанесення.") };
+  }
+}
+
 /** Методи, позиції нанесення, звʼязки моделей із методами і цінові сходинки. */
 export async function fetchCatalogEnrichment(
   teamId: string,

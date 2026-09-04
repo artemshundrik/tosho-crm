@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ImportDraftRow, type DraftKindOption } from "@/features/quotes/quote-import/ImportDraftRow";
+import { ImportDraftRow, type DraftKindOption, type PlaceOption } from "@/features/quotes/quote-import/ImportDraftRow";
 import {
   parseImportFile,
   startImportResearch,
@@ -20,7 +20,11 @@ import {
 } from "@/features/quotes/quote-import/importFlow";
 import type { QuoteImportRunDefaults } from "@/features/quotes/quote-import/mapping";
 import { QUOTE_IMPORT_ACCEPT } from "@/features/quotes/quote-import/readWorkbook";
-import type { QuoteImportDraftItem, QuoteImportLinkPreview } from "@/features/quotes/quote-import/types";
+import type {
+  QuoteImportDraftImprint,
+  QuoteImportDraftItem,
+  QuoteImportLinkPreview,
+} from "@/features/quotes/quote-import/types";
 import { countSettledPreviews, fetchLinkPreview, useLinkPreviews } from "@/features/quotes/quote-import/useLinkPreviews";
 import { pluralWordUk } from "@/lib/lastSeen";
 import { cn } from "@/lib/utils";
@@ -29,7 +33,7 @@ import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions
 import { QuoteItemCommandField } from "./QuoteItemCommandField";
 import { QUOTE_KINDS, type QuoteKindValue } from "./quoteWizardKinds";
 import { useCatalogSuggestions } from "./useCatalogSuggestions";
-import { useKindMethods } from "./useKindMethods";
+import { useKindImprintOptions } from "./useKindImprintOptions";
 
 /**
  * Вікно «Новий прорахунок» на один екран (REQ-237, обраний концепт із трьох).
@@ -74,7 +78,7 @@ function makeDraft(partial: Partial<QuoteImportDraftItem> = {}): QuoteImportDraf
     notes: null,
     variant: null,
     catalog: null,
-    methodIds: [],
+    imprints: [],
     ...partial,
   };
 }
@@ -138,7 +142,37 @@ export function QuoteWizardDialog({
     () => drafts.map((draft) => draft.catalog?.kindId).filter((id): id is string => Boolean(id)),
     [drafts]
   );
-  const { byKind: methodsByKind, reset: resetKindMethods } = useKindMethods(teamId, draftKindIds);
+  const { byKind: optionsByKind, reset: resetKindOptions } = useKindImprintOptions(teamId, draftKindIds);
+  /**
+   * Місця виду: довідник плюс те, що вже вписали руками на інших позиціях
+   * ЦЬОГО Ж виду. Рядок довідника з'явиться лише на «Створити», а прорахунок
+   * на десять однакових футболок збирають до нього — і набирати «по центру
+   * спереду» десять разів людина не буде.
+   */
+  const placesByKind = React.useMemo(() => {
+    const typed = new Map<string, Map<string, string>>();
+    for (const draft of drafts) {
+      const kindId = draft.catalog?.kindId;
+      if (!kindId) continue;
+      for (const imprint of draft.imprints) {
+        const label = imprint.positionLabel?.trim();
+        if (!label || imprint.positionId) continue;
+        const forKind = typed.get(kindId) ?? new Map<string, string>();
+        forKind.set(label.toLowerCase(), label);
+        typed.set(kindId, forKind);
+      }
+    }
+    const result: Record<string, PlaceOption[]> = {};
+    for (const kindId of new Set([...Object.keys(optionsByKind), ...typed.keys()])) {
+      const known = optionsByKind[kindId]?.places ?? [];
+      const knownLabels = new Set(known.map((place) => place.label.toLowerCase()));
+      const extra = [...(typed.get(kindId)?.entries() ?? [])]
+        .filter(([lower]) => !knownLabels.has(lower))
+        .map(([, label]) => ({ id: null, label }));
+      result[kindId] = [...known, ...extra];
+    }
+    return result;
+  }, [drafts, optionsByKind]);
 
   const reset = React.useCallback(() => {
     setKind("merch");
@@ -153,8 +187,8 @@ export function QuoteWizardDialog({
     setHeaderNudge(0);
     setLinkPreviews({});
     resetLinkPreviews();
-    resetKindMethods();
-  }, [resetKindMethods, resetLinkPreviews]);
+    resetKindOptions();
+  }, [resetKindOptions, resetLinkPreviews]);
 
   const selected = React.useMemo(() => drafts.filter((draft) => draft.selected), [drafts]);
   const fileDrafts = React.useMemo(() => drafts.filter(isFileDraft), [drafts]);
@@ -185,20 +219,9 @@ export function QuoteWizardDialog({
     );
   };
   const removeDraft = (key: string) => setDrafts((prev) => prev.filter((draft) => draft.key !== key));
-  /** `null` — «Без нанесення»: стирає всі методи; id — вмикає або вимикає один. */
-  const toggleMethod = (key: string, methodId: string | null) =>
-    setDrafts((prev) =>
-      prev.map((draft) => {
-        if (draft.key !== key) return draft;
-        if (methodId === null) return { ...draft, methodIds: [] };
-        return {
-          ...draft,
-          methodIds: draft.methodIds.includes(methodId)
-            ? draft.methodIds.filter((id) => id !== methodId)
-            : [...draft.methodIds, methodId],
-        };
-      })
-    );
+  /** Пари «метод + місце» цілком: список збирає сам рядок позиції. */
+  const changeImprints = (key: string, next: QuoteImportDraftImprint[]) =>
+    setDrafts((prev) => prev.map((draft) => (draft.key === key ? { ...draft, imprints: next } : draft)));
   /** Тиражі взаємовиключні: це не «ще стільки», а «а скільки буде, якщо стільки». */
   const addRun = (key: string) =>
     setDrafts((prev) =>
@@ -278,16 +301,17 @@ export function QuoteWizardDialog({
 
   /**
    * Вид для рядка без моделі — руками (REQ-182#p18). Зміна виду скидає
-   * методи: вони належать виду, і чужі id у чернетці були б брехнею.
+   * нанесення: методи й місця належать виду, і чужі id у чернетці були б
+   * брехнею.
    */
   const changeKind = (key: string, kind: DraftKindOption | null) =>
     setDrafts((prev) =>
       prev.map((draft) => {
         if (draft.key !== key) return draft;
-        if (!kind) return { ...draft, catalog: null, methodIds: [] };
+        if (!kind) return { ...draft, catalog: null, imprints: [] };
         return {
           ...draft,
-          methodIds: draft.catalog?.kindId === kind.kindId ? draft.methodIds : [],
+          imprints: draft.catalog?.kindId === kind.kindId ? draft.imprints : [],
           catalog: {
             modelId: null,
             kindId: kind.kindId,
@@ -685,8 +709,15 @@ export function QuoteWizardDialog({
                         // Рядок файлу ЗНІМАЮТЬ галочкою (щоб було видно, що він там
                         // був), а доданий полем — просто прибирають.
                         onRemove={isFileDraft(draft) ? undefined : () => removeDraft(draft.key)}
-                        methodOptions={draft.catalog ? methodsByKind[draft.catalog.kindId] : undefined}
-                        onToggleMethod={draft.catalog ? (methodId) => toggleMethod(draft.key, methodId) : undefined}
+                        imprintOptions={
+                          draft.catalog && optionsByKind[draft.catalog.kindId]
+                            ? {
+                                methods: optionsByKind[draft.catalog.kindId].methods,
+                                places: placesByKind[draft.catalog.kindId] ?? [],
+                              }
+                            : undefined
+                        }
+                        onChangeImprints={draft.catalog ? (next) => changeImprints(draft.key, next) : undefined}
                         // Вид руками — лише в рядків без моделі: у позиції з каталогу він уже є.
                         kindOptions={isFileDraft(draft) ? undefined : catalog.kinds}
                         onChangeKind={isFileDraft(draft) ? undefined : (kind) => changeKind(draft.key, kind)}

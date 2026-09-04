@@ -130,7 +130,7 @@ describe("рядки прев'ю → payload мутацій", () => {
     expect(payload).toMatchObject({ qty: 300, unit_price: 0, line_total: 0 });
   });
 
-  it("позиція з каталогу несе catalog_*_id і методи нанесення тим самим рядком, що картка", () => {
+  it("позиція з каталогу несе catalog_*_id і пари «метод + місце» тим самим рядком, що картка", () => {
     const payload = buildImportItemPayload({
       draft: draft({
         catalog: {
@@ -141,7 +141,11 @@ describe("рядки прев'ю → payload мутацій", () => {
           typeName: "Одяг",
           imageUrl: null,
         },
-        methodIds: ["method-dtf", "method-embroidery"],
+        imprints: [
+          { key: "i-1", methodId: "method-dtf", positionId: "place-chest", positionLabel: "Груди" },
+          // Місце вписали руками: рядка довідника ще немає, лишається підпис.
+          { key: "i-2", methodId: "method-embroidery", positionId: null, positionLabel: "По центру спини" },
+        ],
       }),
       itemId: "item-1",
       teamId: "team-1",
@@ -152,9 +156,26 @@ describe("рядки прев'ю → payload мутацій", () => {
 
     expect(payload).toMatchObject({ catalog_type_id: "t-1", catalog_kind_id: "k-1", catalog_model_id: "m-1" });
     expect(payload.methods).toEqual([
-      { method_id: "method-dtf", count: 1, print_position_id: null, print_width_mm: null, print_height_mm: null },
-      { method_id: "method-embroidery", count: 1, print_position_id: null, print_width_mm: null, print_height_mm: null },
+      {
+        method_id: "method-dtf",
+        count: 1,
+        print_position_id: "place-chest",
+        print_position_label: "Груди",
+        print_width_mm: null,
+        print_height_mm: null,
+      },
+      {
+        method_id: "method-embroidery",
+        count: 1,
+        print_position_id: null,
+        print_position_label: "По центру спини",
+        print_width_mm: null,
+        print_height_mm: null,
+      },
     ]);
+    // Колонка позиції — перше місце з довідника: нею користуються старі читачі,
+    // які дивляться не в масив, а в саму позицію.
+    expect(payload.print_position_id).toBe("place-chest");
   });
 
   it("без нанесення — methods: null, як і в решти шляхів створення", () => {

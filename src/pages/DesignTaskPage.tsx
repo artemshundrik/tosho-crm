@@ -3262,7 +3262,15 @@ export default function DesignTaskPage() {
   const methods = useMemo(() => {
     const raw = quoteItem?.methods;
     if (!raw || !Array.isArray(raw)) return [];
-    return raw as { method_id?: string; print_position_id?: string; print_width_mm?: number | null; print_height_mm?: number | null }[];
+    return raw as {
+      method_id?: string;
+      print_position_id?: string;
+      // Місце, вписане руками у вікні прорахунку (REQ-182#p24): рядка
+      // довідника може не бути, а сказане місце є.
+      print_position_label?: string | null;
+      print_width_mm?: number | null;
+      print_height_mm?: number | null;
+    }[];
   }, [quoteItem?.methods]);
 
   useEffect(() => {
@@ -11302,7 +11310,8 @@ export default function DesignTaskPage() {
                     <div key={idx} className="border-b border-border/25 py-2.5 text-sm last:border-b-0">
                       <div className="font-medium text-foreground/90">Метод {idx + 1}: {getMethodLabel(method.method_id ?? null)}</div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {getPrintPositionLabel(method.print_position_id ?? null)} · {method.print_width_mm ?? "—"} × {method.print_height_mm ?? "—"} мм
+                        {getPrintPositionLabel(method.print_position_id ?? method.print_position_label ?? null)} ·{" "}
+                        {method.print_width_mm ?? "—"} × {method.print_height_mm ?? "—"} мм
                       </div>
                     </div>
                   ))

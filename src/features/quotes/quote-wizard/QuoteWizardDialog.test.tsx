@@ -94,11 +94,18 @@ const fetchCatalogBase = vi.fn(async () => ({
   },
 }));
 
+const insertPrintPositionRow = vi.fn(async (payload: Record<string, unknown>) => {
+  void payload;
+  return { ok: true as const, data: { id: "place-new" } };
+});
+
 vi.mock("@/features/quotes/quote-details/queries", () => ({
   insertQuoteItemRow: (payload: Record<string, unknown>) => insertQuoteItemRow(payload),
   persistQuoteRuns: () => persistQuoteRuns(),
   fetchCatalogBase: () => fetchCatalogBase(),
   insertCatalogModelRow: (payload: Record<string, unknown>) => insertCatalogModelRow(payload),
+  fetchKindPrintPositions: async () => ({ ok: true as const, data: [] }),
+  insertPrintPositionRow: (payload: Record<string, unknown>) => insertPrintPositionRow(payload),
 }));
 
 const runDefaults = { markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 };
@@ -128,6 +135,7 @@ describe("QuoteWizardDialog — один екран", () => {
     insertQuoteItemRow.mockClear();
     persistQuoteRuns.mockClear();
     insertCatalogModelRow.mockClear();
+    insertPrintPositionRow.mockClear();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -263,7 +271,7 @@ describe("QuoteWizardDialog — один екран", () => {
     });
   });
 
-  it("позиція з каталогу: чипи нанесення за історією виду, «Без нанесення» увімкнене, методи пишуться рядком", async () => {
+  it("позиція з каталогу: метод чипом за історією виду, місце вписується руками й стає рядком довідника", async () => {
     const user = userEvent.setup();
     const { prepareQuote } = renderWizard();
 
@@ -277,22 +285,54 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(chips.map((chip) => chip.textContent)).toEqual(["Без нанесення", "ДТФ", "Вишивка"]);
     expect(chips[0]).toHaveAttribute("aria-pressed", "true");
 
+    // Клік по методу створює ПАРУ, і рядок одразу питає про місце.
     await user.click(within(group).getByRole("button", { name: "ДТФ" }));
-    await user.click(within(group).getByRole("button", { name: "Вишивка" }));
-    expect(within(group).getByRole("button", { name: "Без нанесення" })).toHaveAttribute("aria-pressed", "false");
-    expect(within(group).getByRole("button", { name: "ДТФ" })).toHaveAttribute("aria-pressed", "true");
+    const pair = await within(group).findByRole("button", { name: "Нанесення: ДТФ, місце не вказане" });
+    expect(pair).toHaveTextContent("місце?");
 
-    // Клік по «Без нанесення» стирає обране — це відповідь, а не порожнеча.
-    await user.click(within(group).getByRole("button", { name: "Без нанесення" }));
-    expect(within(group).getByRole("button", { name: "ДТФ" })).toHaveAttribute("aria-pressed", "false");
-    await user.click(within(group).getByRole("button", { name: "ДТФ" }));
+    // Довідник місць цього виду порожній (так у 89 видів із 92) — місце вписують.
+    await user.click(pair);
+    await user.type(await screen.findByRole("textbox", { name: "Своє місце нанесення" }), "По центру спини{Enter}");
+    await within(group).findByRole("button", { name: "Нанесення: ДТФ, місце По центру спини" });
 
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "40");
     await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
     await waitFor(() => expect(prepareQuote).toHaveBeenCalled());
+
+    // Вписане місце стало рядком довідника ЦЬОГО виду, а не текстом у json.
+    expect(insertPrintPositionRow).toHaveBeenCalledTimes(1);
+    expect(insertPrintPositionRow.mock.calls[0][0]).toMatchObject({ kind_id: "k-hoodie", label: "По центру спини" });
     expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({
-      methods: [{ method_id: "method-dtf", count: 1, print_position_id: null }],
+      print_position_id: "place-new",
+      methods: [
+        {
+          method_id: "method-dtf",
+          count: 1,
+          print_position_id: "place-new",
+          print_position_label: "По центру спини",
+        },
+      ],
     });
+  });
+
+  it("нанесення прибирається — позиція повертається до «Без нанесення» й пише methods: null", async () => {
+    const user = userEvent.setup();
+    const { prepareQuote } = renderWizard();
+
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "худі");
+    const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    await user.click(await within(list).findByRole("option", { name: /Реглан LENNY/ }));
+
+    const group = await screen.findByRole("group", { name: "Нанесення" });
+    await user.click(within(group).getByRole("button", { name: "ДТФ" }));
+    await user.click(await within(group).findByRole("button", { name: "Прибрати нанесення ДТФ" }));
+    expect(within(group).getByRole("button", { name: "Без нанесення" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "40");
+    await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalled());
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({ methods: null });
+    expect(insertPrintPositionRow).not.toHaveBeenCalled();
   });
 
   it("за посиланням: вид вгадується з назви сторінки, на «Створити» товар стає рядком каталогу", async () => {

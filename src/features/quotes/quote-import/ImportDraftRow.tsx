@@ -8,10 +8,23 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
 
-import type { QuoteImportDraftCatalog, QuoteImportDraftItem, QuoteImportFlag, QuoteImportLinkPreview } from "./types";
+import type {
+  QuoteImportDraftCatalog,
+  QuoteImportDraftImprint,
+  QuoteImportDraftItem,
+  QuoteImportFlag,
+  QuoteImportLinkPreview,
+} from "./types";
 
 /** Вид товару для вибору в рядку: те саме, що `CatalogKindOption` у візарді. */
 export type DraftKindOption = Pick<QuoteImportDraftCatalog, "kindId" | "kindName" | "typeId" | "typeName">;
+
+/**
+ * Місце нанесення для списку: рядок довідника виду (`id`) або вже вписане
+ * руками на іншій позиції цього ж виду (`id: null`) — щоб два однакові товари
+ * в одному прорахунку не вимагали набирати те саме двічі.
+ */
+export type PlaceOption = { id: string | null; label: string };
 
 /**
  * Один рядок прев'ю імпорту — той самий у вікні «Імпорт з файлу» й у візарді
@@ -35,8 +48,10 @@ export type DraftKindOption = Pick<QuoteImportDraftCatalog, "kindId" | "kindName
  * файлу, посилання, варіант, попередження).
  *
  * ПЕРШИЙ РЯДОК НЕ ПЕРЕНОСИТЬСЯ (`flex` без `flex-wrap`), і смуга нанесення
- * теж (`overflow-hidden`): висота позиції фіксована 102 px незалежно від
- * кількості тиражів, довжини назви й довжини назв методів.
+ * теж, поки на неї не відповіли: висота позиції — 102 px незалежно від
+ * кількості тиражів, довжини назви й довжини назв методів. Названі пари
+ * «метод + місце» — виняток (REQ-182#p24): їх переносить на другий рядок, бо
+ * обрізана відповідь гірша за вищий рядок, а третя пара — це 0,9 % позицій.
  */
 
 /** Гола іконка-дія в рядку позиції: та сама вага, що в кошика. */
@@ -111,8 +126,8 @@ export function ImportDraftRow({
   onRemoveRun,
   namePlaceholder,
   autoFocusName,
-  methodOptions,
-  onToggleMethod,
+  imprintOptions,
+  onChangeImprints,
   kindOptions,
   onChangeKind,
 }: {
@@ -136,12 +151,12 @@ export function ImportDraftRow({
   namePlaceholder?: string;
   autoFocusName?: boolean;
   /**
-   * Методи нанесення виду — чипами під назвою (REQ-182#p16). Не задано —
-   * рядка немає: в імпорті з файлу виду ще не знають, а без виду методу
-   * нема на що вказувати.
+   * Методи й місця нанесення цього виду — смугою під назвою (REQ-182#p24).
+   * Не задано — смуги немає: в імпорті з файлу виду ще не знають, а без виду
+   * методу нема на що вказувати.
    */
-  methodOptions?: Array<{ id: string; name: string }>;
-  onToggleMethod?: (methodId: string | null) => void;
+  imprintOptions?: { methods: Array<{ id: string; name: string }>; places: PlaceOption[] };
+  onChangeImprints?: (next: QuoteImportDraftImprint[]) => void;
   /**
    * Види каталогу для рядка без моделі (REQ-182#p18): припущення з назви
    * стоїть чипом «Кепка · припущення», людина клацає й виправляє. Не задано —
@@ -235,15 +250,23 @@ export function ImportDraftRow({
             йому, тож вони поруч, а не через рядок. Смуга не переноситься:
             «ще N» забирає все, що не влізло.
           */}
-          {kindChip || (methodOptions && onToggleMethod) ? (
-            <div className="flex items-center gap-1.5 overflow-hidden">
+          {kindChip || (imprintOptions && onChangeImprints) ? (
+            <div
+              className={cn(
+                "flex items-center gap-1.5",
+                // Поки нанесення не назвали, смуга тримається одного рядка й
+                // ріже зайве; названі пари ховати не можна — вони переносяться.
+                draft.imprints.length > 0 ? "flex-wrap" : "overflow-hidden"
+              )}
+            >
               {kindChip}
-              {methodOptions && onToggleMethod ? (
-                <MethodChips
-                  options={methodOptions}
-                  selected={draft.methodIds}
+              {imprintOptions && onChangeImprints ? (
+                <ImprintChips
+                  imprints={draft.imprints}
+                  methods={imprintOptions.methods}
+                  places={imprintOptions.places}
                   disabled={disabled}
-                  onToggle={onToggleMethod}
+                  onChange={onChangeImprints}
                 />
               ) : null}
             </div>
@@ -322,7 +345,7 @@ export function ImportDraftRow({
 }
 
 /**
- * Скільки чипів методів показуємо разом — обраних і запропонованих (REQ-182#p22).
+ * Скільки методів пропонуємо чипами, поки нанесення ще не назвали (REQ-182#p22).
  *
  * Було три запропоновані ПЛЮС усі обрані, тобто до п'яти чипів, і смуга
  * розповзалась на другий рядок. Заміри проду: один метод обирають у 85 %
@@ -336,50 +359,114 @@ export function ImportDraftRow({
 const VISIBLE_METHODS = 2;
 
 /**
- * Нанесення чипами (REQ-182#p16): «Без нанесення» перший і увімкнений, поки
- * нічого не обрано; далі методи виду в порядку історії. Показуємо три
- * найчастіші й обрані, решта за «ще N» (REQ-182#p20): вісім чипів на позицію
- * робили з рядка стіну, а історія каже, що перші два-три покривають більшість.
+ * ESC ЗАКРИВАЄ СПИСОК, А НЕ ВІКНО. Перевірено живим натиском: без цього
+ * Escape при відкритому списку лишав список на екрані й вів діалог до
+ * питання «Закрити без збереження?» — тобто клавіша робила рівно протилежне
+ * очікуваному. Слухаємо на фазі ЗАХОПЛЕННЯ й глушимо подію повністю:
+ * обробники Radix (і поповера, і діалога) висять на document на фазі
+ * спливання, тож до них вона вже не доходить.
  */
-function MethodChips({
-  options,
-  selected,
-  disabled,
-  onToggle,
-}: {
-  options: Array<{ id: string; name: string }>;
-  selected: string[];
-  disabled?: boolean;
-  onToggle: (methodId: string | null) => void;
-}) {
-  const [open, setOpen] = React.useState(false);
-
-  /*
-    ESC ЗАКРИВАЄ СПИСОК, А НЕ ВІКНО. Перевірено живим натиском: без цього
-    Escape при відкритому списку лишав список на екрані й вів діалог до
-    питання «Закрити без збереження?» — тобто клавіша робила рівно протилежне
-    очікуваному. Слухаємо на фазі ЗАХОПЛЕННЯ й глушимо подію повністю:
-    обробники Radix (і поповера, і діалога) висять на document на фазі
-    спливання, тож до них вона вже не доходить.
-  */
+function usePopoverEscape(open: boolean, close: () => void) {
   React.useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      setOpen(false);
+      close();
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [open]);
+  }, [open, close]);
+}
 
-  // Обрані першими: метод, обраний зі списку, мусить лишитись видимим у рядку.
-  const visible = options
-    .filter((method, index) => index < VISIBLE_METHODS || selected.includes(method.id))
-    .sort((left, right) => Number(selected.includes(right.id)) - Number(selected.includes(left.id)))
-    .slice(0, VISIBLE_METHODS);
-  const hidden = options.length - visible.length;
+/**
+ * Нанесення парами «метод + місце» (REQ-182#p24).
+ *
+ * ДВА СТАНИ СМУГИ, І ЦЕ НАВМИСНО. Поки не відповіли — смуга ПИТАЄ: «Без
+ * нанесення» увімкнене, поруч два найчастіші методи виду й «ще N». Щойно
+ * відповіли — смуга ПОКАЗУЄ відповідь: кожна пара окремим чипом «ДТФ ·
+ * Груди», плюс «+» на ще одну. Тримати обидва разом означало б до семи чипів
+ * у рядку на 410 px, а обране й запропоноване виглядали б однаково.
+ *
+ * МІСЦЕ ВИДНО НЕЗАПОВНЕНИМ. Чип без місця каже «ДТФ · місце?» приглушеним
+ * хвостиком: питання, на яке ще не відповіли, має бути видно в рядку, а не
+ * ховатись за клік. Саме через невидиме питання 203 нанесення з 332 поїхали
+ * з «Індивідуальний» — єдиним місцем, яке взагалі пропонувалось.
+ */
+function ImprintChips({
+  imprints,
+  methods,
+  places,
+  disabled,
+  onChange,
+}: {
+  imprints: QuoteImportDraftImprint[];
+  methods: Array<{ id: string; name: string }>;
+  places: PlaceOption[];
+  disabled?: boolean;
+  onChange: (next: QuoteImportDraftImprint[]) => void;
+}) {
+  const [listOpen, setListOpen] = React.useState(false);
+  const closeList = React.useCallback(() => setListOpen(false), []);
+  usePopoverEscape(listOpen, closeList);
+
+  const add = (methodId: string) =>
+    onChange([...imprints, { key: crypto.randomUUID(), methodId, positionId: null, positionLabel: null }]);
+  const patch = (key: string, next: Partial<QuoteImportDraftImprint>) =>
+    onChange(imprints.map((imprint) => (imprint.key === key ? { ...imprint, ...next } : imprint)));
+  const remove = (key: string) => onChange(imprints.filter((imprint) => imprint.key !== key));
+  const methodName = (methodId: string) => methods.find((method) => method.id === methodId)?.name ?? "Метод";
+
+  if (imprints.length > 0) {
+    return (
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label="Нанесення">
+        {imprints.map((imprint) => (
+          <ImprintChip
+            key={imprint.key}
+            imprint={imprint}
+            methodLabel={methodName(imprint.methodId)}
+            methods={methods}
+            places={places}
+            disabled={disabled}
+            onPatch={(next) => patch(imprint.key, next)}
+            onRemove={() => remove(imprint.key)}
+          />
+        ))}
+        {/* «Ще одне нанесення» — не «ще методи»: пара додається цілком. */}
+        <Popover open={listOpen} onOpenChange={setListOpen}>
+          <PopoverTrigger asChild>
+            <Chip
+              size="sm"
+              disabled={disabled}
+              icon={<Plus />}
+              aria-label="Додати нанесення"
+              className="shrink-0 border-dashed px-2.5 text-muted-foreground"
+            >
+              нанесення
+            </Chip>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="max-h-72 w-56 overflow-y-auto p-1.5">
+            <PopoverHeading>Метод</PopoverHeading>
+            {methods.map((method) => (
+              <ListRow
+                key={method.id}
+                label={method.name}
+                checked={false}
+                onSelect={() => {
+                  add(method.id);
+                  setListOpen(false);
+                }}
+              />
+            ))}
+          </PopoverContent>
+        </Popover>
+      </div>
+    );
+  }
+
+  const visible = methods.slice(0, VISIBLE_METHODS);
+  const hidden = methods.length - visible.length;
 
   return (
     <div className="flex min-w-0 items-center gap-1.5" role="group" aria-label="Нанесення">
@@ -390,33 +477,23 @@ function MethodChips({
       */}
       {/* Чипи можуть обрізатись, «ще N» — ніколи: це єдиний шлях до решти методів. */}
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        <Chip
-          size="sm"
-          disabled={disabled}
-          active={selected.length === 0}
-          aria-pressed={selected.length === 0}
-          onClick={() => onToggle(null)}
-        >
+        <Chip size="sm" disabled={disabled} active aria-pressed="true" onClick={() => onChange([])}>
           Без нанесення
         </Chip>
-        {visible.map((method) => {
-          const on = selected.includes(method.id);
-          return (
-            <Chip
-              key={method.id}
-              size="sm"
-              disabled={disabled}
-              active={on}
-              aria-pressed={on}
-              onClick={() => onToggle(method.id)}
-            >
-              {method.name}
-            </Chip>
-          );
-        })}
+        {visible.map((method) => (
+          <Chip
+            key={method.id}
+            size="sm"
+            disabled={disabled}
+            aria-pressed="false"
+            onClick={() => add(method.id)}
+          >
+            {method.name}
+          </Chip>
+        ))}
       </div>
       {hidden > 0 ? (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={listOpen} onOpenChange={setListOpen}>
           <PopoverTrigger asChild>
             <Chip
               size="sm"
@@ -429,14 +506,15 @@ function MethodChips({
             </Chip>
           </PopoverTrigger>
           <PopoverContent align="end" className="max-h-72 w-60 overflow-y-auto p-1.5">
-            <MethodOption label="Без нанесення" checked={selected.length === 0} onSelect={() => onToggle(null)} />
-            <div className="my-1 h-px bg-border/60" />
-            {options.map((method) => (
-              <MethodOption
+            {methods.map((method) => (
+              <ListRow
                 key={method.id}
                 label={method.name}
-                checked={selected.includes(method.id)}
-                onSelect={() => onToggle(method.id)}
+                checked={false}
+                onSelect={() => {
+                  add(method.id);
+                  setListOpen(false);
+                }}
               />
             ))}
           </PopoverContent>
@@ -446,8 +524,181 @@ function MethodChips({
   );
 }
 
-/** Рядок списку методів: клік застосовує одразу, список лишається відкритим. */
-function MethodOption({
+/**
+ * Одна пара в смузі: чип «метод · місце», під ним панель із двома питаннями.
+ *
+ * ОДИН ЧИП — ОДНА ПАНЕЛЬ, А НЕ ДВА ОКРЕМІ ДРОПДАУНИ. Метод і місце
+ * запитуються разом, бо разом і живуть: у базі це один запис масиву
+ * `methods`. Два дропдауни поруч з'їли б удвічі більше смуги й дозволили б
+ * місце без методу — стан, якого в базі немає.
+ *
+ * МІСЦЕ ВПИСУЄТЬСЯ РУКАМИ, І ЦЕ ГОЛОВНИЙ ШЛЯХ, а не запасний: довідник місць
+ * заповнений у трьох видів із 92. Вписане не гине в тексті — на «Створити»
+ * воно стає рядком довідника цього виду, тож наступного разу вже стоїть у
+ * списку (як товар за посиланням стає рядком каталогу, REQ-182#p18).
+ */
+function ImprintChip({
+  imprint,
+  methodLabel,
+  methods,
+  places,
+  disabled,
+  onPatch,
+  onRemove,
+}: {
+  imprint: QuoteImportDraftImprint;
+  methodLabel: string;
+  methods: Array<{ id: string; name: string }>;
+  places: PlaceOption[];
+  disabled?: boolean;
+  onPatch: (next: Partial<QuoteImportDraftImprint>) => void;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [typed, setTyped] = React.useState("");
+  const close = React.useCallback(() => setOpen(false), []);
+  usePopoverEscape(open, close);
+
+  const place = imprint.positionLabel?.trim() || "";
+  const applyTyped = (value: string) => {
+    const label = value.trim();
+    if (!label) return;
+    // Вписали те, що вже є в списку виду, — беремо рядок довідника, а не текст:
+    // однакове місце має лишатись одним місцем, хай навіть його набрали руками.
+    const known = places.find((option) => option.id && option.label.toLowerCase() === label.toLowerCase());
+    onPatch({ positionId: known?.id ?? null, positionLabel: known?.label ?? label.slice(0, 60) });
+    setTyped("");
+  };
+
+  return (
+    <div className="group/imprint relative shrink-0">
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          // Набране й не підтверджене Enter'ом не пропадає: закриття панелі —
+          // теж відповідь, і людина вважає, що вписала місце, бо вона його вписала.
+          if (!next) applyTyped(typed);
+          setOpen(next);
+        }}
+      >
+        <PopoverTrigger asChild>
+          <Chip
+            size="sm"
+            disabled={disabled}
+            active
+            title={place ? `${methodLabel} · ${place}` : `${methodLabel} — місце не вказане`}
+            aria-label={place ? `Нанесення: ${methodLabel}, місце ${place}` : `Нанесення: ${methodLabel}, місце не вказане`}
+            className="max-w-[190px]"
+          >
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="shrink-0">{methodLabel}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className={cn("min-w-0 truncate", !place && "font-normal text-muted-foreground")}>
+                {place || "місце?"}
+              </span>
+            </span>
+          </Chip>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="max-h-80 w-64 overflow-y-auto p-1.5">
+          {/*
+            МІСЦЕ СТОЇТЬ ПЕРШИМ, хоч у назві пари воно друге. Пари без методу
+            не буває — його вже назвали, коли пару створювали, — а місце саме
+            те, чого бракує. Перевірено живцем: із методами вгорі список місць
+            ішов під край панелі, і питання, заради якого її відкрили, було не
+            видно без прокрутки. Поле фокусується саме, бо в 89 видів із 92
+            місця вписують, а не вибирають.
+          */}
+          <PopoverHeading>Місце</PopoverHeading>
+          <Input
+            value={typed}
+            controlSize="md"
+            aria-label="Своє місце нанесення"
+            placeholder={places.length > 0 ? "Або своє місце…" : "Напишіть місце…"}
+            className="mb-1"
+            onChange={(event) => setTyped(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              applyTyped(typed);
+              setOpen(false);
+            }}
+          />
+          {places.map((option) => (
+            <ListRow
+              key={option.id ?? option.label}
+              label={option.label}
+              checked={
+                option.id
+                  ? imprint.positionId === option.id
+                  : !imprint.positionId && imprint.positionLabel === option.label
+              }
+              onSelect={() => {
+                onPatch({ positionId: option.id, positionLabel: option.label });
+                setOpen(false);
+              }}
+            />
+          ))}
+          {place ? (
+            <ListRow
+              label="Без місця"
+              checked={false}
+              onSelect={() => {
+                onPatch({ positionId: null, positionLabel: null });
+                setOpen(false);
+              }}
+            />
+          ) : null}
+          <div className="my-1.5 h-px bg-border/60" />
+          <PopoverHeading>Метод</PopoverHeading>
+          {methods.map((method) => (
+            <ListRow
+              key={method.id}
+              label={method.name}
+              checked={method.id === imprint.methodId}
+              onSelect={() => onPatch({ methodId: method.id })}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onRemove();
+            }}
+            className="mt-1 flex w-full items-center rounded-[var(--radius-md)] border-t border-border/60 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
+          >
+            Прибрати нанесення
+          </button>
+        </PopoverContent>
+      </Popover>
+      {/*
+        Хрестик лежить НА чипі, а не поруч: пара й так найширший елемент смуги,
+        і окрема кнопка забрала б місце в назви методу. Той самий прийом, що на
+        комірці тиражу.
+      */}
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={`Прибрати нанесення ${methodLabel}`}
+        onClick={onRemove}
+        className="absolute -right-0.5 -top-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-muted text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/imprint:opacity-100"
+      >
+        <X className="h-2.5 w-2.5" strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+/** Підпис секції в панелі нанесення — той самий, що над групою видів. */
+function PopoverHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-2 pb-1 pt-1 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
+/** Рядок списку в панелі: клік застосовує одразу, панель лишається відкритою. */
+function ListRow({
   label,
   checked,
   onSelect,
