@@ -11,8 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
-import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { ImportDraftRow, type DraftKindOption } from "@/features/quotes/quote-import/ImportDraftRow";
 import {
   parseImportFile,
@@ -508,44 +506,50 @@ export function QuoteWizardDialog({
             {header(headerNudge)}
 
             {/*
-              «РАХУЄМО» — ВЕРТИКАЛЬНИМ ПЕРЕМИКАЧЕМ у стовпчику полів, тим самим
-              канонічним, що в тулбарі, лише кнопки одна під одною. Підпис
-              секції потрібен тут, бо це поле серед полів.
+              «РАХУЄМО» — ДВІ КВАДРАТНІ ПЛАШКИ (REQ-182#p23).
+
+              Було вертикальною рейкою на 32 px — тобто відповідь на головне
+              питання вікна виглядала дрібніше за чіп замовника над нею. Тепер
+              це дві однакові квадратні плашки поруч: піктограма, підпис,
+              обране темнішає рамкою й тлом. Місце під них у панелі є: її
+              вміст 376 px при 664 px висоти.
+
+              Це вже не сегментований перемикач, тож і ковзної плашки тут
+              немає: вона розрахована на ряд однакових кнопок у смузі, а не на
+              дві плитки в сітці.
             */}
             <div className="flex flex-col gap-1.5">
-              <span className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-                Рахуємо
-              </span>
-              <SegmentedGroup
-                className={cn(SEGMENTED_GROUP_SM, "h-auto flex-col items-stretch p-0.5")}
-                role="radiogroup"
-                aria-label="Тип виробу"
-              >
+              <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Рахуємо</span>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Тип виробу">
                 {QUOTE_KINDS.map((option) => {
                   const Icon = option.icon;
+                  const active = kind === option.value;
                   return (
-                    <Button
+                    <button
                       key={option.value}
-                      variant="segmented"
-                      size="xs"
+                      type="button"
                       role="radio"
-                      aria-pressed={kind === option.value}
-                      aria-checked={kind === option.value}
+                      aria-checked={active}
+                      aria-pressed={active}
                       disabled={busy}
                       title={option.hint}
                       onClick={() => setKind(option.value)}
-                      // Рядки рейки вищі за тулбарні (32 проти 28): це поле серед
-                      // полів лівої панелі, і воно має бути тієї ж висоти, що чіпи над ним.
-                      // `flex-none`: тулбарний тригер має `flex-1` з нульовою базою, і в
-                      // стовпчику це стискало кнопку до висоти тексту, ігноруючи h-8.
-                      className={cn(SEGMENTED_TRIGGER_SM, "h-8 flex-none justify-start")}
+                      className={cn(
+                        "flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border text-xs font-medium",
+                        "transition-[background-color,border-color,color] duration-base ease-out motion-reduce:transition-none",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
+                        "disabled:pointer-events-none disabled:opacity-50",
+                        active
+                          ? "border-foreground/35 bg-card text-foreground"
+                          : "border-border/60 bg-card/40 text-muted-foreground hover:border-border hover:text-foreground"
+                      )}
                     >
-                      <Icon className="h-3.5 w-3.5" />
+                      <Icon className="h-6 w-6" strokeWidth={1.5} />
                       {option.label}
-                    </Button>
+                    </button>
                   );
                 })}
-              </SegmentedGroup>
+              </div>
             </div>
           </aside>
 

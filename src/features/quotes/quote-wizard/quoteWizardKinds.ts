@@ -36,19 +36,24 @@ export type QuoteKindOption = {
   tone: string;
 };
 
+/**
+ * «Товар» стоїть ПЕРШИМ (REQ-182#p23): за сім місяців так порахували 293
+ * прорахунки проти шести поліграфічних. Перший у списку має бути той, який
+ * обирають, а не той, який алфавітно раніше.
+ */
 export const QUOTE_KINDS: QuoteKindOption[] = [
-  {
-    value: "print",
-    label: "Поліграфія",
-    hint: "Щоденники, каталоги, блокноти, пакування",
-    icon: Printer,
-    tone: "bg-muted text-muted-foreground",
-  },
   {
     value: "merch",
     label: "Товар",
     hint: "Усе, що купуємо готовим і брендуємо",
     icon: Package,
+    tone: "bg-muted text-muted-foreground",
+  },
+  {
+    value: "print",
+    label: "Поліграфія",
+    hint: "Щоденники, каталоги, блокноти, пакування",
+    icon: Printer,
     tone: "bg-muted text-muted-foreground",
   },
 ];

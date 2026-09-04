@@ -330,7 +330,12 @@ function HeaderField({
         крапками, а не розсуває панель на другий рядок (у стовпчику 272 px це
         стрибок висоти всього вікна).
       */}
-      <div className="min-w-0 [&_button>span]:truncate [&_button]:w-full [&_button]:max-w-none [&_button]:justify-start [&_button]:rounded-lg">
+      {/*
+        `:not([role=combobox])` — щоб не чіпати селект валюти: Radix ставить
+        тригеру `justify-between`, і саме він відсуває стрілку до правого краю.
+        Без винятку загальне `justify-start` тягло стрілку впритул до «UAH».
+      */}
+      <div className="min-w-0 [&_button:not([role=combobox])]:justify-start [&_button>span]:truncate [&_button]:w-full [&_button]:max-w-none [&_button]:rounded-lg">
         {children}
       </div>
     </div>

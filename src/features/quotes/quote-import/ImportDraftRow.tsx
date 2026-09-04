@@ -352,14 +352,33 @@ function MethodChips({
   disabled?: boolean;
   onToggle: (methodId: string | null) => void;
 }) {
-  const [expanded, setExpanded] = React.useState(false);
-  // Обрані першими: якщо метод обрали з-під «ще N», він мусить лишитись видимим.
-  const visible = expanded
-    ? options
-    : options
-        .filter((method, index) => index < VISIBLE_METHODS || selected.includes(method.id))
-        .sort((left, right) => Number(selected.includes(right.id)) - Number(selected.includes(left.id)))
-        .slice(0, VISIBLE_METHODS);
+  const [open, setOpen] = React.useState(false);
+
+  /*
+    ESC ЗАКРИВАЄ СПИСОК, А НЕ ВІКНО. Перевірено живим натиском: без цього
+    Escape при відкритому списку лишав список на екрані й вів діалог до
+    питання «Закрити без збереження?» — тобто клавіша робила рівно протилежне
+    очікуваному. Слухаємо на фазі ЗАХОПЛЕННЯ й глушимо подію повністю:
+    обробники Radix (і поповера, і діалога) висять на document на фазі
+    спливання, тож до них вона вже не доходить.
+  */
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [open]);
+
+  // Обрані першими: метод, обраний зі списку, мусить лишитись видимим у рядку.
+  const visible = options
+    .filter((method, index) => index < VISIBLE_METHODS || selected.includes(method.id))
+    .sort((left, right) => Number(selected.includes(right.id)) - Number(selected.includes(left.id)))
+    .slice(0, VISIBLE_METHODS);
   const hidden = options.length - visible.length;
 
   return (
@@ -371,36 +390,83 @@ function MethodChips({
       */}
       {/* Чипи можуть обрізатись, «ще N» — ніколи: це єдиний шлях до решти методів. */}
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-      <Chip
-        size="sm"
-        disabled={disabled}
-        active={selected.length === 0}
-        aria-pressed={selected.length === 0}
-        onClick={() => onToggle(null)}
-      >
-        Без нанесення
-      </Chip>
-      {visible.map((method) => {
-        const on = selected.includes(method.id);
-        return (
-          <Chip key={method.id} size="sm" disabled={disabled} active={on} aria-pressed={on} onClick={() => onToggle(method.id)}>
-            {method.name}
-          </Chip>
-        );
-      })}
-      </div>
-      {hidden > 0 ? (
         <Chip
           size="sm"
           disabled={disabled}
-          icon={<ChevronDown />}
-          onClick={() => setExpanded(true)}
-          className="shrink-0 border-transparent bg-muted text-muted-foreground"
+          active={selected.length === 0}
+          aria-pressed={selected.length === 0}
+          onClick={() => onToggle(null)}
         >
-          ще {hidden}
+          Без нанесення
         </Chip>
+        {visible.map((method) => {
+          const on = selected.includes(method.id);
+          return (
+            <Chip
+              key={method.id}
+              size="sm"
+              disabled={disabled}
+              active={on}
+              aria-pressed={on}
+              onClick={() => onToggle(method.id)}
+            >
+              {method.name}
+            </Chip>
+          );
+        })}
+      </div>
+      {hidden > 0 ? (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Chip
+              size="sm"
+              disabled={disabled}
+              icon={<ChevronDown />}
+              aria-label={`Усі методи нанесення, ще ${hidden}`}
+              className="shrink-0 border-transparent bg-muted text-muted-foreground"
+            >
+              ще {hidden}
+            </Chip>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="max-h-72 w-60 overflow-y-auto p-1.5">
+            <MethodOption label="Без нанесення" checked={selected.length === 0} onSelect={() => onToggle(null)} />
+            <div className="my-1 h-px bg-border/60" />
+            {options.map((method) => (
+              <MethodOption
+                key={method.id}
+                label={method.name}
+                checked={selected.includes(method.id)}
+                onSelect={() => onToggle(method.id)}
+              />
+            ))}
+          </PopoverContent>
+        </Popover>
       ) : null}
     </div>
+  );
+}
+
+/** Рядок списку методів: клік застосовує одразу, список лишається відкритим. */
+function MethodOption({
+  label,
+  checked,
+  onSelect,
+}: {
+  label: string;
+  checked: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={checked}
+      onClick={onSelect}
+      className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+    >
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {checked ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+    </button>
   );
 }
 
