@@ -140,7 +140,7 @@ export function QuoteWizardDialog({
     () => drafts.map((draft) => draft.catalog?.kindId).filter((id): id is string => Boolean(id)),
     [drafts]
   );
-  const kindMethods = useKindMethods(teamId, draftKindIds);
+  const { byKind: methodsByKind, reset: resetKindMethods } = useKindMethods(teamId, draftKindIds);
 
   const reset = React.useCallback(() => {
     setKind("merch");
@@ -155,8 +155,8 @@ export function QuoteWizardDialog({
     setHeaderNudge(0);
     setLinkPreviews({});
     resetLinkPreviews();
-    kindMethods.reset();
-  }, [kindMethods.reset, resetLinkPreviews]);
+    resetKindMethods();
+  }, [resetKindMethods, resetLinkPreviews]);
 
   const selected = React.useMemo(() => drafts.filter((draft) => draft.selected), [drafts]);
   const fileDrafts = React.useMemo(() => drafts.filter(isFileDraft), [drafts]);
@@ -407,8 +407,12 @@ export function QuoteWizardDialog({
     if (footerIssue) return footerIssue;
     // Поки помилка вгорі не піднята, підвал підказує наперед. Коли піднята —
     // мовчить: та сама фраза двічі на одному екрані читається як збій.
-    if (!error && runless > 0)
-      return `Впишіть тираж: без нього позицію нема з чого рахувати (${runless} із ${selected.length}).`;
+    if (!error && runless > 0) {
+      const only = runless === 1 ? selected.find((draft) => !draft.runs.some((run) => run.quantity > 0)) : null;
+      return only?.name.trim()
+        ? `Впишіть тираж «${only.name.trim()}» — без нього її нема з чого рахувати.`
+        : `Впишіть тираж: без нього позицію нема з чого рахувати (${runless} із ${selected.length}).`;
+    }
     if (!error && nameless > 0) return "Впишіть назву позиції — сайт її не віддав.";
     if (drafts.length > 0)
       return `Прорахунок з’явиться в базі лише після «Створити» · ${selected.length} із ${drafts.length} ${pluralWordUk(drafts.length, "позиції", "позицій", "позицій")}`;
@@ -424,227 +428,249 @@ export function QuoteWizardDialog({
         if (!next) reset();
       }}
     >
-      <DialogContent className="flex max-h-[88vh] flex-col overflow-hidden sm:max-w-3xl" isDirty={hasContent}>
-        <DialogHeader>
-          <DialogTitle>Новий прорахунок</DialogTitle>
-          <DialogDescription>Один екран: що рахуємо, для кого і звідки беруться позиції.</DialogDescription>
-        </DialogHeader>
+      {/*
+        ДВІ ПАНЕЛІ (REQ-182#p20, прототип Б, обраний 03.09.2026). Ліворуч —
+        «для кого й що рахуємо»: замовник, менеджер, дедлайн, валюта й тип
+        виробу стовпчиком на приглушеному тлі. Праворуч — позиції: поле, список,
+        плитка файлу, підвал. Ліва панель не прокручується, права — так: шапка
+        завжди на очах, поки список росте. На телефоні панелі стають одна над
+        одною, і прокручується все вікно.
 
-        {/*
-          Мінімальна висота — щоб вікно не стрибало. Порожній стан низький,
-          розібраний файл високий, і без цієї стелі знизу перехід читався як
-          ривок. Висоту НЕ анімуємо: анімація висоти вікна смикається, а
-          прибиті шапка з підвалом і прокрутка всередині дають те саме
-          відчуття сталості дешевше.
-        */}
-        <div className="-mx-4 min-h-[19rem] flex-1 space-y-4 overflow-y-auto px-4 py-1 sm:-mx-5 sm:px-5">
-          {error ? (
-            <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
+        Відступи DialogContent погашено (`!p-0 !gap-0`): панелі малюють свої,
+        бо лівій потрібне тло до самого краю.
+      */}
+      <DialogContent
+        className="flex max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0 sm:max-w-[920px]"
+        isDirty={hasContent}
+      >
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
+          <aside className="flex shrink-0 flex-col gap-4 border-b border-border/60 bg-muted/30 px-5 pb-5 pt-5 md:w-[272px] md:border-b-0 md:border-r md:pr-4">
+            <DialogHeader className="text-left">
+              <DialogTitle>Новий прорахунок</DialogTitle>
+              <DialogDescription>Для кого й що рахуємо.</DialogDescription>
+            </DialogHeader>
+
+            {header(headerNudge)}
+
+            {/*
+              «РАХУЄМО» — ВЕРТИКАЛЬНИМ ПЕРЕМИКАЧЕМ у стовпчику полів, тим самим
+              канонічним, що в тулбарі, лише кнопки одна під одною. Підпис
+              секції потрібен тут, бо це поле серед полів.
+            */}
+            <div className="flex flex-col gap-1.5">
+              <span className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+                Рахуємо
+              </span>
+              <SegmentedGroup
+                className={cn(SEGMENTED_GROUP_SM, "h-auto flex-col items-stretch p-0.5")}
+                role="radiogroup"
+                aria-label="Тип виробу"
+              >
+                {QUOTE_KINDS.map((option) => {
+                  const Icon = option.icon;
+                  return (
+                    <Button
+                      key={option.value}
+                      variant="segmented"
+                      size="xs"
+                      role="radio"
+                      aria-pressed={kind === option.value}
+                      aria-checked={kind === option.value}
+                      disabled={busy}
+                      title={option.hint}
+                      onClick={() => setKind(option.value)}
+                      // Рядки рейки вищі за тулбарні (32 проти 28): це поле серед
+                      // полів лівої панелі, і воно має бути тієї ж висоти, що чіпи над ним.
+                      className={cn(SEGMENTED_TRIGGER_SM, "h-8 justify-start")}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {option.label}
+                    </Button>
+                  );
+                })}
+              </SegmentedGroup>
             </div>
-          ) : null}
+          </aside>
 
-          {header(headerNudge)}
+          <div className="flex min-w-0 flex-1 flex-col md:min-h-0">
+            <div className="flex items-center gap-2.5 px-5 pt-4 pb-3 md:pr-14">
+              <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Позиції</span>
+              <span className="text-2xs text-muted-foreground/70">поле розуміє саме: посилання чи назва</span>
+            </div>
 
-          {/*
-            «РАХУЄМО» — ОДНИМ РЯДКОМ, ПОЛЕ — ПІД НИМ (REQ-182#p14).
-
-            Було два сегментовані перемикачі поруч: тип виробу і джерело
-            позицій. Другого більше немає — його роботу робить саме поле, а
-            перемикач типу лишився канонічним, тим самим, що в тулбарі
-            сторінок. Підпис секції не потрібен: «Поліграфія · Товар» каже
-            це сам.
-          */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="text-xs text-muted-foreground">Рахуємо</span>
-            <SegmentedGroup className={SEGMENTED_GROUP_SM} role="radiogroup" aria-label="Тип виробу">
-              {QUOTE_KINDS.map((option) => {
-                const Icon = option.icon;
-                return (
-                  <Button
-                    key={option.value}
-                    variant="segmented"
-                    size="xs"
-                    role="radio"
-                    aria-pressed={kind === option.value}
-                    aria-checked={kind === option.value}
-                    disabled={busy}
-                    title={option.hint}
-                    onClick={() => setKind(option.value)}
-                    className={SEGMENTED_TRIGGER_SM}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {option.label}
-                  </Button>
-                );
-              })}
-            </SegmentedGroup>
-          </div>
-
-          <QuoteItemCommandField
-            value={fieldValue}
-            onValueChange={setFieldValue}
-            suggestions={catalog.suggestions}
-            suggestionsLoading={catalog.loading}
-            disabled={busy}
-            busy={linkBusy}
-            hasDrafts={drafts.length > 0}
-            onPickCatalog={handlePickCatalog}
-            onAddLinks={(urls) => void handleLinks(urls)}
-            onAddName={handleAddName}
-            onInvalid={setError}
-          />
-
-          {drafts.length > 0 ? (
-            <section className="space-y-3">
-              {/*
-                КАРТКА ФАЙЛУ. Була пігулка з повною назвою файлу в ряду інших
-                пігулок, а кнопка «Інший файл» висіла окремим рядком над
-                числом — саме вона й давала той дивний відступ. Тепер це одна
-                картка: піктограма, назва в один рядок, під нею факти розбору,
-                і дія при самому файлі.
-              */}
-              {fileName && fileDrafts.length > 0 ? (
-                <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/25 p-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground ring-1 ring-border/60">
-                    <FileSpreadsheet className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium" title={fileName}>
-                      {fileName}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {[
-                        `знайдено ${fileDrafts.length} ${pluralWordUk(fileDrafts.length, "позицію", "позиції", "позицій")}`,
-                        photoProgress.total > 0
-                          ? photoProgress.settled < photoProgress.total
-                            ? `фото: ${photoProgress.settled} з ${photoProgress.total}`
-                            : `фото у ${photoProgress.withPhoto} з ${photoProgress.total}`
-                          : null,
-                        drafts.some((draft) => draft.variant) ? "є варіанти одного товару" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </div>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" disabled={busy} onClick={clearFile}>
-                    Інший файл
-                  </Button>
+            <div className="flex-1 space-y-3 px-5 pb-4 md:min-h-[19rem] md:overflow-y-auto">
+              {error ? (
+                <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{error}</span>
                 </div>
               ) : null}
 
-              {/*
-                ПРОПУЩЕНІ РЯДКИ. Була бурштинова плита з маркованим списком —
-                найважчий елемент вікна заради новини, яка нічого не вимагає.
-                Тепер це тиха картка тієї ж родини, що й картка файлу, а
-                заголовком стоїть ЧИСЛО: «4 рядки не стали позиціями» каже те
-                саме, що «Що не вдалося розібрати», але одразу з масштабом.
-                Жовтий лишається за тим, що потребує дії.
-              */}
-              {warnings.length > 0 ? (
-                <div className="overflow-hidden rounded-xl border border-border/60">
-                  <div className="flex items-center gap-2.5 border-b border-border/60 bg-muted/25 px-3 py-2">
-                    <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="text-sm font-medium">
-                      {warnings.length} {pluralWordUk(warnings.length, "рядок", "рядки", "рядків")} з файлу не{" "}
-                      {warnings.length === 1 ? "став позицією" : "стали позиціями"}
+              <QuoteItemCommandField
+                value={fieldValue}
+                onValueChange={setFieldValue}
+                suggestions={catalog.suggestions}
+                suggestionsLoading={catalog.loading}
+                disabled={busy}
+                busy={linkBusy}
+                hasDrafts={drafts.length > 0}
+                onPickCatalog={handlePickCatalog}
+                onAddLinks={(urls) => void handleLinks(urls)}
+                onAddName={handleAddName}
+                onInvalid={setError}
+              />
+
+              {drafts.length > 0 ? (
+                <section className="space-y-3">
+                  {/*
+                    КАРТКА ФАЙЛУ. Була пігулка з повною назвою файлу в ряду інших
+                    пігулок, а кнопка «Інший файл» висіла окремим рядком над
+                    числом — саме вона й давала той дивний відступ. Тепер це одна
+                    картка: піктограма, назва в один рядок, під нею факти розбору,
+                    і дія при самому файлі.
+                  */}
+                  {fileName && fileDrafts.length > 0 ? (
+                    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/25 p-3">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground ring-1 ring-border/60">
+                        <FileSpreadsheet className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium" title={fileName}>
+                          {fileName}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {[
+                            `знайдено ${fileDrafts.length} ${pluralWordUk(fileDrafts.length, "позицію", "позиції", "позицій")}`,
+                            photoProgress.total > 0
+                              ? photoProgress.settled < photoProgress.total
+                                ? `фото: ${photoProgress.settled} з ${photoProgress.total}`
+                                : `фото у ${photoProgress.withPhoto} з ${photoProgress.total}`
+                              : null,
+                            drafts.some((draft) => draft.variant) ? "є варіанти одного товару" : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={clearFile}>
+                        Інший файл
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {/*
+                    ПРОПУЩЕНІ РЯДКИ. Була бурштинова плита з маркованим списком —
+                    найважчий елемент вікна заради новини, яка нічого не вимагає.
+                    Тепер це тиха картка тієї ж родини, що й картка файлу, а
+                    заголовком стоїть ЧИСЛО: «4 рядки не стали позиціями» каже те
+                    саме, що «Що не вдалося розібрати», але одразу з масштабом.
+                    Жовтий лишається за тим, що потребує дії.
+                  */}
+                  {warnings.length > 0 ? (
+                    <div className="overflow-hidden rounded-xl border border-border/60">
+                      <div className="flex items-center gap-2.5 border-b border-border/60 bg-muted/25 px-3 py-2">
+                        <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="text-sm font-medium">
+                          {warnings.length} {pluralWordUk(warnings.length, "рядок", "рядки", "рядків")} з файлу не{" "}
+                          {warnings.length === 1 ? "став позицією" : "стали позиціями"}
+                        </span>
+                      </div>
+                      <ul className="divide-y divide-border/60">
+                        {warnings.map((warning) => (
+                          <li key={warning} className="px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                            {warning}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  <div className="flex items-end gap-2.5 pt-1">
+                    <span className="font-mono text-2xl font-semibold leading-none tabular-nums">{selected.length}</span>
+                    <span className="pb-0.5 text-xs text-muted-foreground">
+                      {pluralWordUk(selected.length, "позиція", "позиції", "позицій")} до прорахунку
                     </span>
+                    {/* Галочки є лише в рядків файлу, тож і «обрати всі» — про них. */}
+                    {fileDrafts.length > 1 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        className="ml-auto"
+                        onClick={() =>
+                          setDrafts((prev) => {
+                            const allOn = prev.filter(isFileDraft).every((draft) => draft.selected);
+                            return prev.map((draft) => (isFileDraft(draft) ? { ...draft, selected: !allOn } : draft));
+                          })
+                        }
+                      >
+                        {fileDrafts.every((draft) => draft.selected) ? "Зняти всі" : "Обрати всі"}
+                      </Button>
+                    ) : null}
                   </div>
-                  <ul className="divide-y divide-border/60">
-                    {warnings.map((warning) => (
-                      <li key={warning} className="px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                        {warning}
-                      </li>
+
+                  <div className="space-y-2">
+                    {drafts.map((draft) => (
+                      <ImportDraftRow
+                        key={draft.key}
+                        draft={draft}
+                        preview={previews[draft.key] ?? linkPreviews[draft.key] ?? catalogPreview(draft)}
+                        disabled={busy}
+                        onPatch={(patch) => patchDraft(draft.key, patch)}
+                        onPatchRun={(runKey, patch) => patchRun(draft.key, runKey, patch)}
+                        // Рядок файлу ЗНІМАЮТЬ галочкою (щоб було видно, що він там
+                        // був), а доданий полем — просто прибирають.
+                        onRemove={isFileDraft(draft) ? undefined : () => removeDraft(draft.key)}
+                        methodOptions={draft.catalog ? methodsByKind[draft.catalog.kindId] : undefined}
+                        onToggleMethod={draft.catalog ? (methodId) => toggleMethod(draft.key, methodId) : undefined}
+                        onAddRun={() => addRun(draft.key)}
+                        onRemoveRun={(runKey) => removeRun(draft.key, runKey)}
+                      />
                     ))}
-                  </ul>
-                </div>
+                  </div>
+
+                </section>
               ) : null}
 
-              <div className="flex items-end gap-2.5 pt-1">
-                <span className="font-mono text-2xl font-semibold leading-none tabular-nums">{selected.length}</span>
-                <span className="pb-0.5 text-xs text-muted-foreground">
-                  {pluralWordUk(selected.length, "позиція", "позиції", "позицій")} до прорахунку
-                </span>
-                {/* Галочки є лише в рядків файлу, тож і «обрати всі» — про них. */}
-                {fileDrafts.length > 1 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    className="ml-auto"
-                    onClick={() =>
-                      setDrafts((prev) => {
-                        const allOn = prev.filter(isFileDraft).every((draft) => draft.selected);
-                        return prev.map((draft) => (isFileDraft(draft) ? { ...draft, selected: !allOn } : draft));
-                      })
-                    }
-                  >
-                    {fileDrafts.every((draft) => draft.selected) ? "Зняти всі" : "Обрати всі"}
-                  </Button>
-                ) : null}
+              {/*
+                ЕКСЕЛЬ — ПЛИТКОЮ ПІД СПИСКОМ, а не вкладкою. Файл не набирають у
+                поле, його кидають, тож йому місце окремо; вузька плитка, бо це
+                другий шлях, а не головний: за сім місяців із ексельки прийшло
+                менше позицій, ніж за посиланнями за місяць.
+              */}
+              <ExcelPanel
+                stage={stage}
+                parseStep={parseStep}
+                fileName={fileName}
+                hasFileDrafts={fileDrafts.length > 0}
+                inputRef={fileInputRef}
+                onFile={(file) => void handleFile(file)}
+              />
+            </div>
+
+            <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">
+              {/*
+                Причина — звичайним приглушеним кольором. Спершу тут стояв
+                `text-warning-copy`: він заведений для тексту ПОВЕРХ бурштинової
+                плашки, а на білій картці дає каламутно-коричневий у світлій темі
+                й вицвілий бежевий у темній. Тінтовий колір працює лише на своєму
+                тінті.
+              */}
+              <span className="text-xs text-muted-foreground">{footerMeta}</span>
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
+                  Скасувати
+                </Button>
+                <Button type="button" disabled={!canSubmit} onClick={() => void handleCreate()} className="gap-2">
+                  {stage === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {stage === "saving" ? `Створюю… ${savedCount}/${selected.length}` : "Створити прорахунок"}
+                  {stage === "saving" ? null : <ArrowRight className="h-4 w-4" />}
+                </Button>
               </div>
-
-              <div className="space-y-2">
-                {drafts.map((draft) => (
-                  <ImportDraftRow
-                    key={draft.key}
-                    draft={draft}
-                    preview={previews[draft.key] ?? linkPreviews[draft.key] ?? catalogPreview(draft)}
-                    disabled={busy}
-                    onPatch={(patch) => patchDraft(draft.key, patch)}
-                    onPatchRun={(runKey, patch) => patchRun(draft.key, runKey, patch)}
-                    // Рядок файлу ЗНІМАЮТЬ галочкою (щоб було видно, що він там
-                    // був), а доданий полем — просто прибирають.
-                    onRemove={isFileDraft(draft) ? undefined : () => removeDraft(draft.key)}
-                    methodOptions={draft.catalog ? kindMethods.byKind[draft.catalog.kindId] : undefined}
-                    onToggleMethod={draft.catalog ? (methodId) => toggleMethod(draft.key, methodId) : undefined}
-                    onAddRun={() => addRun(draft.key)}
-                    onRemoveRun={(runKey) => removeRun(draft.key, runKey)}
-                  />
-                ))}
-              </div>
-
-            </section>
-          ) : null}
-
-          {/*
-            ЕКСЕЛЬ — ПЛИТКОЮ ПІД СПИСКОМ, а не вкладкою. Файл не набирають у
-            поле, його кидають, тож йому місце окремо; вузька плитка, бо це
-            другий шлях, а не головний: за сім місяців із ексельки прийшло
-            менше позицій, ніж за посиланнями за місяць.
-          */}
-          <ExcelPanel
-            stage={stage}
-            parseStep={parseStep}
-            fileName={fileName}
-            hasFileDrafts={fileDrafts.length > 0}
-            inputRef={fileInputRef}
-            onFile={(file) => void handleFile(file)}
-          />
-        </div>
-
-        <DialogFooter className="shrink-0 gap-2 border-t border-border/60 pt-3 sm:justify-between">
-          {/*
-            Причина — звичайним приглушеним кольором. Спершу тут стояв
-            `text-warning-copy`: він заведений для тексту ПОВЕРХ бурштинової
-            плашки, а на білій картці дає каламутно-коричневий у світлій темі
-            й вицвілий бежевий у темній. Тінтовий колір працює лише на своєму
-            тінті.
-          */}
-          <span className="text-xs text-muted-foreground">{footerMeta}</span>
-          <div className="flex gap-2">
-            <Button type="button" variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
-              Скасувати
-            </Button>
-            <Button type="button" disabled={!canSubmit} onClick={() => void handleCreate()} className="gap-2">
-              {stage === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {stage === "saving" ? `Створюю… ${savedCount}/${selected.length}` : "Створити прорахунок"}
-              {stage === "saving" ? null : <ArrowRight className="h-4 w-4" />}
-            </Button>
+            </DialogFooter>
           </div>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -195,8 +195,10 @@ export function QuoteItemCommandField({
           className={cn(
             // 44 px: вище за звичайне поле (40), бо це головний вхід вікна, а не
             // одне з полів форми. Той самий радіус і межа, що в решти полів.
-            "flex h-11 items-center gap-2 rounded-xl border border-border bg-background px-3 transition-colors",
-            "focus-within:border-foreground/40 focus-within:ring-2 focus-within:ring-foreground/10",
+            // Тло замість рамки (прототип: «командний рядок» на muted без
+            // обводки); рамка з'являється на фокусі — поле стало полем.
+            "flex h-11 items-center gap-2.5 rounded-xl border border-transparent bg-muted/60 px-3.5 transition-colors",
+            "focus-within:border-border focus-within:bg-background focus-within:ring-2 focus-within:ring-foreground/10",
             disabled && "opacity-60"
           )}
         >

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CalendarIcon, User } from "lucide-react";
+import { Building2, CalendarIcon, Coins, User } from "lucide-react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 
@@ -82,12 +82,19 @@ export function QuoteWizardHeader({
   onChange,
   disabled,
   nudgeSignal = 0,
+  layout = "row",
 }: {
   teamId: string;
   currentUserId?: string | null;
   value: QuoteWizardHeaderValue;
   onChange: (next: QuoteWizardHeaderValue) => void;
   disabled?: boolean;
+  /**
+   * `row` — чіпи в один рядок (як було). `column` — стовпчик підписаних полів
+   * для лівої панелі вікна (REQ-182#p20, прототип Б): підпис дрібними літерами
+   * над контролом, контрол на всю ширину, дедлайн і валюта в одному рядку.
+   */
+  layout?: "row" | "column";
   /**
    * Лічильник «покажи, що бракує саме тут». Зростає, коли натиснули «Створити»
    * без замовника; зміна значення перезапускає анімацію через `key`.
@@ -163,6 +170,124 @@ export function QuoteWizardHeader({
   // `new Date(...)` перерахував би його з фіктивного «+00» у зону браузера.
   const deadlineDate = parseDeadlineDate(value.deadlineAt);
 
+  const partyPicker = (
+    <span key={nudgeSignal} className={cn("inline-flex min-w-0", layout === "column" && "w-full", nudgeSignal > 0 && "animate-control-nudge")}>
+      <CustomerLeadPicker
+        open={partyPickerOpen}
+        onOpenChange={setPartyPickerOpen}
+        selectedLabel={value.partyLabel}
+        selectedType={value.partyType}
+        selectedLogoUrl={value.partyLogoUrl}
+        searchValue={partySearch}
+        onSearchChange={setPartySearch}
+        options={partyOptions}
+        loading={partiesLoading}
+        chipLabel={layout === "column" ? "Оберіть замовника або ліда" : undefined}
+        onSelect={(option) =>
+          patch({
+            partyId: option.id,
+            partyLabel: option.label,
+            partyType: option.entityType,
+            partyLogoUrl: option.logoUrl ?? null,
+          })
+        }
+        onClear={() => patch({ partyId: "", partyLabel: "", partyType: "customer", partyLogoUrl: null })}
+      />
+    </span>
+  );
+
+  const managerPicker = (
+    <Popover open={managerPopoverOpen} onOpenChange={setManagerPopoverOpen}>
+      <PopoverTrigger asChild>
+        <Chip
+          size="md"
+          disabled={disabled}
+          active={Boolean(manager)}
+          icon={manager ? <AvatarBase src={manager.avatarUrl} name={manager.label} size={20} /> : <User />}
+        >
+          {manager?.label ?? "Менеджер"}
+        </Chip>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-1">
+        {members.map((member) => (
+          <button
+            key={member.id}
+            type="button"
+            onClick={() => {
+              patch({ managerId: member.id });
+              setManagerPopoverOpen(false);
+            }}
+            className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+          >
+            <AvatarBase src={member.avatarUrl} name={member.label} size={20} />
+            <span className="truncate">{member.label}</span>
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+
+  const deadlinePicker = (
+    <DateTimePicker
+      value={deadlineDate}
+      // НЕ toISOString(): дедлайни зберігаються настінним часом (див.
+      // шапку deadlineLabels.ts). Через toISOString() обраний менеджером
+      // час їхав у базу зсунутим на різницю поясів, і картка показувала
+      // не те, що він щойно поставив.
+      onChange={(next) => patch({ deadlineAt: toWallClockValue(next) })}
+      open={deadlineOpen}
+      onOpenChange={setDeadlineOpen}
+      trigger={
+        <Chip size="md" icon={<CalendarIcon />} active={Boolean(deadlineDate)} disabled={disabled}>
+          {deadlineDate ? format(deadlineDate, "d MMM, HH:mm", { locale: uk }) : "Дедлайн"}
+        </Chip>
+      }
+    />
+  );
+
+  const currencyPicker = (
+    <Select value={value.currency} onValueChange={(next) => patch({ currency: next })} disabled={disabled}>
+      <SelectTrigger className={cn("h-9 rounded-full", layout === "column" ? "w-full rounded-lg" : "w-24")}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {CURRENCIES.map((code) => (
+          <SelectItem key={code} value={code}>
+            {code}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  if (layout === "column") {
+    /*
+      ЛІВА ПАНЕЛЬ (REQ-182#p20). Ті самі чіпи, що в рядку, але кожен стоїть
+      під своїм підписом і на всю ширину: у стовпчику 272 px чіп без підпису
+      читався б як кнопка, а не як відповідь на питання «для кого».
+      Дедлайн і валюта — в один рядок: обидва короткі, і валюта майже завжди
+      UAH.
+    */
+    return (
+      <div className="flex flex-col gap-3">
+        <HeaderField label="Замовник / Лід" icon={Building2}>
+          {partyPicker}
+        </HeaderField>
+        <HeaderField label="Менеджер" icon={User}>
+          {managerPicker}
+        </HeaderField>
+        <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2">
+          <HeaderField label="Дедлайн" icon={CalendarIcon}>
+            {deadlinePicker}
+          </HeaderField>
+          <HeaderField label="Валюта" icon={Coins}>
+            {currencyPicker}
+          </HeaderField>
+        </div>
+      </div>
+    );
+  }
+
   return (
     /*
       БЕЗ ПІДЛОЖКИ (REQ-237#p8). Рамка з фоном обіцяла форму — розділ, у якому
@@ -172,95 +297,36 @@ export function QuoteWizardHeader({
     */
     <div>
       <div className="flex flex-wrap items-center gap-2">
-        <span key={nudgeSignal} className={cn("inline-flex", nudgeSignal > 0 && "animate-control-nudge")}>
-        <CustomerLeadPicker
-          open={partyPickerOpen}
-          onOpenChange={setPartyPickerOpen}
-          selectedLabel={value.partyLabel}
-          selectedType={value.partyType}
-          selectedLogoUrl={value.partyLogoUrl}
-          searchValue={partySearch}
-          onSearchChange={setPartySearch}
-          options={partyOptions}
-          loading={partiesLoading}
-          onSelect={(option) =>
-            patch({
-              partyId: option.id,
-              partyLabel: option.label,
-              partyType: option.entityType,
-              partyLogoUrl: option.logoUrl ?? null,
-            })
-          }
-          onClear={() =>
-            patch({ partyId: "", partyLabel: "", partyType: "customer", partyLogoUrl: null })
-          }
-        />
-        </span>
-
-        <Popover open={managerPopoverOpen} onOpenChange={setManagerPopoverOpen}>
-          <PopoverTrigger asChild>
-            <Chip
-              size="md"
-              disabled={disabled}
-              active={Boolean(manager)}
-              icon={
-                manager ? (
-                  <AvatarBase src={manager.avatarUrl} name={manager.label} size={20} />
-                ) : (
-                  <User />
-                )
-              }
-            >
-              {manager?.label ?? "Менеджер"}
-            </Chip>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-1">
-            {members.map((member) => (
-              <button
-                key={member.id}
-                type="button"
-                onClick={() => {
-                  patch({ managerId: member.id });
-                  setManagerPopoverOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-left text-sm hover:bg-muted/60"
-              >
-                <AvatarBase src={member.avatarUrl} name={member.label} size={20} />
-                <span className="truncate">{member.label}</span>
-              </button>
-            ))}
-          </PopoverContent>
-        </Popover>
-
-        <DateTimePicker
-          value={deadlineDate}
-          // НЕ toISOString(): дедлайни зберігаються настінним часом (див.
-          // шапку deadlineLabels.ts). Через toISOString() обраний менеджером
-          // час їхав у базу зсунутим на різницю поясів, і картка показувала
-          // не те, що він щойно поставив.
-          onChange={(next) => patch({ deadlineAt: toWallClockValue(next) })}
-          open={deadlineOpen}
-          onOpenChange={setDeadlineOpen}
-          trigger={
-            <Chip size="md" icon={<CalendarIcon />} active={Boolean(deadlineDate)} disabled={disabled}>
-              {deadlineDate ? format(deadlineDate, "d MMM, HH:mm", { locale: uk }) : "Дедлайн"}
-            </Chip>
-          }
-        />
-
-        <Select value={value.currency} onValueChange={(next) => patch({ currency: next })} disabled={disabled}>
-          <SelectTrigger className="h-9 w-24 rounded-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CURRENCIES.map((code) => (
-              <SelectItem key={code} value={code}>
-                {code}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {partyPicker}
+        {managerPicker}
+        {deadlinePicker}
+        {currencyPicker}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Підпис над контролом у стовпчику. Контрол усередині розтягується на всю
+ * ширину й отримує кут 8 px замість пігулки — у стовпчику підписаних полів
+ * пігулка виглядає як кнопка, а тут це поле.
+ */
+function HeaderField({
+  label,
+  icon: Icon,
+  children,
+}: {
+  label: string;
+  icon: typeof User;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+        <Icon className="h-3 w-3 text-muted-foreground/70" />
+        {label}
+      </span>
+      <div className="min-w-0 [&_button]:w-full [&_button]:max-w-none [&_button]:justify-start [&_button]:rounded-lg">{children}</div>
     </div>
   );
 }

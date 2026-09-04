@@ -147,6 +147,7 @@ export function TestQuoteWizardButton({
                 value={header}
                 onChange={setHeader}
                 nudgeSignal={nudgeSignal}
+                layout="column"
               />
             )}
             headerIssue={headerIssue}

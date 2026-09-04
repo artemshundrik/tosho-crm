@@ -1,4 +1,5 @@
-import { ImageOff, Link2, Plus, Trash2, X } from "lucide-react";
+import * as React from "react";
+import { ChevronDown, ImageOff, Link2, Plus, Trash2, X } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
@@ -16,7 +17,7 @@ import type { QuoteImportDraftItem, QuoteImportFlag, QuoteImportLinkPreview } fr
 
 /** Гола іконка-дія в рядку позиції: та сама вага, що в кошика. */
 const ICON_ACTION =
-  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50";
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50";
 
 const FLAG_LABELS: Record<QuoteImportFlag, string> = {
   quantity_range: "діапазон → два тиражі",
@@ -32,12 +33,14 @@ const FLAG_LABELS: Record<QuoteImportFlag, string> = {
  * відкривати нема сенсу.
  */
 export function ImportItemPhoto({ preview, name }: { preview: QuoteImportLinkPreview | undefined; name: string }) {
-  const base = "h-16 w-16 shrink-0 overflow-hidden rounded-[var(--radius-lg)] border border-border/60";
+  // 44 px, як у затвердженому прототипі (REQ-182#p20): фото тут упізнавання,
+  // а не розгляд, і на шести позиціях 64 px з'їдали пів екрана.
+  const base = "h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60";
 
   if (!preview) {
     return (
       <div className={cn(base, "flex items-center justify-center bg-muted/40")} aria-hidden>
-        <ImageOff className="h-4 w-4 text-muted-foreground/40" />
+        <ImageOff className="h-3.5 w-3.5 text-muted-foreground/40" />
       </div>
     );
   }
@@ -68,7 +71,7 @@ export function ImportItemPhoto({ preview, name }: { preview: QuoteImportLinkPre
       title={preview.reason}
       aria-label={`Фото «${name}» не доїхало: ${preview.reason}`}
     >
-      <ImageOff className="h-4 w-4 text-muted-foreground/50" />
+      <ImageOff className="h-3.5 w-3.5 text-muted-foreground/50" />
     </div>
   );
 }
@@ -142,6 +145,7 @@ export function ImportDraftRow({
             <Input
               value={draft.name}
               disabled={disabled}
+              controlSize="md"
               aria-label="Назва позиції"
               placeholder={namePlaceholder}
               autoFocus={autoFocusName}
@@ -170,11 +174,12 @@ export function ImportDraftRow({
                     value={run.quantity > 0 ? run.quantity : null}
                     min={0}
                     emptyValue={0}
+                    controlSize="md"
                     className={cn(
                       // Підказка гасне, щойно в поле стали: стандартний
                       // placeholder висить, поки не почнеш друкувати, і на
                       // вузькому полі це читається як уже введене значення.
-                      "w-24 text-center focus:placeholder:text-transparent",
+                      "w-20 text-center focus:placeholder:text-transparent",
                       onRemoveRun && draft.runs.length > 1 && "pr-6"
                     )}
                     placeholder="к-ть"
@@ -283,39 +288,19 @@ export function ImportDraftRow({
             Порядок методів — за історією виду, найчастіший перший.
           */}
           {methodOptions && onToggleMethod ? (
-            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Нанесення">
-              <span className="mr-0.5 text-xs text-muted-foreground">Нанесення</span>
-              <Chip
-                size="sm"
-                disabled={disabled}
-                active={draft.methodIds.length === 0}
-                aria-pressed={draft.methodIds.length === 0}
-                onClick={() => onToggleMethod(null)}
-              >
-                Без нанесення
-              </Chip>
-              {methodOptions.map((method) => {
-                const on = draft.methodIds.includes(method.id);
-                return (
-                  <Chip
-                    key={method.id}
-                    size="sm"
-                    disabled={disabled}
-                    active={on}
-                    aria-pressed={on}
-                    onClick={() => onToggleMethod(method.id)}
-                  >
-                    {method.name}
-                  </Chip>
-                );
-              })}
-            </div>
+            <MethodChips
+              options={methodOptions}
+              selected={draft.methodIds}
+              disabled={disabled}
+              onToggle={onToggleMethod}
+            />
           ) : null}
 
           {draft.comment || draft.notes ? (
             <Input
               value={draft.comment}
               disabled={disabled}
+              controlSize="md"
               aria-label="Коментар замовника"
               placeholder={draft.notes ?? "Коментар замовника"}
               onChange={(event) => onPatch({ comment: event.target.value })}
@@ -323,6 +308,67 @@ export function ImportDraftRow({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Скільки методів видно одразу; решта — за «ще N». Худі має 7, кепка 8. */
+const VISIBLE_METHODS = 3;
+
+/**
+ * Нанесення чипами (REQ-182#p16): «Без нанесення» перший і увімкнений, поки
+ * нічого не обрано; далі методи виду в порядку історії. Показуємо три
+ * найчастіші й обрані, решта за «ще N» (REQ-182#p20): вісім чипів на позицію
+ * робили з рядка стіну, а історія каже, що перші два-три покривають більшість.
+ */
+function MethodChips({
+  options,
+  selected,
+  disabled,
+  onToggle,
+}: {
+  options: Array<{ id: string; name: string }>;
+  selected: string[];
+  disabled?: boolean;
+  onToggle: (methodId: string | null) => void;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const visible = expanded
+    ? options
+    : options.filter((method, index) => index < VISIBLE_METHODS || selected.includes(method.id));
+  const hidden = options.length - visible.length;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Нанесення">
+      <span className="mr-0.5 text-xs text-muted-foreground">Нанесення</span>
+      <Chip
+        size="sm"
+        disabled={disabled}
+        active={selected.length === 0}
+        aria-pressed={selected.length === 0}
+        onClick={() => onToggle(null)}
+      >
+        Без нанесення
+      </Chip>
+      {visible.map((method) => {
+        const on = selected.includes(method.id);
+        return (
+          <Chip key={method.id} size="sm" disabled={disabled} active={on} aria-pressed={on} onClick={() => onToggle(method.id)}>
+            {method.name}
+          </Chip>
+        );
+      })}
+      {hidden > 0 ? (
+        <Chip
+          size="sm"
+          disabled={disabled}
+          icon={<ChevronDown />}
+          className="border-transparent bg-muted text-muted-foreground"
+          onClick={() => setExpanded(true)}
+        >
+          ще {hidden}
+        </Chip>
+      ) : null}
     </div>
   );
 }
