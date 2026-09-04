@@ -1,6 +1,8 @@
 import * as React from "react";
 import { CornerDownLeft, Database, ImageOff, Link2, Loader2, Plus, Search } from "lucide-react";
 
+import { SEARCH_LEFT_ICON } from "@/components/ui/controlStyles";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { normalizeProductUrl } from "@/features/quotes/quote-import/productUrl";
 import { cn } from "@/lib/utils";
@@ -191,19 +193,19 @@ export function QuoteItemCommandField({
   return (
     <Popover open={open}>
       <PopoverAnchor asChild>
-        <div
-          className={cn(
-            // 44 px: вище за звичайне поле (40), бо це головний вхід вікна, а не
-            // одне з полів форми. Той самий радіус і межа, що в решти полів.
-            // Тло замість рамки (прототип: «командний рядок» на muted без
-            // обводки); рамка з'являється на фокусі — поле стало полем.
-            "flex h-11 items-center gap-2.5 rounded-xl border border-transparent bg-muted/60 px-3.5 transition-colors",
-            "focus-within:border-border focus-within:bg-background focus-within:ring-2 focus-within:ring-foreground/10",
-            disabled && "opacity-60"
-          )}
-        >
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <input
+        {/*
+          ЦЕ ТОЙ САМИЙ ПОШУК, ЩО В ТУЛБАРІ ПРОРАХУНКІВ, а не схожий на нього.
+          Спершу я зібрав поле руками за прототипом: своя висота 44, тло замість
+          рамки й підсвітка `ring-2` на фокусі. Рінг у цьому застосунку прибрано
+          свідомо (див. CONTROL_BASE у controlStyles: «рінг давав блюр-глоу на
+          темній»), тож моє поле поводилось інакше за всі інші поля CRM — на це
+          Артем і поскаржився. Тепер тут звичайний <Input> із канонічною
+          поверхнею: на фокусі темнішає рамка й тло стає `background`, як у
+          «Пошук за назвою…». Іконка ліворуч — тим самим `SEARCH_LEFT_ICON`.
+        */}
+        <div className="relative">
+          <Search className={cn(SEARCH_LEFT_ICON, "h-4 w-4")} aria-hidden />
+          <Input
             ref={inputRef}
             value={value}
             disabled={disabled}
@@ -219,27 +221,31 @@ export function QuoteItemCommandField({
                 ? "Ще товар: посилання або назва з бази"
                 : "Вставте посилання на товар або почніть писати назву — підкажемо з бази"
             }
-            className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            // Праворуч сидить підпис режиму, тож поле лишає під нього місце —
+            // інакше довгий текст заїжджав би під «Посилання».
+            className={cn("pl-9", trimmed || busy ? "pr-32" : "pr-3.5")}
             onChange={(event) => onValueChange(event.target.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={handleKeyDown}
           />
-          {busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-label="Читаю сторінку" /> : null}
           {/*
             Підпис праворуч — не кнопка, а відповідь поля на набране: «це я
             прочитаю як посилання» або «це шукаю в базі». Показується, щойно є
             що тлумачити; на порожньому полі йому нема про що казати.
           */}
-          {trimmed ? (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground"
-              aria-live="polite"
-            >
-              <ModeIcon className="h-3 w-3" />
-              {MODE_LABELS[mode].label}
-            </span>
-          ) : null}
+          <div className="pointer-events-none absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Читаю сторінку" /> : null}
+            {trimmed ? (
+              <span
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground"
+                aria-live="polite"
+              >
+                <ModeIcon className="h-3 w-3" />
+                {MODE_LABELS[mode].label}
+              </span>
+            ) : null}
+          </div>
         </div>
       </PopoverAnchor>
 

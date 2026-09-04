@@ -480,8 +480,16 @@ export function QuoteWizardDialog({
         Відступи DialogContent погашено (`!p-0 !gap-0`): панелі малюють свої,
         бо лівій потрібне тло до самого краю.
       */}
+      {/*
+        ВИСОТА ФІКСОВАНА (35rem), а не «по вмісту». Вікно, що росте з кожною
+        доданою позицією, штовхає кнопки вниз під курсором: людина цілиться в
+        «Створити», а він від'їжджає. Тепер росте лише прокрутка правої панелі,
+        а рамка стоїть на місці — від порожнього стану до двадцятої позиції.
+        На телефоні висоту не фіксуємо: там вікно вже нижній аркуш, і 560 px
+        посеред екрана виглядали б як обрізана сторінка.
+      */}
       <DialogContent
-        className="flex max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0 sm:max-w-[920px]"
+        className="flex max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0 sm:max-w-[920px] md:h-[35rem]"
         isDirty={hasContent}
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
@@ -537,11 +545,13 @@ export function QuoteWizardDialog({
 
           <div className="flex min-w-0 flex-1 flex-col md:min-h-0">
             <div className="flex items-center gap-2.5 px-5 pt-4 pb-3 md:pr-14">
-              <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Позиції</span>
-              <span className="text-2xs text-muted-foreground/70">поле розуміє саме: посилання чи назва</span>
+              <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Позиції
+              </span>
+              <span className="truncate text-2xs text-muted-foreground/70">поле розуміє саме: посилання чи назва</span>
             </div>
 
-            <div className="flex-1 space-y-3 px-5 pb-4 md:min-h-[19rem] md:overflow-y-auto">
+            <div className="flex-1 space-y-3 px-5 pb-4 md:min-h-0 md:overflow-y-auto">
               {error ? (
                 <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -703,7 +713,11 @@ export function QuoteWizardDialog({
                 й вицвілий бежевий у темній. Тінтовий колір працює лише на своєму
                 тінті.
               */}
-              <span className="text-xs text-muted-foreground">{footerMeta}</span>
+              {/* Один рядок: підвал пояснює, а не переносить вікно — довше
+                  речення обрізається, повний текст лишається в підказці. */}
+              <span className="min-w-0 truncate text-xs text-muted-foreground" title={footerMeta}>
+                {footerMeta}
+              </span>
               <div className="flex gap-2">
                 <Button type="button" variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
                   Скасувати
@@ -847,7 +861,7 @@ function ExcelPanel({
           <Upload className="h-4 w-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">Або ексельку від клієнта — перетягніть чи клацніть</span>
+          <span className="block truncate text-sm font-medium">Або ексельку від клієнта — перетягніть чи клацніть</span>
           <span className="block truncate text-xs text-muted-foreground">
             Як є, з об’єднаними клітинками й кількома аркушами: модель сама знайде позиції, тиражі й варіанти
           </span>

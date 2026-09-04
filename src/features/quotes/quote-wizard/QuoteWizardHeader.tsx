@@ -182,7 +182,6 @@ export function QuoteWizardHeader({
         onSearchChange={setPartySearch}
         options={partyOptions}
         loading={partiesLoading}
-        chipLabel={layout === "column" ? "Оберіть замовника або ліда" : undefined}
         onSelect={(option) =>
           patch({
             partyId: option.id,
@@ -326,7 +325,14 @@ function HeaderField({
         <Icon className="h-3 w-3 text-muted-foreground/70" />
         {label}
       </span>
-      <div className="min-w-0 [&_button]:w-full [&_button]:max-w-none [&_button]:justify-start [&_button]:rounded-lg">{children}</div>
+      {/*
+        Рядок не переноситься: довга назва замовника обрізається трьома
+        крапками, а не розсуває панель на другий рядок (у стовпчику 272 px це
+        стрибок висоти всього вікна).
+      */}
+      <div className="min-w-0 [&_button>span]:truncate [&_button]:w-full [&_button]:max-w-none [&_button]:justify-start [&_button]:rounded-lg">
+        {children}
+      </div>
     </div>
   );
 }
