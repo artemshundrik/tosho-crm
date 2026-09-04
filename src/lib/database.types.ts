@@ -3409,6 +3409,7 @@ export type Database = {
           file_size: number | null
           id: string
           mime_type: string | null
+          quote_item_id: string | null
           quote_id: string
           storage_bucket: string
           storage_path: string
@@ -3422,6 +3423,7 @@ export type Database = {
           file_size?: number | null
           id?: string
           mime_type?: string | null
+          quote_item_id?: string | null
           quote_id: string
           storage_bucket?: string
           storage_path: string
@@ -3435,6 +3437,7 @@ export type Database = {
           file_size?: number | null
           id?: string
           mime_type?: string | null
+          quote_item_id?: string | null
           quote_id?: string
           storage_bucket?: string
           storage_path?: string
@@ -3454,6 +3457,13 @@ export type Database = {
             columns: ["quote_id"]
             isOneToOne: false
             referencedRelation: "v_quotes_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_attachments_quote_item_id_fkey"
+            columns: ["quote_item_id"]
+            isOneToOne: false
+            referencedRelation: "quote_items"
             referencedColumns: ["id"]
           },
         ]

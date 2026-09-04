@@ -91,6 +91,11 @@ export type QuoteAttachment = {
   storageBucket?: string | null;
   storagePath?: string | null;
   audience?: QuoteAttachmentAudience;
+  /**
+   * Позиція прорахунку, до якої належить файл (REQ-246). `null` — файл усього
+   * прорахунку: так лежать усі 512 вкладень, що були до появи колонки.
+   */
+  quoteItemId?: string | null;
 };
 
 export async function fetchStatusHistory(
@@ -118,7 +123,9 @@ export async function fetchQuoteAttachments(
       let query = supabase
         .schema("tosho")
         .from("quote_attachments")
-        .select("id,file_name,mime_type,file_size,created_at,storage_bucket,storage_path,uploaded_by,audience")
+        .select(
+          "id,file_name,mime_type,file_size,created_at,storage_bucket,storage_path,uploaded_by,audience,quote_item_id"
+        )
         .eq("quote_id", quoteId)
         .order("created_at", { ascending: false });
       if (withTeamFilter && teamId) {
@@ -146,6 +153,7 @@ export async function fetchQuoteAttachments(
       storageBucket: row.storage_bucket ?? null,
       storagePath: row.storage_path ?? null,
       audience: normalizeQuoteAttachmentAudience(row.audience),
+      quoteItemId: (row as { quote_item_id?: string | null }).quote_item_id ?? null,
     } satisfies QuoteAttachment));
 
     const isDesignVisualization = (file: QuoteAttachment) =>
@@ -944,6 +952,8 @@ export async function uploadQuoteAttachmentFile(input: {
   uploadedBy: string;
   audience: QuoteAttachmentAudience;
   bucket: string;
+  /** Позиція, до якої кріпимо файл. Не задано — файл усього прорахунку. */
+  quoteItemId?: string | null;
 }): Promise<QueryResult<null>> {
   try {
     const safeName = input.file.name.replace(/[^\w.-]+/g, "_");
@@ -968,6 +978,7 @@ export async function uploadQuoteAttachmentFile(input: {
         storage_bucket: input.bucket,
         storage_path: uploadResult.storagePath,
         uploaded_by: input.uploadedBy,
+        quote_item_id: input.quoteItemId ?? null,
         // Панель «Файли» на картці прорахунку — це файли прорахунку, а не ТЗ
         // дизайнеру. Матеріали для дизайнера додають у дизайн-блоці модалки або
         // на самій дизайн-задачі — звідти сюди приходить явний audience.

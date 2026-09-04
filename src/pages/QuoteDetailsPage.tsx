@@ -139,9 +139,9 @@ import { useQuoteMarkupApprovals } from "@/features/quotes/quote-details/useQuot
 import { QuoteRunMarkupPanel } from "@/features/quotes/quote-details/QuoteRunMarkupPanel";
 import { QuoteRunPriceFields } from "@/features/quotes/quote-details/QuoteRunPriceFields";
 import {
-  QuoteDesignTasksPanel,
   buildQuoteDesignTaskCards,
 } from "@/features/quotes/quote-details/QuoteDesignTasksPanel";
+import { QuoteDesignTabSection } from "@/features/quotes/quote-details/QuoteDesignTabSection";
 import { QuoteDeadlineOrderWarning } from "@/features/quotes/quote-details/QuoteDeadlineOrderWarning";
 import { QuoteFeed } from "@/features/quotes/quote-details/QuoteFeed";
 import { describeRunChanges } from "@/features/quotes/quote-details/quoteRunChanges";
@@ -686,6 +686,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [createDesignTaskDialogOpen, setCreateDesignTaskDialogOpen] = useState(false);
   /** На яку позицію створюємо задачу. null — на прорахунок загалом. */
   const [designTaskItemId, setDesignTaskItemId] = useState<string | null>(null);
+  /** ТЗ, набране просто на вкладці «Дизайн» (REQ-246). Порожнє = взяти з прорахунку. */
+  const [designComposerBrief, setDesignComposerBrief] = useState("");
   // Сторож від повторного входу — ref, а не стан: його ніхто не показує на
   // екрані, зате як стан він отруював ефект синхронізації. У чесному списку
   // залежностей він змушував ефект перезапуститись одразу після setSyncing(true),
@@ -2324,6 +2326,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     [attachments]
   );
 
+  /*
+    Файли для композера — лише ті, що прикріплені до ОБРАНОЇ позиції
+    (REQ-246). Спільні файли прорахунку (без позиції) тут не показуємо: вони
+    вже видно в панелі матеріалів нижче, і змішувати їх означало б обіцяти,
+    що вони поїдуть саме в цю задачу.
+  */
+  /** Позиція, на яку зараз націлений композер: обрана або перша без задачі. */
+  const designComposerItemId =
+    designTaskItemId ?? itemsWithoutDesignTask[0]?.id ?? items[0]?.id ?? null;
+
+  const designComposerFiles = useMemo(
+    () =>
+      designComposerItemId
+        ? attachments.filter((file) => file.audience === "design" && file.quoteItemId === designComposerItemId)
+        : [],
+    [attachments, designComposerItemId]
+  );
+
   const resolvedItemSelection = useMemo(
     () =>
       resolveCatalogSelection({
@@ -2993,7 +3013,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const uploadAttachments = async (
     files: FileList | File[] | null,
-    audience: QuoteAttachmentAudience = "project"
+    audience: QuoteAttachmentAudience = "project",
+    /** Позиція, до якої кріпимо файли (REQ-246). Не задано — файл усього прорахунку. */
+    quoteItemId?: string | null
   ) => {
     if (!files || files.length === 0) return;
     if (attachmentsUploading) return;
@@ -3041,6 +3063,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         file,
         uploadedBy,
         audience,
+        quoteItemId: quoteItemId ?? null,
         bucket: ITEM_VISUAL_BUCKET,
       });
       if (!uploaded.ok) {
@@ -6207,63 +6230,61 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </div>
 
-              {designTaskLoading ? (
-                <AppSectionLoader label="Завантаження..." />
-              ) : designTaskError ? (
-                <div className="py-4 text-sm text-destructive">{designTaskError}</div>
-              ) : designTaskCards.length > 0 ? (
-                <QuoteDesignTasksPanel
-                  tasks={designTaskCards}
-                  activeTaskId={activeDesignTaskId}
-                  renderBrief={renderBriefRichText}
-                  materials={designMaterials}
-                  materialsUploading={attachmentsUploading}
-                  canAddMaterials={canEditQuoteContent}
-                  onSelectTask={setActiveDesignTaskId}
-                  onOpenTask={(taskId) => navigate(`/design/${taskId}`)}
-                  onPreviewVisual={(file) => {
-                    void ensureAttachmentAccessUrl(file, { variant: "preview" }).then((url) => {
-                      if (!url) return;
-                      setVisualizationPreview({ ...file, url });
-                    });
-                  }}
-                  onDownloadVisual={(file) => {
-                    void ensureAttachmentAccessUrl(file).then((url) => {
-                      if (!url) return;
-                      void downloadFileToDevice(
-                        url,
-                        getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
-                      );
-                    });
-                  }}
-                  onAddMaterials={(files) => void uploadAttachments(files, "design")}
-                />
-              ) : (
-                /*
-                  ЗАДАЧА НАРОДЖУЄТЬСЯ РАЗОМ ІЗ ПРОРАХУНКОМ (REQ-155 p5), і тут її
-                  не створюють. Аварійний шлях лишився в меню «⋮» шапки: виняток
-                  має жити в меню, а не займати екран замість типового стану.
-                */
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center">
-                  <Palette className="h-9 w-9 text-muted-foreground/30" />
-                  <div>
-                    <p className="font-medium text-foreground">Дизайн-задач у цьому прорахунку немає</p>
-                    <p className="mx-auto mt-1.5 max-w-[56ch] text-sm leading-relaxed text-muted-foreground">
-                      Задача створюється разом із прорахунком — по одній на кожен товар із нанесенням.
-                      Щоб вона тут зʼявилась, додайте нанесення в товарі.
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-1 gap-2"
-                    onClick={() => setActiveQuoteTab("products")}
-                  >
-                    <Package className="h-4 w-4" />
-                    Відкрити «Товари»
-                  </Button>
-                </div>
-              )}
+              <QuoteDesignTabSection
+                items={items}
+                designTaskItemIds={designTaskItemIds}
+                itemsWithoutDesignTask={itemsWithoutDesignTask}
+                designTaskItemId={designTaskItemId}
+                onSelectDesignTaskItem={(itemId) => {
+                  setDesignTaskItemId(itemId);
+                  setDesignComposerBrief("");
+                }}
+                composerBrief={designComposerBrief}
+                onComposerBriefChange={setDesignComposerBrief}
+                briefPlaceholder={briefSourceText || undefined}
+                composerFiles={designComposerFiles}
+                attachmentsUploading={attachmentsUploading}
+                onAddComposerFiles={(files) => void uploadAttachments(files, "design", designComposerItemId)}
+                onRemoveComposerFile={requestDeleteAttachment}
+                designTaskType={designTaskType}
+                onDesignTaskTypeChange={setDesignTaskType}
+                designTaskSaving={designTaskSaving}
+                designTaskError={designTaskError}
+                designTaskLoading={designTaskLoading}
+                canEditQuoteContent={canEditQuoteContent}
+                onCreateDesignTask={() => {
+                  if (designComposerItemId && designComposerItemId !== designTaskItemId) {
+                    setDesignTaskItemId(designComposerItemId);
+                  }
+                  void createDesignTask({
+                    designBrief: designComposerBrief.trim() || undefined,
+                    hasFiles: designComposerFiles.length > 0,
+                  }).then(() => setDesignComposerBrief(""));
+                }}
+                designTaskCards={designTaskCards}
+                activeDesignTaskId={activeDesignTaskId}
+                renderBrief={renderBriefRichText}
+                designMaterials={designMaterials}
+                onSelectTask={setActiveDesignTaskId}
+                onOpenTask={(taskId) => navigate(`/design/${taskId}`)}
+                onPreviewVisual={(file) => {
+                  void ensureAttachmentAccessUrl(file, { variant: "preview" }).then((url) => {
+                    if (!url) return;
+                    setVisualizationPreview({ ...file, url });
+                  });
+                }}
+                onDownloadVisual={(file) => {
+                  void ensureAttachmentAccessUrl(file).then((url) => {
+                    if (!url) return;
+                    void downloadFileToDevice(
+                      url,
+                      getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
+                    );
+                  });
+                }}
+                onAddMaterials={(files) => void uploadAttachments(files, "design")}
+                onOpenProducts={() => setActiveQuoteTab("products")}
+              />
             </section>
 
             <section className={cn("tab-panel py-2", activeQuoteTab !== "discussion" && "hidden")}>
