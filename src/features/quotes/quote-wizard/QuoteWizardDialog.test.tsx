@@ -7,13 +7,14 @@ import type { QuoteImportItem } from "@/features/quotes/quote-import/types";
 import { QuoteWizardDialog } from "./QuoteWizardDialog";
 
 /**
- * Вікно «Новий прорахунок» на один екран (REQ-237).
+ * Вікно «Новий прорахунок» на один екран (REQ-237 → REQ-182#p14).
  *
- * Перевіряється те, що бачить і натискає людина: три джерела на одному
- * екрані; ексель дає прев'ю БЕЗ прорахунку в базі; «руками» пише позицію
- * тим самим шляхом, що й імпорт; посилання перетворюється на позицію з назвою
- * зі сторінки. Порядок створення — головне: скільки разів покликали
- * створення до натиску «Створити».
+ * Перевіряється те, що бачить і натискає людина: одне поле замість вкладок —
+ * посилання стає позицією з назвою зі сторінки, назва шукає в каталозі й
+ * лягає з `catalog_*_id`, а чого в базі немає — додається як нова позиція;
+ * ексель дає прев'ю БЕЗ прорахунку в базі й живе в списку поруч із рештою.
+ * Порядок створення — головне: скільки разів покликали створення до натиску
+ * «Створити».
  */
 
 const items: QuoteImportItem[] = [
@@ -48,9 +49,28 @@ const insertQuoteItemRow = vi.fn(async (payload: Record<string, unknown>) => {
 });
 const persistQuoteRuns = vi.fn(async () => ({ ok: true as const }));
 
+const fetchCatalogBase = vi.fn(async () => ({
+  ok: true as const,
+  data: {
+    typeRows: [
+      { id: "t-cloth", name: "Одяг", quote_type: "merch" },
+      { id: "t-paper", name: "Папір", quote_type: "print" },
+    ],
+    kindRows: [
+      { id: "k-hoodie", type_id: "t-cloth", name: "Худі" },
+      { id: "k-notebook", type_id: "t-paper", name: "Блокнот" },
+    ],
+    modelRows: [
+      { id: "m-lenny", kind_id: "k-hoodie", name: "Реглан LENNY", image_url: "https://cdn/lenny.jpg" },
+      { id: "m-a5", kind_id: "k-notebook", name: "Блокнот А5", image_url: null },
+    ],
+  },
+}));
+
 vi.mock("@/features/quotes/quote-details/queries", () => ({
   insertQuoteItemRow: (payload: Record<string, unknown>) => insertQuoteItemRow(payload),
   persistQuoteRuns: () => persistQuoteRuns(),
+  fetchCatalogBase: () => fetchCatalogBase(),
 }));
 
 const runDefaults = { markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 };
@@ -101,16 +121,17 @@ describe("QuoteWizardDialog — один екран", () => {
     );
   });
 
-  it("шапка, два типи виробу і три джерела стоять на одному екрані", () => {
+  it("шапка, два типи виробу, одне поле і плитка файлу стоять на одному екрані", () => {
     renderWizard();
     expect(screen.getByText("шапка прорахунку")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Поліграфія/ })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Товар/ })).toBeChecked();
     // «Інше» прибрано (REQ-182): це був дефолт при заведенні категорії, а не вибір.
     expect(screen.queryByRole("radio", { name: /Інше/ })).not.toBeInTheDocument();
-    const sources = screen.getByRole("tablist", { name: "Джерело позицій" });
-    expect(within(sources).getAllByRole("tab")).toHaveLength(3);
-    expect(within(sources).getByRole("tab", { name: /Excel/ })).toHaveAttribute("aria-selected", "true");
+    // Вкладок джерела більше немає (REQ-182#p14): поле саме розуміє, що набрали.
+    expect(screen.queryByRole("tablist", { name: "Джерело позицій" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Товар: посилання або назва" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обрати файл Excel" })).toBeInTheDocument();
   });
 
   it("ексель: прев'ю є, а прорахунку до «Створити» немає", async () => {
@@ -146,14 +167,25 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(screen.getByRole("button", { name: /Створити прорахунок/ })).toBeDisabled();
   });
 
-  it("руками: порожній рядок одразу, створення тим самим шляхом", async () => {
+  it("назви немає в базі: останній рядок підказок додає її як нову позицію, без каталогу", async () => {
     const user = userEvent.setup();
     const { prepareQuote } = renderWizard();
+    const field = screen.getByRole("combobox", { name: "Товар: посилання або назва" });
 
-    await user.click(screen.getByRole("tab", { name: /Руками/ }));
+    await user.type(field, "Кепка six-panel");
+    // Поле каже, як воно це прочитало.
+    expect(screen.getByText("З бази")).toBeInTheDocument();
+    const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    expect(within(list).getByText("У базі такого немає")).toBeInTheDocument();
+    expect(within(list).getAllByRole("option")).toHaveLength(1);
+
+    await user.keyboard("{Enter}");
+    expect(screen.getByDisplayValue("Кепка six-panel")).toBeInTheDocument();
+    // Поле очистилось і лишилось у фокусі — далі набирають наступний товар.
+    expect(field).toHaveValue("");
+    expect(field).toHaveFocus();
+
     const create = screen.getByRole("button", { name: /Створити прорахунок/ });
-
-    await user.type(screen.getByRole("textbox", { name: "Назва позиції" }), "Кепка six-panel");
     // Тираж порожній навмисно. Кнопка при цьому НЕ мовчить: натиск називає,
     // чого бракує, замість того щоб не робити нічого.
     await user.click(create);
@@ -166,15 +198,63 @@ describe("QuoteWizardDialog — один екран", () => {
     await user.click(create);
 
     await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("print"));
-    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({ name: "Кепка six-panel", qty: 250 });
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({
+      name: "Кепка six-panel",
+      qty: 250,
+      catalog_model_id: null,
+    });
   });
 
-  it("за посиланням: назва й опис зі сторінки стають позицією", async () => {
+  it("назва з бази: підказка з фото й категорією, позиція лягає з catalog_*_id", async () => {
+    const user = userEvent.setup();
+    const { prepareQuote } = renderWizard();
+    const field = screen.getByRole("combobox", { name: "Товар: посилання або назва" });
+
+    // «худі» знаходить реглан за ВИДОМ — слова «худі» в назві моделі немає.
+    await user.type(field, "худі");
+    const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    const option = await within(list).findByRole("option", { name: /Реглан LENNY/ });
+    expect(within(option).getByText("Худі · Одяг")).toBeInTheDocument();
+    expect(within(option).getByRole("img", { name: "Реглан LENNY" })).toHaveAttribute("src", "https://cdn/lenny.jpg");
+
+    await user.click(option);
+    expect(screen.getByDisplayValue("Реглан LENNY")).toBeInTheDocument();
+    expect(screen.getByText("Худі · Одяг")).toBeInTheDocument();
+    expect(field).toHaveValue("");
+
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "40");
+    await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
+
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("merch"));
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({
+      name: "Реглан LENNY",
+      catalog_model_id: "m-lenny",
+      catalog_kind_id: "k-hoodie",
+      catalog_type_id: "t-cloth",
+    });
+  });
+
+  it("перший товар із поліграфічного типу перемикає «Рахуємо» на поліграфію", async () => {
     const user = userEvent.setup();
     renderWizard();
 
-    await user.click(screen.getByRole("tab", { name: /Посилання/ }));
-    await user.type(screen.getByRole("textbox", { name: "Посилання на товар" }), "https://shop.example/hoodie{Enter}");
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "блокнот");
+    const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    await user.click(await within(list).findByRole("option", { name: /Блокнот А5/ }));
+
+    expect(screen.getByRole("radio", { name: /Поліграфія/ })).toBeChecked();
+  });
+
+  it("за посиланням: назва зі сторінки стає позицією, поле впізнає адресу", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+
+    const field = screen.getByRole("combobox", { name: "Товар: посилання або назва" });
+    await user.type(field, "https://shop.example/hoodie");
+    expect(screen.getByText("Посилання")).toBeInTheDocument();
+    // На адресу підказок із бази немає — нема чого шукати.
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
 
     await waitFor(() => expect(screen.getByDisplayValue("Худі оверсайз Classic")).toBeInTheDocument());
     // Опис зі сторінки не тягнемо: у магазинів це рекламний абзац.
@@ -191,8 +271,7 @@ describe("QuoteWizardDialog — один екран", () => {
     const user = userEvent.setup();
     renderWizard();
 
-    await user.click(screen.getByRole("tab", { name: /Посилання/ }));
-    const input = screen.getByRole("textbox", { name: "Посилання на товар" });
+    const input = screen.getByRole("combobox", { name: "Товар: посилання або назва" });
 
     await user.type(input, "https://shop.example/a{Enter}");
     await waitFor(() => expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(1));
@@ -205,5 +284,23 @@ describe("QuoteWizardDialog — один екран", () => {
     await waitFor(() => expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(3));
 
     expect(screen.getByRole("link", { name: "shop.example/c" })).toBeInTheDocument();
+  });
+
+  it("файл і поле живуть в одному списку: «Інший файл» прибирає лише рядки файлу", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "https://shop.example/a{Enter}");
+    await waitFor(() => expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(1));
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["x"], "zapyt.csv", { type: "text/csv" }));
+    await waitFor(() => expect(screen.getByDisplayValue("Футболка бавовна")).toBeInTheDocument());
+    expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "Інший файл" }));
+    expect(screen.queryByDisplayValue("Футболка бавовна")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Обрати файл Excel" })).toBeInTheDocument();
   });
 });

@@ -73,6 +73,23 @@ export type QuoteImportDraftItem = {
   notes: string | null;
   /** Порядковий номер варіанта в межах групи — уже порахований, для підпису. */
   variant: { index: number; total: number } | null;
+  /**
+   * Позиція взята з каталогу (REQ-182#p14): модель, її вид і тип. Файл і
+   * посилання дають `null` — там каталогу ще немає, і він з'явиться (якщо
+   * з'явиться) уже після створення, фоновою розвідкою або рукою менеджера.
+   */
+  catalog: QuoteImportDraftCatalog | null;
+};
+
+/** Прив'язка чернетки до каталогу: рівно те, що ляже в `quote_items.catalog_*_id`. */
+export type QuoteImportDraftCatalog = {
+  modelId: string;
+  kindId: string;
+  typeId: string;
+  /** Підписи для рядка прев'ю — «Худі · Одяг», — щоб не ходити в базу вдруге. */
+  kindName: string;
+  typeName: string;
+  imageUrl: string | null;
 };
 
 /** Слід імпорту на позиції — щоб відрізнити її на картці й дебажити розбір. */

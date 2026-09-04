@@ -1,7 +1,11 @@
-import { FileSpreadsheet, Link2, Package, PencilLine, Printer } from "lucide-react";
+import { Package, Printer } from "lucide-react";
 
 /**
- * Словник вікна «Новий прорахунок» (REQ-237): що рахуємо і звідки позиції.
+ * Словник вікна «Новий прорахунок» (REQ-237): що рахуємо.
+ *
+ * Джерел позицій тут більше немає (REQ-182#p14): вкладки «Руками · Excel ·
+ * Посилання» замінило одне поле, яке саме розуміє, посилання це чи назва, —
+ * `QuoteItemCommandField`. Ексель лишився окремою плиткою під списком.
  *
  * Типів виробу ДВА, не три (REQ-182, 04.09.2026). «Інше» прибрано: заміри
  * проду показали, що це був не вибір людини, а дефолт при заведенні категорії
@@ -17,9 +21,6 @@ import { FileSpreadsheet, Link2, Package, PencilLine, Printer } from "lucide-rea
  */
 
 export type QuoteKindValue = "print" | "merch";
-
-/** Звідки беруться позиції: людина вводить їх руками, з файлу або зі сторінки товару. */
-export type QuoteSourceValue = "manual" | "excel" | "link";
 
 export type QuoteKindOption = {
   value: QuoteKindValue;
@@ -50,20 +51,4 @@ export const QUOTE_KINDS: QuoteKindOption[] = [
     icon: Package,
     tone: "bg-muted text-muted-foreground",
   },
-];
-
-export type QuoteSourceOption = {
-  value: QuoteSourceValue;
-  /** Одне-два слова: підпис живе в сегментованому перемикачі, а не на плитці. */
-  label: string;
-  hint: string;
-  icon: typeof PencilLine;
-  /** Джерело, де працює модель або розвідка сайту — позначається окремо. */
-  assisted: boolean;
-};
-
-export const QUOTE_SOURCES: QuoteSourceOption[] = [
-  { value: "manual", label: "Руками", hint: "Одна-дві позиції, знаю що", icon: PencilLine, assisted: false },
-  { value: "excel", label: "Excel", hint: "Запит від клієнта таблицею", icon: FileSpreadsheet, assisted: true },
-  { value: "link", label: "Посилання", hint: "Товар у постачальника", icon: Link2, assisted: true },
 ];

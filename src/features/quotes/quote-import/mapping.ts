@@ -122,6 +122,7 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
         sourceRows: (item.sourceRows ?? []).filter((row) => Number.isFinite(row)).map((row) => Math.trunc(row)),
         notes: (item.notes ?? "").trim() || null,
         variant,
+        catalog: null,
       };
     })
     .filter((item): item is QuoteImportDraftItem => item !== null);
@@ -136,6 +137,28 @@ export type QuoteImportItemPayloadInput = {
   trace: Omit<QuoteImportTrace, "sourceRows">;
 };
 
+/** Слід позиції, яка прийшла не з файлу: посиланням, з каталогу чи просто назвою. */
+export const DRAFT_ORIGIN_LABELS = {
+  link: "за посиланням",
+  catalog: "з каталогу",
+  manual: "введено руками",
+} as const;
+
+/**
+ * Звідки взялась чернетка — для сліду в `metadata.import.fileName`.
+ *
+ * У візарді всі джерела лежать одним списком (REQ-182#p14): поруч із рядками
+ * файлу стоять товари за посиланням і з каталогу. Один спільний підпис на всіх
+ * брехав би — «zapyt.xlsx» на позиції, яку вписали руками. Тому підпис іде від
+ * самої чернетки: рядки файлу є лише в тієї, що з файлу.
+ */
+export function describeDraftOrigin(draft: QuoteImportDraftItem, fileName: string): string {
+  if (draft.sourceRows.length > 0 && fileName) return fileName;
+  if (draft.links.length > 0) return DRAFT_ORIGIN_LABELS.link;
+  if (draft.catalog) return DRAFT_ORIGIN_LABELS.catalog;
+  return DRAFT_ORIGIN_LABELS.manual;
+}
+
 /**
  * Рядок `quote_items`.
  *
@@ -143,6 +166,10 @@ export type QuoteImportItemPayloadInput = {
  * («скільки»), а рахує ціну все одно `quote_item_runs` (docs/DB_MAP.md).
  * `unit_price` лишається нулем: це та сама собівартість, тільки збоку, і
  * імпорт її не приносить (REQ-235).
+ *
+ * Позиція з каталогу несе `catalog_*_id` (REQ-182#p14): саме через них її
+ * бачать замовлення, КП, дизайн-задача й орієнтир накрутки — усі ті читачі,
+ * які сліпі до `metadata.catalogVariant` посилання.
  */
 export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Record<string, unknown> {
   const { draft } = input;
@@ -151,7 +178,7 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
 
   const metadata: Record<string, unknown> = {
     import: {
-      fileName: input.trace.fileName,
+      fileName: describeDraftOrigin(draft, input.trace.fileName),
       importedAt: input.trace.importedAt,
       sourceRows: draft.sourceRows,
     } satisfies QuoteImportTrace,
@@ -175,9 +202,9 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
     unit: "шт.",
     unit_price: 0,
     line_total: 0,
-    catalog_type_id: null,
-    catalog_kind_id: null,
-    catalog_model_id: null,
+    catalog_type_id: draft.catalog?.typeId ?? null,
+    catalog_kind_id: draft.catalog?.kindId ?? null,
+    catalog_model_id: draft.catalog?.modelId ?? null,
     methods: null,
     attachment: null,
   };

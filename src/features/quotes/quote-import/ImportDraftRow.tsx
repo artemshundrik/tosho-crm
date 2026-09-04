@@ -220,6 +220,13 @@ export function ImportDraftRow({
             {draft.sourceRows.length > 0 ? (
               <span className="text-muted-foreground">рядок {draft.sourceRows.join(", ")}</span>
             ) : null}
+            {/* Позиція з каталогу каже це категорією, а не плашкою «з бази»:
+                «Худі · Одяг» — і зрозуміло, звідки вона, і що це таке. */}
+            {draft.catalog ? (
+              <span className="text-muted-foreground">
+                {draft.catalog.kindName} · {draft.catalog.typeName}
+              </span>
+            ) : null}
             {/* Зв'язок варіантів — словами. Бедж «альтернатива» казав, що щось
                 не так, але не казав що саме: під номером 30 у файлі лежать два
                 різних дзен-сади, і це вибір із двох, а не два товари. */}

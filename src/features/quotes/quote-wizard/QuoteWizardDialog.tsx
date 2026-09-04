@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Loader2, Plus, Upload } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
-import { Input } from "@/components/ui/input";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { ImportDraftRow } from "@/features/quotes/quote-import/ImportDraftRow";
 import {
@@ -22,27 +21,32 @@ import {
   type ImportParseStep,
 } from "@/features/quotes/quote-import/importFlow";
 import type { QuoteImportRunDefaults } from "@/features/quotes/quote-import/mapping";
-import { normalizeProductUrl } from "@/features/quotes/quote-import/productUrl";
 import { QUOTE_IMPORT_ACCEPT } from "@/features/quotes/quote-import/readWorkbook";
 import type { QuoteImportDraftItem, QuoteImportLinkPreview } from "@/features/quotes/quote-import/types";
 import { countSettledPreviews, fetchLinkPreview, useLinkPreviews } from "@/features/quotes/quote-import/useLinkPreviews";
 import { pluralWordUk } from "@/lib/lastSeen";
 import { cn } from "@/lib/utils";
 
-import { QUOTE_KINDS, QUOTE_SOURCES, type QuoteKindValue, type QuoteSourceValue } from "./quoteWizardKinds";
+import type { CatalogSuggestion } from "./catalogSuggestions";
+import { QuoteItemCommandField } from "./QuoteItemCommandField";
+import { QUOTE_KINDS, type QuoteKindValue } from "./quoteWizardKinds";
+import { useCatalogSuggestions } from "./useCatalogSuggestions";
 
 /**
  * Вікно «Новий прорахунок» на один екран (REQ-237, обраний концепт із трьох).
  *
- * ЩО ТУТ ОДНЕ. Замовник, тип виробу і джерело позицій — три відповіді, які
- * менеджер знає ще до відкриття вікна, тож вони стоять поруч без кроків
- * «далі». Джерело — не другий екран, а перемикач, який змінює лише нижню
- * панель: файл, посилання або порожній рядок під позицію.
+ * ЩО ТУТ ОДНЕ. Замовник, тип виробу і поле позиції — те, що менеджер знає ще
+ * до відкриття вікна, тож воно стоїть поруч без кроків «далі». Джерела
+ * позицій більше не перемикаються вкладками (REQ-182#p14): одне поле саме
+ * розуміє, посилання це чи назва, — адресу читає розвідка сторінки, назву
+ * шукає в каталозі з підказками, а «додати як нову позицію» лишається
+ * останнім рядком підказок, коли в базі такого немає. Ексель — окрема вузька
+ * плитка під списком: файл не набирають, його кидають.
  *
- * ЩО СПІЛЬНЕ. Усі три джерела зводяться до одного: список чернеток позицій
- * (`QuoteImportDraftItem`), той самий, що в імпорті. Ексель наповнює його
- * моделлю, посилання — розвідкою сторінки, «руками» — порожнім рядком. Далі
- * все однакове: той самий рядок прев'ю, той самий запис у базу
+ * ЩО СПІЛЬНЕ. Усі джерела зводяться до одного списку чернеток
+ * (`QuoteImportDraftItem`), того самого, що в імпорті, і живуть у ньому
+ * ВПЕРЕМІШ: поруч із рядками файлу стоять товари за посиланням і з каталогу.
+ * Далі все однакове: той самий рядок прев'ю, той самий запис у базу
  * (`writeDraftsToQuote`), той самий момент створення.
  *
  * КОЛИ З'ЯВЛЯЄТЬСЯ ПРОРАХУНОК. Рівно на натиску «Створити» — `onPrepareQuote`
@@ -51,9 +55,6 @@ import { QUOTE_KINDS, QUOTE_SOURCES, type QuoteKindValue, type QuoteSourceValue 
  */
 
 type Stage = "compose" | "parsing" | "saving";
-
-const LINK_TRACE = "за посиланням";
-const MANUAL_TRACE = "введено руками";
 
 function makeDraft(partial: Partial<QuoteImportDraftItem> = {}): QuoteImportDraftItem {
   const key = crypto.randomUUID();
@@ -73,17 +74,21 @@ function makeDraft(partial: Partial<QuoteImportDraftItem> = {}): QuoteImportDraf
     sourceRows: [],
     notes: null,
     variant: null,
+    catalog: null,
     ...partial,
   };
 }
 
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value.trim());
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
+/** Рядок із файлу — у нього є номери рядків; решта прийшла полем. */
+const isFileDraft = (draft: QuoteImportDraftItem) => draft.sourceRows.length > 0;
+
+/**
+ * Фото позиції з каталогу — тим самим станом, що й фото з сайту: рядок прев'ю
+ * не розрізняє, звідки картинка, і не мусить.
+ */
+function catalogPreview(draft: QuoteImportDraftItem): QuoteImportLinkPreview | undefined {
+  if (!draft.catalog?.imageUrl) return undefined;
+  return { status: "done", imageUrl: draft.catalog.imageUrl, title: draft.name };
 }
 
 export function QuoteWizardDialog({
@@ -113,7 +118,6 @@ export function QuoteWizardDialog({
   onCreated: (quoteId: string) => void;
 }) {
   const [kind, setKind] = React.useState<QuoteKindValue>("merch");
-  const [source, setSource] = React.useState<QuoteSourceValue>("excel");
   const [stage, setStage] = React.useState<Stage>("compose");
   const [drafts, setDrafts] = React.useState<QuoteImportDraftItem[]>([]);
   const [warnings, setWarnings] = React.useState<string[]>([]);
@@ -121,7 +125,7 @@ export function QuoteWizardDialog({
   const [fileName, setFileName] = React.useState("");
   const [parseStep, setParseStep] = React.useState<ImportParseStep>("read");
   const [savedCount, setSavedCount] = React.useState(0);
-  const [linkUrl, setLinkUrl] = React.useState("");
+  const [fieldValue, setFieldValue] = React.useState("");
   const [linkBusy, setLinkBusy] = React.useState(false);
   /** Скільки разів людина натиснула «Створити», а шапка була неповна. */
   const [headerNudge, setHeaderNudge] = React.useState(0);
@@ -129,17 +133,17 @@ export function QuoteWizardDialog({
   const [linkPreviews, setLinkPreviews] = React.useState<Record<string, QuoteImportLinkPreview>>({});
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const { previews, start: startLinkPreviews, reset: resetLinkPreviews } = useLinkPreviews();
+  const catalog = useCatalogSuggestions(teamId, open);
 
   const reset = React.useCallback(() => {
     setKind("merch");
-    setSource("excel");
     setStage("compose");
     setDrafts([]);
     setWarnings([]);
     setError(null);
     setFileName("");
     setSavedCount(0);
-    setLinkUrl("");
+    setFieldValue("");
     setLinkBusy(false);
     setHeaderNudge(0);
     setLinkPreviews({});
@@ -147,6 +151,7 @@ export function QuoteWizardDialog({
   }, [resetLinkPreviews]);
 
   const selected = React.useMemo(() => drafts.filter((draft) => draft.selected), [drafts]);
+  const fileDrafts = React.useMemo(() => drafts.filter(isFileDraft), [drafts]);
   const nameless = React.useMemo(() => selected.filter((draft) => !draft.name.trim()).length, [selected]);
   const runless = React.useMemo(
     () => selected.filter((draft) => !draft.runs.some((run) => run.quantity > 0)).length,
@@ -193,24 +198,12 @@ export function QuoteWizardDialog({
     );
 
   /**
-   * Зміна джерела скидає чернетки: позиції з файлу й позиції руками — різні
-   * списки, і тримати їх упереміш означало б, що «Створити» пише те, чого
-   * людина на екрані не бачить. «Руками» одразу дає порожній рядок — інакше
-   * перший клік ішов би на кнопку «Ще позиція», а не в поле.
+   * «Інший файл» прибирає ЛИШЕ рядки файлу: товари за посиланням і з
+   * каталогу, що стоять поруч, людина додавала окремо, і файл до них не має
+   * стосунку.
    */
-  const switchSource = (next: QuoteSourceValue) => {
-    if (next === source) return;
-    setSource(next);
-    setError(null);
-    setWarnings([]);
-    setFileName("");
-    setLinkPreviews({});
-    resetLinkPreviews();
-    setDrafts(next === "manual" ? [makeDraft()] : []);
-  };
-
   const clearFile = React.useCallback(() => {
-    setDrafts([]);
+    setDrafts((prev) => prev.filter((draft) => !isFileDraft(draft)));
     setWarnings([]);
     setFileName("");
     resetLinkPreviews();
@@ -230,9 +223,43 @@ export function QuoteWizardDialog({
       setWarnings(outcome.warnings);
       return;
     }
-    setDrafts(outcome.drafts);
+    // Файл один: новий заміняє рядки попереднього, а позиції з поля лишаються.
+    setDrafts((prev) => [...prev.filter((draft) => !isFileDraft(draft)), ...outcome.drafts]);
     setWarnings(outcome.warnings);
     void startLinkPreviews(outcome.drafts);
+  };
+
+  /**
+   * Позиція з каталогу: назва, фото і `catalog_*_id` уже відомі — лишається
+   * тираж. Перемикач «Рахуємо» іде за ПЕРШИМ товаром: тип каталогу знає, чи
+   * це поліграфія, а людина ще ні на що не відповідала. Далі перемикач її —
+   * змішаний прорахунок буває, і вгадувати за другим товаром було б свавіллям.
+   */
+  const handlePickCatalog = (suggestion: CatalogSuggestion) => {
+    setError(null);
+    if (drafts.length === 0 && suggestion.quoteType) {
+      setKind(suggestion.quoteType === "print" ? "print" : "merch");
+    }
+    setDrafts((prev) => [
+      ...prev,
+      makeDraft({
+        name: suggestion.name,
+        catalog: {
+          modelId: suggestion.modelId,
+          kindId: suggestion.kindId,
+          typeId: suggestion.typeId,
+          kindName: suggestion.kindName,
+          typeName: suggestion.typeName,
+          imageUrl: suggestion.imageUrl,
+        },
+      }),
+    ]);
+  };
+
+  /** Назви в базі немає — позиція без каталогу, як колишнє «руками». */
+  const handleAddName = (name: string) => {
+    setError(null);
+    setDrafts((prev) => [...prev, makeDraft({ name })]);
   };
 
   /**
@@ -251,29 +278,9 @@ export function QuoteWizardDialog({
    * ПОЗИЦІЯ ЛИШАЄТЬСЯ, НАВІТЬ КОЛИ САЙТ НЕ ПУСТИВ: посилання — уже цінність,
    * а назву менеджер допише сам. Причина стоїть поруч із фото, як в імпорті.
    */
-  const handleLink = async () => {
-    const raw = linkUrl.trim();
-    if (!raw) return;
-
-    // Рекламний хвіст зрізаємо ОДРАЗУ, до перевірки й до розвідки: далі ця
-    // адреса піде і в запит по фото, і в `metadata.supplierUrl`, звідки її вже
-    // ніхто не почистить — вона стане кнопкою «Постачальник» на картці позиції.
-    const urls = raw
-      .split(/[\s,]+/)
-      .map((part) => normalizeProductUrl(part))
-      .filter(Boolean);
-    const bad = urls.find((url) => !isHttpUrl(url));
-    if (bad) {
-      setError(
-        urls.length === 1
-          ? "Це не схоже на посилання: потрібна адреса, що починається з http:// або https://."
-          : `«${bad.slice(0, 60)}» не схоже на посилання — приберіть його зі списку.`
-      );
-      return;
-    }
-
+  const handleLinks = async (urls: string[]) => {
+    if (urls.length === 0) return;
     setError(null);
-    setLinkUrl("");
 
     const fresh = urls.map((url) => ({ url, draft: makeDraft({ links: [url] }) }));
     setDrafts((prev) => [...prev, ...fresh.map((entry) => entry.draft)]);
@@ -335,14 +342,15 @@ export function QuoteWizardDialog({
       return;
     }
 
-    const trace = source === "excel" ? fileName : source === "link" ? LINK_TRACE : MANUAL_TRACE;
+    // Слід джерела — на кожній позиції окремо (`describeDraftOrigin`): у
+    // списку впереміш файл, посилання й каталог, і один підпис на всіх брехав би.
     const written = await writeDraftsToQuote({
       drafts: selected,
       quoteId,
       teamId,
       nextPosition: 1,
       runDefaults: runDefaultsFor(kind),
-      trace: { fileName: trace, importedAt: new Date().toISOString() },
+      trace: { fileName, importedAt: new Date().toISOString() },
       onSaved: setSavedCount,
     });
 
@@ -368,7 +376,7 @@ export function QuoteWizardDialog({
   };
 
   const busy = stage !== "compose";
-  const hasContent = drafts.some((draft) => draft.name.trim() || draft.links.length > 0);
+  const hasContent = drafts.some((draft) => draft.name.trim() || draft.links.length > 0) || fieldValue.trim().length > 0;
 
   // Підвал каже, ЧОМУ кнопка вимкнена. Мовчазна сіра кнопка читається як
   // поломка, а не як «дозаповніть шапку».
@@ -380,7 +388,6 @@ export function QuoteWizardDialog({
     if (!error && runless > 0)
       return `Впишіть тираж: без нього позицію нема з чого рахувати (${runless} із ${selected.length}).`;
     if (!error && nameless > 0) return "Впишіть назву позиції — сайт її не віддав.";
-    if (source === "manual") return "Ціни й собівартість — уже в картці прорахунку.";
     if (drafts.length > 0)
       return `Прорахунок з’явиться в базі лише після «Створити» · ${selected.length} із ${drafts.length} ${pluralWordUk(drafts.length, "позиції", "позицій", "позицій")}`;
     return "Нічого не записується, поки ви не натиснете «Створити».";
@@ -419,17 +426,13 @@ export function QuoteWizardDialog({
           {header(headerNudge)}
 
           {/*
-            ОБИДВА ВИБОРИ — ОДНИМ РЯДКОМ (REQ-237#p8).
+            «РАХУЄМО» — ОДНИМ РЯДКОМ, ПОЛЕ — ПІД НИМ (REQ-182#p14).
 
-            Було дві смуги плиток із великими підписами секцій: разом ~200 px
-            хрому перед вмістом, заради двох відповідей на три варіанти кожна.
-            Артем: «мені не подобається ця комбінація». Тепер це два
-            сегментовані перемикачі в один рядок — канонічні, ті самі, що в
-            тулбарі сторінок, — а підписи стали дрібними мітками поруч.
-
-            Секцій більше немає навмисно: підпис секції потрібен, коли з вигляду
-            контрола не видно, про що він. «Поліграфія · Мерч · Інше» і
-            «Руками · Excel · Посилання» кажуть це самі.
+            Було два сегментовані перемикачі поруч: тип виробу і джерело
+            позицій. Другого більше немає — його роботу робить саме поле, а
+            перемикач типу лишився канонічним, тим самим, що в тулбарі
+            сторінок. Підпис секції не потрібен: «Поліграфія · Товар» каже
+            це сам.
           */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-xs text-muted-foreground">Рахуємо</span>
@@ -455,83 +458,21 @@ export function QuoteWizardDialog({
                 );
               })}
             </SegmentedGroup>
-
-            <span className="ml-1 text-xs text-muted-foreground">Позиції</span>
-            <SegmentedGroup className={SEGMENTED_GROUP_SM} role="tablist" aria-label="Джерело позицій">
-              {QUOTE_SOURCES.map((option) => {
-                const Icon = option.icon;
-                return (
-                  <Button
-                    key={option.value}
-                    variant="segmented"
-                    size="xs"
-                    role="tab"
-                    aria-pressed={source === option.value}
-                    aria-selected={source === option.value}
-                    disabled={busy}
-                    title={option.hint}
-                    onClick={() => switchSource(option.value)}
-                    className={SEGMENTED_TRIGGER_SM}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {option.label}
-                  </Button>
-                );
-              })}
-            </SegmentedGroup>
           </div>
 
-          {source === "excel" ? (
-            <ExcelPanel
-              stage={stage}
-              parseStep={parseStep}
-              fileName={fileName}
-              hasDrafts={drafts.length > 0}
-              inputRef={fileInputRef}
-              onFile={(file) => void handleFile(file)}
-            />
-          ) : null}
-
-          {source === "link" ? (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <Input
-                  value={linkUrl}
-                  disabled={busy}
-                  aria-label="Посилання на товар"
-                  placeholder={
-                    drafts.length > 0
-                      ? "Ще одне посилання — позиція стане в список нижче"
-                      : "Вставте посилання на товар — prom, rozetka, сайт постачальника"
-                  }
-                  onChange={(event) => setLinkUrl(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleLink();
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={busy || !linkUrl.trim()}
-                  onClick={() => void handleLink()}
-                  // Поле вводу в CRM за замовчуванням `lg` (h-10, rounded-xl), а
-                  // кнопка `md` (h-9, rounded-lg): поруч це видно як сходинку.
-                  className="h-10 shrink-0 gap-2 rounded-xl"
-                >
-                  {linkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  Додати товар
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {drafts.length === 0
-                  ? "Система прочитає сторінку постачальника — фото, назву й опис — і підготує позицію. Можна вставити одразу кілька посилань, кожне з нового рядка."
-                  : `Товарів у прорахунку: ${drafts.length}. Додавайте ще посилання — позиції накопичуються нижче.`}
-              </p>
-            </div>
-          ) : null}
+          <QuoteItemCommandField
+            value={fieldValue}
+            onValueChange={setFieldValue}
+            suggestions={catalog.suggestions}
+            suggestionsLoading={catalog.loading}
+            disabled={busy}
+            busy={linkBusy}
+            hasDrafts={drafts.length > 0}
+            onPickCatalog={handlePickCatalog}
+            onAddLinks={(urls) => void handleLinks(urls)}
+            onAddName={handleAddName}
+            onInvalid={setError}
+          />
 
           {drafts.length > 0 ? (
             <section className="space-y-3">
@@ -542,7 +483,7 @@ export function QuoteWizardDialog({
                 картка: піктограма, назва в один рядок, під нею факти розбору,
                 і дія при самому файлі.
               */}
-              {source === "excel" && fileName ? (
+              {fileName && fileDrafts.length > 0 ? (
                 <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/25 p-3">
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground ring-1 ring-border/60">
                     <FileSpreadsheet className="h-4 w-4" />
@@ -553,7 +494,7 @@ export function QuoteWizardDialog({
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
                       {[
-                        `знайдено ${drafts.length} ${pluralWordUk(drafts.length, "позицію", "позиції", "позицій")}`,
+                        `знайдено ${fileDrafts.length} ${pluralWordUk(fileDrafts.length, "позицію", "позиції", "позицій")}`,
                         photoProgress.total > 0
                           ? photoProgress.settled < photoProgress.total
                             ? `фото: ${photoProgress.settled} з ${photoProgress.total}`
@@ -598,12 +539,13 @@ export function QuoteWizardDialog({
                 </div>
               ) : null}
 
-              {source === "excel" ? (
-                <div className="flex items-end gap-2.5 pt-1">
-                  <span className="font-mono text-2xl font-semibold leading-none tabular-nums">{selected.length}</span>
-                  <span className="pb-0.5 text-xs text-muted-foreground">
-                    {pluralWordUk(selected.length, "позиція", "позиції", "позицій")} до прорахунку
-                  </span>
+              <div className="flex items-end gap-2.5 pt-1">
+                <span className="font-mono text-2xl font-semibold leading-none tabular-nums">{selected.length}</span>
+                <span className="pb-0.5 text-xs text-muted-foreground">
+                  {pluralWordUk(selected.length, "позиція", "позиції", "позицій")} до прорахунку
+                </span>
+                {/* Галочки є лише в рядків файлу, тож і «обрати всі» — про них. */}
+                {fileDrafts.length > 1 ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -612,49 +554,51 @@ export function QuoteWizardDialog({
                     className="ml-auto"
                     onClick={() =>
                       setDrafts((prev) => {
-                        const allOn = prev.every((draft) => draft.selected);
-                        return prev.map((draft) => ({ ...draft, selected: !allOn }));
+                        const allOn = prev.filter(isFileDraft).every((draft) => draft.selected);
+                        return prev.map((draft) => (isFileDraft(draft) ? { ...draft, selected: !allOn } : draft));
                       })
                     }
                   >
-                    {drafts.every((draft) => draft.selected) ? "Зняти всі" : "Обрати всі"}
+                    {fileDrafts.every((draft) => draft.selected) ? "Зняти всі" : "Обрати всі"}
                   </Button>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
 
               <div className="space-y-2">
-                {drafts.map((draft, index) => (
+                {drafts.map((draft) => (
                   <ImportDraftRow
                     key={draft.key}
                     draft={draft}
-                    preview={previews[draft.key] ?? linkPreviews[draft.key]}
+                    preview={previews[draft.key] ?? linkPreviews[draft.key] ?? catalogPreview(draft)}
                     disabled={busy}
-                    namePlaceholder={source === "manual" ? "Худі оверсайз, чорний, лого на грудях" : undefined}
-                    autoFocusName={source === "manual" && index === drafts.length - 1}
                     onPatch={(patch) => patchDraft(draft.key, patch)}
                     onPatchRun={(runKey, patch) => patchRun(draft.key, runKey, patch)}
-                    onRemove={source === "excel" ? undefined : () => removeDraft(draft.key)}
+                    // Рядок файлу ЗНІМАЮТЬ галочкою (щоб було видно, що він там
+                    // був), а доданий полем — просто прибирають.
+                    onRemove={isFileDraft(draft) ? undefined : () => removeDraft(draft.key)}
                     onAddRun={() => addRun(draft.key)}
                     onRemoveRun={(runKey) => removeRun(draft.key, runKey)}
                   />
                 ))}
               </div>
 
-              {source === "manual" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  className="gap-2"
-                  onClick={() => setDrafts((prev) => [...prev, makeDraft()])}
-                >
-                  <Plus className="h-4 w-4" />
-                  Ще позиція
-                </Button>
-              ) : null}
             </section>
           ) : null}
+
+          {/*
+            ЕКСЕЛЬ — ПЛИТКОЮ ПІД СПИСКОМ, а не вкладкою. Файл не набирають у
+            поле, його кидають, тож йому місце окремо; вузька плитка, бо це
+            другий шлях, а не головний: за сім місяців із ексельки прийшло
+            менше позицій, ніж за посиланнями за місяць.
+          */}
+          <ExcelPanel
+            stage={stage}
+            parseStep={parseStep}
+            fileName={fileName}
+            hasFileDrafts={fileDrafts.length > 0}
+            inputRef={fileInputRef}
+            onFile={(file) => void handleFile(file)}
+          />
         </div>
 
         <DialogFooter className="shrink-0 gap-2 border-t border-border/60 pt-3 sm:justify-between">
@@ -693,14 +637,14 @@ function ExcelPanel({
   stage,
   parseStep,
   fileName,
-  hasDrafts,
+  hasFileDrafts,
   inputRef,
   onFile,
 }: {
   stage: Stage;
   parseStep: ImportParseStep;
   fileName: string;
-  hasDrafts: boolean;
+  hasFileDrafts: boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onFile: (file: File) => void;
 }) {
@@ -758,7 +702,7 @@ function ExcelPanel({
 
   // Файл розібрано — дропзони більше немає: її місце займає картка файлу в
   // підсумку, і кнопка «Інший файл» стоїть саме там, при самому файлі.
-  if (hasDrafts) return null;
+  if (hasFileDrafts) return null;
 
   return (
     <div className="space-y-2">
@@ -769,13 +713,17 @@ function ExcelPanel({
         розібрати файл раніше нічим не шкодить: менеджер бачить, що приїхало,
         і дозаповнює шапку, дивлячись на позиції. Замовника вимагає САМЕ
         створення, і підвал каже про це словами.
+
+        ВУЗЬКА, В ОДИН РЯДОК (REQ-182#p14): велика плита з піктограмою по
+        центру була доречна, поки файл був цілою вкладкою. Тепер він стоїть
+        під полем і списком, і плита на 150 px читалась би як головний вхід.
       */}
       <div
         role="button"
         tabIndex={0}
         aria-label="Обрати файл Excel"
         className={cn(
-          "flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-dashed border-border px-6 py-8 text-center transition-colors",
+          "flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-border px-3 py-2.5 text-left transition-colors",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
           "hover:border-foreground/40 hover:bg-muted/50",
           over && "border-foreground/60 bg-muted"
@@ -799,21 +747,22 @@ function ExcelPanel({
           if (file) onFile(file);
         }}
       >
-        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-muted text-muted-foreground">
-          <Upload className="h-5 w-5" />
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+          <Upload className="h-4 w-4" />
         </span>
-        <p className="text-sm font-medium">Перетягніть ексельку або клацніть, щоб обрати</p>
-        <p className="max-w-md text-xs text-muted-foreground">
-          Файл від клієнта як є — з об’єднаними клітинками, кількома аркушами й посиланнями на товари. Модель{" "}
-          <span className="text-foreground/80">сама знайде позиції, тиражі й варіанти</span>; ціни не бере.
-        </p>
-        <div className="mt-1 flex gap-1.5 font-mono text-2xs text-muted-foreground">
-          {[".xlsx", ".xls", ".csv", "до 12 МБ"].map((tag) => (
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">Або ексельку від клієнта — перетягніть чи клацніть</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            Як є, з об’єднаними клітинками й кількома аркушами: модель сама знайде позиції, тиражі й варіанти
+          </span>
+        </span>
+        <span className="hidden shrink-0 gap-1.5 font-mono text-2xs text-muted-foreground sm:flex">
+          {[".xlsx", ".csv", "до 12 МБ"].map((tag) => (
             <span key={tag} className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5">
               {tag}
             </span>
           ))}
-        </div>
+        </span>
         <input
           ref={inputRef}
           type="file"

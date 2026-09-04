@@ -6,4 +6,4 @@ export type {
   QuoteBatchBuilderFormData,
   QuoteBatchProductSubmitData,
 } from "./QuoteBatchBuilderDialog";
-export type { QuoteKindValue, QuoteSourceValue } from "@/features/quotes/quote-wizard/quoteWizardKinds";
+export type { QuoteKindValue } from "@/features/quotes/quote-wizard/quoteWizardKinds";

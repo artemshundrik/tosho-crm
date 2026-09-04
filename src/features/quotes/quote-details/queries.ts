@@ -1087,7 +1087,7 @@ export async function createOrderFromQuote(
   }
 }
 
-export type CatalogTypeRowRaw = { id: string; name: string; sort_order?: number | null };
+export type CatalogTypeRowRaw = { id: string; name: string; sort_order?: number | null; quote_type?: string | null };
 export type CatalogKindRowRaw = { id: string; type_id: string; name: string; sort_order?: number | null };
 export type CatalogModelRowRaw = {
   id: string;
@@ -1121,7 +1121,7 @@ export async function fetchCatalogBase(teamId: string): Promise<
       supabase
         .schema("tosho")
         .from("catalog_types")
-        .select("id,name,sort_order")
+        .select("id,name,sort_order,quote_type")
         .eq("team_id", teamId)
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true }),
