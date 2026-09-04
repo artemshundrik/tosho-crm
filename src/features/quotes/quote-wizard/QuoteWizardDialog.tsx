@@ -104,6 +104,7 @@ export function QuoteWizardDialog({
   runDefaultsFor,
   onPrepareQuote,
   onCreated,
+  appendTo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -120,6 +121,13 @@ export function QuoteWizardDialog({
   /** Створити прорахунок і віддати його id. Кличеться ПІСЛЯ прев'ю. */
   onPrepareQuote: (kind: QuoteKindValue) => Promise<string | null>;
   onCreated: (quoteId: string) => void;
+  /**
+   * Дописати позиції в НАЯВНИЙ прорахунок (REQ-157#p7) — те саме вікно, тільки
+   * без шапки: замовника, менеджера, дедлайн і валюту прорахунок уже має, а
+   * питати їх удруге означало б дати другий редактор тієї самої відповіді.
+   * Поле, ексель, підказки каталогу, чипи нанесення й тиражі — ті самі.
+   */
+  appendTo?: { quoteId: string; nextPosition: number; kind: QuoteKindValue; label: string | null } | null;
 }) {
   const [kind, setKind] = React.useState<QuoteKindValue>("merch");
   const [stage, setStage] = React.useState<Stage>("compose");
@@ -401,7 +409,7 @@ export function QuoteWizardDialog({
 
   const handleCreate = async () => {
     if (!canSubmit) return;
-    if (headerIssue) {
+    if (!appendTo && headerIssue) {
       setHeaderNudge((count) => count + 1);
       return;
     }
@@ -416,9 +424,9 @@ export function QuoteWizardDialog({
     setStage("saving");
     setError(null);
 
-    let quoteId: string | null = null;
+    let quoteId: string | null = appendTo?.quoteId ?? null;
     try {
-      quoteId = await onPrepareQuote(kind);
+      if (!appendTo) quoteId = await onPrepareQuote(kind);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не вдалося створити прорахунок.");
     }
@@ -433,8 +441,8 @@ export function QuoteWizardDialog({
       drafts: selected,
       quoteId,
       teamId,
-      nextPosition: 1,
-      runDefaults: runDefaultsFor(kind),
+      nextPosition: appendTo?.nextPosition ?? 1,
+      runDefaults: runDefaultsFor(appendTo?.kind ?? kind),
       trace: { fileName, importedAt: new Date().toISOString() },
       onSaved: setSavedCount,
     });
@@ -449,12 +457,16 @@ export function QuoteWizardDialog({
     }
 
     await startImportResearch(quoteId, written.itemIds);
-    const created = `Створено прорахунок з ${written.itemIds.length} ${pluralWordUk(written.itemIds.length, "позицією", "позиціями", "позиціями")}`;
+    const count = written.itemIds.length;
+    const word = pluralWordUk(count, "позицією", "позиціями", "позиціями");
+    const created = appendTo ? `Додано ${count} ${word}` : `Створено прорахунок з ${count} ${word}`;
     // Дизайн-задачі візард не заводить НАВМИСНО: тип задачі обовʼязковий у всіх
     // шляхах створення, а в мить «кинув посилання» менеджер ще не знає, що саме
     // малювати. Плюс тираж задача бачить лише через позицію прорахунку, тобто
     // позиції мають існувати раніше. Тому — вкладка «Дизайн» уже в картці.
-    toast.success(`${created}. Ціни впишіть у картці, дизайн-задачі — у вкладці «Дизайн».`);
+    toast.success(
+      appendTo ? `${created}. Ціни й нанесення — у картці позиції.` : `${created}. Ціни впишіть у картці, дизайн-задачі — у вкладці «Дизайн».`
+    );
     onCreated(quoteId);
     onOpenChange(false);
     reset();
@@ -479,7 +491,9 @@ export function QuoteWizardDialog({
     if (!error && nameless > 0) return "Впишіть назву позиції — сайт її не віддав.";
     if (drafts.length > 0)
       return `Прорахунок з’явиться в базі лише після «Створити» · ${selected.length} із ${drafts.length} ${pluralWordUk(drafts.length, "позиції", "позицій", "позицій")}`;
-    return "Нічого не записується, поки ви не натиснете «Створити».";
+    return appendTo
+      ? "Нічого не записується, поки ви не натиснете «Додати позиції»."
+      : "Нічого не записується, поки ви не натиснете «Створити».";
   })();
 
   return (
@@ -521,6 +535,7 @@ export function QuoteWizardDialog({
         isDirty={hasContent}
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
+          {appendTo ? null : (
           <aside className="flex shrink-0 flex-col gap-4 border-b border-border/60 bg-muted/30 px-5 pb-5 pt-5 md:w-[272px] md:border-b-0 md:border-r md:pr-4">
             <DialogHeader className="text-left">
               <DialogTitle>Новий прорахунок</DialogTitle>
@@ -576,8 +591,18 @@ export function QuoteWizardDialog({
               </div>
             </div>
           </aside>
+          )}
 
           <div className="flex min-w-0 flex-1 flex-col md:min-h-0">
+            {appendTo ? (
+              <DialogHeader className="px-5 pb-1 pt-5 text-left">
+                <DialogTitle>Додати товари</DialogTitle>
+                <DialogDescription>
+                  {appendTo.label ? `У прорахунок ${appendTo.label}` : "У цей прорахунок"} — замовник і дедлайн
+                  у нього вже є.
+                </DialogDescription>
+              </DialogHeader>
+            ) : null}
             <div className="flex items-center gap-2.5 px-5 pt-4 pb-3 md:pr-14">
               <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Позиції
@@ -765,7 +790,11 @@ export function QuoteWizardDialog({
                 </Button>
                 <Button type="button" disabled={!canSubmit} onClick={() => void handleCreate()} className="gap-2">
                   {stage === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {stage === "saving" ? `Створюю… ${savedCount}/${selected.length}` : "Створити прорахунок"}
+                  {stage === "saving"
+                    ? `${appendTo ? "Додаю" : "Створюю"}… ${savedCount}/${selected.length}`
+                    : appendTo
+                      ? "Додати позиції"
+                      : "Створити прорахунок"}
                   {stage === "saving" ? null : <ArrowRight className="h-4 w-4" />}
                 </Button>
               </div>

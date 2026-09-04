@@ -70,6 +70,8 @@ import {
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
+import { QuoteWizardDialog } from "@/features/quotes/quote-wizard/QuoteWizardDialog";
+import type { QuoteKindValue } from "@/features/quotes/quote-wizard/quoteWizardKinds";
 import { QuoteItemImprints } from "@/features/quotes/quote-details/QuoteItemImprints";
 import { QuoteItemModelSwap } from "@/features/quotes/quote-details/QuoteItemModelSwap";
 import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
@@ -703,6 +705,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const designVisualizationSyncingRef = useRef(false);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
+  /** Вікно «Додати товар» — той самий візард, що створює прорахунок. */
+  const [addItemsOpen, setAddItemsOpen] = useState(false);
   const [itemFormMode, setItemFormMode] = useState<"simple" | "advanced">("simple");
   const [itemTitle, setItemTitle] = useState("");
   const [itemQty, setItemQty] = useState("1");
@@ -4672,7 +4676,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        openNewItem();
+                        setAddItemsOpen(true);
                       }}
                       className="h-10 gap-2 rounded-xl"
                     >
@@ -7206,6 +7210,40 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/*
+        «ДОДАТИ ТОВАР» — ТЕ САМЕ ВІКНО, ЩО Й СТВОРЕННЯ ПРОРАХУНКУ (REQ-157#p7),
+        лише без шапки: замовника, менеджера, дедлайн і валюту прорахунок уже
+        має. Поле «посилання або назва», ексель, підказки каталогу, чипи
+        нанесення й тиражі — ті самі, тож товар додається однаково і в новий
+        прорахунок, і в наявний.
+      */}
+      {addItemsOpen && teamId && quoteId ? (
+        <QuoteWizardDialog
+          open={addItemsOpen}
+          onOpenChange={setAddItemsOpen}
+          teamId={teamId}
+          header={() => null}
+          headerIssue={null}
+          runDefaultsFor={() => ({
+            markupRate: defaultMarkupRateFor(dealType),
+            managerRate: currentManagerRate,
+            fixedCostRate: companyRates.fixedCostRate,
+            vatRate: companyRates.vatRate,
+          })}
+          onPrepareQuote={async () => quoteId}
+          onCreated={() => {
+            void loadItems();
+            void loadRuns();
+          }}
+          appendTo={{
+            quoteId,
+            nextPosition: items.length === 0 ? 1 : Math.max(...items.map((item) => item.position ?? 0)) + 1,
+            kind: (quote?.quote_type ?? "merch") as QuoteKindValue,
+            label: quote?.number ?? null,
+          }}
+        />
+      ) : null}
 
       <CustomerLeadQuickViewDialog
         open={partyCardOpen}
