@@ -39,8 +39,31 @@ vi.mock("@/features/quotes/quote-import/readWorkbook", async () => {
   };
 });
 
+/**
+ * Методи виду й історія їх уживання (REQ-182#p16): два запити з `useKindMethods`.
+ * Ланцюжок PostgREST підроблено мінімально — відповідь залежить лише від таблиці.
+ */
+const kindMethodRows = [
+  { id: "method-embroidery", name: "Вишивка" },
+  { id: "method-dtf", name: "ДТФ" },
+];
+const methodHistoryRows = [
+  { methods: [{ method_id: "method-dtf" }] },
+  { methods: [{ method_id: "method-dtf" }, { method_id: "method-embroidery" }] },
+];
+function fakeTable(table: string) {
+  const rows = table === "catalog_methods" ? kindMethodRows : table === "quote_items" ? methodHistoryRows : [];
+  const chain: Record<string, unknown> = {};
+  for (const name of ["select", "eq", "not", "order", "limit"]) chain[name] = () => chain;
+  chain.then = (resolve: (value: { data: unknown; error: null }) => void) => resolve({ data: rows, error: null });
+  return chain;
+}
+
 vi.mock("@/lib/supabaseClient", () => ({
-  supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "token" } } }) } },
+  supabase: {
+    auth: { getSession: async () => ({ data: { session: { access_token: "token" } } }) },
+    schema: () => ({ from: (table: string) => fakeTable(table) }),
+  },
 }));
 
 const insertQuoteItemRow = vi.fn(async (payload: Record<string, unknown>) => {
@@ -232,6 +255,46 @@ describe("QuoteWizardDialog — один екран", () => {
       catalog_kind_id: "k-hoodie",
       catalog_type_id: "t-cloth",
     });
+  });
+
+  it("позиція з каталогу: чипи нанесення за історією виду, «Без нанесення» увімкнене, методи пишуться рядком", async () => {
+    const user = userEvent.setup();
+    const { prepareQuote } = renderWizard();
+
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "худі");
+    const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    await user.click(await within(list).findByRole("option", { name: /Реглан LENNY/ }));
+
+    const group = await screen.findByRole("group", { name: "Нанесення" });
+    const chips = within(group).getAllByRole("button");
+    // ДТФ уживали двічі, вишивку раз — ДТФ стоїть першим, хоч за абеткою був би другим.
+    expect(chips.map((chip) => chip.textContent)).toEqual(["Без нанесення", "ДТФ", "Вишивка"]);
+    expect(chips[0]).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(within(group).getByRole("button", { name: "ДТФ" }));
+    await user.click(within(group).getByRole("button", { name: "Вишивка" }));
+    expect(within(group).getByRole("button", { name: "Без нанесення" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(group).getByRole("button", { name: "ДТФ" })).toHaveAttribute("aria-pressed", "true");
+
+    // Клік по «Без нанесення» стирає обране — це відповідь, а не порожнеча.
+    await user.click(within(group).getByRole("button", { name: "Без нанесення" }));
+    expect(within(group).getByRole("button", { name: "ДТФ" })).toHaveAttribute("aria-pressed", "false");
+    await user.click(within(group).getByRole("button", { name: "ДТФ" }));
+
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "40");
+    await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalled());
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({
+      methods: [{ method_id: "method-dtf", count: 1, print_position_id: null }],
+    });
+  });
+
+  it("позиція за посиланням чипів нанесення не має: без виду методу нема на що вказувати", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "https://shop.example/a{Enter}");
+    await waitFor(() => expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(1));
+    expect(screen.queryByRole("group", { name: "Нанесення" })).not.toBeInTheDocument();
   });
 
   it("перший товар із поліграфічного типу перемикає «Рахуємо» на поліграфію", async () => {

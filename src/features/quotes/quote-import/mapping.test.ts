@@ -130,6 +130,46 @@ describe("рядки прев'ю → payload мутацій", () => {
     expect(payload).toMatchObject({ qty: 300, unit_price: 0, line_total: 0 });
   });
 
+  it("позиція з каталогу несе catalog_*_id і методи нанесення тим самим рядком, що картка", () => {
+    const payload = buildImportItemPayload({
+      draft: draft({
+        catalog: {
+          modelId: "m-1",
+          kindId: "k-1",
+          typeId: "t-1",
+          kindName: "Худі",
+          typeName: "Одяг",
+          imageUrl: null,
+        },
+        methodIds: ["method-dtf", "method-embroidery"],
+      }),
+      itemId: "item-1",
+      teamId: "team-1",
+      quoteId: "quote-1",
+      position: 1,
+      trace: { fileName: "", importedAt: "2026-09-04T10:00:00.000Z" },
+    });
+
+    expect(payload).toMatchObject({ catalog_type_id: "t-1", catalog_kind_id: "k-1", catalog_model_id: "m-1" });
+    expect(payload.methods).toEqual([
+      { method_id: "method-dtf", count: 1, print_position_id: null, print_width_mm: null, print_height_mm: null },
+      { method_id: "method-embroidery", count: 1, print_position_id: null, print_width_mm: null, print_height_mm: null },
+    ]);
+  });
+
+  it("без нанесення — methods: null, як і в решти шляхів створення", () => {
+    const payload = buildImportItemPayload({
+      draft: draft(),
+      itemId: "item-1",
+      teamId: "team-1",
+      quoteId: "quote-1",
+      position: 1,
+      trace: { fileName: "kmz.xlsx", importedAt: "2026-09-01T10:00:00.000Z" },
+    });
+    expect(payload.methods).toBeNull();
+    expect(payload.catalog_model_id).toBeNull();
+  });
+
   it("коментар замовника лягає в опис позиції", () => {
     const payload = buildImportItemPayload({
       draft: draft({ comment: "уточнити колір" }),

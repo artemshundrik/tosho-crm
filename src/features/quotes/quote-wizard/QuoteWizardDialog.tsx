@@ -31,6 +31,7 @@ import type { CatalogSuggestion } from "./catalogSuggestions";
 import { QuoteItemCommandField } from "./QuoteItemCommandField";
 import { QUOTE_KINDS, type QuoteKindValue } from "./quoteWizardKinds";
 import { useCatalogSuggestions } from "./useCatalogSuggestions";
+import { useKindMethods } from "./useKindMethods";
 
 /**
  * Вікно «Новий прорахунок» на один екран (REQ-237, обраний концепт із трьох).
@@ -75,6 +76,7 @@ function makeDraft(partial: Partial<QuoteImportDraftItem> = {}): QuoteImportDraf
     notes: null,
     variant: null,
     catalog: null,
+    methodIds: [],
     ...partial,
   };
 }
@@ -134,6 +136,11 @@ export function QuoteWizardDialog({
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const { previews, start: startLinkPreviews, reset: resetLinkPreviews } = useLinkPreviews();
   const catalog = useCatalogSuggestions(teamId, open);
+  const draftKindIds = React.useMemo(
+    () => drafts.map((draft) => draft.catalog?.kindId).filter((id): id is string => Boolean(id)),
+    [drafts]
+  );
+  const kindMethods = useKindMethods(teamId, draftKindIds);
 
   const reset = React.useCallback(() => {
     setKind("merch");
@@ -148,7 +155,8 @@ export function QuoteWizardDialog({
     setHeaderNudge(0);
     setLinkPreviews({});
     resetLinkPreviews();
-  }, [resetLinkPreviews]);
+    kindMethods.reset();
+  }, [kindMethods.reset, resetLinkPreviews]);
 
   const selected = React.useMemo(() => drafts.filter((draft) => draft.selected), [drafts]);
   const fileDrafts = React.useMemo(() => drafts.filter(isFileDraft), [drafts]);
@@ -179,6 +187,20 @@ export function QuoteWizardDialog({
     );
   };
   const removeDraft = (key: string) => setDrafts((prev) => prev.filter((draft) => draft.key !== key));
+  /** `null` — «Без нанесення»: стирає всі методи; id — вмикає або вимикає один. */
+  const toggleMethod = (key: string, methodId: string | null) =>
+    setDrafts((prev) =>
+      prev.map((draft) => {
+        if (draft.key !== key) return draft;
+        if (methodId === null) return { ...draft, methodIds: [] };
+        return {
+          ...draft,
+          methodIds: draft.methodIds.includes(methodId)
+            ? draft.methodIds.filter((id) => id !== methodId)
+            : [...draft.methodIds, methodId],
+        };
+      })
+    );
   /** Тиражі взаємовиключні: це не «ще стільки», а «а скільки буде, якщо стільки». */
   const addRun = (key: string) =>
     setDrafts((prev) =>
@@ -576,6 +598,8 @@ export function QuoteWizardDialog({
                     // Рядок файлу ЗНІМАЮТЬ галочкою (щоб було видно, що він там
                     // був), а доданий полем — просто прибирають.
                     onRemove={isFileDraft(draft) ? undefined : () => removeDraft(draft.key)}
+                    methodOptions={draft.catalog ? kindMethods.byKind[draft.catalog.kindId] : undefined}
+                    onToggleMethod={draft.catalog ? (methodId) => toggleMethod(draft.key, methodId) : undefined}
                     onAddRun={() => addRun(draft.key)}
                     onRemoveRun={(runKey) => removeRun(draft.key, runKey)}
                   />

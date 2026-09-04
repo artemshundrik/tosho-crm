@@ -1,6 +1,7 @@
 import { ImageOff, Link2, Plus, Trash2, X } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
@@ -83,6 +84,8 @@ export function ImportDraftRow({
   onRemoveRun,
   namePlaceholder,
   autoFocusName,
+  methodOptions,
+  onToggleMethod,
 }: {
   draft: QuoteImportDraftItem;
   preview: QuoteImportLinkPreview | undefined;
@@ -103,6 +106,13 @@ export function ImportDraftRow({
   onRemoveRun?: (runKey: string) => void;
   namePlaceholder?: string;
   autoFocusName?: boolean;
+  /**
+   * Методи нанесення виду — чипами під назвою (REQ-182#p16). Не задано —
+   * рядка немає: в імпорті з файлу виду ще не знають, а без виду методу
+   * нема на що вказувати.
+   */
+  methodOptions?: Array<{ id: string; name: string }>;
+  onToggleMethod?: (methodId: string | null) => void;
 }) {
   return (
     <div
@@ -263,6 +273,44 @@ export function ImportDraftRow({
               <span className="text-muted-foreground/70">{preview.reason}</span>
             ) : null}
           </div>
+
+          {/*
+            НАНЕСЕННЯ — ЧИПАМИ, ЯК ТИРАЖІ (REQ-182#p16). «Без нанесення» стоїть
+            першим і УВІМКНЕНИЙ, поки нічого не обрано: це відповідь, а не
+            порожнє поле, — товар без друку буває, і його не треба доводити
+            галочкою «я не забув». Клік по методу вимикає «без», кілька
+            методів можна: у 46 позицій із 358 нанесень більше за одне.
+            Порядок методів — за історією виду, найчастіший перший.
+          */}
+          {methodOptions && onToggleMethod ? (
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Нанесення">
+              <span className="mr-0.5 text-xs text-muted-foreground">Нанесення</span>
+              <Chip
+                size="sm"
+                disabled={disabled}
+                active={draft.methodIds.length === 0}
+                aria-pressed={draft.methodIds.length === 0}
+                onClick={() => onToggleMethod(null)}
+              >
+                Без нанесення
+              </Chip>
+              {methodOptions.map((method) => {
+                const on = draft.methodIds.includes(method.id);
+                return (
+                  <Chip
+                    key={method.id}
+                    size="sm"
+                    disabled={disabled}
+                    active={on}
+                    aria-pressed={on}
+                    onClick={() => onToggleMethod(method.id)}
+                  >
+                    {method.name}
+                  </Chip>
+                );
+              })}
+            </div>
+          ) : null}
 
           {draft.comment || draft.notes ? (
             <Input

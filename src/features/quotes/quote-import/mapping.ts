@@ -123,6 +123,7 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
         notes: (item.notes ?? "").trim() || null,
         variant,
         catalog: null,
+        methodIds: [],
       };
     })
     .filter((item): item is QuoteImportDraftItem => item !== null);
@@ -170,6 +171,11 @@ export function describeDraftOrigin(draft: QuoteImportDraftItem, fileName: strin
  * Позиція з каталогу несе `catalog_*_id` (REQ-182#p14): саме через них її
  * бачать замовлення, КП, дизайн-задача й орієнтир накрутки — усі ті читачі,
  * які сліпі до `metadata.catalogVariant` посилання.
+ *
+ * Нанесення (REQ-182#p16) — тим самим рядком `{method_id, count, …}`, що пишуть
+ * «Новий прорахунок» і картка позиції; місце й розмір порожні, бо у вікні їх
+ * не питали. Порожній список — `null`, як і в решти шляхів: «без нанесення»
+ * у базі виглядає однаково, звідки б позиція не прийшла.
  */
 export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Record<string, unknown> {
   const { draft } = input;
@@ -205,7 +211,16 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
     catalog_type_id: draft.catalog?.typeId ?? null,
     catalog_kind_id: draft.catalog?.kindId ?? null,
     catalog_model_id: draft.catalog?.modelId ?? null,
-    methods: null,
+    methods:
+      draft.methodIds.length > 0
+        ? draft.methodIds.map((methodId) => ({
+            method_id: methodId,
+            count: 1,
+            print_position_id: null,
+            print_width_mm: null,
+            print_height_mm: null,
+          }))
+        : null,
     attachment: null,
   };
 }
