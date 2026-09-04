@@ -13,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~7 540 lines, 360 KB, as of 2026-09-02)
+## src/pages/QuoteDetailsPage.tsx (~7 540 lines, 361 KB, as of 2026-09-04)
 
 Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p12. Файл СХУДНУВ на
 2 460 рядків (9 893 → 7 434): три вкладки з чотирьох поїхали в окремі модулі, а
@@ -30,8 +30,8 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 |---|---|
 | 1–213 | imports |
 | 214–509 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `renderBriefRichText`); розбір файлів дизайну — у `quote-details/designOutputFiles.ts`, збирач стрічки — у `quoteFeedEvents.ts` |
-| **500** | `export function QuoteDetailsPage(...)` — main component starts |
-| **1001** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
+| **501** | `export function QuoteDetailsPage(...)` — main component starts |
+| **1002** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
 | 1119 / 1123 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
 | 1295 / 1346 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
 | **1842** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
@@ -56,7 +56,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 6247 | вкладка «Економіка» (заглушка `EconomicsComingSoon`) |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 863 lines, 584 KB, as of 2026-09-02)
+## src/pages/DesignTaskPage.tsx (~12 863 lines, 584 KB, as of 2026-09-04)
 
 | Range | Content |
 |---|---|
@@ -65,15 +65,15 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | **1341** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~8 315 lines, 360 KB, as of 2026-09-02)
+## src/pages/QuotesPage.tsx (~8 309 lines, 359 KB, as of 2026-09-04)
 
 | Range | Content |
 |---|---|
 | 1–193 | imports |
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
-| **538** | `export function QuotesPage(...)` — main component starts |
+| **539** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 985 lines, 262 KB, as of 2026-09-02)
+## src/pages/DesignPage.tsx (~5 985 lines, 262 KB, as of 2026-09-04)
 
 | Range | Content |
 |---|---|
