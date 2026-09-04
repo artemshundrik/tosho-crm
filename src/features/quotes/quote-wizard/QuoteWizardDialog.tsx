@@ -481,7 +481,9 @@ export function QuoteWizardDialog({
                       onClick={() => setKind(option.value)}
                       // Рядки рейки вищі за тулбарні (32 проти 28): це поле серед
                       // полів лівої панелі, і воно має бути тієї ж висоти, що чіпи над ним.
-                      className={cn(SEGMENTED_TRIGGER_SM, "h-8 justify-start")}
+                      // `flex-none`: тулбарний тригер має `flex-1` з нульовою базою, і в
+                      // стовпчику це стискало кнопку до висоти тексту, ігноруючи h-8.
+                      className={cn(SEGMENTED_TRIGGER_SM, "h-8 flex-none justify-start")}
                     >
                       <Icon className="h-3.5 w-3.5" />
                       {option.label}
