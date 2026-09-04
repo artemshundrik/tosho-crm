@@ -47,6 +47,12 @@ describe("розшифровка → рядки прев'ю", () => {
     expect(empty.runs).toEqual([{ key: "0-0", quantity: 1 }]);
   });
 
+  it("рядок файлу приходить без артикула — його називає сторінка, а не таблиця", () => {
+    const [first] = toDraftItems([item()]);
+
+    expect(first.sku).toBeNull();
+  });
+
   it("викидає позицію без назви й гасить сміттєві числа", () => {
     expect(toDraftItems([item({ name: "   " })])).toHaveLength(0);
 
@@ -189,6 +195,34 @@ describe("рядки прев'ю → payload мутацій", () => {
     });
     expect(payload.methods).toBeNull();
     expect(payload.catalog_model_id).toBeNull();
+  });
+
+  it("артикул зі сторінки постачальника лягає в metadata.sku (REQ-247)", () => {
+    const payload = buildImportItemPayload({
+      draft: draft({ sku: "5003-03", links: ["https://totobi.com.ua/parasolya"] }),
+      itemId: "item-sku",
+      teamId: "team-1",
+      quoteId: "quote-1",
+      position: 1,
+      trace: { fileName: "", importedAt: "2026-09-04T10:00:00.000Z" },
+    });
+
+    // Ключ саме `sku`: картка позиції й картка на дошці читають його вже
+    // сьогодні, тож «Артикул: …» з'являється без правок у тих читачах.
+    expect((payload.metadata as Record<string, unknown>).sku).toBe("5003-03");
+  });
+
+  it("сторінка не назвала артикула — ключа в metadata немає взагалі", () => {
+    const payload = buildImportItemPayload({
+      draft: draft({ sku: null }),
+      itemId: "item-no-sku",
+      teamId: "team-1",
+      quoteId: "quote-1",
+      position: 1,
+      trace: { fileName: "kmz.xlsx", importedAt: "2026-09-04T10:00:00.000Z" },
+    });
+
+    expect((payload.metadata as Record<string, unknown>).sku).toBeUndefined();
   });
 
   it("коментар замовника лягає в опис позиції", () => {

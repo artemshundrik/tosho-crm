@@ -123,6 +123,9 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
         notes: (item.notes ?? "").trim() || null,
         variant,
         catalog: null,
+        // Артикула у файлі клієнта немає — його називає сторінка постачальника
+        // (REQ-247), і він доїде розвідкою посилання, а не розбором таблиці.
+        sku: null,
         imprints: [],
       };
     })
@@ -198,6 +201,11 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
     metadata.supplierUrl = draft.links[0];
     metadata.importLinks = draft.links;
   }
+  // Артикул зі сторінки постачальника (REQ-247). Ключ `sku` вибрано не
+  // випадково: картка позиції й картка на дошці читають саме його вже сьогодні,
+  // тож «Артикул: …» з'являється без жодної зміни в тих читачах.
+  const sku = draft.sku?.trim();
+  if (sku) metadata.sku = sku;
 
   return {
     id: input.itemId,

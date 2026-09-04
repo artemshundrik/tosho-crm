@@ -73,6 +73,8 @@
     "_lib/notificationDelivery.test.ts",
     "_lib/ogTags.test.ts",
     "_lib/ogTags.ts",
+    "_lib/productSku.test.ts",
+    "_lib/productSku.ts",
     "_lib/openAiResponses.ts",
     "_lib/parseBody.test.ts",
     "_lib/parseBody.ts",

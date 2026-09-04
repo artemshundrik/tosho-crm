@@ -80,6 +80,12 @@ export type QuoteImportDraftItem = {
    */
   catalog: QuoteImportDraftCatalog | null;
   /**
+   * Артикул зі сторінки постачальника (REQ-247), `null` — сторінка його не
+   * назвала. Вгаданих значень тут не буває: за артикулом замовляють товар, і
+   * неправильний гірший за порожній — його ніхто не перевіряє очима.
+   */
+  sku: string | null;
+  /**
    * Нанесення позиції — пари «метод + місце» (REQ-182#p24).
    * Порожньо = «Без нанесення», і це ЯВНИЙ стан, а не «ще не відповіли»:
    * так само порожні `methods` у базі читаються всіма як «без нанесення».
@@ -141,13 +147,19 @@ export type QuoteImportTrace = {
   sourceRows: number[];
 };
 
-/** Чим закінчилась розвідка посилання для прев'ю (REQ-236). */
+/**
+ * Чим закінчилась розвідка посилання для прев'ю (REQ-236).
+ *
+ * Артикул їде поруч зі статусом, а не всередині «done» (REQ-247): сторінка
+ * буває живою й без фото — тоді статус `no_image`, а артикул у розмітці є.
+ */
 export type QuoteImportLinkPreview =
   | { status: "pending" }
-  | { status: "done"; imageUrl: string; title: string | null }
+  | { status: "done"; imageUrl: string; title: string | null; sku?: string | null }
   | {
       status: "no_image" | "blocked" | "failed";
       reason: string;
       /** Назва буває й без фото: сторінка жива, просто без картинки. */
       title?: string | null;
+      sku?: string | null;
     };

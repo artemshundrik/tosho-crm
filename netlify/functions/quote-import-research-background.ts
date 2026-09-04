@@ -11,6 +11,7 @@ import {
   isAllowedImageContentType,
 } from "./_lib/externalFetch";
 import { extractOgTags } from "./_lib/ogTags";
+import { extractProductSku } from "./_lib/productSku";
 
 /**
  * Дослідження лінків постачальників після імпорту (REQ-233, §3.4).
@@ -101,7 +102,7 @@ function readSupplierUrl(metadata: Record<string, unknown> | null): string | nul
  * і `cdn1.midocean.com` віддають картинки звичайному запиту. Стіна стоїть на
  * сторінках, не на сховищі, тож `storeImage` лишається як був.
  */
-async function fetchOgTags(url: string) {
+async function fetchProductFacts(url: string) {
   const page = await fetchProductPage(url, {
     timeoutMs: SITE_TIMEOUT_MS,
     proxyTimeoutMs: SITE_TIMEOUT_MS,
@@ -109,7 +110,8 @@ async function fetchOgTags(url: string) {
   });
   if (page.status === "blocked") throw new Error("Сайт не пускає роботів.");
   if (page.status !== "ok") throw new Error(`Сайт відповів ${page.httpStatus}.`);
-  return extractOgTags(page.html, page.baseUrl);
+  // Артикул читається з тієї самої сторінки (REQ-247) — окремого походу немає.
+  return { ...extractOgTags(page.html, page.baseUrl), sku: extractProductSku(page.html)?.value ?? null };
 }
 
 async function storeImage(params: {
@@ -204,7 +206,7 @@ export const handler = async (event: HttpEvent) => {
       metadata.research = { status: "skipped", fetchedAt };
     } else {
       try {
-        const tags = await fetchOgTags(supplierUrl);
+        const tags = await fetchProductFacts(supplierUrl);
         let imageUrl: string | null = null;
         if (tags.imageUrl) {
           imageUrl = await storeImage({
@@ -216,14 +218,20 @@ export const handler = async (event: HttpEvent) => {
           });
         }
 
-        if (tags.title || imageUrl) {
+        // Артикул пишемо ЛИШЕ В ПОРОЖНЄ (REQ-247). Позиція, створена візардом,
+        // уже несе артикул із прев'ю, а менеджер міг виправити його рукою —
+        // розмітка магазину не головніша за жодне з цих двох джерел.
+        const existingSku = typeof metadata.sku === "string" ? metadata.sku.trim() : "";
+        if (!existingSku && tags.sku) metadata.sku = tags.sku;
+
+        if (tags.title || imageUrl || tags.sku) {
           // Пишемо в `catalogVariant` навмисно: картка позиції рендерить це
           // поле вже сьогодні, тож картинка й назва з'являються без жодної
           // зміни в UI. `id` штучний — товару каталогу за цим нічого не стоїть.
           metadata.catalogVariant = {
             id: `import:${item.id}`,
             name: (tags.title ?? "").slice(0, 160) || "Товар постачальника",
-            sku: null,
+            sku: existingSku || tags.sku,
             imageUrl,
           };
           metadata.research = { status: "done", fetchedAt };
@@ -240,6 +248,30 @@ export const handler = async (event: HttpEvent) => {
               .eq("id", item.catalog_model_id)
               .is("image_url", null);
             if (modelError) console.error("quote-import-research: model image update failed", modelError.message);
+          }
+
+          // Артикул у рядок каталогу — тим самим правилом «лише в порожнє»
+          // (REQ-247). Візард уже кладе його при створенні моделі; сюди
+          // потрапляють позиції старого вікна «Імпорт з файлу», де моделі на
+          // момент запису ще не було.
+          if (tags.sku && item.catalog_model_id) {
+            const { data: modelRow } = await userClient
+              .schema("tosho")
+              .from("catalog_models")
+              .select("metadata")
+              .eq("id", item.catalog_model_id)
+              .maybeSingle();
+            const modelMetadata = ((modelRow as { metadata?: Record<string, unknown> } | null)?.metadata ??
+              {}) as Record<string, unknown>;
+            const modelSku = typeof modelMetadata.sku === "string" ? modelMetadata.sku.trim() : "";
+            if (!modelSku) {
+              const { error: skuError } = await userClient
+                .schema("tosho")
+                .from("catalog_models")
+                .update({ metadata: { ...modelMetadata, sku: tags.sku } } as never)
+                .eq("id", item.catalog_model_id);
+              if (skuError) console.error("quote-import-research: model sku update failed", skuError.message);
+            }
           }
         } else {
           metadata.research = { status: "failed", fetchedAt, error: "Сторінка не віддала ні назви, ні картинки." };

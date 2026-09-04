@@ -106,6 +106,7 @@ async function bindCatalogModel(draft: QuoteImportDraftItem, teamId: string): Pr
   const catalog = draft.catalog;
   if (!catalog || catalog.modelId || !draft.name.trim()) return draft;
   const supplierUrl = draft.links[0] ?? null;
+  const sku = draft.sku?.trim() || null;
   const inserted = await insertCatalogModelRow({
     team_id: teamId,
     kind_id: catalog.kindId,
@@ -114,6 +115,11 @@ async function bindCatalogModel(draft: QuoteImportDraftItem, teamId: string): Pr
     metadata: {
       source: { vendor: "link", url: supplierUrl, importedAt: new Date().toISOString() },
       ...(supplierUrl ? { supplierUrl } : {}),
+      // Артикул у КАТАЛОЗІ, а не лише в позиції (REQ-247): каталог живе довше
+      // за прорахунок, і пошук моделі по SKU на сторінці каталогу читає саме
+      // `metadata.sku`. Без цього товар, доданий посиланням, лишався б у
+      // каталозі безіменним кодом.
+      ...(sku ? { sku } : {}),
     },
   });
   if (!inserted.ok) return draft;

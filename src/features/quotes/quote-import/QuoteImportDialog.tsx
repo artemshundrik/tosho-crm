@@ -171,8 +171,19 @@ export function QuoteImportDialog({
       }
     }
 
+    // Артикул зі сторінки постачальника (REQ-247). Тут він живе збоку від
+    // чернетки — у відповіді розвідки, — тож зводимо їх саме перед записом:
+    // інакше артикул чекав би фонової розвідки й з'являвся в картці з
+    // запізненням, хоч у вікні його вже видно.
+    const withSku = selected.map((draft) => {
+      if (draft.sku) return draft;
+      const preview = previews[draft.key];
+      const sku = preview && preview.status !== "pending" ? preview.sku ?? null : null;
+      return sku ? { ...draft, sku } : draft;
+    });
+
     const written = await writeDraftsToQuote({
-      drafts: selected,
+      drafts: withSku,
       quoteId: targetQuoteId,
       teamId,
       nextPosition,

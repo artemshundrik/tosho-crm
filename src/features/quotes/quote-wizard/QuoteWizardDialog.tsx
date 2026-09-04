@@ -78,6 +78,7 @@ function makeDraft(partial: Partial<QuoteImportDraftItem> = {}): QuoteImportDraf
     notes: null,
     variant: null,
     catalog: null,
+    sku: null,
     imprints: [],
     ...partial,
   };
@@ -374,6 +375,7 @@ export function QuoteWizardDialog({
         cursor += 1;
         const preview = await fetchLinkPreview(entry.url);
         const title = preview.status === "pending" ? null : preview.title ?? null;
+        const sku = preview.status === "pending" ? null : preview.sku ?? null;
         setLinkPreviews((prev) => ({ ...prev, [entry.draft.key]: preview }));
         // Беремо ЛИШЕ назву й фото. Опис зі сторінки не тягнемо: у магазинів
         // це рекламний абзац («замовляйте оптом для брендування»), який у
@@ -386,7 +388,10 @@ export function QuoteWizardDialog({
         setDrafts((prev) =>
           prev.map((draft) => {
             if (draft.key !== entry.draft.key) return draft;
-            const next = { ...draft, name: draft.name || title || "" };
+            // Артикул сторінка називає сама (REQ-247), тож він лягає одразу й
+            // не чекає фонової розвідки. У порожнє: якщо менеджер уже вписав
+            // свій — його рука головніша за розмітку магазину.
+            const next = { ...draft, name: draft.name || title || "", sku: draft.sku || sku };
             if (guess && !draft.catalog) {
               next.catalog = {
                 modelId: null,

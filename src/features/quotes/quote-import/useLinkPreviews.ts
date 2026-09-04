@@ -32,15 +32,20 @@ type PreviewResponse = {
   reason?: string | null;
   title?: string | null;
   imageUrl?: string | null;
+  sku?: string | null;
 };
 
 function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
   const status = payload?.status;
+  // Артикул несуть ОБИДВІ гілки (REQ-247): сторінка без фото — це `no_image`,
+  // а артикул у її розмітці цілком може бути.
+  const sku = payload?.sku?.trim() || null;
   if (status === "done" && payload?.imageUrl) {
     return {
       status: "done",
       imageUrl: payload.imageUrl,
       title: payload.title ?? null,
+      sku,
     };
   }
   if (status === "blocked" || status === "no_image" || status === "failed") {
@@ -48,6 +53,7 @@ function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
       status,
       reason: payload?.reason || "Фото дістати не вдалося",
       title: payload?.title ?? null,
+      sku,
     };
   }
   return { status: "failed", reason: "Фото дістати не вдалося" };

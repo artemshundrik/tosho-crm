@@ -140,6 +140,41 @@ describe("прев'ю імпорту: тираж без собівартості
     expect(photo).toHaveAttribute("src", "https://totobi.com.ua/img/mug.jpg");
   });
 
+  it("артикул зі сторінки постачальника видно в рядку прев'ю (REQ-247)", async () => {
+    await openWith([importItem({ links: ["https://totobi.com.ua/parasolya"] })], {
+      status: "done",
+      imageUrl: "https://totobi.com.ua/photo.jpg",
+      title: "Парасоля-тростина Odessa",
+      sku: "5003-03",
+    });
+
+    await waitFor(() => expect(screen.getByText("арт. 5003-03")).toBeInTheDocument());
+  });
+
+  it("сторінка без фото, але з артикулом — артикул усе одно показуємо", async () => {
+    // Статус `no_image` не означає «нічого не дізнались»: розмітка товару на
+    // такій сторінці цілком жива, і артикул у ній є.
+    await openWith([importItem({ links: ["https://flash-market.com.ua/flash/S0801-6"] })], {
+      status: "no_image",
+      reason: "На сторінці немає фото товару",
+      sku: "S0801-6",
+    });
+
+    await waitFor(() => expect(screen.getByText("арт. S0801-6")).toBeInTheDocument());
+  });
+
+  it("сайт артикула не назвав — рядок про нього мовчить", async () => {
+    await openWith([importItem({ links: ["https://dnipro-m.ua/tovar/riven"] })], {
+      status: "done",
+      imageUrl: "https://dnipro-m.ua/photo.jpg",
+      title: "Лазерний рівень",
+      sku: null,
+    });
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /Створити/ })).toBeInTheDocument());
+    expect(screen.queryByText(/^арт\. /)).not.toBeInTheDocument();
+  });
+
   it("коли сайт не пустив — причина словами, а не мовчазний квадрат", async () => {
     await openWith([importItem({ links: ["https://rozetka.com.ua/x"] })], {
       status: "blocked",

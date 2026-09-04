@@ -163,6 +163,13 @@ export function ImportDraftRow({
   onChangeKind?: (kind: DraftKindOption | null) => void;
 }) {
   /*
+    Артикул приходить двома шляхами (REQ-247): візард кладе його в чернетку
+    одразу, а вікно «Імпорт з файлу» тримає відповідь розвідки збоку, у
+    `preview`. Рядок не мусить знати, яке з вікон його малює.
+  */
+  const sku = draft.sku ?? (preview && preview.status !== "pending" ? preview.sku ?? null : null);
+
+  /*
     Рядок метаданих не просто ховається, а НЕ РЕНДЕРИТЬСЯ, коли сказати нема
     чого. `space-y-2` у Tailwind v4 вішає відступ на кожну дитину, крім
     останньої, — тож порожній прихований <div> лишався останнім і додавав
@@ -174,6 +181,7 @@ export function ImportDraftRow({
     Boolean(draft.variant) ||
     draft.flags.length > 0 ||
     draft.links.length > 0 ||
+    Boolean(sku) ||
     Boolean(preview && preview.status !== "pending" && preview.status !== "done");
 
   const kindChip =
@@ -286,6 +294,15 @@ export function ImportDraftRow({
             {draft.catalog && !draft.catalog.modelId ? (
               // Вид є, моделі ще немає: на «Створити» товар стане рядком каталогу.
               <span className="text-muted-foreground">додасться в базу</span>
+            ) : null}
+            {/* Артикул зі сторінки постачальника (REQ-247). Стоїть у наявній
+                смузі метаданих, а не окремим рядком: це підпис, а не дія, і
+                висоти рядка він не додає. Показуємо, лише коли сайт його
+                справді назвав, — вгаданих артикулів тут не буває. */}
+            {sku ? (
+              <span className="font-medium text-muted-foreground" title={`Артикул зі сторінки постачальника: ${sku}`}>
+                арт. {sku}
+              </span>
             ) : null}
             {/* Зв'язок варіантів — словами. Бедж «альтернатива» казав, що щось
                 не так, але не казав що саме: під номером 30 у файлі лежать два

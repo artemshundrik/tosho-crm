@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { parseBody } from "./_lib/parseBody";
 import { fetchProductPage } from "./_lib/externalFetch";
 import { extractOgTags } from "./_lib/ogTags";
+import { extractProductSku } from "./_lib/productSku";
 
 /**
  * Фото товару для ПРЕВ'Ю імпорту (REQ-236).
@@ -134,10 +135,15 @@ export const handler = async (event: HttpEvent) => {
         ...describeHttpStatus(page.httpStatus),
         title: null,
         imageUrl: null,
+        sku: null,
       });
     }
 
     const tags = extractOgTags(page.html, page.baseUrl);
+    // Артикул читається з ТІЄЇ САМОЇ сторінки, що вже в руках (REQ-247), —
+    // жодного зайвого походу по сайту. Він їде і в невдалій відповіді теж:
+    // сторінка без фото цілком може мати артикул у розмітці.
+    const sku = extractProductSku(page.html);
 
     if (!tags.imageUrl) {
       return jsonResponse(200, {
@@ -146,6 +152,7 @@ export const handler = async (event: HttpEvent) => {
         reason: "На сторінці немає фото товару",
         title: tags.title,
         imageUrl: null,
+        sku: sku?.value ?? null,
       });
     }
 
@@ -156,6 +163,8 @@ export const handler = async (event: HttpEvent) => {
       title: tags.title,
       imageUrl: tags.imageUrl,
       imageSource: tags.imageSource,
+      sku: sku?.value ?? null,
+      skuSource: sku?.source ?? null,
     });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "Не вдалося відкрити сторінку";
@@ -165,6 +174,7 @@ export const handler = async (event: HttpEvent) => {
       reason: /timeout|abort/i.test(message) ? "Сайт не відповів вчасно" : message,
       title: null,
       imageUrl: null,
+      sku: null,
     });
   }
 };
