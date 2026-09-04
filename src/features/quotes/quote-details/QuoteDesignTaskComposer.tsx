@@ -1,10 +1,11 @@
 import * as React from "react";
-import { Loader2, Paperclip, Upload, X } from "lucide-react";
+import { Loader2, Package, Paperclip, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
+import { DictationButton, DictationCapsule, isDictationActive } from "@/components/ui/dictation-capsule";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDictation } from "@/lib/useDictation";
 import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_OPTIONS, type DesignTaskType } from "@/lib/designTaskType";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ import type { QuoteAttachment } from "./queries";
 export type DesignComposerItem = {
   id: string;
   title: string;
+  imageUrl: string | null;
   hasTask: boolean;
 };
 
@@ -84,6 +86,22 @@ export function QuoteDesignTaskComposer({
 }) {
   const [dragOver, setDragOver] = React.useState(false);
   const busy = Boolean(saving || uploading);
+  const briefRef = React.useRef<HTMLTextAreaElement | null>(null);
+
+  /*
+    ТЗ МОЖНА НАДИКТУВАТИ. Менеджер переказує побажання замовника з розмови, і
+    набирати це двома пальцями довше, ніж сказати. Той самий гачок і та сама
+    капсула, що в обговоренні справи, — окремого рішення тут не вигадуємо.
+  */
+  const dictation = useDictation({
+    context: "comment",
+    onResult: (text) => {
+      const clean = text.trim();
+      if (!clean) return;
+      onBriefChange(brief ? `${brief.trimEnd()} ${clean}` : clean);
+      requestAnimationFrame(() => briefRef.current?.focus());
+    },
+  });
 
   return (
     <section className="space-y-4 rounded-2xl border border-border/60 p-4">
@@ -99,23 +117,50 @@ export function QuoteDesignTaskComposer({
       */}
       <div className="space-y-2">
         <Label>Товар</Label>
-        <Select
-          value={selectedItemId ?? ""}
-          onValueChange={onSelectItem}
-          disabled={disabled || busy}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Оберіть товар" />
-          </SelectTrigger>
-          <SelectContent>
-            {items.map((item) => (
-              <SelectItem key={item.id} value={item.id}>
-                {item.title || "Позиція"}
-                {item.hasTask ? " — задача вже є" : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/*
+          Пігулки — ТІ САМІ, що в смузі дизайн-задач нижче: фото, назва, мітка.
+          Це вже звичний спосіб перемикати товар у цій вкладці, тож вибирати
+          товар для НОВОЇ задачі логічно так само. Селект тут показував лише
+          назву, і фото товару, за яким людина його впізнає, зникало.
+        */}
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Товар для дизайн-задачі">
+          {items.map((item) => {
+            const on = item.id === selectedItemId;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                disabled={disabled || busy}
+                title={item.title}
+                onClick={() => onSelectItem(item.id)}
+                className={cn(
+                  "inline-flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5 text-left transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                  "disabled:pointer-events-none disabled:opacity-50",
+                  on ? "border-foreground/70 bg-background" : "border-border/60 bg-background hover:bg-muted/40"
+                )}
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/30">
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <Package className="h-3.5 w-3.5 text-muted-foreground/60" />
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block max-w-[168px] truncate text-xs font-semibold text-foreground">
+                    {item.title || "Позиція"}
+                  </span>
+                  {item.hasTask ? (
+                    <span className="block text-3xs text-muted-foreground">задача вже є</span>
+                  ) : null}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
         {/*
           НАНЕСЕННЯ ПОКАЗУЄМО, АЛЕ НЕ РЕДАГУЄМО. Тип і місце ставлять при
@@ -170,17 +215,25 @@ export function QuoteDesignTaskComposer({
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">ТЗ для дизайнера</span>
-        <AutoTextarea
-          value={brief}
-          disabled={disabled || busy}
-          minRows={3}
-          maxRows={10}
-          aria-label="ТЗ для дизайнера"
-          placeholder={briefPlaceholder || "Що саме малюємо: ідея, побажання замовника, обовʼязкові елементи."}
-          onChange={(event) => onBriefChange(event.target.value)}
-        />
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label>ТЗ для дизайнера</Label>
+          {isDictationActive(dictation) ? null : <DictationButton dictation={dictation} />}
+        </div>
+        {isDictationActive(dictation) ? (
+          <DictationCapsule dictation={dictation} />
+        ) : (
+          <AutoTextarea
+            ref={briefRef}
+            value={brief}
+            disabled={disabled || busy}
+            minRows={3}
+            maxRows={10}
+            aria-label="ТЗ для дизайнера"
+            placeholder={briefPlaceholder || "Що саме малюємо: ідея, побажання замовника, обовʼязкові елементи."}
+            onChange={(event) => onBriefChange(event.target.value)}
+          />
+        )}
         {briefPlaceholder ? (
           <p className="text-2xs text-muted-foreground">
             Порожнє поле означає, що в задачу поїде ТЗ із прорахунку.

@@ -6196,24 +6196,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </section>
 
             <section className={cn("tab-panel py-2", activeQuoteTab !== "design" && "hidden")}>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
-                    <Palette className="h-4 w-4" />
-                  </div>
+              {/* Заголовок без декоративного значка — той самий рецепт, що на
+                  «Товарах» (REQ-175#p24): постійний акцентний тінт казав «тут
+                  щось відбувається» там, де це просто назва секції. */}
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
                   <div className="text-base font-semibold tracking-tight text-foreground">Дизайн</div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="peer flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                      aria-label="Інформація про дизайн"
-                      onClick={(event) => event.preventDefault()}
-                    >
-                      <CircleHelp className="h-3.5 w-3.5" />
-                    </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                      ТЗ для дизайнера і готові візуалізації в одному місці.
-                    </div>
+                  <div className="text-xs text-muted-foreground">
+                    ТЗ для дизайнера і готові візуалізації в одному місці.
                   </div>
                 </div>
               </div>
@@ -6232,6 +6222,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 briefPlaceholder={briefSourceText || undefined}
                 attachments={attachments}
                 catalogTypes={catalogTypes}
+                itemImages={runSections}
                 attachmentsUploading={attachmentsUploading}
                 onAddComposerFiles={(files, itemId) => void uploadAttachments(files, "design", itemId)}
                 onRemoveComposerFile={requestDeleteAttachment}

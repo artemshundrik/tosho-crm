@@ -46,6 +46,7 @@ export function QuoteDesignTabSection({
   briefPlaceholder,
   attachments,
   catalogTypes,
+  itemImages,
   attachmentsUploading,
   onAddComposerFiles,
   onRemoveComposerFile,
@@ -77,6 +78,8 @@ export function QuoteDesignTabSection({
   /** Усі вкладення прорахунку — композер сам відбере файли своєї позиції. */
   attachments: QuoteAttachment[];
   catalogTypes: Parameters<typeof buildComposerImprint>[1];
+  /** Секції тиражів — з них беремо мініатюру товару для пігулки вибору. */
+  itemImages: Array<{ item: { id: string } | null; imageUrl: string | null }>;
   attachmentsUploading?: boolean;
   onAddComposerFiles: (files: FileList | null, itemId: string | null) => void;
   onRemoveComposerFile: (file: QuoteAttachment) => void;
@@ -110,6 +113,13 @@ export function QuoteDesignTabSection({
         : [],
     [attachments, fallbackItemId]
   );
+  const imageByItemId = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const section of itemImages) {
+      if (section.item?.id && section.imageUrl) map.set(section.item.id, section.imageUrl);
+    }
+    return map;
+  }, [itemImages]);
   const composerImprint = React.useMemo(
     () => buildComposerImprint(items.find((item) => item.id === fallbackItemId), catalogTypes),
     [catalogTypes, fallbackItemId, items]
@@ -130,6 +140,7 @@ export function QuoteDesignTabSection({
             items={items.map((item) => ({
               id: item.id,
               title: item.title,
+              imageUrl: imageByItemId.get(item.id) ?? null,
               hasTask: designTaskItemIds.has(item.id),
             }))}
             selectedItemId={fallbackItemId}
