@@ -28,12 +28,24 @@ import type { QuoteImportDraftCatalog } from "@/features/quotes/quote-import/typ
  * як назви вони майже однакові. Тому артикул звіряється просто: рівність,
  * початок, входження — і виграє в будь-якої назви, бо людина, яка вставила
  * код, шукає рівно один товар.
+ *
+ * АРТИКУЛИ ВАРІАНТІВ СЮДИ НЕ ЇДУТЬ (REQ-248). Масив `variants` важить 661 кБ
+ * на 250 моделях, і возити його в браузер заради зрідка потрібного пошуку
+ * дорого. Їх шукає база — `useCatalogSkuMatches` у `catalogSkuSearch.ts`, — а
+ * сюди приходить готова мапа `modelId → збіглий артикул` останнім аргументом
+ * `rankCatalogSuggestions`. Локальний пошук від цього не залежить: без мапи
+ * все працює як раніше.
  */
 
 export type CatalogSuggestion = QuoteImportDraftCatalog & {
   name: string;
   /** Артикул моделі — за ним теж шукаємо (REQ-178#p7); `null` — модель без артикула. */
   sku: string | null;
+  /**
+   * Артикул, який справді збігся з набраним, — коли модель знайшлась запитом
+   * по всіх артикулах варіантів (REQ-248). `null`, поки шукали лише локально.
+   */
+  matchedSku?: string | null;
   /** `print` / `merch` / інше з `catalog_types.quote_type` — щоб перемикач «Рахуємо» міг піти за вибором. */
   quoteType: string | null;
 };
@@ -78,7 +90,7 @@ export function buildCatalogSuggestions(source: CatalogSuggestionSource): Catalo
  * замість підказки. Повна рівність приймається за будь-якої довжини — якщо
  * артикул справді «107», його треба знаходити.
  */
-function scoreSkuMatch(query: string, sku: string | null): number {
+export function scoreSkuMatch(query: string, sku: string | null): number {
   if (!sku) return 0;
   const needle = query.toLowerCase().replace(/\s+/g, "");
   const target = sku.toLowerCase().replace(/\s+/g, "");
@@ -88,6 +100,47 @@ function scoreSkuMatch(query: string, sku: string | null): number {
   if (target.startsWith(needle)) return 700;
   if (target.includes(needle)) return 500;
   return 0;
+}
+
+const EMPTY_SKU_MATCHES: ReadonlyMap<string, string> = new Map();
+
+/**
+ * Чи схоже набране на артикул.
+ *
+ * Умисно вузько: кожне «так» — це запит у базу, тож ціна помилки тут не нуль.
+ * Артикул у цьому каталозі — один суцільний токен латиницею й цифрами, з
+ * дефісами, крапками або скісною («TSRA170-BK», «70030505-44», «eco-sumka/grey»),
+ * тому вимагаємо або цифру, або роздільник: інакше будь-яке латинське слово
+ * («hudi», «lenny») ганяло б мережу. Кирилиця відпадає сама — назви шукаються
+ * локально й миттєво.
+ *
+ * Пробіл усередині НЕ приймаємо, хоч у каталозі є п'ять таких артикулів
+ * («64000-CG 10C», «U0402-Grey Heather»). Токен із пробілом невідрізнимий від
+ * двослівної назви, а самі ці коди й так знаходяться початком до пробіла.
+ *
+ * Заразом ця межа тримає запит безпечним: у ній немає ні `%`, ні `_`, ні `*`,
+ * ні коми — тобто нічого, що PostgREST або LIKE прочитали б як шаблон чи як
+ * кінець значення фільтра.
+ */
+export function looksLikeSku(query: string): boolean {
+  const token = query.trim();
+  if (token.length < 3) return false;
+  if (!/^[A-Za-z0-9][A-Za-z0-9./-]*$/.test(token)) return false;
+  return /\d/.test(token) || /[./-]/.test(token);
+}
+
+/**
+ * Який саме з артикулів моделі збігся — щоб підказка показала його, а не код
+ * першого кольору. Людина, яка вставила «TSRA170-BK», має побачити «TSRA170-BK»
+ * і впізнати свій товар, інакше збіг виглядає випадковим.
+ */
+export function bestMatchingSku(skus: readonly string[], query: string): string | null {
+  let best: { sku: string; score: number } | null = null;
+  for (const sku of skus) {
+    const score = scoreSkuMatch(query, sku);
+    if (score > 0 && (!best || score > best.score)) best = { sku, score };
+  }
+  return best?.sku ?? null;
 }
 
 /** Скільки підказок показуємо: більше — це вже список, а не підказка. */
@@ -104,7 +157,12 @@ export const CATALOG_SUGGESTION_LIMIT = 8;
 export function rankCatalogSuggestions(
   suggestions: CatalogSuggestion[],
   query: string,
-  limit = CATALOG_SUGGESTION_LIMIT
+  limit = CATALOG_SUGGESTION_LIMIT,
+  /**
+   * Що знайшла база по ВСІХ артикулах моделі та її варіантів: `modelId` → той
+   * самий збіглий артикул (REQ-248). Порожня мапа — шукали лише локально.
+   */
+  skuMatches: ReadonlyMap<string, string> = EMPTY_SKU_MATCHES
 ): CatalogSuggestion[] {
   const trimmed = query.trim();
   if (!trimmed) return [];
@@ -114,11 +172,20 @@ export function rankCatalogSuggestions(
   for (const suggestion of suggestions) {
     const byModel = scoreCompanyNameMatch(trimmed, [suggestion.name]);
     const byKind = scoreCompanyNameMatch(trimmed, [suggestion.kindName, suggestion.typeName]);
+    // Артикул варіанта важить рівно стільки ж, скільки артикул моделі: для
+    // менеджера це той самий код товару, і те, що один лежить скаляром, а
+    // другий — у масиві варіантів, його не стосується.
+    const matchedSku = (suggestion.modelId ? skuMatches.get(suggestion.modelId) : null) ?? null;
     // Збіг у назві моделі важить більше за збіг у виді: +200 ставить усі
     // моделі-збіги вище за будь-який вид-збіг, а всередині групи порядок
     // лишається за силою самого збігу.
-    const score = Math.max(byModel > 0 ? byModel + 200 : 0, byKind, scoreSkuMatch(trimmed, suggestion.sku));
-    if (score >= minScore) scored.push({ suggestion, score });
+    const score = Math.max(
+      byModel > 0 ? byModel + 200 : 0,
+      byKind,
+      scoreSkuMatch(trimmed, suggestion.sku),
+      scoreSkuMatch(trimmed, matchedSku)
+    );
+    if (score >= minScore) scored.push({ suggestion: matchedSku ? { ...suggestion, matchedSku } : suggestion, score });
   }
 
   scored.sort(

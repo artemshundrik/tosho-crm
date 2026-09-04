@@ -472,7 +472,7 @@ export type Database = {
           p_note?: string
           p_quote_id: string
         }
-        Returns: boolean
+        Returns: undefined
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
@@ -1016,6 +1016,7 @@ export type Database = {
           metadata: Json | null
           name: string
           price: number | null
+          search_skus: string | null
           team_id: string
           updated_at: string
         }
@@ -1027,6 +1028,7 @@ export type Database = {
           metadata?: Json | null
           name: string
           price?: number | null
+          search_skus?: string | null
           team_id: string
           updated_at?: string
         }
@@ -1038,6 +1040,7 @@ export type Database = {
           metadata?: Json | null
           name?: string
           price?: number | null
+          search_skus?: string | null
           team_id?: string
           updated_at?: string
         }
@@ -1218,6 +1221,7 @@ export type Database = {
         Row: {
           created_at: string
           fixed_cost_rate: number
+          print_markup_approver_user_id: string | null
           updated_at: string
           updated_by: string | null
           vat_rate: number
@@ -1226,6 +1230,7 @@ export type Database = {
         Insert: {
           created_at?: string
           fixed_cost_rate?: number
+          print_markup_approver_user_id?: string | null
           updated_at?: string
           updated_by?: string | null
           vat_rate?: number
@@ -1234,6 +1239,7 @@ export type Database = {
         Update: {
           created_at?: string
           fixed_cost_rate?: number
+          print_markup_approver_user_id?: string | null
           updated_at?: string
           updated_by?: string | null
           vat_rate?: number
@@ -1578,6 +1584,45 @@ export type Database = {
           updated_at?: string
           vat_rate?: number | null
           website?: string | null
+        }
+        Relationships: []
+      }
+      dev_news_last: {
+        Row: {
+          body: string
+          built_at: string
+          dry: boolean
+          id: number
+          items: number
+        }
+        Insert: {
+          body: string
+          built_at?: string
+          dry?: boolean
+          id?: number
+          items?: number
+        }
+        Update: {
+          body?: string
+          built_at?: string
+          dry?: boolean
+          id?: number
+          items?: number
+        }
+        Relationships: []
+      }
+      dev_news_seen: {
+        Row: {
+          first_seen_at: string
+          key: string
+        }
+        Insert: {
+          first_seen_at?: string
+          key: string
+        }
+        Update: {
+          first_seen_at?: string
+          key?: string
         }
         Relationships: []
       }
@@ -3409,8 +3454,8 @@ export type Database = {
           file_size: number | null
           id: string
           mime_type: string | null
-          quote_item_id: string | null
           quote_id: string
+          quote_item_id: string | null
           storage_bucket: string
           storage_path: string
           team_id: string
@@ -3423,8 +3468,8 @@ export type Database = {
           file_size?: number | null
           id?: string
           mime_type?: string | null
-          quote_item_id?: string | null
           quote_id: string
+          quote_item_id?: string | null
           storage_bucket?: string
           storage_path: string
           team_id: string
@@ -3437,8 +3482,8 @@ export type Database = {
           file_size?: number | null
           id?: string
           mime_type?: string | null
-          quote_item_id?: string | null
           quote_id?: string
+          quote_item_id?: string | null
           storage_bucket?: string
           storage_path?: string
           team_id?: string
@@ -5524,6 +5569,7 @@ export type Database = {
         Returns: Json
       }
       capture_observability_snapshot_scheduled: { Args: never; Returns: Json }
+      catalog_model_search_skus: { Args: { p_metadata: Json }; Returns: string }
       count_absence_business_days: {
         Args: { _from: string; _to: string; _workspace: string }
         Returns: number
@@ -5605,7 +5651,9 @@ export type Database = {
         Returns: boolean
       }
       is_owner_or_seo: { Args: never; Returns: boolean }
-      is_quote_markup_approver: { Args: { _user_id: string }; Returns: boolean }
+      is_quote_markup_approver:
+        | { Args: { _user_id: string }; Returns: boolean }
+        | { Args: { _quote_id: string; _user_id: string }; Returns: boolean }
       is_user_blocked: { Args: { _user_id: string }; Returns: boolean }
       is_valid_work_schedule_days: { Args: { days: Json }; Returns: boolean }
       is_workspace_admin:
@@ -5641,6 +5689,10 @@ export type Database = {
       }
       next_quote_number: { Args: { _team_id: string }; Returns: string }
       normalize_method_name: { Args: { p_name: string }; Returns: string }
+      quote_deal_type_default_markup: {
+        Args: { p_deal_type: string }
+        Returns: number
+      }
       recalc_quote_totals: { Args: { p_quote_id: string }; Returns: undefined }
       record_activity_minute: {
         Args: {

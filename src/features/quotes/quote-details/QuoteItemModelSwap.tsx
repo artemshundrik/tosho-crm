@@ -4,6 +4,7 @@ import { Check, RefreshCw, Search } from "lucide-react";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useCatalogSkuMatches } from "@/features/quotes/quote-wizard/catalogSkuSearch";
 import {
   rankCatalogSuggestions,
   type CatalogSuggestion,
@@ -45,7 +46,13 @@ export function QuoteItemModelSwap({
   const [query, setQuery] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const { suggestions } = useCatalogSuggestions(teamId, open);
-  const found = React.useMemo(() => rankCatalogSuggestions(suggestions, query), [suggestions, query]);
+  // Той самий пошук за артикулом, що й у вікні створення (REQ-248): менеджер
+  // міняє товар тим самим кодом від постачальника, яким його й додавав.
+  const { matches: skuMatches, searching: skuSearching } = useCatalogSkuMatches(teamId, open ? query : "");
+  const found = React.useMemo(
+    () => rankCatalogSuggestions(suggestions, query, undefined, skuMatches),
+    [suggestions, query, skuMatches]
+  );
 
   const pick = async (suggestion: CatalogSuggestion) => {
     setSaving(true);
@@ -84,7 +91,7 @@ export function QuoteItemModelSwap({
             autoFocus
             controlSize="md"
             aria-label="Пошук товару в каталозі"
-            placeholder="Почніть писати назву…"
+            placeholder="Назва або артикул…"
             className="border-0 bg-transparent px-0 focus-visible:ring-0"
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -103,13 +110,19 @@ export function QuoteItemModelSwap({
                 <span className="block truncate text-sm">{suggestion.name}</span>
                 <span className="block truncate text-2xs text-muted-foreground">
                   {suggestion.kindName} · {suggestion.typeName}
+                  {/* Знайшли за кодом — показуємо, ЗА ЯКИМ саме: у моделі їх
+                      стільки ж, скільки кольорів (REQ-248). */}
+                  {suggestion.matchedSku ? ` · арт. ${suggestion.matchedSku}` : ""}
                   {suggestion.modelId === currentModelId ? " · зараз обраний" : ""}
                 </span>
               </span>
               {suggestion.modelId === currentModelId ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
             </button>
           ))}
-          {query.trim() && found.length === 0 ? (
+          {skuSearching && found.length === 0 ? (
+            <p className="px-2 py-3 text-xs text-muted-foreground">Шукаю за артикулом…</p>
+          ) : null}
+          {query.trim() && !skuSearching && found.length === 0 ? (
             <p className="px-2 py-3 text-xs text-muted-foreground">
               Нічого не знайшли. Товар заводять у «Каталозі» або посиланням у вікні створення.
             </p>

@@ -218,6 +218,13 @@ Practical implication:
 
 - `catalog_models`
   - core product model data for quotes and catalog UI
+  - `search_skus` — GENERATED ALWAYS column: every article of the model and of its
+    variants, one per line, from `metadata` via `tosho.catalog_model_search_skus()`.
+    Read-only; a trigram GIN index (`catalog_models_search_skus_trgm`) backs the
+    `ilike '%code%'` lookup behind the quote item field (REQ-248). Changing the rule
+    means `drop column` → `create or replace function` → `add column` — replacing the
+    function alone leaves already-stored rows untouched.
+    ([scripts/catalog-model-sku-search.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-model-sku-search.sql))
 
 - `catalog_types`
 - `catalog_methods`

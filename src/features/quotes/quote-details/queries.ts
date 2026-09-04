@@ -1177,6 +1177,50 @@ export async function fetchCatalogBase(teamId: string): Promise<
 }
 
 /**
+ * Моделі, серед артикулів яких є набране (REQ-248).
+ *
+ * ЧОМУ ОКРЕМИМ ЗАПИТОМ, А НЕ РАЗОМ ІЗ КАТАЛОГОМ. Артикули варіантів живуть у
+ * `metadata.variants`, і цей масив на 250 моделях важить 661 кБ — вантажити
+ * його на кожне відкриття вікна заради зрідка потрібного пошуку дорого, а з
+ * ростом каталогу дорожчає лінійно. Тому пошук іде в базу, і лише тоді, коли
+ * набране схоже на код (`looksLikeSku`).
+ *
+ * Шукає по `search_skus` — генерованій колонці з усіх артикулів моделі та її
+ * варіантів (scripts/catalog-model-sku-search.sql). Триграмний індекс робить
+ * `ilike %…%` дешевим; без нього це був би прохід по всій таблиці.
+ *
+ * `needle` приходить уже перевіреним `looksLikeSku`: там немає ні `%`, ні `_`,
+ * ні `*`, ні коми, тож у шаблон він іде як є.
+ */
+export async function fetchCatalogModelsBySku(
+  teamId: string,
+  needle: string,
+  limit: number
+): Promise<QueryResult<Array<{ id: string; skus: string[] }>>> {
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("catalog_models")
+      .select("id,search_skus")
+      .eq("team_id", teamId)
+      .ilike("search_skus", `%${needle}%`)
+      .limit(limit);
+    if (error) throw error;
+    return {
+      ok: true,
+      data: ((data ?? []) as Array<{ id: string; search_skus: string | null }>).map((row) => ({
+        id: row.id,
+        // Артикули лежать по одному в рядок: у самих кодах трапляється пробіл
+        // («64000-CG 10C»), тож розділяти їх пробілом було б неможливо.
+        skus: (row.search_skus ?? "").split("\n").filter(Boolean),
+      })),
+    };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося знайти товар за артикулом.") };
+  }
+}
+
+/**
  * Новий рядок каталогу з вікна прорахунку (REQ-182#p18): товар за посиланням
  * стає справжньою моделлю свого виду. Під RLS користувача — так само, як
  * заводить моделі сторінка «Каталог».

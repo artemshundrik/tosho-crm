@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCatalogKinds, buildCatalogSuggestions, guessKindFromTitle, rankCatalogSuggestions } from "./catalogSuggestions";
+import {
+  bestMatchingSku,
+  buildCatalogKinds,
+  buildCatalogSuggestions,
+  guessKindFromTitle,
+  looksLikeSku,
+  rankCatalogSuggestions,
+} from "./catalogSuggestions";
 
 /**
  * Підказки з каталогу (REQ-182#p14): модель знає свій вид і тип, пошук іде
@@ -129,6 +136,81 @@ describe("пошук за артикулом (REQ-178#p7)", () => {
     });
     expect(withoutSku[0].sku).toBeNull();
     expect(rankCatalogSuggestions(withoutSku, "50040138-01")).toEqual([]);
+  });
+});
+
+describe("пошук за артикулом ВАРІАНТА (REQ-248)", () => {
+  const suggestions = buildCatalogSuggestions(source);
+
+  it("модель знаходиться за кодом кольору, якого в її власному артикулі немає", () => {
+    // Живий випадок: модель підписана артикулом першого кольору («U0102-Black»),
+    // а постачальник дав код іншого — його знає лише база.
+    const found = rankCatalogSuggestions(suggestions, "U0102-Green", undefined, new Map([["m-lenny", "U0102-Green"]]));
+    expect(found.map((s) => s.name)).toEqual(["Реглан LENNY"]);
+  });
+
+  it("у підказці стоїть ТОЙ артикул, який шукали, а не артикул моделі", () => {
+    const found = rankCatalogSuggestions(suggestions, "U0102-Green", undefined, new Map([["m-lenny", "U0102-Green"]]));
+    expect(found[0].sku).toBe("U0102-Black");
+    expect(found[0].matchedSku).toBe("U0102-Green");
+  });
+
+  it("моделі, яких база не назвала, лишаються без позначки збігу", () => {
+    const found = rankCatalogSuggestions(suggestions, "худі", undefined, new Map([["m-lenny", "U0102-Green"]]));
+    expect(found.find((s) => s.name === "Худі Classic оверсайз")?.matchedSku).toBeUndefined();
+  });
+
+  it("без відповіді бази все працює як раніше", () => {
+    expect(rankCatalogSuggestions(suggestions, "50040138-01").map((s) => s.name)).toEqual(["Блокнот А5"]);
+  });
+});
+
+describe("looksLikeSku", () => {
+  it("живі коди з каталогу проходять", () => {
+    for (const sku of ["TSRA170-BK", "70030505-44", "ka413-BL", "U0102-Black", "107", "eco-sumka/grey"]) {
+      expect(looksLikeSku(sku), sku).toBe(true);
+    }
+  });
+
+  it("пробіли по краях не заважають", () => {
+    expect(looksLikeSku("  tsra170-bk  ")).toBe(true);
+  });
+
+  it("назви в базу не ходять", () => {
+    // Кирилиця, латинська назва без цифри й роздільника, два слова, коротке —
+    // усе це шукається в браузері й миттєво.
+    for (const query of ["худі", "hudi", "Кепка six", "six panel", "10", "лен"]) {
+      expect(looksLikeSku(query), query).toBe(false);
+    }
+  });
+
+  it("у шаблон не проходить нічого схожого на підстановку", () => {
+    // Ці символи PostgREST або LIKE прочитали б як шаблон чи як кінець
+    // значення фільтра — тому вони й не «схожі на артикул».
+    for (const query of ["u01%2", "u01_2", "u01*2", "u01,2", "u01(2)"]) {
+      expect(looksLikeSku(query), query).toBe(false);
+    }
+  });
+});
+
+describe("bestMatchingSku", () => {
+  const skus = ["TSRA170-AS", "TSRA170-BK", "TSRA170-WH"];
+
+  it("показує ТОЙ артикул, який шукали, а не перший у моделі", () => {
+    expect(bestMatchingSku(skus, "TSRA170-BK")).toBe("TSRA170-BK");
+  });
+
+  it("регістр і пробіли по краях не заважають", () => {
+    expect(bestMatchingSku(skus, "  tsra170-wh ")).toBe("TSRA170-WH");
+  });
+
+  it("часткова частина коду дає перший збіг, а не порожнечу", () => {
+    expect(bestMatchingSku(["70030505-02", "70030505-44"], "70030505")).toBe("70030505-02");
+  });
+
+  it("нічого не збіглося — нічого й не показуємо", () => {
+    expect(bestMatchingSku(skus, "ka413-BL")).toBeNull();
+    expect(bestMatchingSku([], "TSRA170-BK")).toBeNull();
   });
 });
 

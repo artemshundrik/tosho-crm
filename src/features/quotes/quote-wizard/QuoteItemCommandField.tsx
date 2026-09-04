@@ -4,9 +4,10 @@ import { CornerDownLeft, Database, ImageOff, Link2, Loader2, Plus, Search } from
 import { SEARCH_LEFT_ICON } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { normalizeProductUrl } from "@/features/quotes/quote-import/productUrl";
 import { cn } from "@/lib/utils";
 
+import { useCatalogSkuMatches } from "./catalogSkuSearch";
+import { detectCommandFieldMode, parseCommandFieldLinks, type CommandFieldMode } from "./commandFieldValue";
 import { rankCatalogSuggestions, type CatalogSuggestion } from "./catalogSuggestions";
 
 /**
@@ -29,58 +30,13 @@ import { rankCatalogSuggestions, type CatalogSuggestion } from "./catalogSuggest
  * стираючи набраного.
  */
 
-export type CommandFieldMode = "link" | "search";
-
-/**
- * Чи це адреса. Приймаємо не лише `https://…`, а й те, як посилання виглядає в
- * чаті: `www.prom.ua/p123` і `prom.ua/p123` — менеджери копіюють їх без схеми.
- * Голий домен без шляху («prom.ua») — ні: це ще не товар, і назва «prom.ua»
- * у каталозі теоретично можлива.
- */
-function looksLikeUrl(token: string): boolean {
-  if (/^https?:\/\//i.test(token)) return true;
-  if (/^www\./i.test(token)) return true;
-  return /^[\w-]+(\.[\w-]+)+\/\S+/.test(token);
-}
-
-function withScheme(token: string): string {
-  return /^https?:\/\//i.test(token) ? token : `https://${token}`;
-}
-
-export function detectCommandFieldMode(value: string): CommandFieldMode {
-  const tokens = value.trim().split(/[\s,]+/).filter(Boolean);
-  if (tokens.length === 0) return "search";
-  return tokens.some(looksLikeUrl) ? "link" : "search";
-}
-
-/**
- * Список адрес із того, що вставили: перенос, пробіл чи кома між ними —
- * менеджери копіюють посилання пачкою з листа. Рекламний хвіст зрізаємо тут,
- * бо далі ця адреса піде і в запит по фото, і в `metadata.supplierUrl`.
- */
-export function parseCommandFieldLinks(value: string): { urls: string[]; bad: string | null } {
-  const tokens = value.trim().split(/[\s,]+/).filter(Boolean);
-  const urls: string[] = [];
-  for (const token of tokens) {
-    if (!looksLikeUrl(token)) return { urls, bad: token };
-    const url = normalizeProductUrl(withScheme(token));
-    try {
-      const parsed = new URL(url);
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return { urls, bad: token };
-    } catch {
-      return { urls, bad: token };
-    }
-    if (!urls.includes(url)) urls.push(url);
-  }
-  return { urls, bad: null };
-}
-
 const MODE_LABELS: Record<CommandFieldMode, { label: string; icon: typeof Link2 }> = {
   link: { label: "Посилання", icon: Link2 },
   search: { label: "З бази", icon: Database },
 };
 
 export function QuoteItemCommandField({
+  teamId,
   value,
   onValueChange,
   suggestions,
@@ -93,6 +49,8 @@ export function QuoteItemCommandField({
   onAddName,
   onInvalid,
 }: {
+  /** Для пошуку за артикулом варіанта — він іде запитом у базу (REQ-248). */
+  teamId: string;
   value: string;
   onValueChange: (next: string) => void;
   suggestions: CatalogSuggestion[];
@@ -114,9 +72,15 @@ export function QuoteItemCommandField({
 
   const trimmed = value.trim();
   const mode = detectCommandFieldMode(value);
+  // Артикули варіантів шукає база — і лише коли набране схоже на код; на
+  // назви цей запит не йде взагалі (REQ-248).
+  const { matches: skuMatches, searching: skuSearching } = useCatalogSkuMatches(
+    teamId,
+    mode === "search" ? trimmed : ""
+  );
   const ranked = React.useMemo(
-    () => (mode === "search" ? rankCatalogSuggestions(suggestions, trimmed) : []),
-    [mode, suggestions, trimmed]
+    () => (mode === "search" ? rankCatalogSuggestions(suggestions, trimmed, undefined, skuMatches) : []),
+    [mode, suggestions, trimmed, skuMatches]
   );
   // Рядків у списку: підказки + «Додати як нову позицію» останнім.
   const rowCount = ranked.length + 1;
@@ -263,10 +227,10 @@ export function QuoteItemCommandField({
         }}
       >
         <ul id={listId} role="listbox" aria-label="Підказки з каталогу" className="space-y-0.5">
-          {suggestionsLoading && ranked.length === 0 ? (
+          {(suggestionsLoading || skuSearching) && ranked.length === 0 ? (
             <li className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Читаю каталог…
+              {suggestionsLoading ? "Читаю каталог…" : "Шукаю за артикулом…"}
             </li>
           ) : null}
           {ranked.map((suggestion, index) => (
@@ -288,8 +252,13 @@ export function QuoteItemCommandField({
                 <span className="block truncate text-2xs text-muted-foreground">
                   {suggestion.kindName} · {suggestion.typeName}
                   {/* Артикул у другому рядку — щоб було видно, ЧОМУ модель
-                      знайшлась, коли шукали кодом, а не назвою (REQ-178#p7). */}
-                  {suggestion.sku ? <span className="text-muted-foreground/70"> · арт. {suggestion.sku}</span> : null}
+                      знайшлась, коли шукали кодом, а не назвою (REQ-178#p7).
+                      Знайшлась за кодом кольору — показуємо САМЕ той код, а не
+                      артикул першого варіанта: інакше збіг виглядає випадковим,
+                      і менеджер не впізнає свій товар (REQ-248). */}
+                  {suggestion.matchedSku ?? suggestion.sku ? (
+                    <span className="text-muted-foreground/70"> · арт. {suggestion.matchedSku ?? suggestion.sku}</span>
+                  ) : null}
                 </span>
               </span>
               {active === index ? (
@@ -297,7 +266,12 @@ export function QuoteItemCommandField({
               ) : null}
             </li>
           ))}
-          {!suggestionsLoading && ranked.length === 0 ? (
+          {/*
+            «Немає» не блимає, поки шукаємо за артикулом: код знаходиться
+            запитом, і сказати «немає» до відповіді означало б збрехати на
+            двісті мілісекунд рівно тим людям, які вставили артикул.
+          */}
+          {!suggestionsLoading && !skuSearching && ranked.length === 0 ? (
             <li className="px-2 pb-1 pt-1.5 text-xs text-muted-foreground">У базі такого немає</li>
           ) : null}
           <li

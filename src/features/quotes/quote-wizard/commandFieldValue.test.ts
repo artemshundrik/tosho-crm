@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detectCommandFieldMode, parseCommandFieldLinks } from "./QuoteItemCommandField";
+import { detectCommandFieldMode, parseCommandFieldLinks } from "./commandFieldValue";
 
 /** Поле позиції (REQ-182#p14): що воно вважає посиланням, а що — назвою. */
 
