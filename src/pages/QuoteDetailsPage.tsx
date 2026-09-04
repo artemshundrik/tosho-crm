@@ -20,14 +20,6 @@ import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -198,7 +190,6 @@ import {
   XCircle,
   Calendar,
   Users,
-  Search,
   ChevronDown,
   Loader2,
   Package,
@@ -228,13 +219,11 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   deleteQuoteItemRow,
-  insertQuoteItemRow,
   deleteQuoteRunsByIds,
   updateQuoteItemRow,
   duplicateQuoteWithContents,
   fetchNextDesignTaskNumber,
   insertDesignTaskRow,
-  uploadQuoteItemVisual,
   changeQuoteStatus,
   linkDesignVisualizationToQuote,
   fetchCatalogBase,
@@ -285,7 +274,6 @@ import {
   getModelImage,
   getModelSpecPreset,
   getModelLabel,
-  getModelPrice,
   getPrintPositionLabel,
   getTypeLabel,
   type CatalogType,
@@ -704,18 +692,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // синхронізацію на півдорозі. Заодно зник зайвий перемальовок (REQ-109).
   const designVisualizationSyncingRef = useRef(false);
 
-  const [itemModalOpen, setItemModalOpen] = useState(false);
   /** Вікно «Додати товар» — той самий візард, що створює прорахунок. */
   const [addItemsOpen, setAddItemsOpen] = useState(false);
-  const [itemFormMode, setItemFormMode] = useState<"simple" | "advanced">("simple");
-  const [itemTitle, setItemTitle] = useState("");
-  const [itemQty, setItemQty] = useState("1");
-  const [itemUnit, setItemUnit] = useState("шт.");
-  const [itemPrice, setItemPrice] = useState("0");
-  const [itemDescription, setItemDescription] = useState("");
-  const [itemTypeId, setItemTypeId] = useState("");
-  const [itemKindId, setItemKindId] = useState("");
-  const [itemModelId, setItemModelId] = useState("");
 
   const toPrintApplications = (item: QuoteItem | null): NewQuoteFormData["printApplications"] => {
     if (!item?.methods || item.methods.length === 0) return [];
@@ -729,14 +707,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         method.printHeightMm === null || method.printHeightMm === undefined ? "" : String(method.printHeightMm),
     }));
   };
-  const [itemAttachment, setItemAttachment] = useState<QuoteItem["attachment"] | null>(null);
-  const [itemAttachmentUploading, setItemAttachmentUploading] = useState(false);
-  const [itemAttachmentError, setItemAttachmentError] = useState<string | null>(null);
+  /* Каталог вантажиться для назв і підказок; самі прапорці ніхто вже не читає —
+     форму, що їх показувала, прибрано (REQ-157#p8). */
+  const [, setCatalogLoading] = useState(false);
+  const [, setCatalogError] = useState<string | null>(null);
   const [catalogTypes, setCatalogTypes] = useState<CatalogType[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [catalogSearchValue, setCatalogSearchValue] = useState("");
-  const [lastAutoTitle, setLastAutoTitle] = useState("");
   const [deadlineDate, setDeadlineDate] = useState("");
   const [deadlineTime, setDeadlineTime] = useState(DEFAULT_DEADLINE_TIME);
   const [customerDeadlineDate, setCustomerDeadlineDate] = useState("");
@@ -2340,28 +2315,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     вже видно в панелі матеріалів нижче, і змішувати їх означало б обіцяти,
     що вони поїдуть саме в цю задачу.
   */
-  const resolvedItemSelection = useMemo(
-    () =>
-      resolveCatalogSelection({
-        typeId: itemTypeId || undefined,
-        kindId: itemKindId || undefined,
-        modelId: itemModelId || undefined,
-      }),
-    [itemKindId, itemModelId, itemTypeId, resolveCatalogSelection]
-  );
-
-  const effectiveItemTypeId = resolvedItemSelection.typeId ?? itemTypeId;
-  const effectiveItemKindId = resolvedItemSelection.kindId ?? itemKindId;
-  const effectiveItemModelId = resolvedItemSelection.modelId ?? itemModelId;
-
-  const selectedType = useMemo(
-    () => catalogTypes.find((type) => type.id === effectiveItemTypeId) ?? null,
-    [catalogTypes, effectiveItemTypeId]
-  );
-
-  const availableKinds = selectedType?.kinds ?? [];
-  const selectedKind = availableKinds.find((kind) => kind.id === effectiveItemKindId) ?? null;
-  const availableModels = selectedKind?.models ?? [];
   // Лише methods обгорнуто: сусідні kinds/models у списки залежностей не
   // потрапляють, а цей масив читає ефект нижче — і без сталої тотожності
   // перезапускався б на кожен рендер сторінки.
@@ -2370,31 +2323,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // ланцюжок проміжних значень React Compiler незмінним визнати не може
   // («Existing memoization could not be preserved») і через це пропускає всю
   // сторінку. Від стану й двох рядків — вміє (REQ-109).
-  const catalogGroups = useMemo(() => {
-    return catalogTypes.map((type) => ({
-      id: type.id,
-      label: type.name,
-      items: type.kinds.flatMap((kind) =>
-        kind.models.map((model) => ({
-          typeId: type.id,
-          kindId: kind.id,
-          modelId: model.id,
-          label: model.name,
-          kindLabel: kind.name,
-          price: model.price ?? 0,
-        }))
-      ),
-    }));
-  }, [catalogTypes]);
 
-  const computedItemPrice = useMemo(() => {
-    if (itemFormMode === "simple") {
-      return Number(itemPrice) || 0;
-    }
-    const qty = Math.max(1, Number(itemQty) || 1);
-    // Ціна нанесення сюди більше не входить: пари ставлять у картці позиції.
-    return Math.max(0, getModelPrice(catalogTypes, effectiveItemTypeId, effectiveItemKindId, effectiveItemModelId, qty));
-  }, [catalogTypes, effectiveItemKindId, effectiveItemModelId, effectiveItemTypeId, itemPrice, itemFormMode, itemQty]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -3277,16 +3206,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   }, [designVisualizations, loadAttachments, quoteId, selectedDesignOutputFile, teamId, userId]);
 
-  const didInitItemAttachmentRefreshRef = useRef(false);
-
-  useEffect(() => {
-    if (!didInitItemAttachmentRefreshRef.current) {
-      didInitItemAttachmentRefreshRef.current = true;
-      return;
-    }
-    if (itemAttachmentUploading) return;
-    void loadAttachments();
-  }, [itemAttachmentUploading, loadAttachments]);
 
 
 
@@ -3905,234 +3824,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [loadItems, loadRuns]);
   const handleImportResearch = useQuoteImportResearch(reloadAfterImport);
 
-  const openNewItem = () => {
-    setItemTitle("");
-    setItemQty("1");
-    setItemUnit("шт.");
-    setItemPrice("0");
-    setItemDescription("");
-    setItemTypeId("");
-    setItemKindId("");
-    setItemModelId("");
-    setItemAttachment(null);
-    setItemAttachmentError(null);
-    setItemAttachmentUploading(false);
-    setItemFormMode("simple");
-    setCatalogSearchValue("");
-    setLastAutoTitle("");
-    setItemModalOpen(true);
-  };
 
-  const handleTypeChange = (value: string) => {
-    setItemTypeId(value);
-    setItemKindId("");
-    setItemModelId("");
-  };
 
-  const handleKindChange = (value: string) => {
-    setItemKindId(value);
-    setItemModelId("");
-  };
 
-  const handleModelChange = (value: string) => {
-    setItemModelId(value);
-  };
 
-  const handleAttachmentChange = async (file: File | null) => {
-    if (!file) {
-      setItemAttachment(null);
-      return;
-    }
-    const effectiveTeamId = quote?.team_id ?? teamId;
-    if (!effectiveTeamId) {
-      setItemAttachmentError("Немає доступної команди.");
-      return;
-    }
-    setItemAttachmentUploading(true);
-    setItemAttachmentError(null);
-
-    const uploaded = await uploadQuoteItemVisual({
-      teamId: effectiveTeamId,
-      quoteId,
-      file,
-      bucket: ITEM_VISUAL_BUCKET,
-    });
-
-    if (!uploaded.ok) {
-      setItemAttachmentError(uploaded.message);
-      setItemAttachment(null);
-      setItemAttachmentUploading(false);
-      return;
-    }
-
-    const { url: publicUrl, row: attachmentRow } = uploaded.data;
-
-    setItemAttachment({
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      url: publicUrl,
-    });
-
-    if (attachmentRow) {
-      const sizeLabel =
-        attachmentRow.file_size != null
-          ? `${(Number(attachmentRow.file_size) / 1024).toFixed(1)} KB`
-          : `${(file.size / 1024).toFixed(1)} KB`;
-      setAttachments((prev) => [
-        {
-          id: attachmentRow.id,
-          name: attachmentRow.file_name ?? file.name,
-          size: sizeLabel,
-          created_at: attachmentRow.created_at ?? new Date().toISOString(),
-          url: publicUrl,
-        },
-        ...prev,
-      ]);
-    }
-
-    setItemAttachmentUploading(false);
-  };
-
-  // Назва позиції підставляється з обраної моделі.
-  //
-  // У підпис входять і itemTitle з lastAutoTitle — навмисно: коли назву
-  // стирають руками, вона має підставитись знову. Саме так поводився ефект, і
-  // цю поведінку тут збережено дослівно (REQ-109).
-  const autoItemTitle =
-    itemFormMode === "advanced" && effectiveItemModelId
-      ? getModelLabel(catalogTypes, effectiveItemTypeId, effectiveItemKindId, effectiveItemModelId) ?? ""
-      : "";
-  const autoItemTitleChanged = useSignatureChanged(
-    `${autoItemTitle}\u0000${itemTitle}\u0000${lastAutoTitle}`
-  );
-  if (autoItemTitleChanged && autoItemTitle && (!itemTitle.trim() || itemTitle === lastAutoTitle)) {
-    setItemTitle(autoItemTitle);
-    setLastAutoTitle(autoItemTitle);
-  }
 
   // Перший метод нанесення підставляється сам — один раз на обрану модель.
   //
-  const handleSaveItem = async () => {
-    if (!itemTitle.trim()) return;
-    
-    const effectiveTeamId = quote?.team_id ?? teamId;
-    if (!effectiveTeamId) {
-      setItemsError("Немає доступної команди.");
-      return;
-    }
-
-    const attachmentPayload = itemAttachment
-      ? {
-          name: itemAttachment.name,
-          size: itemAttachment.size,
-          type: itemAttachment.type,
-          url: itemAttachment.url,
-        }
-      : null;
-    // Carry the catalog model's supplier / Avantprint links into the quote item
-    // so the link buttons on the quote product card light up. On edit we keep any
-    // links already on the item and only fill in missing ones from the model.
-    const selectedCatalogModel =
-      itemFormMode === "advanced" && effectiveItemModelId
-        ? catalogTypes
-            .find((type) => type.id === effectiveItemTypeId)
-            ?.kinds.find((kind) => kind.id === effectiveItemKindId)
-            ?.models.find((model) => model.id === effectiveItemModelId)
-        : undefined;
-    const modelSupplierUrl = selectedCatalogModel?.metadata?.supplierUrl?.trim() || null;
-    const modelAvantprintUrl = selectedCatalogModel?.metadata?.avantprintUrl?.trim() || null;
-    const existingItemMetadata =
-      modelSupplierUrl || modelAvantprintUrl
-        ? { supplierUrl: modelSupplierUrl, avantprintUrl: modelAvantprintUrl }
-        : null;
-
-    const newItem: QuoteItem = {
-      id: createLocalId(),
-      position: undefined,
-      title: itemTitle.trim(),
-      qty: Math.max(1, Number(itemQty) || 1),
-      unit: normalizeUnitLabel(itemUnit),
-      price: computedItemPrice,
-      description: itemDescription.trim() || undefined,
-      metadata: existingItemMetadata,
-      catalogTypeId: itemFormMode === "advanced" ? effectiveItemTypeId : undefined,
-      catalogKindId: itemFormMode === "advanced" ? effectiveItemKindId : undefined,
-      catalogModelId: itemFormMode === "advanced" ? effectiveItemModelId : undefined,
-      productTypeId: itemFormMode === "advanced" ? effectiveItemTypeId : undefined,
-      productKindId: itemFormMode === "advanced" ? effectiveItemKindId : undefined,
-      productModelId: itemFormMode === "advanced" ? effectiveItemModelId : undefined,
-      attachment: itemAttachment
-        ? {
-            name: itemAttachment.name,
-            size: itemAttachment.size,
-            type: itemAttachment.type,
-            url: itemAttachment.url,
-          }
-        : undefined,
-    };
-
-    // Без try/catch: обидва записи нижче — updateQuoteItemRow та
-    // insertQuoteItemRow — повертають QueryResult і не кидають, а решта
-    // (normalizeUnitLabel, parseQuoteItemMetadata, crypto.randomUUID) чиста.
-    // Обидві відмови вже показує setItemsError у гілках `!ok`. Прибрано, бо
-    // «??» усередині try/catch React Compiler не вміє — і через цей блок
-    // пропускав усю сторінку разом із перевірками лінту (REQ-109).
-    {
-
-      const newId = crypto.randomUUID();
-      const nextPosition =
-        items.length === 0 ? 1 : Math.max(...items.map((item) => item.position ?? 0)) + 1;
-      const insertPayload = {
-        id: newId,
-        team_id: effectiveTeamId,
-        quote_id: quoteId,
-        position: nextPosition,
-        name: newItem.title,
-        description: newItem.description ?? null,
-        metadata: newItem.metadata ?? null,
-        qty: newItem.qty,
-        unit: normalizeUnitLabel(newItem.unit),
-        unit_price: newItem.price,
-        line_total: newItem.qty * newItem.price,
-        catalog_type_id: newItem.catalogTypeId ?? null,
-        catalog_kind_id: newItem.catalogKindId ?? null,
-        catalog_model_id: newItem.catalogModelId ?? null,
-        methods: null,
-        attachment: attachmentPayload,
-      };
-      const insertedRow = await insertQuoteItemRow(insertPayload);
-      if (!insertedRow.ok) {
-        setItemsError(insertedRow.message);
-        return;
-      }
-      // Рядок повертається як довільний обʼєкт: у запасному проході без
-      // metadata набір колонок інший, тож поля читаємо поштучно.
-      const data = insertedRow.data as
-        | {
-            id?: string | null;
-            position?: number | null;
-            qty?: number | null;
-            unit?: string | null;
-            unit_price?: number | null;
-            description?: string | null;
-            metadata?: unknown;
-          }
-        | null;
-      const inserted: QuoteItem = {
-        ...newItem,
-        id: data?.id ?? newId,
-        position: data?.position ?? nextPosition,
-        qty: Number(data?.qty ?? newItem.qty),
-        unit: normalizeUnitLabel(data?.unit ?? newItem.unit),
-        price: Number(data?.unit_price ?? newItem.price),
-        description: data?.description ?? newItem.description,
-        metadata: parseQuoteItemMetadata(data?.metadata) ?? newItem.metadata ?? null,
-      };
-      setItems((prev) => [...prev, inserted]);
-    }
-    setItemModalOpen(false);
-  };
 
   /**
    * Слід у стрічці подій про зміну позиції.
@@ -4733,13 +4431,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                   <Button
                     size="sm"
-                    onClick={openNewItem}
+                    onClick={() => setAddItemsOpen(true)}
                     disabled={!canManageItems}
                     title={itemsLockedHint ?? undefined}
                     className="gap-2"
                   >
                     <Plus className="h-4 w-4" />
-                    Обрати модель
+                    Додати товар
                   </Button>
                 </div>
               ) : (
@@ -6856,360 +6554,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={itemModalOpen} onOpenChange={setItemModalOpen}>
-        <DialogContent className="w-[min(1040px,calc(100vw-32px))] max-h-[90vh] gap-0 overflow-hidden border border-border/60 bg-card p-0 text-foreground">
-          <div className="border-b border-border bg-muted/5 p-6">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                Додати позицію
-              </DialogTitle>
-            </DialogHeader>
-          </div>
-
-          <div className="max-h-[calc(90vh-180px)] overflow-y-auto p-6">
-            <Tabs
-              value={itemFormMode}
-              onValueChange={(v) => setItemFormMode(v as "simple" | "advanced")}
-              className="w-full"
-            >
-              <TabsList className="mb-6 grid w-full grid-cols-2 rounded-xl bg-muted/30 p-1">
-                <TabsTrigger
-                  value="simple"
-                  className="rounded-lg py-2.5 text-sm data-[state=active]:border data-[state=active]:border-border/50 data-[state=active]:bg-card data-[state=active]:text-foreground"
-                >
-                  Проста позиція
-                </TabsTrigger>
-                <TabsTrigger
-                  value="advanced"
-                  className="rounded-lg py-2.5 text-sm data-[state=active]:border data-[state=active]:border-border/50 data-[state=active]:bg-card data-[state=active]:text-foreground"
-                >
-                  Із каталогу
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="simple" className="mt-0 space-y-4">
-                <div className="space-y-2">
-                  <Label>Назва <span className="text-destructive">*</span></Label>
-                  <Input
-                    value={itemTitle}
-                    onChange={(e) => setItemTitle(e.target.value)}
-                    placeholder="Наприклад: Футболки з логотипом"
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-2">
-                    <Label>Кількість</Label>
-                    <NumberInput
-                      value={itemQty === "" ? null : Number(itemQty)}
-                      onValueChange={(next) => setItemQty(next === null ? "" : String(next))}
-                      min={1}
-                      emptyValue={1}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Одиниця</Label>
-                    <Select value={itemUnit} onValueChange={setItemUnit}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="шт.">шт.</SelectItem>
-                        <SelectItem value="м">м</SelectItem>
-                        <SelectItem value="кг">кг</SelectItem>
-                        <SelectItem value="л">л</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Ціна за од.</Label>
-                    <NumberInput
-                      value={itemPrice === "" ? null : Number(itemPrice)}
-                      onValueChange={(next) => setItemPrice(next === null ? "" : String(next))}
-                      placeholder="0"
-                      min={0}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Опис (опціонально)</Label>
-                  <Textarea
-                    value={itemDescription}
-                    onChange={(e) => setItemDescription(e.target.value)}
-                    placeholder="Додаткова інформація про позицію..."
-                    rows={3}
-                    className="resize-none"
-                  />
-                </div>
-
-                <div className="rounded-lg border border-border/40 bg-muted/30 p-4">
-                  <div className="mb-2 text-xs text-muted-foreground">Попередній перегляд:</div>
-                  <div className="space-y-1">
-                    <div className="font-medium">{itemTitle || "Назва позиції"}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {itemQty || "1"} {itemUnit} × {itemPrice || "0"} ={" "}
-                      {((Number(itemQty) || 1) * (Number(itemPrice) || 0)).toLocaleString("uk-UA")}
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="advanced" className="mt-0">
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-                  <div className="space-y-5">
-                    <div className="space-y-2">
-                      <Label>Назва <span className="text-destructive">*</span></Label>
-                      <Input
-                        value={itemTitle}
-                        onChange={(e) => setItemTitle(e.target.value)}
-                        placeholder="Наприклад: Футболки Malfini з DTF"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Швидкий пошук у каталозі</Label>
-                      <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
-                        <Command>
-                          <CommandInput
-                            placeholder="Пошук по моделях..."
-                            leftIcon={<Search className="h-4 w-4" />}
-                            value={catalogSearchValue}
-                            onValueChange={setCatalogSearchValue}
-                          />
-                          <CommandList className="max-h-64">
-                            <CommandEmpty>Нічого не знайдено</CommandEmpty>
-                            {catalogGroups.map((group) => (
-                              <CommandGroup key={group.id} heading={group.label}>
-                                {group.items.map((option) => {
-                                  const isSelected =
-                                    itemTypeId === option.typeId &&
-                                    itemKindId === option.kindId &&
-                                    itemModelId === option.modelId;
-                                  return (
-                                    <CommandItem
-                                      key={`${option.typeId}-${option.kindId}-${option.modelId}`}
-                                      value={`${option.label} ${group.label} ${option.kindLabel}`}
-                                      onSelect={() => {
-                                        setItemTypeId(option.typeId);
-                                        setItemKindId(option.kindId);
-                                        setItemModelId(option.modelId);
-                                        setCatalogSearchValue("");
-                                      }}
-                                    >
-                                      <div className="flex flex-col">
-                                        <span className="font-medium">{option.label}</span>
-                                        <span className="text-xs text-muted-foreground">
-                                          {group.label} / {option.kindLabel}
-                                        </span>
-                                      </div>
-                                      <div className="ml-auto flex items-center gap-3">
-                                        <span className="text-xs text-muted-foreground">
-                                          {option.price.toLocaleString("uk-UA")} ₴
-                                        </span>
-                                        {isSelected ? <Check className="h-4 w-4 text-primary" /> : null}
-                                      </div>
-                                    </CommandItem>
-                                  );
-                                })}
-                              </CommandGroup>
-                            ))}
-                          </CommandList>
-                        </Command>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Почніть вводити назву моделі — ми підставимо тип і вид.
-                      </p>
-                      {catalogLoading && (
-                        <p className="text-xs text-muted-foreground">Каталог завантажується...</p>
-                      )}
-                      {catalogError && <p className="text-xs text-destructive">{catalogError}</p>}
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Тип товару</Label>
-                        <Select value={itemTypeId} onValueChange={handleTypeChange}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Оберіть тип" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {catalogTypes.map((type) => (
-                              <SelectItem key={type.id} value={type.id}>
-                                {type.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {itemTypeId && (
-                        <div className="space-y-2">
-                          <Label>Вид товару</Label>
-                          <Select value={itemKindId} onValueChange={handleKindChange}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Оберіть вид" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableKinds.map((kind) => (
-                                <SelectItem key={kind.id} value={kind.id}>
-                                  {kind.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                    </div>
-
-                    {itemKindId && (
-                      <div className="space-y-2">
-                        <Label>Модель</Label>
-                        <Select value={itemModelId} onValueChange={handleModelChange}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Оберіть модель" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableModels.map((model) => (
-                              <SelectItem key={model.id} value={model.id}>
-                                {model.name} ({model.price ?? 0} UAH)
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    {/* Методи нанесення тут більше не питають (REQ-157#p6):
-                        пари «метод · місце» ставлять у самій картці позиції. */}
-
-                    <div className="space-y-2">
-                      <Label>Опис (опціонально)</Label>
-                      <Textarea
-                        value={itemDescription}
-                        onChange={(e) => setItemDescription(e.target.value)}
-                        placeholder="Додаткова інформація..."
-                        rows={2}
-                        className="resize-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Кількість</Label>
-                      <NumberInput
-                        value={itemQty === "" ? null : Number(itemQty)}
-                        onValueChange={(next) => setItemQty(next === null ? "" : String(next))}
-                        min={1}
-                        emptyValue={1}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Одиниця</Label>
-                      <Select value={itemUnit} onValueChange={setItemUnit}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="шт.">шт.</SelectItem>
-                          <SelectItem value="м">м</SelectItem>
-                          <SelectItem value="кг">кг</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Візуалізація (файл)</Label>
-                      <div className="space-y-3 rounded-lg border border-dashed border-border/60 bg-muted/10 p-4">
-                        <input
-                          type="file"
-                          accept=".png,.jpg,.jpeg,.pdf"
-                          onChange={(e) => handleAttachmentChange(e.target.files?.[0] ?? null)}
-                          className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted/40 file:px-3 file:py-2 file:text-foreground"
-                        />
-                        {itemAttachmentUploading && (
-                          <div className="text-xs text-muted-foreground">Завантаження файлу...</div>
-                        )}
-                        {itemAttachmentError && <div className="text-xs text-destructive">{itemAttachmentError}</div>}
-                        {itemAttachment ? (
-                          <div className="space-y-2">
-                            <div className="text-xs text-muted-foreground">
-                              {itemAttachment.name} • {(itemAttachment.size / 1024).toFixed(1)} KB
-                            </div>
-                            {itemAttachment.type.startsWith("image/") ? (
-                              <img
-                                src={itemAttachment.url}
-                                alt={itemAttachment.name}
-                                className="max-h-48 w-full rounded-md border border-border/50 bg-background object-contain"
-                              />
-                            ) : (
-                              <button
-                                type="button"
-                                className="text-xs text-primary underline"
-                                onClick={() => void downloadFileToDevice(itemAttachment.url, itemAttachment.name)}
-                              >
-                                Завантажити PDF
-                              </button>
-                            )}
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setItemAttachment(null)}
-                              className="w-full"
-                            >
-                              Прибрати файл
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="text-xs text-muted-foreground">Підтримуються PNG/JPG/PDF.</div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="sticky top-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
-                      <div className="mb-2 text-xs text-muted-foreground">Розрахунок ціни:</div>
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between">
-                          <span>Базова ціна:</span>
-                          <span className="tabular-nums">
-                            {getModelPrice(catalogTypes, itemTypeId, itemKindId, itemModelId, Number(itemQty))}
-                          </span>
-                        </div>
-                        <div className="flex justify-between border-t border-primary/20 pt-2 font-semibold">
-                          <span>Ціна за одиницю:</span>
-                          <span className="tabular-nums text-primary">{computedItemPrice}</span>
-                        </div>
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Загальна сума:</span>
-                          <span className="tabular-nums">
-                            {(computedItemPrice * (Number(itemQty) || 1)).toLocaleString("uk-UA")}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
-
-          <DialogFooter className="border-t border-border bg-muted/5 p-6">
-            <Button variant="outline" onClick={() => setItemModalOpen(false)}>
-              Скасувати
-            </Button>
-            <Button
-              onClick={handleSaveItem}
-              disabled={!itemTitle.trim() || itemAttachmentUploading}
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              {itemAttachmentUploading ? "Збереження..." : "Додати"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Стара форма «Додати позицію» прибрана (REQ-157#p8): товар додають
+          тим самим вікном, що створює прорахунок. */}
 
       {/*
         «ДОДАТИ ТОВАР» — ТЕ САМЕ ВІКНО, ЩО Й СТВОРЕННЯ ПРОРАХУНКУ (REQ-157#p7),
