@@ -6,12 +6,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { buildCatalogImageAsset } from "@/lib/catalogAssetUrl";
 import { supabase } from "@/lib/supabaseClient";
 import type {
   CatalogType,
   CatalogKind,
   CatalogModel,
   CatalogModelMetadata,
+  CatalogModelVariant,
   CatalogMethod,
   CatalogPrintPosition,
   CatalogPriceTier,
@@ -98,7 +100,19 @@ export function useCatalogData(teamId: string | null) {
           name: string;
           price: number | null;
           image_url: string | null;
-          metadata?: unknown;
+          sku: string | null;
+          imageBucket: string | null;
+          imagePath: string | null;
+        }>;
+        variants: Array<{
+          id: string;
+          model_id: string;
+          name: string;
+          sku: string | null;
+          image_bucket: string | null;
+          image_path: string | null;
+          is_active: boolean;
+          sort_order: number;
         }>;
         modelMethods: Array<{ model_id: string; method_id: string }>;
         tiers: Array<{ id: string; model_id: string; min_qty: number; max_qty: number | null; price: number }>;
@@ -124,13 +138,35 @@ export function useCatalogData(teamId: string | null) {
         tiersByModel.set(row.model_id, list);
       });
 
+      // Варіанти приїжджають окремою таблицею (REQ-250#p1), а їхні URL
+      // виводяться зі шляху (REQ-250#p2) — сітці лишається та сама форма, що
+      // була в metadata, тож картка не змінилась ані рядком.
+      const variantsByModel = new Map<string, CatalogModelVariant[]>();
+      [...payload.variants]
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .forEach((row) => {
+          const list = variantsByModel.get(row.model_id) ?? [];
+          const asset = buildCatalogImageAsset(row.image_bucket, row.image_path);
+          list.push({
+            id: row.id,
+            name: row.name,
+            sku: row.sku,
+            active: row.is_active,
+            imageUrl: asset?.previewUrl ?? asset?.originalUrl ?? null,
+            imageAsset: asset,
+          });
+          variantsByModel.set(row.model_id, list);
+        });
+
       const modelsByKind = new Map<string, CatalogModel[]>();
       payload.models.forEach((row) => {
         const list = modelsByKind.get(row.kind_id) ?? [];
-        const metadata =
-          row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-            ? (row.metadata as CatalogModelMetadata)
-            : undefined;
+        const variants = variantsByModel.get(row.id);
+        const metadata: CatalogModelMetadata = {
+          sku: row.sku,
+          imageAsset: buildCatalogImageAsset(row.imageBucket, row.imagePath),
+          ...(variants ? { variants } : {}),
+        };
         list.push({
           id: row.id,
           name: row.name,
@@ -157,12 +193,19 @@ export function useCatalogData(teamId: string | null) {
 
   const loadModelPayload = useCallback(
     async (kindIds?: string[]) => {
-      if (!teamId) return { models: [], modelMethods: [], tiers: [] };
+      if (!teamId) return { models: [], variants: [], modelMethods: [], tiers: [] };
 
       let modelsQuery = supabase
         .schema("tosho")
         .from("catalog_models")
-        .select("id,kind_id,name,price,image_url,metadata")
+        // НЕ `metadata` цілком (REQ-250#p2): у ньому лежали чотири майже
+        // однакові URL на кожну картинку — 563 кБ із 660 усієї ваги варіантів.
+        // Беремо шлях, решту виводить `buildCatalogImageAsset`. Повний
+        // metadata читає `loadFullModelMedia`, коли модель відкривають на
+        // редагування, — там він справді потрібен.
+        .select(
+          "id,kind_id,name,price,image_url,sku:metadata->>sku,imageBucket:metadata->imageAsset->>bucket,imagePath:metadata->imageAsset->>path"
+        )
         .eq("team_id", teamId)
         .order("name", { ascending: true });
 
@@ -175,15 +218,21 @@ export function useCatalogData(teamId: string | null) {
 
       const modelIds = (modelRows ?? []).map((row) => row.id);
       if (modelIds.length === 0) {
-        return { models: [], modelMethods: [], tiers: [] };
+        return { models: [], variants: [], modelMethods: [], tiers: [] };
       }
 
-      // Methods + price tiers fetched in parallel, each a single batched query
-      // (model_id IN [...]) — fixed query count regardless of catalog size.
+      // Variants + methods + price tiers in parallel, each a single batched
+      // query (model_id IN [...]) — fixed query count regardless of catalog size.
       const [
+        { data: variantRows, error: variantError },
         { data: modelMethodRows, error: modelMethodError },
         { data: tierRows, error: tierError },
       ] = await Promise.all([
+        supabase
+          .schema("tosho")
+          .from("catalog_variants")
+          .select("id,model_id,name,sku,image_bucket,image_path,is_active,sort_order")
+          .in("model_id", modelIds),
         supabase.schema("tosho").from("catalog_model_methods").select("model_id,method_id").in("model_id", modelIds),
         supabase
           .schema("tosho")
@@ -192,6 +241,7 @@ export function useCatalogData(teamId: string | null) {
           .in("model_id", modelIds),
       ]);
 
+      if (variantError) throw variantError;
       if (modelMethodError) throw modelMethodError;
       if (tierError) throw tierError;
 
@@ -202,7 +252,19 @@ export function useCatalogData(teamId: string | null) {
           name: string;
           price: number | null;
           image_url: string | null;
-          metadata?: unknown;
+          sku: string | null;
+          imageBucket: string | null;
+          imagePath: string | null;
+        }>,
+        variants: (variantRows ?? []) as Array<{
+          id: string;
+          model_id: string;
+          name: string;
+          sku: string | null;
+          image_bucket: string | null;
+          image_path: string | null;
+          is_active: boolean;
+          sort_order: number;
         }>,
         modelMethods: (modelMethodRows ?? []) as Array<{ model_id: string; method_id: string }>,
         tiers: (tierRows ?? []) as Array<{

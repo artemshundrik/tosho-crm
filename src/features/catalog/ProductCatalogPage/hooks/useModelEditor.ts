@@ -606,17 +606,17 @@ export function useModelEditor({
       }
     }
 
+    // Модель із сітки ЛЕГКА (REQ-250#p2) — не доїхало повне, не відкриваємо.
     let fullImageUrl = model.imageUrl || "";
-    let fullMetadata = model.metadata ?? {};
-
+    let fullMetadata: CatalogModelMetadata;
     try {
       const fullModel = await loadFullModelMedia(model.id);
-      if (fullModel) {
-        fullImageUrl = fullModel.image_url ?? fullImageUrl;
-        fullMetadata = (fullModel.metadata as CatalogModelMetadata | null) ?? fullMetadata;
-      }
+      fullImageUrl = fullModel?.image_url ?? fullImageUrl;
+      fullMetadata = (fullModel?.metadata as CatalogModelMetadata | null) ?? {};
     } catch (error) {
       console.error("load full model media failed", error);
+      toast.error("Не вдалося прочитати картку товару — спробуйте ще раз.");
+      return;
     }
 
     setEditingModelId(model.id);

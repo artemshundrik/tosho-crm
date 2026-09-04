@@ -13,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~7 540 lines, 361 KB, as of 2026-09-04)
+## src/pages/QuoteDetailsPage.tsx (~6 749 lines, 327 KB, as of 2026-09-04)
 
 Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p12. Файл СХУДНУВ на
 2 460 рядків (9 893 → 7 434): три вкладки з чотирьох поїхали в окремі модулі, а
@@ -30,11 +30,11 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 |---|---|
 | 1–213 | imports |
 | 214–509 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `renderBriefRichText`); розбір файлів дизайну — у `quote-details/designOutputFiles.ts`, збирач стрічки — у `quoteFeedEvents.ts` |
-| **501** | `export function QuoteDetailsPage(...)` — main component starts |
-| **1002** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
+| **497** | `export function QuoteDetailsPage(...)` — main component starts |
+| **987** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
 | 1119 / 1123 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
 | 1295 / 1346 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
-| **1842** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
+| **1827** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
 | 2006 / 2053 | `handlePrimaryStatusAction`, `handleCreateOrder` |
 | 3123 / 3130 | ліниві завантажувачі «Стрічки»: вкладення й журнал вантажаться, коли відкрита вкладка |
 | 3200 / 3314 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
@@ -42,7 +42,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 3517 / 3633 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
 | 3845 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
 | 3960 | items: `handleSaveItem` |
-| **4357** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
+| **3962** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
 | 4336–4492 | `<header>`: статус-контрол (DropdownMenu) + меню «⋮» (там же «Створити дизайн-задачу») |
 | 4507 | смуга вкладок — спільний `<TabBar>` (`src/components/ui/tab-bar.tsx`); риска ПЕРЕЇЖДЖАЄ окремим вузлом, псевдоелемента `after:` у файлі більше немає |
 | 4548 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
@@ -56,7 +56,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 6247 | вкладка «Економіка» (заглушка `EconomicsComingSoon`) |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 863 lines, 584 KB, as of 2026-09-04)
+## src/pages/DesignTaskPage.tsx (~12 872 lines, 584 KB, as of 2026-09-04)
 
 | Range | Content |
 |---|---|
