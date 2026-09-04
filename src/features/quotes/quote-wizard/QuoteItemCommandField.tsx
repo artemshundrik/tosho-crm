@@ -287,6 +287,9 @@ export function QuoteItemCommandField({
                 <span className="block truncate font-medium">{suggestion.name}</span>
                 <span className="block truncate text-2xs text-muted-foreground">
                   {suggestion.kindName} · {suggestion.typeName}
+                  {/* Артикул у другому рядку — щоб було видно, ЧОМУ модель
+                      знайшлась, коли шукали кодом, а не назвою (REQ-178#p7). */}
+                  {suggestion.sku ? <span className="text-muted-foreground/70"> · арт. {suggestion.sku}</span> : null}
                 </span>
               </span>
               {active === index ? (

@@ -1106,6 +1106,8 @@ export type CatalogModelRowRaw = {
   name: string;
   price?: number | null;
   image_url?: string | null;
+  /** Артикул моделі — щоб поле позиції знаходило товар за ним (REQ-178#p7). */
+  sku?: string | null;
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
   specPreset?: string | null;
   supplierUrl?: string | null;
@@ -1147,7 +1149,11 @@ export async function fetchCatalogBase(teamId: string): Promise<
         .schema("tosho")
         .from("catalog_models")
         .select(
-          "id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset,specPreset:metadata->>specPreset,supplierUrl:metadata->>supplierUrl,avantprintUrl:metadata->>avantprintUrl"
+          // `sku` — скаляр із metadata, тому нічого не важить. Артикули
+          // ВАРІАНТІВ сюди не беремо навмисно: масив `variants` на 250 моделях
+          // важить 661 кБ (замір 04.09.2026), і тягнути його на кожне
+          // відкриття вікна заради пошуку, яким користуються зрідка, — дорого.
+          "id,kind_id,name,price,image_url,sku:metadata->>sku,configuratorPreset:metadata->>configuratorPreset,specPreset:metadata->>specPreset,supplierUrl:metadata->>supplierUrl,avantprintUrl:metadata->>avantprintUrl"
         )
         .eq("team_id", teamId)
         .order("name", { ascending: true }),

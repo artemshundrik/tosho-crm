@@ -20,10 +20,20 @@ import type { QuoteImportDraftCatalog } from "@/features/quotes/quote-import/typ
  * обирає з того, що знайшлось. Тому кандидатами йдуть і назва моделі, і назва
  * виду, і назва типу, але збіг у назві моделі стоїть вище: «Худі» знайде
  * спершу моделі зі словом «худі», а вже за ними — решту виду.
+ *
+ * ЧОМУ АРТИКУЛ ОКРЕМИМ ПРАВИЛОМ, А НЕ ЩЕ ОДНИМ КАНДИДАТОМ ДЛЯ
+ * `scoreCompanyNameMatch` (REQ-178#p7). Той пошук зроблений для НАЗВ: він
+ * прощає закінчення, плутанину кирилиці з латиницею й подвоєння — усе, що в
+ * коді товару є значущим. «U0102-Black» і «U0102-Black1» — різні артикули, а
+ * як назви вони майже однакові. Тому артикул звіряється просто: рівність,
+ * початок, входження — і виграє в будь-якої назви, бо людина, яка вставила
+ * код, шукає рівно один товар.
  */
 
 export type CatalogSuggestion = QuoteImportDraftCatalog & {
   name: string;
+  /** Артикул моделі — за ним теж шукаємо (REQ-178#p7); `null` — модель без артикула. */
+  sku: string | null;
   /** `print` / `merch` / інше з `catalog_types.quote_type` — щоб перемикач «Рахуємо» міг піти за вибором. */
   quoteType: string | null;
 };
@@ -50,6 +60,7 @@ export function buildCatalogSuggestions(source: CatalogSuggestionSource): Catalo
       kindId: kind.id,
       typeId: type.id,
       name: model.name,
+      sku: model.sku?.trim() || null,
       kindName: kind.name,
       typeName: type.name,
       imageUrl: model.image_url ?? null,
@@ -57,6 +68,26 @@ export function buildCatalogSuggestions(source: CatalogSuggestionSource): Catalo
     });
   }
   return result;
+}
+
+/**
+ * Наскільки набране схоже на артикул цієї моделі.
+ *
+ * Часткові збіги дозволені лише від трьох символів: «10» входить у половину
+ * кодів каталогу, і без цієї межі короткий номер вивалював би весь список
+ * замість підказки. Повна рівність приймається за будь-якої довжини — якщо
+ * артикул справді «107», його треба знаходити.
+ */
+function scoreSkuMatch(query: string, sku: string | null): number {
+  if (!sku) return 0;
+  const needle = query.toLowerCase().replace(/\s+/g, "");
+  const target = sku.toLowerCase().replace(/\s+/g, "");
+  if (!needle || !target) return 0;
+  if (needle === target) return 1000;
+  if (query.trim().length < 3) return 0;
+  if (target.startsWith(needle)) return 700;
+  if (target.includes(needle)) return 500;
+  return 0;
 }
 
 /** Скільки підказок показуємо: більше — це вже список, а не підказка. */
@@ -86,7 +117,7 @@ export function rankCatalogSuggestions(
     // Збіг у назві моделі важить більше за збіг у виді: +200 ставить усі
     // моделі-збіги вище за будь-який вид-збіг, а всередині групи порядок
     // лишається за силою самого збігу.
-    const score = Math.max(byModel > 0 ? byModel + 200 : 0, byKind);
+    const score = Math.max(byModel > 0 ? byModel + 200 : 0, byKind, scoreSkuMatch(trimmed, suggestion.sku));
     if (score >= minScore) scored.push({ suggestion, score });
   }
 

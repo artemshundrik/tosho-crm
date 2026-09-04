@@ -19,10 +19,10 @@ const source = {
     { id: "k-orphan", type_id: "t-missing", name: "Без типу" },
   ],
   modelRows: [
-    { id: "m-lenny", kind_id: "k-hoodie", name: "Реглан LENNY", image_url: "https://cdn/lenny.jpg" },
-    { id: "m-hoodie-classic", kind_id: "k-hoodie", name: "Худі Classic оверсайз", image_url: null },
-    { id: "m-cap", kind_id: "k-cap", name: "Кепка six-panel", image_url: null },
-    { id: "m-a5", kind_id: "k-notebook", name: "Блокнот А5", image_url: null },
+    { id: "m-lenny", kind_id: "k-hoodie", name: "Реглан LENNY", image_url: "https://cdn/lenny.jpg", sku: "U0102-Black" },
+    { id: "m-hoodie-classic", kind_id: "k-hoodie", name: "Худі Classic оверсайз", image_url: null, sku: "U0102-White" },
+    { id: "m-cap", kind_id: "k-cap", name: "Кепка six-panel", image_url: null, sku: "107" },
+    { id: "m-a5", kind_id: "k-notebook", name: "Блокнот А5", image_url: null, sku: "50040138-01" },
     { id: "m-orphan", kind_id: "k-orphan", name: "Сирота", image_url: null },
     { id: "m-lost", kind_id: "k-nowhere", name: "Загублена", image_url: null },
   ],
@@ -75,6 +75,60 @@ describe("rankCatalogSuggestions", () => {
 
   it("обмежує кількість", () => {
     expect(rankCatalogSuggestions(suggestions, "одяг", 2)).toHaveLength(2);
+  });
+});
+
+describe("пошук за артикулом (REQ-178#p7)", () => {
+  const suggestions = buildCatalogSuggestions(source);
+
+  it("вставлений артикул знаходить рівно свою модель", () => {
+    expect(rankCatalogSuggestions(suggestions, "50040138-01").map((s) => s.name)).toEqual(["Блокнот А5"]);
+  });
+
+  it("регістр і пробіли по краях не заважають", () => {
+    expect(rankCatalogSuggestions(suggestions, "  u0102-black ").map((s) => s.name)).toEqual(["Реглан LENNY"]);
+  });
+
+  it("точний артикул виграє в моделі, у якої той самий код стоїть у НАЗВІ", () => {
+    // Живий випадок: bergamo дописує артикул у назву товару («… - 50040138-01»),
+    // тож той самий код трапляється і назвою, і артикулом іншої моделі.
+    const mixed = buildCatalogSuggestions({
+      ...source,
+      modelRows: [
+        { id: "m-named", kind_id: "k-notebook", name: "Блокнот Berganote - 50040138-01", image_url: null },
+        { id: "m-coded", kind_id: "k-notebook", name: "Блокнот А5", image_url: null, sku: "50040138-01" },
+      ],
+    });
+
+    expect(rankCatalogSuggestions(mixed, "50040138-01").map((s) => s.name)).toEqual([
+      "Блокнот А5",
+      "Блокнот Berganote - 50040138-01",
+    ]);
+  });
+
+  it("частина артикула шукається від трьох символів", () => {
+    expect(rankCatalogSuggestions(suggestions, "0102").map((s) => s.name).sort()).toEqual([
+      "Реглан LENNY",
+      "Худі Classic оверсайз",
+    ]);
+  });
+
+  it("короткий номер НЕ вивалює каталог частковими збігами", () => {
+    // «10» входить і в «107», і в «50040138-01» — підказкою це не є.
+    expect(rankCatalogSuggestions(suggestions, "10")).toEqual([]);
+  });
+
+  it("але повний короткий артикул знаходиться", () => {
+    expect(rankCatalogSuggestions(suggestions, "107").map((s) => s.name)).toEqual(["Кепка six-panel"]);
+  });
+
+  it("модель без артикула пошуку кодом не заважає", () => {
+    const withoutSku = buildCatalogSuggestions({
+      ...source,
+      modelRows: [{ id: "m-cap", kind_id: "k-cap", name: "Кепка six-panel", image_url: null }],
+    });
+    expect(withoutSku[0].sku).toBeNull();
+    expect(rankCatalogSuggestions(withoutSku, "50040138-01")).toEqual([]);
   });
 });
 
