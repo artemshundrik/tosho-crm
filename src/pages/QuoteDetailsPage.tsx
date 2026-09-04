@@ -280,7 +280,6 @@ import {
   type CatalogPriceTier,
   type CatalogPrintPosition,
   getKindLabel,
-  getMethodPrice,
   getModelImage,
   getModelSpecPreset,
   getModelLabel,
@@ -705,7 +704,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [itemFormMode, setItemFormMode] = useState<"simple" | "advanced">("simple");
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [itemTitle, setItemTitle] = useState("");
   const [itemQty, setItemQty] = useState("1");
   const [itemUnit, setItemUnit] = useState("шт.");
@@ -727,11 +725,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         method.printHeightMm === null || method.printHeightMm === undefined ? "" : String(method.printHeightMm),
     }));
   };
-  const [itemMethods, setItemMethods] = useState<ItemMethod[]>([]);
   const [itemAttachment, setItemAttachment] = useState<QuoteItem["attachment"] | null>(null);
   const [itemAttachmentUploading, setItemAttachmentUploading] = useState(false);
   const [itemAttachmentError, setItemAttachmentError] = useState<string | null>(null);
-  const [autoMethodsApplied, setAutoMethodsApplied] = useState(false);
   const [catalogTypes, setCatalogTypes] = useState<CatalogType[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -2370,14 +2366,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // ланцюжок проміжних значень React Compiler незмінним визнати не може
   // («Existing memoization could not be preserved») і через це пропускає всю
   // сторінку. Від стану й двох рядків — вміє (REQ-109).
-  const availableMethods = useMemo(
-    () =>
-      catalogTypes
-        .find((type) => type.id === effectiveItemTypeId)
-        ?.kinds.find((kind) => kind.id === effectiveItemKindId)?.methods ?? [],
-    [catalogTypes, effectiveItemKindId, effectiveItemTypeId]
-  );
-
   const catalogGroups = useMemo(() => {
     return catalogTypes.map((type) => ({
       id: type.id,
@@ -2400,12 +2388,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       return Number(itemPrice) || 0;
     }
     const qty = Math.max(1, Number(itemQty) || 1);
-    const base = getModelPrice(catalogTypes, effectiveItemTypeId, effectiveItemKindId, effectiveItemModelId, qty);
-    const methodsTotal = itemMethods.reduce((sum, method) => {
-      return sum + getMethodPrice(catalogTypes, effectiveItemTypeId, effectiveItemKindId, method.methodId) * method.count;
-    }, 0);
-    return Math.max(0, base + methodsTotal);
-  }, [catalogTypes, effectiveItemKindId, effectiveItemModelId, effectiveItemTypeId, itemMethods, itemPrice, itemFormMode, itemQty]);
+    // Ціна нанесення сюди більше не входить: пари ставлять у картці позиції.
+    return Math.max(0, getModelPrice(catalogTypes, effectiveItemTypeId, effectiveItemKindId, effectiveItemModelId, qty));
+  }, [catalogTypes, effectiveItemKindId, effectiveItemModelId, effectiveItemTypeId, itemPrice, itemFormMode, itemQty]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -3917,7 +3902,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const handleImportResearch = useQuoteImportResearch(reloadAfterImport);
 
   const openNewItem = () => {
-    setEditingItemId(null);
     setItemTitle("");
     setItemQty("1");
     setItemUnit("шт.");
@@ -3926,38 +3910,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setItemTypeId("");
     setItemKindId("");
     setItemModelId("");
-    setItemMethods([]);
     setItemAttachment(null);
     setItemAttachmentError(null);
     setItemAttachmentUploading(false);
-    setAutoMethodsApplied(false);
     setItemFormMode("simple");
-    setCatalogSearchValue("");
-    setLastAutoTitle("");
-    setItemModalOpen(true);
-  };
-
-  const openEditItem = (item: QuoteItem) => {
-    const resolvedSelection = resolveCatalogSelection({
-      typeId: item.catalogTypeId ?? item.productTypeId ?? undefined,
-      kindId: item.catalogKindId ?? item.productKindId ?? undefined,
-      modelId: item.catalogModelId ?? item.productModelId ?? undefined,
-    });
-    setEditingItemId(item.id);
-    setItemTitle(item.title);
-    setItemQty(String(item.qty));
-    setItemUnit(normalizeUnitLabel(item.unit));
-    setItemPrice(String(item.price));
-    setItemDescription(item.description ?? "");
-    setItemTypeId(resolvedSelection.typeId ?? "");
-    setItemKindId(resolvedSelection.kindId ?? "");
-    setItemModelId(resolvedSelection.modelId ?? "");
-    setItemMethods(item.methods ?? []);
-    setItemAttachment(item.attachment ?? null);
-    setItemAttachmentError(null);
-    setItemAttachmentUploading(false);
-    setAutoMethodsApplied(true);
-    setItemFormMode(item.catalogTypeId || item.productTypeId ? "advanced" : "simple");
     setCatalogSearchValue("");
     setLastAutoTitle("");
     setItemModalOpen(true);
@@ -3967,21 +3923,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setItemTypeId(value);
     setItemKindId("");
     setItemModelId("");
-    setItemMethods([]);
-    setAutoMethodsApplied(false);
   };
 
   const handleKindChange = (value: string) => {
     setItemKindId(value);
     setItemModelId("");
-    setItemMethods([]);
-    setAutoMethodsApplied(false);
   };
 
   const handleModelChange = (value: string) => {
     setItemModelId(value);
-    setItemMethods([]);
-    setAutoMethodsApplied(false);
   };
 
   const handleAttachmentChange = async (file: File | null) => {
@@ -4059,25 +4009,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   // Перший метод нанесення підставляється сам — один раз на обрану модель.
   //
-  // Ідентифікатор рядка тут передбачуваний, а не createLocalId(): той бере
-  // Date.now() і Math.random(), а рендер React може відкинути й повторити —
-  // тоді на кожну спробу виходив би інший id. Для ключа списку достатньо
-  // походження методу, а руками додані рядки й далі отримують createLocalId.
-  const autoMethodCandidateId = availableMethods[0]?.id ?? "";
-  const autoMethodsInputChanged = useSignatureChanged(
-    `${itemFormMode}\u0000${effectiveItemModelId}\u0000${autoMethodsApplied ? "1" : "0"}\u0000${autoMethodCandidateId}`
-  );
-  if (
-    autoMethodsInputChanged &&
-    itemFormMode === "advanced" &&
-    effectiveItemModelId &&
-    !autoMethodsApplied &&
-    autoMethodCandidateId
-  ) {
-    setItemMethods([{ id: `auto-${autoMethodCandidateId}`, methodId: autoMethodCandidateId, count: 1 }]);
-    setAutoMethodsApplied(true);
-  }
-
   const handleSaveItem = async () => {
     if (!itemTitle.trim()) return;
     
@@ -4087,17 +4018,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       return;
     }
 
-  const methodsPayload =
-    itemFormMode === "advanced" && itemMethods.length > 0
-      ? itemMethods.map((method) => ({
-          method_id: method.methodId,
-          count: method.count,
-          print_position_id: method.printPositionId ?? null,
-          print_position_label: method.printPositionLabel ?? null,
-          print_width_mm: method.printWidthMm ?? null,
-          print_height_mm: method.printHeightMm ?? null,
-        }))
-      : null;
     const attachmentPayload = itemAttachment
       ? {
           name: itemAttachment.name,
@@ -4118,19 +4038,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         : undefined;
     const modelSupplierUrl = selectedCatalogModel?.metadata?.supplierUrl?.trim() || null;
     const modelAvantprintUrl = selectedCatalogModel?.metadata?.avantprintUrl?.trim() || null;
-    const previousItemMetadata =
-      editingItemId ? items.find((item) => item.id === editingItemId)?.metadata ?? null : null;
     const existingItemMetadata =
-      previousItemMetadata || modelSupplierUrl || modelAvantprintUrl
-        ? {
-            ...(previousItemMetadata ?? {}),
-            supplierUrl: previousItemMetadata?.supplierUrl ?? modelSupplierUrl,
-            avantprintUrl: previousItemMetadata?.avantprintUrl ?? modelAvantprintUrl,
-          }
+      modelSupplierUrl || modelAvantprintUrl
+        ? { supplierUrl: modelSupplierUrl, avantprintUrl: modelAvantprintUrl }
         : null;
 
     const newItem: QuoteItem = {
-      id: editingItemId || createLocalId(),
+      id: createLocalId(),
       position: undefined,
       title: itemTitle.trim(),
       qty: Math.max(1, Number(itemQty) || 1),
@@ -4144,7 +4058,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       productTypeId: itemFormMode === "advanced" ? effectiveItemTypeId : undefined,
       productKindId: itemFormMode === "advanced" ? effectiveItemKindId : undefined,
       productModelId: itemFormMode === "advanced" ? effectiveItemModelId : undefined,
-      methods: itemFormMode === "advanced" ? itemMethods : undefined,
       attachment: itemAttachment
         ? {
             name: itemAttachment.name,
@@ -4161,33 +4074,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     // Обидві відмови вже показує setItemsError у гілках `!ok`. Прибрано, бо
     // «??» усередині try/catch React Compiler не вміє — і через цей блок
     // пропускав усю сторінку разом із перевірками лінту (REQ-109).
-    if (editingItemId) {
-      const updatePayload = {
-        name: newItem.title,
-        description: newItem.description ?? null,
-        metadata: newItem.metadata ?? null,
-        qty: newItem.qty,
-        unit: normalizeUnitLabel(newItem.unit),
-        unit_price: newItem.price,
-        line_total: newItem.qty * newItem.price,
-        catalog_type_id: newItem.catalogTypeId ?? null,
-        catalog_kind_id: newItem.catalogKindId ?? null,
-        catalog_model_id: newItem.catalogModelId ?? null,
-        methods: methodsPayload,
-        attachment: attachmentPayload,
-      };
-      const savedItem = await updateQuoteItemRow(editingItemId, updatePayload, {
-        retryWithoutMetadata: true,
-      });
-      if (!savedItem.ok) {
-        setItemsError(savedItem.message);
-        return;
-      }
-      setItems((prev) =>
-        prev.map((item) => (item.id === editingItemId ? newItem : item))
-      );
-      await logItemChange("update", newItem);
-    } else {
+    {
+
       const newId = crypto.randomUUID();
       const nextPosition =
         items.length === 0 ? 1 : Math.max(...items.map((item) => item.position ?? 0)) + 1;
@@ -4206,7 +4094,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         catalog_type_id: newItem.catalogTypeId ?? null,
         catalog_kind_id: newItem.catalogKindId ?? null,
         catalog_model_id: newItem.catalogModelId ?? null,
-        methods: methodsPayload,
+        methods: null,
         attachment: attachmentPayload,
       };
       const insertedRow = await insertQuoteItemRow(insertPayload);
@@ -4328,17 +4216,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
 
 
-  const toggleMethod = (methodId: string) => {
-    setItemMethods(prev => {
-      const existing = prev.find(m => m.methodId === methodId);
-      if (existing) {
-        return prev.filter(m => m.methodId !== methodId);
-      } else {
-        return [...prev, { id: createLocalId(), methodId, count: 1 }];
-      }
-    });
-    setAutoMethodsApplied(true);
-  };
 
   if (loading || quoteSectionsBootstrapping) {
     return <PageLoading />;
@@ -5111,17 +4988,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                      {/* Без preventDefault: меню має згорнутись саме,
-                                          інакше воно лишається розкритим під вікном
-                                          підтвердження. */}
-                                      <DropdownMenuItem
-                                        disabled={!canManageItems}
-                                        onSelect={() => openEditItem(item)}
-                                      >
-                                        <Pencil className="mr-2 h-4 w-4" />
-                                        Редагувати
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
+                                      {/* «Редагувати» тут більше немає (REQ-157#p6):
+                                          товар, нанесення й тиражі правлять у самій
+                                          картці. Без preventDefault: меню має
+                                          згорнутись саме. */}
                                       <DropdownMenuItem
                                         disabled={!canManageItems}
                                         className="text-destructive focus:text-destructive"
@@ -6987,7 +6857,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           <div className="border-b border-border bg-muted/5 p-6">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold">
-                {editingItemId ? "Редагувати позицію" : "Додати позицію"}
+                Додати позицію
               </DialogTitle>
             </DialogHeader>
           </div>
@@ -7120,7 +6990,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         setItemTypeId(option.typeId);
                                         setItemKindId(option.kindId);
                                         setItemModelId(option.modelId);
-                                        setItemMethods([]);
                                         setCatalogSearchValue("");
                                       }}
                                     >
@@ -7207,32 +7076,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       </div>
                     )}
 
-                    {itemKindId && availableMethods.length > 0 && (
-                      <div className="space-y-2">
-                        <Label>Методи нанесення</Label>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          {availableMethods.map((method) => {
-                            const isSelected = itemMethods.some((m) => m.methodId === method.id);
-                            return (
-                              <button
-                                key={method.id}
-                                type="button"
-                                onClick={() => toggleMethod(method.id)}
-                                className={cn(
-                                  "flex items-center justify-between rounded-lg border-2 p-3 text-left transition-all",
-                                  isSelected
-                                    ? "border-primary bg-primary/10"
-                                    : "border-border hover:border-border/60"
-                                )}
-                              >
-                                <span className="text-sm font-medium">{method.name}</span>
-                                <span className="text-xs text-muted-foreground">{method.price ?? 0} UAH</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    {/* Методи нанесення тут більше не питають (REQ-157#p6):
+                        пари «метод · місце» ставлять у самій картці позиції. */}
 
                     <div className="space-y-2">
                       <Label>Опис (опціонально)</Label>
@@ -7328,18 +7173,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             {getModelPrice(catalogTypes, itemTypeId, itemKindId, itemModelId, Number(itemQty))}
                           </span>
                         </div>
-                        {itemMethods.length > 0 && (
-                          <div className="flex justify-between">
-                            <span>Методи:</span>
-                            <span className="tabular-nums">
-                              +{itemMethods.reduce(
-                                (sum, m) =>
-                                  sum + getMethodPrice(catalogTypes, itemTypeId, itemKindId, m.methodId) * m.count,
-                                0
-                              )}
-                            </span>
-                          </div>
-                        )}
                         <div className="flex justify-between border-t border-primary/20 pt-2 font-semibold">
                           <span>Ціна за одиницю:</span>
                           <span className="tabular-nums text-primary">{computedItemPrice}</span>
@@ -7367,17 +7200,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               disabled={!itemTitle.trim() || itemAttachmentUploading}
               className="gap-2"
             >
-              {editingItemId ? (
-                <>
-                  <Check className="h-4 w-4" />
-                  {itemAttachmentUploading ? "Збереження..." : "Зберегти"}
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4" />
-                  {itemAttachmentUploading ? "Збереження..." : "Додати"}
-                </>
-              )}
+              <Plus className="h-4 w-4" />
+              {itemAttachmentUploading ? "Збереження..." : "Додати"}
             </Button>
           </DialogFooter>
         </DialogContent>
