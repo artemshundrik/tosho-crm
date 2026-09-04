@@ -94,6 +94,18 @@ describe("guessKindFromTitle", () => {
     expect(guessKindFromTitle(kinds, "Худі з кишенею кенгуру")?.kindName).toBe("Худі");
   });
 
+  it("дефіс розділяє слова, а близькі за початком слова не зливаються", () => {
+    // Живий прогін 04.09.2026: prom.ua віддав «Кепка-тракер мультикам», і
+    // вид вийшов «Мультитул» — дефіс не розділяв, а основи різались до пʼяти.
+    const withTool = buildCatalogKinds({
+      ...source,
+      kindRows: [...source.kindRows, { id: "k-tool", type_id: "t-cloth", name: "Мультитул" }],
+      modelRows: source.modelRows,
+    });
+    expect(guessKindFromTitle(withTool, "Кепка-тракер мультикам")?.kindName).toBe("Кепка");
+    expect(guessKindFromTitle(withTool, "Ліхтарик мультикам тактичний")).toBeNull();
+  });
+
   it("не вгадує без збігу й на порожній назві", () => {
     expect(guessKindFromTitle(kinds, "Реглан LENNY")).toBeNull();
     expect(guessKindFromTitle(kinds, null)).toBeNull();
