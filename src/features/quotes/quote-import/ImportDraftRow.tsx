@@ -15,8 +15,28 @@ export type DraftKindOption = Pick<QuoteImportDraftCatalog, "kindId" | "kindName
 
 /**
  * Один рядок прев'ю імпорту — той самий у вікні «Імпорт з файлу» й у візарді
- * (REQ-237#p2). Що людина бачить і править: назва, тиражі, коментар; що лише
- * бачить: фото, рядок файлу, зв'язок варіантів, ознаки, посилання.
+ * (REQ-237#p2). Що людина бачить і править: назва, тиражі, нанесення,
+ * коментар; що лише бачить: фото, рядок файлу, зв'язок варіантів, ознаки,
+ * посилання.
+ *
+ * РОЗКЛАДКА «ТИРАЖІ ОДНИМ ПОЛЕМ» (REQ-182#p22, варіант А з п'яти).
+ *
+ * ЩО БУЛО НЕ ТАК. Кожен тираж був окремим полем на 80 px, тож третій влазив
+ * лише за рахунок назви (вона стискалась до свого мінімуму й ховала кінець), а
+ * четвертий кидав увесь блок на новий рядок — картка росла зі 123 до 175 px.
+ * Заміри проду 04.09.2026: три тиражі це 11 % позицій, чотири — 0,8 %, тобто
+ * ламалось воно на кожній дев'ятій. Окремий рядок «Кепка · Одяг» з'їдав ще
+ * 21 px на КОЖНІЙ позиції заради двох слів.
+ *
+ * ЯК ТЕПЕР. Тиражі живуть в ОДНОМУ полі з роздільниками: один чи чотири —
+ * ширина росте на 49 px, висота не змінюється взагалі. Вид переїхав чипом на
+ * початок смуги нанесення, тож окремого рядка метаданих у позиції з каталогу
+ * більше немає — він лишається тільки там, де справді є що сказати (рядок
+ * файлу, посилання, варіант, попередження).
+ *
+ * ПЕРШИЙ РЯДОК НЕ ПЕРЕНОСИТЬСЯ (`flex` без `flex-wrap`), і смуга нанесення
+ * теж (`overflow-hidden`): висота позиції фіксована 102 px незалежно від
+ * кількості тиражів, довжини назви й довжини назв методів.
  */
 
 /** Гола іконка-дія в рядку позиції: та сама вага, що в кошика. */
@@ -130,9 +150,29 @@ export function ImportDraftRow({
   kindOptions?: DraftKindOption[];
   onChangeKind?: (kind: DraftKindOption | null) => void;
 }) {
+  /*
+    Рядок метаданих не просто ховається, а НЕ РЕНДЕРИТЬСЯ, коли сказати нема
+    чого. `space-y-2` у Tailwind v4 вішає відступ на кожну дитину, крім
+    останньої, — тож порожній прихований <div> лишався останнім і додавав
+    рядку зайві 8 px висоти (заміряно: 110 замість 102).
+  */
+  const hasMeta =
+    draft.sourceRows.length > 0 ||
+    Boolean(draft.catalog && !draft.catalog.modelId) ||
+    Boolean(draft.variant) ||
+    draft.flags.length > 0 ||
+    draft.links.length > 0 ||
+    Boolean(preview && preview.status !== "pending" && preview.status !== "done");
+
   const kindChip =
     kindOptions && onChangeKind && !draft.catalog?.modelId ? (
       <KindChip value={draft.catalog ?? null} options={kindOptions} disabled={disabled} onChange={onChangeKind} />
+    ) : draft.catalog ? (
+      // Позиція з каталогу: вид — факт, а не вибір, тож це підпис, а не кнопка.
+      <span className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-muted px-3 text-xs font-medium text-muted-foreground">
+        <Tag className="h-3.5 w-3.5" />
+        {draft.catalog.kindName} · {draft.catalog.typeName}
+      </span>
     ) : null;
   return (
     <div
@@ -155,10 +195,11 @@ export function ImportDraftRow({
         )}
         <ImportItemPhoto preview={preview} name={draft.name} />
         <div className="min-w-0 flex-1 space-y-2">
-          {/* Назва й тираж — в одному рядку: тираж це коротке число, а власний
-              рядок під нього коштував би на двадцяти семи позиціях цілого
-              екрана прокрутки. */}
-          <div className="flex flex-wrap items-start gap-2">
+          {/*
+            ПЕРШИЙ РЯДОК: назва, тиражі одним полем, кошик. Без `flex-wrap`
+            навмисно — саме перенесення цього блоку й розганяло висоту картки.
+          */}
+          <div className="flex items-center gap-2">
             <Input
               value={draft.name}
               disabled={disabled}
@@ -166,83 +207,49 @@ export function ImportDraftRow({
               aria-label="Назва позиції"
               placeholder={namePlaceholder}
               autoFocus={autoFocusName}
-              className="min-w-[12rem] flex-1"
+              className="min-w-0 flex-1"
               onChange={(event) => onPatch({ name: event.target.value })}
             />
-            {/*
-              ТИРАЖІ Й ДІЇ — ОДНІЄЇ ВИСОТИ З НАЗВОЮ, БЕЗ ЗАЙВИХ РАМОК.
-
-              Спершу тут була окрема рамка з полями всередині — вона читалась
-              як другий блок у рядку й сперечалась із полем назви. Тепер поле
-              тиражу таке саме, як поле назви, а «плюс» і кошик — голі іконки,
-              як і належить діям. Обидва разом узяті в один блок, щоб при
-              переносі вони їхали на новий рядок цілими, а не порізно.
-
-              Хрестик прибирання тиражу живе ВСЕРЕДИНІ поля й показується під
-              курсором: на кутах він читався як значок помилки.
-            */}
-            <div className="flex shrink-0 items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">
-                {draft.runs.length > 1 ? "Тиражі" : "Тираж"}
-              </span>
-              {draft.runs.map((run) => (
-                <div key={run.key} className="group/run relative">
-                  <NumberInput
-                    value={run.quantity > 0 ? run.quantity : null}
-                    min={0}
-                    emptyValue={0}
-                    controlSize="md"
-                    className={cn(
-                      // Підказка гасне, щойно в поле стали: стандартний
-                      // placeholder висить, поки не почнеш друкувати, і на
-                      // вузькому полі це читається як уже введене значення.
-                      "w-20 text-center focus:placeholder:text-transparent",
-                      onRemoveRun && draft.runs.length > 1 && "pr-6"
-                    )}
-                    placeholder="к-ть"
-                    disabled={disabled}
-                    aria-label="Кількість тиражу"
-                    onValueChange={(next) => onPatchRun(run.key, { quantity: Math.max(0, next ?? 0) })}
-                  />
-                  {onRemoveRun && draft.runs.length > 1 ? (
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      aria-label="Прибрати тираж"
-                      onClick={() => onRemoveRun(run.key)}
-                      className="absolute right-1.5 top-1/2 grid h-4 w-4 -translate-y-1/2 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/run:opacity-100"
-                    >
-                      <X className="h-3 w-3" strokeWidth={2.5} />
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-              {onAddRun ? (
-                <button
-                  type="button"
-                  disabled={disabled}
-                  aria-label="Додати ще тираж"
-                  title="Клієнт просить порахувати кілька кількостей"
-                  onClick={onAddRun}
-                  className={ICON_ACTION}
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              ) : null}
-              {onRemove ? (
-                <button
-                  type="button"
-                  disabled={disabled}
-                  aria-label={`Прибрати «${draft.name || "позицію"}»`}
-                  onClick={onRemove}
-                  className={cn(ICON_ACTION, "hover:bg-danger-soft hover:text-danger-foreground")}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              ) : null}
-            </div>
+            <RunsField
+              runs={draft.runs}
+              disabled={disabled}
+              onPatchRun={onPatchRun}
+              onAddRun={onAddRun}
+              onRemoveRun={onRemoveRun}
+            />
+            {onRemove ? (
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label={`Прибрати «${draft.name || "позицію"}»`}
+                onClick={onRemove}
+                className={cn(ICON_ACTION, "hover:bg-danger-soft hover:text-danger-foreground")}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
 
+          {/*
+            СМУГА НАНЕСЕННЯ. Вид стоїть тут першим чипом — методи належать саме
+            йому, тож вони поруч, а не через рядок. Смуга не переноситься:
+            «ще N» забирає все, що не влізло.
+          */}
+          {kindChip || (methodOptions && onToggleMethod) ? (
+            <div className="flex items-center gap-1.5 overflow-hidden">
+              {kindChip}
+              {methodOptions && onToggleMethod ? (
+                <MethodChips
+                  options={methodOptions}
+                  selected={draft.methodIds}
+                  disabled={disabled}
+                  onToggle={onToggleMethod}
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          {hasMeta ? (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
             {/*
               Мітки рядка й варіанта більше не пігулки: пігулка обіцяє дію або
@@ -254,11 +261,9 @@ export function ImportDraftRow({
             ) : null}
             {/* Позиція з каталогу каже це категорією, а не плашкою «з бази»:
                 «Худі · Одяг» — і зрозуміло, звідки вона, і що це таке. */}
-            {draft.catalog?.modelId ? (
-              <span className="text-muted-foreground">
-                {draft.catalog.kindName} · {draft.catalog.typeName}
-              </span>
-            ) : draft.catalog ? (
+            {/* Вид·тип переїхав у чип смуги нанесення — тут лишається лише те,
+                що більше ніде не видно. */}
+            {draft.catalog && !draft.catalog.modelId ? (
               // Вид є, моделі ще немає: на «Створити» товар стане рядком каталогу.
               <span className="text-muted-foreground">додасться в базу</span>
             ) : null}
@@ -298,25 +303,6 @@ export function ImportDraftRow({
               <span className="text-muted-foreground/70">{preview.reason}</span>
             ) : null}
           </div>
-
-          {/*
-            НАНЕСЕННЯ — ЧИПАМИ, ЯК ТИРАЖІ (REQ-182#p16). «Без нанесення» стоїть
-            першим і УВІМКНЕНИЙ, поки нічого не обрано: це відповідь, а не
-            порожнє поле, — товар без друку буває, і його не треба доводити
-            галочкою «я не забув». Клік по методу вимикає «без», кілька
-            методів можна: у 46 позицій із 358 нанесень більше за одне.
-            Порядок методів — за історією виду, найчастіший перший.
-          */}
-          {methodOptions && onToggleMethod ? (
-            <MethodChips
-              options={methodOptions}
-              selected={draft.methodIds}
-              disabled={disabled}
-              onToggle={onToggleMethod}
-              lead={kindChip}
-            />
-          ) : kindChip ? (
-            <div className="flex flex-wrap items-center gap-1.5">{kindChip}</div>
           ) : null}
 
           {draft.comment || draft.notes ? (
@@ -335,8 +321,19 @@ export function ImportDraftRow({
   );
 }
 
-/** Скільки методів видно одразу; решта — за «ще N». Худі має 7, кепка 8. */
-const VISIBLE_METHODS = 3;
+/**
+ * Скільки чипів методів показуємо разом — обраних і запропонованих (REQ-182#p22).
+ *
+ * Було три запропоновані ПЛЮС усі обрані, тобто до п'яти чипів, і смуга
+ * розповзалась на другий рядок. Заміри проду: один метод обирають у 85 %
+ * позицій, два в 15 %, три — тричі за весь час. Тож двох чипів вистачає на
+ * дев'ять випадків із десяти, а решта живе за «ще N».
+ *
+ * Двох, а не трьох: разом із чипом виду й підписом «Нанесення» третій чип не
+ * влазив у смугу й обрізався разом із «ще N» — тобто ховав саму дорогу до
+ * решти методів (заміряно: 508 px вмісту в 410 px смуги).
+ */
+const VISIBLE_METHODS = 2;
 
 /**
  * Нанесення чипами (REQ-182#p16): «Без нанесення» перший і увімкнений, поки
@@ -349,25 +346,31 @@ function MethodChips({
   selected,
   disabled,
   onToggle,
-  lead,
 }: {
   options: Array<{ id: string; name: string }>;
   selected: string[];
   disabled?: boolean;
   onToggle: (methodId: string | null) => void;
-  /** Чип виду перед методами — методи залежать від нього, тож стоять поруч. */
-  lead?: React.ReactNode;
 }) {
   const [expanded, setExpanded] = React.useState(false);
+  // Обрані першими: якщо метод обрали з-під «ще N», він мусить лишитись видимим.
   const visible = expanded
     ? options
-    : options.filter((method, index) => index < VISIBLE_METHODS || selected.includes(method.id));
+    : options
+        .filter((method, index) => index < VISIBLE_METHODS || selected.includes(method.id))
+        .sort((left, right) => Number(selected.includes(right.id)) - Number(selected.includes(left.id)))
+        .slice(0, VISIBLE_METHODS);
   const hidden = options.length - visible.length;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Нанесення">
-      {lead}
-      <span className="mr-0.5 text-xs text-muted-foreground">Нанесення</span>
+    <div className="flex min-w-0 items-center gap-1.5" role="group" aria-label="Нанесення">
+      {/*
+        Підпису «Нанесення» тут немає: перший чип каже «Без нанесення», тобто
+        слово вже на екрані. Зайняті ним 76 px коштували дорожче — через них
+        обрізався третій чип разом із «ще N». Групу називає aria-label.
+      */}
+      {/* Чипи можуть обрізатись, «ще N» — ніколи: це єдиний шлях до решти методів. */}
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
       <Chip
         size="sm"
         disabled={disabled}
@@ -385,13 +388,14 @@ function MethodChips({
           </Chip>
         );
       })}
+      </div>
       {hidden > 0 ? (
         <Chip
           size="sm"
           disabled={disabled}
           icon={<ChevronDown />}
-          className="border-transparent bg-muted text-muted-foreground"
           onClick={() => setExpanded(true)}
+          className="shrink-0 border-transparent bg-muted text-muted-foreground"
         >
           ще {hidden}
         </Chip>
@@ -486,5 +490,96 @@ function KindChip({
         ) : null}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * Тиражі одним полем (REQ-182#p22).
+ *
+ * ОДНЕ ПОЛЕ, А НЕ N ПОЛІВ. Тиражі взаємовиключні — це «а скільки буде, якщо
+ * стільки», один запит клієнта, — тож і виглядати вони мусять як одна
+ * відповідь із варіантами, а не як чотири різні поля. Практична ціна старого
+ * вигляду: кожне поле 80 px, тож на трьох тиражах назва стискалась до
+ * мінімуму, а на чотирьох рядок переносився й картка росла на 52 px.
+ *
+ * Комірка 48 px тримає п'ятизначне число (найбільший тираж у базі — 25 000),
+ * роздільники повторюють ті самі волосяні лінії, що в решті інтерфейсу, а
+ * «плюс» стоїть усередині поля: додати тираж — це дописати варіант у ту саму
+ * відповідь, а не окрема дія збоку.
+ */
+function RunsField({
+  runs,
+  disabled,
+  onPatchRun,
+  onAddRun,
+  onRemoveRun,
+}: {
+  runs: QuoteImportDraftItem["runs"];
+  disabled?: boolean;
+  onPatchRun: (runKey: string, patch: Partial<QuoteImportDraftItem["runs"][number]>) => void;
+  onAddRun?: () => void;
+  onRemoveRun?: (runKey: string) => void;
+}) {
+  const divider = <span aria-hidden className="my-2 w-px shrink-0 self-stretch bg-border/60" />;
+
+  return (
+    <div
+      className={cn(
+        // Та сама поверхня, що в полів застосунку (CONTROL_BASE), лише зібрана
+        // вручну: всередині живуть кілька комірок, тож рамка спільна.
+        "flex h-9 shrink-0 items-center rounded-lg border border-border/50 bg-muted/40",
+        disabled && "opacity-50"
+      )}
+    >
+      <span className="shrink-0 pl-2.5 pr-2 text-2xs text-muted-foreground">Тираж</span>
+      {runs.map((run) => (
+        <React.Fragment key={run.key}>
+          {divider}
+          <div className="group/run relative">
+            <NumberInput
+              value={run.quantity > 0 ? run.quantity : null}
+              min={0}
+              emptyValue={0}
+              controlSize="md"
+              disabled={disabled}
+              aria-label="Кількість тиражу"
+              placeholder="к-ть"
+              className={cn(
+                "h-9 w-12 rounded-none border-0 bg-transparent px-0 text-center tabular-nums",
+                "placeholder:text-2xs focus:placeholder:text-transparent",
+                "focus-visible:border-0 focus-visible:bg-transparent"
+              )}
+              onValueChange={(next) => onPatchRun(run.key, { quantity: Math.max(0, next ?? 0) })}
+            />
+            {onRemoveRun && runs.length > 1 ? (
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label="Прибрати тираж"
+                onClick={() => onRemoveRun(run.key)}
+                className="absolute right-0 top-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-muted text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/run:opacity-100"
+              >
+                <X className="h-2.5 w-2.5" strokeWidth={2.5} />
+              </button>
+            ) : null}
+          </div>
+        </React.Fragment>
+      ))}
+      {onAddRun ? (
+        <>
+          {divider}
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label="Додати ще тираж"
+            title="Клієнт просить порахувати кілька кількостей"
+            onClick={onAddRun}
+            className="grid h-9 w-8 shrink-0 place-items-center rounded-r-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </>
+      ) : null}
+    </div>
   );
 }
