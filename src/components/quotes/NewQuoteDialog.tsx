@@ -1751,9 +1751,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               </div>
             ) : null}
 
-        {/* Main chips row */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Status */}
+          {/* Статус — лише при створенні (REQ-157#p3): у картці він має свою кнопку. */}
+          {!isEditMode ? (
           <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
             <PopoverTrigger asChild>
               <Chip
@@ -1787,8 +1787,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               </div>
             </PopoverContent>
           </Popover>
+          ) : null}
 
-          {/* Customer */}
           <CustomerLeadPicker
             open={customerPopoverOpen}
             onOpenChange={setCustomerPopoverOpen}

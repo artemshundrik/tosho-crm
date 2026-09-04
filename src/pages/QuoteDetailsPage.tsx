@@ -70,6 +70,7 @@ import {
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
+import { QuoteItemImprints } from "@/features/quotes/quote-details/QuoteItemImprints";
 import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
 import { parseQuoteItemMetadata } from "@/features/quotes/quote-details/quoteItemMetadata";
 import { QuoteImportDialog } from "@/features/quotes/quote-import/QuoteImportDialog";
@@ -278,7 +279,6 @@ import {
   type CatalogPriceTier,
   type CatalogPrintPosition,
   getKindLabel,
-  getMethodLabel,
   getMethodPrice,
   getModelImage,
   getModelSpecPreset,
@@ -4963,43 +4963,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           ]
                         : []),
                     ];
-                    const methodSections = item.methods && item.methods.length > 0
-                      ? [
-                          {
-                            title: "Нанесення",
-                            fields: item.methods.map((method) => {
-                              const methodName =
-                                item.resolvedMethodNames?.[method.methodId] ??
-                                getMethodLabel(
-                                  catalogTypes,
-                                  resolvedTypeId,
-                                  resolvedKindId,
-                                  method.methodId
-                                ) ?? "Метод";
-                              const place =
-                                getPrintPositionLabel(
-                                  catalogTypes,
-                                  resolvedTypeId,
-                                  resolvedKindId,
-                                  method.printPositionId
-                                ) ?? method.printPositionLabel ?? positionLabel ?? "Місце не вказано";
-                              const size =
-                                method.printWidthMm && method.printHeightMm
-                                  ? `${method.printWidthMm}×${method.printHeightMm} мм`
-                                  : method.printWidthMm
-                                  ? `${method.printWidthMm} мм`
-                                  : method.printHeightMm
-                                  ? `${method.printHeightMm} мм`
-                                  : sizeLabel;
-
-                              return {
-                                label: method.count > 1 ? `${methodName} ×${method.count}` : methodName,
-                                value: [place, size].filter(Boolean).join(" · "),
-                              };
-                            }),
-                          },
-                        ]
-                      : [];
                     const defaultSpecSections = [
                       specHighlights.length > 0
                         ? {
@@ -5007,7 +4970,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             fields: specHighlights,
                           }
                         : null,
-                      ...methodSections,
                     ].filter((section): section is { title: string; fields: Array<{ label: string; value: string }> } => Boolean(section));
                     const renderedSections = packageSections.length > 0 ? packageSections : defaultSpecSections;
 
@@ -5180,6 +5142,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 ) : null}
                               </div>
                             </div>
+
+                            {/* Нанесення тепер РЕДАГУЄТЬСЯ тут, а не показується
+                                рядком специфікації (REQ-157#p4): вікно редагування
+                                прорахунку віддало продукцію цій вкладці. */}
+                            {teamId && resolvedKindId ? (
+                              <div className="mt-4 border-t border-border/50 pt-3">
+                                <div className="mb-2 text-xs text-muted-foreground">Нанесення</div>
+                                <QuoteItemImprints
+                                  teamId={teamId}
+                                  itemId={item.id}
+                                  kindId={resolvedKindId}
+                                  methods={item.methods ?? []}
+                                  disabled={!canManageItems}
+                                  onSaved={() => void loadItems()}
+                                />
+                              </div>
+                            ) : null}
 
                             <QuoteItemSpec sections={renderedSections} />
 

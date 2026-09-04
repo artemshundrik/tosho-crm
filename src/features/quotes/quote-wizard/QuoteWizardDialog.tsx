@@ -33,7 +33,7 @@ import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions
 import { QuoteItemCommandField } from "./QuoteItemCommandField";
 import { QUOTE_KINDS, type QuoteKindValue } from "./quoteWizardKinds";
 import { useCatalogSuggestions } from "./useCatalogSuggestions";
-import { useKindImprintOptions } from "./useKindImprintOptions";
+import { useKindImprintOptions } from "@/features/quotes/quote-details/useKindImprintOptions";
 
 /**
  * Вікно «Новий прорахунок» на один екран (REQ-237, обраний концепт із трьох).
