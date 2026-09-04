@@ -15,12 +15,13 @@ import { Button } from "@/components/ui/button";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { getAttachmentDisplayFileName } from "@/lib/attachmentPreview";
 import { DESIGN_STATUS_LABELS, type DesignStatus } from "@/lib/designTaskStatus";
-import { DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } from "@/lib/designTaskType";
 import { designStatusTone, toneDotClass, toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 
 import { canPreviewDocumentThumb, canPreviewImage, formatFileSize, getFileExtension } from "./config";
+import type { DesignComposerImprint } from "./designComposerImprint";
 import { parseDesignOutputMetaFiles } from "./designOutputFiles";
+import { QuoteImprintBadges } from "./QuoteImprintBadges";
 import type { QuoteAttachment } from "./queries";
 
 /**
@@ -52,7 +53,6 @@ export type QuoteDesignTaskCard = {
   number: string | null;
   /** Назва товару: модель із задачі, назва позиції або назва самої задачі. */
   title: string;
-  typeLabel: string | null;
   imageUrl: string | null;
   /** Статус задачі як він лежить у metadata: new, in_progress, approved… */
   status: string | null;
@@ -157,7 +157,6 @@ export function buildQuoteDesignTaskCards({
       };
       const itemId = readString("quote_item_id");
       const section = itemId ? sectionByItemId.get(itemId) ?? null : null;
-      const taskType = parseDesignTaskType(metadata.design_task_type);
 
       const visuals: QuoteAttachment[] = parseDesignOutputMetaFiles(metadata.design_output_files).map(
         (file) => ({
@@ -205,7 +204,6 @@ export function buildQuoteDesignTaskCards({
           section?.title ??
           task.title?.trim() ??
           "Дизайн-задача",
-        typeLabel: taskType ? DESIGN_TASK_TYPE_LABELS[taskType] : null,
         imageUrl: section?.imageUrl ?? null,
         status: readString("status"),
         itemMeta:
@@ -307,10 +305,16 @@ export function QuoteDesignTasksPanel({
   onOpenTask,
   onPreviewVisual,
   onDownloadVisual,
+  imprint,
   onAddMaterials,
 }: {
   tasks: QuoteDesignTaskCard[];
   activeTaskId: string | null;
+  /**
+   * Нанесення позиції, на яку заведено задачу (REQ-157): пігулки «метод ·
+   * місце» стоять у рядку назви — там, де раніше була плашка типу задачі.
+   */
+  imprint: DesignComposerImprint[];
   /** Розмітка ТЗ — та сама, що в редакторі: заголовки, списки, жирний. */
   renderBrief: (text: string) => ReactNode;
   /** Вкладення прорахунку з `audience=design` — вхідні матеріали для дизайнера. */
@@ -368,13 +372,16 @@ export function QuoteDesignTasksPanel({
                 </span>
               ) : null}
             </div>
-            <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            {/*
+              ТИП ЗАДАЧІ ЗВІЛЬНИВ ЦЕЙ СЛОТ (REQ-157). Плашка «Візуалізація/
+              адаптація» стояла на 64 % карток і не казала нічого нового —
+              натомість тут те, що дизайнеру треба знати про роботу: чим і де
+              наносимо. Тип лишається в даних (норми часу, звіти) і видно його
+              на самій задачі.
+            */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
               <span className="text-base font-semibold tracking-tight text-foreground">{active.title}</span>
-              {active.typeLabel ? (
-                <span className="rounded-md border border-border/60 px-1.5 py-0.5 text-2xs text-muted-foreground">
-                  {active.typeLabel}
-                </span>
-              ) : null}
+              <QuoteImprintBadges imprint={imprint} />
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               {active.itemMeta ? (
@@ -413,7 +420,7 @@ export function QuoteDesignTasksPanel({
 
         <div className="border-t border-border/40 p-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">ТЗ задачі</span>
+            <span className="text-sm font-semibold text-foreground">ТЗ задачі</span>
             {/*
               РЕДАГУВАННЯ ЖИВЕ В ЗАДАЧІ, А НЕ ТУТ, і це не лінь.
               ТЗ задачі — це не просто текст: у метаданих поруч лежать його
@@ -447,10 +454,12 @@ export function QuoteDesignTasksPanel({
 
         <div className="border-t border-border/40 p-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
+            <span className="text-sm font-semibold text-foreground">
               Візуалізації
               {active.visuals.length ? (
-                <span className="ml-1.5 tabular-nums text-foreground">{active.visuals.length}</span>
+                <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">
+                  {active.visuals.length}
+                </span>
               ) : null}
             </span>
           </div>
@@ -493,15 +502,15 @@ export function QuoteDesignTasksPanel({
         {materials.length > 0 || canAddMaterials ? (
           <div className="border-t border-border/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
+              <span className="text-sm font-semibold text-foreground">
                 Вихідні матеріали
                 {materials.length ? (
-                  <span className="ml-1.5 tabular-nums text-foreground">{materials.length}</span>
+                  <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">
+                    {materials.length}
+                  </span>
                 ) : null}
                 {tasks.length > 1 ? (
-                  <span className="ml-2 font-normal normal-case tracking-normal">
-                    спільні для прорахунку
-                  </span>
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">спільні для прорахунку</span>
                 ) : null}
               </span>
               {canAddMaterials ? (

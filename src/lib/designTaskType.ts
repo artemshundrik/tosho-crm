@@ -17,6 +17,23 @@ export const DESIGN_TASK_TYPE_OPTIONS = [
 
 export type DesignTaskType = (typeof DESIGN_TASK_TYPE_OPTIONS)[number]["value"];
 
+/**
+ * Тип, який проставляється сам, коли задачу заводять із вкладки «Дизайн»
+ * (REQ-157).
+ *
+ * ЧОМУ ВЗАГАЛІ ЗАМОВЧУВАННЯ. Вкладка питала тип п'ятьма плашками — і в 6 із 10
+ * випадків відповідь була та сама. Заміри 04.09.2026: із 615 задач 392
+ * «Візуалізація/адаптація», а за останні 30 днів 39 із 66.
+ *
+ * ЧОМУ ПОЛЕ ЛИШАЄТЬСЯ. Решта 27 задач за той самий місяць — креатив (12),
+ * верстка (7), адаптація макету (5), презентація (3), і заводять їх далі.
+ * Тип годує норми часу (`DESIGN_TASK_TYPE_NORM_MINUTES`) у дашборді дизайнерів
+ * і у звіті для СЕО, тож прибрати його означало б зламати два звіти заради
+ * одного кліка. Прибране саме ПИТАННЯ: значення стоїть, його видно, і воно
+ * міняється одним рухом.
+ */
+export const DEFAULT_DESIGN_TASK_TYPE: DesignTaskType = "visualization";
+
 export const DESIGN_TASK_TYPE_LABELS: Record<DesignTaskType, string> = DESIGN_TASK_TYPE_OPTIONS.reduce(
   (acc, option) => {
     acc[option.value] = option.label;

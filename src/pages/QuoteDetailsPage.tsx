@@ -79,6 +79,7 @@ import {
   DESIGN_TASK_TYPE_ICONS,
   DESIGN_TASK_TYPE_LABELS,
   DESIGN_TASK_TYPE_OPTIONS,
+  DEFAULT_DESIGN_TASK_TYPE,
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
@@ -681,7 +682,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [designTaskSaving, setDesignTaskSaving] = useState(false);
   const [designAssigneeId, setDesignAssigneeId] = useState<string | null>(null);
   const [designCollaboratorIds, setDesignCollaboratorIds] = useState<string[]>([]);
-  const [designTaskType, setDesignTaskType] = useState<DesignTaskType | null>(null);
+  /*
+    ТИП ЗАДАЧІ СТОЇТЬ ЗАЗДАЛЕГІДЬ (REQ-157). Форма на вкладці «Дизайн» його
+    більше не питає, тож стан починається з `DEFAULT_DESIGN_TASK_TYPE` і
+    повертається до нього на кожному скиданні: `null` тут означав би «людина
+    ще не відповіла», а питання більше немає. Задача, яка вже є, підставляє
+    свій тип нижче.
+  */
+  const [designTaskType, setDesignTaskType] = useState<DesignTaskType>(DEFAULT_DESIGN_TASK_TYPE);
   const [createDesignTaskDialogOpen, setCreateDesignTaskDialogOpen] = useState(false);
   /** На яку позицію створюємо задачу. null — на прорахунок загалом. */
   const [designTaskItemId, setDesignTaskItemId] = useState<string | null>(null);
@@ -2622,7 +2630,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDesignTasks([]);
       setDesignTask(null);
       setDesignAssigneeId(null);
-      setDesignTaskType(null);
+      setDesignTaskType(DEFAULT_DESIGN_TASK_TYPE);
       return;
     }
     setDesignTaskLoading(true);
@@ -2634,7 +2642,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDesignTaskError(result.message);
       setDesignTasks([]);
       setDesignTask(null);
-      setDesignTaskType(null);
+      setDesignTaskType(DEFAULT_DESIGN_TASK_TYPE);
       setDesignTaskLoading(false);
       return;
     }
@@ -2644,7 +2652,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!row) {
       setDesignTask(null);
       setDesignAssigneeId(null);
-      setDesignTaskType(null);
+      setDesignTaskType(DEFAULT_DESIGN_TASK_TYPE);
       setDesignTaskLoading(false);
       return;
     }
@@ -2658,7 +2666,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       metadata,
     });
     setDesignAssigneeId(assigneeUserId);
-    setDesignTaskType(parseDesignTaskType((metadata as { design_task_type?: unknown }).design_task_type));
+    setDesignTaskType(
+      parseDesignTaskType((metadata as { design_task_type?: unknown }).design_task_type) ?? DEFAULT_DESIGN_TASK_TYPE
+    );
     setDesignTaskLoading(false);
   }, [quoteId, teamId]);
 
@@ -3158,7 +3168,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDesignTask(null);
     setDesignTaskError(null);
     setDesignAssigneeId(null);
-    setDesignTaskType(null);
+    setDesignTaskType(DEFAULT_DESIGN_TASK_TYPE);
     activityTabLoadedQuoteRef.current = null;
     setHistory([]);
     setHistoryError(null);
@@ -6815,27 +6825,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
             <div className="space-y-2">
               <Label>Тип задачі</Label>
+              {/* Порожнього стану тут більше немає: тип завжди має значення
+                  (REQ-157), тож селект показує його, а не запрошення обрати. */}
               <Select
-                value={designTaskType ?? "none"}
-                onValueChange={(value) => setDesignTaskType(value === "none" ? null : (value as DesignTaskType))}
+                value={designTaskType}
+                onValueChange={(value) => setDesignTaskType(value as DesignTaskType)}
                 disabled={designTaskSaving}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Оберіть тип задачі">
-                    {designTaskType ? (
-                      <span className="inline-flex items-center gap-2">
-                        {createElement(DESIGN_TASK_TYPE_ICONS[designTaskType], { className: "h-4 w-4 text-muted-foreground" })}
-                        <span>{DESIGN_TASK_TYPE_LABELS[designTaskType]}</span>
-                      </span>
-                    ) : (
-                      "Оберіть тип задачі"
-                    )}
+                  <SelectValue>
+                    <span className="inline-flex items-center gap-2">
+                      {createElement(DESIGN_TASK_TYPE_ICONS[designTaskType], { className: "h-4 w-4 text-muted-foreground" })}
+                      <span>{DESIGN_TASK_TYPE_LABELS[designTaskType]}</span>
+                    </span>
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none" disabled>
-                    Оберіть тип задачі
-                  </SelectItem>
                   {DESIGN_TASK_TYPE_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       <span className="inline-flex items-center gap-2">

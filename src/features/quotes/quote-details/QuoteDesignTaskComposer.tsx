@@ -1,14 +1,28 @@
 import * as React from "react";
-import { Loader2, Paperclip, Upload, X } from "lucide-react";
+import { Check, Loader2, Paperclip, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { DictationButton, DictationCapsule, isDictationActive } from "@/components/ui/dictation-capsule";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { useDictation } from "@/lib/useDictation";
-import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_OPTIONS, type DesignTaskType } from "@/lib/designTaskType";
+import {
+  DEFAULT_DESIGN_TASK_TYPE,
+  DESIGN_TASK_TYPE_ICONS,
+  DESIGN_TASK_TYPE_LABELS,
+  DESIGN_TASK_TYPE_OPTIONS,
+  type DesignTaskType,
+} from "@/lib/designTaskType";
 import { cn } from "@/lib/utils";
 
+import type { DesignComposerImprint } from "./designComposerImprint";
+import { QuoteImprintBadges } from "./QuoteImprintBadges";
 import type { QuoteAttachment } from "./queries";
 
 /**
@@ -29,14 +43,18 @@ import type { QuoteAttachment } from "./queries";
  * ФАЙЛИ КРІПЛЯТЬСЯ ДО ПОЗИЦІЇ, А НЕ ДО ЗАДАЧІ, і це навмисно: задача — рядок
  * журналу активності, зовнішнього ключа на неї не побудувати, а позиція живе
  * й до створення задачі, і після її закриття.
+ *
+ * ТИП ЗАДАЧІ БІЛЬШЕ НЕ ПИТАЄМО (REQ-157). П'ять плашок займали цілий ярус
+ * форми, а в 6 випадках із 10 відповідь була та сама: заміри 04.09.2026 —
+ * 392 «Візуалізації/адаптації» з 615 задач, за останні 30 днів 39 із 66.
+ * Тепер значення стоїть саме (`DEFAULT_DESIGN_TASK_TYPE`) і живе тихим рядком
+ * у підвалі, поруч із кнопкою: видно, з чим створюється задача, і міняється
+ * одним рухом. Прибрати поле зовсім було не можна — решта 27 задач місяця
+ * (креатив, верстка, адаптація макету, презентація) заводяться далі, а тип
+ * годує норми часу в дашборді дизайнерів і у звіті для СЕО.
  */
 
-/** Нанесення позиції, вже перекладене на людські назви сторінкою. */
-export type DesignComposerImprint = {
-  method: string;
-  place: string;
-  size: string | null;
-};
+export type { DesignComposerImprint };
 
 export function QuoteDesignTaskComposer({
   brief,
@@ -73,6 +91,10 @@ export function QuoteDesignTaskComposer({
 }) {
   const [dragOver, setDragOver] = React.useState(false);
   const busy = Boolean(saving || uploading);
+  /* Тип завжди має значення: сторінка ставить його за замовчуванням, а `null`
+     лишається можливим лише в старих шляхах, які цю форму не відкривають. */
+  const effectiveType = taskType ?? DEFAULT_DESIGN_TASK_TYPE;
+  const TypeIcon = DESIGN_TASK_TYPE_ICONS[effectiveType];
   const briefRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   /*
@@ -98,62 +120,22 @@ export function QuoteDesignTaskComposer({
       </div>
 
       {/*
-        ТОВАР — ПЕРШИЙ КРОК, і вибирається він тим самим селектом, що й раніше
-        в діалозі: перевинаходити для цього власні чипи не було потреби.
-        Задача заводиться НА ПОЗИЦІЮ: від неї беруться нанесення, тираж і фото.
+        НАНЕСЕННЯ ПОКАЗУЄМО, АЛЕ НЕ РЕДАГУЄМО, і тими самими пігулками, що
+        в картці вже створеної задачі (REQ-157): одна річ — один вигляд, хай
+        людина дивиться на неї до створення чи після. Ставлять нанесення при
+        створенні прорахунку, розмір дизайнер бере з ТЗ.
       */}
-      <div className="space-y-2">
-        {/*
-          НАНЕСЕННЯ ПОКАЗУЄМО, АЛЕ НЕ РЕДАГУЄМО. Тип і місце ставлять при
-          створенні прорахунку, а розмір дизайнер бере з ТЗ. Тут це довідка:
-          видно, з чим людина заводить задачу, і не треба відкривати «Товари».
-        */}
+      <div className="flex flex-wrap items-center gap-1.5">
         {imprint.length > 0 ? (
-          <ul className="space-y-1 pt-0.5">
-            {imprint.map((line, index) => (
-              <li key={`${line.method}-${index}`} className="flex flex-wrap items-center gap-x-2 text-2xs">
-                <span className="font-medium text-foreground">{line.method}</span>
-                <span className="text-muted-foreground">{line.place}</span>
-                {line.size ? <span className="text-muted-foreground">{line.size}</span> : null}
-              </li>
-            ))}
-          </ul>
+          <>
+            <QuoteImprintBadges imprint={imprint} />
+            <span className="text-2xs text-muted-foreground/70">— з товару, змінюється у вкладці «Товари»</span>
+          </>
         ) : (
           <p className="text-2xs text-muted-foreground">
             У цій позиції нанесення не вказано — його ставлять у товарі, при створенні прорахунку.
           </p>
         )}
-      </div>
-
-      <div className="space-y-1.5">
-        <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Тип задачі</span>
-        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Тип дизайн-задачі">
-          {DESIGN_TASK_TYPE_OPTIONS.map((option) => {
-            const active = taskType === option.value;
-            const Icon = DESIGN_TASK_TYPE_ICONS[option.value];
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                disabled={disabled || busy}
-                onClick={() => onTaskTypeChange(option.value)}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium",
-                  "transition-[background-color,border-color,color] duration-base ease-out motion-reduce:transition-none",
-                  "disabled:pointer-events-none disabled:opacity-50",
-                  active
-                    ? "border-foreground/35 bg-muted text-foreground"
-                    : "border-border/50 text-muted-foreground hover:border-border hover:text-foreground"
-                )}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       <div className="space-y-2">
@@ -260,17 +242,43 @@ export function QuoteDesignTaskComposer({
 
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
 
-      <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-        <span className="text-2xs text-muted-foreground">
-          {taskType ? "Задача зʼявиться в розділі «Дизайн»." : "Оберіть тип задачі, щоб створити."}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border/60 pt-3">
+        {/*
+          ТИП — РЯДОК, А НЕ ПИТАННЯ. Значення стоїть, іконка та сама, що в
+          решті застосунку, а «змінити» відкриває той самий перелік із п'яти —
+          просто він більше не займає ярус форми заради шести випадків із десяти.
+        */}
+        <span className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
+          <TypeIcon className="h-3.5 w-3.5 shrink-0" />
+          Тип: <span className="font-semibold text-foreground">{DESIGN_TASK_TYPE_LABELS[effectiveType]}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild disabled={disabled || busy}>
+              <button
+                type="button"
+                className="text-2xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground disabled:opacity-50"
+              >
+                змінити
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              {DESIGN_TASK_TYPE_OPTIONS.map((option) => {
+                const Icon = DESIGN_TASK_TYPE_ICONS[option.value];
+                return (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onSelect={() => onTaskTypeChange(option.value)}
+                    className="gap-2 text-sm"
+                  >
+                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="flex-1">{option.label}</span>
+                    {option.value === effectiveType ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </span>
-        <Button
-          type="button"
-          size="sm"
-          disabled={disabled || busy || !taskType}
-          className="gap-2"
-          onClick={onCreate}
-        >
+        <Button type="button" size="sm" disabled={disabled || busy} className="gap-2" onClick={onCreate}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Створити дизайн-задачу
         </Button>

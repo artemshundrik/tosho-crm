@@ -1,6 +1,14 @@
 import { getMethodLabel, getPrintPositionLabel } from "./catalog-utils";
 
-import type { DesignComposerImprint } from "./QuoteDesignTaskComposer";
+/**
+ * Нанесення позиції людськими словами: чим, де і (як лишилось із давніх
+ * позицій) якого розміру. `place: null` — місця немає взагалі.
+ */
+export type DesignComposerImprint = {
+  method: string;
+  place: string | null;
+  size: string | null;
+};
 
 /**
  * Нанесення позиції людськими словами — для довідки в композері дизайн-задачі
@@ -16,7 +24,9 @@ import type { DesignComposerImprint } from "./QuoteDesignTaskComposer";
  *
  * Місце буває вписаним руками (REQ-182#p24): якщо рядка довідника немає,
  * беремо підпис із самого нанесення, а не кажемо «Місце не вказано» про те,
- * що менеджер якраз вказав.
+ * що менеджер якраз вказав. Місця немає зовсім — `null`, а не готовий текст:
+ * бейдж у картці й рядок у формі кажуть про це по-своєму, і вирішувати за них
+ * тут означало б підставляти речення в бейдж на 22 px.
  */
 export function buildComposerImprint(
   item:
@@ -54,7 +64,7 @@ export function buildComposerImprint(
       place:
         getPrintPositionLabel(catalogTypes, item.resolvedTypeId, item.resolvedKindId, method.printPositionId) ??
         method.printPositionLabel?.trim() ??
-        "Місце не вказано",
+        null,
       size,
     };
   });

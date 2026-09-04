@@ -31,6 +31,8 @@ export type QuoteDesignTabItem = {
   methods?: Array<{
     methodId: string;
     printPositionId?: string;
+    /** Місце, вписане руками у вікні прорахунку (REQ-182#p24). */
+    printPositionLabel?: string | null;
     printWidthMm?: number | null;
     printHeightMm?: number | null;
   }> | null;
@@ -186,6 +188,7 @@ export function QuoteDesignTabSection({
         <QuoteDesignTasksPanel
           tasks={[taskForItem]}
           activeTaskId={taskForItem.id}
+          imprint={composerImprint}
           renderBrief={renderBrief}
           materials={designMaterials}
           materialsUploading={attachmentsUploading}
