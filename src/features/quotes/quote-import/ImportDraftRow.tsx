@@ -521,6 +521,13 @@ function RunsField({
   onRemoveRun?: (runKey: string) => void;
 }) {
   const divider = <span aria-hidden className="my-2 w-px shrink-0 self-stretch bg-border/60" />;
+  /*
+    ЩЕ ОДИН ТИРАЖ — ЛИШЕ КОЛИ ПОПЕРЕДНІЙ ЗАПОВНЕНИЙ.
+    Порожній тираж — це не варіант, це незадане питання: «Створити» на ньому
+    однаково спиняється й каже вписати кількість. Кнопка, яка додає другу таку
+    саму зупинку, лише забирає ширину в назви. Тому «плюс» чекає на число.
+  */
+  const blocked = runs.some((run) => run.quantity <= 0);
 
   return (
     <div
@@ -570,11 +577,15 @@ function RunsField({
           {divider}
           <button
             type="button"
-            disabled={disabled}
+            disabled={disabled || blocked}
             aria-label="Додати ще тираж"
-            title="Клієнт просить порахувати кілька кількостей"
+            title={
+              blocked
+                ? "Спершу впишіть кількість — порожній тираж нема з чим порівнювати"
+                : "Клієнт просить порахувати кілька кількостей"
+            }
             onClick={onAddRun}
-            className="grid h-9 w-8 shrink-0 place-items-center rounded-r-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            className="grid h-9 w-8 shrink-0 place-items-center rounded-r-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>

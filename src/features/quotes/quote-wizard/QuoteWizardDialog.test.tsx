@@ -364,6 +364,24 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({ catalog_model_id: null, catalog_kind_id: null });
   });
 
+  it("другий тираж не додається, поки перший порожній", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "Кепка six-panel{Enter}");
+    const add = screen.getByRole("button", { name: "Додати ще тираж" });
+    // Порожній тираж — це незадане питання, а не варіант: додавати другий нема сенсу.
+    expect(add).toBeDisabled();
+    expect(screen.getAllByRole("textbox", { name: "Кількість тиражу" })).toHaveLength(1);
+
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "100");
+    expect(add).toBeEnabled();
+    await user.click(add);
+    expect(screen.getAllByRole("textbox", { name: "Кількість тиражу" })).toHaveLength(2);
+    // Новий порожній знову замикає кнопку, доки в нього не впишуть число.
+    expect(add).toBeDisabled();
+  });
+
   it("перший товар із поліграфічного типу перемикає «Рахуємо» на поліграфію", async () => {
     const user = userEvent.setup();
     renderWizard();
