@@ -669,13 +669,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    * списком, кожна зі своїм посиланням.
    */
   const [designTasks, setDesignTasks] = useState<DesignTaskRow[]>([]);
-  /**
-   * Яку задачу показує вкладка «Дизайн». null — першу зі списку; окремого
-   * ефекту-скидання немає навмисно: панель сама падає на першу, коли обраної
-   * в списку більше немає (інший прорахунок, задачу видалили).
-   */
-  const [activeDesignTaskId, setActiveDesignTaskId] = useState<string | null>(null);
-  /** Підвкладка «Дедлайнів». Керована, щоб попередження вміло привести до потрібної дати. */
+    /** Підвкладка «Дедлайнів». Керована, щоб попередження вміло привести до потрібної дати. */
   const [deadlineSubTab, setDeadlineSubTab] = useState("internal");
   const [designTaskLoading, setDesignTaskLoading] = useState(false);
   const [designTaskError, setDesignTaskError] = useState<string | null>(null);
@@ -6210,7 +6204,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
               <QuoteDesignTabSection
                 items={items}
-                designTaskItemIds={designTaskItemIds}
                 itemsWithoutDesignTask={itemsWithoutDesignTask}
                 designTaskItemId={designTaskItemId}
                 onSelectDesignTaskItem={(itemId) => {
@@ -6240,10 +6233,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   }).then(() => setDesignComposerBrief(""));
                 }}
                 designTaskCards={designTaskCards}
-                activeDesignTaskId={activeDesignTaskId}
                 renderBrief={renderBriefRichText}
                 designMaterials={designMaterials}
-                onSelectTask={setActiveDesignTaskId}
                 onOpenTask={(taskId) => navigate(`/design/${taskId}`)}
                 onPreviewVisual={(file) => {
                   void ensureAttachmentAccessUrl(file, { variant: "preview" }).then((url) => {

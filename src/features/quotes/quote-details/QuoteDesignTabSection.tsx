@@ -3,6 +3,10 @@ import * as React from "react";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import type { DesignTaskType } from "@/lib/designTaskType";
 
+import { Package } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+
 import { buildComposerImprint } from "./designComposerImprint";
 import { QuoteDesignTaskComposer } from "./QuoteDesignTaskComposer";
 import { QuoteDesignTasksPanel, type QuoteDesignTaskCard } from "./QuoteDesignTasksPanel";
@@ -37,7 +41,6 @@ export type QuoteDesignTabItem = {
 
 export function QuoteDesignTabSection({
   items,
-  designTaskItemIds,
   itemsWithoutDesignTask,
   designTaskItemId,
   onSelectDesignTaskItem,
@@ -58,17 +61,14 @@ export function QuoteDesignTabSection({
   canEditQuoteContent,
   onCreateDesignTask,
   designTaskCards,
-  activeDesignTaskId,
   renderBrief,
   designMaterials,
-  onSelectTask,
   onOpenTask,
   onPreviewVisual,
   onDownloadVisual,
   onAddMaterials,
 }: {
   items: QuoteDesignTabItem[];
-  designTaskItemIds: Set<string>;
   itemsWithoutDesignTask: QuoteDesignTabItem[];
   designTaskItemId: string | null;
   onSelectDesignTaskItem: (itemId: string) => void;
@@ -91,10 +91,8 @@ export function QuoteDesignTabSection({
   canEditQuoteContent?: boolean;
   onCreateDesignTask: (itemId: string | null, hasFiles: boolean) => void;
   designTaskCards: QuoteDesignTaskCard[];
-  activeDesignTaskId: string | null;
   renderBrief: (text: string) => React.ReactNode;
   designMaterials: QuoteAttachment[];
-  onSelectTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   onPreviewVisual: (file: QuoteAttachment) => void;
   onDownloadVisual: (file: QuoteAttachment) => void;
@@ -120,6 +118,11 @@ export function QuoteDesignTabSection({
     }
     return map;
   }, [itemImages]);
+  /** Задача обраного товару, якщо вона вже є. */
+  const taskForItem = React.useMemo(
+    () => designTaskCards.find((task) => task.quoteItemId === fallbackItemId) ?? null,
+    [designTaskCards, fallbackItemId]
+  );
   const composerImprint = React.useMemo(
     () => buildComposerImprint(items.find((item) => item.id === fallbackItemId), catalogTypes),
     [catalogTypes, fallbackItemId, items]
@@ -128,58 +131,88 @@ export function QuoteDesignTabSection({
   return (
     <>
       {/*
-        СТВОРЕННЯ ЖИВЕ ТУТ (REQ-246), а не в меню «⋮» шапки. Порядок
-        такий, як його описав Артем: угорі товар, під ним ТЗ і файли
-        саме для нього, і кнопка. Блок стоїть НАД списком задач і
-        показується завжди, поки в прорахунку є позиції: другу задачу
-        на той самий товар (візуал і макет) заводять свідомо.
+        ОДНА СМУГА, І ВОНА ПРО ТОВАРИ (REQ-246).
+
+        Було дві: угорі мій вибір товару для нової задачі, нижче — власний
+        перемикач задач у панелі. Тобто той самий товар доводилось обирати
+        двічі, різними контролами. Тепер перемикач один і стоїть одразу під
+        заголовком: у ньому ВСІ товари прорахунку, а нижче відкривається те,
+        що для обраного товару є, — його задача або форма створення.
       */}
-      {!designTaskLoading && items.length > 0 && canEditQuoteContent ? (
-        <div className="mb-4">
-          <QuoteDesignTaskComposer
-            items={items.map((item) => ({
-              id: item.id,
-              title: item.title,
-              imageUrl: imageByItemId.get(item.id) ?? null,
-              hasTask: designTaskItemIds.has(item.id),
-            }))}
-            selectedItemId={fallbackItemId}
-            onSelectItem={onSelectDesignTaskItem}
-            brief={composerBrief}
-            onBriefChange={onComposerBriefChange}
-            briefPlaceholder={briefPlaceholder}
-            imprint={composerImprint}
-            files={composerFiles}
-            uploading={attachmentsUploading}
-            onAddFiles={(files) => onAddComposerFiles(files, fallbackItemId)}
-            onRemoveFile={onRemoveComposerFile}
-            taskType={designTaskType}
-            onTaskTypeChange={onDesignTaskTypeChange}
-            saving={designTaskSaving}
-            error={designTaskError}
-            onCreate={() => onCreateDesignTask(fallbackItemId, composerFiles.length > 0)}
-          />
+      {items.length > 0 && !designTaskLoading ? (
+        <div className="mb-4 flex flex-wrap gap-2" role="radiogroup" aria-label="Товар">
+          {items.map((item) => {
+            const on = item.id === fallbackItemId;
+            const task = designTaskCards.find((card) => card.quoteItemId === item.id) ?? null;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                title={item.title}
+                onClick={() => onSelectDesignTaskItem(item.id)}
+                className={cn(
+                  "inline-flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5 text-left transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                  on ? "border-foreground/70 bg-background" : "border-border/60 bg-background hover:bg-muted/40"
+                )}
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/30">
+                  {imageByItemId.get(item.id) ? (
+                    <img src={imageByItemId.get(item.id)} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <Package className="h-3.5 w-3.5 text-muted-foreground/60" />
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block max-w-[168px] truncate text-xs font-semibold text-foreground">
+                    {item.title || "Позиція"}
+                  </span>
+                  <span className="block tabular-nums text-3xs text-muted-foreground">
+                    {task?.number ?? "задачі ще немає"}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       ) : null}
 
       {designTaskLoading ? (
         <AppSectionLoader label="Завантаження..." />
-      ) : designTaskCards.length > 0 ? (
+      ) : taskForItem ? (
+        /* У товару вже є задача — показуємо саме її, без списку й без форми. */
         <QuoteDesignTasksPanel
-          tasks={designTaskCards}
-          activeTaskId={activeDesignTaskId}
+          tasks={[taskForItem]}
+          activeTaskId={taskForItem.id}
           renderBrief={renderBrief}
           materials={designMaterials}
           materialsUploading={attachmentsUploading}
           canAddMaterials={canEditQuoteContent}
-          onSelectTask={onSelectTask}
           onOpenTask={onOpenTask}
-            onPreviewVisual={onPreviewVisual}
-            onDownloadVisual={onDownloadVisual}
+          onPreviewVisual={onPreviewVisual}
+          onDownloadVisual={onDownloadVisual}
           onAddMaterials={onAddMaterials}
         />
+      ) : items.length > 0 && canEditQuoteContent ? (
+        /* Задачі немає — тут-таки її й заводимо, для ОБРАНОГО товару. */
+        <QuoteDesignTaskComposer
+          brief={composerBrief}
+          onBriefChange={onComposerBriefChange}
+          briefPlaceholder={briefPlaceholder}
+          imprint={composerImprint}
+          files={composerFiles}
+          uploading={attachmentsUploading}
+          onAddFiles={(files) => onAddComposerFiles(files, fallbackItemId)}
+          onRemoveFile={onRemoveComposerFile}
+          taskType={designTaskType}
+          onTaskTypeChange={onDesignTaskTypeChange}
+          saving={designTaskSaving}
+          error={designTaskError}
+          onCreate={() => onCreateDesignTask(fallbackItemId, composerFiles.length > 0)}
+        />
       ) : null}
-
     </>
   );
 }

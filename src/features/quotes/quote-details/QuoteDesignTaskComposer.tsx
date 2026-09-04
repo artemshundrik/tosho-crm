@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Loader2, Package, Paperclip, Upload, X } from "lucide-react";
+import { Loader2, Paperclip, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
@@ -20,23 +20,16 @@ import type { QuoteAttachment } from "./queries";
  * було нікуди: вкладення належали прорахунку цілком, тож дві задачі одного
  * прорахунку бачили один спільний список.
  *
- * ЯК ТЕПЕР. Порядок такий, як його описав Артем: угорі вибір товару, під ним
- * ТЗ і файли САМЕ ДЛЯ ЦЬОГО товару, і кнопка «Створити дизайн-задачу». Товар,
- * у якого задача вже є, лишається в списку позначеним — щоб було видно, що
- * зроблено, і щоб можна було завести другу задачу на той самий товар
- * (візуалізація й макет — це різні задачі).
+ * ЯК ТЕПЕР. Товар обирають смугою пігулок НАД цим блоком — тією самою, що
+ * перемикає вже заведені задачі. Форма ж відповідає лише за те, чого ще
+ * немає: ТЗ і файли для обраного товару. Свого вибору товару тут не було й
+ * не має бути: два контроли на одну відповідь — це та сама помилка, що й
+ * дві смуги пігулок поспіль.
  *
  * ФАЙЛИ КРІПЛЯТЬСЯ ДО ПОЗИЦІЇ, А НЕ ДО ЗАДАЧІ, і це навмисно: задача — рядок
  * журналу активності, зовнішнього ключа на неї не побудувати, а позиція живе
  * й до створення задачі, і після її закриття.
  */
-
-export type DesignComposerItem = {
-  id: string;
-  title: string;
-  imageUrl: string | null;
-  hasTask: boolean;
-};
 
 /** Нанесення позиції, вже перекладене на людські назви сторінкою. */
 export type DesignComposerImprint = {
@@ -46,9 +39,6 @@ export type DesignComposerImprint = {
 };
 
 export function QuoteDesignTaskComposer({
-  items,
-  selectedItemId,
-  onSelectItem,
   brief,
   onBriefChange,
   briefPlaceholder,
@@ -64,9 +54,6 @@ export function QuoteDesignTaskComposer({
   disabled,
   onCreate,
 }: {
-  items: DesignComposerItem[];
-  selectedItemId: string | null;
-  onSelectItem: (itemId: string) => void;
   brief: string;
   onBriefChange: (value: string) => void;
   /** Текст ТЗ, який успадкується з прорахунку, якщо своє не написали. */
@@ -107,7 +94,7 @@ export function QuoteDesignTaskComposer({
     <section className="space-y-4 rounded-2xl border border-border/60 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="text-sm font-semibold">Нова дизайн-задача</h3>
-        <p className="text-xs text-muted-foreground">Оберіть товар, напишіть ТЗ і прикріпіть файли замовника.</p>
+        <p className="text-xs text-muted-foreground">Напишіть ТЗ і прикріпіть файли замовника.</p>
       </div>
 
       {/*
@@ -116,52 +103,6 @@ export function QuoteDesignTaskComposer({
         Задача заводиться НА ПОЗИЦІЮ: від неї беруться нанесення, тираж і фото.
       */}
       <div className="space-y-2">
-        <Label>Товар</Label>
-        {/*
-          Пігулки — ТІ САМІ, що в смузі дизайн-задач нижче: фото, назва, мітка.
-          Це вже звичний спосіб перемикати товар у цій вкладці, тож вибирати
-          товар для НОВОЇ задачі логічно так само. Селект тут показував лише
-          назву, і фото товару, за яким людина його впізнає, зникало.
-        */}
-        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Товар для дизайн-задачі">
-          {items.map((item) => {
-            const on = item.id === selectedItemId;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                disabled={disabled || busy}
-                title={item.title}
-                onClick={() => onSelectItem(item.id)}
-                className={cn(
-                  "inline-flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5 text-left transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                  "disabled:pointer-events-none disabled:opacity-50",
-                  on ? "border-foreground/70 bg-background" : "border-border/60 bg-background hover:bg-muted/40"
-                )}
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/30">
-                  {item.imageUrl ? (
-                    <img src={item.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <Package className="h-3.5 w-3.5 text-muted-foreground/60" />
-                  )}
-                </span>
-                <span className="min-w-0">
-                  <span className="block max-w-[168px] truncate text-xs font-semibold text-foreground">
-                    {item.title || "Позиція"}
-                  </span>
-                  {item.hasTask ? (
-                    <span className="block text-3xs text-muted-foreground">задача вже є</span>
-                  ) : null}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
         {/*
           НАНЕСЕННЯ ПОКАЗУЄМО, АЛЕ НЕ РЕДАГУЄМО. Тип і місце ставлять при
           створенні прорахунку, а розмір дизайнер бере з ТЗ. Тут це довідка:
@@ -253,7 +194,7 @@ export function QuoteDesignTaskComposer({
           className={cn(
             "relative flex min-h-[92px] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors",
             dragOver ? "border-primary/70 bg-primary/10" : "border-border/50 hover:border-border/80",
-            (disabled || busy || !selectedItemId) && "pointer-events-none opacity-50"
+            (disabled || busy) && "pointer-events-none opacity-50"
           )}
           onDragOver={(event) => {
             event.preventDefault();
@@ -326,7 +267,7 @@ export function QuoteDesignTaskComposer({
         <Button
           type="button"
           size="sm"
-          disabled={disabled || busy || !selectedItemId || !taskType}
+          disabled={disabled || busy || !taskType}
           className="gap-2"
           onClick={onCreate}
         >

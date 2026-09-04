@@ -46,6 +46,8 @@ import type { QuoteAttachment } from "./queries";
 
 export type QuoteDesignTaskCard = {
   id: string;
+  /** Позиція прорахунку, на яку заведено задачу (REQ-246). */
+  quoteItemId: string | null;
   /** DT-0826-021 — номер дизайн-задачі з metadata. */
   number: string | null;
   /** Назва товару: модель із задачі, назва позиції або назва самої задачі. */
@@ -195,6 +197,7 @@ export function buildQuoteDesignTaskCards({
 
       return {
         id: task.id,
+        quoteItemId: itemId,
         number: readString("design_task_number"),
         title:
           readString("model") ??
@@ -301,7 +304,6 @@ export function QuoteDesignTasksPanel({
   materials,
   materialsUploading,
   canAddMaterials,
-  onSelectTask,
   onOpenTask,
   onPreviewVisual,
   onDownloadVisual,
@@ -315,7 +317,6 @@ export function QuoteDesignTasksPanel({
   materials: QuoteAttachment[];
   materialsUploading?: boolean;
   canAddMaterials?: boolean;
-  onSelectTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   onPreviewVisual: (file: QuoteAttachment) => void;
   onDownloadVisual: (file: QuoteAttachment) => void;
@@ -323,79 +324,10 @@ export function QuoteDesignTasksPanel({
 }) {
   const active = tasks.find((task) => task.id === activeTaskId) ?? tasks[0] ?? null;
   if (!active) return null;
-  const activeIndex = tasks.indexOf(active);
-  // Від чотирьох пігулок підпис тіснішає: назва товару лишається, мініатюра й
-  // поля меншають. Інакше п'ять задач розповзаються на три ряди.
-  const tight = tasks.length > 3;
   const activeStatus = statusOf(active.status);
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <span className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
-          Дизайн-задачі{" "}
-          <span className="tabular-nums text-foreground">{tasks.length}</span>
-          <span className="font-normal normal-case tracking-normal"> · по одній на товар із нанесенням</span>
-        </span>
-        {tasks.length > 1 ? (
-          <span className="text-xs text-muted-foreground">
-            показано <span className="font-semibold tabular-nums text-foreground">{activeIndex + 1}</span> з{" "}
-            {tasks.length}
-          </span>
-        ) : null}
-      </div>
-
-      {tasks.length > 1 ? (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {tasks.map((task) => {
-            const on = task.id === active.id;
-            const pillStatus = statusOf(task.status);
-            return (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => onSelectTask(task.id)}
-                title={task.title}
-                className={cn(
-                  "inline-flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                  on ? "border-foreground/70 bg-background" : "border-border/60 bg-background hover:bg-muted/40"
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/30",
-                    tight ? "h-7 w-7" : "h-8 w-8"
-                  )}
-                >
-                  {task.imageUrl ? (
-                    <img src={task.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <Package className="h-3.5 w-3.5 text-muted-foreground/60" />
-                  )}
-                </span>
-                <span className="min-w-0">
-                  <span className="block max-w-[168px] truncate text-xs font-semibold text-foreground">
-                    {task.title}
-                  </span>
-                  {task.number ? (
-                    <span className="block tabular-nums text-3xs text-muted-foreground">{task.number}</span>
-                  ) : null}
-                </span>
-                {/* Стан задачі видно НЕ ВІДКРИВАЮЧИ її: без крапки пігулки
-                    відрізнялись лише назвою товару, і «яка з трьох ще не
-                    зроблена» доводилось перебирати кліками. */}
-                {pillStatus ? (
-                  <span
-                    className={cn("h-2 w-2 shrink-0 rounded-full", toneDotClass[pillStatus.tone])}
-                    title={pillStatus.label}
-                  />
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-
       {/*
         ШАПКА Ш1 (REQ-155 p6). Три яруси, і кожен відповідає на своє питання:
         ЩО ЦЕ (номер і статус) → ПРО ЩО (товар і тип) → ХТО Й КОЛИ (позиція,
