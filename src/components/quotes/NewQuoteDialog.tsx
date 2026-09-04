@@ -31,6 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
 import { cn } from "@/lib/utils";
+import { QuoteRequiredValue } from "./QuoteRequiredValue";
 import { QuoteDealTypePicker } from "@/features/quotes/components/QuoteDealTypePicker";
 import {
   DEFAULT_DEAL_TYPE,
@@ -209,11 +210,10 @@ const normalizePartyLabel = (value?: string | null) =>
 /**
  * Section header component
  */
+/** Підпис розділу — реченням, а не капсом: REQ-157#p2, слідом за REQ-175#p33. */
 const SectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="flex items-center gap-3 -mx-6 px-6">
-    <span className="text-xs uppercase tracking-wider text-muted-foreground font-normal">
-      {children}
-    </span>
+    <span className="text-sm font-semibold text-foreground">{children}</span>
     <Separator className="flex-1 bg-border/40" />
   </div>
 );
@@ -593,6 +593,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   currentManagerLabel,
 }) => {
   const isEditMode = mode === "edit";
+  /** Чи вже тиснули «Зберегти»: до першого натиску вікно нічого не червонить. */
+  const [submitTried, setSubmitTried] = React.useState(false);
   // Form state
   const [status, setStatus] = React.useState<(typeof QUOTE_STATUSES)[number]["value"]>("new");
   const [comment, setComment] = React.useState("");
@@ -1382,6 +1384,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
   // Handle submit
   const handleSubmit = async () => {
+    setSubmitTried(true);
     const showValidationError = (message: string) => {
       toast.error("Перевірте форму", {
         description: message,
@@ -1707,13 +1710,13 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       <DialogContent className="w-[calc(100vw-2rem)] max-w-[1180px] max-h-[88vh] overflow-hidden !p-0 sm:!p-0">
         <div className="flex max-h-[85vh] flex-col">
           <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle className="text-base font-medium flex items-center gap-2">
-              <Plus className="h-4 w-4" />
+            {/* Без плюса (REQ-157#p2): «додати» на вікні, яке редагує. */}
+            <DialogTitle className="text-base font-medium">
               {isEditMode ? "Редагувати прорахунок" : "Новий прорахунок"}
             </DialogTitle>
             <DialogDescription>
               {isEditMode
-                ? "Оновіть актуальні параметри прорахунку."
+                ? "Замовник, дедлайн, гроші й доставка. Товари й дизайн — на своїх вкладках."
                 : "Заповніть параметри замовлення, щоб створити прорахунок."}
             </DialogDescription>
           </DialogHeader>
@@ -1958,24 +1961,18 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         <div className="mt-5 space-y-4">
           <SectionHeader>Деталі</SectionHeader>
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Замовник або Лід *</div>
-              <div className={cn(
-                "rounded-xl border px-3 py-2 text-sm",
-                customerId ? "tone-success-subtle text-foreground" : "border-destructive/40 bg-destructive/5 text-destructive"
-              )}>
-                {customerId ? "Поле заповнено" : "Потрібно обрати замовника або ліда перед збереженням"}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Дедлайн прорахунку *</div>
-              <div className={cn(
-                "rounded-xl border px-3 py-2 text-sm",
-                deadline ? "tone-success-subtle text-foreground" : "border-destructive/40 bg-destructive/5 text-destructive"
-              )}>
-                {deadline ? format(deadline, "d MMMM yyyy, HH:mm", { locale: uk }) : "Потрібно вказати дату та час дедлайну"}
-              </div>
-            </div>
+            <QuoteRequiredValue
+              label="Замовник або Лід"
+              value={customerId ? customerLabel?.trim() || "Обрано" : null}
+              emptyHint="Не обрано — оберіть у полі вгорі"
+              invalid={submitTried}
+            />
+            <QuoteRequiredValue
+              label="Дедлайн прорахунку"
+              value={deadline ? format(deadline, "d MMMM yyyy, HH:mm", { locale: uk }) : null}
+              emptyHint="Не заданий — поставте в полі вгорі"
+              invalid={submitTried}
+            />
             {/* Тільки на поліграфії: шкала Олени виросла з неї, на мерчі лишається
                 старе дно 20 % (REQ-182). Показувати перемикач на мерчі означало б
                 просити рішення, яке ні на що не впливає. */}
@@ -2037,7 +2034,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           </div>
         ) : null}
 
-        {/* Product section */}
+        {/* Продукція, нанесення й дизайн — НЕ в режимі редагування (REQ-157#p2):
+            вони дублюють вкладки «Товари» й «Дизайн» (REQ-246), через що вікно
+            виросло до 2407 px, бачачи лише ПЕРШУ позицію. У створенні — як було. */}
+        {!isEditMode ? (
         <div className="mt-5 space-y-4">
           <SectionHeader>Продукція</SectionHeader>
 
@@ -2291,8 +2291,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           </div>
         </div>
 
+        ) : null}
+
         {/* Print applications section */}
-        {!isPrintPackageMode ? (
+        {!isEditMode && !isPrintPackageMode ? (
         <div className="mt-8 space-y-4">
           <SectionHeader>Нанесення</SectionHeader>
           <div className="rounded-4xl border border-border/40 bg-background/30 p-4 md:p-5">
@@ -2514,7 +2516,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         </div>
 
         {/* Design section */}
-        {(isPrintPackageMode || printMode !== "no_print") ? (
+        {!isEditMode && (isPrintPackageMode || printMode !== "no_print") ? (
         <div className="mt-8 space-y-4">
           <SectionHeader>Дизайн</SectionHeader>
           <div className="rounded-3xl border border-border/40 bg-background/35 p-4 md:p-5">
@@ -2743,7 +2745,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   disabled={submitting}
                   className="gap-1.5 px-4 h-9 rounded-[var(--radius-md)] "
                 >
-                  <Plus className="h-3.5 w-3.5" />
                   {submitting ? "Збереження..." : isEditMode ? "Зберегти" : "Створити"}
                 </Button>
               </div>
