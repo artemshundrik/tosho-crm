@@ -101,11 +101,13 @@ describe("QuoteWizardDialog — один екран", () => {
     );
   });
 
-  it("шапка, тип виробу і три джерела стоять на одному екрані", () => {
+  it("шапка, два типи виробу і три джерела стоять на одному екрані", () => {
     renderWizard();
     expect(screen.getByText("шапка прорахунку")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Поліграфія/ })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /Мерч/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Товар/ })).toBeChecked();
+    // «Інше» прибрано (REQ-182): це був дефолт при заведенні категорії, а не вибір.
+    expect(screen.queryByRole("radio", { name: /Інше/ })).not.toBeInTheDocument();
     const sources = screen.getByRole("tablist", { name: "Джерело позицій" });
     expect(within(sources).getAllByRole("tab")).toHaveLength(3);
     expect(within(sources).getByRole("tab", { name: /Excel/ })).toHaveAttribute("aria-selected", "true");

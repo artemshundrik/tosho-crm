@@ -84,7 +84,7 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
         label: "Quote Type And Ownership",
         description: "Тип прорахунку і юридичні форми, які теж сприймаються як маркери.",
         items: [
-          { label: "Мерч", note: "Quote type для мерчу", renderAs: "chip", active: true, source: ["src/features/quotes/quotes-page/config.ts", "src/features/catalog/ProductCatalogPage/components/ContentHeader.tsx"] },
+          { label: "Товар", note: "Quote type для товару", renderAs: "chip", active: true, source: ["src/features/quotes/quotes-page/config.ts", "src/features/catalog/ProductCatalogPage/components/ContentHeader.tsx"] },
           { label: "Поліграфія", note: "Quote type для друку", renderAs: "chip", active: true, source: ["src/features/quotes/quotes-page/config.ts", "src/features/catalog/ProductCatalogPage/components/ContentHeader.tsx"] },
           { label: "Інше", note: "Fallback quote type", renderAs: "chip", source: ["src/features/quotes/quotes-page/config.ts"] },
           { label: "ТОВ", note: "Поширений ownership type", renderAs: "tag", className: "rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground", source: ["src/lib/customerLegalEntities.ts", "src/components/customers/CustomerDialog.tsx"] },

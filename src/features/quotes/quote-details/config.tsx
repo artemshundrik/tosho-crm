@@ -227,7 +227,7 @@ export const STATUS_NEXT_ACTION: Record<
 };
 
 export const QUOTE_TYPE_LABELS: Record<string, string> = {
-  merch: "Мерч",
+  merch: "Товар",
   print: "Поліграфія",
   other: "Інше",
 };

@@ -17,7 +17,6 @@ import {
   Plus,
   Printer,
   Settings,
-  Shirt,
   Sparkles,
 } from "lucide-react";
 import type { CatalogType, CatalogKind, MethodDirectoryEntry } from "@/types/catalog";
@@ -59,8 +58,8 @@ export function ContentHeader({
   onCountPrintPositionUsage,
 }: ContentHeaderProps) {
   const quoteType = selectedType?.quote_type === "merch" || selectedType?.quote_type === "print" ? selectedType.quote_type : "other";
-  const quoteTypeLabel = quoteType === "merch" ? "мерч" : quoteType === "print" ? "поліграфія" : "інше";
-  const QuoteTypeIcon = quoteType === "merch" ? Shirt : quoteType === "print" ? Printer : Package;
+  const quoteTypeLabel = quoteType === "merch" ? "товар" : quoteType === "print" ? "поліграфія" : "інше";
+  const QuoteTypeIcon = quoteType === "merch" ? Package : quoteType === "print" ? Printer : Package;
   // useMemo, а не `?? []`: новий літерал масиву на кожен рендер зробив би
   // залежності підказок нестабільними (і eslint правий, що свариться).
   const availableMethods = useMemo(() => selectedKind?.methods ?? [], [selectedKind]);

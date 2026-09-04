@@ -11,7 +11,6 @@ import {
   Paperclip,
   Plus,
   Printer,
-  Shirt,
   Trash2,
   Truck,
   Upload,
@@ -108,9 +107,8 @@ import type { CatalogModel, CatalogModelVariant, CatalogType } from "@/types/cat
 import { CatalogModelPicker, getVisibleCatalogVariants } from "@/components/catalog/CatalogModelPicker";
 
 const QUOTE_TYPES = [
-  { value: "merch", label: "Мерч", icon: Shirt },
+  { value: "merch", label: "Товар", icon: Package },
   { value: "print", label: "Поліграфія", icon: Printer },
-  { value: "other", label: "Інше", icon: Package },
 ] as const;
 
 const CURRENCIES = [

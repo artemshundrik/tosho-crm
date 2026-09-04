@@ -30,7 +30,7 @@ export const DEFAULT_MIN_QUANTITY = 1;
  * Quote type labels for UI display
  */
 export const QUOTE_TYPE_LABELS = {
-  merch: "Мерч",
+  merch: "Товар",
   print: "Поліграфія",
   other: "Інше",
 } as const;

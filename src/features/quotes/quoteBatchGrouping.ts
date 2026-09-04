@@ -48,6 +48,6 @@ export function groupProductsForQuotes<T extends { quoteType?: string | null }>(
 export function describeQuoteBatchGroups<T>(groups: QuoteBatchGroup<T>[]): string[] {
   return groups.map(
     (group) =>
-      `${quoteTypeLabel(group.quoteType)} · ${pluralUk(group.products.length, "товар", "товари", "товарів")}`
+      `${quoteTypeLabel(group.quoteType)} · ${pluralUk(group.products.length, "позиція", "позиції", "позицій")}`
   );
 }

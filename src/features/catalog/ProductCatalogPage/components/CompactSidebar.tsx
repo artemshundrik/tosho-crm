@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ChevronDown, ChevronRight, Edit2, Package, Plus, Printer, Shirt } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Edit2, Package, Plus, Printer } from "lucide-react";
 import type { CatalogType, QuoteType } from "@/types/catalog";
 
 /**
@@ -93,7 +93,7 @@ export function CompactSidebar({
     quoteType === "merch" || quoteType === "print" || quoteType === "other" ? quoteType : "other";
 
   const groups: Array<{ key: QuoteType; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-    { key: "merch", label: "Мерч", icon: Shirt },
+    { key: "merch", label: "Товар", icon: Package },
     { key: "print", label: "Поліграфія", icon: Printer },
     { key: "other", label: "Інше", icon: Package },
   ];

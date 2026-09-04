@@ -129,9 +129,8 @@ const CURRENCIES = [
  * Quote types
  */
 const QUOTE_TYPES = [
-  { value: "merch", label: "Мерч", icon: Shirt },
+  { value: "merch", label: "Товар", icon: Package },
   { value: "print", label: "Поліграфія", icon: Printer },
-  { value: "other", label: "Інше", icon: Package },
 ];
 
 /**

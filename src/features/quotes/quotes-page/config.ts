@@ -12,8 +12,8 @@ import {
   Layers,
   PlayCircle,
   PlusCircle,
+  Package,
   Printer,
-  Shirt,
   XCircle,
 } from "lucide-react";
 
@@ -186,7 +186,7 @@ export const createPrintConfig = (): PrintConfig => ({
 });
 
 export const QUOTE_TYPE_OPTIONS = [
-  { id: "merch", label: "Мерч", icon: Shirt },
+  { id: "merch", label: "Товар", icon: Package },
   { id: "print", label: "Поліграфія", icon: Printer },
   { id: "other", label: "Інше", icon: Layers },
 ];

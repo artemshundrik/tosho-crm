@@ -66,6 +66,6 @@ describe("describeQuoteBatchGroups", () => {
       product("print", "Візитка"),
     ]);
 
-    expect(describeQuoteBatchGroups(groups)).toEqual(["Мерч · 3 товари", "Поліграфія · 1 товар"]);
+    expect(describeQuoteBatchGroups(groups)).toEqual(["Товар · 3 позиції", "Поліграфія · 1 позиція"]);
   });
 });

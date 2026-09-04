@@ -39,7 +39,7 @@ export function useCategoryManager({
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryMode, setCategoryMode] = useState<CategoryMode>("type");
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newTypeQuoteType, setNewTypeQuoteType] = useState<QuoteType>("other");
+  const [newTypeQuoteType, setNewTypeQuoteType] = useState<QuoteType>("merch");
   const [selectedTypeForKind, setSelectedTypeForKind] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export function useCategoryManager({
   /**
    * Opens dialog to add a new type (category)
    */
-  const openAddType = (quoteType: QuoteType = "other") => {
+  const openAddType = (quoteType: QuoteType = "merch") => {
     setCategoryMode("type");
     setNewCategoryName("");
     setNewTypeQuoteType(quoteType);

@@ -1,14 +1,22 @@
-import { FileSpreadsheet, Link2, Package, PencilLine, Printer, Shirt } from "lucide-react";
+import { FileSpreadsheet, Link2, Package, PencilLine, Printer } from "lucide-react";
 
 /**
  * Словник вікна «Новий прорахунок» (REQ-237): що рахуємо і звідки позиції.
  *
- * Типи виробу лишились ті самі, що в першому екрані REQ-134; джерел стало
- * три — до «руками» й «Excel» додалось «за посиланням». Тримається окремо від
- * розмітки, бо ці значення читає й сторінка прорахунків (`quote_type`).
+ * Типів виробу ДВА, не три (REQ-182, 04.09.2026). «Інше» прибрано: заміри
+ * проду показали, що це був не вибір людини, а дефолт при заведенні категорії
+ * каталогу — там осіли 16 із 29 типів, зокрема Агро й Туризм. Менеджери тікали
+ * туди від слова «мерч»: усі 20 агро-позицій пішли в «Інше», хоч «Мерч» був
+ * поруч, бо каска будівельника й опадомір мерчем не звучать. Тому друга
+ * відповідь тепер «Товар» — слово, яке покриває всі 29 категорій і вже
+ * вживалось у CRM (`DesignTaskProductCard`).
+ *
+ * Значення `merch` у базі лишилось те саме: перейменовано ПІДПИС, не дані.
+ * `other` теж лишився в `QuoteType` — під ним 78 старих прорахунків, які мають
+ * далі знаходитись у фільтрах.
  */
 
-export type QuoteKindValue = "print" | "merch" | "other";
+export type QuoteKindValue = "print" | "merch";
 
 /** Звідки беруться позиції: людина вводить їх руками, з файлу або зі сторінки товару. */
 export type QuoteSourceValue = "manual" | "excel" | "link";
@@ -37,15 +45,8 @@ export const QUOTE_KINDS: QuoteKindOption[] = [
   },
   {
     value: "merch",
-    label: "Мерч",
-    hint: "Одяг, аксесуари, сувеніри з нанесенням",
-    icon: Shirt,
-    tone: "bg-muted text-muted-foreground",
-  },
-  {
-    value: "other",
-    label: "Інше",
-    hint: "Усе, що не лягло в перші дві",
+    label: "Товар",
+    hint: "Усе, що купуємо готовим і брендуємо",
     icon: Package,
     tone: "bg-muted text-muted-foreground",
   },
