@@ -1148,6 +1148,56 @@ export type Database = {
         }
         Relationships: []
       }
+      catalog_variants: {
+        Row: {
+          created_at: string
+          id: string
+          image_bucket: string | null
+          image_path: string | null
+          is_active: boolean
+          model_id: string
+          name: string
+          sku: string | null
+          sort_order: number
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          image_bucket?: string | null
+          image_path?: string | null
+          is_active?: boolean
+          model_id: string
+          name: string
+          sku?: string | null
+          sort_order?: number
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_bucket?: string | null
+          image_path?: string | null
+          is_active?: boolean
+          model_id?: string
+          name?: string
+          sku?: string | null
+          sort_order?: number
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_variants_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commits: {
         Row: {
           committed_at: string
@@ -3692,6 +3742,7 @@ export type Database = {
           catalog_kind_id: string | null
           catalog_model_id: string | null
           catalog_type_id: string | null
+          catalog_variant_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -3715,6 +3766,7 @@ export type Database = {
           catalog_kind_id?: string | null
           catalog_model_id?: string | null
           catalog_type_id?: string | null
+          catalog_variant_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -3738,6 +3790,7 @@ export type Database = {
           catalog_kind_id?: string | null
           catalog_model_id?: string | null
           catalog_type_id?: string | null
+          catalog_variant_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -3776,6 +3829,13 @@ export type Database = {
             columns: ["catalog_type_id"]
             isOneToOne: false
             referencedRelation: "catalog_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_items_catalog_variant_id_fkey"
+            columns: ["catalog_variant_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_variants"
             referencedColumns: ["id"]
           },
           {

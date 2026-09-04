@@ -63,6 +63,9 @@ export function QuoteItemModelSwap({
       catalog_type_id: suggestion.typeId,
       catalog_kind_id: suggestion.kindId,
       catalog_model_id: suggestion.modelId,
+      // Знайшли за артикулом кольору — колір і записуємо; знайшли за назвою —
+      // стираємо старий, бо він належав ІНШІЙ моделі (REQ-250#p1).
+      catalog_variant_id: suggestion.matched?.variantId ?? null,
       ...(kindChanged ? { methods: null, print_position_id: null } : {}),
     });
     setSaving(false);
@@ -112,7 +115,7 @@ export function QuoteItemModelSwap({
                   {suggestion.kindName} · {suggestion.typeName}
                   {/* Знайшли за кодом — показуємо, ЗА ЯКИМ саме: у моделі їх
                       стільки ж, скільки кольорів (REQ-248). */}
-                  {suggestion.matchedSku ? ` · арт. ${suggestion.matchedSku}` : ""}
+                  {suggestion.matched ? ` · арт. ${suggestion.matched.sku}` : ""}
                   {suggestion.modelId === currentModelId ? " · зараз обраний" : ""}
                 </span>
               </span>

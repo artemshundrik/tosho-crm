@@ -94,6 +94,16 @@ const fetchCatalogBase = vi.fn(async () => ({
   },
 }));
 
+/**
+ * Пошук за артикулом КОЛЬОРУ (REQ-250#p1): база віддає сам варіант, і його id
+ * має долетіти до позиції прорахунку. Без цього моку хук просто не сходив би в
+ * базу — решта тестів шукає кирилицею, а вона в базу не ходить.
+ */
+const fetchCatalogVariantsBySku = vi.fn(async () => ({
+  ok: true as const,
+  data: [{ modelId: "m-lenny", variantId: "v-green", variantName: "Зелений", sku: "U0102-Green" }],
+}));
+
 const insertPrintPositionRow = vi.fn(async (payload: Record<string, unknown>) => {
   void payload;
   return { ok: true as const, data: { id: "place-new" } };
@@ -106,6 +116,7 @@ vi.mock("@/features/quotes/quote-details/queries", () => ({
   insertCatalogModelRow: (payload: Record<string, unknown>) => insertCatalogModelRow(payload),
   fetchKindPrintPositions: async () => ({ ok: true as const, data: [] }),
   insertPrintPositionRow: (payload: Record<string, unknown>) => insertPrintPositionRow(payload),
+  fetchCatalogVariantsBySku: () => fetchCatalogVariantsBySku(),
 }));
 
 const runDefaults = { markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 };
@@ -133,6 +144,7 @@ describe("QuoteWizardDialog — один екран", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
     insertQuoteItemRow.mockClear();
+    fetchCatalogVariantsBySku.mockClear();
     persistQuoteRuns.mockClear();
     insertCatalogModelRow.mockClear();
     insertPrintPositionRow.mockClear();
@@ -268,6 +280,30 @@ describe("QuoteWizardDialog — один екран", () => {
       catalog_model_id: "m-lenny",
       catalog_kind_id: "k-hoodie",
       catalog_type_id: "t-cloth",
+    });
+  });
+
+  it("артикул кольору: позиція запам'ятовує САМЕ той колір, а не перший варіант моделі", async () => {
+    // До REQ-250#p1 позиція знала лише модель, і в замовлення їхав артикул
+    // першого кольору. Тепер база віддає сам варіант, і його id лягає в рядок.
+    const user = userEvent.setup();
+    const { prepareQuote } = renderWizard();
+    const field = screen.getByRole("combobox", { name: "Товар: посилання або назва" });
+
+    await user.type(field, "U0102-Green");
+    const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    const option = await within(list).findByRole("option", { name: /Реглан LENNY/ });
+    // У підказці видно ТОЙ артикул, який шукали.
+    expect(within(option).getByText(/U0102-Green/)).toBeInTheDocument();
+
+    await user.click(option);
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "40");
+    await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
+
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalled());
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({
+      catalog_model_id: "m-lenny",
+      catalog_variant_id: "v-green",
     });
   });
 

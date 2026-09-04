@@ -3,6 +3,7 @@ import type {
   CatalogModelRowRaw,
   CatalogTypeRowRaw,
 } from "@/features/quotes/quote-details/queries";
+import type { CatalogVariantMatch } from "@/features/quotes/quote-details/queries";
 import { scoreCompanyNameMatch } from "@/lib/companyNameSearch";
 
 import type { QuoteImportDraftCatalog } from "@/features/quotes/quote-import/types";
@@ -34,7 +35,8 @@ import type { QuoteImportDraftCatalog } from "@/features/quotes/quote-import/typ
  * дорого. Їх шукає база — `useCatalogSkuMatches` у `catalogSkuSearch.ts`, — а
  * сюди приходить готова мапа `modelId → збіглий артикул` останнім аргументом
  * `rankCatalogSuggestions`. Локальний пошук від цього не залежить: без мапи
- * все працює як раніше.
+ * все працює як раніше. З REQ-250#p1 варіанти — окрема таблиця, тож збіг
+ * приносить не лише артикул, а й сам варіант: його id лягає в позицію.
  */
 
 export type CatalogSuggestion = QuoteImportDraftCatalog & {
@@ -42,10 +44,11 @@ export type CatalogSuggestion = QuoteImportDraftCatalog & {
   /** Артикул моделі — за ним теж шукаємо (REQ-178#p7); `null` — модель без артикула. */
   sku: string | null;
   /**
-   * Артикул, який справді збігся з набраним, — коли модель знайшлась запитом
-   * по всіх артикулах варіантів (REQ-248). `null`, поки шукали лише локально.
+   * Варіант, який справді збігся з набраним, — коли модель знайшлась запитом по
+   * артикулах кольорів (REQ-248, таблиця з REQ-250#p1). `undefined`, поки
+   * шукали лише локально. Його `variantId` лягає в позицію прорахунку.
    */
-  matchedSku?: string | null;
+  matched?: CatalogVariantMatch;
   /** `print` / `merch` / інше з `catalog_types.quote_type` — щоб перемикач «Рахуємо» міг піти за вибором. */
   quoteType: string | null;
 };
@@ -102,7 +105,7 @@ export function scoreSkuMatch(query: string, sku: string | null): number {
   return 0;
 }
 
-const EMPTY_SKU_MATCHES: ReadonlyMap<string, string> = new Map();
+const EMPTY_SKU_MATCHES: ReadonlyMap<string, CatalogVariantMatch> = new Map();
 
 /**
  * Чи схоже набране на артикул.
@@ -129,20 +132,6 @@ export function looksLikeSku(query: string): boolean {
   return /\d/.test(token) || /[./-]/.test(token);
 }
 
-/**
- * Який саме з артикулів моделі збігся — щоб підказка показала його, а не код
- * першого кольору. Людина, яка вставила «TSRA170-BK», має побачити «TSRA170-BK»
- * і впізнати свій товар, інакше збіг виглядає випадковим.
- */
-export function bestMatchingSku(skus: readonly string[], query: string): string | null {
-  let best: { sku: string; score: number } | null = null;
-  for (const sku of skus) {
-    const score = scoreSkuMatch(query, sku);
-    if (score > 0 && (!best || score > best.score)) best = { sku, score };
-  }
-  return best?.sku ?? null;
-}
-
 /** Скільки підказок показуємо: більше — це вже список, а не підказка. */
 export const CATALOG_SUGGESTION_LIMIT = 8;
 
@@ -162,7 +151,7 @@ export function rankCatalogSuggestions(
    * Що знайшла база по ВСІХ артикулах моделі та її варіантів: `modelId` → той
    * самий збіглий артикул (REQ-248). Порожня мапа — шукали лише локально.
    */
-  skuMatches: ReadonlyMap<string, string> = EMPTY_SKU_MATCHES
+  skuMatches: ReadonlyMap<string, CatalogVariantMatch> = EMPTY_SKU_MATCHES
 ): CatalogSuggestion[] {
   const trimmed = query.trim();
   if (!trimmed) return [];
@@ -175,7 +164,7 @@ export function rankCatalogSuggestions(
     // Артикул варіанта важить рівно стільки ж, скільки артикул моделі: для
     // менеджера це той самий код товару, і те, що один лежить скаляром, а
     // другий — у масиві варіантів, його не стосується.
-    const matchedSku = (suggestion.modelId ? skuMatches.get(suggestion.modelId) : null) ?? null;
+    const matched = suggestion.modelId ? skuMatches.get(suggestion.modelId) : undefined;
     // Збіг у назві моделі важить більше за збіг у виді: +200 ставить усі
     // моделі-збіги вище за будь-який вид-збіг, а всередині групи порядок
     // лишається за силою самого збігу.
@@ -183,9 +172,9 @@ export function rankCatalogSuggestions(
       byModel > 0 ? byModel + 200 : 0,
       byKind,
       scoreSkuMatch(trimmed, suggestion.sku),
-      scoreSkuMatch(trimmed, matchedSku)
+      scoreSkuMatch(trimmed, matched?.sku ?? null)
     );
-    if (score >= minScore) scored.push({ suggestion: matchedSku ? { ...suggestion, matchedSku } : suggestion, score });
+    if (score >= minScore) scored.push({ suggestion: matched ? { ...suggestion, matched } : suggestion, score });
   }
 
   scored.sort(

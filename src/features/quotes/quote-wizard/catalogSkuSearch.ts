@@ -1,8 +1,8 @@
 import * as React from "react";
 
-import { fetchCatalogModelsBySku } from "@/features/quotes/quote-details/queries";
+import { fetchCatalogVariantsBySku, type CatalogVariantMatch } from "@/features/quotes/quote-details/queries";
 
-import { bestMatchingSku, looksLikeSku } from "./catalogSuggestions";
+import { looksLikeSku, scoreSkuMatch } from "./catalogSuggestions";
 
 /**
  * Пошук товару за артикулом ВАРІАНТА — запитом до бази (REQ-248).
@@ -33,17 +33,17 @@ const SKU_SEARCH_LIMIT = 12;
  */
 const SKU_SEARCH_DELAY_MS = 200;
 
-const NO_MATCHES: ReadonlyMap<string, string> = new Map();
+const NO_MATCHES: ReadonlyMap<string, CatalogVariantMatch> = new Map();
 
 /**
- * Моделі, чий артикул (свій або варіанта) містить набране: `modelId` → той
- * самий збіглий артикул.
+ * Моделі, у яких є варіант із таким артикулом: `modelId` → сам той варіант
+ * (id, назва кольору, артикул).
  *
  * Без React Query навмисно — як і решта стану цього вікна: результат живе
  * рівно стільки, скільки набране в полі, і кешувати його нема сенсу.
  */
 export function useCatalogSkuMatches(teamId: string, query: string) {
-  const [matches, setMatches] = React.useState<ReadonlyMap<string, string>>(NO_MATCHES);
+  const [matches, setMatches] = React.useState<ReadonlyMap<string, CatalogVariantMatch>>(NO_MATCHES);
   const [searching, setSearching] = React.useState(false);
   const needle = looksLikeSku(query) ? query.trim() : "";
 
@@ -57,15 +57,19 @@ export function useCatalogSkuMatches(teamId: string, query: string) {
     setSearching(true);
     const timer = setTimeout(() => {
       void (async () => {
-        const result = await fetchCatalogModelsBySku(teamId, needle, SKU_SEARCH_LIMIT);
+        const result = await fetchCatalogVariantsBySku(teamId, needle, SKU_SEARCH_LIMIT);
         if (!alive) return;
         // Запит не вдався — поле працює далі на локальних підказках: ламати
         // пошук назв через невдалий запит по коду нема чого.
-        const next = new Map<string, string>();
+        const next = new Map<string, CatalogVariantMatch>();
         if (result.ok) {
           for (const row of result.data) {
-            const sku = bestMatchingSku(row.skus, needle);
-            if (sku) next.set(row.id, sku);
+            // Одна модель — один найкращий варіант: показувати десять кольорів
+            // того самого товару підказкою не є.
+            const best = next.get(row.modelId);
+            if (!best || scoreSkuMatch(needle, row.sku) > scoreSkuMatch(needle, best.sku)) {
+              next.set(row.modelId, row);
+            }
           }
         }
         setMatches(next);

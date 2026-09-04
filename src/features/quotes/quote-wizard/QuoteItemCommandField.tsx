@@ -256,8 +256,8 @@ export function QuoteItemCommandField({
                       Знайшлась за кодом кольору — показуємо САМЕ той код, а не
                       артикул першого варіанта: інакше збіг виглядає випадковим,
                       і менеджер не впізнає свій товар (REQ-248). */}
-                  {suggestion.matchedSku ?? suggestion.sku ? (
-                    <span className="text-muted-foreground/70"> · арт. {suggestion.matchedSku ?? suggestion.sku}</span>
+                  {suggestion.matched?.sku ?? suggestion.sku ? (
+                    <span className="text-muted-foreground/70"> · арт. {suggestion.matched?.sku ?? suggestion.sku}</span>
                   ) : null}
                 </span>
               </span>

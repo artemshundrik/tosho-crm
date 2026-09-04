@@ -298,6 +298,10 @@ export function QuoteWizardDialog({
         name: suggestion.name,
         catalog: {
           modelId: suggestion.modelId,
+          // Товар знайшли за артикулом кольору — запам'ятовуємо САМЕ той колір
+          // (REQ-250#p1), інакше в замовлення поїде артикул першого варіанта.
+          variantId: suggestion.matched?.variantId ?? null,
+          variantName: suggestion.matched?.variantName || null,
           kindId: suggestion.kindId,
           typeId: suggestion.typeId,
           kindName: suggestion.kindName,

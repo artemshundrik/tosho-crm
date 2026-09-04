@@ -130,6 +130,12 @@ export type QuoteImportDraftImprint = {
  */
 export type QuoteImportDraftCatalog = {
   modelId: string | null;
+  /**
+   * Конкретний колір, якщо товар знайшли за його артикулом (REQ-250#p1).
+   * `null` — колір не вибирали: замовляють тоді за артикулом моделі.
+   */
+  variantId?: string | null;
+  variantName?: string | null;
   kindId: string;
   typeId: string;
   /** Підписи для рядка прев'ю — «Худі · Одяг», — щоб не ходити в базу вдруге. */

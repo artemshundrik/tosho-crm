@@ -222,6 +222,9 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
     catalog_type_id: draft.catalog?.typeId ?? null,
     catalog_kind_id: draft.catalog?.kindId ?? null,
     catalog_model_id: draft.catalog?.modelId ?? null,
+    // Який саме колір продали (REQ-250#p1). До цієї колонки замовлення знало
+    // лише модель, а постачальнику товар замовляють за артикулом кольору.
+    catalog_variant_id: draft.catalog?.variantId ?? null,
     print_position_id: draft.imprints.find((imprint) => imprint.positionId)?.positionId ?? null,
     methods:
       draft.imprints.length > 0

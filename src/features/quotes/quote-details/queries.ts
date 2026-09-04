@@ -1177,43 +1177,47 @@ export async function fetchCatalogBase(teamId: string): Promise<
 }
 
 /**
- * Моделі, серед артикулів яких є набране (REQ-248).
+ * Варіанти, чий артикул містить набране (REQ-248, переведено на таблицю в REQ-250#p1).
  *
- * ЧОМУ ОКРЕМИМ ЗАПИТОМ, А НЕ РАЗОМ ІЗ КАТАЛОГОМ. Артикули варіантів живуть у
- * `metadata.variants`, і цей масив на 250 моделях важить 661 кБ — вантажити
- * його на кожне відкриття вікна заради зрідка потрібного пошуку дорого, а з
- * ростом каталогу дорожчає лінійно. Тому пошук іде в базу, і лише тоді, коли
- * набране схоже на код (`looksLikeSku`).
+ * ЧОМУ ОКРЕМИМ ЗАПИТОМ, А НЕ РАЗОМ ІЗ КАТАЛОГОМ. Варіантів у 4,5 раза більше за
+ * моделі, і возити їх усі на кожне відкриття вікна заради пошуку, яким
+ * користуються зрідка, — марно. Тому в базу йдемо, лише коли набране схоже на
+ * код (`looksLikeSku`).
  *
- * Шукає по `search_skus` — генерованій колонці з усіх артикулів моделі та її
- * варіантів (scripts/catalog-model-sku-search.sql). Триграмний індекс робить
- * `ilike %…%` дешевим; без нього це був би прохід по всій таблиці.
+ * Раніше це шукалось по генерованій колонці `catalog_models.search_skus` — вона
+ * була обходом того, що варіанти лежали в JSON. Тепер варіант це рядок, тож
+ * запит звичайний, а разом з артикулом повертається САМ ВАРІАНТ: його id
+ * лягає в позицію прорахунку, і CRM нарешті знає, який колір продали.
  *
  * `needle` приходить уже перевіреним `looksLikeSku`: там немає ні `%`, ні `_`,
  * ні `*`, ні коми, тож у шаблон він іде як є.
  */
-export async function fetchCatalogModelsBySku(
+export type CatalogVariantMatch = { modelId: string; variantId: string; variantName: string; sku: string };
+
+export async function fetchCatalogVariantsBySku(
   teamId: string,
   needle: string,
   limit: number
-): Promise<QueryResult<Array<{ id: string; skus: string[] }>>> {
+): Promise<QueryResult<CatalogVariantMatch[]>> {
   try {
     const { data, error } = await supabase
       .schema("tosho")
-      .from("catalog_models")
-      .select("id,search_skus")
+      .from("catalog_variants")
+      .select("id,model_id,name,sku")
       .eq("team_id", teamId)
-      .ilike("search_skus", `%${needle}%`)
+      .ilike("sku", `%${needle}%`)
       .limit(limit);
     if (error) throw error;
     return {
       ok: true,
-      data: ((data ?? []) as Array<{ id: string; search_skus: string | null }>).map((row) => ({
-        id: row.id,
-        // Артикули лежать по одному в рядок: у самих кодах трапляється пробіл
-        // («64000-CG 10C»), тож розділяти їх пробілом було б неможливо.
-        skus: (row.search_skus ?? "").split("\n").filter(Boolean),
-      })),
+      data: ((data ?? []) as Array<{ id: string; model_id: string; name: string | null; sku: string | null }>)
+        .filter((row) => Boolean(row.sku))
+        .map((row) => ({
+          modelId: row.model_id,
+          variantId: row.id,
+          variantName: (row.name ?? "").trim(),
+          sku: (row.sku ?? "").trim(),
+        })),
     };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося знайти товар за артикулом.") };
