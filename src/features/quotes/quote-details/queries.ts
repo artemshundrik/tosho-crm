@@ -1159,6 +1159,32 @@ export async function fetchCatalogBase(teamId: string): Promise<
   }
 }
 
+/**
+ * Новий рядок каталогу з вікна прорахунку (REQ-182#p18): товар за посиланням
+ * стає справжньою моделлю свого виду. Під RLS користувача — так само, як
+ * заводить моделі сторінка «Каталог».
+ */
+export async function insertCatalogModelRow(payload: {
+  team_id: string;
+  kind_id: string;
+  name: string;
+  image_url: string | null;
+  metadata: Record<string, unknown> | null;
+}): Promise<QueryResult<{ id: string }>> {
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("catalog_models")
+      .insert(payload as never)
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { ok: true, data: { id: (data as { id: string }).id } };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося записати товар у каталог.") };
+  }
+}
+
 /** Методи, позиції нанесення, звʼязки моделей із методами і цінові сходинки. */
 export async function fetchCatalogEnrichment(
   teamId: string,

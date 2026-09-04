@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCatalogSuggestions, rankCatalogSuggestions } from "./catalogSuggestions";
+import { buildCatalogKinds, buildCatalogSuggestions, guessKindFromTitle, rankCatalogSuggestions } from "./catalogSuggestions";
 
 /**
  * Підказки з каталогу (REQ-182#p14): модель знає свій вид і тип, пошук іде
@@ -75,5 +75,28 @@ describe("rankCatalogSuggestions", () => {
 
   it("обмежує кількість", () => {
     expect(rankCatalogSuggestions(suggestions, "одяг", 2)).toHaveLength(2);
+  });
+});
+
+describe("guessKindFromTitle", () => {
+  const kinds = buildCatalogKinds({
+    ...source,
+    kindRows: [...source.kindRows, { id: "k-book", type_id: "t-paper", name: "Записна книжка" }, { id: "k-pocket", type_id: "t-cloth", name: "Кишеня" }],
+  });
+
+  it("вид — слово з назви сторінки, відмінок не заважає", () => {
+    expect(guessKindFromTitle(kinds, "Кепки 5-панельні бавовняні, чорні")?.kindName).toBe("Кепка");
+    expect(guessKindFromTitle(kinds, "Худі оверсайз Classic — купити")?.kindName).toBe("Худі");
+  });
+
+  it("багатослівний вид збігається цілком, а з двох кандидатів перемагає той, що стоїть раніше", () => {
+    expect(guessKindFromTitle(kinds, "Записна книжка А5 у клітинку")?.kindName).toBe("Записна книжка");
+    expect(guessKindFromTitle(kinds, "Худі з кишенею кенгуру")?.kindName).toBe("Худі");
+  });
+
+  it("не вгадує без збігу й на порожній назві", () => {
+    expect(guessKindFromTitle(kinds, "Реглан LENNY")).toBeNull();
+    expect(guessKindFromTitle(kinds, null)).toBeNull();
+    expect(guessKindFromTitle(kinds, "Без типу річ")).toBeNull();
   });
 });

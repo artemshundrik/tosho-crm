@@ -2,7 +2,12 @@ import * as React from "react";
 
 import { fetchCatalogBase } from "@/features/quotes/quote-details/queries";
 
-import { buildCatalogSuggestions, type CatalogSuggestion } from "./catalogSuggestions";
+import {
+  buildCatalogKinds,
+  buildCatalogSuggestions,
+  type CatalogKindOption,
+  type CatalogSuggestion,
+} from "./catalogSuggestions";
 
 /**
  * Каталог для підказок у полі позиції (REQ-182#p14): три таблиці одним заходом
@@ -15,6 +20,8 @@ import { buildCatalogSuggestions, type CatalogSuggestion } from "./catalogSugges
  */
 export function useCatalogSuggestions(teamId: string, open: boolean) {
   const [suggestions, setSuggestions] = React.useState<CatalogSuggestion[]>([]);
+  /** Види з типами — для припущення виду з назви сторінки й для вибору руками (REQ-182#p18). */
+  const [kinds, setKinds] = React.useState<CatalogKindOption[]>([]);
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
@@ -27,6 +34,7 @@ export function useCatalogSuggestions(teamId: string, open: boolean) {
       // Каталог не доїхав — поле працює далі без підказок: посилання й назва
       // руками від бази не залежать, і ламати їх через невдалий запит нема чого.
       setSuggestions(result.ok ? buildCatalogSuggestions(result.data) : []);
+      setKinds(result.ok ? buildCatalogKinds(result.data) : []);
       setLoading(false);
     })();
     return () => {
@@ -34,5 +42,5 @@ export function useCatalogSuggestions(teamId: string, open: boolean) {
     };
   }, [open, teamId]);
 
-  return { suggestions, loading };
+  return { suggestions, kinds, loading };
 }

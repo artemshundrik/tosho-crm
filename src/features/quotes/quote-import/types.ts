@@ -88,15 +88,23 @@ export type QuoteImportDraftItem = {
   methodIds: string[];
 };
 
-/** Прив'язка чернетки до каталогу: рівно те, що ляже в `quote_items.catalog_*_id`. */
+/**
+ * Прив'язка чернетки до каталогу: рівно те, що ляже в `quote_items.catalog_*_id`.
+ *
+ * `modelId: null` — вид відомий, моделі ще немає (REQ-182#p18): так виглядає
+ * товар за посиланням, якому вид вгадали з назви сторінки. На «Створити» для
+ * нього заводиться справжній рядок `catalog_models`, і id стає на місце.
+ */
 export type QuoteImportDraftCatalog = {
-  modelId: string;
+  modelId: string | null;
   kindId: string;
   typeId: string;
   /** Підписи для рядка прев'ю — «Худі · Одяг», — щоб не ходити в базу вдруге. */
   kindName: string;
   typeName: string;
   imageUrl: string | null;
+  /** Вид — припущення з назви, а не вибір людини: рядок каже це словами. */
+  guessed?: boolean;
 };
 
 /** Слід імпорту на позиції — щоб відрізнити її на картці й дебажити розбір. */

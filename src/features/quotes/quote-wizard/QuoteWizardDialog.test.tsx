@@ -71,6 +71,10 @@ const insertQuoteItemRow = vi.fn(async (payload: Record<string, unknown>) => {
   return { ok: true as const, data: { id: "item-1" } };
 });
 const persistQuoteRuns = vi.fn(async () => ({ ok: true as const }));
+const insertCatalogModelRow = vi.fn(async (payload: Record<string, unknown>) => {
+  void payload;
+  return { ok: true as const, data: { id: "model-new" } };
+});
 
 const fetchCatalogBase = vi.fn(async () => ({
   ok: true as const,
@@ -94,6 +98,7 @@ vi.mock("@/features/quotes/quote-details/queries", () => ({
   insertQuoteItemRow: (payload: Record<string, unknown>) => insertQuoteItemRow(payload),
   persistQuoteRuns: () => persistQuoteRuns(),
   fetchCatalogBase: () => fetchCatalogBase(),
+  insertCatalogModelRow: (payload: Record<string, unknown>) => insertCatalogModelRow(payload),
 }));
 
 const runDefaults = { markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 };
@@ -122,6 +127,7 @@ describe("QuoteWizardDialog — один екран", () => {
     vi.unstubAllGlobals();
     insertQuoteItemRow.mockClear();
     persistQuoteRuns.mockClear();
+    insertCatalogModelRow.mockClear();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -289,12 +295,73 @@ describe("QuoteWizardDialog — один екран", () => {
     });
   });
 
-  it("позиція за посиланням чипів нанесення не має: без виду методу нема на що вказувати", async () => {
+  it("за посиланням: вид вгадується з назви сторінки, на «Створити» товар стає рядком каталогу", async () => {
     const user = userEvent.setup();
-    renderWizard();
+    const { prepareQuote } = renderWizard();
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "https://shop.example/hoodie{Enter}");
+    await waitFor(() => expect(screen.getByDisplayValue("Худі оверсайз Classic")).toBeInTheDocument());
+
+    // «Худі оверсайз Classic» → вид «Худі», підписаний як припущення, і методи цього виду поруч.
+    const kindChip = await screen.findByRole("button", { name: "Вид товару: Худі, припущення" });
+    expect(kindChip).toHaveTextContent("припущення");
+    expect(screen.getByText("додасться в базу")).toBeInTheDocument();
+    expect(await screen.findByRole("group", { name: "Нанесення" })).toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "50");
+    await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalled());
+
+    // Рядок каталогу заводиться лише на «Створити», з видом, назвою і посиланням постачальника.
+    expect(insertCatalogModelRow).toHaveBeenCalledTimes(1);
+    expect(insertCatalogModelRow.mock.calls[0][0]).toMatchObject({
+      team_id: "team-1",
+      kind_id: "k-hoodie",
+      name: "Худі оверсайз Classic",
+      image_url: null,
+      metadata: { source: { vendor: "link", url: "https://shop.example/hoodie" }, supplierUrl: "https://shop.example/hoodie" },
+    });
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({
+      catalog_model_id: "model-new",
+      catalog_kind_id: "k-hoodie",
+      catalog_type_id: "t-cloth",
+    });
+  });
+
+  it("вид не вгадали — чипів нанесення немає, а людина ставить вид сама й рядок іде в каталог", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ status: "done", imageUrl: "https://shop.example/x.jpg", title: "Реглан LENNY" }),
+      })) as unknown as typeof fetch
+    );
+    const { prepareQuote } = renderWizard();
     await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "https://shop.example/a{Enter}");
-    await waitFor(() => expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(1));
+    await waitFor(() => expect(screen.getByDisplayValue("Реглан LENNY")).toBeInTheDocument());
     expect(screen.queryByRole("group", { name: "Нанесення" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Вид товару" }));
+    await user.click(await screen.findByRole("option", { name: "Худі" }));
+    expect(await screen.findByRole("group", { name: "Нанесення" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Вид товару: Худі" })).toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "50");
+    await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalled());
+    expect(insertCatalogModelRow).toHaveBeenCalledTimes(1);
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({ catalog_model_id: "model-new", catalog_kind_id: "k-hoodie" });
+  });
+
+  it("назва руками без виду — каталог не чіпається", async () => {
+    const user = userEvent.setup();
+    const { prepareQuote } = renderWizard();
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "Кепка six-panel{Enter}");
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "50");
+    await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalled());
+    expect(insertCatalogModelRow).not.toHaveBeenCalled();
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({ catalog_model_id: null, catalog_kind_id: null });
   });
 
   it("перший товар із поліграфічного типу перемикає «Рахуємо» на поліграфію", async () => {

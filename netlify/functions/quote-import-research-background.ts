@@ -68,6 +68,7 @@ type ItemRow = {
   quote_id: string;
   team_id: string | null;
   metadata: Record<string, unknown> | null;
+  catalog_model_id?: string | null;
 };
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
@@ -182,7 +183,7 @@ export const handler = async (event: HttpEvent) => {
   const { data: itemRows, error: itemsError } = await userClient
     .schema("tosho")
     .from("quote_items")
-    .select("id, quote_id, team_id, metadata")
+    .select("id, quote_id, team_id, metadata, catalog_model_id")
     .eq("quote_id", body.quoteId)
     .in("id", body.itemIds);
   if (itemsError) return jsonResponse(500, { error: itemsError.message });
@@ -227,6 +228,19 @@ export const handler = async (event: HttpEvent) => {
           };
           metadata.research = { status: "done", fetchedAt };
           outcome = "done";
+
+          // Товар за посиланням уже став рядком каталогу (REQ-182#p18), але
+          // без фото: воно з'являється саме тут, коли картинку стиснуто. Лише
+          // в порожнє поле — фото, яке людина поставила руками, не затираємо.
+          if (imageUrl && item.catalog_model_id) {
+            const { error: modelError } = await userClient
+              .schema("tosho")
+              .from("catalog_models")
+              .update({ image_url: imageUrl } as never)
+              .eq("id", item.catalog_model_id)
+              .is("image_url", null);
+            if (modelError) console.error("quote-import-research: model image update failed", modelError.message);
+          }
         } else {
           metadata.research = { status: "failed", fetchedAt, error: "Сторінка не віддала ні назви, ні картинки." };
         }

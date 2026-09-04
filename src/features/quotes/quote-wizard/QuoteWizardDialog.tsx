@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
-import { ImportDraftRow } from "@/features/quotes/quote-import/ImportDraftRow";
+import { ImportDraftRow, type DraftKindOption } from "@/features/quotes/quote-import/ImportDraftRow";
 import {
   parseImportFile,
   startImportResearch,
@@ -27,7 +27,7 @@ import { countSettledPreviews, fetchLinkPreview, useLinkPreviews } from "@/featu
 import { pluralWordUk } from "@/lib/lastSeen";
 import { cn } from "@/lib/utils";
 
-import type { CatalogSuggestion } from "./catalogSuggestions";
+import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions";
 import { QuoteItemCommandField } from "./QuoteItemCommandField";
 import { QUOTE_KINDS, type QuoteKindValue } from "./quoteWizardKinds";
 import { useCatalogSuggestions } from "./useCatalogSuggestions";
@@ -278,6 +278,31 @@ export function QuoteWizardDialog({
     ]);
   };
 
+  /**
+   * Вид для рядка без моделі — руками (REQ-182#p18). Зміна виду скидає
+   * методи: вони належать виду, і чужі id у чернетці були б брехнею.
+   */
+  const changeKind = (key: string, kind: DraftKindOption | null) =>
+    setDrafts((prev) =>
+      prev.map((draft) => {
+        if (draft.key !== key) return draft;
+        if (!kind) return { ...draft, catalog: null, methodIds: [] };
+        return {
+          ...draft,
+          methodIds: draft.catalog?.kindId === kind.kindId ? draft.methodIds : [],
+          catalog: {
+            modelId: null,
+            kindId: kind.kindId,
+            typeId: kind.typeId,
+            kindName: kind.kindName,
+            typeName: kind.typeName,
+            imageUrl: null,
+            guessed: false,
+          },
+        };
+      })
+    );
+
   /** Назви в базі немає — позиція без каталогу, як колишнє «руками». */
   const handleAddName = (name: string) => {
     setError(null);
@@ -325,10 +350,26 @@ export function QuoteWizardDialog({
         // прорахунку не значить нічого, а місце в рядку займає.
         // Правки менеджера не затираємо: він міг почати вписувати назву, поки
         // сайт думав, тому назва лягає лише в порожнє поле.
+        // Вид — припущення з назви сторінки (REQ-182#p18): «Кепка 5-панельна…»
+        // → Кепка. Лише якщо людина ще не поставила вид сама.
+        const guess = guessKindFromTitle(catalog.kinds, title);
         setDrafts((prev) =>
-          prev.map((draft) =>
-            draft.key === entry.draft.key ? { ...draft, name: draft.name || title || "" } : draft
-          )
+          prev.map((draft) => {
+            if (draft.key !== entry.draft.key) return draft;
+            const next = { ...draft, name: draft.name || title || "" };
+            if (guess && !draft.catalog) {
+              next.catalog = {
+                modelId: null,
+                kindId: guess.kindId,
+                typeId: guess.typeId,
+                kindName: guess.kindName,
+                typeName: guess.typeName,
+                imageUrl: null,
+                guessed: true,
+              };
+            }
+            return next;
+          })
         );
       }
     };
@@ -626,6 +667,9 @@ export function QuoteWizardDialog({
                         onRemove={isFileDraft(draft) ? undefined : () => removeDraft(draft.key)}
                         methodOptions={draft.catalog ? methodsByKind[draft.catalog.kindId] : undefined}
                         onToggleMethod={draft.catalog ? (methodId) => toggleMethod(draft.key, methodId) : undefined}
+                        // Вид руками — лише в рядків без моделі: у позиції з каталогу він уже є.
+                        kindOptions={isFileDraft(draft) ? undefined : catalog.kinds}
+                        onChangeKind={isFileDraft(draft) ? undefined : (kind) => changeKind(draft.key, kind)}
                         onAddRun={() => addRun(draft.key)}
                         onRemoveRun={(runKey) => removeRun(draft.key, runKey)}
                       />

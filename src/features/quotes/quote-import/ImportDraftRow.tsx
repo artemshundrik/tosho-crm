@@ -1,13 +1,17 @@
 import * as React from "react";
-import { ChevronDown, ImageOff, Link2, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ImageOff, Link2, Plus, Tag, Trash2, X } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
 
-import type { QuoteImportDraftItem, QuoteImportFlag, QuoteImportLinkPreview } from "./types";
+import type { QuoteImportDraftCatalog, QuoteImportDraftItem, QuoteImportFlag, QuoteImportLinkPreview } from "./types";
+
+/** Вид товару для вибору в рядку: те саме, що `CatalogKindOption` у візарді. */
+export type DraftKindOption = Pick<QuoteImportDraftCatalog, "kindId" | "kindName" | "typeId" | "typeName">;
 
 /**
  * Один рядок прев'ю імпорту — той самий у вікні «Імпорт з файлу» й у візарді
@@ -89,6 +93,8 @@ export function ImportDraftRow({
   autoFocusName,
   methodOptions,
   onToggleMethod,
+  kindOptions,
+  onChangeKind,
 }: {
   draft: QuoteImportDraftItem;
   preview: QuoteImportLinkPreview | undefined;
@@ -116,7 +122,18 @@ export function ImportDraftRow({
    */
   methodOptions?: Array<{ id: string; name: string }>;
   onToggleMethod?: (methodId: string | null) => void;
+  /**
+   * Види каталогу для рядка без моделі (REQ-182#p18): припущення з назви
+   * стоїть чипом «Кепка · припущення», людина клацає й виправляє. Не задано —
+   * чипа немає (імпорт у картці).
+   */
+  kindOptions?: DraftKindOption[];
+  onChangeKind?: (kind: DraftKindOption | null) => void;
 }) {
+  const kindChip =
+    kindOptions && onChangeKind && !draft.catalog?.modelId ? (
+      <KindChip value={draft.catalog ?? null} options={kindOptions} disabled={disabled} onChange={onChangeKind} />
+    ) : null;
   return (
     <div
       className={cn(
@@ -237,10 +254,13 @@ export function ImportDraftRow({
             ) : null}
             {/* Позиція з каталогу каже це категорією, а не плашкою «з бази»:
                 «Худі · Одяг» — і зрозуміло, звідки вона, і що це таке. */}
-            {draft.catalog ? (
+            {draft.catalog?.modelId ? (
               <span className="text-muted-foreground">
                 {draft.catalog.kindName} · {draft.catalog.typeName}
               </span>
+            ) : draft.catalog ? (
+              // Вид є, моделі ще немає: на «Створити» товар стане рядком каталогу.
+              <span className="text-muted-foreground">додасться в базу</span>
             ) : null}
             {/* Зв'язок варіантів — словами. Бедж «альтернатива» казав, що щось
                 не так, але не казав що саме: під номером 30 у файлі лежать два
@@ -293,7 +313,10 @@ export function ImportDraftRow({
               selected={draft.methodIds}
               disabled={disabled}
               onToggle={onToggleMethod}
+              lead={kindChip}
             />
+          ) : kindChip ? (
+            <div className="flex flex-wrap items-center gap-1.5">{kindChip}</div>
           ) : null}
 
           {draft.comment || draft.notes ? (
@@ -326,11 +349,14 @@ function MethodChips({
   selected,
   disabled,
   onToggle,
+  lead,
 }: {
   options: Array<{ id: string; name: string }>;
   selected: string[];
   disabled?: boolean;
   onToggle: (methodId: string | null) => void;
+  /** Чип виду перед методами — методи залежать від нього, тож стоять поруч. */
+  lead?: React.ReactNode;
 }) {
   const [expanded, setExpanded] = React.useState(false);
   const visible = expanded
@@ -340,6 +366,7 @@ function MethodChips({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Нанесення">
+      {lead}
       <span className="mr-0.5 text-xs text-muted-foreground">Нанесення</span>
       <Chip
         size="sm"
@@ -370,5 +397,94 @@ function MethodChips({
         </Chip>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Чип виду для рядка без моделі (REQ-182#p18). Вгаданий вид підписаний
+ * «припущення» і стоїть пунктиром: це не факт, а здогад з назви сторінки, і
+ * від нього залежать методи нанесення — тому виправити його має бути так само
+ * легко, як клацнути чип.
+ */
+function KindChip({
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  value: QuoteImportDraftCatalog | null;
+  options: DraftKindOption[];
+  disabled?: boolean;
+  onChange: (kind: DraftKindOption | null) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const groups = React.useMemo(() => {
+    const byType = new Map<string, { typeName: string; kinds: DraftKindOption[] }>();
+    for (const option of options) {
+      const group = byType.get(option.typeId) ?? { typeName: option.typeName, kinds: [] };
+      group.kinds.push(option);
+      byType.set(option.typeId, group);
+    }
+    return [...byType.values()];
+  }, [options]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Chip
+          size="sm"
+          disabled={disabled}
+          icon={<Tag />}
+          aria-label={value ? `Вид товару: ${value.kindName}${value.guessed ? ", припущення" : ""}` : "Вид товару"}
+          className={cn(!value || value.guessed ? "border-dashed" : undefined, value && !value.guessed && "bg-muted")}
+        >
+          {value ? (
+            <>
+              {value.kindName}
+              {value.guessed ? <span className="font-normal text-muted-foreground"> · припущення</span> : null}
+            </>
+          ) : (
+            "Вид товару?"
+          )}
+        </Chip>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="max-h-80 w-64 overflow-y-auto p-1.5">
+        {groups.map((group) => (
+          <div key={group.typeName} className="mb-1 last:mb-0">
+            <div className="px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {group.typeName}
+            </div>
+            {group.kinds.map((kind) => (
+              <button
+                key={kind.kindId}
+                type="button"
+                role="option"
+                aria-selected={value?.kindId === kind.kindId}
+                onClick={() => {
+                  onChange(kind);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+              >
+                <span className="min-w-0 flex-1 truncate">{kind.kindName}</span>
+                {value?.kindId === kind.kindId ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+              </button>
+            ))}
+          </div>
+        ))}
+        {value ? (
+          <button
+            type="button"
+            onClick={() => {
+              onChange(null);
+              setOpen(false);
+            }}
+            className="mt-1 flex w-full items-center rounded-[var(--radius-md)] border-t border-border/60 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
+          >
+            Без виду — в каталог не записувати
+          </button>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }

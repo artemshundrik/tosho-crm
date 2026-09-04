@@ -1,4 +1,4 @@
-import { insertQuoteItemRow, persistQuoteRuns } from "@/features/quotes/quote-details/queries";
+import { insertCatalogModelRow, insertQuoteItemRow, persistQuoteRuns } from "@/features/quotes/quote-details/queries";
 import { supabase } from "@/lib/supabaseClient";
 import type { QuoteRun } from "@/lib/toshoApi";
 
@@ -89,6 +89,36 @@ export async function parseImportFile(
   }
 }
 
+/**
+ * Товар за посиланням → справжній рядок каталогу (REQ-182#p18).
+ *
+ * Вид у чернетки вже є (припущення з назви сторінки або вибір людини), а
+ * моделі ще немає — заводимо її ТУТ, у мить «Створити», а не коли посилання
+ * дочиталось: до натиску вікно не лишає в базі нічого, і каталог не виняток.
+ * Рядок каталогу мінімальний: вид, назва, посилання постачальника в
+ * `metadata.source`; фото доставить фонова розвідка, коли стисне картинку.
+ *
+ * Не вдалося — позиція лягає з видом, але без моделі: як і будь-яка інша
+ * позиція без каталогу, вона від цього рахуватись не перестає.
+ */
+async function bindCatalogModel(draft: QuoteImportDraftItem, teamId: string): Promise<QuoteImportDraftItem> {
+  const catalog = draft.catalog;
+  if (!catalog || catalog.modelId || !draft.name.trim()) return draft;
+  const supplierUrl = draft.links[0] ?? null;
+  const inserted = await insertCatalogModelRow({
+    team_id: teamId,
+    kind_id: catalog.kindId,
+    name: draft.name.trim().slice(0, 160),
+    image_url: null,
+    metadata: {
+      source: { vendor: "link", url: supplierUrl, importedAt: new Date().toISOString() },
+      ...(supplierUrl ? { supplierUrl } : {}),
+    },
+  });
+  if (!inserted.ok) return draft;
+  return { ...draft, catalog: { ...catalog, modelId: inserted.data.id, guessed: false } };
+}
+
 export type ImportWriteOutcome =
   | { ok: true; itemIds: string[] }
   | { ok: false; itemIds: string[]; error: string };
@@ -130,8 +160,9 @@ export async function writeDraftsToQuote(input: {
     error: `Позиції створено (${itemIds.length}), а тиражі до них — ні. ${message.replace(/[.\s]*$/, "")}. Впишіть тиражі руками або приберіть позиції.`,
   });
 
-  for (const [index, draft] of input.drafts.entries()) {
+  for (const [index, rawDraft] of input.drafts.entries()) {
     const itemId = crypto.randomUUID();
+    const draft = await bindCatalogModel(rawDraft, input.teamId);
     const payload = buildImportItemPayload({
       draft,
       itemId,

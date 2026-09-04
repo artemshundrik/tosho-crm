@@ -95,3 +95,72 @@ export function rankCatalogSuggestions(
   );
   return scored.slice(0, limit).map((entry) => entry.suggestion);
 }
+
+/** Вид товару з типом — для припущення з назви й для вибору руками. */
+export type CatalogKindOption = {
+  kindId: string;
+  kindName: string;
+  typeId: string;
+  typeName: string;
+  quoteType: string | null;
+};
+
+export function buildCatalogKinds(source: CatalogSuggestionSource): CatalogKindOption[] {
+  const types = new Map(source.typeRows.map((row) => [row.id, row]));
+  const result: CatalogKindOption[] = [];
+  for (const kind of source.kindRows) {
+    const type = types.get(kind.type_id);
+    if (!type) continue;
+    result.push({
+      kindId: kind.id,
+      kindName: kind.name,
+      typeId: type.id,
+      typeName: type.name,
+      quoteType: type.quote_type ?? null,
+    });
+  }
+  return result;
+}
+
+const wordsOf = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[«»"'’]/g, " ")
+    .split(/[^\p{L}\p{N}-]+/u)
+    .filter(Boolean);
+
+/**
+ * Вид за назвою сторінки — ПРИПУЩЕННЯ, не вибір (REQ-182#p18).
+ *
+ * Без моделі навмисно: назва товару в магазині майже завжди починається з
+ * виду («Кепка 5-панельна…», «Худі оверсайз…», «Горнятко керамічне…»), і
+ * точний збіг слова з назвою виду покриває це задарма й миттєво. Слово
+ * порівнюється по основі (без закінчення): «Кепки» знайде «Кепка». Кілька видів-кандидатів — беремо той, що стоїть у назві
+ * раніше: «Худі з кишенею» — це худі, а не кишеня. Синоніми («бейсболка» →
+ * кепка) сюди не входять: не вгадали — людина клацне вид сама, і це чесніше
+ * за впевнену помилку моделі.
+ */
+export function guessKindFromTitle(kinds: CatalogKindOption[], title: string | null | undefined): CatalogKindOption | null {
+  const words = wordsOf(title ?? "");
+  if (words.length === 0) return null;
+  // Основа: без останньої літери й не довше п'яти — «кепки»/«кепка» → «кепк»,
+  // «кишенею»/«кишеня» → «кишен», «худі» → «худ».
+  const stem = (word: string) => (word.length < 3 ? word : word.slice(0, Math.min(word.length - 1, 5)));
+  const titleStems = words.map(stem);
+
+  let best: { kind: CatalogKindOption; position: number; length: number } | null = null;
+  for (const kind of kinds) {
+    const kindWords = wordsOf(kind.kindName);
+    if (kindWords.length === 0) continue;
+    const kindStems = kindWords.map(stem);
+    // Усі слова виду мають стояти в назві підряд («Записна книжка»).
+    const position = titleStems.findIndex((_, index) =>
+      kindStems.every((kindStem, offset) => titleStems[index + offset] === kindStem)
+    );
+    if (position < 0) continue;
+    if (!best || position < best.position || (position === best.position && kindStems.length > best.length)) {
+      best = { kind, position, length: kindStems.length };
+    }
+  }
+  return best?.kind ?? null;
+}
