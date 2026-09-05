@@ -9,7 +9,15 @@ import {
 } from "./_lib/digestDelivery";
 import { isCategoryVisibleForRole } from "./_notificationCategories";
 import { escapeTelegramHtml } from "./_telegram";
-import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
+import {
+  addRange,
+  formatMoneyRange,
+  QUOTE_RUN_PRICING_COLUMNS,
+  quoteSaleTotalRanges,
+  ZERO_RANGE,
+  type MoneyRange,
+  type QuoteRunPricingRow,
+} from "./_lib/quotePricing";
 import { formatLastSeen, loadPresence, shortName } from "./_teamAssistant";
 import { ABSENCE_KIND_LABELS, formatAbsenceShort } from "./_lib/absenceSubmit";
 import {
@@ -274,27 +282,25 @@ type DesignTaskRow = {
   metadata?: Record<string, unknown> | null;
 };
 
-/** Сума прорахунків за їхніми run-ами (quotes.total — застарілий снапшот). */
-async function sumQuotesByRuns(admin: AdminClient, quoteIds: string[]): Promise<Map<string, number>> {
-  const totals = new Map<string, number>();
-  if (quoteIds.length === 0) return totals;
+/**
+ * Межі сум прорахунків за їхніми run-ами (quotes.total — застарілий снапшот).
+ *
+ * Саме межі, а не число: тиражі однієї позиції взаємовиключні, і складати їх
+ * означало б назвати керівництву суму, якої не буде в жодному замовленні
+ * (REQ-77 — завищення щонайменше на 3,9 млн грн).
+ */
+async function sumQuotesByRuns(admin: AdminClient, quoteIds: string[]): Promise<Map<string, MoneyRange>> {
+  if (quoteIds.length === 0) return new Map();
 
   const { data, error } = await admin
     .schema("tosho")
     .from("quote_item_runs")
-    .select(
-      "quote_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,markup_rate,manager_rate,fixed_cost_rate,vat_rate"
-    )
+    .select(QUOTE_RUN_PRICING_COLUMNS)
     .in("quote_id", quoteIds)
     .limit(20000);
   if (error) throw new Error(`quote_item_runs: ${error.message}`);
 
-  for (const run of ((data ?? []) as QuoteRunPricingRow[])) {
-    const quoteId = run.quote_id;
-    if (!quoteId) continue;
-    totals.set(quoteId, (totals.get(quoteId) ?? 0) + runSaleTotal(run));
-  }
-  return totals;
+  return quoteSaleTotalRanges((data ?? []) as QuoteRunPricingRow[]);
 }
 
 /**
@@ -563,11 +569,13 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   const orderQuoteIds = orders.map((o) => o.quote_id).filter((v): v is string => Boolean(v));
 
   const runTotals = await sumQuotesByRuns(admin, Array.from(new Set([...orderQuoteIds, ...monthQuoteIds])));
-  const monthSum = monthQuoteIds.reduce((sum, id) => sum + (runTotals.get(id) ?? 0), 0);
-  const ordersSum = orders.reduce((sum, order) => {
-    const fromRuns = order.quote_id ? runTotals.get(order.quote_id) ?? 0 : 0;
-    return sum + (fromRuns > 0 ? fromRuns : num(order.total));
-  }, 0);
+  const monthSum = monthQuoteIds.reduce((acc, id) => addRange(acc, runTotals.get(id)), ZERO_RANGE);
+  const ordersSum = orders.reduce((acc, order) => {
+    const fromRuns = order.quote_id ? runTotals.get(order.quote_id) : undefined;
+    // Снапшот — одне число, тож його межі вироджені: іншого в ньому немає.
+    const snapshot = num(order.total);
+    return addRange(acc, fromRuns && fromRuns.max > 0 ? fromRuns : { min: snapshot, max: snapshot });
+  }, ZERO_RANGE);
 
   // --- рендер ---
   const lines: string[] = [`<b>🌅 План на день — ${escapeTelegramHtml(formatDayLabel(todayKey))}</b>`];
@@ -585,7 +593,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   if (estimated.length > 0) funnel.push(`• Пораховано, чекає відправки: ${estimated.length}`);
   if (monthQuoteIds.length > 0) {
     funnel.push(
-      `• Місяць: ${monthQuoteIds.length} нових прорахунків на ${escapeTelegramHtml(formatMoney(monthSum))}`
+      `• Місяць: ${monthQuoteIds.length} нових прорахунків на ${escapeTelegramHtml(formatMoneyRange(monthSum, formatMoney))}`
     );
   }
   if (funnel.length > 0) lines.push("", "<b>Воронка</b>", ...funnel);
@@ -774,7 +782,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
     tail.push(`Платежі найближчі ${PAYMENT_HORIZON_DAYS} днів: ${escapeTelegramHtml(parts.join(" · "))}`);
   }
   if (orders.length > 0) {
-    tail.push(`Вчора нових замовлень: ${orders.length} на ${escapeTelegramHtml(formatMoney(ordersSum))}`);
+    tail.push(`Вчора нових замовлень: ${orders.length} на ${escapeTelegramHtml(formatMoneyRange(ordersSum, formatMoney))}`);
   }
   if (tail.length > 0) lines.push("", ...tail);
 
@@ -919,10 +927,10 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
     admin,
     Array.from(new Set([...newQuoteIds, ...approvedTodayIds, ...approvedMonthIds, ...approvedPrevMonthIds, ...orderQuoteIds]))
   );
-  const sumOf = (ids: string[]) => ids.reduce((sum, id) => sum + (runTotals.get(id) ?? 0), 0);
+  const sumOf = (ids: string[]) => ids.reduce((acc, id) => addRange(acc, runTotals.get(id)), ZERO_RANGE);
 
   // Найбільша угода дня — щоб цифра «затверджено» мала обличчя.
-  let topDeal: { name: string; amount: number } | null = null;
+  let topDeal: { name: string; amount: MoneyRange } | null = null;
   if (approvedTodayIds.length > 0) {
     const { data: dealRows } = await admin
       .schema("tosho")
@@ -931,9 +939,11 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
       .in("id", approvedTodayIds)
       .limit(2000);
     for (const row of ((dealRows ?? []) as Array<{ id: string; customer_name?: string | null; number?: string | null }>)) {
-      const amount = runTotals.get(row.id) ?? 0;
-      if (amount <= 0) continue;
-      if (!topDeal || amount > topDeal.amount) {
+      const amount = runTotals.get(row.id);
+      if (!amount || amount.max <= 0) continue;
+      // Ранжуємо за найдорожчим сценарієм: «найбільша угода» — це стеля, яку
+      // угода може дати, і порівнювати межі між собою інакше нема як.
+      if (!topDeal || amount.max > topDeal.amount.max) {
         topDeal = { name: (row.customer_name ?? "").trim() || row.number || "Без назви", amount };
       }
     }
@@ -947,10 +957,12 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
     if (!owner) continue;
     quotesByManager.set(owner, (quotesByManager.get(owner) ?? 0) + 1);
   }
-  const ordersSum = orders.reduce((sum, order) => {
-    const fromRuns = order.quote_id ? runTotals.get(order.quote_id) ?? 0 : 0;
-    return sum + (fromRuns > 0 ? fromRuns : num(order.total));
-  }, 0);
+  const ordersSum = orders.reduce((acc, order) => {
+    const fromRuns = order.quote_id ? runTotals.get(order.quote_id) : undefined;
+    // Снапшот — одне число, тож його межі вироджені: іншого в ньому немає.
+    const snapshot = num(order.total);
+    return addRange(acc, fromRuns && fromRuns.max > 0 ? fromRuns : { min: snapshot, max: snapshot });
+  }, ZERO_RANGE);
 
   const designApproved = designApprovedResult.count ?? 0;
   const newRevisions = revisionsResult.count ?? 0;
@@ -983,20 +995,20 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
   const salesLines: string[] = [];
   if (newLeads > 0) salesLines.push(`• Нові ліди: ${newLeads} (за тиждень: ${weekLeads})`);
   if (newQuoteIds.length > 0) {
-    salesLines.push(`• Нові прорахунки: ${newQuoteIds.length} на ${escapeTelegramHtml(formatMoney(sumOf(newQuoteIds)))}`);
+    salesLines.push(`• Нові прорахунки: ${newQuoteIds.length} на ${escapeTelegramHtml(formatMoneyRange(sumOf(newQuoteIds), formatMoney))}`);
   }
   if (approvedTodayIds.length > 0) {
     salesLines.push(
-      `• Затверджено: ${approvedTodayIds.length} на ${escapeTelegramHtml(formatMoney(sumOf(approvedTodayIds)))}`
+      `• Затверджено: ${approvedTodayIds.length} на ${escapeTelegramHtml(formatMoneyRange(sumOf(approvedTodayIds), formatMoney))}`
     );
   }
   if (topDeal) {
     salesLines.push(
-      `• Найбільша угода: ${escapeTelegramHtml(topDeal.name)} — ${escapeTelegramHtml(formatMoney(topDeal.amount))}`
+      `• Найбільша угода: ${escapeTelegramHtml(topDeal.name)} — ${escapeTelegramHtml(formatMoneyRange(topDeal.amount, formatMoney))}`
     );
   }
   if (orders.length > 0) {
-    salesLines.push(`• Нові замовлення: ${orders.length} на ${escapeTelegramHtml(formatMoney(ordersSum))}`);
+    salesLines.push(`• Нові замовлення: ${orders.length} на ${escapeTelegramHtml(formatMoneyRange(ordersSum, formatMoney))}`);
   }
   if (quotesByManager.size > 1) {
     const parts = Array.from(quotesByManager.entries())
@@ -1012,19 +1024,23 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
     const monthSum = sumOf(approvedMonthIds);
     const prevSum = sumOf(approvedPrevMonthIds);
     lines.push("", "<b>Місяць до дати</b>");
-    lines.push(`• Затверджено: ${approvedMonthIds.length} на ${escapeTelegramHtml(formatMoney(monthSum))}`);
+    lines.push(`• Затверджено: ${approvedMonthIds.length} на ${escapeTelegramHtml(formatMoneyRange(monthSum, formatMoney))}`);
     if (approvedPrevMonthIds.length > 0) {
-      const deltaRaw = prevSum > 0 ? ((monthSum - prevSum) / prevSum) * 100 : null;
+      // Порівнюємо НАЙДОРОЖЧІ сценарії обох місяців. Відсоток між двома
+      // межами інакше не порахувати, а брати різні кінці (стелю цього місяця
+      // проти дна минулого) означало б підмалювати зростання. Обидва боки
+      // міряються однією лінійкою, тож напрямок і масштаб чесні.
+      const deltaRaw = prevSum.max > 0 ? ((monthSum.max - prevSum.max) / prevSum.max) * 100 : null;
       let deltaText = "";
       if (deltaRaw !== null) {
         const rounded = Math.round(deltaRaw);
         // «-100%» означає нуль. Поки сума не нульова, показуємо десяту частку,
         // інакше -99,9% округлюється до «виторгу немає».
-        const value = Math.abs(rounded) === 100 && monthSum > 0 ? deltaRaw.toFixed(1) : String(rounded);
+        const value = Math.abs(rounded) === 100 && monthSum.max > 0 ? deltaRaw.toFixed(1) : String(rounded);
         deltaText = ` (${deltaRaw >= 0 ? "+" : ""}${value}%)`;
       }
       lines.push(
-        `• Минулого місяця за цей самий період: ${escapeTelegramHtml(formatMoney(prevSum))}${deltaText}`
+        `• Минулого місяця за цей самий період: ${escapeTelegramHtml(formatMoneyRange(prevSum, formatMoney))}${deltaText}`
       );
     }
   }

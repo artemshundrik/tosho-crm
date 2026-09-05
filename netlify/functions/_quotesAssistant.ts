@@ -3,11 +3,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // Асистент по прорахунках. Той самий принцип, що й у дизайн-модулі: модель
 // лише розбирає питання, всі числа рахує цей код.
 //
-// Суми ЗАВЖДИ з quote_item_runs через runSaleTotal. `quotes.total` — застарілий
-// снапшот і реальною ціною не є (та сама пастка, що в дайджестах).
+// Суми ЗАВЖДИ з quote_item_runs через quoteSaleTotalRanges. `quotes.total` —
+// застарілий снапшот і реальною ціною не є (та сама пастка, що в дайджестах).
+//
+// І це МЕЖІ, а не одне число: тиражі однієї позиції взаємовиключні, тож
+// підсумок прорахунку — «від найдешевшого сценарію до найдорожчого» (REQ-77).
 
 import { escapeTelegramHtml } from "./_telegram";
-import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
+import {
+  addRange,
+  formatMoneyRange,
+  QUOTE_RUN_PRICING_COLUMNS,
+  quoteSaleTotalRanges,
+  ZERO_RANGE,
+  type MoneyRange,
+  type QuoteRunPricingRow,
+} from "./_lib/quotePricing";
 import { resolvePeriod, type DesignPeriod } from "./_designAssistant";
 
 const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
@@ -64,32 +75,31 @@ function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/[ʼ‘’`´]/g, "'").replace(/\s+/g, " ");
 }
 
-/** Суми по прорахунках із runs. Прорахунки без runs дають 0. */
-async function sumByQuote(admin: SupabaseClient, quoteIds: string[]): Promise<Map<string, number>> {
-  const totals = new Map<string, number>();
-  if (quoteIds.length === 0) return totals;
+/**
+ * Межі сум по прорахунках із runs. Прорахунки без runs дають нуль.
+ *
+ * Саме МЕЖІ, а не число: тиражі однієї позиції взаємовиключні, і складати їх
+ * не можна (REQ-77, докладно — у quoteSaleTotalRanges).
+ */
+async function sumByQuote(admin: SupabaseClient, quoteIds: string[]): Promise<Map<string, MoneyRange>> {
+  if (quoteIds.length === 0) return new Map();
   const { data, error } = await admin
     .schema("tosho")
     .from("quote_item_runs")
-    .select(
-      "quote_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,markup_rate,manager_rate,fixed_cost_rate,vat_rate"
-    )
+    .select(QUOTE_RUN_PRICING_COLUMNS)
     .in("quote_id", quoteIds)
     .limit(20000);
   if (error) throw new Error(`quote_item_runs: ${error.message}`);
-  for (const run of ((data ?? []) as QuoteRunPricingRow[])) {
-    if (!run.quote_id) continue;
-    totals.set(run.quote_id, (totals.get(run.quote_id) ?? 0) + runSaleTotal(run));
-  }
-  return totals;
+  return quoteSaleTotalRanges((data ?? []) as QuoteRunPricingRow[]);
 }
 
-function quoteLine(quote: QuoteRow, amount: number): string {
+function quoteLine(quote: QuoteRow, amount: MoneyRange | undefined): string {
   const label = [quote.number, (quote.customer_name ?? "").trim() || "(без клієнта)"].filter(Boolean).join(" · ");
   const status = STATUS_LABELS[(quote.status ?? "").trim()] ?? quote.status ?? "—";
+  const money = (amount?.max ?? 0) > 0 ? formatMoneyRange(amount, formatMoney) : "";
   return (
     `• <a href="${APP_URL}/orders/estimates/${quote.id}">${escapeTelegramHtml(label)}</a>\n` +
-    `  ${escapeTelegramHtml(status)}${amount > 0 ? ` · ${escapeTelegramHtml(formatMoney(amount))}` : ""}`
+    `  ${escapeTelegramHtml(status)}${money ? ` · ${escapeTelegramHtml(money)}` : ""}`
   );
 }
 
@@ -175,14 +185,14 @@ export async function answerQuotesQuery(params: {
       }
 
       const totals = await sumByQuote(admin, rows.map((r) => r.id));
-      const sum = rows.reduce((acc, r) => acc + (totals.get(r.id) ?? 0), 0);
+      const sum = rows.reduce((acc, r) => addRange(acc, totals.get(r.id)), ZERO_RANGE);
       const heading = scope ? `Прорахунки ${scope}` : "Відкриті прорахунки";
 
       const lines = [
-        `🧾 <b>${escapeTelegramHtml(heading)}</b> — ${rows.length} на ${escapeTelegramHtml(formatMoney(sum))}`,
+        `🧾 <b>${escapeTelegramHtml(heading)}</b> — ${rows.length} на ${escapeTelegramHtml(formatMoneyRange(sum, formatMoney))}`,
         "",
       ];
-      for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id) ?? 0));
+      for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id)));
       if (rows.length > limit) lines.push("", `…і ще ${rows.length - limit}`);
       return lines.join("\n");
     }
@@ -204,7 +214,7 @@ export async function answerQuotesQuery(params: {
       for (const q of open) byStatus.set((q.status ?? "—").trim(), (byStatus.get((q.status ?? "—").trim()) ?? 0) + 1);
 
       const totals = await sumByQuote(admin, open.map((q) => q.id));
-      const openSum = open.reduce((sum, q) => sum + (totals.get(q.id) ?? 0), 0);
+      const openSum = open.reduce((acc, q) => addRange(acc, totals.get(q.id)), ZERO_RANGE);
 
       const oldestDays = open.reduce((oldest, q) => {
         if (!q.updated_at) return oldest;
@@ -212,7 +222,7 @@ export async function answerQuotesQuery(params: {
         return days > oldest ? days : oldest;
       }, 0);
 
-      const lines = [`📊 <b>Воронка</b> — ${open.length} відкритих на ${escapeTelegramHtml(formatMoney(openSum))}`, ""];
+      const lines = [`📊 <b>Воронка</b> — ${open.length} відкритих на ${escapeTelegramHtml(formatMoneyRange(openSum, formatMoney))}`, ""];
       for (const [status, count] of Array.from(byStatus.entries()).sort((a, b) => b[1] - a[1])) {
         lines.push(`   ${STATUS_EMOJI[status] ?? "•"} ${escapeTelegramHtml(STATUS_LABELS[status] ?? status)}: <b>${count}</b>`);
       }
@@ -248,13 +258,13 @@ export async function answerQuotesQuery(params: {
         return `${what} прорахунків ${escapeTelegramHtml(resolved.label)}: 0.`;
       }
       const totals = await sumByQuote(admin, rows.map((r) => r.id));
-      const sum = rows.reduce((acc, r) => acc + (totals.get(r.id) ?? 0), 0);
+      const sum = rows.reduce((acc, r) => addRange(acc, totals.get(r.id)), ZERO_RANGE);
 
       const lines = [
-        `${isApproved ? "✅" : "🧾"} <b>${what} ${escapeTelegramHtml(resolved.label)}</b>: ${rows.length} на ${escapeTelegramHtml(formatMoney(sum))}`,
+        `${isApproved ? "✅" : "🧾"} <b>${what} ${escapeTelegramHtml(resolved.label)}</b>: ${rows.length} на ${escapeTelegramHtml(formatMoneyRange(sum, formatMoney))}`,
         "",
       ];
-      for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id) ?? 0));
+      for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id)));
       if (rows.length > limit) lines.push("", `…і ще ${rows.length - limit}`);
       return lines.join("\n");
     }
@@ -281,7 +291,7 @@ export async function answerQuotesQuery(params: {
 
       const totals = await sumByQuote(admin, rows.map((r) => r.id));
       const lines = [`🔥 <b>Прострочено</b> — ${rows.length}`, ""];
-      for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id) ?? 0));
+      for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id)));
       if (rows.length > limit) lines.push("", `…і ще ${rows.length - limit}`);
       return lines.join("\n");
     }
@@ -306,18 +316,18 @@ export async function answerQuotesQuery(params: {
 
       const totals = await sumByQuote(admin, rows.map((r) => r.id));
       const approved = rows.filter((r) => (r.status ?? "") === "approved");
-      const approvedSum = approved.reduce((sum, r) => sum + (totals.get(r.id) ?? 0), 0);
-      const allSum = rows.reduce((sum, r) => sum + (totals.get(r.id) ?? 0), 0);
+      const approvedSum = approved.reduce((acc, r) => addRange(acc, totals.get(r.id)), ZERO_RANGE);
+      const allSum = rows.reduce((acc, r) => addRange(acc, totals.get(r.id)), ZERO_RANGE);
       const name = (rows[0].customer_name ?? "").trim() || needle;
 
       const lines = [
         `🏢 <b>${escapeTelegramHtml(name)}</b>`,
         "",
-        `🧾 Прорахунків: <b>${rows.length}</b> на ${escapeTelegramHtml(formatMoney(allSum))}`,
-        `✅ Затверджено: <b>${approved.length}</b> на ${escapeTelegramHtml(formatMoney(approvedSum))}`,
+        `🧾 Прорахунків: <b>${rows.length}</b> на ${escapeTelegramHtml(formatMoneyRange(allSum, formatMoney))}`,
+        `✅ Затверджено: <b>${approved.length}</b> на ${escapeTelegramHtml(formatMoneyRange(approvedSum, formatMoney))}`,
         "",
       ];
-      for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id) ?? 0));
+      for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id)));
       if (rows.length > limit) lines.push("", `…і ще ${rows.length - limit}`);
       return lines.join("\n");
     }

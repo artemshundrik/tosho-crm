@@ -6,12 +6,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // ГРОШІ. `orders.total` — снапшот на момент створення замовлення, і він бреше:
 // прогін по базі показав замовлення з `total = 0` там, де по runs виходить
 // 300 000 ₴, і розходження 74 300 проти 73 300 на іншому. Тому сума рахується
-// з `quote_item_runs` через `runSaleTotal` — те саме джерело правди, що в
-// прорахунках і дайджестах. `orders.total` лишається запасним варіантом лише
-// для ручних замовлень, у яких прорахунку немає взагалі й брати більше нізвідки.
+// з `quote_item_runs` через `quoteSaleTotalRanges` — те саме джерело правди, що
+// в прорахунках і дайджестах, і тими самими МЕЖАМИ: тиражі однієї позиції
+// взаємовиключні, складати їх не можна (REQ-77). `orders.total` лишається
+// запасним варіантом лише для ручних замовлень, у яких прорахунку немає взагалі
+// й брати більше нізвідки.
 
 import { escapeTelegramHtml } from "./_telegram";
-import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
+import {
+  addRange,
+  formatMoneyRange,
+  QUOTE_RUN_PRICING_COLUMNS,
+  quoteSaleTotalRanges,
+  ZERO_RANGE,
+  type MoneyRange,
+  type QuoteRunPricingRow,
+} from "./_lib/quotePricing";
 import { resolvePeriod, type DesignPeriod } from "./_designAssistant";
 
 const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
@@ -75,38 +85,36 @@ function statusKey(value?: string | null): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-/** Суми з runs по прорахунках, з яких виросли замовлення. */
-async function sumByQuote(admin: SupabaseClient, quoteIds: string[]): Promise<Map<string, number>> {
-  const totals = new Map<string, number>();
-  if (quoteIds.length === 0) return totals;
+/**
+ * Межі сум із runs по прорахунках, з яких виросли замовлення. Саме межі:
+ * тиражі однієї позиції взаємовиключні, складати їх не можна (REQ-77).
+ */
+async function sumByQuote(admin: SupabaseClient, quoteIds: string[]): Promise<Map<string, MoneyRange>> {
+  if (quoteIds.length === 0) return new Map();
   const { data, error } = await admin
     .schema("tosho")
     .from("quote_item_runs")
-    .select(
-      "quote_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,markup_rate,manager_rate,fixed_cost_rate,vat_rate"
-    )
+    .select(QUOTE_RUN_PRICING_COLUMNS)
     .in("quote_id", quoteIds)
     .limit(20000);
   if (error) throw new Error(`quote_item_runs: ${error.message}`);
-  for (const run of ((data ?? []) as QuoteRunPricingRow[])) {
-    if (!run.quote_id) continue;
-    totals.set(run.quote_id, (totals.get(run.quote_id) ?? 0) + runSaleTotal(run));
-  }
-  return totals;
+  return quoteSaleTotalRanges((data ?? []) as QuoteRunPricingRow[]);
 }
 
 /**
  * Сума замовлення: спершу runs прорахунку, і лише якщо їх немає — снапшот.
  * Порядок саме такий, бо снапшот застаріває, а runs — ні.
  */
-function orderAmount(order: OrderRow, runTotals: Map<string, number>): number {
+function orderAmount(order: OrderRow, runTotals: Map<string, MoneyRange>): MoneyRange {
   const fromRuns = order.quote_id ? runTotals.get(order.quote_id) : undefined;
-  if (fromRuns !== undefined && fromRuns > 0) return fromRuns;
+  if (fromRuns && fromRuns.max > 0) return fromRuns;
+  // Снапшот — одне число, тож і межі в нього вироджені: іншого в ньому немає.
   const snapshot = typeof order.total === "string" ? Number(order.total) : order.total;
-  return Number.isFinite(snapshot) && snapshot ? Number(snapshot) : 0;
+  const value = Number.isFinite(snapshot) && snapshot ? Number(snapshot) : 0;
+  return { min: value, max: value };
 }
 
-function orderLine(order: OrderRow, amount: number): string {
+function orderLine(order: OrderRow, amount: MoneyRange | undefined): string {
   const label = [order.quote_number, (order.customer_name ?? "").trim() || "(без клієнта)"]
     .filter(Boolean)
     .join(" · ");
@@ -114,7 +122,7 @@ function orderLine(order: OrderRow, amount: number): string {
   const status = STATUS_LABELS[key] ?? order.order_status ?? "—";
   return (
     `${STATUS_EMOJI[key] ?? "•"} <a href="${APP_URL}/orders/production/${order.id}">${escapeTelegramHtml(label)}</a>\n` +
-    `  ${escapeTelegramHtml(status)}${amount > 0 ? ` · ${escapeTelegramHtml(formatMoney(amount))}` : ""}`
+    `  ${escapeTelegramHtml(status)}${(amount?.max ?? 0) > 0 ? ` · ${escapeTelegramHtml(formatMoneyRange(amount, formatMoney))}` : ""}`
   );
 }
 
@@ -184,14 +192,14 @@ export async function answerOrdersQuery(params: {
     Array.from(new Set(rows.map((row) => row.quote_id).filter((id): id is string => Boolean(id))))
   );
   const amounts = new Map(rows.map((row) => [row.id, orderAmount(row, runTotals)]));
-  const sum = rows.reduce((acc, row) => acc + (amounts.get(row.id) ?? 0), 0);
+  const sum = rows.reduce((acc, row) => addRange(acc, amounts.get(row.id)), ZERO_RANGE);
 
   const heading = activeOnly && !needle && !resolved ? "Активні замовлення" : `Замовлення ${scope}`.trim();
   const lines = [
-    `📦 <b>${escapeTelegramHtml(heading)}</b> — ${rows.length} на ${escapeTelegramHtml(formatMoney(sum))}`,
+    `📦 <b>${escapeTelegramHtml(heading)}</b> — ${rows.length} на ${escapeTelegramHtml(formatMoneyRange(sum, formatMoney))}`,
     "",
   ];
-  for (const row of rows.slice(0, limit)) lines.push(orderLine(row, amounts.get(row.id) ?? 0));
+  for (const row of rows.slice(0, limit)) lines.push(orderLine(row, amounts.get(row.id)));
   if (rows.length > limit) lines.push("", `…і ще ${rows.length - limit}`);
   return lines.join("\n");
 }

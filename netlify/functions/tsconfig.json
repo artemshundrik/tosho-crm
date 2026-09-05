@@ -80,6 +80,7 @@
     "_lib/quietHours.test.ts",
     "_lib/quietHours.ts",
     "_lib/quotePricing.ts",
+    "_lib/quoteSaleTotalRanges.test.ts",
     "_lib/releasesDigest.test.ts",
     "_lib/releasesDigest.ts",
     "_lib/remindersDispatch.test.ts",

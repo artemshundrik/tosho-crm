@@ -14,7 +14,15 @@ import { loadWorkSchedules, scheduleRowsForDates } from "./_lib/workSchedules";
 // Людські підписи дій — той самий довідник, що показує вкладка «Пульс».
 // Без нього у відповідь летіли сирі ключі на кшталт design_task_brief_change_request.
 import { actionLabel, isNoiseActivity } from "../../src/components/team/activityCategories";
-import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
+import {
+  addRange,
+  formatMoneyRange,
+  QUOTE_RUN_PRICING_COLUMNS,
+  quoteSaleTotalRanges,
+  ZERO_RANGE,
+  type MoneyRange,
+  type QuoteRunPricingRow,
+} from "./_lib/quotePricing";
 import { resolvePeriod, type DesignPeriod } from "./_designAssistant";
 
 export type TeamIntent = "team_list" | "person_summary" | "who_is_online" | "who_is_absent";
@@ -243,23 +251,20 @@ export function renderPresence(members: TeamMember[], presence: Map<string, Pres
   return lines.join("\n");
 }
 
-async function sumByQuote(admin: SupabaseClient, quoteIds: string[]): Promise<Map<string, number>> {
-  const totals = new Map<string, number>();
-  if (quoteIds.length === 0) return totals;
+/**
+ * Межі сум по прорахунках. Саме межі, а не число: тиражі однієї позиції
+ * взаємовиключні, складати їх не можна (REQ-77).
+ */
+async function sumByQuote(admin: SupabaseClient, quoteIds: string[]): Promise<Map<string, MoneyRange>> {
+  if (quoteIds.length === 0) return new Map();
   const { data, error } = await admin
     .schema("tosho")
     .from("quote_item_runs")
-    .select(
-      "quote_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,markup_rate,manager_rate,fixed_cost_rate,vat_rate"
-    )
+    .select(QUOTE_RUN_PRICING_COLUMNS)
     .in("quote_id", quoteIds)
     .limit(20000);
   if (error) throw new Error(`quote_item_runs: ${error.message}`);
-  for (const run of ((data ?? []) as QuoteRunPricingRow[])) {
-    if (!run.quote_id) continue;
-    totals.set(run.quote_id, (totals.get(run.quote_id) ?? 0) + runSaleTotal(run));
-  }
-  return totals;
+  return quoteSaleTotalRanges((data ?? []) as QuoteRunPricingRow[]);
 }
 
 /**
@@ -345,7 +350,7 @@ export async function renderPersonSummary(params: {
   const createdIds = ((createdResult.data ?? []) as Array<{ id: string }>).map((r) => r.id);
   const approvedIds = ((approvedResult.data ?? []) as Array<{ id: string }>).map((r) => r.id);
   const totals = await sumByQuote(admin, Array.from(new Set([...createdIds, ...approvedIds])));
-  const sumOf = (ids: string[]) => ids.reduce((sum, id) => sum + (totals.get(id) ?? 0), 0);
+  const sumOf = (ids: string[]) => ids.reduce((acc, id) => addRange(acc, totals.get(id)), ZERO_RANGE);
 
   const role = formatJobRole(person.jobRole);
   const departed = person.isActive === false ? " · <i>не працює</i>" : "";
@@ -359,10 +364,10 @@ export async function renderPersonSummary(params: {
 
   const sales: string[] = [];
   if (createdIds.length > 0) {
-    sales.push(`🧾 Прорахунків: <b>${createdIds.length}</b> на ${escapeTelegramHtml(formatMoney(sumOf(createdIds)))}`);
+    sales.push(`🧾 Прорахунків: <b>${createdIds.length}</b> на ${escapeTelegramHtml(formatMoneyRange(sumOf(createdIds), formatMoney))}`);
   }
   if (approvedIds.length > 0) {
-    sales.push(`✅ Затверджено: <b>${approvedIds.length}</b> на ${escapeTelegramHtml(formatMoney(sumOf(approvedIds)))}`);
+    sales.push(`✅ Затверджено: <b>${approvedIds.length}</b> на ${escapeTelegramHtml(formatMoneyRange(sumOf(approvedIds), formatMoney))}`);
   }
   if ((ordersResult.count ?? 0) > 0) sales.push(`📦 Замовлень: <b>${ordersResult.count}</b>`);
   if (sales.length > 0) lines.push("", "💰 <b>Продажі</b>", ...sales);
