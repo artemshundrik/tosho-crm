@@ -31,9 +31,10 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
 
 const normalizeJobRole = (value?: string | null) => (value ?? "").trim().toLowerCase();
 
-export const config = {
-  schedule: "0 9 * * *",
-};
+// Розкладу тут НЕМАЄ навмисно. Він жив тут — і саме тому функція мовчки не
+// працювала: планувальник Netlify перестав будити наші функції 18.06.2026, а
+// рядок `schedule` про це не знав і виглядав як робочий розклад. Тепер її
+// будить pg_cron (scripts/reminders-cron.sql), де видно всі джоби одразу.
 
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod && !["GET", "POST"].includes(event.httpMethod)) {

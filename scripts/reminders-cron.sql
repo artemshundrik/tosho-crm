@@ -127,19 +127,52 @@ select cron.schedule(
 );
 
 -- ---------------------------------------------------------------------------
--- Optional. Uncomment if you also want these back. Times below are UTC
--- (Kyiv = UTC+3 in summer / UTC+2 in winter, so they drift ~1h across DST).
+-- Ці два джоби стояли тут закоментованими під заголовком «Optional. Uncomment
+-- if you also want these back» — тобто вважалось, що вони не критичні й що без
+-- них нічого не станеться. Насправді ставалось: розклад у них лишався в
+-- config.schedule самих функцій, а планувальник Netlify перестав будити наші
+-- функції 18.06.2026 (див. шапку файлу). Тож ці двоє не «вимкнені за
+-- рішенням» — вони мовчки не запускались, і ніде цього не було видно.
+--
+-- Ціна виявилась вимірною: 05.09.2026 у public.activity_log знайшлось 1286
+-- рядків, які вже перейшли свій строк зберігання. У design_task_timer правило
+-- 30 днів, а найстаріші такі рядки лежали з 09.03.2026 — прострочені майже на
+-- пів року. Найсвіжіший рядок в архіві датований 06.03.2026: після тієї дати
+-- не архівувалось нічого.
+--
+-- Час — UTC (Київ = UTC+3 влітку / UTC+2 взимку, тож ~1 год дрейфу на DST).
+--
+-- ПРО ВИБІР ХВИЛИН. Обидва зсунуто з їхніх історичних слотів навмисно.
+-- pg_cron бере на кожен джоб окремий фоновий процес, а їх в інстансі рівно
+-- шість — 20.08.2026 одночасний старт уже дав 479 збоїв «job startup timeout»
+-- за ніч (див. коментар вище). Історичні '20 0' і '0 6' обидва зайняті:
+-- о :20 щогодини прокидається system-alerts і туди ж о 0:20 стає
+-- feature-adoption-refresh, а о 0 6 сходяться dev-news, reminders-finance-payment
+-- і місячні finance-month-close. Тому беремо порожні хвилини: :40 і :25
+-- (о :00 стоїть reminders-team-events, о :10 — design-timer-reminders).
 -- ---------------------------------------------------------------------------
 
--- Probation review reminders (was 09:00 Kyiv):
--- select cron.schedule(
---   'reminders-probation', '0 6 * * *',
---   $$ select net.http_post(url := 'https://tosho.pro/.netlify/functions/probation-reminders', headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')), timeout_milliseconds := 20000) $$);
+-- Нагадування про кінець випробувального. 6:25 UTC = 9:25 Київ улітку.
+select cron.schedule(
+  'reminders-probation',
+  '25 6 * * *',
+  $$ select net.http_post(
+       url := 'https://tosho.pro/.netlify/functions/probation-reminders',
+       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
+       timeout_milliseconds := 20000) $$
+);
 
--- Activity-log retention -- DELETES old activity_log rows (was 03:20 Kyiv):
--- select cron.schedule(
---   'activity-log-retention', '20 0 * * *',
---   $$ select net.http_post(url := 'https://tosho.pro/.netlify/functions/activity-log-retention', headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')), timeout_milliseconds := 20000) $$);
+-- Чистка журналу активності: переносить прострочені рядки з public.activity_log
+-- у tosho.activity_log_archive за правилами строків (30/90/180 днів залежно від
+-- дії). 0:40 UTC = 3:40 Київ улітку — ніч, бо перший прогін розбере накопичене.
+select cron.schedule(
+  'activity-log-retention',
+  '40 0 * * *',
+  $$ select net.http_post(
+       url := 'https://tosho.pro/.netlify/functions/activity-log-retention',
+       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
+       timeout_milliseconds := 20000) $$
+);
 
 -- ---------------------------------------------------------------------------
 -- Verify after running:
