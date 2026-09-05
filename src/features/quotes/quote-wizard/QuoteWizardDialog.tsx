@@ -30,6 +30,8 @@ import { pluralWordUk } from "@/lib/lastSeen";
 import { cn } from "@/lib/utils";
 
 import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions";
+import { SupplierPoolPopover } from "@/components/catalog/SupplierPoolPopover";
+
 import { QuoteItemCommandField } from "./QuoteItemCommandField";
 import { QUOTE_KINDS, type QuoteKindValue } from "./quoteWizardKinds";
 import { useCatalogSuggestions } from "./useCatalogSuggestions";
@@ -641,6 +643,22 @@ export function QuoteWizardDialog({
                 onAddName={handleAddName}
                 onInvalid={setError}
               />
+
+              {/*
+                Вітрина пулу постачальників (REQ-250#p3) — та сама, що в білдері.
+                Стоїть одразу під полем, бо тут людина й формулює, чого хоче:
+                набрала назву — і бачить, чи є така річ у постачальників, за
+                скільки і в кого, не виходячи з вікна.
+
+                Засіваємо лише назву. У це поле кидають і ПОСИЛАННЯ (один із
+                трьох входів візарда), а пошук по назві від URL дасть порожньо —
+                тож посилання сюди не передаємо.
+              */}
+              <div className="-mt-1">
+                <SupplierPoolPopover
+                  initialTerm={/^https?:\/\//i.test(fieldValue.trim()) ? "" : fieldValue}
+                />
+              </div>
 
               {drafts.length > 0 ? (
                 <section className="space-y-3">
