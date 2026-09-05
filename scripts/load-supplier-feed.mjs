@@ -44,8 +44,19 @@ const SUPPLIERS = {
     format: "prom",
     source: "feed:prom",
   },
-  // totobi:  { slug: "totobi.com.ua",  feed: "…", format: "cscart", source: "feed:cscart" },
-  // eney:    { slug: "eney.com.ua",    feed: "…", format: "prom",   source: "feed:prom" },
+  avanprint: {
+    slug: "avanprint.ua",
+    feed: "https://avanprint.ua/content/export/avanprint.ua/catalog-sitemap.xml",
+    format: "sitemap",
+    source: "sitemap",
+  },
+  // НЕ ДОДАНІ, і причина в них, а не в коді (перевірено 05.09.2026):
+  //   totobi (CS-Cart) — ні фіда, ні мапи: усе 404. Дані лише з кабінету.
+  //   eney (OpenCart)  — точка фіда index.php?route=extension/feed/google_base
+  //                      віддає 200 і НУЛЬ байт: розширення є, фід вимкнено в
+  //                      їхній адмінці. Мапа є, але без назв — самі адреси.
+  // Обом достатньо, щоб постачальник увімкнув вивантаження в себе; тоді сюди
+  // лягає рядок, а для google_base — ще й свій розбір (це Merchant XML, не YML).
 };
 
 const args = process.argv.slice(2);
@@ -110,7 +121,41 @@ function parseProm(xml) {
   return rows;
 }
 
-const PARSERS = { prom: parseProm };
+/**
+ * Мапа сайту з картинками (avanprint). Дає назву, фото й адресу — але НЕ дає
+ * ціни й артикула: вони на сторінках за анти-бот захистом, і чистий шлях до них
+ * — експорт з адмінки (docs/CATALOG_DESIGN.md §6а). Для пошуку агрегатора назви
+ * й фото вже корисні: менеджер бачить, що така річ у нас є, і відкриває її.
+ */
+function parseSitemap(xml) {
+  const rows = [];
+  for (const m of xml.matchAll(/<url>([\s\S]*?)<\/url>/g)) {
+    const b = m[1];
+    const loc = b.match(/<loc>([^<]+)<\/loc>/);
+    if (!loc) continue;
+    const url = loc[1].trim();
+    if (url.includes("/en/")) continue; // англійський дубль тієї ж картки
+    const pics = [...b.matchAll(/<image:loc>([^<]+)<\/image:loc>/g)].map((p) => p[1].trim());
+    const titleMatch = b.match(/<image:title><!\[CDATA\[([\s\S]*?)\]\]><\/image:title>/);
+    const name = titleMatch ? unesc(titleMatch[1]) : "";
+    if (!name) continue; // без назви рядок у пошуку марний
+    rows.push({
+      external_key: url,
+      article: null,
+      name,
+      vendor: null,
+      category: null,
+      price: null,
+      currency: "UAH",
+      url,
+      image_url: pics[0] || null,
+      images: JSON.stringify(pics),
+    });
+  }
+  return rows;
+}
+
+const PARSERS = { prom: parseProm, sitemap: parseSitemap };
 
 // ── тягнемо фід ─────────────────────────────────────────────────────────────
 console.log(`Фід: ${cfg.feed}`);
@@ -160,6 +205,17 @@ create temp table _feed (
 ) on commit drop;
 
 \\copy _feed (${cols.join(", ")}) from '${tsv}' with (format text, null '\\N')
+
+-- Немає картки постачальника — падаємо ГУЧНО. Без цього CROSS JOIN нижче дав би
+-- порожньо, і залив «успішно» вставив би нуль рядків: рівно той тихий збій, на
+-- якому в цьому проєкті вже обпікались (SQL, що не поїхав, при зелених джобах).
+do $$
+begin
+  if not exists (select 1 from tosho.contractors where website ilike '%${cfg.slug}%') then
+    raise exception 'Немає картки підрядника з доменом %. Заведіть її (kind=supplier, website), інакше вставляти нема під кого.', '${cfg.slug}';
+  end if;
+end
+$$;
 
 -- team_id і contractor_id беремо з картки постачальника за доменом.
 with sup as (
