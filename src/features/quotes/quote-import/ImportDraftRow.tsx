@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ImageOff, Link2, Plus, Tag, Trash2, X } from "lucide-react";
+import { Check, ImageOff, Link2, Plus, Search, Tag, Trash2, X } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
@@ -376,15 +376,31 @@ function KindChip({
   onChange: (kind: DraftKindOption | null) => void;
 }) {
   const [open, setOpen] = React.useState(false);
+  /**
+   * Пошук по видах. Їх 92 — гортати стільки, щоб знайти «Поло», людина не буде
+   * (скарга Артема 05.09). Фільтр чисто на клієнті: список уже в пам'яті, тож
+   * ні запиту, ні витрат.
+   *
+   * Шукаємо і по виду, і по ТИПУ: серед 92 є однойменні види в різних типах
+   * («Антистрес» двічі), і без типу вибір із двох однакових рядків — лотерея.
+   */
+  const [search, setSearch] = React.useState("");
+  const needle = search.trim().toLowerCase();
+
+  React.useEffect(() => {
+    if (!open) setSearch("");
+  }, [open]);
+
   const groups = React.useMemo(() => {
     const byType = new Map<string, { typeName: string; kinds: DraftKindOption[] }>();
     for (const option of options) {
+      if (needle && !`${option.kindName} ${option.typeName}`.toLowerCase().includes(needle)) continue;
       const group = byType.get(option.typeId) ?? { typeName: option.typeName, kinds: [] };
       group.kinds.push(option);
       byType.set(option.typeId, group);
     }
     return [...byType.values()];
-  }, [options]);
+  }, [options, needle]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -406,7 +422,21 @@ function KindChip({
           )}
         </Chip>
       </PopoverTrigger>
-      <PopoverContent align="start" className="max-h-80 w-64 overflow-y-auto p-1.5">
+      <PopoverContent align="start" className="w-72 p-1.5">
+        <div className="relative mb-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Пошук виду"
+            className="h-8 rounded-full pl-8 text-sm"
+            autoFocus
+          />
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+        {groups.length === 0 ? (
+          <p className="px-2 py-4 text-center text-xs text-muted-foreground">Такого виду немає</p>
+        ) : null}
         {groups.map((group) => (
           <div key={group.typeName} className="mb-1 last:mb-0">
             <div className="px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -430,6 +460,7 @@ function KindChip({
             ))}
           </div>
         ))}
+        </div>
         {value ? (
           <button
             type="button"

@@ -360,7 +360,37 @@ export function QuoteWizardDialog({
    */
   const handleAddSupplierProduct = (product: SupplierPoolProduct) => {
     setError(null);
-    const draft = makeDraft({ name: product.name, sku: product.article });
+    /**
+     * Вид — припущення, і джерел у нього два, у порядку надійності.
+     *
+     * СПЕРШУ КАТЕГОРІЯ ПОСТАЧАЛЬНИКА. Це не здогад із рядка, а його власна
+     * класифікація: berrytex сам каже «Футболки» (750 товарів), «Поло» (511),
+     * «Светри» (425). Наявне вгадування вже порівнює по основі слова, тож
+     * «Футболки» знаходить наш вид «Футболка» без жодного нового коду.
+     *
+     * ПОТІМ НАЗВА — те саме, що для позицій за посиланням. Потрібне для
+     * джерел без категорій: у мапах avanprint і bergamo їх немає взагалі.
+     *
+     * `guessed: true` тут принципове: чип підпише «припущення», і людина
+     * побачить, що це версія CRM, а не факт від постачальника.
+     */
+    const guess =
+      guessKindFromTitle(catalog.kinds, product.category) ?? guessKindFromTitle(catalog.kinds, product.name);
+    const draft = makeDraft({
+      name: product.name,
+      sku: product.article,
+      catalog: guess
+        ? {
+            modelId: null,
+            kindId: guess.kindId,
+            typeId: guess.typeId,
+            kindName: guess.kindName,
+            typeName: guess.typeName,
+            imageUrl: null,
+            guessed: true,
+          }
+        : null,
+    });
     setDrafts((prev) => [...prev, draft]);
     const imageUrl = product.imageUrl;
     if (imageUrl) {
