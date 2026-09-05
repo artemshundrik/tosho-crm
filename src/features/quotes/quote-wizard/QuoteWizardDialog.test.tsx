@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -124,18 +125,28 @@ const runDefaults = { markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRat
 function renderWizard(overrides: Partial<React.ComponentProps<typeof QuoteWizardDialog>> = {}) {
   const prepareQuote = vi.fn(async () => "quote-1");
   const onCreated = vi.fn();
+  /**
+   * Клієнт React Query потрібен, відколи поле позиції шукає ще й у пулі
+   * постачальників (REQ-250#p3). Свій на кожен рендер — щоб кеш не перетікав
+   * між тестами; retry вимкнено, інакше невдалий запит тягнув би тест у таймаут.
+   */
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
   render(
-    <QuoteWizardDialog
-      open
-      onOpenChange={() => {}}
-      teamId="team-1"
-      header={() => <div>шапка прорахунку</div>}
-      headerIssue={null}
-      runDefaultsFor={() => runDefaults}
-      onPrepareQuote={prepareQuote}
-      onCreated={onCreated}
-      {...overrides}
-    />
+    <QueryClientProvider client={queryClient}>
+      <QuoteWizardDialog
+        open
+        onOpenChange={() => {}}
+        teamId="team-1"
+        header={() => <div>шапка прорахунку</div>}
+        headerIssue={null}
+        runDefaultsFor={() => runDefaults}
+        onPrepareQuote={prepareQuote}
+        onCreated={onCreated}
+        {...overrides}
+      />
+    </QueryClientProvider>
   );
   return { prepareQuote, onCreated };
 }

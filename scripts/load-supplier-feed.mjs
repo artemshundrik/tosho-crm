@@ -50,6 +50,12 @@ const SUPPLIERS = {
     format: "sitemap",
     source: "sitemap",
   },
+  bergamo: {
+    slug: "bergamo.ua",
+    feed: "https://bergamo.ua/sitemap.xml",
+    format: "sitemap-sku",
+    source: "sitemap",
+  },
   // НЕ ДОДАНІ, і причина в них, а не в коді (перевірено 05.09.2026):
   //   totobi (CS-Cart) — ні фіда, ні мапи: усе 404. Дані лише з кабінету.
   //   eney (OpenCart)  — точка фіда index.php?route=extension/feed/google_base
@@ -155,7 +161,39 @@ function parseSitemap(xml) {
   return rows;
 }
 
-const PARSERS = { prom: parseProm, sitemap: parseSitemap };
+/**
+ * Мапа, у якій немає ні назв, ні фото, зате АДРЕСА товару — це його артикул
+ * (bergamo: bergamo.ua/V3447-03). Такий рядок не знайдеться за назвою, але
+ * знайдеться за кодом — а артикул вставляють не рідше, ніж набирають назву.
+ *
+ * Назвою ставимо сам артикул: у базі поле not null, а вигадувати назву з коду
+ * означало б показати менеджеру те, чого постачальник не казав.
+ */
+function parseSitemapSku(xml) {
+  const rows = [];
+  for (const m of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) {
+    const url = m[1].trim();
+    const slug = url.replace(/\/+$/, "").split("/").pop() || "";
+    // Артикул — це код, а не слово: цифри в ньому обов'язкові. Так відсіюються
+    // сторінки на кшталт /about, /catalog і головна.
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\d[A-Za-z0-9._-]*$/.test(slug)) continue;
+    rows.push({
+      external_key: url,
+      article: slug,
+      name: slug,
+      vendor: null,
+      category: null,
+      price: null,
+      currency: "UAH",
+      url,
+      image_url: null,
+      images: "[]",
+    });
+  }
+  return rows;
+}
+
+const PARSERS = { prom: parseProm, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku };
 
 // ── тягнемо фід ─────────────────────────────────────────────────────────────
 console.log(`Фід: ${cfg.feed}`);

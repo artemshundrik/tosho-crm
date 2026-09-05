@@ -1,9 +1,11 @@
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { CornerDownLeft, Database, ImageOff, Link2, Loader2, Plus, Search } from "lucide-react";
 
 import { SEARCH_LEFT_ICON } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { formatSupplierPoolPrice, searchSupplierPool } from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
 
 import { useCatalogSkuMatches } from "./catalogSkuSearch";
@@ -82,8 +84,27 @@ export function QuoteItemCommandField({
     () => (mode === "search" ? rankCatalogSuggestions(suggestions, trimmed, undefined, skuMatches) : []),
     [mode, suggestions, trimmed, skuMatches]
   );
-  // Рядків у списку: підказки + «Додати як нову позицію» останнім.
-  const rowCount = ranked.length + 1;
+
+  /**
+   * Товари постачальників — у ТОМУ САМОМУ списку, а не окремим пошуком
+   * (рішення Артема 05.09). Менеджер не має вирішувати наперед, де шукати:
+   * він пише назву, а звідки вона знайшлась — уже відповідь, а не питання.
+   *
+   * Каталог іде першим свідомо: перевірене, що ми вже продавали, має стояти
+   * вище прайсу на тисячі позицій (§6а docs/CATALOG_DESIGN.md).
+   */
+  const poolTerm = useDebouncedValue(mode === "search" ? trimmed : "", 250);
+  const { data: poolData, isFetching: poolSearching } = useQuery({
+    queryKey: ["supplier-pool", poolTerm],
+    queryFn: () => searchSupplierPool(poolTerm, { limit: 6 }),
+    enabled: poolTerm.length >= 2,
+    staleTime: 60_000,
+  });
+  const pool = poolTerm.length >= 2 ? poolData ?? [] : [];
+
+  // Рядків у списку: каталог + постачальники + «Додати як нову позицію».
+  const rowCount = ranked.length + pool.length + 1;
+  const addRowIndex = ranked.length + pool.length;
   const open = focused && !dismissed && mode === "search" && trimmed.length > 0;
 
   // Новий текст — новий список: підсвітка повертається на перший рядок, а
@@ -122,9 +143,20 @@ export function QuoteItemCommandField({
     if (suggestion) {
       onPickCatalog(suggestion);
       onValueChange("");
-    } else {
-      commitName();
+      return;
     }
+    const product = pool[index - ranked.length];
+    if (product) {
+      // Товар постачальника — це ще НЕ модель каталогу: у нього немає ні виду,
+      // ні пресетів. Тому додаємо його назвою, як «нову позицію», тільки назва
+      // приходить готова й точна — з боку постачальника. Прив'язка позиції до
+      // самої пропозиції — наступний крок (p9/p10), і робити її тихо тут було б
+      // рішенням за людину.
+      onAddName(product.name);
+      onValueChange("");
+      return;
+    }
+    commitName();
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -271,20 +303,71 @@ export function QuoteItemCommandField({
             запитом, і сказати «немає» до відповіді означало б збрехати на
             двісті мілісекунд рівно тим людям, які вставили артикул.
           */}
-          {!suggestionsLoading && !skuSearching && ranked.length === 0 ? (
+          {!suggestionsLoading && !skuSearching && ranked.length === 0 && pool.length === 0 && !poolSearching ? (
             <li className="px-2 pb-1 pt-1.5 text-xs text-muted-foreground">У базі такого немає</li>
           ) : null}
+
+          {/* Постачальники — та сама вітрина, тільки вбудована в один список.
+              Заголовок пояснює, чому ці рядки виглядають інакше: у них немає
+              виду й пресетів, зате є ціна й сайт. */}
+          {pool.length > 0 ? (
+            <li
+              aria-hidden
+              className={cn(
+                "px-2 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70",
+                ranked.length > 0 && "mt-1 border-t border-border/60"
+              )}
+            >
+              У постачальників
+            </li>
+          ) : null}
+          {pool.map((product, poolIndex) => {
+            const index = ranked.length + poolIndex;
+            const price = formatSupplierPoolPrice(product);
+            return (
+              <li
+                key={product.key}
+                role="option"
+                aria-selected={active === index}
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
+                  active === index ? "bg-muted" : "hover:bg-muted/50"
+                )}
+                onMouseEnter={() => setActive(index)}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => commitRow(index)}
+              >
+                <SuggestionPhoto url={product.imageUrl} name={product.name} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{product.name}</span>
+                  <span className="block truncate text-2xs text-muted-foreground">
+                    {[product.article, product.supplierSlug].filter(Boolean).join(" · ")}
+                    {product.variantCount > 1 ? (
+                      <span className="text-muted-foreground/70"> · {product.variantCount} вар.</span>
+                    ) : null}
+                  </span>
+                </span>
+                {price ? (
+                  <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-muted-foreground">{price}</span>
+                ) : null}
+                {active === index ? (
+                  <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                ) : null}
+              </li>
+            );
+          })}
+
           <li
             role="option"
-            aria-selected={active === ranked.length}
+            aria-selected={active === addRowIndex}
             className={cn(
               "flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
-              ranked.length > 0 && "mt-1 border-t border-border/60 pt-2",
-              active === ranked.length ? "bg-muted" : "hover:bg-muted/50"
+              addRowIndex > 0 && "mt-1 border-t border-border/60 pt-2",
+              active === addRowIndex ? "bg-muted" : "hover:bg-muted/50"
             )}
-            onMouseEnter={() => setActive(ranked.length)}
+            onMouseEnter={() => setActive(addRowIndex)}
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => commitRow(ranked.length)}
+            onClick={() => commitRow(addRowIndex)}
           >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-md)] border border-dashed border-border text-muted-foreground">
               <Plus className="h-4 w-4" />
@@ -295,7 +378,7 @@ export function QuoteItemCommandField({
               </span>
               <span className="block text-2xs text-muted-foreground">Без каталогу — назва й тираж, решта в картці</span>
             </span>
-            {active === ranked.length ? (
+            {active === addRowIndex ? (
               <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             ) : null}
           </li>
@@ -303,6 +386,16 @@ export function QuoteItemCommandField({
       </PopoverContent>
     </Popover>
   );
+}
+
+/** Пауза перед запитом до пулу: каталог уже в пам'яті, а пул — це база. */
+function useDebouncedValue(value: string, delay: number) {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
 }
 
 function SuggestionPhoto({ url, name }: { url: string | null; name: string }) {
