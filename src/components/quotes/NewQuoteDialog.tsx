@@ -65,14 +65,18 @@ import {
   validatePrintProductConfig,
   type PrintConfiguratorPreset,
   type PrintPackageConfig,
+  type PrintProductKind,
 } from "@/lib/printPackage";
 import {
   PrintProductConfigurator,
-  PRINT_PACKAGE_DENSITIES,
-  PRINT_PACKAGE_HANDLES,
-  PRINT_PACKAGE_PRINT_TYPES,
   type ConfiguratorProductOption,
 } from "@/components/quotes/PrintPackageConfigurator";
+import {
+  listPackageDensities,
+  listPackageHandles,
+  listPackagePrintTypes,
+  reconcilePrintProductConfig,
+} from "@/lib/printPackageRules";
 import {
   ChevronDown,
   User,
@@ -657,7 +661,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [categoryId, setCategoryId] = React.useState<string>("");
   const [kindId, setKindId] = React.useState<string>("");
   const [modelId, setModelId] = React.useState<string>("");
-  const [printPackageConfig, setPrintPackageConfig] = React.useState<PrintPackageConfig>(
+  const [rawPrintPackageConfig, setRawPrintPackageConfig] = React.useState<PrintPackageConfig>(
     createEmptyPrintPackageConfig()
   );
   const [quantity, setQuantity] = React.useState<number>();
@@ -678,6 +682,20 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [quickModelImageUrl, setQuickModelImageUrl] = React.useState("");
   const [quickModelSaving, setQuickModelSaving] = React.useState(false);
   const [quickModelError, setQuickModelError] = React.useState<string | null>(null);
+  /**
+   * Незбережений товар прив'язаний до виду, тож при зміні виду його чернетку
+   * скидають. Раніше це робив ефект на `kindId` — і заразом стирав те, що щойно
+   * відновилось із чернетки вікна: обидва значення прилітали одним батчем, а
+   * ефект спрацьовував уже після нього (REQ-245#p1). Тепер скидання кличуть ті
+   * місця, де вид справді змінює людина.
+   */
+  const resetQuickModelDraft = React.useCallback(() => {
+    setQuickModelName("");
+    setQuickModelSku("");
+    setQuickModelPrice("");
+    setQuickModelImageUrl("");
+    setQuickModelError(null);
+  }, []);
 
   // Popover states
   const [statusPopoverOpen, setStatusPopoverOpen] = React.useState(false);
@@ -774,34 +792,55 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       ) ?? null,
     [categoryId, configuratorProductOptions, kindId, modelId]
   );
-  const activeProductKind = React.useMemo(
+  const activeProductKind = React.useMemo<PrintProductKind | "">(
     () => (activeConfiguratorPreset ? getProductKindFromPreset(activeConfiguratorPreset) : ""),
     [activeConfiguratorPreset]
   );
+  /**
+   * Звірена конфігурація — те, що бачить людина і що йде в базу (REQ-245#p1).
+   *
+   * Вид виробу диктує обрана модель каталогу, а він тягне за собою правила
+   * сумісності решти полів. Раніше це робили три ефекти по черзі, тож вікно
+   * встигало показати неможливу комбінацію й наступним кадром стерти поле —
+   * найпомітніше при відкритті, коли модель приїздила з каталогу вже після
+   * першого рендера. Тепер правила застосовуються до показу, одним проходом.
+   */
+  const printPackageConfig = React.useMemo(
+    () => reconcilePrintProductConfig(rawPrintPackageConfig, { productKind: activeProductKind }),
+    [activeProductKind, rawPrintPackageConfig]
+  );
+  /**
+   * Записувати теж належить звірене: інакше в стані осідали б значення, яких на
+   * екрані немає, і поле «воскресало» б, щойно людина поверне попередній папір.
+   *
+   * Вид виробу читається через ref, щоб сеттер лишався стабільним: він стоїть у
+   * залежностях ефекту, який наповнює вікно при відкритті, і новий сеттер на
+   * кожну зміну виду скидав би форму просто посеред роботи.
+   */
+  const activeProductKindRef = React.useRef(activeProductKind);
+  activeProductKindRef.current = activeProductKind;
+  const setPrintPackageConfig = React.useCallback<React.Dispatch<React.SetStateAction<PrintPackageConfig>>>(
+    (nextConfig) => {
+      setRawPrintPackageConfig((prev) => {
+        const context = { productKind: activeProductKindRef.current };
+        const current = reconcilePrintProductConfig(prev, context);
+        const resolved = typeof nextConfig === "function" ? nextConfig(current) : nextConfig;
+        return reconcilePrintProductConfig(resolved, context);
+      });
+    },
+    []
+  );
   const availablePackageDensities = React.useMemo(
-    () =>
-      PRINT_PACKAGE_DENSITIES.filter((option) => {
-        if (option.onlyFor === "kraft") return printPackageConfig.paperType === "kraft";
-        if (option.onlyFor === "cardboard") return printPackageConfig.paperType === "cardboard";
-        return true;
-      }),
-    [printPackageConfig.paperType]
+    () => listPackageDensities(printPackageConfig),
+    [printPackageConfig]
   );
   const availablePackageHandles = React.useMemo(
-    () =>
-      PRINT_PACKAGE_HANDLES.filter((option) => {
-        if (option.onlyFor === "kraft") return printPackageConfig.paperType === "kraft";
-        return true;
-      }),
-    [printPackageConfig.paperType]
+    () => listPackageHandles(printPackageConfig),
+    [printPackageConfig]
   );
   const availablePackagePrintTypes = React.useMemo(
-    () =>
-      PRINT_PACKAGE_PRINT_TYPES.filter((option) => {
-        if (option.notForReady) return printPackageConfig.packageType !== "ready";
-        return true;
-      }),
-    [printPackageConfig.packageType]
+    () => listPackagePrintTypes(printPackageConfig),
+    [printPackageConfig]
   );
   const availablePrintMethods = selectedKind?.methods ?? [];
   const availablePrintPositions = selectedKind?.printPositions ?? [];
@@ -883,6 +922,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setCategoryId(initialValues?.categoryId ?? "");
     setKindId(initialValues?.kindId ?? "");
     setModelId(initialValues?.modelId ?? "");
+    resetQuickModelDraft();
     setPrintPackageConfig({
       ...createEmptyPrintPackageConfig(),
       ...(initialValues?.printPackageConfig ?? {}),
@@ -943,7 +983,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setDeliveryPopoverOpen(false);
     setFilesDragActive(false);
     setProjectFilesDragActive(false);
-  }, [availableStatuses, currentUserId, initialValues, isEditMode, open]);
+  }, [availableStatuses, currentUserId, initialValues, isEditMode, open, resetQuickModelDraft, setPrintPackageConfig]);
 
   // Draft persistence. On dialog open we apply any stored draft *after* the
   // initialValues-based reset above so the draft wins. We persist the full
@@ -1155,19 +1195,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     kindId,
     modelId,
     quoteType,
+    setPrintPackageConfig,
   ]);
-
-  const resetQuickModelDraft = React.useCallback(() => {
-    setQuickModelName("");
-    setQuickModelSku("");
-    setQuickModelPrice("");
-    setQuickModelImageUrl("");
-    setQuickModelError(null);
-  }, []);
-
-  React.useEffect(() => {
-    resetQuickModelDraft();
-  }, [kindId, resetQuickModelDraft]);
 
   const handleQuickCreateModel = React.useCallback(async () => {
     if (!onCreateCatalogModel) return;
@@ -1211,64 +1240,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       setQuickModelSaving(false);
     }
   }, [categoryId, kindId, onCreateCatalogModel, quickModelImageUrl, quickModelName, quickModelPrice, quickModelSku, resetQuickModelDraft]);
-
-  React.useEffect(() => {
-    if (!isPrintPackageMode || printPackageConfig.productKind !== "package") return;
-    const activeHandleValid = availablePackageHandles.some((option) => option.value === printPackageConfig.handleType);
-    const activeDensityValid = availablePackageDensities.some((option) => option.value === printPackageConfig.density);
-    const shouldHideEyelets =
-      printPackageConfig.packageType !== "custom" || printPackageConfig.paperType === "kraft";
-    const nextKraftColor = printPackageConfig.paperType === "kraft" ? printPackageConfig.kraftColor : "";
-    const nextHandleType = activeHandleValid ? printPackageConfig.handleType : "";
-    const nextDensity = activeDensityValid ? printPackageConfig.density : "";
-    const nextEyelets = shouldHideEyelets ? "" : printPackageConfig.eyelets;
-    if (
-      nextKraftColor !== printPackageConfig.kraftColor ||
-      nextHandleType !== printPackageConfig.handleType ||
-      nextDensity !== printPackageConfig.density ||
-      nextEyelets !== printPackageConfig.eyelets
-    ) {
-      setPrintPackageConfig((prev) => ({
-        ...prev,
-        kraftColor: nextKraftColor,
-        handleType: nextHandleType,
-        density: nextDensity,
-        eyelets: nextEyelets,
-      }));
-    }
-  }, [
-    availablePackageDensities,
-    availablePackageHandles,
-    isPrintPackageMode,
-    printPackageConfig.density,
-    printPackageConfig.eyelets,
-    printPackageConfig.handleType,
-    printPackageConfig.kraftColor,
-    printPackageConfig.packageType,
-    printPackageConfig.paperType,
-    printPackageConfig.productKind,
-  ]);
-
-  React.useEffect(() => {
-    if (!isPrintPackageMode || !activeProductKind) return;
-    if (printPackageConfig.productKind === activeProductKind) return;
-    setPrintPackageConfig((prev) => ({
-      ...prev,
-      productKind: activeProductKind,
-    }));
-  }, [activeProductKind, isPrintPackageMode, printPackageConfig.productKind]);
-
-  React.useEffect(() => {
-    if (!isPrintPackageMode || printPackageConfig.productKind !== "package") return;
-    const activePrintTypeValid = availablePackagePrintTypes.some((option) => option.value === printPackageConfig.printType);
-    if (activePrintTypeValid) return;
-    setPrintPackageConfig((prev) => ({
-      ...prev,
-      printType: "",
-      pantoneCount: "",
-      stickerSize: "",
-    }));
-  }, [availablePackagePrintTypes, isPrintPackageMode, printPackageConfig.printType, printPackageConfig.productKind]);
 
   React.useEffect(() => {
     if (isPrintPackageMode) return;
@@ -2063,6 +2034,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                           setCategoryId("");
                           setKindId("");
                           setModelId("");
+                          resetQuickModelDraft();
                           setPrintApplications([]);
                           setPrintMode("no_print");
                           setPrintPackageConfig(createEmptyPrintPackageConfig());
@@ -2099,6 +2071,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                         setCategoryId(nextOption.typeId);
                         setKindId(nextOption.kindId);
                         setModelId(nextOption.modelId);
+                        resetQuickModelDraft();
                         setPrintPackageConfig((prev) => ({
                           ...createEmptyPrintPackageConfig(),
                           ...prev,
@@ -2138,6 +2111,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                               setCategoryId(value);
                               setKindId("");
                               setModelId("");
+                              resetQuickModelDraft();
                             }}
                             options={(filteredCatalogTypes.length > 0 ? filteredCatalogTypes : catalogTypes).map((type) => ({
                               value: type.id,
@@ -2155,6 +2129,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                             onChange={(value) => {
                               setKindId(value);
                               setModelId("");
+                              resetQuickModelDraft();
                             }}
                             disabled={!categoryId}
                             options={availableKinds.map((kind) => ({

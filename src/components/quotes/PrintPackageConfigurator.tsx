@@ -5,6 +5,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import type { PrintConfiguratorPreset, PrintProductConfig } from "@/lib/printPackage";
 import { getProductKindFromPreset } from "@/lib/printPackage";
+// Переліки з умовними правилами живуть у `printPackageRules` разом зі звіркою,
+// яка ці правила застосовує (REQ-245#p1). Реекспорт лишений для сумісності.
+export {
+  PRINT_PACKAGE_DENSITIES,
+  PRINT_PACKAGE_HANDLES,
+  PRINT_PACKAGE_PRINT_TYPES,
+} from "@/lib/printPackageRules";
 import {
   Check,
   CheckCircle2,
@@ -59,22 +66,6 @@ export const PRINT_PACKAGE_KRAFT_COLORS: SimpleOption[] = [
   { value: "brown", label: "Бурий" },
 ];
 
-export const PRINT_PACKAGE_DENSITIES: Array<{ value: string; label: string; onlyFor?: "kraft" | "cardboard" }> = [
-  { value: "90", label: "90г" },
-  { value: "110", label: "110г" },
-  { value: "120", label: "120г", onlyFor: "kraft" },
-  { value: "125", label: "125г" },
-  { value: "200", label: "200г" },
-  { value: "205", label: "205г", onlyFor: "cardboard" },
-  { value: "250", label: "250г" },
-];
-
-export const PRINT_PACKAGE_HANDLES: Array<{ value: string; label: string; onlyFor?: "kraft" }> = [
-  { value: "ribbon", label: "Лента" },
-  { value: "cord", label: "Шнурок" },
-  { value: "twisted_paper", label: "Кручена паперова", onlyFor: "kraft" },
-  { value: "flat_paper", label: "Плоска паперова", onlyFor: "kraft" },
-];
 
 export const YES_NO_OPTIONS: SimpleOption[] = [
   { value: "yes", label: "Так" },
@@ -90,16 +81,6 @@ export const PRINT_PACKAGE_LAMINATION_OPTIONS: SimpleOption[] = [
 export const PRINT_PACKAGE_PRINT_SIDES: SimpleOption[] = [
   { value: "one_side", label: "З одної сторони" },
   { value: "two_sides", label: "З двох сторін" },
-];
-
-export const PRINT_PACKAGE_PRINT_TYPES: Array<{ value: string; label: string; notForReady?: boolean }> = [
-  { value: "cmyk", label: "CMYK", notForReady: true },
-  { value: "pantone", label: "Pantone" },
-  { value: "cmyk_pantone", label: "CMYK+Pantone" },
-  { value: "uv_dtf", label: "УФ-DTF" },
-  { value: "uv_print", label: "УФ-друк" },
-  { value: "screen_print", label: "Трафарет" },
-  { value: "sticker", label: "Наліпка/стікер" },
 ];
 
 export const PRINT_PACKAGE_EXTRA_FINISHING: SimpleOption[] = [

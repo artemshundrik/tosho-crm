@@ -89,10 +89,13 @@ import {
   type PrintPackageConfig,
 } from "@/lib/printPackage";
 import {
+  listPackageDensities,
+  listPackageHandles,
+  listPackagePrintTypes,
+  reconcilePrintProductConfig,
+} from "@/lib/printPackageRules";
+import {
   PrintProductConfigurator,
-  PRINT_PACKAGE_DENSITIES,
-  PRINT_PACKAGE_HANDLES,
-  PRINT_PACKAGE_PRINT_TYPES,
   type ConfiguratorProductOption,
 } from "@/components/quotes/PrintPackageConfigurator";
 import { PrintSpecFields } from "@/components/quotes/PrintSpecFields";
@@ -324,15 +327,27 @@ const createPrintApplicationDraft = (): QuoteBatchPrintApplicationDraft => ({
   height: "",
 });
 
+/**
+ * Зводить конфігурацію позиції до канонічного вигляду: вид виробу з пресета
+ * моделі плюс звірка решти полів із правилами сумісності (REQ-245#p1).
+ *
+ * Звірка тут, а не в ефектах, як було: два ефекти стирали щільність і вид друку
+ * ВЖЕ ПІСЛЯ того, як вікно показало неможливу комбінацію. Вид виробу конфігу вже
+ * проставлений вище, тож окремий контекст непотрібен.
+ */
 const normalizeProductPrintPackageConfig = (
   product: Partial<ProductDraft>,
   preset?: PrintConfiguratorPreset | null
-): PrintPackageConfig => ({
-  ...createEmptyPrintPackageConfig(),
-  ...(product.printPackageConfig ?? {}),
-  productKind:
-    preset ? getProductKindFromPreset(preset) : product.printPackageConfig?.productKind || "",
-});
+): PrintPackageConfig =>
+  reconcilePrintProductConfig(
+    {
+      ...createEmptyPrintPackageConfig(),
+      ...(product.printPackageConfig ?? {}),
+      productKind:
+        preset ? getProductKindFromPreset(preset) : product.printPackageConfig?.productKind || "",
+    },
+    { productKind: "" }
+  );
 
 const createProductDraft = (seed?: Partial<ProductDraft>): ProductDraft => ({
   id: crypto.randomUUID(),
@@ -1729,29 +1744,16 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     [activeProduct?.categoryId, activeProduct?.kindId, activeProduct?.modelId, configuratorProductOptions]
   );
   const availablePackageDensities = React.useMemo(
-    () =>
-      PRINT_PACKAGE_DENSITIES.filter((option) => {
-        if (option.onlyFor === "kraft") return activePrintPackageConfig.paperType === "kraft";
-        if (option.onlyFor === "cardboard") return activePrintPackageConfig.paperType === "cardboard";
-        return true;
-      }),
-    [activePrintPackageConfig.paperType]
+    () => listPackageDensities(activePrintPackageConfig),
+    [activePrintPackageConfig]
   );
   const availablePackageHandles = React.useMemo(
-    () =>
-      PRINT_PACKAGE_HANDLES.filter((option) => {
-        if (option.onlyFor === "kraft") return activePrintPackageConfig.paperType === "kraft";
-        return true;
-      }),
-    [activePrintPackageConfig.paperType]
+    () => listPackageHandles(activePrintPackageConfig),
+    [activePrintPackageConfig]
   );
   const availablePackagePrintTypes = React.useMemo(
-    () =>
-      PRINT_PACKAGE_PRINT_TYPES.filter((option) => {
-        if (option.notForReady) return activePrintPackageConfig.packageType !== "ready";
-        return true;
-      }),
-    [activePrintPackageConfig.packageType]
+    () => listPackagePrintTypes(activePrintPackageConfig),
+    [activePrintPackageConfig]
   );
   const setActivePrintPackageConfig = React.useCallback<React.Dispatch<React.SetStateAction<PrintPackageConfig>>>(
     (nextConfig) => {
@@ -1849,62 +1851,6 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     [activeProduct, updateActiveProduct]
   );
 
-  React.useEffect(() => {
-    if (!isPrintPackageMode || activePrintPackageConfig.productKind !== "package") return;
-    const activeHandleValid = availablePackageHandles.some((option) => option.value === activePrintPackageConfig.handleType);
-    const activeDensityValid = availablePackageDensities.some((option) => option.value === activePrintPackageConfig.density);
-    const shouldHideEyelets =
-      activePrintPackageConfig.packageType !== "custom" || activePrintPackageConfig.paperType === "kraft";
-    const nextHandleType = activeHandleValid ? activePrintPackageConfig.handleType : "";
-    const nextDensity = activeDensityValid ? activePrintPackageConfig.density : "";
-    const nextEyelets = shouldHideEyelets ? "" : activePrintPackageConfig.eyelets;
-    const nextKraftColor = activePrintPackageConfig.paperType === "kraft" ? activePrintPackageConfig.kraftColor : "";
-    if (
-      nextHandleType === activePrintPackageConfig.handleType &&
-      nextDensity === activePrintPackageConfig.density &&
-      nextEyelets === activePrintPackageConfig.eyelets &&
-      nextKraftColor === activePrintPackageConfig.kraftColor
-    ) {
-      return;
-    }
-    setActivePrintPackageConfig((prev) => ({
-      ...prev,
-      handleType: nextHandleType,
-      density: nextDensity,
-      eyelets: nextEyelets,
-      kraftColor: nextKraftColor,
-    }));
-  }, [
-    activePrintPackageConfig.density,
-    activePrintPackageConfig.eyelets,
-    activePrintPackageConfig.handleType,
-    activePrintPackageConfig.kraftColor,
-    activePrintPackageConfig.packageType,
-    activePrintPackageConfig.paperType,
-    activePrintPackageConfig.productKind,
-    availablePackageDensities,
-    availablePackageHandles,
-    isPrintPackageMode,
-    setActivePrintPackageConfig,
-  ]);
-
-  React.useEffect(() => {
-    if (!isPrintPackageMode || activePrintPackageConfig.productKind !== "package") return;
-    const activePrintTypeValid = availablePackagePrintTypes.some((option) => option.value === activePrintPackageConfig.printType);
-    if (activePrintTypeValid) return;
-    setActivePrintPackageConfig((prev) => ({
-      ...prev,
-      printType: "",
-      pantoneCount: "",
-      stickerSize: "",
-    }));
-  }, [
-    activePrintPackageConfig.printType,
-    activePrintPackageConfig.productKind,
-    availablePackagePrintTypes,
-    isPrintPackageMode,
-    setActivePrintPackageConfig,
-  ]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
