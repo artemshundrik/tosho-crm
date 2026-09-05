@@ -5,7 +5,11 @@ import { CornerDownLeft, Database, ImageOff, Link2, Loader2, Plus, Search } from
 import { SEARCH_LEFT_ICON } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { formatSupplierPoolPrice, searchSupplierPool } from "@/lib/supplierPool";
+import {
+  formatSupplierPoolPrice,
+  searchSupplierPool,
+  type SupplierPoolProduct,
+} from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
 
 import { useCatalogSkuMatches } from "./catalogSkuSearch";
@@ -49,6 +53,7 @@ export function QuoteItemCommandField({
   onPickCatalog,
   onAddLinks,
   onAddName,
+  onPickSupplier,
   onInvalid,
 }: {
   /** Для пошуку за артикулом варіанта — він іде запитом у базу (REQ-248). */
@@ -64,6 +69,12 @@ export function QuoteItemCommandField({
   onPickCatalog: (suggestion: CatalogSuggestion) => void;
   onAddLinks: (urls: string[]) => void;
   onAddName: (name: string) => void;
+  /**
+   * Обрано товар постачальника. Окремо від `onAddName`, бо він несе ще й фото та
+   * артикул — те, що людина щойно бачила в підказці. Через `onAddName` картинка
+   * губилась, і в позиції лишався сірий квадрат.
+   */
+  onPickSupplier: (product: SupplierPoolProduct) => void;
   /** Що саме не схоже на посилання — вікно покаже це своєю смугою помилки. */
   onInvalid: (message: string) => void;
 }) {
@@ -148,11 +159,10 @@ export function QuoteItemCommandField({
     const product = pool[index - ranked.length];
     if (product) {
       // Товар постачальника — це ще НЕ модель каталогу: у нього немає ні виду,
-      // ні пресетів. Тому додаємо його назвою, як «нову позицію», тільки назва
-      // приходить готова й точна — з боку постачальника. Прив'язка позиції до
-      // самої пропозиції — наступний крок (p9/p10), і робити її тихо тут було б
-      // рішенням за людину.
-      onAddName(product.name);
+      // ні пресетів. Але назву, фото й артикул він приносить із собою — саме те,
+      // що людина щойно бачила в підказці. Прив'язка позиції до самої пропозиції
+      // — наступний крок (p9/p10), і робити її тихо тут було б рішенням за людину.
+      onPickSupplier(product);
       onValueChange("");
       return;
     }

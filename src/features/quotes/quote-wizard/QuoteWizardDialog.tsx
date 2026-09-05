@@ -27,6 +27,7 @@ import type {
 } from "@/features/quotes/quote-import/types";
 import { countSettledPreviews, fetchLinkPreview, useLinkPreviews } from "@/features/quotes/quote-import/useLinkPreviews";
 import { pluralWordUk } from "@/lib/lastSeen";
+import type { SupplierPoolProduct } from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
 
 import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions";
@@ -345,6 +346,32 @@ export function QuoteWizardDialog({
   };
 
   /**
+   * Товар, обраний у постачальників, приносить із собою те, що вже показав у
+   * списку: фото й артикул.
+   *
+   * ЧОМУ ОКРЕМО ВІД handleAddName. Спершу такий вибір ішов простим додаванням
+   * назви — і фото, яке людина щойно бачила в підказці, зникало: у позиції
+   * лишався сірий квадрат. Артем на це й поскаржився. Фото кладемо тим самим
+   * станом, що й для позицій «за посиланням»: рядок прев'ю не розрізняє, звідки
+   * картинка, і не мусить.
+   *
+   * Посилання на товар у постачальника свідомо НЕ пишемо в links: це зробило б
+   * сайт джерелом закупівлі мовчки, а таке рішення ухвалює людина (p9/p10).
+   */
+  const handleAddSupplierProduct = (product: SupplierPoolProduct) => {
+    setError(null);
+    const draft = makeDraft({ name: product.name, sku: product.article });
+    setDrafts((prev) => [...prev, draft]);
+    const imageUrl = product.imageUrl;
+    if (imageUrl) {
+      setLinkPreviews((prev) => ({
+        ...prev,
+        [draft.key]: { status: "done", imageUrl, title: product.name },
+      }));
+    }
+  };
+
+  /**
    * Розвідка посилань: назва, опис і фото зі сторінки товару.
    *
    * ПОЗИЦІЯ З'ЯВЛЯЄТЬСЯ ОДРАЗУ, ще до відповіді сайту, і доповнюється, коли
@@ -639,6 +666,7 @@ export function QuoteWizardDialog({
                 onPickCatalog={handlePickCatalog}
                 onAddLinks={(urls) => void handleLinks(urls)}
                 onAddName={handleAddName}
+                onPickSupplier={handleAddSupplierProduct}
                 onInvalid={setError}
               />
 
