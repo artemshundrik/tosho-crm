@@ -168,9 +168,13 @@ function isDeliverableProfile(profile?: ProfileRow) {
   return status !== "inactive" && status !== "rejected";
 }
 
-export const config = {
-  schedule: "* * * * *",
-};
+// Розкладу тут НЕМАЄ навмисно. Планувальник Netlify перестав будити ці функції
+// 18.06.2026 (f7414689) — нагадування мовчали, поки розклад не переїхав у
+// Supabase pg_cron. Рядок `schedule` лишався мертвим вантажем: він нічого не
+// запускав, але обіцяв, що запускає, і при кожній спробі порахувати виклики
+// доводилось наново з'ясовувати, хто ж насправді смикає функцію. Тепер її
+// будить джоб reminders-minute через reminders-dispatch
+// (scripts/reminders-cron.sql).
 
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod && !["GET", "POST"].includes(event.httpMethod)) {

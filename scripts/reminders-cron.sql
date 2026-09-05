@@ -37,10 +37,12 @@ revoke all on tosho.cron_config from anon, authenticated, public;
 -- 20.08.2026 це вилилось у 479 збоїв «job startup timeout» за ніч: pg_cron не
 -- зміг підняти воркер, і наші функції в ті хвилини навіть не викликались.
 --
--- Злиття НІЧОГО не міняє для людей: ті самі три виклики о тій самій хвилині,
--- просто одним `select` — pg_net кладе всі три в чергу й віддає керування, тож
--- воркер потрібен один замість трьох. Заодно втричі менше рядків у журналі
--- запусків (було ~4 300 на добу, стало ~1 400).
+-- Злиття НІЧОГО не міняє для людей: та сама робота о тій самій хвилині, просто
+-- одним `select` — воркер потрібен один замість трьох. Заодно втричі менше
+-- рядків у журналі запусків (було ~4 300 на добу, стало ~1 400).
+--
+-- 05.09.2026 злиття доведено до кінця: замість трьох POST-ів джоб робить один,
+-- у функцію-диспетчер (див. коментар біля самого cron.schedule нижче).
 --
 -- ЦІНА, яку варто знати: на дошці здоровʼя це тепер ОДИН рядок замість трьох.
 -- Якщо мовчатиме конкретно одне з трьох нагадувань, джоб цього не покаже —
@@ -77,22 +79,22 @@ begin
   end if;
 end $$;
 
+-- ОДИН POST, А НЕ ТРИ. Досі цей джоб будив три функції трьома окремими
+-- net.http_post — і кожен Netlify рахував як окрему інвокацію: 288 тіків × 3 =
+-- 864 виклики на добу, 92% усього, що крони взагалі шлють у Netlify. Роботи в
+-- них при цьому майже немає: за тиждень усі три разом доставили вісім
+-- сповіщень. Тепер б'ємо в reminders-dispatch, який викликає ті самі три
+-- обробники всередині одного процесу: 864 → 288 на добу, логіка не змінилась.
+-- Ізоляцію падінь диспетчер зберігає через Promise.allSettled — див. коментар
+-- у netlify/functions/reminders-dispatch.ts.
 select cron.schedule(
   'reminders-minute',
   '*/5 * * * *',
   $$ select
        net.http_post(
-         url := 'https://tosho.pro/.netlify/functions/customer-lead-reminders',
+         url := 'https://tosho.pro/.netlify/functions/reminders-dispatch',
          headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
-         timeout_milliseconds := 20000),
-       net.http_post(
-         url := 'https://tosho.pro/.netlify/functions/quote-deadline-reminders',
-         headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
-         timeout_milliseconds := 20000),
-       net.http_post(
-         url := 'https://tosho.pro/.netlify/functions/contractor-reminders',
-         headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
-         timeout_milliseconds := 20000) $$
+         timeout_milliseconds := 30000) $$
 );
 
 -- Team events: birthdays / work anniversaries / vacation start+end.

@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { deliverNotifications } from "./_notificationDelivery";
 
@@ -84,7 +84,7 @@ function formatDateTimeUA(value: string) {
 }
 
 async function loadQuotes(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: SupabaseClient,
   deadlineLowerBoundIso: string,
   deadlineUpperBoundIso: string
 ) {
@@ -93,41 +93,51 @@ async function loadQuotes(
   const selectWithoutCreator =
     "id,number,status,customer_name,title,assigned_to,deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment";
 
-  let result = await adminClient
-    .schema("tosho")
-    .from("quotes")
-    .select(selectWithCreator)
-    .not("deadline_at", "is", null)
-    .not("deadline_reminder_offset_minutes", "is", null)
-    .lte("deadline_at", deadlineUpperBoundIso)
-    .gte("deadline_at", deadlineLowerBoundIso)
-    .order("deadline_at", { ascending: true })
-    .limit(500);
-
-  if (
-    result.error &&
-    /column/i.test(result.error.message ?? "") &&
-    /created_by/i.test(result.error.message ?? "")
-  ) {
-    result = await adminClient
+  // Один запит, дві колонки на вибір. Раніше обидві гілки були виписані
+  // повністю, і це коштувало не лише дублювання: `select` із рядка-літерала
+  // виводить РІЗНІ типи рядка для кожного переліку колонок, тож запасна гілка
+  // (без created_by) не присвоювалась у ту саму змінну. Спільний параметр
+  // `columns: string` прибирає розбіжність — форму рядка все одно задає
+  // QuoteReminderRow нижче.
+  // Перелік колонок збирається в рантаймі, тож вивести з нього форму рядка
+  // неможливо — Supabase у такому разі віддає GenericStringError. Форму задаємо
+  // тут, поруч із самими переліками: обидва вони — підмножина QuoteReminderRow,
+  // у якій created_by необов'язковий рівно тому, що запасна гілка його не бере.
+  const queryByColumns = async (columns: string) => {
+    const { data, error } = await adminClient
       .schema("tosho")
       .from("quotes")
-      .select(selectWithoutCreator)
+      .select(columns)
       .not("deadline_at", "is", null)
       .not("deadline_reminder_offset_minutes", "is", null)
       .lte("deadline_at", deadlineUpperBoundIso)
       .gte("deadline_at", deadlineLowerBoundIso)
       .order("deadline_at", { ascending: true })
       .limit(500);
+    return { data: (data ?? []) as unknown as QuoteReminderRow[], error };
+  };
+
+  let result = await queryByColumns(selectWithCreator);
+
+  if (
+    result.error &&
+    /column/i.test(result.error.message ?? "") &&
+    /created_by/i.test(result.error.message ?? "")
+  ) {
+    result = await queryByColumns(selectWithoutCreator);
   }
 
   if (result.error) throw result.error;
-  return (result.data ?? []) as QuoteReminderRow[];
+  return result.data;
 }
 
-export const config = {
-  schedule: "* * * * *",
-};
+// Розкладу тут НЕМАЄ навмисно. Планувальник Netlify перестав будити ці функції
+// 18.06.2026 (f7414689) — нагадування мовчали, поки розклад не переїхав у
+// Supabase pg_cron. Рядок `schedule` лишався мертвим вантажем: він нічого не
+// запускав, але обіцяв, що запускає, і при кожній спробі порахувати виклики
+// доводилось наново з'ясовувати, хто ж насправді смикає функцію. Тепер її
+// будить джоб reminders-minute через reminders-dispatch
+// (scripts/reminders-cron.sql).
 
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod && !["GET", "POST"].includes(event.httpMethod)) {

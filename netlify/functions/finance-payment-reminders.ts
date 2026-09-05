@@ -126,11 +126,12 @@ function reminderKeyFromHref(href?: string | null) {
   return new URLSearchParams(href.slice(q + 1)).get("reminder")?.trim() || null;
 }
 
-export const config = {
-  // Щодня о 06:00 UTC (~08–09 Київ). Функція резолвить «сьогодні» у Києві, тож
-  // конкретна година-тригер не критична.
-  schedule: "0 6 * * *",
-};
+// Розкладу тут НЕМАЄ навмисно. Джоб reminders-finance-payment у pg_cron уже
+// будить цю функцію о 06:00 UTC, і той самий розклад тут означав ДРУГИЙ запуск
+// у ту саму хвилину. Для решти нагадувань дубль коштував би зайвий виклик, а
+// тут він небезпечний: функція прокручує next_charge_date вперед, тож два
+// прогони поспіль можуть перескочити період. Розклад живе в
+// scripts/reminders-cron.sql — в одному місці, як і в решти нагадувань.
 
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod && !["GET", "POST"].includes(event.httpMethod)) {
