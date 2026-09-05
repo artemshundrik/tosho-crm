@@ -105,6 +105,7 @@ import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import type { CatalogModel, CatalogModelVariant, CatalogType } from "@/types/catalog";
 import { CatalogModelPicker, getVisibleCatalogVariants } from "@/components/catalog/CatalogModelPicker";
+import { SupplierPoolPopover } from "@/components/catalog/SupplierPoolPopover";
 
 const QUOTE_TYPES = [
   { value: "merch", label: "Товар", icon: Package },
@@ -2296,6 +2297,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             placeholder="Оберіть модель"
                             popoverClassName="w-[420px]"
                           />
+                          <SupplierPoolPopover initialTerm={activeProduct.modelId ? getProductLabel(catalogTypes, activeProduct) : ""} />
                           {/* У поліграфії товар нашвидку не створюємо: набір полів
                               виробу живе в коді, і модель, заведена звідси, покаже
                               в прорахунку нуль налаштувань. Саме так у каталозі

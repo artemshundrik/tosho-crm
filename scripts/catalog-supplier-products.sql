@@ -77,6 +77,12 @@ create policy supplier_products_select on tosho.supplier_products
 
 grant select on tosho.supplier_products to authenticated;
 
+-- anon відрізаємо явно. Supabase роздає права за замовчуванням і анонімній ролі
+-- теж — перевірка «захист БД» спіймала це на першому ж повному прогоні. RLS
+-- тут прикрила б (is_team_member для анонімного хибний), але грант, який нікому
+-- не потрібен, — це зайві двері: прибираємо їх, а не покладаємось на замок.
+revoke all on tosho.supplier_products from anon;
+
 commit;
 
 -- Перевірка після застосування:
