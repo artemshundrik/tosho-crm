@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-09-06T09:53:12.217Z",
+  "generatedAt": "2026-09-06T13:18:10.648Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -39,6 +39,21 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тій одній перевірці читати TypeScript. Стоїть замість typescript-eslint, який тримав нас на шостій версії TypeScript.",
       "homepage": "https://babel.dev/",
+      "usedIn": 1,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=babel.dev&sz=128"
+    },
+    {
+      "name": "@babel/parser",
+      "version": "8.0.4",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": "2026-09-06T16:16:14+03:00",
+      "bumpCommit": {
+        "sha": "752978da",
+        "subject": "Розбирач викликів до бази — основа для перевірки, що зупинить мовчазні поломки"
+      },
+      "description": "Читає наш власний код як дерево, а не як текст. Потрібен перевірці, що звіряє кожен виклик до бази з тим, що в базі справді є: регулярки на цьому спотикались об згадку виклику в коментарі.",
+      "homepage": "https://babel.dev/docs/en/next/babel-parser",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=babel.dev&sz=128"
     },
@@ -710,7 +725,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
       "homepage": "https://lucide.dev",
-      "usedIn": 227,
+      "usedIn": 228,
       "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
     },
     {
@@ -718,10 +733,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "27.5.0",
       "layer": "platform",
       "dev": true,
-      "bumpedAt": "2026-04-08T22:34:06+03:00",
+      "bumpedAt": "2026-09-06T13:02:27+03:00",
       "bumpCommit": {
-        "sha": "4a3714fc",
-        "subject": "dropbox"
+        "sha": "ed095f6f",
+        "subject": "Локальна перевірка Netlify-функцій працює на свіжій версії CLI"
       },
       "description": "Інструмент Netlify: піднімає функції локально, щоб перевіряти їх до викочування.",
       "homepage": null,
@@ -946,14 +961,14 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "7.0.2",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-08-29T14:12:19+03:00",
+      "bumpedAt": "2026-09-06T13:02:27+03:00",
       "bumpCommit": {
-        "sha": "1a7cd2c1",
-        "subject": "Перевірки перед пушем стали за 11 секунд замість двох хвилин"
+        "sha": "ed095f6f",
+        "subject": "Локальна перевірка Netlify-функцій працює на свіжій версії CLI"
       },
       "description": "Перевіряє типи: ловить помилки до запуску, а не в проді. Версія 7 — перевірка за 2,6 с замість 16.",
       "homepage": "https://www.typescriptlang.org/",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=www.typescriptlang.org&sz=128"
     },
     {
@@ -984,7 +999,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 155,
+      "usedIn": 157,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1045,12 +1060,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 2092,
-  "testFiles": 153,
+  "tests": 2122,
+  "testFiles": 155,
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 45,
-  "sourceLines": 276574,
+  "sourceLines": 276819,
   "automation": {
     "workflows": [
       {

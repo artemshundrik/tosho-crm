@@ -66,6 +66,7 @@ FULL_CHECKS='
 eval-сценарії|node scripts/check-eval-cases.mjs
 версія Node|node scripts/check-node-version.mjs
 адреси кронів|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-cron-endpoints.mjs
+виклики RPC|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-rpc-contracts.mjs
 захист БД|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-db-guards.mjs
 SQL-журнал|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-sql-journal.mjs
 '

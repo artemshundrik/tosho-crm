@@ -20,6 +20,7 @@
     "check:hook-disables": "node scripts/check-hook-disables.mjs",
     "check:functions": "node scripts/check-netlify-functions.mjs",
     "check:db-guards": "node scripts/check-db-guards.mjs",
+    "check:rpc-contracts": "node scripts/check-rpc-contracts.mjs",
     "check:sql-journal": "node scripts/check-sql-journal.mjs",
     "check:docs-drift": "node scripts/check-docs-drift.mjs",
     "docs:sync": "node scripts/check-docs-drift.mjs --fix && node scripts/check-file-growth.mjs --fix && node scripts/check-instruction-size.mjs --fix",
