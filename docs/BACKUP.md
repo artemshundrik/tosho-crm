@@ -325,7 +325,44 @@ launchctl load ~/Library/LaunchAgents/com.tosho.crm.backup.plist
 launchctl kickstart -k gui/$(id -u)/com.tosho.crm.backup
 ```
 
-## 10. Minimal operational policy
+## 10. Morning watchdog (REQ-205)
+
+```bash
+node scripts/backup-watchdog.mjs             # human output, exit 0/1
+node scripts/backup-watchdog.mjs --json      # same, machine-readable
+node scripts/backup-watchdog.mjs --telegram  # also message the owner when red
+```
+
+Checks the things that **only exist on this Mac** and therefore cannot be seen by the
+`system-alerts` cron on Netlify, which reads `tosho.backup_runs` — i.e. whatever the backup
+scripts said about themselves:
+
+- each bucket's mirror under `${BACKUP_STORAGE_ROOT}/.mirror/` exists and is non-empty
+  (a vanished mirror makes the next weekly run re-pull the whole bucket — the egress hole
+  that was closed in July, and the log would still read "success");
+- newest DB archive younger than 2 days, newest storage archive younger than
+  `STORAGE_ARCHIVE_MAX_AGE_DAYS` (8 — after self-healing has had its chance);
+- neither archive is suspiciously small (the 280-byte empty archive of 2026-07-12);
+- free disk is at least 1.5× the mirror size, so the next run has room for the tar;
+- the last `tosho.backup_runs` row per section did not fail.
+
+**Silent when green** — a daily "backup is fine" becomes background within a week, and then
+it will not register on the day it matters. Exit code 0 and one line on stdout; nothing sent.
+
+Thresholds live in `scripts/lib/backupWatchdog.mjs` and are covered by
+`scripts/lib/backupWatchdog.test.mjs` — a watchdog that is wrong about a threshold fails
+silently in both directions.
+
+`--telegram` needs `TELEGRAM_BOT_TOKEN` in the environment; the token is deliberately **not**
+stored on disk. The recipient is resolved at run time: the `owner` from `memberships_view`,
+then their `telegram_chat_id` from `tosho.user_notification_settings`.
+
+Scheduled daily at 08:51 as the Claude scheduled task `backup-watchdog`
+(`~/.claude/scheduled-tasks/backup-watchdog/SKILL.md`), which fetches the token via
+`netlify env:get` and runs the command above. It runs while the Claude app is open; if the
+app was closed at 08:51 the task runs on the next launch.
+
+## 11. Minimal operational policy
 
 - Keep daily DB archives outside Supabase as a secondary recovery path
 - Run Storage backup weekly/monthly
