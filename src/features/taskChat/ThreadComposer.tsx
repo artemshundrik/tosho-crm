@@ -88,6 +88,9 @@ export function ThreadComposer({
   const isRecording = dictation.state === "recording";
   const isTranscribing = dictation.state === "transcribing";
 
+
+  /** Є що надіслати — текст або вкладення. Керує тим, що стоїть у правому кружечку. */
+  const hasSomethingToSend = body.trim().length > 0 || pendingFiles.length > 0;
   const submit = () => {
     const text = body.trim();
     if ((!text && pendingFiles.length === 0) || sending) return;
@@ -229,8 +232,6 @@ export function ThreadComposer({
             });
           }}
         />
-        <DictationButton dictation={dictation} />
-
         <textarea
           ref={inputRef}
           value={body}
@@ -256,20 +257,32 @@ export function ThreadComposer({
           className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-[7px] text-xs leading-snug outline-none placeholder:text-muted-foreground"
         />
 
-        <button
-          type="button"
-          onClick={submit}
-          disabled={sending || (body.trim().length === 0 && pendingFiles.length === 0)}
-          aria-label="Надіслати"
-          className={cn(
-            "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full transition-colors",
-            sending || (body.trim().length === 0 && pendingFiles.length === 0)
-              ? "bg-muted text-muted-foreground"
-              : "bg-primary text-primary-foreground hover:opacity-90"
-          )}
-        >
-          <Send className="h-3.5 w-3.5" />
-        </button>
+        {/*
+          ОДНЕ МІСЦЕ НА ДВІ ДІЇ. Доти мікрофон стояв ліворуч від поля, а кнопка
+          надсилання праворуч — і одна з них завжди була марною: поки порожньо,
+          надсилати нічого, а коли текст набрано, диктувати вже пізно. Тепер
+          вони ділять один кружечок: порожньо — мікрофон, є що надіслати —
+          стрілка. Композер вузький, і зайвих 30 px у ньому немає.
+
+          Чорна, а не синя: та сама головна дія, що й «Створити задачу»
+          (REQ-255#p1) — `bg-foreground text-background`.
+        */}
+        {hasSomethingToSend ? (
+          <button
+            type="button"
+            onClick={submit}
+            disabled={sending}
+            aria-label="Надіслати"
+            className={cn(
+              "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full transition-colors",
+              sending ? "bg-muted text-muted-foreground" : "bg-foreground text-background hover:opacity-90"
+            )}
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <DictationButton dictation={dictation} />
+        )}
       </div>
       )}
     </div>

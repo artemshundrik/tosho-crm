@@ -13,7 +13,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DictationButton } from "@/components/dictation/DictationButton";
+import { DictationButton, useDictationField } from "@/components/dictation/DictationButton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1665,6 +1665,16 @@ export default function DesignTaskPage() {
     onBeforeRelease: () => saveBriefBeforeReleaseRef.current?.(),
   });
   const designTaskLockedByOther = designTaskLock.lockedByOther;
+  /** Диктування ТЗ смугою під полем — чому саме так, у `useDictationField`. */
+  const briefDictation = useDictationField({
+    textareaRef: briefTextareaRef,
+    value: briefDraft,
+    onChange: (next) => { setBriefDraft(next); setBriefDirty(true); setBriefInlineEditing(true); },
+    onAfterInsert: () => resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT),
+    context: "brief",
+    disabled: briefSaving || designTaskLockedByOther,
+    withStrip: true,
+  });
 
   useEffect(() => {
     syncDesignPageCacheTask(effectiveTeamId ?? "", task);
@@ -10074,20 +10084,7 @@ export default function DesignTaskPage() {
                         </Badge>
                       ) : null}
                     </div>
-                    <DictationButton
-                      textareaRef={briefTextareaRef}
-                      value={briefDraft}
-                      onChange={(next) => {
-                        setBriefDraft(next);
-                        setBriefDirty(true);
-                        setBriefInlineEditing(true);
-                      }}
-                      onAfterInsert={() =>
-                        resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT)
-                      }
-                      context="brief"
-                      disabled={briefSaving || designTaskLockedByOther}
-                    />
+                    {briefDictation.button}
                   </div>
 
                   {briefInlineEditing || briefDirty ? (
@@ -10164,6 +10161,8 @@ export default function DesignTaskPage() {
                       ) : null}
                     </div>
                   )}
+
+                  {briefDictation.strip}
 
                   {(briefInlineEditing || briefDirty) && (
                     <div className="flex flex-wrap items-center justify-end gap-2">

@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { DateTimePicker } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
-import { DictationButton } from "@/components/dictation/DictationButton";
+import { useDictationField } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Chip } from "@/components/ui/chip";
@@ -1033,6 +1033,23 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     },
     [activeProduct, updateProduct]
   );
+
+  /* Обидва поля великі, тож розкладка «смуга» (REQ-255#p3): написане лишається
+     видимим, час і хвиля йдуть під поле. */
+  const notesDictation = useDictationField({
+    textareaRef: notesTextareaRef,
+    value: notes,
+    onChange: setNotes,
+    context: "comment",
+    withStrip: true,
+  });
+  const designBriefDictation = useDictationField({
+    textareaRef: designBriefTextareaRef,
+    value: activeProduct.designBrief,
+    onChange: (next) => updateActiveProduct({ designBrief: next }),
+    context: "brief",
+    withStrip: true,
+  });
 
   const resetQuickModelDraft = React.useCallback(() => {
     setQuickModelName("");
@@ -2097,12 +2114,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
               <div className="mt-4 space-y-2 border-t border-border/60 pt-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-semibold text-foreground">Доповнення</div>
-                  <DictationButton
-                    textareaRef={notesTextareaRef}
-                    value={notes}
-                    onChange={setNotes}
-                    context="comment"
-                  />
+                  {notesDictation.button}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Тези / нотатки до прорахунку. Відобразяться в його деталях.
@@ -2114,6 +2126,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                   placeholder="Напр.: домовились про знижку 5%, оплата частинами, особливі вимоги до пакування…"
                   className="min-h-[110px] resize-y text-sm"
                 />
+                {notesDictation.strip}
               </div>
             </aside>
 
@@ -2616,12 +2629,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             <Palette className={cn("mr-2 h-3.5 w-3.5", activeProduct.createDesignTask ? "text-primary" : "text-muted-foreground")} />
                             {activeProduct.createDesignTask ? "Задача увімкнена" : "Без задачі"}
                           </button>
-                          <DictationButton
-                            textareaRef={designBriefTextareaRef}
-                            value={activeProduct.designBrief}
-                            onChange={(next) => updateActiveProduct({ designBrief: next })}
-                            context="brief"
-                          />
+                          {designBriefDictation.button}
                           <Button type="button" variant="outline" size="sm" onClick={prepareDesignBrief} className="gap-1.5">
                             <Wand2 className="h-4 w-4" />
                             Підготувати ТЗ
@@ -2680,6 +2688,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         placeholder="ТЗ дизайнеру: що нанести, де, розмір, важливі побажання, файли"
                         rows={5}
                       />
+                      {designBriefDictation.strip}
                       <div className="space-y-2" {...dropHandlers("design", addFiles)}>
                         <div
                           className={cn(

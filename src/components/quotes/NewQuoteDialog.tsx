@@ -14,7 +14,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { DateTimePicker } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
-import { DictationButton } from "@/components/dictation/DictationButton";
+import { useDictationField } from "@/components/dictation/DictationButton";
 import { Chip } from "@/components/ui/chip";
 import {
   Select,
@@ -673,6 +673,23 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [createDesignTask, setCreateDesignTask] = React.useState(false);
   const notesTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const briefTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+
+  /* Обидва поля тут великі, тож розкладка «смуга» (REQ-255#p3): поле лишається
+     видимим, час і хвиля йдуть під нього. */
+  const notesDictation = useDictationField({
+    textareaRef: notesTextareaRef,
+    value: notes,
+    onChange: setNotes,
+    context: "comment",
+    withStrip: true,
+  });
+  const briefDictation = useDictationField({
+    textareaRef: briefTextareaRef,
+    value: comment,
+    onChange: setComment,
+    context: "brief",
+    withStrip: true,
+  });
   const [files, setFiles] = React.useState<File[]>([]);
   const [projectFiles, setProjectFiles] = React.useState<File[]>([]);
   const [quickModelName, setQuickModelName] = React.useState("");
@@ -2401,12 +2418,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <div className="text-sm text-muted-foreground">
                 Додаткова інформація до прорахунку: тези, нюанси, домовленості. Відобразиться в деталях прорахунку.
               </div>
-              <DictationButton
-                textareaRef={notesTextareaRef}
-                value={notes}
-                onChange={setNotes}
-                context="comment"
-              />
+              {notesDictation.button}
             </div>
             <Textarea
               ref={notesTextareaRef}
@@ -2415,6 +2427,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
+            {notesDictation.strip}
           </div>
         </div>
 
@@ -2576,12 +2589,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm text-muted-foreground">ТЗ для дизайнера</div>
-                    <DictationButton
-                      textareaRef={briefTextareaRef}
-                      value={comment}
-                      onChange={setComment}
-                      context="brief"
-                    />
+                    {briefDictation.button}
                   </div>
                   {/* Той самий компонент і ті самі межі, що в «Новій
                       дизайн-задачі»: два поля з однаковою роллю мають і
@@ -2597,6 +2605,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                   />
+                  {briefDictation.strip}
                 </div>
 
                 <div className="space-y-2">
