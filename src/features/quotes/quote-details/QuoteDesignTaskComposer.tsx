@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
+import { HoldButton } from "@/components/ui/hold-button";
 import { Label } from "@/components/ui/label";
 import { useDictation } from "@/lib/useDictation";
 import {
@@ -192,15 +193,15 @@ export function QuoteDesignTaskComposer({
                 <span className="min-w-0 flex-1 truncate">{file.name}</span>
                 <span className="shrink-0 text-2xs text-muted-foreground">{file.size}</span>
                 {onRemoveFile ? (
-                  <button
-                    type="button"
-                    disabled={disabled || busy}
+                  <HoldButton
                     aria-label={`Прибрати «${file.name}»`}
-                    onClick={() => onRemoveFile(file)}
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-[var(--radius-md)] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    className="h-6 w-6 shrink-0 border-0 px-0 text-muted-foreground"
+                    disabled={disabled || busy}
+                    holdingLabel={<X className="h-3.5 w-3.5" />}
+                    onConfirm={() => onRemoveFile(file)}
                   >
                     <X className="h-3.5 w-3.5" />
-                  </button>
+                  </HoldButton>
                 ) : null}
               </li>
             ))}

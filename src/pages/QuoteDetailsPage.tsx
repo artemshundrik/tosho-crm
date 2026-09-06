@@ -648,7 +648,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [attachmentsDeleteError, setAttachmentsDeleteError] = useState<string | null>(null);
   const [visualizationPreview, setVisualizationPreview] = useState<QuoteAttachment | null>(null);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
-  const [deleteAttachmentOpen, setDeleteAttachmentOpen] = useState(false);
   const [deleteAttachmentTarget, setDeleteAttachmentTarget] = useState<QuoteAttachment | null>(null);
   const [attachmentAccessUrlByKey, setAttachmentAccessUrlByKey] = useState<Record<string, string>>({});
   const attachmentObjectUrlRegistryRef = useRef<Set<string>>(new Set());
@@ -3018,19 +3017,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     finish();
   };
 
+  /*
+    ВИДАЛЕННЯ ФАЙЛУ БІЛЬШЕ НЕ ПИТАЄ ВІКНОМ. Кнопка-кошик стоїть у самому рядку
+    файлу, тож вікно лише переказувало його назву — те, що й так під курсором.
+    Замість вікна кнопка тримається: випадковим дотиком файл не зникне, а
+    зайвого кроку більше немає.
+  */
   const requestDeleteAttachment = (attachment: QuoteAttachment) => {
     if (attachmentsDeletingId) return;
     if (!canDeleteDesignerBriefAttachment(attachment)) return;
-    setDeleteAttachmentTarget(attachment);
-    setDeleteAttachmentOpen(true);
+    void confirmDeleteAttachment(attachment);
   };
 
-  const confirmDeleteAttachment = async () => {
-    if (!deleteAttachmentTarget || attachmentsDeletingId) return;
-    const attachment = deleteAttachmentTarget;
+  const confirmDeleteAttachment = async (target?: QuoteAttachment) => {
+    const attachment = target ?? deleteAttachmentTarget;
+    if (!attachment || attachmentsDeletingId) return;
     if (!canDeleteDesignerBriefAttachment(attachment)) {
       setAttachmentsDeleteError("Видаляти ці файли може лише менеджер прорахунку, який їх завантажив.");
-      setDeleteAttachmentOpen(false);
       setDeleteAttachmentTarget(null);
       toast.error("Недостатньо прав", {
         description: "Видаляти ці файли може лише менеджер прорахунку, який їх завантажив.",
@@ -3068,7 +3071,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
 
     setAttachments((prev) => prev.filter((item) => item.id !== attachment.id));
-    setDeleteAttachmentOpen(false);
     setDeleteAttachmentTarget(null);
     toast.success("Файл видалено");
     setAttachmentsDeletingId(null);
@@ -6333,19 +6335,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       </Dialog>
 
       {approvedPriceGuard.dialog}
-
-      <ConfirmDialog
-        open={deleteAttachmentOpen}
-        onOpenChange={setDeleteAttachmentOpen}
-        title="Видалити файл?"
-        description={deleteAttachmentTarget ? deleteAttachmentTarget.name : undefined}
-        icon={<Trash2 className="h-5 w-5 text-destructive" />}
-        confirmLabel="Видалити"
-        cancelLabel="Скасувати"
-        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-        onConfirm={confirmDeleteAttachment}
-        loading={!!attachmentsDeletingId}
-      />
 
       <ConfirmDialog
         open={deleteItemTarget !== null}

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatActivityClock, formatActivityDayLabel } from "@/lib/activity";
 import { getAttachmentDisplayFileName } from "@/lib/attachmentPreview";
+import { HoldButton } from "@/components/ui/hold-button";
 import { cn } from "@/lib/utils";
 
 import { getFileExtension } from "./config";
@@ -225,12 +226,11 @@ function FilesRegister({
                     </Button>
                   ) : null}
                   {canDelete(file) ? (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
-                      onClick={() => onDelete(file)}
+                    <HoldButton
+                      className="h-7 w-7 shrink-0 px-0 text-destructive"
+                      onConfirm={() => onDelete(file)}
                       disabled={deletingId === file.id}
+                      holdingLabel={<Trash2 className="h-3.5 w-3.5" />}
                       aria-label={`Видалити ${displayName}`}
                     >
                       {deletingId === file.id ? (
@@ -238,7 +238,7 @@ function FilesRegister({
                       ) : (
                         <Trash2 className="h-3.5 w-3.5" />
                       )}
-                    </Button>
+                    </HoldButton>
                   ) : null}
                 </div>
               );

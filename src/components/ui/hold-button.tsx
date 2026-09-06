@@ -35,6 +35,7 @@ export function HoldButton({
   holdMs = 900,
   tone = "danger",
   guard = true,
+  "aria-label": ariaLabel,
   disabled = false,
   className,
 }: {
@@ -54,6 +55,14 @@ export function HoldButton({
    * інакше кожне місце писало б дві кнопки замість однієї.
    */
   guard?: boolean;
+  /**
+   * Підпис для читалок — обов'язковий, коли всередині лише значок.
+   *
+   * ЧОМУ ЯВНО. TypeScript пропускає будь-який `aria-*` на власному компоненті
+   * без перевірки: помилки не буде, а підпис просто зникне. Тому він тут
+   * названий і переданий руками.
+   */
+  "aria-label"?: string;
   disabled?: boolean;
   className?: string;
 }) {
@@ -87,6 +96,7 @@ export function HoldButton({
     <button
       type="button"
       aria-disabled={disabled || undefined}
+      aria-label={ariaLabel}
       disabled={disabled}
       onClick={guarded ? undefined : onConfirm}
       onPointerDown={guarded ? start : undefined}
