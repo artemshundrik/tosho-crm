@@ -41,7 +41,11 @@
 
     --primary: var(--brand-h) var(--brand-s) var(--brand-l);
     --primary-foreground: 210 40% 98%;
-    --ring: var(--brand-h) var(--brand-s) var(--brand-l);
+    /* ОРЕОЛ ФОКУСА БІЛЬШЕ НЕ СИНІЙ. Він був заведений на бренд, і кожне поле
+       при виділенні спалахувало синім — єдиною кольоровою плямою на чорно-білому
+       екрані. Тепер це той самий `foreground`, що й у головних кнопок: помітно,
+       але не кричить, і в темній темі виходить саме собою. */
+    --ring: 0 0% 14%;
     
     /* --- SHAPE RULES --- */
     /* 8px base (REQ-48): rounded-md 6, lg 8, xl 12, 2xl 16 — весь застосунок
@@ -459,7 +463,7 @@
 
     /* Той самий тон 213°, що й --chart-1 у темній темі (REQ-175#p43). */
     --primary: 213 76.8% 56.1%;
-    --ring: 213 76.8% 56.1%;
+    --ring: 210 40% 98%;
     /* Темна тема лишається як була: заливка світліша за середину бренду. */
     --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) + 5%);
     --btn-primary-grad-bot: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 4%);

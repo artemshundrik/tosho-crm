@@ -53,7 +53,7 @@ export function ThreadReactions({ reactions, userId, memberName, onToggle, align
                   className={cn(
                     "inline-flex h-[22px] items-center gap-1 rounded-full border px-1.5 text-2xs tabular-nums transition-colors",
                     mine
-                      ? "border-primary/40 bg-primary/10 font-semibold text-primary"
+                      ? "border-foreground/30 bg-foreground/10 font-semibold text-foreground"
                       : "border-border/60 bg-card text-foreground/80 hover:bg-muted/60"
                   )}
                 >

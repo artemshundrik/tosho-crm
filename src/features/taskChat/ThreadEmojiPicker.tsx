@@ -46,7 +46,7 @@ export function ThreadEmojiPicker({ onPick, className, trigger, align = "start",
             aria-label="Емодзі"
             className={cn(
               "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
-              open && "bg-primary/10 text-primary",
+              open && "bg-foreground/10 text-foreground",
               className
             )}
           >

@@ -318,12 +318,12 @@ export function TaskThreadRail({
         // Непрозоре тло: під час перетягування вміст позаду не має просвічувати —
         // напівпрозорий шар із блюром виглядав брудно.
         <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 rounded-inner bg-card p-2">
-          <div className="pointer-events-none absolute inset-2 rounded-xl border-2 border-dashed border-primary/50 bg-primary/[0.06]" />
-          <span className="relative grid h-10 w-10 place-items-center rounded-full bg-primary/15 text-primary">
+          <div className="pointer-events-none absolute inset-2 rounded-xl border-2 border-dashed border-foreground/40 bg-foreground/[0.05]" />
+          <span className="relative grid h-10 w-10 place-items-center rounded-full bg-foreground/10 text-foreground">
             <Upload className="h-5 w-5" />
           </span>
-          <span className="relative text-xs font-semibold text-primary">Відпустіть файл тут</span>
-          <span className="relative max-w-[26ch] text-center text-2xs text-primary/80">
+          <span className="relative text-xs font-semibold text-foreground">Відпустіть файл тут</span>
+          <span className="relative max-w-[26ch] text-center text-2xs text-muted-foreground">
             Він ляже у «Файли» задачі, а в розмові стане повідомленням
           </span>
         </div>

@@ -241,7 +241,7 @@ export function ThreadFeed({
                           restricted
                             ? "border border-warning-soft-border bg-warning-soft text-foreground"
                             : highlighted
-                              ? "border border-primary/30 bg-primary/10 text-foreground"
+                              ? "border border-foreground/25 bg-foreground/10 text-foreground"
                               : block.own
                                 ? // thread-bubble-own — не декор, а гачок для правила
                                   // виділення тексту (index.css): без нього виділення
@@ -269,7 +269,7 @@ export function ThreadFeed({
                               "mb-1 block rounded-lg border-l-2 py-0.5 pl-2 text-3xs",
                               block.own
                                 ? "border-primary-foreground/50 text-primary-foreground/85"
-                                : "border-primary/40 text-muted-foreground"
+                                : "border-foreground/30 text-muted-foreground"
                             )}
                           >
                             <span className="block font-semibold">

@@ -135,9 +135,9 @@ export function ThreadComposer({
     <div className="border-t border-border/40 bg-card p-2.5">
       {replyTo ? (
         <div className="mb-2 flex items-start gap-2 rounded-xl border border-border/60 bg-muted/40 py-1.5 pl-2 pr-1.5">
-          <span className="mt-0.5 h-full w-0.5 shrink-0 self-stretch rounded-full bg-primary" />
+          <span className="mt-0.5 h-full w-0.5 shrink-0 self-stretch rounded-full bg-foreground" />
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="text-2xs font-semibold text-primary">{replyTo.author}</span>
+            <span className="text-2xs font-semibold text-foreground">{replyTo.author}</span>
             <span className="line-clamp-2 text-2xs text-muted-foreground">{replyTo.body}</span>
           </span>
           <button
@@ -173,7 +173,7 @@ export function ThreadComposer({
               onClick={() => applyMention(candidate.name)}
               className={cn(
                 "flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/60",
-                index === 0 && "bg-primary/5"
+                index === 0 && "bg-muted"
               )}
             >
               <AvatarBase size={20} src={candidate.avatarUrl} name={candidate.name} className="shrink-0" />
@@ -199,7 +199,7 @@ export function ThreadComposer({
       {isRecording || isTranscribing ? (
         <DictationCapsule dictation={dictation} />
       ) : (
-      <div className="flex min-h-[38px] items-end gap-1 rounded-3xl border border-border bg-muted/70 p-1 pl-1.5 transition-colors focus-within:border-primary/60 focus-within:bg-card">
+      <div className="flex min-h-[38px] items-end gap-1 rounded-3xl border border-border bg-muted/70 p-1 pl-1.5 transition-colors focus-within:border-foreground/40 focus-within:bg-card">
         <input
           ref={fileInputRef}
           type="file"
