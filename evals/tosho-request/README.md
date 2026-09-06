@@ -29,7 +29,7 @@ npm run eval:skill-sync
 ```
 
 ```sh
-CLAUDE_CODE_WALNUT_SPIRE=1 claude plugin eval ~/.claude/skills/tosho-request --runs 1 --ablation none
+claude plugin eval ~/.claude/skills/tosho-request --runs 1 --ablation none
 ```
 
 Дешевший прогін: `--runs 1`, а `--ablation none` знімає другу руку без скіла.
@@ -42,12 +42,14 @@ CLAUDE_CODE_WALNUT_SPIRE=1 claude plugin eval ~/.claude/skills/tosho-request --r
 «"evals" is an eval-directory link that points outside the plugin — remove it».
 Тому `eval:skill-sync` копіює; `results/` попередніх прогонів він не чіпає.
 
-**Команда вимкнена, поки не поставити змінну.** `claude plugin eval` розкочують
-на організації прапорцем `tengu_walnut_spire`; без нього — «currently in early
-access». Особистий акаунт розкочування не отримує, тож потрібна
-`CLAUDE_CODE_WALNUT_SPIRE=1` — у самій команді, як вище, або назавжди в
-`~/.claude/settings.json` під `env`. У `.claude/settings.json` репозиторію її
-класти не можна: репо публічне, та й CLI звідти її не підхоплює.
+**Команду відмикає змінна — вона вже стоїть.** `claude plugin eval` розкочують
+на організації прапорцем `tengu_walnut_spire`, і особистий акаунт розкочування
+не отримує: без змінної команда відповідає «currently in early access».
+06.09.2026 `CLAUDE_CODE_WALNUT_SPIRE=1` прописано в `~/.claude/settings.json`
+під `env`, і гейт відкривається без жодних прапорців у команді. На чужій машині
+або в CI її треба поставити так само (або підставити просто в команду). У
+`.claude/settings.json` репозиторію — ні: репо публічне, та й CLI звідти її не
+підхоплює.
 
 **Прогін не запускається з сесії Claude Code.** Кожен кейс — це окрема сесія
 Claude, а вкладеному процесу нема звідки взяти облікові дані: усередині
