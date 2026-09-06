@@ -948,7 +948,7 @@ function ExcelPanel({
                 >
                   {done ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
                 </span>
-                {step.label}
+                <span className={cn(running && "text-shimmer")}>{step.label}</span>
               </li>
             );
           })}

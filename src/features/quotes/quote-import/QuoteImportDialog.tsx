@@ -260,7 +260,7 @@ export function QuoteImportDialog({
           <div className="flex flex-col items-center gap-3 py-12 text-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50" />
             <div>
-              <p className="font-medium">Розшифровую…</p>
+              <p className="font-medium text-shimmer">Розшифровую…</p>
               <p className="text-sm text-muted-foreground">{fileName}</p>
             </div>
           </div>
