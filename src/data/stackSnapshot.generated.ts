@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-09-02T20:50:27.655Z",
+  "generatedAt": "2026-09-06T09:33:06.871Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -339,7 +339,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Памʼятає, що вже завантажено, і не питає базу двічі. Через нього ходять майже всі запити.",
       "homepage": "https://tanstack.com/query",
-      "usedIn": 19,
+      "usedIn": 22,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
@@ -384,7 +384,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 25,
+      "usedIn": 27,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -399,7 +399,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Клікає й друкує в тестах так, як це робить людина, — з наведенням, фокусом і клавіатурою, а не одним синтетичним кліком.",
       "homepage": null,
-      "usedIn": 11,
+      "usedIn": 13,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -626,10 +626,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "4.4.0",
       "layer": "data",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-09-02T23:52:43+03:00",
       "bumpCommit": {
-        "sha": "414eedfe",
-        "subject": "Initial commit"
+        "sha": "2db7365d",
+        "subject": "Дати в CRM працюють на новій версії бібліотеки, з підтримкою часових зон"
       },
       "description": "Робота з датами: дедлайни, періоди, «3 дні тому».",
       "homepage": null,
@@ -684,7 +684,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "jsdom",
-      "version": "29.1.1",
+      "version": "30.0.1",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-08T00:42:10+03:00",
@@ -710,7 +710,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
       "homepage": "https://lucide.dev",
-      "usedIn": 220,
+      "usedIn": 227,
       "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
     },
     {
@@ -770,7 +770,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 294,
+      "usedIn": 306,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -852,7 +852,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "rollup-plugin-visualizer",
-      "version": "6.0.11",
+      "version": "7.1.1",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-21T00:41:35+03:00",
@@ -974,7 +974,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "vitest",
-      "version": "4.1.11",
+      "version": "5.0.0",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -984,7 +984,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 147,
+      "usedIn": 155,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1045,12 +1045,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 1978,
-  "testFiles": 145,
+  "tests": 2092,
+  "testFiles": 153,
   "lintStubs": 29,
   "node": "24",
-  "netlifyFunctions": 44,
-  "sourceLines": 271243,
+  "netlifyFunctions": 45,
+  "sourceLines": 276574,
   "automation": {
     "workflows": [
       {
