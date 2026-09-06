@@ -9,6 +9,7 @@ import { useKanbanDrag } from "@/components/kanban/kanbanDrag";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Chip } from "@/components/ui/chip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -1038,7 +1039,6 @@ export default function DesignPage() {
   // Дзеркало createFiles для addFilesToCreate: воно має знати поточну кількість
   // ДО оновлення стану, щоб сказати, скільки з доданого не влізло.
   const createFilesRef = useRef<File[]>([]);
-  const [createFilesDragActive, setCreateFilesDragActive] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [, setCustomersLoading] = useState(false);
@@ -3969,7 +3969,6 @@ export default function DesignPage() {
       setCreateAssigneePopoverOpen(false);
       setCreateCollaboratorIds([]);
       setCreateCollaboratorsPopoverOpen(false);
-      setCreateFilesDragActive(false);
       setCreateFiles([]);
       toast.success("Дизайн-задачу створено", {
         description: `Задача ${createdTaskLabel}${createdTask.assigneeUserId ? ` · ${getMemberLabel(createdTask.assigneeUserId)}` : ""}`,
@@ -5368,7 +5367,6 @@ export default function DesignPage() {
             setCreateCollaboratorsPopoverOpen(false);
             setCreateManagerPopoverOpen(false);
             setCreateDeadlinePopoverOpen(false);
-            setCreateFilesDragActive(false);
           }
         }}
       >
@@ -5804,50 +5802,20 @@ export default function DesignPage() {
             </div>
             <div className="space-y-2">
               <Label>Файли / картинки</Label>
-              <div
-                tabIndex={0}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setCreateFilesDragActive(false);
-                  void handleCreateFilesDrop(event.dataTransfer);
-                }}
-                onPaste={(event) => {
+              <FileDropZone
+                hint={`до ${MAX_BRIEF_FILES} файлів`}
+                label="Додати файли до задачі"
+                multiple
+                onDropTransfer={(dataTransfer) => void handleCreateFilesDrop(dataTransfer)}
+                onFiles={(list) => addFilesToCreate(list)}
+                onPasteFiles={(event) => {
                   if (!hasAttachmentPayload(event.clipboardData)) return;
                   event.preventDefault();
                   event.stopPropagation();
                   void handleCreateFilesDrop(event.clipboardData);
                 }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  event.dataTransfer.dropEffect = "copy";
-                  if (!createFilesDragActive) setCreateFilesDragActive(true);
-                }}
-                onDragLeave={(event) => {
-                  event.preventDefault();
-                  setCreateFilesDragActive(false);
-                }}
-                className={cn(
-                  "relative flex items-center justify-center gap-2.5 border border-dashed rounded-[var(--radius-md)] px-3 py-2.5 text-center transition-colors cursor-pointer",
-                  createFilesDragActive
-                    ? "border-primary/70 bg-primary/10"
-                    : "border-border/40 hover:border-border/60"
-                )}
-              >
-                <input
-                  type="file"
-                  multiple
-                  onChange={(event) => addFilesToCreate(event.target.files)}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  accept="*/*"
-                />
-                <Paperclip className={cn("h-4 w-4 shrink-0", createFilesDragActive ? "text-primary" : "text-muted-foreground")} />
-                <span className={cn("text-sm", createFilesDragActive ? "text-primary font-medium" : "text-foreground")}>
-                  {createFilesDragActive ? "Відпустіть файли тут" : "Перетягніть, вставте або клікніть"}
-                </span>
-                <span className="text-xs text-muted-foreground">· до {MAX_BRIEF_FILES} файлів</span>
-              </div>
+                title="Перетягніть, вставте або клікніть"
+              />
               {createFiles.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {createFiles.map((file, index) => (

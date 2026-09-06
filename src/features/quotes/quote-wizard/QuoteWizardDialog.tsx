@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { UploadIllustration } from "@/components/ui/upload-illustration";
 import { ImportDraftRow, type DraftKindOption, type PlaceOption } from "@/features/quotes/quote-import/ImportDraftRow";
 import {
@@ -899,8 +900,6 @@ function ExcelPanel({
   inputRef: React.RefObject<HTMLInputElement | null>;
   onFile: (file: File) => void;
 }) {
-  const [over, setOver] = React.useState(false);
-
   if (stage === "parsing") {
     const steps: Array<{ key: ImportParseStep | "preview"; label: string }> = [
       { key: "read", label: "Читаю аркуші файлу" },
@@ -972,104 +971,26 @@ function ExcelPanel({
         і дозаповнює шапку, дивлячись на позиції. Замовника вимагає САМЕ
         створення, і підвал каже про це словами.
 
-        ВУЗЬКА, В ОДИН РЯДОК (REQ-182#p14): велика плита з піктограмою по
-        центру була доречна, поки файл був цілою вкладкою. Тепер він стоїть
-        під полем і списком, і плита на 150 px читалась би як головний вхід.
+        РЯДОК, А НЕ ПЛИТА (REQ-182#p14): велика плита з піктограмою по центру
+        була доречна, поки файл був цілою вкладкою. Тепер він стоїть під полем
+        і списком, і плита читалась би як головний вхід. Це той самий
+        `FileDropZone`, що в решті п'яти місць, — ті самі частини, покладені в
+        рядок.
       */}
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label="Обрати файл Excel"
-        className={cn(
-          "block cursor-pointer rounded-xl border border-dashed border-border px-3 py-2.5 text-left transition-colors",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-          "hover:border-foreground/40 hover:bg-muted/50",
-          over && "border-foreground/60 bg-muted"
-        )}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setOver(true);
-        }}
-        onDragLeave={(event) => {
-          // Перехід курсора на ВЛАСНУ дитину теж стріляє `dragleave`. Доти це
-          // нікому не заважало — рамка встигала перемигнути кольором і назад.
-          // Тепер під курсором розкривається плита, і без цієї перевірки вона
-          // блимала б: розкрилась → курсор опинився над ілюстрацією → згорнулась.
-          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-          setOver(false);
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          setOver(false);
-          const file = event.dataTransfer.files?.[0];
+      <FileDropZone
+        accept={QUOTE_IMPORT_ACCEPT}
+        dropTitle="Відпустіть — розберу файл"
+        hint="Як є, з об’єднаними клітинками й кількома аркушами: модель сама знайде позиції, тиражі й варіанти"
+        inputRef={inputRef}
+        label="Обрати файл Excel"
+        onFiles={(files) => {
+          const file = files?.[0];
           if (file) onFile(file);
         }}
-      >
-        {/*
-          Плита з живою ілюстрацією розкривається ЛИШЕ під курсором із файлом
-          (REQ-253). Вузький рядок за замовчуванням лишається недоторканим:
-          REQ-182#p14 прибрав звідси велику плиту свідомо — файл стоїть під
-          полем і списком, і постійна плита читалась би як головний вхід.
-          Тут вона з'являється рівно тоді, коли файл справді летить, і зникає
-          разом із ним.
-
-          Висота їде через `grid-template-rows: 0fr → 1fr` — єдиний спосіб
-          дати CSS анімувати «авто» без фіксованих пікселів. Вміст не ловить
-          вказівник (`pointer-events-none`), інакше він крав би події
-          перетягування в батька.
-        */}
-        <div
-          aria-hidden="true"
-          className={cn(
-            "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
-            over ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-          )}
-        >
-          <div className="overflow-hidden">
-            <div className="pointer-events-none flex flex-col items-center gap-1.5 pb-3 pt-1 text-foreground">
-              <UploadIllustration className="h-14 w-14" />
-              <span className="text-sm font-medium">Відпустіть — розберу файл</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-            <Upload className="h-4 w-4" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">Або ексельку від клієнта — перетягніть чи клацніть</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              Як є, з об’єднаними клітинками й кількома аркушами: модель сама знайде позиції, тиражі й варіанти
-            </span>
-          </span>
-          <span className="hidden shrink-0 gap-1.5 font-mono text-2xs text-muted-foreground sm:flex">
-            {[".xlsx", ".csv", "до 12 МБ"].map((tag) => (
-              <span key={tag} className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5">
-                {tag}
-              </span>
-            ))}
-          </span>
-          <input
-            ref={inputRef}
-            type="file"
-            accept={QUOTE_IMPORT_ACCEPT}
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) onFile(file);
-            }}
-          />
-        </div>
-      </div>
+        size="row"
+        tags={[".xlsx", ".csv", "до 12 МБ"]}
+        title="Або ексельку від клієнта — перетягніть чи клацніть"
+      />
     </div>
   );
 }

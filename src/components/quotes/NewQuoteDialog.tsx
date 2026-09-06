@@ -8,6 +8,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { DateTimePicker } from "@/components/ui/picker-input";
@@ -673,9 +674,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const notesTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const briefTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const [files, setFiles] = React.useState<File[]>([]);
-  const [filesDragActive, setFilesDragActive] = React.useState(false);
   const [projectFiles, setProjectFiles] = React.useState<File[]>([]);
-  const [projectFilesDragActive, setProjectFilesDragActive] = React.useState(false);
   const [quickModelName, setQuickModelName] = React.useState("");
   const [quickModelSku, setQuickModelSku] = React.useState("");
   const [quickModelPrice, setQuickModelPrice] = React.useState("");
@@ -991,8 +990,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setDeadlinePopoverOpen(false);
     setCurrencyPopoverOpen(false);
     setDeliveryPopoverOpen(false);
-    setFilesDragActive(false);
-    setProjectFilesDragActive(false);
   }, [availableStatuses, currentUserId, initialValues, isEditMode, open, resetQuickModelDraft, setPrintPackageConfig]);
 
   // Draft persistence. On dialog open we apply any stored draft *after* the
@@ -1315,36 +1312,24 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   };
 
   // Handle file drop
-  const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setFilesDragActive(false);
+  /*
+    ОДИН ОБРОБНИК НА ЗОНУ, А НЕ ДВА. Доти кидок і вибір із діалогу писались
+    окремо — і розходились: гейт на друк стояв в обох, а скидання `value`
+    (без якого той самий файл удруге не додається) — лише в одному.
+    `FileDropZone` віддає `FileList` в обох випадках, тож гілки злились.
+  */
+  const addDesignFiles = (list: FileList | null) => {
+    if (!list) return;
     if (printMode === "no_print" && !isPrintPackageMode) return;
-    const next = appendWithinLimit(files, Array.from(e.dataTransfer.files));
+    const next = appendWithinLimit(files, Array.from(list));
     if (next) setFiles(next);
   };
 
-  // Handle file select
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (printMode === "no_print" && !isPrintPackageMode) return;
-    if (e.target.files) {
-      const next = appendWithinLimit(files, Array.from(e.target.files));
-      if (next) setFiles(next);
-    }
-  };
-
   // Файли прорахунку: без гейта на друк — зона доступна завжди.
-  const handleProjectFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setProjectFilesDragActive(false);
-    const next = appendWithinLimit(projectFiles, Array.from(e.dataTransfer.files));
+  const addProjectFiles = (list: FileList | null) => {
+    if (!list) return;
+    const next = appendWithinLimit(projectFiles, Array.from(list));
     if (next) setProjectFiles(next);
-  };
-
-  const handleProjectFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const next = appendWithinLimit(projectFiles, Array.from(e.target.files));
-    if (next) setProjectFiles(next);
-    e.target.value = "";
   };
 
   const updateRunDraft = (runId: string, value: string) => {
@@ -2444,45 +2429,13 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               Матеріали замовника для роботи над прорахунком: договір, розміри, листування.
               Дизайнер їх не бачить — для нього файли додають у блоці «Дизайн».
             </div>
-            <div
-              onDrop={handleProjectFileDrop}
-              onDragOver={(e) => {
-                e.preventDefault();
-                if (!projectFilesDragActive) setProjectFilesDragActive(true);
-              }}
-              onDragLeave={() => setProjectFilesDragActive(false)}
-              className={cn(
-                "relative flex min-h-[140px] cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-colors",
-                projectFilesDragActive
-                  ? "border-primary/70 bg-primary/10"
-                  : "border-border/40 hover:border-border/60"
-              )}
-            >
-              <input
-                type="file"
-                multiple
-                aria-label="Додати файли прорахунку"
-                onChange={handleProjectFileSelect}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                accept="*/*"
-              />
-              <div className="flex flex-col items-center gap-2">
-                <Paperclip
-                  className={cn("h-5 w-5", projectFilesDragActive ? "text-primary" : "text-muted-foreground")}
-                />
-                <div
-                  className={cn(
-                    "text-sm",
-                    projectFilesDragActive ? "font-medium text-primary" : "text-foreground"
-                  )}
-                >
-                  {projectFilesDragActive ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  до {MAX_ATTACHMENTS} файлів, до 50 MB
-                </div>
-              </div>
-            </div>
+            <FileDropZone
+              hint={`до ${MAX_ATTACHMENTS} файлів, до 50 MB`}
+              label="Додати файли прорахунку"
+              multiple
+              onFiles={addProjectFiles}
+              title="Перетягніть або клікніть для вибору"
+            />
 
             {projectFiles.length > 0 ? (
               <div className="flex flex-wrap gap-2">
@@ -2651,35 +2604,13 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     Файли для дизайнера
                     <span className="ml-1.5 text-xs">— потраплять у дизайн-задачу</span>
                   </div>
-                  <div
-                    onDrop={handleFileDrop}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      if (!filesDragActive) setFilesDragActive(true);
-                    }}
-                    onDragLeave={() => setFilesDragActive(false)}
-                    className={cn(
-                      "relative flex min-h-[180px] items-center justify-center border-2 border-dashed rounded-2xl p-6 text-center transition-colors cursor-pointer",
-                      filesDragActive
-                        ? "border-primary/70 bg-primary/10"
-                        : "border-border/40 hover:border-border/60"
-                    )}
-                  >
-                    <input
-                      type="file"
-                      multiple
-                      onChange={handleFileSelect}
-                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                      accept="*/*"
-                    />
-                    <div className="flex flex-col items-center gap-2">
-                      <Paperclip className={cn("h-5 w-5", filesDragActive ? "text-primary" : "text-muted-foreground")} />
-                      <div className={cn("text-sm", filesDragActive ? "font-medium text-primary" : "text-foreground")}>
-                        {filesDragActive ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">до {MAX_ATTACHMENTS} файлів, до 50MB</div>
-                    </div>
-                  </div>
+                  <FileDropZone
+                    hint={`до ${MAX_ATTACHMENTS} файлів, до 50 MB`}
+                    label="Додати файли для дизайнера"
+                    multiple
+                    onFiles={addDesignFiles}
+                    title="Перетягніть або клікніть для вибору"
+                  />
 
                   {files.length > 0 && (
                     <div className="flex flex-wrap gap-2">

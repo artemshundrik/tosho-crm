@@ -128,7 +128,9 @@ describe("імпорт як спосіб СТВОРИТИ прорахунок",
       />
     );
 
-    expect(screen.getByRole("button", { name: /Обрати файл/ })).toBeDisabled();
+    // Зона — не <button>, а плита з `role="button"`, тож вимкненість каже
+    // `aria-disabled`; клавіатурі її закриває `tabIndex={-1}` у компоненті.
+    expect(screen.getByRole("button", { name: /Обрати файл/ })).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText("Спершу оберіть замовника")).toBeInTheDocument();
   });
 

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Loader2, Paperclip, Upload, X } from "lucide-react";
+import { Check, Loader2, Paperclip, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Label } from "@/components/ui/label";
 import { useDictation } from "@/lib/useDictation";
 import {
@@ -19,7 +20,6 @@ import {
   DESIGN_TASK_TYPE_OPTIONS,
   type DesignTaskType,
 } from "@/lib/designTaskType";
-import { cn } from "@/lib/utils";
 
 import type { DesignComposerImprint } from "./designComposerImprint";
 import { QuoteImprintBadges } from "./QuoteImprintBadges";
@@ -89,7 +89,6 @@ export function QuoteDesignTaskComposer({
   disabled?: boolean;
   onCreate: () => void;
 }) {
-  const [dragOver, setDragOver] = React.useState(false);
   const busy = Boolean(saving || uploading);
   /* Тип завжди має значення: сторінка ставить його за замовчуванням, а `null`
      лишається можливим лише в старих шляхах, які цю форму не відкривають. */
@@ -172,46 +171,15 @@ export function QuoteDesignTaskComposer({
       */}
       <div className="space-y-2">
         <Label>Файли замовника для цього товару</Label>
-        <div
-          className={cn(
-            "relative flex min-h-[92px] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors",
-            dragOver ? "border-primary/70 bg-primary/10" : "border-border/50 hover:border-border/80",
-            (disabled || busy) && "pointer-events-none opacity-50"
-          )}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragOver(false);
-            onAddFiles(event.dataTransfer.files);
-          }}
-        >
-          <input
-            type="file"
-            multiple
-            aria-label="Додати файли замовника"
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            onChange={(event) => {
-              const list = event.target.files;
-              event.target.value = "";
-              onAddFiles(list);
-            }}
-          />
-          <div className="flex flex-col items-center gap-1.5">
-            {uploading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : (
-              <Upload className={cn("h-4 w-4", dragOver ? "text-primary" : "text-muted-foreground")} />
-            )}
-            <div className={cn("text-sm", dragOver ? "font-medium text-primary" : "text-foreground")}>
-              {dragOver ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
-            </div>
-            <div className="text-xs text-muted-foreground">Побачить дизайнер саме в цій задачі.</div>
-          </div>
-        </div>
+        <FileDropZone
+          busy={Boolean(uploading)}
+          disabled={Boolean(disabled || saving)}
+          hint="Побачить дизайнер саме в цій задачі."
+          label="Додати файли замовника"
+          multiple
+          onFiles={onAddFiles}
+          title="Перетягніть або клікніть для вибору"
+        />
 
         {files.length > 0 ? (
           <ul className="space-y-1">

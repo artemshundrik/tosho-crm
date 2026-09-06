@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { AlertTriangle, FileSpreadsheet, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 import { pluralWordUk } from "@/lib/lastSeen";
 
 import { ImportDraftRow } from "./ImportDraftRow";
 import { parseImportFile, startImportResearch, writeDraftsToQuote } from "./importFlow";
 import type { QuoteImportRunDefaults } from "./mapping";
 import { countSettledPreviews, useLinkPreviews } from "./useLinkPreviews";
+import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { QUOTE_IMPORT_ACCEPT } from "./readWorkbook";
 import type { QuoteImportDraftItem } from "./types";
 
@@ -236,47 +236,20 @@ export function QuoteImportDialog({
         {stage === "pick" && header ? header : null}
 
         {stage === "pick" ? (
-          <div
-            className={cn(
-              "flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center",
-              !canPick && "pointer-events-none opacity-50"
-            )}
-            aria-disabled={!canPick}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              if (!canPick) return;
-              const file = event.dataTransfer.files?.[0];
+          <FileDropZone
+            accept={QUOTE_IMPORT_ACCEPT}
+            disabled={!canPick}
+            dropTitle="Відпустіть — розберу файл"
+            hint="Як є, з об’єднаними клітинками й кількома аркушами: модель сама знайде позиції, тиражі й варіанти"
+            inputRef={inputRef}
+            label="Обрати файл Excel"
+            onFiles={(files) => {
+              const file = files?.[0];
               if (file) void handleFile(file);
             }}
-          >
-            <FileSpreadsheet className="h-10 w-10 text-muted-foreground/30" />
-            <div>
-              <p className="font-medium">Перетягніть файл сюди</p>
-              <p className="text-sm text-muted-foreground">xlsx, xls, xlsm або csv — до 12 МБ</p>
-            </div>
-            <input
-              ref={inputRef}
-              type="file"
-              accept={QUOTE_IMPORT_ACCEPT}
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) void handleFile(file);
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="gap-2"
-              disabled={!canPick}
-              onClick={() => inputRef.current?.click()}
-            >
-              <Upload className="h-4 w-4" />
-              Обрати файл
-            </Button>
-          </div>
+            tags={[".xlsx", ".xls", ".xlsm", ".csv", "до 12 МБ"]}
+            title="Перетягніть файл сюди або клацніть"
+          />
         ) : null}
 
         {stage === "pick" && !canPick && pickBlockedHint ? (
