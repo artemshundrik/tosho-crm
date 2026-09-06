@@ -80,3 +80,6 @@ e2e/__screens__/
 # Звіти vitest. П'ятірка кладе json/junit/html-звіти сюди замість stdout
 # (`.vitest/json/output.json` тощо) — це артефакти прогону, не код.
 .vitest/
+
+# результати прогонів claude plugin eval — знімки, не джерело
+evals/*/results/
