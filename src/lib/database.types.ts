@@ -5711,9 +5711,10 @@ export type Database = {
         Returns: boolean
       }
       is_owner_or_seo: { Args: never; Returns: boolean }
-      is_quote_markup_approver:
-        | { Args: { _user_id: string }; Returns: boolean }
-        | { Args: { _quote_id: string; _user_id: string }; Returns: boolean }
+      is_quote_markup_approver: {
+        Args: { _quote_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_user_blocked: { Args: { _user_id: string }; Returns: boolean }
       is_valid_work_schedule_days: { Args: { days: Json }; Returns: boolean }
       is_workspace_admin:
