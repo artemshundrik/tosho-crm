@@ -46,8 +46,10 @@ cpSync(FROM, TO, { recursive: true, filter: (src) => !src.endsWith("/results") }
 const cases = readdirSync(TO).filter((e) => e !== "results" && !e.endsWith(".md")).length;
 console.log(`Синхронізовано ${cases} кейсів у ${TO}`);
 console.log("");
-console.log("Прогін (з власного терміналу, не з сесії Claude Code):");
+console.log("Прогін:");
 console.log(`  claude plugin eval ${SKILL} --runs 1 --ablation none`);
 console.log("");
-console.log("Якщо відповість «currently in early access» — бракує змінної:");
+console.log("«currently in early access» — бракує змінної:");
 console.log("  CLAUDE_CODE_WALNUT_SPIRE=1 у ~/.claude/settings.json під env");
+console.log("«Not logged in» — протермінувався сеанс CLI:");
+console.log("  запусти `claude`, набери /login, потім /exit");
