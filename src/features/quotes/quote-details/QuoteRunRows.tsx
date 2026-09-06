@@ -33,8 +33,23 @@ import type { QuoteRun } from "@/lib/toshoApi";
  *
  * Найтісніше не на найширшому екрані, а рівно на xl (1280 px): там зʼявляється
  * права колонка справи, картці лишається 773 px, і вільного місця в рядку
- * тиражу — 31 px. Тому проміжок між колонками на lg — 10 px, а не 16: колонки
+ * тиражу — 31 px. Тому проміжок між колонками — 10 px, а не 16: колонки
  * вирівняні по правому краю, і десяти пікселів між числами вистачає.
+ *
+ * МІРА — ШИРИНА КАРТКИ, А НЕ ЕКРАНА (REQ-175#p73). Спершу таблиця вмикалась на
+ * `lg`, тобто за шириною вікна, — а місце в рядку залежить не від вікна, а від
+ * того, скільки лишила картці решта сторінки. На 1280 з розгорнутим сайдбаром
+ * картці діставалось 642 px замість 802: вісім колонок вимагають 778, і
+ * колонка «Сума» цілком їхала за правий край — заміряно в прев'ю, 136 px повз
+ * картку. Найважливіше число рядка просто зникало, і жоден екран цього не
+ * показував, бо ширина вікна лишалась та сама.
+ *
+ * Тому перемикає контейнерний запит на 746 px. Це ширина САМОГО блоку, а не
+ * рядка: рядок ширший за нього на 32 px, бо виходить за поля картки
+ * від'ємними марджинами. Рядку треба 778 px, блоку — на ті 32 менше.
+ * Сайдбар, права колонка справи й майбутні панелі тепер ураховані самі собою:
+ * таблиця стоїть, поки картка справді може її втримати, а щойно не може —
+ * рядок розкладається ярусами, де не зникає нічого.
  *
  * Колонка рішення клієнта — 10rem: її ширину диктує не дані, а стан (бейдж
  * «Погоджено клієнтом» — 157 px проти 94 у кнопки «Погодити»), тож на `auto`
@@ -42,7 +57,8 @@ import type { QuoteRun } from "@/lib/toshoApi";
  * порожня, і це не діра: сусідня колонка — 1fr, теж порожня, тож числа лишаються
  * рівно там, де були, а між накруткою й сумою просто більше повітря.
  *
- * ДО lg — ТРИ ЯРУСИ. Вісім колонок потребують ~740 px і на планшеті не влазять.
+ * ВУЗЬКА КАРТКА — ТРИ ЯРУСИ. Вісім колонок потребують 778 px і не влазять ні
+ * на планшеті, ні на десктопі з розгорнутим сайдбаром.
  * Там рядок розкладається на кількість і суму зверху, склад собівартості
  * підписами під ними й рішення внизу — порівнювати на телефоні все одно нема з
  * чим, бо тираж на екрані один.
@@ -50,7 +66,7 @@ import type { QuoteRun } from "@/lib/toshoApi";
 
 /** Шаблон колонок — спільний для шапки й рядків, інакше вони розʼїдуться. */
 const GRID_COLS =
-  "lg:grid-cols-[5.5rem_7.25rem_5.25rem_4.75rem_3.75rem_minmax(0,1fr)_10rem_6.75rem]";
+  "@min-[746px]:grid-cols-[5.5rem_7.25rem_5.25rem_4.75rem_3.75rem_minmax(0,1fr)_10rem_6.75rem]";
 
 const num = (value: number, digits = 0) =>
   (Math.round(value * 100) / 100).toLocaleString("uk-UA", {
@@ -132,7 +148,8 @@ export function QuoteRunRows({
   const anyUnsaved = runs.some((run) => !!run.id && !!unsavedRunIds?.has(run.id));
 
   return (
-    <div>
+    // Розкладку перемикає ШИРИНА ЦЬОГО БЛОКУ, тож він і є контейнер (REQ-175#p73).
+    <div className="[container-type:inline-size]">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-foreground">
@@ -185,7 +202,7 @@ export function QuoteRunRows({
       {anyPriced ? (
         <div
           className={cn(
-            "-mx-3 hidden gap-x-2.5 border-b border-border/40 px-3 pb-1.5 text-2xs text-muted-foreground sm:-mx-4 sm:px-4 lg:grid",
+            "-mx-3 hidden gap-x-2.5 border-b border-border/40 px-3 pb-1.5 text-2xs text-muted-foreground sm:-mx-4 sm:px-4 @min-[746px]:grid",
             GRID_COLS
           )}
           aria-hidden
@@ -229,28 +246,28 @@ export function QuoteRunRows({
               label: "Вартість товару",
               value: num(Number(run.unit_price_model) || 0, 2),
               unit: money,
-              col: "lg:col-start-2",
+              col: "@min-[746px]:col-start-2",
             },
             {
               key: "print",
               label: "Нанесення",
               value: num(Number(run.unit_price_print) || 0, 2),
               unit: money,
-              col: "lg:col-start-3",
+              col: "@min-[746px]:col-start-3",
             },
             {
               key: "logistics",
               label: "Логістика",
               value: num(Number(run.logistics_cost) || 0),
               unit: money,
-              col: "lg:col-start-4",
+              col: "@min-[746px]:col-start-4",
             },
             {
               key: "markup",
               label: "Накрутка",
               value: num(Math.round((Number(run.markup_rate) || 0) * 100) / 100, 2),
               unit: "%",
-              col: "lg:col-start-5",
+              col: "@min-[746px]:col-start-5",
             },
           ];
 
@@ -270,7 +287,7 @@ export function QuoteRunRows({
               className={cn(
                 // Смужка стоїть на ВСІХ рядках, просто прозора: інакше вибір
                 // зсував би вміст рядка на 3 px убік.
-                "grid cursor-pointer items-center gap-x-4 gap-y-1.5 lg:gap-x-2.5 border-b border-l-[3px] border-border/40 border-l-transparent py-2.5 pl-[9px] pr-3 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:pl-[13px] sm:pr-4",
+                "grid cursor-pointer items-center gap-x-4 gap-y-1.5 @min-[746px]:gap-x-2.5 border-b border-l-[3px] border-border/40 border-l-transparent py-2.5 pl-[9px] pr-3 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:pl-[13px] sm:pr-4",
                 "grid-cols-[minmax(0,1fr)_auto]",
                 GRID_COLS,
                 isSelected && "border-l-foreground bg-muted"
@@ -294,11 +311,11 @@ export function QuoteRunRows({
                 таблиці. Одна розмітка на обидва випадки: другої гілки, яку
                 React комітив би вхолосту, тут немає.
               */}
-              <div className="col-start-1 col-end-3 row-start-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 lg:contents">
+              <div className="col-start-1 col-end-3 row-start-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 @min-[746px]:contents">
                 {priced ? (
                   costCells.map((cell) => (
-                    <span key={cell.key} className={cn("whitespace-nowrap lg:row-start-1 lg:text-right", cell.col)}>
-                      <span className="mr-1 text-2xs text-muted-foreground lg:hidden">{cell.label}</span>
+                    <span key={cell.key} className={cn("whitespace-nowrap @min-[746px]:row-start-1 @min-[746px]:text-right", cell.col)}>
+                      <span className="mr-1 text-2xs text-muted-foreground @min-[746px]:hidden">{cell.label}</span>
                       <span
                         className={cn(
                           "text-sm tabular-nums",
@@ -325,7 +342,7 @@ export function QuoteRunRows({
                     </span>
                   ))
                 ) : (
-                  <span className="text-xs text-muted-foreground lg:col-start-2 lg:col-end-6 lg:row-start-1">
+                  <span className="text-xs text-muted-foreground @min-[746px]:col-start-2 @min-[746px]:col-end-6 @min-[746px]:row-start-1">
                     собівартість не внесена
                   </span>
                 )}
@@ -334,7 +351,7 @@ export function QuoteRunRows({
               {/* Колонка рішення клієнта — тут воно й ухвалюється (REQ-155 p2).
                   Порожня — теж колонка: вона тримає ширину, щоб сума праворуч не
                   їздила туди-сюди, коли бейдж змінюється кнопкою й навпаки. */}
-              <span className="col-start-1 col-end-3 row-start-3 flex items-center justify-start lg:col-start-7 lg:col-end-8 lg:row-start-1 lg:justify-end">
+              <span className="col-start-1 col-end-3 row-start-3 flex items-center justify-start @min-[746px]:col-start-7 @min-[746px]:col-end-8 @min-[746px]:row-start-1 @min-[746px]:justify-end">
                 {/*
                   Погоджувати нема чого, поки немає ціни (REQ-175#p67). Кнопка
                   стояла активною на тиражі з написом «собівартість не внесена»
@@ -378,7 +395,7 @@ export function QuoteRunRows({
 
               {/* Прочерка тут більше немає: він казав «нуль», хоч ішлося про «ще
                   невідомо», а це вже сказано словами ліворуч. */}
-              <span className="col-start-2 row-start-1 whitespace-nowrap text-right lg:col-start-8">
+              <span className="col-start-2 row-start-1 whitespace-nowrap text-right @min-[746px]:col-start-8">
                 {priced ? (
                   <>
                     <span
