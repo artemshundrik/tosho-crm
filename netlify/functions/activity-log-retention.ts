@@ -41,10 +41,16 @@ export const handler = async (event: HttpEvent) => {
   });
 
   try {
-    const { data, error } = await adminClient.rpc("archive_activity_log_all", {
-      batch_limit: 5000,
-      max_rounds: 50,
-    });
+    // .schema("tosho") і префікс p_ обов'язкові: RPC живе в tosho, а PostgREST
+    // добирає функцію за ІМЕНАМИ аргументів. Без цього — 404, 500 і мовчазна
+    // тиша, бо крон бачить лише «запит поставлено в чергу». Саме так чистка
+    // не працювала з 06.03.2026; стереже тепер npm run check:rpc-contracts.
+    const { data, error } = await adminClient
+      .schema("tosho")
+      .rpc("archive_activity_log_all", {
+        p_batch_limit: 5000,
+        p_max_rounds: 50,
+      });
 
     if (error) throw error;
 
