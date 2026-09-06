@@ -17,6 +17,7 @@ Local runtime rule:
 - if the change depends on Netlify Functions, redirects, or `/.netlify/functions/*`, verify locally with `npx netlify dev`, not plain `npm run dev`
 - for local Netlify function parity, `.env.local` must include server-side Supabase vars too: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; `VITE_SUPABASE_*` alone only covers the frontend client
 - when using `netlify dev`, test the app via `http://localhost:8888` unless the local proxy is configured differently
+- **Чому в package.json є два `overrides` заради netlify-cli.** Обидва — плата за сусідство 27-ї версії з нашим стеком, і прибирати їх наосліп не можна. `@opentelemetry/api` притиснутий до 1.9.1: vitest 5 просить `^1.9.0`, Netlify тягне `~1.8.0`, і без цього рядка `npm install` падає на ERESOLVE. `ts-api-utils` отримує власний TypeScript 5.9.3: у дереві 27-ї він виїжджає в корінь дерева й чіпляє наш TypeScript 7, а в сімки немає `ts.TypeFlags` — через це `netlify dev` помирав на «Cannot read properties of undefined (reading 'Intrinsic')» ще до завантаження функцій. У 24-й обох проблем не було: вона носила власний TypeScript 5.8 усередині себе.
 
 MCP-сервери (підключені в local scope, `~/.claude.json` — не в `.mcp.json` репозиторію):
 

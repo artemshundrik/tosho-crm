@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-09-06T09:34:58.797Z",
+  "generatedAt": "2026-09-06T09:53:12.217Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -715,7 +715,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "netlify-cli",
-      "version": "24.10.0",
+      "version": "27.5.0",
       "layer": "platform",
       "dev": true,
       "bumpedAt": "2026-04-08T22:34:06+03:00",
@@ -810,10 +810,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "6.2.3",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-31T18:09:40+02:00",
+      "bumpedAt": "2026-09-06T12:43:29+03:00",
       "bumpCommit": {
-        "sha": "65745f4d",
-        "subject": "user menu"
+        "sha": "cbb330d6",
+        "subject": "Кадрування фото профілю менше смикається при зміні розміру вікна"
       },
       "description": "Обрізання картинки при завантаженні аватарки чи лого.",
       "homepage": "https://ValentinH.github.io/react-easy-crop/",
