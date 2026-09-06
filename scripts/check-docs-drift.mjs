@@ -36,7 +36,9 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const ДОПУСК = 0.05;
 
@@ -71,15 +73,29 @@ const рядок = (file, шаблон) => {
 };
 const кілобайт = (file) => Math.round(statSync(file).size / 1024);
 
-/** Скільки тестів насправді — питаємо самого vitest, а не рахуємо `it(` регуляркою. */
+/**
+ * Скільки тестів насправді — питаємо самого vitest, а не рахуємо `it(` регуляркою.
+ *
+ * ЧОМУ ШЛЯХ ДО ЗВІТУ ЗАДАЄМО САМІ. До vitest 5 json-звіт друкувався в stdout, і
+ * тут стояло `out.slice(out.indexOf("{"))`. П'ятірка кладе його у файл
+ * (.vitest/json/output.json), а на екран пише один рядок — тобто розбір stdout
+ * почав падати на «Unexpected end of JSON input» замість числа тестів. Ця
+ * перевірка живе ЛИШЕ в GitHub Actions (у pre-push її немає навмисно), тож
+ * помітно це було б аж після пушу.
+ */
 function тести() {
-  const out = execFileSync("npx", ["vitest", "run", "--reporter=json", "--silent"], {
-    encoding: "utf8",
-    timeout: 300_000,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const json = JSON.parse(out.slice(out.indexOf("{")));
-  return { files: json.testResults?.length ?? json.numTotalTestSuites, tests: json.numTotalTests };
+  const файл = join(tmpdir(), `docs-drift-tests-${process.pid}.json`);
+  try {
+    execFileSync("npx", ["vitest", "run", "--reporter=json", "--silent", "--outputFile", файл], {
+      encoding: "utf8",
+      timeout: 300_000,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    const json = JSON.parse(readFileSync(файл, "utf8"));
+    return { files: json.testResults?.length ?? json.numTotalTestSuites, tests: json.numTotalTests };
+  } finally {
+    rmSync(файл, { force: true });
+  }
 }
 
 const число = (text) => Number(String(text).replace(/[^\d]/g, ""));
