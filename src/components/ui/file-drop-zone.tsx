@@ -1,6 +1,8 @@
 import * as React from "react";
 import { Loader2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+
 import { UploadIllustration } from "@/components/ui/upload-illustration";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +51,13 @@ export type FileDropZoneProps = {
   hint?: React.ReactNode;
   /** Головний рядок, поки файл висить над зоною. Типово — за `multiple`. */
   dropTitle?: string;
+  /**
+   * Напис на кнопці всередині плити. Типово — за `multiple`.
+   *
+   * Кнопка є ЛИШЕ в плиті: у рядку для неї немає місця, а тиснути на сам
+   * рядок і так очевидно.
+   */
+  actionLabel?: string;
   /** Дрібні плашки праворуч (у рядку) або під підписом (у плиті). */
   tags?: string[];
   accept?: string;
@@ -74,6 +83,7 @@ export function FileDropZone({
   title,
   hint,
   dropTitle,
+  actionLabel,
   tags,
   accept,
   multiple = false,
@@ -181,6 +191,23 @@ export function FileDropZone({
           <span className={cn("block text-xs text-muted-foreground", !plate && "truncate")}>{hint}</span>
         ) : null}
       </span>
+
+      {plate && !busy ? (
+        /*
+          КНОПКА ТУТ — ОЗДОБА, А НЕ КОНТРОЛ, І ЦЕ НАВМИСНО. Плита вже сама
+          `role="button"`: справжня <button> усередині дала б інтерактив в
+          інтерактиві — зайвий Tab-стоп, який робить рівно те саме, що й
+          натиск на плиту, і читалка оголосила б два різні входи в одну дію.
+          Тому це <span> у вигляді кнопки (`asChild` віддає лише оформлення) з
+          `aria-hidden`: око бачить звичну кнопку, клік по ній ловить плита.
+
+          Навіщо взагалі: «клікніть» у підписі помічають не всі, а знайомий
+          прямокутник читається як вхід одразу.
+        */
+        <Button asChild className="mt-1" size="sm" variant="secondary">
+          <span aria-hidden="true">{actionLabel ?? (multiple ? "Обрати файли" : "Обрати файл")}</span>
+        </Button>
+      ) : null}
 
       {chips}
 
