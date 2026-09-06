@@ -6361,26 +6361,6 @@ export default function DesignTaskPage() {
 
   const closeDiscardDialog = () => setDiscardDialog((prev) => ({ ...prev, open: false }));
 
-  const confirmDiscardOr = (
-    hasContent: boolean,
-    label: string,
-    description: string,
-    action: () => void
-  ) => {
-    if (!hasContent) {
-      action();
-      return;
-    }
-    setDiscardDialog({
-      open: true,
-      label,
-      description,
-      confirm: () => {
-        action();
-        closeDiscardDialog();
-      },
-    });
-  };
 
   const startBriefChangeRequestEdit = (request: DesignBriefChangeRequest) => {
     const isOwn = Boolean(request.requested_by && userId && request.requested_by === userId);
@@ -10184,26 +10164,20 @@ export default function DesignTaskPage() {
                         </p>
                       ) : null}
                       {briefDirty ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={briefSaving || designTaskLockedByOther}
-                          onClick={() => {
-                            const reset = () => {
-                              setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
-                              setBriefDirty(false);
-                              setBriefInlineEditing(false);
-                            };
-                            confirmDiscardOr(
-                              briefDirty && briefDraft.trim().length > 0,
-                              "Скасувати зміни ТЗ?",
-                              "Усі незбережені зміни в ТЗ буде втрачено.",
-                              reset
-                            );
-                          }}
-                        >
-                          Скасувати
-                        </Button>
+                            <HoldButton
+                              className="h-8 px-3 text-xs"
+                              disabled={briefSaving || designTaskLockedByOther}
+                              guard={briefDraft.trim().length > 0}
+                              holdingLabel="Не відпускайте — скасую"
+                              onConfirm={() => {
+                                setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
+                                setBriefDirty(false);
+                                setBriefInlineEditing(false);
+                              }}
+                              tone="neutral"
+                            >
+                              Скасувати
+                            </HoldButton>
                       ) : null}
                       <Button
                         size="sm"
@@ -10586,21 +10560,16 @@ export default function DesignTaskPage() {
 
                             {isEditingChangeRequest ? (
                               <div className="mt-3 flex items-center justify-end gap-2 border-t border-border/30 pt-3">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={isSavingChangeRequest}
-                                  onClick={() =>
-                                    confirmDiscardOr(
-                                      changeRequestEditDraft.trim() !== (request.request_text ?? "").trim(),
-                                      "Скасувати редагування правки?",
-                                      "Зміни в правці буде втрачено.",
-                                      cancelBriefChangeRequestEdit
-                                    )
-                                  }
-                                >
-                                  Скасувати
-                                </Button>
+                        <HoldButton
+                          className="h-8 px-3 text-xs"
+                          disabled={isSavingChangeRequest}
+                          guard={changeRequestEditDraft.trim() !== (request.request_text ?? "").trim()}
+                          holdingLabel="Не відпускайте — скасую"
+                          onConfirm={cancelBriefChangeRequestEdit}
+                          tone="neutral"
+                        >
+                          Скасувати
+                        </HoldButton>
                                 <Button
                                   size="sm"
                                   className="gap-1.5"
@@ -10724,29 +10693,14 @@ export default function DesignTaskPage() {
                                     </Button>
                                   ) : null}
                                   {canDelete ? (
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-7 w-7 text-destructive hover:text-destructive"
-                                      disabled={isDeleting || designTaskLockedByOther}
-                                      onClick={() =>
-                                        confirmDiscardOr(
-                                          true,
-                                          "Видалити правку?",
-                                          "Правку і прикріплені файли буде остаточно видалено.",
-                                          () => void deleteBriefChangeRequest(request)
-                                        )
-                                      }
-                                      aria-label="Видалити правку"
-                                      title="Видалити"
-                                    >
-                                      {isDeleting ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      ) : (
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      )}
-                                    </Button>
+                            <HoldButton
+                              className="h-7 w-7 px-0 text-destructive"
+                              disabled={isDeleting || designTaskLockedByOther}
+                              holdingLabel={<Trash2 className="h-3.5 w-3.5" />}
+                              onConfirm={() => void deleteBriefChangeRequest(request)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </HoldButton>
                                   ) : null}
                                 </div>
                               </div>
@@ -12219,25 +12173,19 @@ export default function DesignTaskPage() {
             </div>
             <div className="flex items-center gap-2">
               {briefDirty ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={briefSaving || designTaskLockedByOther}
-                  onClick={() => {
-                    const reset = () => {
-                      setBriefDraft(activeBriefVersion?.brief ?? task?.designBrief ?? "");
-                      setBriefDirty(false);
-                    };
-                    confirmDiscardOr(
-                      briefDirty,
-                      "Скасувати зміни ТЗ?",
-                      "Усі незбережені зміни буде втрачено.",
-                      reset
-                    );
-                  }}
-                >
-                  Скасувати зміни
-                </Button>
+                      <HoldButton
+                        className="h-8 px-3 text-xs"
+                        disabled={briefSaving || designTaskLockedByOther}
+                        guard={briefDraft.trim().length > 0}
+                        holdingLabel="Не відпускайте — скасую"
+                        onConfirm={() => {
+                          setBriefDraft(activeBriefVersion?.brief ?? task?.designBrief ?? "");
+                          setBriefDirty(false);
+                        }}
+                        tone="neutral"
+                      >
+                        Скасувати зміни
+                      </HoldButton>
               ) : null}
               {briefDirty && documentBlockers.length > 0 ? (
                 <p className="mr-auto text-xs text-destructive">

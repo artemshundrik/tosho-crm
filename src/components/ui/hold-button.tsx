@@ -34,16 +34,26 @@ export function HoldButton({
   holdingLabel = "Тримайте…",
   holdMs = 900,
   tone = "danger",
+  guard = true,
   disabled = false,
   className,
 }: {
   onConfirm: () => void;
   children: React.ReactNode;
   /** Підпис під час затиску. */
-  holdingLabel?: string;
+  holdingLabel?: React.ReactNode;
   /** Скільки тримати. Менше за 600 мс перестає бути захистом від випадкового натиску. */
   holdMs?: number;
   tone?: "danger" | "neutral";
+  /**
+   * Коли захищати. `false` — звичайний натиск.
+   *
+   * НАВІЩО. Затиск має сенс лише там, де є що втрачати: скасувати ПОРОЖНЮ
+   * чернетку — не втрата, і змушувати тримати кнопку заради порожнього поля
+   * було б знущанням. Прапорець тут, а не тернарник на місці виклику, бо
+   * інакше кожне місце писало б дві кнопки замість однієї.
+   */
+  guard?: boolean;
   disabled?: boolean;
   className?: string;
 }) {
@@ -71,20 +81,22 @@ export function HoldButton({
   React.useEffect(() => stop, [stop]);
 
   const danger = tone === "danger";
+  const guarded = guard && !disabled;
 
   return (
     <button
       type="button"
       aria-disabled={disabled || undefined}
       disabled={disabled}
-      onPointerDown={start}
+      onClick={guarded ? undefined : onConfirm}
+      onPointerDown={guarded ? start : undefined}
       onPointerUp={stop}
       onPointerLeave={stop}
       onPointerCancel={stop}
       onKeyDown={(event) => {
         // `repeat` відсікає автоповтор: інакше кожен повторний keydown
         // перезапускав би відлік, і затиснути було б неможливо.
-        if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
+        if (!guarded || event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
         event.preventDefault();
         start();
       }}

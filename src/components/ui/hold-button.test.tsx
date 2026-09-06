@@ -79,6 +79,34 @@ describe("HoldButton", () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
+  it("без захисту це звичайна кнопка: натиснув — сталося одразу", () => {
+    const onConfirm = vi.fn();
+    render(
+      <HoldButton guard={false} onConfirm={onConfirm}>
+        Скасувати
+      </HoldButton>
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("без захисту затиск нічого не запускає — щоб дія не сталася двічі", () => {
+    const onConfirm = vi.fn();
+    render(
+      <HoldButton guard={false} onConfirm={onConfirm}>
+        Скасувати
+      </HoldButton>
+    );
+    const button = screen.getByRole("button");
+
+    fireEvent.pointerDown(button);
+    act(() => void vi.advanceTimersByTime(2000));
+
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it("відпущена клавіша скасовує так само, як відпущена кнопка миші", () => {
     const { onConfirm, button } = setup();
 
