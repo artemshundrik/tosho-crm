@@ -21,6 +21,7 @@ import {
 } from "@/lib/toshoApi";
 import { needsApprovedRunChoice, pickApprovedRun } from "@/lib/quoteRuns";
 import { collectRunsForItem, getRunLineTotal, getRunUnitPrice } from "@/features/orders/orderItemPricing";
+import { formatQuoteItemMethodsSummary } from "@/features/orders/quoteItemMethodsSummary";
 import { normalizeUnitLabel } from "@/lib/units";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
@@ -699,25 +700,6 @@ async function listCatalogMethodNamesByIds(ids: string[]) {
       .map((row) => [row.id, row.name?.trim() || "Метод нанесення"])
   );
 }
-
-const formatQuoteItemMethodsSummary = (methods: unknown, methodNamesById: Map<string, string>) => {
-  if (!Array.isArray(methods) || methods.length === 0) return null;
-  const labels = methods
-    .map((entry) => {
-      if (!entry || typeof entry !== "object") return "";
-      const record = entry as Record<string, unknown>;
-      const label = typeof record.label === "string" ? record.label.trim() : "";
-      if (label) return label;
-      const methodId = typeof record.method_id === "string" ? record.method_id.trim() : "";
-      const methodName = methodId ? methodNamesById.get(methodId) ?? "Метод нанесення" : "Метод нанесення";
-      const width = Number(record.print_width_mm ?? 0) || 0;
-      const height = Number(record.print_height_mm ?? 0) || 0;
-      const size = width > 0 || height > 0 ? `${width || "?"}x${height || "?"} мм` : "";
-      return [methodName, size].filter(Boolean).join(" ");
-    })
-    .filter(Boolean);
-  return labels.length > 0 ? labels.join("; ") : null;
-};
 
 /**
  * «Є нанесення» — хоч одна позиція з друком. Товар без нанесення нічого не потребує
