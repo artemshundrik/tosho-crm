@@ -281,7 +281,12 @@ export function ThreadComposer({
             <Send className="h-3.5 w-3.5" />
           </button>
         ) : (
-          <DictationButton dictation={dictation} />
+          /* Той самий круглий чорний кружечок, що й «Надіслати»: вони ділять
+             одне місце, і різна форма читалась би як дві різні речі. */
+          <DictationButton
+            dictation={dictation}
+            className="bg-foreground text-background hover:bg-foreground hover:text-background hover:opacity-90"
+          />
         )}
       </div>
       )}

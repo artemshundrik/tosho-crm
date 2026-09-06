@@ -13,7 +13,8 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DictationButton, useDictationField } from "@/components/dictation/DictationButton";
+import { DictationButton } from "@/components/dictation/DictationButton";
+import { useDesignTaskDictation } from "@/features/designTask/useDesignTaskDictation";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1665,15 +1666,14 @@ export default function DesignTaskPage() {
     onBeforeRelease: () => saveBriefBeforeReleaseRef.current?.(),
   });
   const designTaskLockedByOther = designTaskLock.lockedByOther;
-  /** Диктування ТЗ смугою під полем — чому саме так, у `useDictationField`. */
-  const briefDictation = useDictationField({
-    textareaRef: briefTextareaRef,
-    value: briefDraft,
-    onChange: (next) => { setBriefDraft(next); setBriefDirty(true); setBriefInlineEditing(true); },
-    onAfterInsert: () => resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT),
-    context: "brief",
-    disabled: briefSaving || designTaskLockedByOther,
-    withStrip: true,
+  /** Диктування ТЗ і правки — обидва смугою під полем. */
+  const dictation = useDesignTaskDictation({
+    briefRef: briefTextareaRef, briefValue: briefDraft,
+    onBrief: (next) => { setBriefDraft(next); setBriefDirty(true); setBriefInlineEditing(true); },
+    onBriefInserted: () => resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT),
+    briefDisabled: briefSaving || designTaskLockedByOther,
+    changeRef: changeRequestTextareaRef, changeValue: changeRequestDraft,
+    onChange: setChangeRequestDraft, changeDisabled: changeRequestSaving || designTaskLockedByOther,
   });
 
   useEffect(() => {
@@ -9998,7 +9998,7 @@ export default function DesignTaskPage() {
           <details open className={cn("group pb-4", activeDesignTab !== "brief" && "hidden")}>
             <summary className="mb-4 flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-3 gap-y-2">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground/10 text-foreground ring-1 ring-foreground/10">
                   <FileText className="h-4 w-4" />
                 </div>
                 <div className="text-base font-semibold tracking-tight text-foreground">ТЗ для дизайнера</div>
@@ -10084,7 +10084,7 @@ export default function DesignTaskPage() {
                         </Badge>
                       ) : null}
                     </div>
-                    {briefDictation.button}
+                    {dictation.brief.button}
                   </div>
 
                   {briefInlineEditing || briefDirty ? (
@@ -10162,7 +10162,7 @@ export default function DesignTaskPage() {
                     </div>
                   )}
 
-                  {briefDictation.strip}
+                  {dictation.brief.strip}
 
                   {(briefInlineEditing || briefDirty) && (
                     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -10240,14 +10240,14 @@ export default function DesignTaskPage() {
                       className={cn(
                         "space-y-3 rounded-lg border p-3 transition-colors",
                         changeRequestDragActive
-                          ? "border-primary/60 bg-primary/5"
-                          : "border-primary/50 bg-primary/[0.03] ring-1 ring-primary/20"
+                          ? "border-foreground/40 bg-foreground/[0.06]"
+                          : "border-foreground/25 bg-foreground/[0.02] ring-1 ring-foreground/10"
                       )}
                       onDrop={handleChangeRequestDrop}
                       onDragOver={handleChangeRequestDragOver}
                       onDragLeave={handleChangeRequestDragLeave}
                     >
-                      <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-caps text-primary">
+                      <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-caps text-foreground">
                         <Plus className="h-3.5 w-3.5" />
                         Нова правка
                       </div>
@@ -10259,6 +10259,7 @@ export default function DesignTaskPage() {
                         disabled={changeRequestSaving || designTaskLockedByOther}
                         className="min-h-[110px] resize-y border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                       />
+                      {dictation.changeRequest.strip}
 
                       {changeRequestDraftAttachments.length > 0 ? (
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
@@ -10352,6 +10353,7 @@ export default function DesignTaskPage() {
                             ? `Прикріпити ще (${changeRequestDraftAttachments.length})`
                             : "Прикріпити файл"}
                         </Button>
+                        {dictation.changeRequest.button}
                         <div className="flex items-center gap-2">
                           <Button
                             size="sm"
@@ -10906,7 +10908,7 @@ export default function DesignTaskPage() {
                               type="button"
                               className={cn(
                                 "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
-                                index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
+                                index === mentionActiveIndex ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
                               )}
                               onMouseDown={(event) => {
                                 event.preventDefault();
