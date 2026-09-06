@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { DictationStrip } from "@/components/ui/dictation-capsule";
 import { FeatureHint } from "@/features/features/FeatureHint";
 import {
   useDictation,
@@ -55,7 +56,20 @@ function insertAtCaret(
   return { nextValue, caret: before.length + insertion.length };
 }
 
-export function DictationButton({
+/**
+ * Диктування для поля з текстом: кнопка + (за потреби) смуга під полем.
+ *
+ * ЧОМУ ХУК, А НЕ САМА КНОПКА (REQ-255#p3). Розкладка «смуга» вимагає малювати
+ * дві речі в РІЗНИХ місцях розмітки — кнопку в кутку поля й смугу під ним, —
+ * а стан запису в них спільний. Компонент таке віддати не може: він малює одне
+ * піддерево. Тому хук тримає стан і повертає обидва вузли, а місце ставить їх
+ * туди, куди треба.
+ *
+ * `withStrip` — вибір розкладки за формою поля: велика текстова область
+ * лишається видимою (людина договорює написане), тож час і хвиля йдуть у смугу
+ * під нею; у решті місць час лишається на самій кнопці.
+ */
+export function useDictationField({
   textareaRef,
   value,
   onChange,
@@ -64,7 +78,11 @@ export function DictationButton({
   className,
   maxDurationMs,
   onAfterInsert,
-}: DictationButtonProps) {
+  withStrip = false,
+}: DictationButtonProps & { withStrip?: boolean }): {
+  button: React.ReactNode;
+  strip: React.ReactNode;
+} {
   // useDictation keeps the latest onResult in a ref, so this closure (recreated
   // each render with the current value/onChange) always splices into fresh text.
   const { state, elapsedMs, error, isSupported, start, stop } = useDictation({
@@ -91,7 +109,7 @@ export function DictationButton({
     }
   }, [state, error]);
 
-  if (!isSupported) return null;
+  if (!isSupported) return { button: null, strip: null };
 
   const isRecording = state === "recording";
   const isTranscribing = state === "transcribing";
@@ -110,7 +128,7 @@ export function DictationButton({
       ? "Розпізнавання…"
       : "Диктувати голосом";
 
-  return (
+  const button = (
     /* Обгортка потрібна лише як точка відліку для підказки. inline-flex, щоб
        у флекс-рядках поводитись так само, як сама кнопка. */
     <span className="relative inline-flex">
@@ -130,7 +148,9 @@ export function DictationButton({
         ) : isRecording ? (
           <>
             <Square className="fill-current" />
-            <span className="text-xs">{formatElapsed(elapsedMs)}</span>
+            {/* Зі смугою час живе в ній: два таймери на екрані — це два місця,
+                де людина шукає одну відповідь. */}
+            {withStrip ? null : <span className="text-xs">{formatElapsed(elapsedMs)}</span>}
           </>
         ) : (
           <Mic />
@@ -147,4 +167,14 @@ export function DictationButton({
       ) : null}
     </span>
   );
+
+  return {
+    button,
+    strip: withStrip ? <DictationStrip dictation={{ state, elapsedMs }} /> : null,
+  };
+}
+
+/** Кнопка без смуги — там, де поле однорядкове або смуга не потрібна. */
+export function DictationButton(props: DictationButtonProps) {
+  return <>{useDictationField(props).button}</>;
 }

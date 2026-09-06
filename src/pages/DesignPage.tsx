@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
-import { DictationButton } from "@/components/dictation/DictationButton";
+import { useDictationField } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
@@ -1014,6 +1014,16 @@ export default function DesignPage() {
   const [createTitle, setCreateTitle] = useState("");
   const [createBrief, setCreateBrief] = useState("");
   const createBriefTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  /* Розкладка «смуга» (REQ-255#p3): ТЗ — велике поле, і людина договорює вже
+     написане, тож ховати його на час запису не можна. Кнопка лишається в кутку,
+     час і хвиля йдуть у смугу під полем. */
+  const createBriefDictation = useDictationField({
+    textareaRef: createBriefTextareaRef,
+    value: createBrief,
+    onChange: setCreateBrief,
+    context: "brief",
+    withStrip: true,
+  });
   const [createCustomer, setCreateCustomer] = useState("");
   const [createCustomerId, setCreateCustomerId] = useState<string | null>(null);
   const [createCustomerLogoUrl, setCreateCustomerLogoUrl] = useState<string | null>(null);
@@ -5775,12 +5785,7 @@ export default function DesignPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
-                <DictationButton
-                  textareaRef={createBriefTextareaRef}
-                  value={createBrief}
-                  onChange={setCreateBrief}
-                  context="brief"
-                />
+                {createBriefDictation.button}
               </div>
               {/* Сім рядків порожнім — приблизно ті самі 180px, що в полі ТЗ
                   у діалозі прорахунку. Доти тут стояв один рядок, і те саме
@@ -5799,6 +5804,7 @@ export default function DesignPage() {
                 onChange={(event) => setCreateBrief(event.target.value)}
                 placeholder="Опишіть задачу: ціль, референси, формат, текст, обмеження."
               />
+              {createBriefDictation.strip}
             </div>
             <div className="space-y-2">
               <Label>Файли / картинки</Label>
