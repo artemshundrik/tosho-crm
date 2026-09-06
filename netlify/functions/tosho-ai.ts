@@ -1,6 +1,9 @@
 import { z } from "zod";
 
 import { parseBody } from "./_lib/parseBody";
+// Розбір `usage` спільний з рештою функцій: одна копія — один спосіб рахувати
+// кешований вхід, інакше звіт і рахунок від OpenAI розходяться мовчки.
+import { extractUsage } from "./_lib/openAiResponses";
 
 import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
@@ -364,6 +367,8 @@ type OpenAiDiagnostics = {
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
+  /** Частина входу, яку OpenAI віддав із кешу — вона вже всередині inputTokens. */
+  cachedInputTokens: number | null;
 };
 
 type OpenAiDecisionResult = {
@@ -741,16 +746,6 @@ async function buildOpenAiImageInputs(
       image_url: attachment.url,
       detail: "low",
     }));
-}
-
-function extractUsage(payload: JsonRecord) {
-  const usage = payload.usage && typeof payload.usage === "object" ? (payload.usage as JsonRecord) : null;
-  const toNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
-  return {
-    inputTokens: toNumber(usage?.input_tokens),
-    outputTokens: toNumber(usage?.output_tokens),
-    totalTokens: toNumber(usage?.total_tokens),
-  };
 }
 
 async function logToShoAiRuntimeSignal(params: {
@@ -7078,6 +7073,7 @@ async function callOpenAiDecision(params: {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
+      cachedInputTokens: usage.cachedInputTokens,
     };
     throw err;
   }
@@ -7131,6 +7127,7 @@ async function callOpenAiDecision(params: {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
+      cachedInputTokens: usage.cachedInputTokens,
     },
     crmToolDiagnostics: crmToolContext.diagnostics,
   };
@@ -7609,6 +7606,7 @@ async function handleSend(params: {
         inputTokens: null,
         outputTokens: null,
         totalTokens: null,
+        cachedInputTokens: null,
       };
       assistantDecision = null;
     }
@@ -7639,6 +7637,7 @@ async function handleSend(params: {
         inputTokens: null,
         outputTokens: null,
         totalTokens: null,
+        cachedInputTokens: null,
       };
     }
     assistantDecision = buildFallbackDecision({
@@ -7812,7 +7811,8 @@ async function handleSend(params: {
     const { costUsd, priceKnown } = chatCostUsd(
       openAiDiagnostics.model,
       openAiDiagnostics.inputTokens,
-      openAiDiagnostics.outputTokens
+      openAiDiagnostics.outputTokens,
+      openAiDiagnostics.cachedInputTokens
     );
     await logAiUsage(params.adminClient, {
       workspaceId: params.auth.workspaceId,
@@ -7827,6 +7827,7 @@ async function handleSend(params: {
       metadata: {
         requestId: requestRow.id,
         responseId: openAiDiagnostics.responseId ?? null,
+        cachedInputTokens: openAiDiagnostics.cachedInputTokens,
         priceKnown,
       },
     });

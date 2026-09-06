@@ -139,7 +139,12 @@ export async function rewriteSubjects(all, env = process.env) {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: env.OPENAI_MODEL || "gpt-4o-mini",
+        // Дефолт мусить збігатися з рештою коду (див. _aiPricing.ts). Тут
+        // стояв gpt-4o-mini — модель, якої в OpenAI вже немає: без заданої
+        // OPENAI_MODEL виклик відповідав 404, помилка ловилась у catch нижче, і
+        // переказ мовчки не робився взагалі. На вигляд це не відрізнялось від
+        // «модель не змогла».
+        model: env.OPENAI_MODEL || "gpt-5.6-luna",
         messages: [{ role: "user", content: prompt }],
         // Схема, а не просто json_object: той лише обіцяв «це буде JSON», а які
         // в ньому ключі — залишалось перевіряти руками на кожному елементі.

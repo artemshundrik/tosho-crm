@@ -47,6 +47,7 @@
     "_designAssistant.ts",
     "_lib/absenceDecision.ts",
     "_lib/absenceSubmit.test.ts",
+    "_lib/aiPricing.test.ts",
     "_lib/absenceSubmit.ts",
     "_lib/appUrl.ts",
     "_lib/assistantAccess.test.ts",

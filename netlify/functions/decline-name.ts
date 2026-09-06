@@ -3,6 +3,8 @@ import { z } from "zod";
 import { parseBody } from "./_lib/parseBody";
 
 import { createClient } from "@supabase/supabase-js";
+import { logAiUsage } from "./_aiUsageLog";
+import { chatCostUsd } from "./_aiPricing";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -25,8 +27,31 @@ type OpenAiResponseShape = {
     }>;
   }>;
   output_text?: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+    input_tokens_details?: { cached_tokens?: number };
+  };
   error?: { message?: string };
 };
+
+type DeclineUsage = {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  cachedInputTokens: number | null;
+};
+
+const EMPTY_USAGE: DeclineUsage = {
+  inputTokens: null,
+  outputTokens: null,
+  totalTokens: null,
+  cachedInputTokens: null,
+};
+
+const toNullableNumber = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
 
 const DEFAULT_MODEL = process.env.OPENAI_NAME_DECLENSION_MODEL || "gpt-5.6-luna";
 const SUPPORTED_CASES = new Set(["genitive"]); // extend later if needed (dative, etc.)
@@ -88,7 +113,12 @@ const extractOutputText = (payload: OpenAiResponseShape) => {
   return "";
 };
 
-async function callOpenAi(params: { apiKey: string; model: string; source: string; targetCase: string }) {
+async function callOpenAi(params: {
+  apiKey: string;
+  model: string;
+  source: string;
+  targetCase: string;
+}): Promise<{ text: string; usage: DeclineUsage }> {
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -114,12 +144,19 @@ async function callOpenAi(params: { apiKey: string; model: string; source: strin
     }),
   });
   const payload = (await response.json()) as OpenAiResponseShape;
+  const usage: DeclineUsage = {
+    inputTokens: toNullableNumber(payload.usage?.input_tokens),
+    outputTokens: toNullableNumber(payload.usage?.output_tokens),
+    totalTokens: toNullableNumber(payload.usage?.total_tokens),
+    cachedInputTokens: toNullableNumber(payload.usage?.input_tokens_details?.cached_tokens),
+  };
   if (!response.ok) {
     const message = payload?.error?.message || `OpenAI HTTP ${response.status}`;
-    throw new Error(message);
+    const failure = new Error(message) as Error & { usage?: DeclineUsage };
+    failure.usage = usage;
+    throw failure;
   }
-  const text = extractOutputText(payload);
-  return normalizeWhitespace(text);
+  return { text: normalizeWhitespace(extractOutputText(payload)), usage };
 }
 
 export const handler = async (event: HttpEvent) => {
@@ -204,11 +241,57 @@ export const handler = async (event: HttpEvent) => {
     });
   }
 
+  // Журнал вартості. Виклик оплачений незалежно від того, чи розібралась
+  // відповідь, тож пишемо і на невдалій спробі — саме такі виклики раніше
+  // зникали зі звіту, а рахунок від OpenAI їх пам'ятав.
+  const logCost = async (usage: DeclineUsage, ok: boolean) => {
+    const { data: membershipRows } = await adminClient
+      .schema("tosho")
+      .from("memberships_view")
+      .select("workspace_id")
+      .eq("user_id", userData.user.id)
+      .limit(1);
+    const workspaceId =
+      ((membershipRows ?? []) as Array<{ workspace_id?: string | null }>)[0]?.workspace_id ?? null;
+    if (!workspaceId) {
+      console.error("[decline-name] ai_usage skipped: no workspace for", userData.user.id);
+      return;
+    }
+    const { costUsd, priceKnown } = chatCostUsd(
+      DEFAULT_MODEL,
+      usage.inputTokens,
+      usage.outputTokens,
+      usage.cachedInputTokens
+    );
+    await logAiUsage(adminClient, {
+      workspaceId,
+      userId: userData.user.id,
+      actorName: userData.user.email ?? null,
+      kind: "chat",
+      model: DEFAULT_MODEL,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+      costUsd,
+      metadata: {
+        source: "decline-name",
+        targetCase,
+        chars: source.length,
+        ok,
+        cachedInputTokens: usage.cachedInputTokens,
+        priceKnown,
+      },
+    });
+  };
+
   let declined: string;
   try {
-    declined = await callOpenAi({ apiKey: openAiKey, model: DEFAULT_MODEL, source, targetCase });
+    const call = await callOpenAi({ apiKey: openAiKey, model: DEFAULT_MODEL, source, targetCase });
+    declined = call.text;
+    await logCost(call.usage, true);
   } catch (error) {
     console.error("[decline-name] OpenAI call failed", error);
+    await logCost((error as { usage?: DeclineUsage })?.usage ?? EMPTY_USAGE, false);
     return jsonResponse(200, {
       source,
       case: targetCase,

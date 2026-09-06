@@ -171,7 +171,12 @@ export const handler = async (event: HttpEvent) => {
 
   // Кости логуємо ДО перевірки на успіх: виклик оплачений незалежно від того,
   // чи вдалось розібрати відповідь.
-  const cost = chatCostUsd(model, result.usage.inputTokens, result.usage.outputTokens);
+  const cost = chatCostUsd(
+    model,
+    result.usage.inputTokens,
+    result.usage.outputTokens,
+    result.usage.cachedInputTokens
+  );
   if (workspaceId) {
     await logAiUsage(admin, {
       workspaceId,
@@ -189,6 +194,7 @@ export const handler = async (event: HttpEvent) => {
         chars: result.text.length,
         drafted: result.ok,
         candidates: candidates.length,
+        cachedInputTokens: result.usage.cachedInputTokens,
       },
     });
   } else {

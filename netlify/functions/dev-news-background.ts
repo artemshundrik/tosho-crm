@@ -375,7 +375,11 @@ async function collectWideNet(days: number, signal: AbortSignal): Promise<WatchC
   return candidates;
 }
 
-type PickResult = { items: DevNewsItem[]; usage: { model: string; input: number; output: number } | null };
+type PickResult = {
+  items: DevNewsItem[];
+  /** `cached` — частина `input`, яку OpenAI віддав із кешу префікса. */
+  usage: { model: string; input: number; output: number; cached: number } | null;
+};
 
 /**
  * Відбір моделлю — єдине місце в підбірці, де вона взагалі бере участь.
@@ -439,7 +443,11 @@ async function pickWorthReading(
     const payload = (await response.json()) as {
       output_text?: string;
       output?: Array<{ content?: Array<{ text?: string }> }>;
-      usage?: { input_tokens?: number; output_tokens?: number };
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        input_tokens_details?: { cached_tokens?: number };
+      };
     };
     const raw =
       payload.output_text ??
@@ -461,6 +469,7 @@ async function pickWorthReading(
         model,
         input: payload.usage?.input_tokens ?? 0,
         output: payload.usage?.output_tokens ?? 0,
+        cached: payload.usage?.input_tokens_details?.cached_tokens ?? 0,
       },
     };
   } catch (error) {
@@ -707,7 +716,12 @@ export const handler = async (event: HttpEvent) => {
     const message = renderDevNews(items, kievDayLabel(now));
 
     if (picked.usage) {
-      const cost = chatCostUsd(picked.usage.model, picked.usage.input, picked.usage.output);
+      const cost = chatCostUsd(
+        picked.usage.model,
+        picked.usage.input,
+        picked.usage.output,
+        picked.usage.cached
+      );
       const workspaceId = members[0]?.workspaceId;
       if (workspaceId) {
         await logAiUsage(admin, {
@@ -719,7 +733,13 @@ export const handler = async (event: HttpEvent) => {
           inputTokens: picked.usage.input,
           outputTokens: picked.usage.output,
           costUsd: cost.costUsd,
-          metadata: { feature: "dev_news", candidates: freshCandidates.length, picked: picked.items.length },
+          metadata: {
+            feature: "dev_news",
+            candidates: freshCandidates.length,
+            picked: picked.items.length,
+            cachedInputTokens: picked.usage.cached,
+            priceKnown: cost.priceKnown,
+          },
         });
       }
     }

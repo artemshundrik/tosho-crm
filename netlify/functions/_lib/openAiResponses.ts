@@ -28,12 +28,23 @@ export function extractResponseOutputText(payload: JsonRecord): string {
   return "";
 }
 
+/**
+ * Токени виклику. `cachedInputTokens` — та частина входу, яку OpenAI віддав із
+ * власного кешу префікса і рахує вдесятеро дешевше; у `input_tokens` вона вже
+ * ВРАХОВАНА, тож віднімати її має той, хто рахує гроші (`chatCostUsd`), а не
+ * ми тут.
+ */
 export function extractUsage(payload: JsonRecord) {
   const usage = payload.usage && typeof payload.usage === "object" ? (payload.usage as JsonRecord) : null;
   const toNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+  const inputDetails =
+    usage?.input_tokens_details && typeof usage.input_tokens_details === "object"
+      ? (usage.input_tokens_details as JsonRecord)
+      : null;
   return {
     inputTokens: toNumber(usage?.input_tokens),
     outputTokens: toNumber(usage?.output_tokens),
     totalTokens: toNumber(usage?.total_tokens),
+    cachedInputTokens: toNumber(inputDetails?.cached_tokens),
   };
 }

@@ -317,7 +317,13 @@ export type DraftDevRequestResult = {
   /** false — модель не відповіла або відповідь не розібралась; draft аварійний. */
   ok: boolean;
   /** Токени для журналу вартості. Заповнені навіть коли ok=false. */
-  usage: { inputTokens: number | null; outputTokens: number | null; totalTokens: number | null };
+  usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
+    /** Частина входу з кешу OpenAI — уже всередині inputTokens. */
+    cachedInputTokens: number | null;
+  };
   /** Текст, який реально поїхав у модель (після обрізання). */
   text: string;
   /** Скільки карток поїхало в промпт — для metadata журналу вартості. */
@@ -339,7 +345,12 @@ export async function draftDevRequest(input: DraftDevRequestInput): Promise<Draf
   let payload: {
     output_text?: string;
     output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
-    usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      total_tokens?: number;
+      input_tokens_details?: { cached_tokens?: number };
+    };
   } = {};
   let responseOk = false;
   try {
@@ -380,6 +391,7 @@ export async function draftDevRequest(input: DraftDevRequestInput): Promise<Draf
     inputTokens: toNullableNumber(payload.usage?.input_tokens),
     outputTokens: toNullableNumber(payload.usage?.output_tokens),
     totalTokens: toNullableNumber(payload.usage?.total_tokens),
+    cachedInputTokens: toNullableNumber(payload.usage?.input_tokens_details?.cached_tokens),
   };
   const base = { usage, text, openTitlesCount: openTitles.length };
 

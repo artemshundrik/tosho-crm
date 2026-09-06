@@ -540,8 +540,14 @@ export const handler = async (event: HttpEvent) => {
     const aiPayload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
 
     // Кости логуємо навіть коли розбір не вдався — виклик усе одно оплачений.
-    const usage = (aiPayload.usage ?? {}) as { input_tokens?: number; output_tokens?: number; total_tokens?: number };
-    const cost = chatCostUsd(model, usage.input_tokens, usage.output_tokens);
+    const usage = (aiPayload.usage ?? {}) as {
+      input_tokens?: number;
+      output_tokens?: number;
+      total_tokens?: number;
+      input_tokens_details?: { cached_tokens?: number };
+    };
+    const cachedInputTokens = usage.input_tokens_details?.cached_tokens ?? null;
+    const cost = chatCostUsd(model, usage.input_tokens, usage.output_tokens, cachedInputTokens);
     await logAiUsage(admin, {
       workspaceId,
       userId,
@@ -552,7 +558,12 @@ export const handler = async (event: HttpEvent) => {
       outputTokens: usage.output_tokens ?? null,
       totalTokens: usage.total_tokens ?? null,
       costUsd: cost.costUsd,
-      metadata: { source: "telegram_assistant", question: question.trim().slice(0, 500) },
+      metadata: {
+        source: "telegram_assistant",
+        question: question.trim().slice(0, 500),
+        cachedInputTokens,
+        priceKnown: cost.priceKnown,
+      },
     });
 
     if (!response.ok) {

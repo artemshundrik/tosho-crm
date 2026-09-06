@@ -263,7 +263,12 @@ export const handler = async (event: HttpEvent) => {
   }
 
   const usage = extractUsage(payload);
-  const { costUsd, priceKnown } = chatCostUsd(model, usage.inputTokens, usage.outputTokens);
+  const { costUsd, priceKnown } = chatCostUsd(
+    model,
+    usage.inputTokens,
+    usage.outputTokens,
+    usage.cachedInputTokens
+  );
 
   // Облік пишемо і на невдалій спробі: невдача теж коштує токенів, і саме такі
   // виклики раніше зникали зі звіту, а рахунок від OpenAI їх пам'ятав.
@@ -284,6 +289,7 @@ export const handler = async (event: HttpEvent) => {
       dumpChars: body.sheetDump.length,
       latencyMs: Date.now() - startedAt,
       ok: response.ok,
+      cachedInputTokens: usage.cachedInputTokens,
       priceKnown,
     },
   });

@@ -133,6 +133,8 @@ type CleanupResult = {
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
+  /** Частина входу з кешу OpenAI — уже всередині inputTokens. */
+  cachedInputTokens: number | null;
 };
 
 function toNullableNumber(value: unknown): number | null {
@@ -170,13 +172,19 @@ async function cleanupTranscript(
   const payload = (await response.json()) as {
     output_text?: string;
     output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
-    usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      total_tokens?: number;
+      input_tokens_details?: { cached_tokens?: number };
+    };
   };
 
   const usage = {
     inputTokens: toNullableNumber(payload.usage?.input_tokens),
     outputTokens: toNullableNumber(payload.usage?.output_tokens),
     totalTokens: toNullableNumber(payload.usage?.total_tokens),
+    cachedInputTokens: toNullableNumber(payload.usage?.input_tokens_details?.cached_tokens),
   };
 
   // The Responses API exposes a convenience `output_text`; fall back to walking
@@ -323,7 +331,7 @@ export const handler = async (event: HttpEvent) => {
       : null;
   const audioCost = transcriptionCostUsd(transcribeModel, audioSeconds);
   const cleanupCost = cleanup
-    ? chatCostUsd(cleanup.model, cleanup.inputTokens, cleanup.outputTokens)
+    ? chatCostUsd(cleanup.model, cleanup.inputTokens, cleanup.outputTokens, cleanup.cachedInputTokens)
     : { costUsd: 0, priceKnown: true };
   // Await the insert: on Lambda (Netlify) the container freezes once the handler
   // returns, so a fire-and-forget promise would be dropped before it reaches the DB.
@@ -342,6 +350,7 @@ export const handler = async (event: HttpEvent) => {
       metadata: {
         context,
         cleanupModel: cleanup?.model ?? null,
+        cachedInputTokens: cleanup?.cachedInputTokens ?? null,
         audioCostUsd: audioCost.costUsd,
         cleanupCostUsd: cleanupCost.costUsd,
         priceKnown: audioCost.priceKnown && cleanupCost.priceKnown,
