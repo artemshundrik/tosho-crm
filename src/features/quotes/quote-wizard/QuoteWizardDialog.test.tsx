@@ -194,6 +194,16 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(screen.getByRole("button", { name: "Обрати файл Excel" })).toBeInTheDocument();
   });
 
+  it("у «Поліграфії» поле позицій більше не просить товар (REQ-178#p11)", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByRole("radio", { name: /Поліграфія/ }));
+
+    expect(screen.getByRole("combobox", { name: "Позиція: посилання або назва" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Товар: посилання або назва" })).not.toBeInTheDocument();
+  });
+
   it("ексель: прев'ю є, а прорахунку до «Створити» немає", async () => {
     const user = userEvent.setup();
     const { prepareQuote, onCreated } = renderWizard();

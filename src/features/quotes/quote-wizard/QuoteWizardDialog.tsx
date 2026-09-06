@@ -686,6 +686,7 @@ export function QuoteWizardDialog({
 
               <QuoteItemCommandField
                 teamId={teamId}
+                kind={kind}
                 value={fieldValue}
                 onValueChange={setFieldValue}
                 suggestions={catalog.suggestions}

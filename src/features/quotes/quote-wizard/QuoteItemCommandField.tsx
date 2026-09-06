@@ -41,8 +41,32 @@ const MODE_LABELS: Record<CommandFieldMode, { label: string; icon: typeof Link2 
   search: { label: "З бази", icon: Database },
 };
 
+/**
+ * Як поле зветься при кожному виді прорахунку (REQ-178#p11).
+ *
+ * Було одне слово «Товар» на обидва: у режимі «Поліграфія» поле просило товар,
+ * хоч рахуємо щоденники й каталоги, — і читач екрана казав те саме. Слово в
+ * підписі має збігатися з тим, що людина щойно обрала плиткою «Рахуємо».
+ */
+const KIND_WORDING: Record<
+  "merch" | "print",
+  { label: string; placeholder: string; more: string }
+> = {
+  merch: {
+    label: "Товар: посилання або назва",
+    placeholder: "Вставте посилання на товар або почніть писати назву — підкажемо з бази",
+    more: "Ще товар: посилання або назва з бази",
+  },
+  print: {
+    label: "Позиція: посилання або назва",
+    placeholder: "Вставте посилання на виріб або почніть писати назву — підкажемо з бази",
+    more: "Ще позиція: посилання або назва з бази",
+  },
+};
+
 export function QuoteItemCommandField({
   teamId,
+  kind = "merch",
   value,
   onValueChange,
   suggestions,
@@ -58,6 +82,8 @@ export function QuoteItemCommandField({
 }: {
   /** Для пошуку за артикулом варіанта — він іде запитом у базу (REQ-248). */
   teamId: string;
+  /** Що рахуємо: від цього залежить, як поле себе називає (REQ-178#p11). */
+  kind?: "merch" | "print";
   value: string;
   onValueChange: (next: string) => void;
   suggestions: CatalogSuggestion[];
@@ -84,6 +110,7 @@ export function QuoteItemCommandField({
   const [active, setActive] = React.useState(0);
 
   const trimmed = value.trim();
+  const wording = KIND_WORDING[kind];
   const mode = detectCommandFieldMode(value);
   // Артикули варіантів шукає база — і лише коли набране схоже на код; на
   // назви цей запит не йде взагалі (REQ-248).
@@ -216,17 +243,13 @@ export function QuoteItemCommandField({
             value={value}
             disabled={disabled}
             role="combobox"
-            aria-label="Товар: посилання або назва"
+            aria-label={wording.label}
             aria-expanded={open}
             aria-controls={open ? listId : undefined}
             aria-autocomplete="list"
             autoComplete="off"
             spellCheck={false}
-            placeholder={
-              hasDrafts
-                ? "Ще товар: посилання або назва з бази"
-                : "Вставте посилання на товар або почніть писати назву — підкажемо з бази"
-            }
+            placeholder={hasDrafts ? wording.more : wording.placeholder}
             // Праворуч сидить підпис режиму, тож поле лишає під нього місце —
             // інакше довгий текст заїжджав би під «Посилання».
             className={cn("pl-9", trimmed || busy ? "pr-32" : "pr-3.5")}
