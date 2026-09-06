@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-09-06T09:33:06.871Z",
+  "generatedAt": "2026-09-06T09:34:58.797Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -687,10 +687,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "30.0.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-08-08T00:42:10+03:00",
+      "bumpedAt": "2026-09-06T12:34:19+03:00",
       "bumpCommit": {
-        "sha": "14dfafe1",
-        "subject": "build(deps): jsdom — залежність тесту, який я закомітив без неї"
+        "sha": "35345896",
+        "subject": "Тести й карта бандла працюють на свіжих мажорних версіях інструментів"
       },
       "description": "Підроблений браузер для тестів, які працюють із розміткою.",
       "homepage": null,
@@ -807,7 +807,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "react-easy-crop",
-      "version": "5.5.6",
+      "version": "6.2.3",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-31T18:09:40+02:00",
@@ -855,10 +855,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "7.1.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-08-21T00:41:35+03:00",
+      "bumpedAt": "2026-09-06T12:34:19+03:00",
       "bumpCommit": {
-        "sha": "00324361",
-        "subject": "perf(швидкість): перший вхід у CRM став легшим на 43 кБ — палітра пошуку більше не вантажиться всім"
+        "sha": "35345896",
+        "subject": "Тести й карта бандла працюють на свіжих мажорних версіях інструментів"
       },
       "description": "Малює карту бандла: що саме займає місце. Вмикається тільки вручну.",
       "homepage": null,
@@ -977,10 +977,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "5.0.0",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-08-23T17:47:00+03:00",
+      "bumpedAt": "2026-09-06T12:34:19+03:00",
       "bumpCommit": {
-        "sha": "e9a6e239",
-        "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
+        "sha": "35345896",
+        "subject": "Тести й карта бандла працюють на свіжих мажорних версіях інструментів"
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
