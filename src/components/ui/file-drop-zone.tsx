@@ -162,12 +162,13 @@ export function FileDropZone({
       role="button"
       tabIndex={inert ? -1 : 0}
       aria-label={label}
+      data-file-drop-zone=""
       aria-disabled={inert || undefined}
       className={cn(
         "cursor-pointer rounded-xl border border-dashed transition-colors",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
         plate ? "flex flex-col items-center gap-2 px-4 py-6 text-center" : "flex items-center gap-3 px-3 py-2.5 text-left",
-        over ? "border-primary/70 bg-primary/10" : "border-border hover:border-foreground/40 hover:bg-muted/50",
+        over ? "border-foreground/50 bg-foreground/[0.06]" : "border-border hover:border-foreground/40 hover:bg-muted/50",
         inert && "pointer-events-none opacity-50",
         className
       )}
@@ -205,12 +206,12 @@ export function FileDropZone({
         onFiles(event.dataTransfer.files);
       }}
     >
-      <span className={cn("grid shrink-0 place-items-center", over ? "text-primary" : "text-muted-foreground")}>
+      <span className={cn("grid shrink-0 place-items-center", over ? "text-foreground" : "text-muted-foreground")}>
         {figure}
       </span>
 
       <span className={cn(plate ? "space-y-0.5" : "min-w-0 flex-1")}>
-        <span className={cn("block text-sm font-medium", !plate && "truncate", over && "text-primary")}>
+        <span className={cn("block text-sm font-medium", !plate && "truncate", over && "text-foreground")}>
           {headline}
         </span>
         {hint ? (
@@ -240,4 +241,124 @@ export function FileDropZone({
       />
     </div>
   );
+}
+
+/**
+ * Накладка «сюди можна кинути» на ЦІЛУ панель.
+ *
+ * ЧИМ ВІДРІЗНЯЄТЬСЯ ВІД `FileDropZone`. Зона — це місце, у яке ціляться:
+ * прямокутник, який видно завжди. Накладка — навпаки: у спокої її немає
+ * взагалі, а панель під нею (стрічка справи, форма правки, збірник тиражів)
+ * зайнята своїм вмістом. Показувати там постійну плиту нема куди, але кидок
+ * поверхня приймає — і поки цього ніхто не каже, жест лишається таємним
+ * знанням.
+ *
+ * ЩО ЦЕ ЗВЕЛО. Чотири панелі, чотири різні відповіді на кидок: непрозорий
+ * шар з ілюстрацією («Обговорення»), обведення плюс смужка, ВСТАВЛЕНА В
+ * ПОТІК і через це зсувала весь вміст униз (стрічка прорахунку), самий лише
+ * тінт фону без жодного напису (правки в дизайн-задачі) і підсвітка дрібної
+ * плити всередині, хоч кидок ловить уся секція (збірник тиражів).
+ *
+ * ЧОМУ ВМІСТ `sticky`, А НЕ ПРОСТО ПО ЦЕНТРУ. Стрічка справи буває на кілька
+ * екранів. Центр такої панелі — це середина скролу, тобто напис міг опинитись
+ * за межами видимого. `sticky` тримає його в тій частині панелі, яку людина
+ * справді бачить; на короткій панелі `max-h-full` повертає звичайне
+ * центрування.
+ *
+ * ЧОМУ ТЛО НЕПРОЗОРЕ. Напівпрозорий шар із блюром поверх щільного вмісту
+ * виглядав брудно: крізь нього проступали рядки й кнопки, і накладка читалась
+ * як помилка рендера, а не як стан.
+ */
+export function FileDropOverlay({
+  active,
+  title,
+  hint,
+  className,
+}: {
+  active: boolean;
+  /** Головний рядок. Типово — «Відпустіть файли тут». */
+  title?: string;
+  /** Другий рядок: куди файл потрапить. */
+  hint?: React.ReactNode;
+  /** Тло під накладкою: типово `bg-card`, на сторінковій поверхні — `bg-background`. */
+  className?: string;
+}) {
+  if (!active) return null;
+
+  return (
+    <div
+      aria-hidden="true"
+      className={cn("pointer-events-none absolute inset-0 z-20 rounded-[inherit] bg-card", className)}
+    >
+      <div className="sticky top-0 flex h-dvh max-h-full items-center justify-center p-2">
+        <div className="absolute inset-2 rounded-xl border-2 border-dashed border-foreground/40 bg-foreground/[0.05]" />
+        <div className="relative flex flex-col items-center gap-1.5 text-center">
+          <UploadIllustration className="h-12 w-12 text-foreground" />
+          <span className="text-sm font-medium text-foreground">{title ?? "Відпустіть файли тут"}</span>
+          {hint ? <span className="max-w-[34ch] text-xs text-muted-foreground">{hint}</span> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Обробники кидка для цілої панелі — пара до `FileDropOverlay`.
+ *
+ * ЧОМУ ХУК, А НЕ ЧОТИРИ КОПІЇ. Панельний кидок має три пастки, і кожне з
+ * чотирьох місць наступало щонайменше на одну:
+ *
+ * 1. `dragleave` стріляє й тоді, коли курсор просто перейшов на ВЛАСНУ дитину
+ *    панелі. З наївним прапорцем підсвітка блимає на кожному русі миші —
+ *    стрічка справи через це рахувала входи лічильником, збірник тиражів звіряв
+ *    `relatedTarget`, а форма правки не робила нічого й гасла посеред жесту.
+ * 2. Перетягнути можна не лише файл: текст, посилання, картку канбану. Без
+ *    перевірки `types` панель спалахувала на будь-якому жесті.
+ * 3. Усередині панелі буває `FileDropZone`, яка забирає кидок собі. Вона
+ *    зупиняє спливання, тож панель просто не дізнається, що курсор пішов у
+ *    неї, — і два індикатори горіли б одночасно. Звідси перевірка на маркер
+ *    `data-file-drop-zone`.
+ */
+export function useFileDropPanel({
+  onFiles,
+  disabled = false,
+}: {
+  onFiles: (files: FileList) => void;
+  disabled?: boolean;
+}) {
+  const [over, setOver] = React.useState(false);
+  const carriesFiles = (event: React.DragEvent<HTMLElement>) =>
+    Array.from(event.dataTransfer.types).includes("Files");
+
+  React.useEffect(() => {
+    if (disabled) setOver(false);
+  }, [disabled]);
+
+  return {
+    over: over && !disabled,
+    dropHandlers: {
+      onDragOver: (event: React.DragEvent<HTMLElement>) => {
+        if (disabled || !carriesFiles(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setOver(true);
+      },
+      onDragLeave: (event: React.DragEvent<HTMLElement>) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && event.currentTarget.contains(next)) {
+          // Курсор лишився в панелі. Гасимо лише коли він зайшов у вкладену
+          // зону: далі кидок веде вона й показує власний стан.
+          if (next instanceof Element && next.closest("[data-file-drop-zone]")) setOver(false);
+          return;
+        }
+        setOver(false);
+      },
+      onDrop: (event: React.DragEvent<HTMLElement>) => {
+        if (disabled || !carriesFiles(event)) return;
+        event.preventDefault();
+        setOver(false);
+        onFiles(event.dataTransfer.files);
+      },
+    },
+  };
 }

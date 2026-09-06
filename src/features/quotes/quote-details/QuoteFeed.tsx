@@ -1,4 +1,4 @@
-import { useState, type DragEvent } from "react";
+import { useState } from "react";
 import {
   ArrowRight,
   ChevronDown,
@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatActivityClock, formatActivityDayLabel } from "@/lib/activity";
 import { getAttachmentDisplayFileName } from "@/lib/attachmentPreview";
+import { FileDropOverlay, useFileDropPanel } from "@/components/ui/file-drop-zone";
 import { HoldButton } from "@/components/ui/hold-button";
 import { cn } from "@/lib/utils";
 
@@ -293,12 +294,9 @@ export function QuoteFeed({
    * Перетягування файлів у стрічку.
    *
    * Зона — УСЯ стрічка, а не сама згортка файлів: коли її згорнуто (а типово
-   * вона згорнута), цілитись доводилось би в смужку заввишки 44 px. Лічильник
-   * замість прапорця, бо `dragleave` стріляє і на кожному вкладеному вузлі —
-   * з булевим прапорцем підсвітка блимала на кожному русі миші.
+   * вона згорнута), цілитись доводилось би в смужку заввишки 44 px.
    */
-  const [dragDepth, setDragDepth] = useState(0);
-  const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer.types).includes("Files");
+  const { over: dropOver, dropHandlers } = useFileDropPanel({ onFiles: onAddFiles });
 
   const counts = new Map<QuoteFeedKind | "all", number>([["all", events.length]]);
   events.forEach((event) => counts.set(event.kind, (counts.get(event.kind) ?? 0) + 1));
@@ -316,36 +314,12 @@ export function QuoteFeed({
   });
 
   return (
-    <div
-      className={cn(
-        "space-y-4 rounded-2xl transition-colors",
-        dragDepth > 0 && "outline-dashed outline-2 outline-offset-4 outline-primary/60"
-      )}
-      onDragEnter={(event) => {
-        if (!hasFiles(event)) return;
-        event.preventDefault();
-        setDragDepth((depth) => depth + 1);
-      }}
-      onDragOver={(event) => {
-        if (!hasFiles(event)) return;
-        event.preventDefault();
-      }}
-      onDragLeave={(event) => {
-        if (!hasFiles(event)) return;
-        setDragDepth((depth) => Math.max(0, depth - 1));
-      }}
-      onDrop={(event) => {
-        if (!hasFiles(event)) return;
-        event.preventDefault();
-        setDragDepth(0);
-        onAddFiles(event.dataTransfer.files);
-      }}
-    >
-      {dragDepth > 0 ? (
-        <div className="rounded-xl border border-dashed border-primary/60 bg-primary/5 px-3.5 py-2.5 text-sm font-medium text-primary">
-          Відпустіть — файли підуть у справу
-        </div>
-      ) : null}
+    <div className="relative space-y-4 rounded-2xl" {...dropHandlers}>
+      <FileDropOverlay
+        active={dropOver}
+        hint="Ляжуть у «Файли справи» — реєстр угорі стрічки"
+        className="bg-background"
+      />
 
       <FilesRegister
         files={files}

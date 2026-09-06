@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { DateTimePicker, deadlineUrgencyTone } from "@/components/ui/picker-input";
 import { PageLoading } from "@/components/app/page-loading";
 import { useNavigate, useParams } from "react-router-dom";
@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FileDropOverlay, useFileDropPanel } from "@/components/ui/file-drop-zone";
 import { HoldButton } from "@/components/ui/hold-button";
 import { useDesignTaskDictation } from "@/features/designTask/useDesignTaskDictation";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -1536,7 +1537,12 @@ export default function DesignTaskPage() {
   const [changeRequestEditSavingId, setChangeRequestEditSavingId] = useState<string | null>(null);
   const [changeRequestDraftAttachments, setChangeRequestDraftAttachments] = useState<DesignBriefChangeRequestAttachment[]>([]);
   const [changeRequestUploading, setChangeRequestUploading] = useState(false);
-  const [changeRequestDragActive, setChangeRequestDragActive] = useState(false);
+  // Кидок ловить УСЯ форма правки, а не текстове поле: файл із прикладом
+  // тягнуть на картку цілком, і поки форма мовчала, жест був таємним знанням.
+  const { over: changeRequestDropOver, dropHandlers: changeRequestDropHandlers } = useFileDropPanel({
+    disabled: changeRequestUploading,
+    onFiles: (files) => void uploadChangeRequestDraftAttachments(files),
+  });
   const [changeRequestDeletingId, setChangeRequestDeletingId] = useState<string | null>(null);
   const [changeRequestReactionTogglingKey, setChangeRequestReactionTogglingKey] = useState<string | null>(null);
   const [changeRequestReactionPickerId, setChangeRequestReactionPickerId] = useState<string | null>(null);
@@ -6211,23 +6217,6 @@ export default function DesignTaskPage() {
     }
   };
 
-  const handleChangeRequestDrop = (event: ReactDragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setChangeRequestDragActive(false);
-    if (changeRequestUploading) return;
-    void uploadChangeRequestDraftAttachments(event.dataTransfer.files);
-  };
-
-  const handleChangeRequestDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    if (!changeRequestDragActive) setChangeRequestDragActive(true);
-  };
-
-  const handleChangeRequestDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setChangeRequestDragActive(false);
-  };
-
   const persistChangeRequests = async (
     nextRequests: DesignBriefChangeRequest[],
     options?: { extraMetadata?: Record<string, unknown> }
@@ -10223,16 +10212,13 @@ export default function DesignTaskPage() {
                       // Акцент рамкою + кільцем: форма стоїть у стосі однакових
                       // сірих карток, і без власного тону її поява не читалась як
                       // «CRM перейшла в режим внесення правки».
-                      className={cn(
-                        "space-y-3 rounded-lg border p-3 transition-colors",
-                        changeRequestDragActive
-                          ? "border-foreground/40 bg-foreground/[0.06]"
-                          : "border-foreground/25 bg-foreground/[0.02] ring-1 ring-foreground/10"
-                      )}
-                      onDrop={handleChangeRequestDrop}
-                      onDragOver={handleChangeRequestDragOver}
-                      onDragLeave={handleChangeRequestDragLeave}
+                      className="relative space-y-3 rounded-lg border border-foreground/25 bg-foreground/[0.02] p-3 ring-1 ring-foreground/10"
+                      {...changeRequestDropHandlers}
                     >
+                      <FileDropOverlay
+                        active={changeRequestDropOver}
+                        hint="Приклад або скрін приліпиться до цієї правки"
+                      />
                       <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-caps text-foreground">
                         <Plus className="h-3.5 w-3.5" />
                         Нова правка

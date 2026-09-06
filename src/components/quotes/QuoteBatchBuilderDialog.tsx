@@ -13,7 +13,6 @@ import {
   Printer,
   Trash2,
   Truck,
-  Upload,
   User,
   Wand2,
   X,
@@ -35,6 +34,7 @@ import { useDictationField } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Chip } from "@/components/ui/chip";
+import { FileDropOverlay, FileDropZone, useFileDropPanel } from "@/components/ui/file-drop-zone";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
@@ -1486,34 +1486,10 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     if (next) updateActiveProduct({ projectFiles: next });
   };
 
-  // Перетягування. Зони дві, підсвічувати треба лише ту, над якою курсор, —
-  // звідси стан із ключем зони, а не булеве.
-  //
-  // dragleave гаситься лише тоді, коли курсор ПОКИНУВ саму зону, а не перейшов
-  // на її ж дочірній вузол: інакше підсвітка блимає щоразу, коли курсор
-  // проходить над чипом файлу всередині зони. Перевірка через relatedTarget,
-  // а не лічильник входів, — вона не накопичує розсинхрон між двома зонами.
-  const [dragZone, setDragZone] = React.useState<"project" | "design" | null>(null);
-
-  const dropHandlers = (zone: "project" | "design", add: (files: FileList | null) => void) => ({
-    onDragOver: (event: React.DragEvent<HTMLElement>) => {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "copy";
-      if (dragZone !== zone) setDragZone(zone);
-    },
-    onDragLeave: (event: React.DragEvent<HTMLElement>) => {
-      const next = event.relatedTarget;
-      if (next instanceof Node && event.currentTarget.contains(next)) return;
-      setDragZone((prev) => (prev === zone ? null : prev));
-    },
-    onDrop: (event: React.DragEvent<HTMLElement>) => {
-      event.preventDefault();
-      setDragZone(null);
-      // dataTransfer.files, а не items: Firefox наповнює items інакше, і на
-      // ньому перетягування мовчки не давало нічого.
-      add(event.dataTransfer.files);
-    },
-  });
+  // Перетягування. Зони дві, і кидок ловить кожна СЕКЦІЯ цілком, а не сама
+  // плита всередині: цілитись у прямокутник посеред довгої форми незручно.
+  const projectDrop = useFileDropPanel({ onFiles: addProjectFiles });
+  const designDrop = useFileDropPanel({ onFiles: addFiles });
 
   const removeProjectFile = (fileIndex: number) => {
     if (!activeProduct) return;
@@ -2532,54 +2508,26 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       і дизайн-задача не створюється. Саме тому вона окрема
                       секція, а не ще одна дропзона всередині ТЗ. */}
                   <section
-                    className="space-y-3 rounded-lg border border-border/60 bg-background p-4"
-                    {...dropHandlers("project", addProjectFiles)}
+                    className="relative space-y-3 rounded-lg border border-border/60 bg-background p-4"
+                    {...projectDrop.dropHandlers}
                   >
+                    <FileDropOverlay
+                      active={projectDrop.over}
+                      className="bg-background"
+                      hint="Матеріали замовника для прорахунку — дизайнер їх не бачить"
+                    />
                     <SectionTitle icon={<Paperclip />}>Файли</SectionTitle>
                     <p className="text-xs text-muted-foreground">
                       Матеріали замовника для роботи над прорахунком: договір, розміри, листування.
                       Дизайнер їх не бачить — для нього файли додають у блоці «ТЗ дизайнеру».
                     </p>
-                    <div
-                      className={cn(
-                        "relative flex min-h-[120px] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed p-5 text-center transition-colors",
-                        dragZone === "project"
-                          ? "border-primary/70 bg-primary/10"
-                          : "border-border/50 hover:border-border/80"
-                      )}
-                    >
-                      <input
-                        type="file"
-                        multiple
-                        aria-label="Додати файли прорахунку"
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                        onChange={(event) => {
-                          addProjectFiles(event.target.files);
-                          event.target.value = "";
-                        }}
-                      />
-                      <div className="flex flex-col items-center gap-1.5">
-                        <Upload
-                          className={cn(
-                            "h-4 w-4",
-                            dragZone === "project" ? "text-primary" : "text-muted-foreground"
-                          )}
-                        />
-                        <div
-                          className={cn(
-                            "text-sm",
-                            dragZone === "project" ? "font-medium text-primary" : "text-foreground"
-                          )}
-                        >
-                          {dragZone === "project"
-                            ? "Відпустіть файли тут"
-                            : "Перетягніть або клікніть для вибору"}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          до {MAX_ATTACHMENTS} файлів, до 50 MB
-                        </div>
-                      </div>
-                    </div>
+                    <FileDropZone
+                      hint={`до ${MAX_ATTACHMENTS} файлів, до 50 MB`}
+                      label="Додати файли прорахунку"
+                      multiple
+                      onFiles={addProjectFiles}
+                      title="Перетягніть або клікніть для вибору"
+                    />
                     {activeProduct.projectFiles.length > 0 ? (
                       <div className="flex flex-wrap gap-2">
                         {activeProduct.projectFiles.map((file, index) => (
@@ -2689,47 +2637,19 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         rows={5}
                       />
                       {designBriefDictation.strip}
-                      <div className="space-y-2" {...dropHandlers("design", addFiles)}>
-                        <div
-                          className={cn(
-                            "relative flex min-h-[100px] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors",
-                            dragZone === "design"
-                              ? "border-primary/70 bg-primary/10"
-                              : "border-border/50 hover:border-border/80"
-                          )}
-                        >
-                          <input
-                            type="file"
-                            multiple
-                            aria-label="Додати файли для дизайнера"
-                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                            onChange={(event) => {
-                              addFiles(event.target.files);
-                              event.target.value = "";
-                            }}
-                          />
-                          <div className="flex flex-col items-center gap-1.5">
-                            <Upload
-                              className={cn(
-                                "h-4 w-4",
-                                dragZone === "design" ? "text-primary" : "text-muted-foreground"
-                              )}
-                            />
-                            <div
-                              className={cn(
-                                "text-sm",
-                                dragZone === "design" ? "font-medium text-primary" : "text-foreground"
-                              )}
-                            >
-                              {dragZone === "design"
-                                ? "Відпустіть файли тут"
-                                : "Файли для дизайнера — перетягніть або клікніть"}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Потрапляють у дизайн-задачу. До {MAX_ATTACHMENTS} на товар.
-                            </div>
-                          </div>
-                        </div>
+                      <div className="relative space-y-2" {...designDrop.dropHandlers}>
+                        <FileDropOverlay
+                          active={designDrop.over}
+                          className="bg-background"
+                          hint="Файли підуть у дизайн-задачу цього товару"
+                        />
+                        <FileDropZone
+                          hint={`Потрапляють у дизайн-задачу. До ${MAX_ATTACHMENTS} на товар.`}
+                          label="Додати файли для дизайнера"
+                          multiple
+                          onFiles={addFiles}
+                          title="Файли для дизайнера — перетягніть або клікніть"
+                        />
                         {activeProduct.files.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
                             {activeProduct.files.map((file, index) => (
