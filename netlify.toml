@@ -11,10 +11,26 @@ publish = "dist"
 # (.github/dependabot.yml) відкриватиме PR-и, і без цього рядка кожен із них
 # перетворювався б на платну збірку. Перевірку PR-ів робить GitHub Actions, він
 # безкоштовний. Порожній CONTEXT не чіпаємо — падаємо у звичайну логіку нижче.
+#
+# ЧОМУ scripts/*.mjs ТЕЖ ВИКЛЮЧЕНІ. Це перевірки, ратчети й разові міграції:
+# вони крутяться в `npm run check`, у гаку пуша й у GitHub Actions, а в
+# зібраний сайт не потрапляє жоден їхній рядок. Правка одного такого скрипта
+# коштувала повної збірки — ~15 кредитів за зміну, яку користувач не побачить.
+#
+# ВИНЯТОК — attachment-preview-renderer.mjs. Єдиний із сімдесяти, який лежить
+# у scripts/, але є входом збірки: vite.config.ts імпортує з нього
+# renderFirstPagePreviewFiles. Якби він потрапив під загальне виключення, його
+# правка мовчки не доїжджала б до проду — рівно та німа поломка, від якої всі
+# інші перевірки й стережуть. Тому після загальної перевірки йде друга, вузька:
+# `&&` віддає її код лише тоді, коли перша не знайшла інших змін.
+#
+# scripts/hooks — з тієї ж причини: commit-msg, post-commit і pre-push
+# виконуються на машині розробника, Netlify їх не запускає ніколи.
 ignore = '''
 [ -n "$CONTEXT" ] && [ "$CONTEXT" != "production" ] && exit 0
 [ -z "$CACHED_COMMIT_REF" ] && exit 1
-git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- . ':(exclude)docs' ':(exclude)ops' ':(exclude)*.md' ':(exclude)scripts/*.sql' ':(exclude).github'
+git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- . ':(exclude)docs' ':(exclude)ops' ':(exclude)*.md' ':(exclude)scripts/*.sql' ':(exclude)scripts/*.mjs' ':(exclude)scripts/hooks' ':(exclude).github' &&
+  git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- scripts/attachment-preview-renderer.mjs
 '''
 
 [build.environment]
