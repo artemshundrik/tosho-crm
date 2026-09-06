@@ -16,6 +16,7 @@ import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { getAttachmentDisplayFileName } from "@/lib/attachmentPreview";
 import { DESIGN_STATUS_LABELS, type DesignStatus } from "@/lib/designTaskStatus";
 import { designStatusTone, toneDotClass, toneTextClass } from "@/lib/statusTones";
+import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { cn } from "@/lib/utils";
 
 import { canPreviewDocumentThumb, canPreviewImage, formatFileSize, getFileExtension } from "./config";
@@ -513,7 +514,7 @@ export function QuoteDesignTasksPanel({
                   <span className="ml-2 text-xs font-normal text-muted-foreground">спільні для прорахунку</span>
                 ) : null}
               </span>
-              {canAddMaterials ? (
+              {canAddMaterials && materials.length > 0 ? (
                 <label
                   className={cn(
                     "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-border/60 px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
@@ -573,10 +574,27 @@ export function QuoteDesignTasksPanel({
                 })}
               </div>
             ) : (
-              <div className="mt-2.5 flex items-center gap-2.5 rounded-xl border border-dashed border-border/60 px-3.5 py-3 text-sm text-muted-foreground">
-                <Paperclip className="h-4 w-4 shrink-0" />
-                <span>Матеріалів для дизайнера ще немає — логотипи, макети й фото додають сюди</span>
-              </div>
+              /*
+                ПУНКТИРНА СМУЖКА ТЕПЕР СПРАВЖНЯ (REQ-175#p78). Доти вона лише
+                виглядала як місце для кидка: пунктир, скріпка, «додають сюди» —
+                а файл, кинутий на неї, не робив нічого. Додати можна було
+                тільки кнопкою в шапці блоку. Тепер це той самий `FileDropZone`,
+                що в решті місць, рядком — під висоту, яку смужка й мала.
+
+                Порожній стан НЕ БУВАЄ без права додавати: блок узагалі
+                показується лише за `materials.length > 0 || canAddMaterials`,
+                тож сюди можна дійти тільки з правом.
+              */
+              <FileDropZone
+                busy={materialsUploading}
+                className="mt-2.5"
+                hint="Логотипи, макети й фото — з них дизайнер починає"
+                label="Додати вихідні матеріали"
+                multiple
+                onFiles={onAddMaterials}
+                size="row"
+                title="Перетягніть або клікніть"
+              />
             )}
           </div>
         ) : null}
