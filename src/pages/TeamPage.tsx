@@ -15,11 +15,9 @@ import {
   LayoutGrid,
   Loader2,
   PartyPopper,
-  Pencil,
   Plus,
   Rows3,
   Settings2,
-  Trash2,
   Undo2,
   UserCheck,
   Users,
@@ -64,26 +62,23 @@ import {
   createTeamAbsence,
   decideAbsenceRequest,
   deleteTeamAbsence,
+  formatAbsenceRange,
+  formatDayMonth,
   isPresenceKind,
   isQuotaAbsenceKind,
   listPendingTeamAbsences,
+  pluralDays,
   listTeamAbsencesInRange,
   loadAbsenceDecisionComments,
   updateTeamAbsence,
   TEAM_ABSENCE_KIND_LABELS,
-  TEAM_ABSENCE_STATUS_LABELS,
-  TEAM_ABSENCE_STATUS_TONE,
   type TeamAbsence,
   type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
 import {
-  absenceWaitingDays,
-  formatAbsenceSubmittedAgo,
   sortAbsencesByNewest,
 } from "@/lib/teamAbsenceQueue";
 import {
-  ABSENCE_QUOTA_UNIT,
-  ABSENCE_QUOTA_UNIT_LABEL,
   countQuotaDaysInYear,
   eachDateKey,
 } from "@/lib/teamAbsenceCalendar";
@@ -96,7 +91,7 @@ import {
   upcomingHolidays,
   type AbsenceBalance,
 } from "@/lib/teamAbsenceQuotas";
-import { TEAM_EVENT_TONE, toneBadgeClass, toneTextClass } from "@/lib/statusTones";
+import { TEAM_EVENT_TONE, toneBadgeClass } from "@/lib/statusTones";
 import { formatLastSeenAgo } from "@/lib/lastSeen";
 import { getInitialsFromName } from "@/lib/userName";
 import {
@@ -109,6 +104,7 @@ import { toAvatarAbsence } from "@/lib/absenceIndicator";
 import { toPersonHoverCardData } from "@/components/app/PersonHoverCard";
 import { notifyAbsenceRequestCancelled } from "@/lib/workflowNotifications";
 import { AbsenceBalanceMeters, buildBalanceEntries } from "@/components/team/AbsenceBalanceMeters";
+import { AbsenceRow, type AbsenceDecideContext } from "@/components/team/AbsenceRow";
 import { AbsenceKindChip } from "@/components/team/AbsenceKindChip";
 import { AbsenceDeclineDialog } from "@/components/team/AbsenceDeclineDialog";
 import {
@@ -144,13 +140,6 @@ import { SegmentedGroup } from "@/components/ui/segmented-group";
  */
 
 
-/** Контекст для approver'а під заявкою: перетини і навантаження заявника. */
-type AbsenceDecideContext = {
-  overlaps: string[];
-  /** null — заявник не дизайнер, задачі не рахуємо. */
-  activeTasks: number | null;
-  dueInPeriod: number;
-};
 type PeopleFilter = "all" | "present" | "away";
 type SortMode = "presence" | "name" | "tenure" | "birthday";
 
@@ -213,16 +202,6 @@ function formatMonthLabel(date: Date) {
   return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
 }
 
-function formatShort(dateKey: string) {
-  return `${dateKey.slice(8, 10)}.${dateKey.slice(5, 7)}`;
-}
-
-function formatRange(absence: TeamAbsence) {
-  return absence.startDate === absence.endDate
-    ? formatShort(absence.startDate)
-    : `${formatShort(absence.startDate)} – ${formatShort(absence.endDate)}`;
-}
-
 /** Скільки подій видно до кнопки «ще N». Решта — на вкладці «Календар». */
 const EVENTS_PREVIEW_COUNT = 5;
 
@@ -245,15 +224,6 @@ function pluralEvents(count: number) {
   if (mod10 === 1) return "подія";
   if (mod10 >= 2 && mod10 <= 4) return "події";
   return "подій";
-}
-
-function pluralDays(count: number) {
-  const mod100 = count % 100;
-  const mod10 = count % 10;
-  if (mod100 >= 11 && mod100 <= 14) return "днів";
-  if (mod10 === 1) return "день";
-  if (mod10 >= 2 && mod10 <= 4) return "дні";
-  return "днів";
 }
 
 function formatRoleLabel(value?: string | null) {
@@ -693,7 +663,7 @@ export function TeamPage() {
         .slice(0, 4)
         .map((other) => {
           const label = memberById.get(other.userId)?.label ?? "—";
-          const range = `${formatShort(other.startDate)}–${formatShort(other.endDate)}`;
+          const range = `${formatDayMonth(other.startDate)}–${formatDayMonth(other.endDate)}`;
           return `${label} (${TEAM_ABSENCE_KIND_LABELS[other.kind].toLowerCase()} ${range}${
             other.status === "pending" ? ", запит" : ""
           })`;
@@ -907,7 +877,7 @@ export function TeamPage() {
           type: "birthday",
           title: member.label,
           caption: birthday.daysUntil === 0 ? "День народження — сьогодні" : "День народження",
-          dateLabel: formatShort(addDaysKey(todayKey, birthday.daysUntil)),
+          dateLabel: formatDayMonth(addDaysKey(todayKey, birthday.daysUntil)),
           daysUntil: birthday.daysUntil,
         });
       }
@@ -919,7 +889,7 @@ export function TeamPage() {
           type: "anniversary",
           title: member.label,
           caption: anniversary.label,
-          dateLabel: formatShort(addDaysKey(todayKey, anniversary.daysUntil)),
+          dateLabel: formatDayMonth(addDaysKey(todayKey, anniversary.daysUntil)),
           daysUntil: anniversary.daysUntil,
         });
       }
@@ -935,7 +905,7 @@ export function TeamPage() {
             type: "return",
             title: member.label,
             caption: `Повертається з ${TEAM_ABSENCE_KIND_LABELS[absence.kind].toLowerCase()}`,
-            dateLabel: formatShort(back),
+            dateLabel: formatDayMonth(back),
             daysUntil,
           });
         }
@@ -963,7 +933,7 @@ export function TeamPage() {
           : daysUntil === 0
             ? "Свято — сьогодні"
             : "Святковий день, вихідний",
-        dateLabel: formatShort(holiday.dateKey),
+        dateLabel: formatDayMonth(holiday.dateKey),
         daysUntil,
       });
     });
@@ -1102,7 +1072,7 @@ export function TeamPage() {
             requesterUserId: absence.userId,
             requesterName: memberById.get(absence.userId)?.label ?? "Співробітник",
             kindLabel: TEAM_ABSENCE_KIND_LABELS[absence.kind],
-            rangeLabel: formatRange(absence),
+            rangeLabel: formatAbsenceRange(absence),
           });
         } catch (notifyError) {
           console.warn("[team] cancel notify failed", notifyError);
@@ -1164,7 +1134,7 @@ export function TeamPage() {
           acc.push({
             userId: absence.userId,
             name: memberById.get(absence.userId)?.label ?? "Колега",
-            rangeLabel: `${TEAM_ABSENCE_KIND_LABELS[absence.kind].toLowerCase()} ${formatRange(absence)}`,
+            rangeLabel: `${TEAM_ABSENCE_KIND_LABELS[absence.kind].toLowerCase()} ${formatAbsenceRange(absence)}`,
             pending: absence.status === "pending",
           });
           return acc;
@@ -1191,7 +1161,7 @@ export function TeamPage() {
       if (!hit) return null;
       return {
         kindLabel: TEAM_ABSENCE_KIND_LABELS[hit.kind],
-        rangeLabel: formatRange(hit),
+        rangeLabel: formatAbsenceRange(hit),
         pending: hit.status === "pending",
         exact: hit.startDate === startDate && hit.endDate === endDate,
       };
@@ -1580,7 +1550,7 @@ export function TeamPage() {
                       />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-semibold">{member.label}</div>
-                        <div className="text-2xs text-muted-foreground">до {formatShort(absence.endDate)}</div>
+                        <div className="text-2xs text-muted-foreground">до {formatDayMonth(absence.endDate)}</div>
                       </div>
                       <AbsenceKindChip kind={absence.kind} size="sm" />
                     </div>
@@ -2129,7 +2099,7 @@ export function TeamPage() {
           if (!open) setDeclineTarget(null);
         }}
         personName={declineTarget ? (memberById.get(declineTarget.userId)?.label ?? "—") : ""}
-        rangeLabel={declineTarget ? formatRange(declineTarget) : ""}
+        rangeLabel={declineTarget ? formatAbsenceRange(declineTarget) : ""}
         saving={Boolean(declineTarget && decidingId === declineTarget.id)}
         onConfirm={(comment) => {
           if (declineTarget) void handleDecide(declineTarget, "declined", comment || undefined);
@@ -2207,219 +2177,5 @@ function EmptyRow({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Рядок відсутності                                                   */
-/* ------------------------------------------------------------------ */
-
-function AbsenceRow({
-  absence,
-  name,
-  exceptions,
-  year,
-  canManage,
-  deleting,
-  onEdit,
-  onDelete,
-  hideName,
-  avatarUrl,
-  initials,
-  decisionComment,
-  balance,
-  canDecide,
-  decisionNote,
-  deciding,
-  onApprove,
-  onDecline,
-  canCancel,
-  cancelling,
-  onCancel,
-  decideContext,
-}: {
-  absence: TeamAbsence;
-  name: string;
-  exceptions: Map<string, boolean>;
-  year: number;
-  canManage: boolean;
-  deleting: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-  hideName?: boolean;
-  avatarUrl?: string | null;
-  initials?: string;
-  /** Причина рішення — приходить окремим RPC, видна лише заявнику й owner/CEO. */
-  decisionComment?: string | null;
-  /** Баланс заявника — щоб рішення приймалось із цифрами перед очима. */
-  balance?: AbsenceBalance | null;
-  canDecide?: boolean;
-  /** Чому кнопок немає: напр. «вирішує власник» — для заявок CEO очима CEO. */
-  decisionNote?: string;
-  deciding?: boolean;
-  onApprove?: () => void;
-  onDecline?: () => void;
-  canCancel?: boolean;
-  cancelling?: boolean;
-  onCancel?: () => void;
-  /** Перетини з іншими відсутностями + навантаження заявника — для рішення. */
-  decideContext?: AbsenceDecideContext | null;
-}) {
-  // «Інше» і «з дому» квоти не мають — рахуємо робочими днями, щоб показати
-  // обсяг («3 роб. дн.»), але рядка «залишиться N із M» для них не буде.
-  const quotaKind = isQuotaAbsenceKind(absence.kind) ? absence.kind : "day_off";
-  // Рік беремо з самої відсутності, а не з курсора вкладки: у черзі погоджень
-  // тепер бувають заявки на наступний рік, і з чужим роком вони показували б
-  // «0 днів · квота не списується» (REQ-22).
-  const rowYear = Number(absence.startDate.slice(0, 4)) || year;
-  const chargedDays = countQuotaDaysInYear(quotaKind, absence, rowYear, exceptions);
-  const unitLabel = ABSENCE_QUOTA_UNIT_LABEL[ABSENCE_QUOTA_UNIT[quotaKind]];
-  const restOnly = chargedDays === 0;
-  // Баланс порахований для завантаженого року. Для заявки на інший рік він
-  // просто не про неї — мовчати чесніше, ніж показати чуже число.
-  const bucket =
-    balance && rowYear === year && isQuotaAbsenceKind(absence.kind) ? balance[absence.kind] : null;
-  const submittedLabel = formatAbsenceSubmittedAgo(absence.createdAt);
-  const waitingDays = absence.status === "pending" ? absenceWaitingDays(absence.createdAt) : null;
-  // Три доби — та межа, після якої заявка вже не «щойно прилетіла». Свіжіші
-  // вгорі, тож без цієї позначки задавнена мовчки з'їжджала б у хвіст.
-  const waitingTooLong = waitingDays !== null && waitingDays >= 3;
-
-  return (
-    <div className="group flex items-center gap-3 py-2.5">
-      {hideName ? null : (
-        <AvatarBase
-          src={avatarUrl}
-          name={name}
-          fallback={initials ?? getInitialsFromName(name)}
-          assetVariant="xs"
-          size={32}
-          className="shrink-0"
-        />
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 text-xs">
-          {hideName ? null : <span className="font-semibold">{name}</span>}
-          <span className="font-medium tabular-nums">{formatRange(absence)}</span>
-          <span className="text-muted-foreground">
-            {restOnly ? "квота не списується" : `${chargedDays} ${pluralDays(chargedDays)} · ${unitLabel}`}
-          </span>
-          {/* Дата подання — те, за чим список і впорядкований. Без неї порядок
-              «свіжі вгорі» виглядав би випадковим. */}
-          {submittedLabel ? (
-            <span className={cn("text-muted-foreground", waitingTooLong && toneTextClass.warning)}>
-              · {submittedLabel}
-            </span>
-          ) : null}
-        </div>
-        {bucket && absence.status === "pending" ? (
-          <div className="mt-0.5 text-2xs text-muted-foreground">
-            після погодження залишиться{" "}
-            <b className="font-medium tabular-nums text-foreground">
-              {Math.max(0, bucket.remaining - chargedDays)}
-            </b>{" "}
-            із {bucket.quota}
-          </div>
-        ) : null}
-        {absence.comment ? (
-          <div className="mt-0.5 truncate text-2xs text-muted-foreground">«{absence.comment}»</div>
-        ) : null}
-        {decisionComment ? (
-          <div className={cn("mt-0.5 truncate text-2xs", toneTextClass.danger)}>
-            Причина: {decisionComment}
-          </div>
-        ) : null}
-        {decideContext ? (
-          <div className="mt-1 space-y-0.5">
-            {decideContext.overlaps.length > 0 ? (
-              <div className={cn("flex items-start gap-1 text-2xs", toneTextClass.warning)}>
-                <CalendarRange className="mt-px h-3 w-3 shrink-0" aria-hidden />
-                <span className="min-w-0">У ці дні також: {decideContext.overlaps.join(" · ")}</span>
-              </div>
-            ) : null}
-            {typeof decideContext.activeTasks === "number" ? (
-              <div className="text-2xs text-muted-foreground">
-                Активних задач:{" "}
-                <b className="font-medium tabular-nums text-foreground">{decideContext.activeTasks}</b>
-                {decideContext.dueInPeriod > 0 ? (
-                  <>
-                    {" "}
-                    · дедлайнів у період:{" "}
-                    <b className={cn("font-medium tabular-nums", toneTextClass.danger)}>
-                      {decideContext.dueInPeriod}
-                    </b>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-      <AbsenceKindChip kind={absence.kind} size="sm" className="hidden sm:inline-flex" />
-      {absence.status !== "approved" ? (
-        <span
-          className={cn(
-            "shrink-0 rounded-full border px-2 py-0.5 text-3xs font-semibold",
-            toneBadgeClass[TEAM_ABSENCE_STATUS_TONE[absence.status]]
-          )}
-        >
-          {TEAM_ABSENCE_STATUS_LABELS[absence.status]}
-        </span>
-      ) : null}
-      {canDecide && absence.status === "pending" ? (
-        <div className="flex shrink-0 items-center gap-2">
-          <Button
-            size="sm"
-            variant="successTonal"
-            onClick={onApprove}
-            disabled={deciding}
-            className="h-8"
-          >
-            {deciding ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-            Погодити
-          </Button>
-          <Button size="sm" variant="destructive" onClick={onDecline} disabled={deciding} className="h-8">
-            Відхилити
-          </Button>
-        </div>
-      ) : null}
-      {!canDecide && decisionNote && absence.status === "pending" ? (
-        <span className="shrink-0 text-2xs text-muted-foreground/80">{decisionNote}</span>
-      ) : null}
-      {canCancel ? (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={onCancel}
-          disabled={cancelling}
-          className="h-8 shrink-0"
-        >
-          {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-          Скасувати
-        </Button>
-      ) : null}
-      {/* На тачі hover не існує, тож до sm дії видно завжди; 44px — мінімальна
-          зона натискання, тому кнопка більша за саму іконку. */}
-      {canManage ? (
-        <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
-          <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={onEdit} aria-label="Редагувати">
-            <Pencil className="h-3.5 w-3.5" aria-hidden />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-11 w-11 text-destructive sm:h-9 sm:w-9"
-            onClick={onDelete}
-            disabled={deleting}
-            aria-label="Видалити"
-          >
-            {deleting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Trash2 className="h-3.5 w-3.5" aria-hidden />
-            )}
-          </Button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 export default TeamPage;

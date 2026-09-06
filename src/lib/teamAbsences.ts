@@ -138,6 +138,30 @@ export const TEAM_ABSENCE_STATUS_TONE: Record<TeamAbsenceStatus, Tone> = {
   cancelled: "neutral",
 };
 
+/**
+ * «16.09» з ключа дати. Рік у списках свідомо не показуємо: вкладка й так
+ * річна, а зайві чотири цифри в кожному рядку з'їдають ширину на телефоні.
+ */
+export function formatDayMonth(dateKey: string) {
+  return `${dateKey.slice(8, 10)}.${dateKey.slice(5, 7)}`;
+}
+
+/** «16.09 – 20.09», а для одноденної — просто «16.09». */
+export function formatAbsenceRange(absence: Pick<TeamAbsence, "startDate" | "endDate">) {
+  return absence.startDate === absence.endDate
+    ? formatDayMonth(absence.startDate)
+    : `${formatDayMonth(absence.startDate)} – ${formatDayMonth(absence.endDate)}`;
+}
+
+export function pluralDays(count: number) {
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  if (mod100 >= 11 && mod100 <= 14) return "днів";
+  if (mod10 === 1) return "день";
+  if (mod10 >= 2 && mod10 <= 4) return "дні";
+  return "днів";
+}
+
 type TeamAbsenceRow = {
   id: string;
   user_id: string;
