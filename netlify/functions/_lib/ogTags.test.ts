@@ -73,6 +73,24 @@ describe("витяг og-тегів зі сторінки постачальни�
     expect(extractOgTags(html, "https://kmz.ua/x").title).toBe("Шопер бавовна 38×42");
   });
 
+  it("зрізає пошуковий значок із початку назви (REQ-178#p6)", () => {
+    const tags = extractOgTags(
+      page('<meta property="og:title" content="\u1405 Шуруповерт акумуляторний Dnipro-M CD-200">'),
+      "https://dnipro-m.ua/p"
+    );
+
+    expect(tags.title).toBe("Шуруповерт акумуляторний Dnipro-M CD-200");
+  });
+
+  it("лапки й дужки на початку назви лишає", () => {
+    expect(
+      extractOgTags(page('<meta property="og:title" content="«Ранок» кухоль керамічний">'), "https://kmz.ua/x").title
+    ).toBe("«Ранок» кухоль керамічний");
+    expect(
+      extractOgTags(page('<meta property="og:title" content="(2 шт.) Кухоль Bari">'), "https://kmz.ua/x").title
+    ).toBe("(2 шт.) Кухоль Bari");
+  });
+
   it("тире всередині назви не ріже", () => {
     const tags = extractOgTags(page('<meta property="og:title" content="Кухоль — 330 мл">'), "https://kmz.ua/x");
     expect(tags.title).toBe("Кухоль — 330 мл");

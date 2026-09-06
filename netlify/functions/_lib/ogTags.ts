@@ -110,11 +110,25 @@ function collectLinkHref(html: string, rel: string): string | null {
 const TITLE_TAIL =
   /\s*[—–|·•]\s*(купити|купить|замовити|заказать|ціна|цена|опт|оптом|інтернет-?магазин|интернет-?магазин|магазин|shop|buy)(?![а-яіїєґa-z])[\s\S]*$/i;
 
+/**
+ * Значок-указівник, який магазини ставлять ПЕРЕД назвою заради пошукової видачі.
+ *
+ * Живий приклад із dnipro-m.ua: og:title = «ᐅ Шуруповерт акумуляторний …», і
+ * ця стрілка їхала в назву позиції прорахунку — менеджер стирав її руками, як
+ * колись стирав хвіст «— купити в …» (REQ-178#p6).
+ *
+ * Ріжемо ЛИШЕ з початку і лише значки, які не бувають частиною назви: указівники
+ * (ᐅ ᐊ ► ▻ ➤ ➔ →), зірочки, буліти й голий роздільник. Лапки, дужки й цифри не
+ * чіпаємо: назва «Ранок» кухоль і «(2 шт.) Кухоль» мають лишитись цілими.
+ */
+const TITLE_HEAD_MARKS =
+  /^[\s\u1400-\u167F\u25B6-\u25C4\u2190-\u21FF\u2794-\u27BF\u2605\u2606\u2022\u00B7\u2013\u2014|]+/u;
+
 function cleanProductTitle(raw: string | null): string | null {
   if (!raw) return null;
   const text = decodeEntities(raw).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   if (!text) return null;
-  const cut = text.replace(TITLE_TAIL, "").trim();
+  const cut = text.replace(TITLE_HEAD_MARKS, "").replace(TITLE_TAIL, "").trim();
   // Захист від занадто жадібного різання: якщо від назви лишився недогризок,
   // повертаємо як було — краще довга назва, ніж «USB».
   return (cut.length >= 4 ? cut : text).slice(0, 200) || null;
