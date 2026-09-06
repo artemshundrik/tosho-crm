@@ -816,9 +816,19 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
    * Вид виробу читається через ref, щоб сеттер лишався стабільним: він стоїть у
    * залежностях ефекту, який наповнює вікно при відкритті, і новий сеттер на
    * кожну зміну виду скидав би форму просто посеред роботи.
+   *
+   * СИНХРОНІЗАЦІЯ РЕФА — ЕФЕКТОМ, А НЕ РЯДКОМ У ТІЛІ. Присвоєння `ref.current`
+   * під час рендеру ловить `react-hooks/refs`, і ратчет боргу компілятора на
+   * ньому падає (scripts/check-compiler-debt.mjs: межу піднімають лише тоді,
+   * коли інакше НЕ МОЖНА). Тут можна: ref читається всередині оновлювача
+   * стану, тобто вже після коміту, а цей ефект оголошений ВИЩЕ за ефект
+   * наповнення вікна — отже в одному коміті встигає першим. Порядок важливий:
+   * посунеш нижче — сеттер при відкритті прочитає вид виробу на рендер назад.
    */
   const activeProductKindRef = React.useRef(activeProductKind);
-  activeProductKindRef.current = activeProductKind;
+  React.useEffect(() => {
+    activeProductKindRef.current = activeProductKind;
+  }, [activeProductKind]);
   const setPrintPackageConfig = React.useCallback<React.Dispatch<React.SetStateAction<PrintPackageConfig>>>(
     (nextConfig) => {
       setRawPrintPackageConfig((prev) => {
