@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { NotificationChannelMatrix } from "@/components/notifications/NotificationChannelMatrix";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { PageLoading } from "@/components/app/page-loading";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
@@ -788,46 +789,50 @@ export default function NotificationsPage() {
                 </Button>
               </SegmentedGroup>
               <div className="hidden md:flex items-center gap-1.5">
-                <button
-                  type="button"
-                  className={cn(statusIconButtonClass(pushStatusTone), "cursor-pointer")}
-                  onClick={handlePushPillClick}
-                  disabled={!push.supported}
-                  aria-label={`Push ${pushStatusLabel}`}
-                  title={`Push ${pushStatusLabel}`}
-                >
-                  <BellRing className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className={cn(statusIconButtonClass(inAppStatusTone), "cursor-pointer")}
-                  onClick={handleInAppPillClick}
-                  aria-label={`Popup ${inAppStatusLabel}`}
-                  title={`Popup ${inAppStatusLabel}`}
-                >
-                  <MonitorSmartphone className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className={cn(statusIconButtonClass(soundStatusTone), "cursor-pointer")}
-                  onClick={handleSoundPillClick}
-                  disabled={!inAppNotificationsEnabled}
-                  aria-label={`Звук ${soundStatusLabel}`}
-                  title={`Звук ${soundStatusLabel}`}
-                >
-                  <Volume2 className="h-4 w-4" />
-                </button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="iconMd"
-                  className="h-10 w-10 rounded-2xl border-border/60 bg-background/70"
-                  onClick={openSettings}
-                  title="Налаштування сповіщень"
-                  aria-label="Налаштування сповіщень"
-                >
-                  <Settings2 className="h-4 w-4" />
-                </Button>
+                <HoverTip asChild label={`Push ${pushStatusLabel}`}>
+                  <button
+                    type="button"
+                    className={cn(statusIconButtonClass(pushStatusTone), "cursor-pointer")}
+                    onClick={handlePushPillClick}
+                    disabled={!push.supported}
+                    aria-label={`Push ${pushStatusLabel}`}
+                  >
+                    <BellRing className="h-4 w-4" />
+                  </button>
+                </HoverTip>
+                <HoverTip asChild label={`Popup ${inAppStatusLabel}`}>
+                  <button
+                    type="button"
+                    className={cn(statusIconButtonClass(inAppStatusTone), "cursor-pointer")}
+                    onClick={handleInAppPillClick}
+                    aria-label={`Popup ${inAppStatusLabel}`}
+                  >
+                    <MonitorSmartphone className="h-4 w-4" />
+                  </button>
+                </HoverTip>
+                <HoverTip asChild label={`Звук ${soundStatusLabel}`}>
+                  <button
+                    type="button"
+                    className={cn(statusIconButtonClass(soundStatusTone), "cursor-pointer")}
+                    onClick={handleSoundPillClick}
+                    disabled={!inAppNotificationsEnabled}
+                    aria-label={`Звук ${soundStatusLabel}`}
+                  >
+                    <Volume2 className="h-4 w-4" />
+                  </button>
+                </HoverTip>
+                <HoverTip asChild label="Налаштування сповіщень">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="iconMd"
+                    className="h-10 w-10 rounded-2xl border-border/60 bg-background/70"
+                    onClick={openSettings}
+                    aria-label="Налаштування сповіщень"
+                  >
+                    <Settings2 className="h-4 w-4" />
+                  </Button>
+                </HoverTip>
               </div>
             </div>
             <Button
@@ -836,7 +841,6 @@ export default function NotificationsPage() {
               size="iconMd"
               className="h-10 w-10 rounded-2xl border-border/60 bg-background/70 md:hidden"
               onClick={openSettings}
-              title="Налаштування сповіщень"
               aria-label="Налаштування сповіщень"
             >
               <Settings2 className="h-4 w-4" />

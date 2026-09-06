@@ -18,6 +18,7 @@ import { callToshoRpc, selectToshoRows } from "@/lib/toshoRpc";
 import { cn } from "@/lib/utils";
 import { getModuleDefinition, type ModuleKey } from "@/lib/moduleAccess";
 import { categoryColor, categoryLabel } from "@/components/team/activityCategories";
+import { HoverTip } from "@/components/ui/hover-tip";
 import {
   DESIGN_TASK_TYPE_ICONS,
   DESIGN_TASK_TYPE_LABELS,
@@ -218,49 +219,50 @@ export function PersonActivitySection({ userId }: { userId: string }) {
               const kindLabel = typeLabel ?? group.entityTypeLabel ?? "Дія в CRM";
               return (
                 <div key={group.key} className="border-b border-border/50 last:border-0">
-                  <button
-                    type="button"
-                    onClick={() => toggle(group.key)}
-                    title={heading}
-                    className={cn(
-                      "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50",
-                      isOpen && "bg-muted/40"
-                    )}
-                  >
-                    <span
-                      role="img"
-                      title={kindLabel}
-                      aria-label={kindLabel}
-                      className="inline-flex shrink-0"
+                  <HoverTip asChild label={heading}>
+                    <button
+                      type="button"
+                      onClick={() => toggle(group.key)}
+                      className={cn(
+                        "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50",
+                        isOpen && "bg-muted/40"
+                      )}
                     >
-                      <GroupIcon
-                        aria-hidden="true"
-                        className="h-4 w-4"
-                        style={{ color: categoryColor(group.categoryKey) }}
-                      />
-                    </span>
-                    <span className="flex min-w-0 flex-1 items-center gap-2">
-                      {group.number ? (
-                        <span className="shrink-0 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground">
-                          {group.number}
-                        </span>
-                      ) : null}
-                      <span className="min-w-0 truncate text-sm text-foreground">
-                        {group.name || group.entityTypeLabel || "Без назви"}
+                      <span
+                        role="img"
+                        title={kindLabel}
+                        aria-label={kindLabel}
+                        className="inline-flex shrink-0"
+                      >
+                        <GroupIcon
+                          aria-hidden="true"
+                          className="h-4 w-4"
+                          style={{ color: categoryColor(group.categoryKey) }}
+                        />
                       </span>
-                      {typeLabel ? (
-                        <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                          · {typeLabel}
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                        {group.number ? (
+                          <span className="shrink-0 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground">
+                            {group.number}
+                          </span>
+                        ) : null}
+                        <span className="min-w-0 truncate text-sm text-foreground">
+                          {group.name || group.entityTypeLabel || "Без назви"}
                         </span>
-                      ) : null}
-                    </span>
-                    <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                      {group.events.length} · {formatWhen(group.lastAt)}
-                    </span>
-                    <ChevronDown
-                      className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")}
-                    />
-                  </button>
+                        {typeLabel ? (
+                          <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                            · {typeLabel}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                        {group.events.length} · {formatWhen(group.lastAt)}
+                      </span>
+                      <ChevronDown
+                        className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")}
+                      />
+                    </button>
+                  </HoverTip>
 
                   {isOpen ? (
                     <div className="border-t border-border/40 bg-muted/[0.04] px-3 py-1.5">

@@ -3,6 +3,7 @@ import { CircleSlash, Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { pluralUk } from "@/lib/lastSeen";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
@@ -141,20 +142,21 @@ export function ChecklistPanel({
             return (
               <div key={item.id} className="rounded-[var(--radius)] px-1 py-1 hover:bg-muted/20">
                 <div className="flex items-start gap-2.5">
-                  <button
-                    type="button"
-                    disabled={!canManage}
-                    onClick={() => cycle(item)}
-                    title={`${CHECK_STATE_LABELS[item.state]} — натисни, щоб змінити`}
-                    aria-label={`Стан: ${CHECK_STATE_LABELS[item.state]}`}
-                    className={cn(
-                      "mt-px shrink-0 rounded-md p-0.5 transition-colors",
-                      toneTextClass[CHECK_STATE_TONE[item.state]],
-                      canManage ? "cursor-pointer hover:bg-muted/50" : "cursor-default"
-                    )}
-                  >
-                    <StateIcon className="h-4 w-4" />
-                  </button>
+                  <HoverTip asChild label={`${CHECK_STATE_LABELS[item.state]} — натисни, щоб змінити`}>
+                    <button
+                      type="button"
+                      disabled={!canManage}
+                      onClick={() => cycle(item)}
+                      aria-label={`Стан: ${CHECK_STATE_LABELS[item.state]}`}
+                      className={cn(
+                        "mt-px shrink-0 rounded-md p-0.5 transition-colors",
+                        toneTextClass[CHECK_STATE_TONE[item.state]],
+                        canManage ? "cursor-pointer hover:bg-muted/50" : "cursor-default"
+                      )}
+                    >
+                      <StateIcon className="h-4 w-4" />
+                    </button>
+                  </HoverTip>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-1.5">
@@ -230,34 +232,38 @@ export function ChecklistPanel({
                         не зробили; скасований лишається в списку закресленим і
                         більше не тримає картку в роботі.
                       */}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="iconXs"
-                        title={item.state === "dropped" ? "Повернути в роботу" : "Не робимо"}
-                        className="shrink-0 text-muted-foreground/60 hover:text-foreground"
-                        onClick={() =>
-                          patch(item.id, {
-                            state: item.state === "dropped" ? "todo" : "dropped",
-                            since: null,
-                            who: null,
-                            closed: null,
-                            sha: null,
-                          })
-                        }
-                      >
-                        <CircleSlash className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="iconXs"
-                        title="Прибрати пункт"
-                        className="shrink-0 text-muted-foreground/60 hover:text-destructive"
-                        onClick={() => onChange(items.filter((entry) => entry.id !== item.id))}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <HoverTip asChild label={item.state === "dropped" ? "Повернути в роботу" : "Не робимо"}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="iconXs"
+                          aria-label={item.state === "dropped" ? "Повернути в роботу" : "Не робимо"}
+                          className="shrink-0 text-muted-foreground/60 hover:text-foreground"
+                          onClick={() =>
+                            patch(item.id, {
+                              state: item.state === "dropped" ? "todo" : "dropped",
+                              since: null,
+                              who: null,
+                              closed: null,
+                              sha: null,
+                            })
+                          }
+                        >
+                          <CircleSlash className="h-3.5 w-3.5" />
+                        </Button>
+                      </HoverTip>
+                      <HoverTip asChild label="Прибрати пункт">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="iconXs"
+                          aria-label="Прибрати пункт"
+                          className="shrink-0 text-muted-foreground/60 hover:text-destructive"
+                          onClick={() => onChange(items.filter((entry) => entry.id !== item.id))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </HoverTip>
                     </>
                   ) : null}
                 </div>

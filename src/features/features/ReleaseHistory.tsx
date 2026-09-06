@@ -22,6 +22,7 @@ import {
 } from "@/lib/releaseHistory";
 import type { WorkSession } from "@/features/features/releaseQueries";
 import { pluralWordUk } from "@/lib/lastSeen";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /** «зміна / зміни / змін» — число поруч форматує fmtN, тож потрібне лише слово. */
 const changesWord = (n: number) => pluralWordUk(n, "зміна", "зміни", "змін");
@@ -642,30 +643,38 @@ function Heatmap({
                 cell.before ? (
                   <span key={cell.key} className="h-[11px] w-[11px]" />
                 ) : (
-                  <button
-                    key={cell.key}
-                    type="button"
-                    onClick={() => onPick({ t: "day", k: cell.key })}
-                    aria-pressed={active.t === "day" && active.k === cell.key}
-                    title={`${fdate(cell.key)} — ${
+                  <HoverTip key={cell.key}
+                    asChild
+                    label={`${fdate(cell.key)} — ${
                       (dayInfo.get(cell.key)?.n ?? 0) === 0 && dayInfo.has(cell.key)
                         ? "без комітів"
                         : `${dayInfo.get(cell.key)?.n ?? 0} ${changesWord(dayInfo.get(cell.key)?.n ?? 0)}`
                     }${dayInfo.has(cell.key) ? `, ≈${fmtN(hoursOf(cell.key))} год` : ""}`}
-                    className={cn(
-                      "h-[11px] w-[11px] cursor-pointer rounded-[2px]",
-                      HEAT_BG[heatLevel(dayInfo.get(cell.key)?.n ?? 0, thresholds)],
-                      // День із годинами, але без комітів: заливки немає (нема
-                      // чого міряти), тож позначаємо обведенням — інакше він
-                      // виглядав би як день, коли не працювали.
-                      dayInfo.has(cell.key) &&
-                        (dayInfo.get(cell.key)?.n ?? 0) === 0 &&
-                        "ring-1 ring-inset ring-primary/40",
-                      active.t === "day" &&
-                        active.k === cell.key &&
-                        "outline outline-2 outline-offset-1 outline-primary"
-                    )}
-                  />
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onPick({ t: "day", k: cell.key })}
+                      aria-pressed={active.t === "day" && active.k === cell.key}
+                      aria-label={`${fdate(cell.key)} — ${
+                        (dayInfo.get(cell.key)?.n ?? 0) === 0 && dayInfo.has(cell.key)
+                          ? "без комітів"
+                          : `${dayInfo.get(cell.key)?.n ?? 0} ${changesWord(dayInfo.get(cell.key)?.n ?? 0)}`
+                      }${dayInfo.has(cell.key) ? `, ≈${fmtN(hoursOf(cell.key))} год` : ""}`}
+                      className={cn(
+                        "h-[11px] w-[11px] cursor-pointer rounded-[2px]",
+                        HEAT_BG[heatLevel(dayInfo.get(cell.key)?.n ?? 0, thresholds)],
+                        // День із годинами, але без комітів: заливки немає (нема
+                        // чого міряти), тож позначаємо обведенням — інакше він
+                        // виглядав би як день, коли не працювали.
+                        dayInfo.has(cell.key) &&
+                          (dayInfo.get(cell.key)?.n ?? 0) === 0 &&
+                          "ring-1 ring-inset ring-primary/40",
+                        active.t === "day" &&
+                          active.k === cell.key &&
+                          "outline outline-2 outline-offset-1 outline-primary"
+                      )}
+                    />
+                  </HoverTip>
                 )
               )
             )}

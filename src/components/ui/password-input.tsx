@@ -3,6 +3,7 @@ import { Eye, EyeOff } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 type PasswordInputProps = React.ComponentProps<"input"> & {
   wrapperClassName?: string;
@@ -24,21 +25,22 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
           {...props}
         />
         <div className="absolute inset-y-0 right-2 z-10 flex items-center">
-          <button
-            type="button"
-            onClick={() => setVisible((v) => !v)}
-            className={cn(
-              "inline-flex h-8 w-8 items-center justify-center rounded-full",
-              "text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/40",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-              isDisabled && "pointer-events-none opacity-50"
-            )}
-            aria-label={visible ? "Сховати пароль" : "Показати пароль"}
-            title={visible ? "Сховати пароль" : "Показати пароль"}
-            disabled={isDisabled}
-          >
-            {visible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-          </button>
+          <HoverTip asChild label={visible ? "Сховати пароль" : "Показати пароль"}>
+            <button
+              type="button"
+              onClick={() => setVisible((v) => !v)}
+              className={cn(
+                "inline-flex h-8 w-8 items-center justify-center rounded-full",
+                "text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/40",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                isDisabled && "pointer-events-none opacity-50"
+              )}
+              aria-label={visible ? "Сховати пароль" : "Показати пароль"}
+              disabled={isDisabled}
+            >
+              {visible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </button>
+          </HoverTip>
         </div>
       </div>
     );

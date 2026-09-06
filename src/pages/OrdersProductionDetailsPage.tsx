@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { HoverTip } from "@/components/ui/hover-tip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1831,20 +1832,21 @@ export default function OrdersProductionDetailsPage() {
           </Button>
           <div className="flex min-w-0 items-start gap-4">
             {record.partyType === "customer" && record.customerId ? (
-              <button
-                type="button"
-                onClick={() => void openCustomerEditor(record.customerId!)}
-                className="shrink-0 rounded-full ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2 hover:opacity-80"
-                aria-label="Редагувати замовника"
-                title="Редагувати замовника"
-              >
-                <EntityAvatar
-                  src={record.customerLogoUrl}
-                  name={record.customerName}
-                  fallback={getInitials(record.customerName)}
-                  size={52}
-                />
-              </button>
+              <HoverTip asChild label="Редагувати замовника">
+                <button
+                  type="button"
+                  onClick={() => void openCustomerEditor(record.customerId!)}
+                  className="shrink-0 rounded-full ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2 hover:opacity-80"
+                  aria-label="Редагувати замовника"
+                >
+                  <EntityAvatar
+                    src={record.customerLogoUrl}
+                    name={record.customerName}
+                    fallback={getInitials(record.customerName)}
+                    size={52}
+                  />
+                </button>
+              </HoverTip>
             ) : (
               <EntityAvatar
                 src={record.customerLogoUrl}

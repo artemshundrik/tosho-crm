@@ -31,6 +31,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { computeRunSalePricingFromMarkup } from "@/lib/quoteRuns";
@@ -903,17 +904,18 @@ function RequisitesPanel({ entities }: { entities: FinanceLegalEntity[] }) {
                 {chips
                   .filter((c) => c.value)
                   .map((c) => (
-                    <button
-                      key={c.label}
-                      type="button"
-                      onClick={() => void copyField(c.label, c.value as string)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/20 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/40"
-                      title={`Скопіювати ${c.label}`}
-                    >
-                      <span className="text-muted-foreground">{c.label}:</span>
-                      <span className="font-medium">{c.value}</span>
-                      <Copy className="h-3 w-3 text-muted-foreground" />
-                    </button>
+                    <HoverTip key={c.label} asChild label={`Скопіювати ${c.label}`}>
+                      <button
+                        type="button"
+                        onClick={() => void copyField(c.label, c.value as string)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/20 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/40"
+                        aria-label={`Скопіювати ${c.label}`}
+                      >
+                        <span className="text-muted-foreground">{c.label}:</span>
+                        <span className="font-medium">{c.value}</span>
+                        <Copy className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    </HoverTip>
                   ))}
                 {chips.every((c) => !c.value) ? (
                   <span className="text-xs text-muted-foreground">Реквізити не заповнені — додайте у вкладці «Юрособи».</span>

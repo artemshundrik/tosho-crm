@@ -33,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TabsContent } from "@/components/ui/tabs";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { NOTIFICATION_CATEGORIES } from "@/lib/notificationCategories";
@@ -780,29 +781,36 @@ export function AttachmentsTabPanel({
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
                                 {row.route && row.entityExists ? (
-                                  <Button asChild size="icon" variant="outline" title="Відкрити сутність" aria-label="Відкрити сутність">
-                                    <a href={row.route}>
-                                      <ExternalLink className="h-4 w-4" />
-                                    </a>
-                                  </Button>
+                                  <HoverTip asChild label="Відкрити сутність">
+                                    <Button asChild size="icon" variant="outline" aria-label="Відкрити сутність">
+                                      <a href={row.route}>
+                                        <ExternalLink className="h-4 w-4" />
+                                      </a>
+                                    </Button>
+                                  </HoverTip>
                                 ) : null}
-                                <Button size="icon" variant="outline" title="Відкрити файл" aria-label="Відкрити файл" onClick={() => onOpenAttachmentFile(row)} disabled={opening || downloading || deleting}>
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button size="icon" variant="outline" title="Скачати файл" aria-label="Скачати файл" onClick={() => onDownloadAttachmentFile(row)} disabled={opening || downloading || deleting}>
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  title={!row.entityExists && row.entityKind !== "unknown" ? "Видалити файл" : "Видалити файл зі storage після перевірки"}
-                                  aria-label="Видалити файл"
-                                  onClick={() => onDeleteAttachmentFile(row)}
-                                  disabled={opening || downloading || deleting}
-                                  className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <HoverTip asChild label="Відкрити файл">
+                                  <Button size="icon" variant="outline" aria-label="Відкрити файл" onClick={() => onOpenAttachmentFile(row)} disabled={opening || downloading || deleting}>
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </HoverTip>
+                                <HoverTip asChild label="Скачати файл">
+                                  <Button size="icon" variant="outline" aria-label="Скачати файл" onClick={() => onDownloadAttachmentFile(row)} disabled={opening || downloading || deleting}>
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </HoverTip>
+                                <HoverTip asChild label={!row.entityExists && row.entityKind !== "unknown" ? "Видалити файл" : "Видалити файл зі storage після перевірки"}>
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    aria-label="Видалити файл"
+                                    onClick={() => onDeleteAttachmentFile(row)}
+                                    disabled={opening || downloading || deleting}
+                                    className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </HoverTip>
                               </div>
                             </TableCell>
                           </TableRow>

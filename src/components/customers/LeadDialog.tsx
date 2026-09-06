@@ -37,6 +37,7 @@ import { IbanInput } from "@/components/customers/IbanInput";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { EmailInput } from "@/components/ui/email-input";
 import { DigitsInput } from "@/components/ui/digits-input";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { normalizeSiteUrl } from "@/lib/inputFormat";
 
 export type LeadFormState = {
@@ -391,7 +392,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                title="Змінити лого"
+                aria-label="Змінити лого"
                 className="group relative shrink-0 rounded-full ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               >
                 {displayedLogoUrl || form.logoUrl.trim() ? (
@@ -547,7 +548,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   <button
                     type="button"
                     className="inline-flex max-w-full items-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    title="Змінити менеджера"
+                    aria-label="Змінити менеджера"
                   >
                     {selectedManager ? (
                       <AvatarBase
@@ -588,33 +589,33 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 ) : null}
                 {teamMembers.length > 0 ? (
                   teamMembers.map((member) => (
-                    <Button
-                      key={member.id}
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start gap-2 h-9 text-sm truncate"
-                      onClick={() => {
-                        setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
-                        setManagerOpen(false);
-                      }}
-                      title={member.label}
-                    >
-                      <AvatarBase
-                        src={member.avatarUrl ?? null}
-                        name={member.label}
-                        fallback={member.label.slice(0, 2).toUpperCase()}
-                        size={20}
-                        className="border-border/60 shrink-0"
-                        fallbackClassName="text-3xs font-semibold"
-                      />
-                      <span className="truncate">{member.label}</span>
-                      <Check
-                        className={cn(
-                          "ml-auto h-3.5 w-3.5 text-primary",
-                          form.managerId === member.id || form.manager === member.label ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                    </Button>
+                    <HoverTip key={member.id} asChild label={member.label}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 h-9 text-sm truncate"
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
+                          setManagerOpen(false);
+                        }}
+                      >
+                        <AvatarBase
+                          src={member.avatarUrl ?? null}
+                          name={member.label}
+                          fallback={member.label.slice(0, 2).toUpperCase()}
+                          size={20}
+                          className="border-border/60 shrink-0"
+                          fallbackClassName="text-3xs font-semibold"
+                        />
+                        <span className="truncate">{member.label}</span>
+                        <Check
+                          className={cn(
+                            "ml-auto h-3.5 w-3.5 text-primary",
+                            form.managerId === member.id || form.manager === member.label ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                      </Button>
+                    </HoverTip>
                   ))
                 ) : (
                   <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
@@ -640,7 +641,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   <button
                     type="button"
                     className="inline-flex max-w-full items-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    title="Тип контрагента"
+                    aria-label="Тип контрагента"
                   >
                     <Building2 className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{currentOwnership?.label ?? "Тип контрагента"}</span>

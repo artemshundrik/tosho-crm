@@ -6,6 +6,7 @@ import {
   type QuoteDealType,
 } from "@/lib/quoteDealType";
 import { cn } from "@/lib/utils";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
  * Вибір типу угоди — чотири рівні шкали Олени (REQ-182).
@@ -35,26 +36,26 @@ export function QuoteDealTypePicker({
         const rule = QUOTE_DEAL_TYPES[key];
         const active = value === key;
         return (
-          <button
-            key={key}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(key)}
-            title={rule.hint}
-            aria-pressed={active}
-            className={cn(
-              "inline-flex h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-all",
-              "disabled:cursor-not-allowed disabled:opacity-60",
-              active
-                ? "border-primary/40 bg-primary/10 text-primary"
-                : "border-border/50 text-muted-foreground hover:bg-background/70 hover:text-foreground"
-            )}
-          >
-            <span>{rule.label}</span>
-            <span className="tabular-nums text-2xs opacity-70">
-              {formatRatePercent(defaultMarkupRateFor(key))} %
-            </span>
-          </button>
+          <HoverTip key={key} asChild label={rule.hint}>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(key)}
+              aria-pressed={active}
+              className={cn(
+                "inline-flex h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-all",
+                "disabled:cursor-not-allowed disabled:opacity-60",
+                active
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border/50 text-muted-foreground hover:bg-background/70 hover:text-foreground"
+              )}
+            >
+              <span>{rule.label}</span>
+              <span className="tabular-nums text-2xs opacity-70">
+                {formatRatePercent(defaultMarkupRateFor(key))} %
+              </span>
+            </button>
+          </HoverTip>
         );
       })}
     </div>

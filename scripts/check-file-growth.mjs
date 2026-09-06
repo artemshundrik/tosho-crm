@@ -238,6 +238,13 @@ const GIANT_THRESHOLD = 2000;
  * і сам гейт у `saveRuns` — п'ять рядків рівно там, де відбувається запис, бо
  * питати треба на санітизованих рядках і скасовувати саме це збереження.
  *
+ * ПІДНЯТО 07.09.2026 для трьох файлів на +3, +2 і +2 рядки — заміна системних
+ * підказок `title=` на власні (REQ-175#p6). Виносити тут нічого: приріст — це
+ * рівно обгортка `<HoverTip asChild>` навколо іконкової кнопки, по два рядки на
+ * кнопку, і кнопка мусить лишатись там, де вона є. Обгортка з'явилась саме
+ * заради того, щоб НЕ додавати вузла в дерево: без неї довелось би тягнути
+ * класи розкладки на проміжний span.
+ *
  */
 
 const CEILINGS = {
@@ -250,13 +257,13 @@ const CEILINGS = {
   // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
   "src/pages/OrdersCustomersPage.tsx": 4277,
   "src/pages/TeamMembersPage.tsx": 2633,
-  "src/pages/OrdersProductionDetailsPage.tsx": 3067,
-  "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2963,
+  "src/pages/OrdersProductionDetailsPage.tsx": 3069,
+  "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2848,
   "src/features/finances/FinanceExpenses.tsx": 2439,
   "src/layout/AppLayout.tsx": 3000,
   "src/components/quotes/NewQuoteDialog.tsx": 2758,
-  "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
-  "src/components/design/DesignersDashboard.tsx": 2702,
+  "src/features/tosho-ai/ToShoAiConsole.tsx": 2723,
+  "src/components/design/DesignersDashboard.tsx": 2705,
   "src/features/orders/orderRecords.ts": 2614,
   "src/lib/toshoApi.ts": 2634,
   "src/pages/TeamPage.tsx": 2182,

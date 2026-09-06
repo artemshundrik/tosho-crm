@@ -139,6 +139,7 @@ import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
 import { TabBar } from "@/components/app/TabBar";
 import { TabBarSettingsSheet } from "@/components/app/TabBarSettingsSheet";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 
 type AppLayoutProps = {
@@ -1876,24 +1877,25 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             >
               <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-[22px] w-auto" />
             </Link>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "h-8 w-8 rounded-[var(--radius-lg)] text-muted-foreground hover:text-foreground transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] translate-y-[2px]",
-                sidebarCollapsed ? "rounded-xl bg-background/35" : ""
-              )}
-              onClick={() => setSidebarCollapsed((prev) => !prev)}
-              aria-label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
-              title={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
-            >
-              {sidebarCollapsed ? (
-                <PanelLeftOpen className="h-4 w-4 transition-transform duration-300" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4 transition-transform duration-300 rotate-0" />
-              )}
-            </Button>
+            <HoverTip asChild label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8 rounded-[var(--radius-lg)] text-muted-foreground hover:text-foreground transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] translate-y-[2px]",
+                  sidebarCollapsed ? "rounded-xl bg-background/35" : ""
+                )}
+                onClick={() => setSidebarCollapsed((prev) => !prev)}
+                aria-label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
+              >
+                {sidebarCollapsed ? (
+                  <PanelLeftOpen className="h-4 w-4 transition-transform duration-300" />
+                ) : (
+                  <PanelLeftClose className="h-4 w-4 transition-transform duration-300 rotate-0" />
+                )}
+              </Button>
+            </HoverTip>
           </div>
         </div>
 
@@ -2145,7 +2147,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                                   variant="control"
                                   size="iconMd"
                                   aria-label="Закрити меню"
-                                  title="Закрити меню"
                                 >
                                   <X className="h-4.5 w-4.5" />
                                 </Button>

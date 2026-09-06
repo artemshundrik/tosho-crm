@@ -12,6 +12,7 @@ import {
 import { ABSENCE_KIND_ICONS, type AvatarAbsence } from "@/lib/absenceIndicator";
 import { PersonHoverCardMaybe, type PersonHoverCardData } from "@/components/app/PersonHoverCard";
 import { TEAM_EVENT_TONE, toneBadgeClass, toneDotClass, toneTextClass } from "@/lib/statusTones";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
  * Планер відсутностей: люди × дні.
@@ -337,15 +338,15 @@ function AbsencePlannerImpl({
                 const style = { gridColumn: `${index + 2} / ${index + 3}`, gridRow: 1 } as const;
 
                 return canPick ? (
-                  <button
-                    key={day.dateKey}
-                    type="button"
-                    className={cn(cellClass, "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-foreground/20")}
-                    style={style}
-                    title={`Додати відсутність — ${person.name}, ${day.dateKey}`}
-                    aria-label={`Додати відсутність: ${person.name}, ${day.dateKey}`}
-                    onClick={() => onPickDay?.(person.userId, day.dateKey)}
-                  />
+                  <HoverTip key={day.dateKey} asChild label={`Додати відсутність — ${person.name}, ${day.dateKey}`}>
+                    <button
+                      type="button"
+                      className={cn(cellClass, "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-foreground/20")}
+                      style={style}
+                      aria-label={`Додати відсутність: ${person.name}, ${day.dateKey}`}
+                      onClick={() => onPickDay?.(person.userId, day.dateKey)}
+                    />
+                  </HoverTip>
                 ) : (
                   <div key={day.dateKey} className={cellClass} style={style} aria-hidden />
                 );

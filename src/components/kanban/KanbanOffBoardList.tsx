@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Loader2, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -114,27 +115,28 @@ export function KanbanOffBoardList({
                   ) : null}
 
                   {entry.restore ? (
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      className="shrink-0 gap-1.5"
-                      disabled={busy}
-                      // На телефоні лишається сама іконка: підпис з'їдав рядок
-                      // так, що від назви картки лишалось «Дизайн: С…».
-                      aria-label={entry.restore.label}
-                      title={entry.restore.label}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        entry.restore?.onSelect();
-                      }}
-                    >
-                      {busy ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      )}
-                      <span className="hidden sm:inline">{entry.restore.label}</span>
-                    </Button>
+                    <HoverTip asChild label={entry.restore.label}>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        className="shrink-0 gap-1.5"
+                        disabled={busy}
+                        // На телефоні лишається сама іконка: підпис з'їдав рядок
+                        // так, що від назви картки лишалось «Дизайн: С…».
+                        aria-label={entry.restore.label}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          entry.restore?.onSelect();
+                        }}
+                      >
+                        {busy ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        )}
+                        <span className="hidden sm:inline">{entry.restore.label}</span>
+                      </Button>
+                    </HoverTip>
                   ) : null}
                 </div>
               </li>

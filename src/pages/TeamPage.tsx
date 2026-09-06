@@ -1296,7 +1296,6 @@ export function TeamPage() {
                 aria-pressed={peopleView === "cards"}
                 onClick={() => setPeopleView("cards")}
                 className={cn(SEGMENTED_TRIGGER, "w-9 flex-none px-0")}
-                title="Картки"
                 aria-label="Показати картками"
               >
                 <LayoutGrid className="h-4 w-4" aria-hidden />
@@ -1307,7 +1306,6 @@ export function TeamPage() {
                 aria-pressed={peopleView === "balances"}
                 onClick={() => setPeopleView("balances")}
                 className={cn(SEGMENTED_TRIGGER, "w-9 flex-none px-0")}
-                title="Баланси таблицею"
                 aria-label="Показати баланси таблицею"
               >
                 <Rows3 className="h-4 w-4" aria-hidden />

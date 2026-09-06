@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { formatJobRole } from "@/lib/jobRoles";
 import {
   defaultModuleAccess,
@@ -448,15 +449,16 @@ export function AccessMatrix({
                                 className="border-b border-border/60 px-2 py-1.5 text-center group-hover:bg-muted/60"
                               >
                                 {editable ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openChange(column.jobRole as string, column.label, module.key, module.label, !checked)}
-                                    className="inline-grid cursor-pointer place-items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                                    title={`${title} · клік змінює стартовий набір посади`}
-                                    aria-label={`${column.label}: ${checked ? "прибрати" : "додати"} ${module.label}`}
-                                  >
-                                    <Cell checked={checked} locked={false} title="" />
-                                  </button>
+                                  <HoverTip asChild label={`${title} · клік змінює стартовий набір посади`}>
+                                    <button
+                                      type="button"
+                                      onClick={() => openChange(column.jobRole as string, column.label, module.key, module.label, !checked)}
+                                      className="inline-grid cursor-pointer place-items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                                      aria-label={`${column.label}: ${checked ? "прибрати" : "додати"} ${module.label}`}
+                                    >
+                                      <Cell checked={checked} locked={false} title="" />
+                                    </button>
+                                  </HoverTip>
                                 ) : (
                                   <Cell
                                     checked={checked}

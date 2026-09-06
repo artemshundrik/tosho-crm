@@ -16,6 +16,7 @@ import {
   type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
 import { toneBadgeClass } from "@/lib/statusTones";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
  * Віджет «мій заробіток» у хедері — тільки для дизайнера, тільки про нього.
@@ -444,15 +445,16 @@ export function DesignerEarningsWidget({
       {/* Іконка лишається 14px, але зона натискання розширена псевдоелементом
           до 44px — рекомендований мінімум для пальця. Візуально не змінює
           пігулку, бо ::after прозорий. */}
-      <button
-        type="button"
-        onClick={toggleMask}
-        className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground after:absolute after:-inset-2 after:content-['']"
-        aria-label={masked ? "Показати суми" : "Приховати суми"}
-        title={masked ? "Показати суми" : "Приховати суми"}
-      >
-        {masked ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-      </button>
+      <HoverTip asChild label={masked ? "Показати суми" : "Приховати суми"}>
+        <button
+          type="button"
+          onClick={toggleMask}
+          className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground after:absolute after:-inset-2 after:content-['']"
+          aria-label={masked ? "Показати суми" : "Приховати суми"}
+        >
+          {masked ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      </HoverTip>
     </div>
   );
 }

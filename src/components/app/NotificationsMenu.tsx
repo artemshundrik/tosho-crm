@@ -201,7 +201,6 @@ export function NotificationsMenu({
           // навколо дзвіночка лише виділяв його серед сусідів без причини.
           className="relative h-10 w-10 rounded-xl transition-colors duration-200"
           aria-label={unreadCount > 0 ? `Сповіщення, непрочитаних: ${unreadCount}` : "Сповіщення"}
-          title="Сповіщення"
         >
           <Bell className="h-4.5 w-4.5" />
           {unreadCount > 0 ? (

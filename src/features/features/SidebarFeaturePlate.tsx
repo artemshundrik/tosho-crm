@@ -6,6 +6,7 @@ import { defaultModuleAccess } from "@/lib/moduleAccess";
 import { visibleFeatures, type FeatureDefinition } from "@/lib/featureCatalog";
 import { isFreshFeature, resolveFeatureState } from "@/lib/featureState";
 import { useMyFeatureAdoption } from "@/features/features/queries";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
  * Плашка над блоком акаунта — єдиний слот зі змінним вмістом (рішення CEO
@@ -80,15 +81,16 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
   // Згорнутий сайдбар — лише крапка-натяк, без тексту.
   if (collapsed) {
     return (
-      <button
-        type="button"
-        onClick={() => navigate("/whats-new/features")}
-        aria-label="Можливості CRM"
-        title="Можливості CRM"
-        className="mx-auto grid h-9 w-9 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-      >
-        <span className="h-2 w-2 rounded-full bg-[hsl(var(--success-solid))]" />
-      </button>
+      <HoverTip asChild label="Можливості CRM">
+        <button
+          type="button"
+          onClick={() => navigate("/whats-new/features")}
+          aria-label="Можливості CRM"
+          className="mx-auto grid h-9 w-9 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          <span className="h-2 w-2 rounded-full bg-[hsl(var(--success-solid))]" />
+        </button>
+      </HoverTip>
     );
   }
 

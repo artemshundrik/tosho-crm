@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { RichTextEditor } from "@/components/contracts/RichTextEditor";
 import { sanitizeContractHtml } from "@/lib/sanitizeContractHtml";
 import type { ContractSection } from "@/features/contractRevisions/contractSections";
@@ -80,18 +81,19 @@ export const ContractSectionsEditor = ({ sections, onChange, disabled }: Props) 
               ) : null}
             </div>
             {!section.isCore ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => removeCustomSection(index)}
-                disabled={disabled}
-                aria-label="Видалити пункт"
-                title="Видалити пункт"
-                className="h-7 px-2 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              <HoverTip asChild label="Видалити пункт">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeCustomSection(index)}
+                  disabled={disabled}
+                  aria-label="Видалити пункт"
+                  className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </HoverTip>
             ) : null}
           </div>
           <RichTextEditor

@@ -28,6 +28,7 @@ export function HoverTip({
   contentClassName,
   ready = true,
   maxReadyWaitMs = 450,
+  asChild = false,
 }: {
   label: React.ReactNode;
   children: React.ReactNode;
@@ -42,8 +43,27 @@ export function HoverTip({
   /** false — вміст ще вантажиться; відкриття зачекає (до maxReadyWaitMs). */
   ready?: boolean;
   maxReadyWaitMs?: number;
+  /**
+   * Не малювати власної обгортки — повісити підказку ПРЯМО на дитину.
+   *
+   * НАВІЩО. Типовий тригер — це `<span class="inline-flex">` навколо дитини, і
+   * в рядку з `flex` елементом ряду стає саме він. Кнопка з `shrink-0`,
+   * загорнута в такий span, свою незжимальність втрачає — span її не має, — і
+   * розкладка тихо їде. Для іконкових кнопок, яких у базі під сотню, це було б
+   * сотня ризиків на рівному місці.
+   *
+   * Radix `asChild` вливає обробники в саму дитину через Slot (він же й
+   * склеює їх із її власними), тож зайвого вузла в дереві не з'являється
+   * взагалі. Дитина має бути ОДНИМ елементом, що приймає ref і DOM-пропси.
+   */
+  asChild?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
+  // Ідентифікатор бульбашки: він потрібен, щоб ПРИВ'ЯЗАТИ підказку до
+  // елемента, а не просто показати її поруч. Без цього читалка оголошує
+  // кнопку без жодного пояснення — рівно та сама дірка, що була в
+  // системному `title`, тільки гарніша на вигляд.
+  const tipId = React.useId();
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const waitTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   // Курсор досі над тригером? Без цього готовність, що прийшла після
@@ -96,8 +116,28 @@ export function HoverTip({
     }
   }, [ready, open]);
 
+  // Порожній підпис — підказки немає взагалі, і Popover не заводиться.
+  // Так виглядає кнопка, чия підказка залежить від стану («чому не можна
+  // натиснути»): у робочому стані пояснювати нічого, а порожня бульбашка
+  // під курсором виглядала б як помилка.
+  if (!label) return <>{children}</>;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
+      {asChild ? (
+        <PopoverAnchor
+          asChild
+          onMouseEnter={show}
+          onMouseLeave={hide}
+          // Обробник стоїть на самій кнопці, тож focus/blur ловляться прямо —
+          // capture-варіант потрібен лише обгортці, повз яку фокус не спливає.
+          onFocus={show}
+          onBlur={hide}
+          aria-describedby={open ? tipId : undefined}
+        >
+          {children}
+        </PopoverAnchor>
+      ) : (
       <PopoverAnchor asChild>
         <span
           className={cn("inline-flex", className)}
@@ -107,10 +147,27 @@ export function HoverTip({
           onFocusCapture={show}
           onBlurCapture={hide}
         >
-          {children}
+          {/*
+            `aria-describedby` вішаємо на САМУ дитину, а не на обгортку.
+            Опис читається для того елемента, на якому стоїть фокус: на
+            span-обгортці він не прозвучав би ніколи, бо фокус отримує кнопка
+            всередині. Клонування — те саме, що робить radix-tooltip через
+            `asChild`; коли дитина не елемент (рядок, фрагмент), лишаємо як є.
+          */}
+          {open && React.isValidElement(children)
+            ? React.cloneElement(children as React.ReactElement<{ "aria-describedby"?: string }>, {
+                "aria-describedby":
+                  [(children.props as { "aria-describedby"?: string })["aria-describedby"], tipId]
+                    .filter(Boolean)
+                    .join(" "),
+              })
+            : children}
         </span>
       </PopoverAnchor>
+      )}
       <PopoverContent
+        id={tipId}
+        role="tooltip"
         side={side}
         align="center"
         sideOffset={6}

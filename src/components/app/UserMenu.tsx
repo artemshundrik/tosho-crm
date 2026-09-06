@@ -8,6 +8,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { AppDropdown, type AppDropdownItem } from "@/components/app/AppDropdown";
 import { Skeleton } from "@/components/ui/skeleton";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
@@ -274,15 +275,17 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
             )}
           </div>
         </Button>
-        <Button
-          type="button"
-          variant="controlDestructive"
-          size="iconSm"
-          onClick={handleLogout}
-          title="Вийти"
-        >
-          <LogOut className="h-4 w-4" />
-        </Button>
+        <HoverTip asChild label="Вийти">
+          <Button
+            type="button"
+            variant="controlDestructive"
+            size="iconSm"
+            onClick={handleLogout}
+            aria-label="Вийти"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </HoverTip>
       </div>
     );
   }
@@ -324,7 +327,6 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
               variant="menu"
               size="icon"
               className="h-10 w-10 rounded-xl p-0 hover:bg-background"
-              title={userData.name}
               aria-label="Меню профілю"
             >
               <AvatarBase

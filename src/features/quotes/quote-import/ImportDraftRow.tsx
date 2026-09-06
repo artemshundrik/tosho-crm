@@ -6,6 +6,7 @@ import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
@@ -560,20 +561,24 @@ function RunsField({
       {onAddRun ? (
         <>
           {divider}
-          <button
-            type="button"
-            disabled={disabled || blocked}
-            aria-label="Додати ще тираж"
-            title={
+          <HoverTip
+            asChild
+            label={
               blocked
                 ? "Спершу впишіть кількість — порожній тираж нема з чим порівнювати"
                 : "Клієнт просить порахувати кілька кількостей"
             }
-            onClick={onAddRun}
-            className="grid h-9 w-8 shrink-0 place-items-center rounded-r-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
           >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+            <button
+              type="button"
+              disabled={disabled || blocked}
+              aria-label="Додати ще тираж"
+              onClick={onAddRun}
+              className="grid h-9 w-8 shrink-0 place-items-center rounded-r-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </HoverTip>
         </>
       ) : null}
     </div>

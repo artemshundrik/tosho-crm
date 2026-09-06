@@ -4,6 +4,7 @@ import { Check, ListFilter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 import {
   REQUEST_ZONES,
@@ -229,30 +230,32 @@ export function BoardFilters({
       {Array.from(state.zones).map((zone) => {
         const Icon = ZONE_ICONS[zone];
         return (
-          <button
-            key={`zone-${zone}`}
-            type="button"
-            onClick={() => onChange({ ...state, zones: toggle(state.zones, zone) })}
-            title={`Прибрати фільтр «${ZONE_LABELS[zone]}»`}
-            className={SELECTED_FILTER_CHIP}
-          >
-            <Icon className="h-3 w-3" />
-            {ZONE_LABELS[zone]}
-            <X className="h-3 w-3 opacity-70" />
-          </button>
+          <HoverTip key={`zone-${zone}`} asChild label={`Прибрати фільтр «${ZONE_LABELS[zone]}»`}>
+            <button
+              type="button"
+              onClick={() => onChange({ ...state, zones: toggle(state.zones, zone) })}
+              aria-label={`Прибрати фільтр «${ZONE_LABELS[zone]}»`}
+              className={SELECTED_FILTER_CHIP}
+            >
+              <Icon className="h-3 w-3" />
+              {ZONE_LABELS[zone]}
+              <X className="h-3 w-3 opacity-70" />
+            </button>
+          </HoverTip>
         );
       })}
       {Array.from(state.themes).map((theme) => (
-        <button
-          key={`theme-${theme}`}
-          type="button"
-          onClick={() => onChange({ ...state, themes: toggle(state.themes, theme) })}
-          title={`Прибрати фільтр «${theme}»`}
-          className={SELECTED_FILTER_CHIP}
-        >
-          {theme}
-          <X className="h-3 w-3 opacity-70" />
-        </button>
+        <HoverTip key={`theme-${theme}`} asChild label={`Прибрати фільтр «${theme}»`}>
+          <button
+            type="button"
+            onClick={() => onChange({ ...state, themes: toggle(state.themes, theme) })}
+            aria-label={`Прибрати фільтр «${theme}»`}
+            className={SELECTED_FILTER_CHIP}
+          >
+            {theme}
+            <X className="h-3 w-3 opacity-70" />
+          </button>
+        </HoverTip>
       ))}
     </div>
   );

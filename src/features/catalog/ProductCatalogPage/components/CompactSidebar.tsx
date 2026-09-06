@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, ChevronDown, ChevronRight, Edit2, Package, Plus, Printer } from "lucide-react";
 import type { CatalogType, QuoteType } from "@/types/catalog";
@@ -118,15 +119,17 @@ export function CompactSidebar({
             Навігація
           </h2>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
-          onClick={() => onAddType("other")}
-          title="Додати категорію"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        <HoverTip asChild label="Додати категорію">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+            onClick={() => onAddType("other")}
+            aria-label="Додати категорію"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </HoverTip>
       </div>
 
       {/* Navigation Tree */}
@@ -144,20 +147,21 @@ export function CompactSidebar({
             return (
               <div key={group.key} className="rounded-lg border border-border/50 bg-background/70">
                 <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border/40">
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.key)}
-                    className={cn("p-0.5", TREE_ICON_BUTTON)}
-                    aria-expanded={isGroupExpanded}
-                    aria-label={isGroupExpanded ? "Згорнути групу" : "Розгорнути групу"}
-                    title={isGroupExpanded ? "Згорнути групу" : "Розгорнути групу"}
-                  >
-                    {isGroupExpanded ? (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </button>
+                  <HoverTip asChild label={isGroupExpanded ? "Згорнути групу" : "Розгорнути групу"}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.key)}
+                      className={cn("p-0.5", TREE_ICON_BUTTON)}
+                      aria-expanded={isGroupExpanded}
+                      aria-label={isGroupExpanded ? "Згорнути групу" : "Розгорнути групу"}
+                    >
+                      {isGroupExpanded ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  </HoverTip>
                   <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <GroupIcon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -171,15 +175,16 @@ export function CompactSidebar({
                     {/* У поліграфії категорію з інтерфейсу не заводимо — див.
                         коментар біля «Додати вид» нижче. */}
                     {group.key === "print" ? null : (
-                      <button
-                        type="button"
-                        onClick={() => onAddType(group.key)}
-                        className={cn("p-1 text-primary", TREE_ICON_BUTTON)}
-                        aria-label={`Додати категорію в "${group.label}"`}
-                        title={`Додати категорію в "${group.label}"`}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
+                      <HoverTip asChild label={`Додати категорію в "${group.label}"`}>
+                        <button
+                          type="button"
+                          onClick={() => onAddType(group.key)}
+                          className={cn("p-1 text-primary", TREE_ICON_BUTTON)}
+                          aria-label={`Додати категорію в "${group.label}"`}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </HoverTip>
                     )}
                   </div>
                 </div>
@@ -204,20 +209,21 @@ export function CompactSidebar({
                                   : "text-foreground hover:bg-muted/50"
                               )}
                             >
-                              <button
-                                type="button"
-                                onClick={() => toggleType(type.id)}
-                                className={cn("p-0.5", TREE_ICON_BUTTON)}
-                                aria-expanded={isExpanded}
-                                aria-label={isExpanded ? `Згорнути "${type.name}"` : `Розгорнути "${type.name}"`}
-                                title={isExpanded ? "Згорнути" : "Розгорнути"}
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown className="h-4 w-4" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4" />
-                                )}
-                              </button>
+                              <HoverTip asChild label={isExpanded ? "Згорнути" : "Розгорнути"}>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleType(type.id)}
+                                  className={cn("p-0.5", TREE_ICON_BUTTON)}
+                                  aria-expanded={isExpanded}
+                                  aria-label={isExpanded ? `Згорнути "${type.name}"` : `Розгорнути "${type.name}"`}
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </HoverTip>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -232,25 +238,26 @@ export function CompactSidebar({
                                 <IncompleteBadge count={incompleteByType?.get(type.id) ?? 0} />
                               </button>
                               {onEditType && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onEditType(type.id);
-                                  }}
-                                  className={cn(
-                                    // focus-visible НА САМІЙ КНОПЦІ, не group-focus-within
-                                    // на рядку: focus-within ловив і мишачий фокус, тож
-                                    // клік по шеврону лишав олівець стирчати без наведення.
-                                    "p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100",
-                                    TREE_ICON_BUTTON,
-                                    isSelected && "opacity-100"
-                                  )}
-                                  aria-label={`Редагувати категорію "${type.name}"`}
-                                  title="Редагувати категорію"
-                                >
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </button>
+                                <HoverTip asChild label="Редагувати категорію">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onEditType(type.id);
+                                    }}
+                                    className={cn(
+                                      // focus-visible НА САМІЙ КНОПЦІ, не group-focus-within
+                                      // на рядку: focus-within ловив і мишачий фокус, тож
+                                      // клік по шеврону лишав олівець стирчати без наведення.
+                                      "p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100",
+                                      TREE_ICON_BUTTON,
+                                      isSelected && "opacity-100"
+                                    )}
+                                    aria-label={`Редагувати категорію "${type.name}"`}
+                                  >
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </HoverTip>
                               )}
                             </div>
 
@@ -294,22 +301,23 @@ export function CompactSidebar({
                                         </span>
                                       </button>
                                       {onEditKind && (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            onEditKind(kind.id);
-                                          }}
-                                          className={cn(
-                                            "p-1 opacity-100 md:opacity-0 md:group-hover/kind:opacity-100 md:focus-visible:opacity-100",
-                                            TREE_ICON_BUTTON,
-                                            isKindSelected && "opacity-100"
-                                          )}
-                                          aria-label={`Редагувати вид "${kind.name}"`}
-                                          title="Редагувати вид"
-                                        >
-                                          <Edit2 className="h-3 w-3" />
-                                        </button>
+                                        <HoverTip asChild label="Редагувати вид">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onEditKind(kind.id);
+                                            }}
+                                            className={cn(
+                                              "p-1 opacity-100 md:opacity-0 md:group-hover/kind:opacity-100 md:focus-visible:opacity-100",
+                                              TREE_ICON_BUTTON,
+                                              isKindSelected && "opacity-100"
+                                            )}
+                                            aria-label={`Редагувати вид "${kind.name}"`}
+                                          >
+                                            <Edit2 className="h-3 w-3" />
+                                          </button>
+                                        </HoverTip>
                                       )}
                                     </div>
                                   );

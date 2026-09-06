@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { TOOLBAR_CONTROL, TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 
 // Примітиви тулбара списків. Кожна сторінка збирала пошук/бейдж/мету руками —
@@ -304,16 +305,17 @@ export function ToolbarMeta({
   return (
     <div className={cn("flex items-center gap-2 text-sm font-semibold text-foreground", className)}>
       {resetVisible ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onReset}
-          className="h-8 w-8 shrink-0 text-muted-foreground"
-          title="Скинути фільтри"
-          aria-label="Скинути фільтри"
-        >
-          <FilterX className="h-4 w-4" />
-        </Button>
+        <HoverTip asChild label="Скинути фільтри">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onReset}
+            className="h-8 w-8 shrink-0 text-muted-foreground"
+            aria-label="Скинути фільтри"
+          >
+            <FilterX className="h-4 w-4" />
+          </Button>
+        </HoverTip>
       ) : null}
       <span className="tabular-nums">{count}</span>
       {countLabel ? <span className="text-muted-foreground">{countLabel}</span> : null}

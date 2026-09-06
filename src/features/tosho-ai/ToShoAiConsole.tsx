@@ -60,6 +60,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { uploadAttachmentWithVariants, removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { cn } from "@/lib/utils";
 import {
@@ -1389,26 +1390,28 @@ function MessageCard({
 
         {isAssistant ? (
           <div className="flex items-center justify-start gap-2 pl-4">
-            <button
-              type="button"
-              className="tosho-ai-feedback-control tosho-ai-feedback-control--helpful"
-              data-state={message.feedback === "helpful" ? "active" : "inactive"}
-              aria-label="Допомогло"
-              title="Допомогло"
-              onClick={() => onFeedback(message.id, "helpful")}
-            >
-              <ThumbsUp className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="tosho-ai-feedback-control tosho-ai-feedback-control--not-helpful"
-              data-state={message.feedback === "not_helpful" ? "active" : "inactive"}
-              aria-label="Не допомогло"
-              title="Не допомогло"
-              onClick={() => onFeedback(message.id, "not_helpful")}
-            >
-              <ThumbsDown className="h-4 w-4" />
-            </button>
+            <HoverTip asChild label="Допомогло">
+              <button
+                type="button"
+                className="tosho-ai-feedback-control tosho-ai-feedback-control--helpful"
+                data-state={message.feedback === "helpful" ? "active" : "inactive"}
+                aria-label="Допомогло"
+                onClick={() => onFeedback(message.id, "helpful")}
+              >
+                <ThumbsUp className="h-4 w-4" />
+              </button>
+            </HoverTip>
+            <HoverTip asChild label="Не допомогло">
+              <button
+                type="button"
+                className="tosho-ai-feedback-control tosho-ai-feedback-control--not-helpful"
+                data-state={message.feedback === "not_helpful" ? "active" : "inactive"}
+                aria-label="Не допомогло"
+                onClick={() => onFeedback(message.id, "not_helpful")}
+              >
+                <ThumbsDown className="h-4 w-4" />
+              </button>
+            </HoverTip>
           </div>
         ) : null}
       </div>

@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 import { looksLikeQuestion } from "@/lib/toshoAiQuestion";
 import { useDictation } from "@/lib/useDictation";
@@ -1304,23 +1305,24 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
             {/* Мікрофон — головна кнопка поля на телефоні: там, де склад і
                 логістика, друкувати незручно, а руки часто зайняті. */}
             {dictation.isSupported ? (
-              <Button
-                type="button"
-                variant="control"
-                size="iconSm"
-                aria-label="Диктувати голосом"
-                title="Диктувати голосом"
-                /* У капсулі на телефоні кнопки круглі 30×30 — рівно як скріпка
-                   й «надіслати» в обговоренні справи. */
-                className="max-sm:h-[30px] max-sm:w-[30px] max-sm:rounded-full"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onClick={() => void dictation.start()}
-              >
-                <Mic className="h-4 w-4" />
-              </Button>
+              <HoverTip asChild label="Диктувати голосом">
+                <Button
+                  type="button"
+                  variant="control"
+                  size="iconSm"
+                  aria-label="Диктувати голосом"
+                  /* У капсулі на телефоні кнопки круглі 30×30 — рівно як скріпка
+                     й «надіслати» в обговоренні справи. */
+                  className="max-sm:h-[30px] max-sm:w-[30px] max-sm:rounded-full"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onClick={() => void dictation.start()}
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+              </HoverTip>
             ) : null}
 
             {/* Підказка клавіш лише там, де є клавіатура: на телефоні вона

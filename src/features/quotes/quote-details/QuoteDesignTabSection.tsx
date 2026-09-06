@@ -11,6 +11,7 @@ import { buildComposerImprint } from "./designComposerImprint";
 import { QuoteDesignTaskComposer } from "./QuoteDesignTaskComposer";
 import { QuoteDesignTasksPanel, type QuoteDesignTaskCard } from "./QuoteDesignTasksPanel";
 import type { QuoteAttachment } from "./queries";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
  * Вміст вкладки «Дизайн» у картці прорахунку.
@@ -147,35 +148,35 @@ export function QuoteDesignTabSection({
             const on = item.id === fallbackItemId;
             const task = designTaskCards.find((card) => card.quoteItemId === item.id) ?? null;
             return (
-              <button
-                key={item.id}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                title={item.title}
-                onClick={() => onSelectDesignTaskItem(item.id)}
-                className={cn(
-                  "inline-flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5 text-left transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                  on ? "border-foreground/70 bg-background" : "border-border/60 bg-background hover:bg-muted/40"
-                )}
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/30">
-                  {imageByItemId.get(item.id) ? (
-                    <img src={imageByItemId.get(item.id)} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <Package className="h-3.5 w-3.5 text-muted-foreground/60" />
+              <HoverTip key={item.id} asChild label={item.title}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => onSelectDesignTaskItem(item.id)}
+                  className={cn(
+                    "inline-flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5 text-left transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                    on ? "border-foreground/70 bg-background" : "border-border/60 bg-background hover:bg-muted/40"
                   )}
-                </span>
-                <span className="min-w-0">
-                  <span className="block max-w-[168px] truncate text-xs font-semibold text-foreground">
-                    {item.title || "Позиція"}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/30">
+                    {imageByItemId.get(item.id) ? (
+                      <img src={imageByItemId.get(item.id)} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <Package className="h-3.5 w-3.5 text-muted-foreground/60" />
+                    )}
                   </span>
-                  <span className="block tabular-nums text-3xs text-muted-foreground">
-                    {task?.number ?? "задачі ще немає"}
+                  <span className="min-w-0">
+                    <span className="block max-w-[168px] truncate text-xs font-semibold text-foreground">
+                      {item.title || "Позиція"}
+                    </span>
+                    <span className="block tabular-nums text-3xs text-muted-foreground">
+                      {task?.number ?? "задачі ще немає"}
+                    </span>
                   </span>
-                </span>
-              </button>
+                </button>
+              </HoverTip>
             );
           })}
         </div>

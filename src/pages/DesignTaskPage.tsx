@@ -177,6 +177,7 @@ import { format } from "date-fns";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { copyText, renderInlineRichText, renderRichTextBlocks } from "@/components/ui/rich-text-links";
+import { HoverTip } from "@/components/ui/hover-tip";
 import {
   BRIEF_SURFACE_FRAME_CLASS,
   BRIEF_SURFACE_TEXT_CLASS,
@@ -8475,15 +8476,16 @@ export default function DesignTaskPage() {
     return (
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {linkedRequest ? (
-          <button
-            type="button"
-            onClick={() => jumpToChangeRequest(linkedRequest.id)}
-            className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-2xs font-medium text-primary transition-colors hover:bg-primary/20"
-            title="Перейти до правки"
-          >
-            <CornerUpLeft className="h-3 w-3 shrink-0" />
-            <span className="truncate">У відповідь на: {changeRequestSnippet(linkedRequest.request_text, 40)}</span>
-          </button>
+          <HoverTip asChild label="Перейти до правки">
+            <button
+              type="button"
+              onClick={() => jumpToChangeRequest(linkedRequest.id)}
+              className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-2xs font-medium text-primary transition-colors hover:bg-primary/20"
+            >
+              <CornerUpLeft className="h-3 w-3 shrink-0" />
+              <span className="truncate">У відповідь на: {changeRequestSnippet(linkedRequest.request_text, 40)}</span>
+            </button>
+          </HoverTip>
         ) : null}
         {canManageLink && hasChangeRequests ? (
           <Popover open={pickerOpen} onOpenChange={(open) => setOutputLinkPickerId(open ? target.id : null)}>
@@ -8593,27 +8595,29 @@ export default function DesignTaskPage() {
         <span>{formatElapsedSeconds(seconds)}</span>
         {canControl ? (
           isActive ? (
-            <button
-              type="button"
-              disabled={busy || !!timerBusy}
-              onClick={() => void handlePauseTimer()}
-              className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-success-foreground transition-colors hover:bg-success/20 disabled:opacity-50"
-              aria-label="Поставити таймер правки на паузу"
-              title="Пауза"
-            >
-              {busy || timerBusy === "pause" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pause className="h-3 w-3" />}
-            </button>
+            <HoverTip asChild label="Пауза">
+              <button
+                type="button"
+                disabled={busy || !!timerBusy}
+                onClick={() => void handlePauseTimer()}
+                className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-success-foreground transition-colors hover:bg-success/20 disabled:opacity-50"
+                aria-label="Поставити таймер правки на паузу"
+              >
+                {busy || timerBusy === "pause" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pause className="h-3 w-3" />}
+              </button>
+            </HoverTip>
           ) : (
-            <button
-              type="button"
-              disabled={busy || !!timerBusy || !!changeRequestTimerBusyId}
-              onClick={() => void handleStartChangeRequestTimer(request.id)}
-              className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-foreground transition-colors hover:bg-primary/15 disabled:opacity-50"
-              aria-label="Запустити таймер цієї правки"
-              title="Запустити таймер цієї правки"
-            >
-              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-            </button>
+            <HoverTip asChild label="Запустити таймер цієї правки">
+              <button
+                type="button"
+                disabled={busy || !!timerBusy || !!changeRequestTimerBusyId}
+                onClick={() => void handleStartChangeRequestTimer(request.id)}
+                className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-foreground transition-colors hover:bg-primary/15 disabled:opacity-50"
+                aria-label="Запустити таймер цієї правки"
+              >
+                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+              </button>
+            </HoverTip>
           )
         ) : null}
       </div>
@@ -8738,15 +8742,16 @@ export default function DesignTaskPage() {
                     <ExternalLink className="h-2.5 w-2.5" /> до результату
                   </button>
                   {canManageLink ? (
-                    <button
-                      type="button"
-                      onClick={() => void linkDesignOutputToChangeRequest({ id: file.id, kind: "file" }, null)}
-                      className="absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-background/85 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/thumb:opacity-100"
-                      title="Відвʼязати"
-                      aria-label="Відвʼязати результат"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
+                    <HoverTip asChild label="Відвʼязати">
+                      <button
+                        type="button"
+                        onClick={() => void linkDesignOutputToChangeRequest({ id: file.id, kind: "file" }, null)}
+                        className="absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-background/85 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/thumb:opacity-100"
+                        aria-label="Відвʼязати результат"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </HoverTip>
                   ) : null}
                 </div>
               );
@@ -8756,25 +8761,27 @@ export default function DesignTaskPage() {
                 key={link.id}
                 className="group/thumb relative inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/40 px-2.5 py-1.5 text-xs"
               >
-                <button
-                  type="button"
-                  onClick={() => jumpToDesignOutput(link.id)}
-                  className="inline-flex cursor-pointer items-center gap-1.5"
-                  title="Перейти до результату"
-                >
-                  <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                  <span className="max-w-[160px] truncate text-foreground">{link.label}</span>
-                </button>
-                {canManageLink ? (
+                <HoverTip asChild label="Перейти до результату">
                   <button
                     type="button"
-                    onClick={() => void linkDesignOutputToChangeRequest({ id: link.id, kind: "link" }, null)}
-                    className="text-muted-foreground hover:text-destructive"
-                    title="Відвʼязати"
-                    aria-label="Відвʼязати результат"
+                    onClick={() => jumpToDesignOutput(link.id)}
+                    className="inline-flex cursor-pointer items-center gap-1.5"
                   >
-                    <X className="h-3 w-3" />
+                    <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                    <span className="max-w-[160px] truncate text-foreground">{link.label}</span>
                   </button>
+                </HoverTip>
+                {canManageLink ? (
+                  <HoverTip asChild label="Відвʼязати">
+                    <button
+                      type="button"
+                      onClick={() => void linkDesignOutputToChangeRequest({ id: link.id, kind: "link" }, null)}
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label="Відвʼязати результат"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </HoverTip>
                 ) : null}
               </div>
             ))}
@@ -8841,16 +8848,18 @@ export default function DesignTaskPage() {
       const label = action.id.kind === "timer" ? timerActionLabel : action.label;
       const busy = isActionBusy(action);
       return (
-        <Button
-          variant={variant}
-          className="gap-2"
-          disabled={busy}
-          title={reason ?? undefined}
-          onClick={() => runTaskAction(action)}
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {label}
-        </Button>
+        <HoverTip asChild label={reason ?? undefined}>
+          <Button
+            variant={variant}
+            className="gap-2"
+            disabled={busy}
+            aria-label={reason ?? undefined}
+            onClick={() => runTaskAction(action)}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {label}
+          </Button>
+        </HoverTip>
       );
     };
 
@@ -9315,30 +9324,32 @@ export default function DesignTaskPage() {
                                   <div className="flex items-center gap-0.5 border-l border-border/40 pl-1.5">
                                   {file.storage_bucket && file.storage_path ? (
                                     <>
-                                      <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-8 w-8"
-                                        aria-label={isPreviewPreparing ? "Готуємо превʼю файлу" : "Переглянути файл"}
-                                        title={isPreviewPreparing ? "Готуємо превʼю" : "Переглянути файл"}
-                                        disabled={isPreviewPreparing}
-                                        onClick={() => void openStorageFilePreview(file, {
-                                          onMissingCleanup: () => void handleRemoveDesignFile(file.id),
-                                        })}
-                                      >
-                                        {isPreviewPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-                                      </Button>
-                                      <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-8 w-8"
-                                        aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
-                                        title={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}
-                                        disabled={isDownloadPreparing}
-                                        onClick={() => void downloadStorageBackedFile(file)}
-                                      >
-                                        {isDownloadPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                                      </Button>
+                                      <HoverTip asChild label={isPreviewPreparing ? "Готуємо превʼю" : "Переглянути файл"}>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-8 w-8"
+                                          aria-label={isPreviewPreparing ? "Готуємо превʼю файлу" : "Переглянути файл"}
+                                          disabled={isPreviewPreparing}
+                                          onClick={() => void openStorageFilePreview(file, {
+                                            onMissingCleanup: () => void handleRemoveDesignFile(file.id),
+                                          })}
+                                        >
+                                          {isPreviewPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                                        </Button>
+                                      </HoverTip>
+                                      <HoverTip asChild label={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-8 w-8"
+                                          aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
+                                          disabled={isDownloadPreparing}
+                                          onClick={() => void downloadStorageBackedFile(file)}
+                                        >
+                                          {isDownloadPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                        </Button>
+                                      </HoverTip>
                                     </>
                                   ) : (
                                     <>
@@ -9515,23 +9526,25 @@ export default function DesignTaskPage() {
               {everySelectedShared ? "Прибрати з добірки" : "Клієнту"}
             </Button>
             {selectedFileIdsInKind.length > 0 ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 gap-1.5 text-xs"
-                disabled={outputSaving || !canManageAssignments}
-                title={canManageAssignments ? undefined : "Погоджувати може тільки менеджер"}
-                onClick={() =>
-                  void handleBulkApproveDesignOutputs(
-                    selectedFileIdsInKind,
-                    kind,
-                    !everySelectedFileApproved
-                  )
-                }
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {everySelectedFileApproved ? "Зняти погодження" : "Погодити"}
-              </Button>
+              <HoverTip asChild label={canManageAssignments ? undefined : "Погоджувати може тільки менеджер"}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1.5 text-xs"
+                  disabled={outputSaving || !canManageAssignments}
+                  aria-label={canManageAssignments ? undefined : "Погоджувати може тільки менеджер"}
+                  onClick={() =>
+                    void handleBulkApproveDesignOutputs(
+                      selectedFileIdsInKind,
+                      kind,
+                      !everySelectedFileApproved
+                    )
+                  }
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {everySelectedFileApproved ? "Зняти погодження" : "Погодити"}
+                </Button>
+              </HoverTip>
             ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -9662,15 +9675,17 @@ export default function DesignTaskPage() {
         topBar={null}
         title={
           <div className="flex flex-wrap items-baseline gap-2 leading-tight">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/design")}
-              className="h-8 w-8 shrink-0 self-center text-muted-foreground"
-              title="Назад до дошки"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+            <HoverTip asChild label="Назад до дошки">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/design")}
+                className="h-8 w-8 shrink-0 self-center text-muted-foreground"
+                aria-label="Назад до дошки"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </HoverTip>
             <HoverCopyText
               value={taskHeaderTitle}
               className="max-w-full"
@@ -10639,7 +10654,6 @@ export default function DesignTaskPage() {
                                         className="h-7 w-7 text-muted-foreground"
                                         disabled={designTaskLockedByOther || !userId}
                                         aria-label="Додати реакцію"
-                                        title="Додати реакцію"
                                       >
                                         <SmilePlus className="h-3.5 w-3.5" />
                                       </Button>
@@ -10665,18 +10679,19 @@ export default function DesignTaskPage() {
                                 </div>
                                 <div className="flex items-center gap-1">
                                   {canEditOwn ? (
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-7 w-7"
-                                      disabled={designTaskLockedByOther || !!changeRequestEditSavingId}
-                                      onClick={() => startBriefChangeRequestEdit(request)}
-                                      aria-label="Редагувати правку"
-                                      title="Редагувати"
-                                    >
-                                      <PencilLine className="h-3.5 w-3.5" />
-                                    </Button>
+                                    <HoverTip asChild label="Редагувати">
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7"
+                                        disabled={designTaskLockedByOther || !!changeRequestEditSavingId}
+                                        onClick={() => startBriefChangeRequestEdit(request)}
+                                        aria-label="Редагувати правку"
+                                      >
+                                        <PencilLine className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </HoverTip>
                                   ) : null}
                                   {canDelete ? (
                             <HoldButton
@@ -11166,17 +11181,18 @@ export default function DesignTaskPage() {
                                 <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8"
-                                  aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
-                                  title={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}
-                                  disabled={isDownloadPreparing}
-                                  onClick={() => void downloadStorageBackedFile(file)}
-                                >
-                                  {isDownloadPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                                </Button>
+                                <HoverTip asChild label={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
+                                    disabled={isDownloadPreparing}
+                                    onClick={() => void downloadStorageBackedFile(file)}
+                                  >
+                                    {isDownloadPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                  </Button>
+                                </HoverTip>
                               </>
                             ) : (
                               <>
@@ -11951,18 +11967,20 @@ export default function DesignTaskPage() {
                 <span className="text-3xs text-muted-foreground">усього по задачі</span>
               </span>
               {isOwnTimerRunning ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="ml-auto h-8 gap-1.5 rounded-full border-success-soft-border bg-success-soft px-3 text-xs text-success-foreground"
-                  disabled={!canPauseTimer || timerBusy === "pause"}
-                  title={pauseTimerBlockedReason ?? undefined}
-                  onClick={() => void handlePauseTimer()}
-                >
-                  {timerBusy === "pause" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
-                  Пауза
-                </Button>
+                <HoverTip asChild label={pauseTimerBlockedReason ?? undefined}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto h-8 gap-1.5 rounded-full border-success-soft-border bg-success-soft px-3 text-xs text-success-foreground"
+                    disabled={!canPauseTimer || timerBusy === "pause"}
+                    aria-label={pauseTimerBlockedReason ?? undefined}
+                    onClick={() => void handlePauseTimer()}
+                  >
+                    {timerBusy === "pause" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+                    Пауза
+                  </Button>
+                </HoverTip>
               ) : (
                 <Button
                   type="button"
@@ -12039,82 +12057,92 @@ export default function DesignTaskPage() {
           {briefEditorMode === "write" ? (
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="flex flex-wrap items-center gap-1 border-b border-border/40 px-3 py-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className={cn("h-8 w-8 p-0", headingActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                  disabled={briefSaving || designTaskLockedByOther}
-                  onClick={() =>
-                    applyBriefFormatting(({ selectedText }) =>
-                      toggleLinePrefix(selectedText, () => "## ", /^##\s+/, "Заголовок")
-                    )
-                  }
-                  title="Заголовок"
-                >
-                  <Heading2 className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className={cn("h-8 w-8 p-0", boldActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                  disabled={briefSaving || designTaskLockedByOther}
-                  onClick={() =>
-                    applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
-                      toggleWrappedFormatting(value, selectionStart, selectionEnd, "**", "жирний текст")
-                    )
-                  }
-                  title="Жирний (Ctrl+B)"
-                >
-                  <Bold className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className={cn("h-8 w-8 p-0", italicActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                  disabled={briefSaving || designTaskLockedByOther}
-                  onClick={() =>
-                    applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
-                      toggleWrappedFormatting(value, selectionStart, selectionEnd, "*", "курсив")
-                    )
-                  }
-                  title="Курсив (Ctrl+I)"
-                >
-                  <Italic className="h-4 w-4" />
-                </Button>
+                <HoverTip asChild label="Заголовок">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={cn("h-8 w-8 p-0", headingActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    disabled={briefSaving || designTaskLockedByOther}
+                    onClick={() =>
+                      applyBriefFormatting(({ selectedText }) =>
+                        toggleLinePrefix(selectedText, () => "## ", /^##\s+/, "Заголовок")
+                      )
+                    }
+                    aria-label="Заголовок"
+                  >
+                    <Heading2 className="h-4 w-4" />
+                  </Button>
+                </HoverTip>
+                <HoverTip asChild label="Жирний (Ctrl+B)">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={cn("h-8 w-8 p-0", boldActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    disabled={briefSaving || designTaskLockedByOther}
+                    onClick={() =>
+                      applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
+                        toggleWrappedFormatting(value, selectionStart, selectionEnd, "**", "жирний текст")
+                      )
+                    }
+                    aria-label="Жирний (Ctrl+B)"
+                  >
+                    <Bold className="h-4 w-4" />
+                  </Button>
+                </HoverTip>
+                <HoverTip asChild label="Курсив (Ctrl+I)">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={cn("h-8 w-8 p-0", italicActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    disabled={briefSaving || designTaskLockedByOther}
+                    onClick={() =>
+                      applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
+                        toggleWrappedFormatting(value, selectionStart, selectionEnd, "*", "курсив")
+                      )
+                    }
+                    aria-label="Курсив (Ctrl+I)"
+                  >
+                    <Italic className="h-4 w-4" />
+                  </Button>
+                </HoverTip>
                 <div className="mx-1 h-5 w-px bg-border/60" />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className={cn("h-8 w-8 p-0", bulletActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                  disabled={briefSaving || designTaskLockedByOther}
-                  onClick={() =>
-                    applyBriefFormatting(({ selectedText }) =>
-                      toggleLinePrefix(selectedText, () => "- ", /^-\s+/, "Пункт списку")
-                    )
-                  }
-                  title="Маркований список"
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className={cn("h-8 w-8 p-0", orderedActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                  disabled={briefSaving || designTaskLockedByOther}
-                  onClick={() =>
-                    applyBriefFormatting(({ selectedText }) =>
-                      toggleLinePrefix(selectedText, (index) => `${index + 1}. `, /^\d+\.\s+/, "Пункт списку")
-                    )
-                  }
-                  title="Нумерований список"
-                >
-                  <ListOrdered className="h-4 w-4" />
-                </Button>
+                <HoverTip asChild label="Маркований список">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={cn("h-8 w-8 p-0", bulletActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    disabled={briefSaving || designTaskLockedByOther}
+                    onClick={() =>
+                      applyBriefFormatting(({ selectedText }) =>
+                        toggleLinePrefix(selectedText, () => "- ", /^-\s+/, "Пункт списку")
+                      )
+                    }
+                    aria-label="Маркований список"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </HoverTip>
+                <HoverTip asChild label="Нумерований список">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={cn("h-8 w-8 p-0", orderedActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    disabled={briefSaving || designTaskLockedByOther}
+                    onClick={() =>
+                      applyBriefFormatting(({ selectedText }) =>
+                        toggleLinePrefix(selectedText, (index) => `${index + 1}. `, /^\d+\.\s+/, "Пункт списку")
+                      )
+                    }
+                    aria-label="Нумерований список"
+                  >
+                    <ListOrdered className="h-4 w-4" />
+                  </Button>
+                </HoverTip>
               </div>
               <Textarea
                 ref={briefDialogTextareaRef}

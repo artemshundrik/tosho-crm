@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { shouldShowHint, type HintState } from "@/lib/featureHintRules";
 import { useMyFeatureAdoption } from "@/features/features/queries";
 import type { FeatureKey } from "@/lib/featureCatalog";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
  * Тиха підказка біля наявної кнопки: «ось цим ти ще не користувався».
@@ -190,18 +191,19 @@ export function FeatureHint({
   };
 
   const dismissButton = (
-    <button
-      type="button"
-      aria-label="Більше не показувати"
-      title="Більше не показувати"
-      onClick={(event) => {
-        event.stopPropagation();
-        dismiss();
-      }}
-      className="grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-    >
-      <X className="h-3 w-3" />
-    </button>
+    <HoverTip asChild label="Більше не показувати">
+      <button
+        type="button"
+        aria-label="Більше не показувати"
+        onClick={(event) => {
+          event.stopPropagation();
+          dismiss();
+        }}
+        className="grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </HoverTip>
   );
 
   if (variant === "inline") {

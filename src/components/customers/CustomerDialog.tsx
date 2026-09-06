@@ -56,6 +56,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { TelegramInput } from "@/components/ui/telegram-input";
 import { EmailInput } from "@/components/ui/email-input";
 import { DigitsInput } from "@/components/ui/digits-input";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { normalizeSiteUrl } from "@/lib/inputFormat";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -594,7 +595,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                title="Змінити лого"
+                aria-label="Змінити лого"
                 className="group relative shrink-0 rounded-full ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               >
                 {displayedLogoUrl || form.logoUrl.trim() ? (
@@ -752,7 +753,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 <button
                   type="button"
                   className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground"
-                  title="Змінити менеджера"
+                  aria-label="Змінити менеджера"
                 >
                   {selectedManager ? (
                     <AvatarBase
@@ -775,27 +776,27 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 <div className="space-y-1">
                   {teamMembers.length > 0 ? (
                     teamMembers.map((member) => (
-                      <Button
-                        key={member.id}
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start gap-2 h-9 text-sm truncate"
-                        onClick={() => {
-                          setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
-                          setManagerOpen(false);
-                        }}
-                        title={member.label}
-                      >
-                        <AvatarBase
-                          src={member.avatarUrl ?? null}
-                          name={member.label}
-                          fallback={member.label.slice(0, 2).toUpperCase()}
-                          size={20}
-                          className="border-border/60 shrink-0"
-                          fallbackClassName="text-3xs font-semibold"
-                        />
-                        <span className="truncate">{member.label}</span>
-                      </Button>
+                      <HoverTip key={member.id} asChild label={member.label}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start gap-2 h-9 text-sm truncate"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
+                            setManagerOpen(false);
+                          }}
+                        >
+                          <AvatarBase
+                            src={member.avatarUrl ?? null}
+                            name={member.label}
+                            fallback={member.label.slice(0, 2).toUpperCase()}
+                            size={20}
+                            className="border-border/60 shrink-0"
+                            fallbackClassName="text-3xs font-semibold"
+                          />
+                          <span className="truncate">{member.label}</span>
+                        </Button>
+                      </HoverTip>
                     ))
                   ) : (
                     <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
@@ -849,18 +850,19 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               Відкрити папку Dropbox
             </Button>
             {onDetachDropboxFolder ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-10 px-0 shrink-0"
-                onClick={onDetachDropboxFolder}
-                disabled={dropboxAction !== null}
-                title="Відв'язати папку Dropbox"
-                aria-label="Відв'язати папку Dropbox"
-              >
-                {dropboxAction === "detach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4" />}
-              </Button>
+              <HoverTip asChild label="Відв'язати папку Dropbox">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-10 px-0 shrink-0"
+                  onClick={onDetachDropboxFolder}
+                  disabled={dropboxAction !== null}
+                  aria-label="Відв'язати папку Dropbox"
+                >
+                  {dropboxAction === "detach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4" />}
+                </Button>
+              </HoverTip>
             ) : null}
           </div>
         ) : (!isDropboxLinked && (onCreateDropboxFolder || onAttachDropboxFolder)) ? (

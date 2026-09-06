@@ -6,6 +6,7 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { formatJobRole } from "@/lib/jobRoles";
 import { cn } from "@/lib/utils";
 import { DictationButton, DictationCapsule } from "@/components/ui/dictation-capsule";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { formatFileSize, isImageFile, withReadableName } from "./threadFiles";
 import { ThreadEmojiPicker } from "./ThreadEmojiPicker";
 
@@ -211,16 +212,17 @@ export function ThreadComposer({
             event.target.value = "";
           }}
         />
-        <button
-          type="button"
-          aria-label="Прикріпити файл"
-          title="Файл ляже у «Файли», а тут стане повідомленням"
-          disabled={!canAttach || attaching}
-          onClick={() => fileInputRef.current?.click()}
-          className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
-        >
-          {attaching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
-        </button>
+        <HoverTip asChild label="Файл ляже у «Файли», а тут стане повідомленням">
+          <button
+            type="button"
+            aria-label="Прикріпити файл"
+            disabled={!canAttach || attaching}
+            onClick={() => fileInputRef.current?.click()}
+            className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
+          >
+            {attaching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+          </button>
+        </HoverTip>
         <ThreadEmojiPicker
           onPick={(emoji) => {
             const node = inputRef.current;

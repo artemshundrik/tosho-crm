@@ -156,58 +156,62 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                 visibleOptions.map((option) => {
                   const isSelected = selectedLabel.trim() === option.label && selectedType === option.entityType;
                   return (
-                    <Button
-                      key={`${option.entityType}-${option.id}`}
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={option.disabled}
-                      className={cn(
-                        "h-auto min-h-12 w-full items-center justify-start gap-3 rounded-[var(--radius-lg)] px-2 py-2 text-left text-sm",
-                        option.disabled && "cursor-not-allowed opacity-55"
-                      )}
-                      onClick={() => {
-                        if (option.disabled) return;
-                        onSelect(option);
-                        onOpenChange(false);
-                      }}
-                      title={option.disabledReason || option.label}
-                    >
-                      <EntityAvatar
-                        src={option.logoUrl ?? null}
-                        name={option.label}
-                        size={36}
-                        className="shrink-0 border-border/50"
-                        fallbackClassName="text-3xs font-semibold"
-                      />
-                      <span className="min-w-0 flex-1 leading-tight">
-                        <span className="block truncate text-sm font-medium leading-5 text-foreground">{option.label}</span>
-                        {option.managerLabel ? (
-                          <span className="mt-0.5 block truncate text-2xs text-muted-foreground">
-                            Менеджер: {option.managerLabel}
-                          </span>
-                        ) : null}
-                        <span className="mt-0.5 flex items-center gap-1.5">
-                          <span
-                            className={cn(
-                              "inline-flex h-4.5 items-center justify-center rounded-full border px-2 text-3xs font-semibold uppercase leading-none tracking-wide",
-                              option.entityType === "lead"
-                                ? "cmd-kind-lead"
-                                : "cmd-kind-customer"
-                            )}
-                          >
-                            {option.entityType === "lead" ? "Лід" : "Замовник"}
-                          </span>
-                          {option.disabled ? (
-                            <span className="inline-flex items-center gap-1 text-3xs font-medium text-muted-foreground">
-                              <Lock className="h-3 w-3" />
-                              Недоступно
+                      <Button
+                        key={`${option.entityType}-${option.id}`}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={option.disabled}
+                        className={cn(
+                          "h-auto min-h-12 w-full items-center justify-start gap-3 rounded-[var(--radius-lg)] px-2 py-2 text-left text-sm",
+                          option.disabled && "cursor-not-allowed opacity-55"
+                        )}
+                        // СИСТЕМНИЙ `title` ТУТ НАВМИСНО (REQ-175#p6): він
+                        // пояснює, чому рядок не вибирається, а вимкнена кнопка
+                        // подій миші не отримує — власна підказка на ній не
+                        // відкрилась би ніколи. Ім'я рядка й так видно текстом.
+                        title={option.disabledReason || undefined}
+                        onClick={() => {
+                          if (option.disabled) return;
+                          onSelect(option);
+                          onOpenChange(false);
+                        }}
+                      >
+                        <EntityAvatar
+                          src={option.logoUrl ?? null}
+                          name={option.label}
+                          size={36}
+                          className="shrink-0 border-border/50"
+                          fallbackClassName="text-3xs font-semibold"
+                        />
+                        <span className="min-w-0 flex-1 leading-tight">
+                          <span className="block truncate text-sm font-medium leading-5 text-foreground">{option.label}</span>
+                          {option.managerLabel ? (
+                            <span className="mt-0.5 block truncate text-2xs text-muted-foreground">
+                              Менеджер: {option.managerLabel}
                             </span>
                           ) : null}
+                          <span className="mt-0.5 flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "inline-flex h-4.5 items-center justify-center rounded-full border px-2 text-3xs font-semibold uppercase leading-none tracking-wide",
+                                option.entityType === "lead"
+                                  ? "cmd-kind-lead"
+                                  : "cmd-kind-customer"
+                              )}
+                            >
+                              {option.entityType === "lead" ? "Лід" : "Замовник"}
+                            </span>
+                            {option.disabled ? (
+                              <span className="inline-flex items-center gap-1 text-3xs font-medium text-muted-foreground">
+                                <Lock className="h-3 w-3" />
+                                Недоступно
+                              </span>
+                            ) : null}
+                          </span>
                         </span>
-                      </span>
-                      <Check className={cn("ml-auto h-3.5 w-3.5 text-primary", isSelected ? "opacity-100" : "opacity-0")} />
-                    </Button>
+                        <Check className={cn("ml-auto h-3.5 w-3.5 text-primary", isSelected ? "opacity-100" : "opacity-0")} />
+                      </Button>
                   );
                 })
               ) : search ? (

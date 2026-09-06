@@ -767,6 +767,11 @@ export default function OrdersProductionPage() {
               size="xs"
               onClick={() => void openGroupedSpecification()}
               disabled={Boolean(selectedSpecificationBlocker)}
+              // ЄДИНЕ МІСЦЕ, ДЕ СИСТЕМНИЙ `title` ЛИШИВСЯ НАВМИСНО (REQ-175#p6).
+              // Підказка пояснює, ЧОМУ кнопка не натискається, а вимкнена
+              // кнопка не отримує подій миші — власна підказка на ній не
+              // відкрилась би ніколи. Системну малює браузер поза деревом, і
+              // на вимкнених контролах працює саме вона.
               title={selectedSpecificationBlocker ?? undefined}
               className="w-full sm:w-auto"
             >

@@ -158,7 +158,6 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
           variant="control"
           size="iconMd"
           className={cn("w-auto", compact ? "gap-1.5 px-2" : "gap-2 px-2.5")}
-          title="Хто онлайн"
           aria-label="Хто онлайн"
         >
           {!compact ? <Users className="h-4.5 w-4.5" /> : null}

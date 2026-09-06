@@ -7,6 +7,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { Download, Trash2, X, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -87,15 +88,17 @@ export function BulkActionsBar({
       <Separator orientation="vertical" className="h-6" />
 
       {/* Clear button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onClearSelection}
-        className="h-8 w-8 hover:bg-muted"
-        title="Скасувати виділення"
-      >
-        <X className="h-4 w-4" />
-      </Button>
+      <HoverTip asChild label="Скасувати виділення">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClearSelection}
+          className="h-8 w-8 hover:bg-muted"
+          aria-label="Скасувати виділення"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </HoverTip>
     </div>
   );
 }

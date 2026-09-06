@@ -137,6 +137,7 @@ import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { Clock3, ExternalLink, LayoutGrid, ListFilter, PencilLine, Users } from "lucide-react";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { MAX_BRIEF_FILES, planBriefFiles } from "@/features/design/briefFiles";
 import {
   createFileFromDroppedUrl,
@@ -470,8 +471,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   }
   return message;
 };
-
-const getTaskPartyLabel = () => "Замовник";
 
 const isTaskAttachedFromStandalone = (task: DesignTask) => {
   const source = typeof task.metadata?.source === "string" ? task.metadata.source.trim() : "";
@@ -4463,7 +4462,6 @@ export default function DesignPage() {
   const renderTaskCard = (task: DesignTask, options?: { draggable?: boolean }) => {
     const isLinkedQuote = isUuid(task.quoteId);
     const isAttachedFromStandalone = isTaskAttachedFromStandalone(task) && isLinkedQuote;
-    const partyLabel = getTaskPartyLabel();
     const assigneeLabel = getTaskAssigneeLabel(task);
     const collaboratorEntries = getTaskCollaborators(task);
     const deadlineBadge = getDeadlineBadge(task.designDeadline);
@@ -4715,22 +4713,18 @@ export default function DesignPage() {
                 size={32}
               />
             </PartyHoverCard>
+            {/*
+              Підпису «ЗАМОВНИК» над назвою компанії тут не було чого нести: на
+              цій дошці він був СТАЛИЙ — жодного іншого значення не приймав, —
+              і просто з'їдав рядок висоти на кожній картці (REQ-175#p8).
+            */}
             <div className="min-w-0">
-              <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">
-                {partyLabel}
-              </div>
-              <div className="truncate text-[14px] font-semibold" title={task.customerName ?? "Не вказано"}>
-                {task.customerName ?? "Не вказано"}
-              </div>
+              <div className="truncate text-[14px] font-semibold">{task.customerName ?? "Не вказано"}</div>
             </div>
           </div>
         </div>
         {task.productName ? (
           <div className="mt-3 rounded-inner border border-border/60 bg-background/35 px-3 py-2.5">
-            <div className="mb-2 inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
-              <Package className="h-3.5 w-3.5" />
-              Товар
-            </div>
             <div className="flex items-center gap-2.5">
               {task.productImageUrl ? (
                 <KanbanImageZoomPreview
@@ -5526,34 +5520,34 @@ export default function DesignPage() {
                   <div className="space-y-1">
                     {managerMembers.length > 0 ? (
                       managerMembers.map((member) => (
-                        <Button
-                          key={member.id}
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start gap-2 h-9 text-sm"
-                          onClick={() => {
-                            setCreateManagerUserId(member.id);
-                            setCreateManagerPopoverOpen(false);
-                          }}
-                          title={member.label}
-                        >
-                          <AvatarBase
-                            src={member.avatarUrl ?? null}
-                            name={member.label}
-                            fallback={getInitials(member.label)}
-                            size={20}
-                            className="border-border/60 shrink-0"
-                            fallbackClassName="text-3xs font-semibold"
-                          />
-                          <span className="truncate">{member.label}</span>
-                          <Check
-                            className={cn(
-                              "ml-auto h-3.5 w-3.5 text-primary",
-                              createManagerUserId === member.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                        </Button>
+                        <HoverTip key={member.id} asChild label={member.label}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start gap-2 h-9 text-sm"
+                            onClick={() => {
+                              setCreateManagerUserId(member.id);
+                              setCreateManagerPopoverOpen(false);
+                            }}
+                          >
+                            <AvatarBase
+                              src={member.avatarUrl ?? null}
+                              name={member.label}
+                              fallback={getInitials(member.label)}
+                              size={20}
+                              className="border-border/60 shrink-0"
+                              fallbackClassName="text-3xs font-semibold"
+                            />
+                            <span className="truncate">{member.label}</span>
+                            <Check
+                              className={cn(
+                                "ml-auto h-3.5 w-3.5 text-primary",
+                                createManagerUserId === member.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                          </Button>
+                        </HoverTip>
                       ))
                     ) : (
                       <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
@@ -5643,46 +5637,46 @@ export default function DesignPage() {
                         sortedDesignerCapacityOptions.map((member) => {
                           const workload = designerLoadById.get(member.id);
                           return (
-                          <Button
-                            key={member.id}
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-auto w-full justify-start gap-2 py-2 text-sm"
-                            onClick={() => {
-                              setCreateAssigneeUserId(member.id);
-                              setCreateCollaboratorIds((prev) => prev.filter((entry) => entry !== member.id));
-                              setCreateAssigneePopoverOpen(false);
-                            }}
-                            title={member.label}
-                          >
-                            <AvatarBase
-                              src={member.avatarUrl ?? null}
-                              name={member.label}
-                              fallback={getInitials(member.label)}
-                              size={20}
-                              className="border-border/60 shrink-0"
-                              fallbackClassName="text-3xs font-semibold"
-                            />
-                            <div className="min-w-0 flex-1 text-left">
-                              <div className="truncate">{member.label}</div>
-                              {workload ? (
-                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-2xs text-muted-foreground">
-                                  <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
-                                  <span>·</span>
-                                  <span>{workload.activeTaskCount} задач</span>
-                                  <span>·</span>
-                                  <span>{formatHoursLoad(workload.estimateMinutesTotal)}</span>
-                                </div>
-                              ) : null}
-                            </div>
-                            <Check
-                              className={cn(
-                                "ml-auto h-3.5 w-3.5 text-primary",
-                                createAssigneeUserId === member.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                          </Button>
+                          <HoverTip key={member.id} asChild label={member.label}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto w-full justify-start gap-2 py-2 text-sm"
+                              onClick={() => {
+                                setCreateAssigneeUserId(member.id);
+                                setCreateCollaboratorIds((prev) => prev.filter((entry) => entry !== member.id));
+                                setCreateAssigneePopoverOpen(false);
+                              }}
+                            >
+                              <AvatarBase
+                                src={member.avatarUrl ?? null}
+                                name={member.label}
+                                fallback={getInitials(member.label)}
+                                size={20}
+                                className="border-border/60 shrink-0"
+                                fallbackClassName="text-3xs font-semibold"
+                              />
+                              <div className="min-w-0 flex-1 text-left">
+                                <div className="truncate">{member.label}</div>
+                                {workload ? (
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-1 text-2xs text-muted-foreground">
+                                    <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
+                                    <span>·</span>
+                                    <span>{workload.activeTaskCount} задач</span>
+                                    <span>·</span>
+                                    <span>{formatHoursLoad(workload.estimateMinutesTotal)}</span>
+                                  </div>
+                                ) : null}
+                              </div>
+                              <Check
+                                className={cn(
+                                  "ml-auto h-3.5 w-3.5 text-primary",
+                                  createAssigneeUserId === member.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </Button>
+                          </HoverTip>
                           );
                         })
                       ) : (
@@ -5715,47 +5709,47 @@ export default function DesignPage() {
                         const checked = createCollaboratorIds.includes(member.id);
                         const workload = designerLoadById.get(member.id);
                         return (
-                          <Button
-                            key={member.id}
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "h-auto w-full justify-start gap-2 py-2 text-sm",
-                              checked && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
-                            )}
-                            onClick={() => {
-                              setCreateCollaboratorIds((prev) =>
-                                checked ? prev.filter((entry) => entry !== member.id) : [...prev, member.id]
-                              );
-                            }}
-                            title={member.label}
-                          >
-                            <AvatarBase
-                              src={member.avatarUrl ?? null}
-                              name={member.label}
-                              fallback={getInitials(member.label)}
-                              size={20}
-                              className="border-border/60 shrink-0"
-                              fallbackClassName="text-3xs font-semibold"
-                            />
-                            <div className="min-w-0 flex-1 text-left">
-                              <div className="truncate">{member.label}</div>
-                              {workload ? (
-                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-2xs text-muted-foreground">
-                                  <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
-                                  <span>·</span>
-                                  <span>{workload.activeTaskCount} задач</span>
-                                </div>
-                              ) : null}
-                            </div>
-                            <Check
+                          <HoverTip key={member.id} asChild label={member.label}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
                               className={cn(
-                                "ml-auto h-3.5 w-3.5 text-primary",
-                                checked ? "opacity-100" : "opacity-0"
+                                "h-auto w-full justify-start gap-2 py-2 text-sm",
+                                checked && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
                               )}
-                            />
-                          </Button>
+                              onClick={() => {
+                                setCreateCollaboratorIds((prev) =>
+                                  checked ? prev.filter((entry) => entry !== member.id) : [...prev, member.id]
+                                );
+                              }}
+                            >
+                              <AvatarBase
+                                src={member.avatarUrl ?? null}
+                                name={member.label}
+                                fallback={getInitials(member.label)}
+                                size={20}
+                                className="border-border/60 shrink-0"
+                                fallbackClassName="text-3xs font-semibold"
+                              />
+                              <div className="min-w-0 flex-1 text-left">
+                                <div className="truncate">{member.label}</div>
+                                {workload ? (
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-1 text-2xs text-muted-foreground">
+                                    <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
+                                    <span>·</span>
+                                    <span>{workload.activeTaskCount} задач</span>
+                                  </div>
+                                ) : null}
+                              </div>
+                              <Check
+                                className={cn(
+                                  "ml-auto h-3.5 w-3.5 text-primary",
+                                  checked ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </Button>
+                          </HoverTip>
                         );
                       })}
                   </div>

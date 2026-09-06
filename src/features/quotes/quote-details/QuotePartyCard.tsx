@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import type { QuoteDeadlineTone } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { cn } from "@/lib/utils";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
  * «Хто це» і «коли треба» — шапка бокової колонки прорахунку.
@@ -102,28 +103,29 @@ export function QuotePartyCard({
       <div className="px-1.5 pb-1.5">
         <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-border/40">
           {deadlines.map((item) => (
-            <button
-              key={`deadline-track-${item.label}`}
-              type="button"
-              onClick={onOpenDeadlines}
-              title={item.title}
-              className="grid justify-items-center gap-0.5 bg-card px-1 py-1 text-center transition-colors hover:bg-muted/50"
-            >
-              <span className="text-3xs font-semibold uppercase tracking-caps-tight text-muted-foreground">
-                {item.label}
-              </span>
-              <span
-                className={cn(
-                  "text-2xs font-semibold tabular-nums",
-                  item.tone === "overdue" && "text-danger-foreground",
-                  item.tone === "today" && "text-warning-foreground",
-                  item.tone === "soon" && "text-warning-foreground",
-                  item.tone === "none" && "font-normal text-muted-foreground/50"
-                )}
+            <HoverTip key={`deadline-track-${item.label}`} asChild label={item.title}>
+              <button
+                type="button"
+                onClick={onOpenDeadlines}
+                aria-label={item.title}
+                className="grid justify-items-center gap-0.5 bg-card px-1 py-1 text-center transition-colors hover:bg-muted/50"
               >
-                {item.short}
-              </span>
-            </button>
+                <span className="text-3xs font-semibold uppercase tracking-caps-tight text-muted-foreground">
+                  {item.label}
+                </span>
+                <span
+                  className={cn(
+                    "text-2xs font-semibold tabular-nums",
+                    item.tone === "overdue" && "text-danger-foreground",
+                    item.tone === "today" && "text-warning-foreground",
+                    item.tone === "soon" && "text-warning-foreground",
+                    item.tone === "none" && "font-normal text-muted-foreground/50"
+                  )}
+                >
+                  {item.short}
+                </span>
+              </button>
+            </HoverTip>
           ))}
         </div>
       </div>

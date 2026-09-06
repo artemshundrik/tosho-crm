@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+/gi;
 const MENTION_TOKEN_REGEX = /(@[^\s@,;:!?()[\]{}<>]+)/g;
@@ -101,19 +102,20 @@ function InlineCopyableLink({
       >
         {url}
       </a>
-      <button
-        type="button"
-        title="Скопіювати посилання"
-        aria-label="Скопіювати посилання"
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/link:opacity-100"
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          void copyText(url).then(() => setCopied(true)).catch(() => toast.error("Не вдалося скопіювати посилання"));
-        }}
-      >
-        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      </button>
+      <HoverTip asChild label="Скопіювати посилання">
+        <button
+          type="button"
+          aria-label="Скопіювати посилання"
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/link:opacity-100"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void copyText(url).then(() => setCopied(true)).catch(() => toast.error("Не вдалося скопіювати посилання"));
+          }}
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      </HoverTip>
     </span>
   );
 }

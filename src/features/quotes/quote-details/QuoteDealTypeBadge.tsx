@@ -14,6 +14,7 @@ import {
   type QuoteDealType,
 } from "@/lib/quoteDealType";
 import { cn } from "@/lib/utils";
+import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
  * Тип угоди в шапці картки — поруч із типом товару (REQ-182).
@@ -58,19 +59,20 @@ export function QuoteDealTypeBadge({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            base,
-            "transition-colors hover:border-border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-          )}
-          title="Тип угоди — від нього дно ціни"
-        >
-          {label}
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
-        </button>
-      </DropdownMenuTrigger>
+      <HoverTip asChild label="Тип угоди — від нього дно ціни">
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              base,
+              "transition-colors hover:border-border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+            )}
+          >
+            {label}
+            <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+          </button>
+        </DropdownMenuTrigger>
+      </HoverTip>
       <DropdownMenuContent align="start" className="w-[300px]">
         {DEAL_TYPE_ORDER.map((key) => {
           const item = QUOTE_DEAL_TYPES[key];

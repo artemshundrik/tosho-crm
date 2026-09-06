@@ -55,6 +55,7 @@ import {
 } from "@/lib/attachmentPreview";
 import { downloadFileToDevice } from "@/lib/downloadFileToDevice";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
+import { HoverTip } from "@/components/ui/hover-tip";
 import {
   formatPrintProductSummary,
   getPrintProductConfig,
@@ -4073,16 +4074,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           <div className="flex min-h-10 flex-wrap items-center gap-x-2 gap-y-2 sm:gap-x-3">
             {/* Номер і кнопка назад — те, що не має стискатись ніколи. */}
             <div className="flex shrink-0 items-center gap-2 lg:gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/orders/estimates")}
-                className="h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Назад"
-                title="Назад"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
+              <HoverTip asChild label="Назад">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigate("/orders/estimates")}
+                  className="h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label="Назад"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </HoverTip>
 
               <HoverCopyText
                 value={quote.number ?? quote.id}
@@ -4667,16 +4669,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         </a>
                                       </Button>
                                     ) : (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 gap-1.5 border-dashed text-muted-foreground/70"
-                                        disabled
-                                        title={hint}
-                                      >
-                                        {label}
-                                        <ExternalLink className="h-3.5 w-3.5" />
-                                      </Button>
+                                      <HoverTip asChild label={hint}>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-8 gap-1.5 border-dashed text-muted-foreground/70"
+                                          disabled
+                                          aria-label={hint}
+                                        >
+                                          {label}
+                                          <ExternalLink className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </HoverTip>
                                     );
                                   return (
                                     <>

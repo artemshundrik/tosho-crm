@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { HoverTip } from "@/components/ui/hover-tip";
 import {
   CatalogModelPicker,
   getVariantOptionValue,
@@ -752,17 +753,18 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="text-sm font-semibold tabular-nums text-foreground">{formatOrderMoney(lineTotal(item), currency)}</span>
                       {item.typeId || item.modelId ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="iconSm"
-                          className="text-muted-foreground hover:text-foreground"
-                          aria-label={`Скинути вибір товару ${index + 1}`}
-                          title="Скинути вибір товару"
-                          onClick={() => clearItemSelection(item)}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
+                        <HoverTip asChild label="Скинути вибір товару">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="iconSm"
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label={`Скинути вибір товару ${index + 1}`}
+                            onClick={() => clearItemSelection(item)}
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </HoverTip>
                       ) : null}
                       <Button type="button" variant="ghost" size="iconSm" className="text-muted-foreground hover:text-destructive" disabled={items.length <= 1} aria-label={`Видалити Товар ${index + 1}`} onClick={() => removeItem(item.key)}>
                         <Trash2 className="h-4 w-4" />

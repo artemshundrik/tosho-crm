@@ -160,7 +160,6 @@ export function ThemeSwitcher({
             className
           )}
           aria-label={label}
-          title={label}
         >
           {/* Сонце й місяць лежать одне на одному й міняються обертом:
               підказка, що це той самий перемикач, а не дві різні кнопки. */}

@@ -29,6 +29,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
 import { cn } from "@/lib/utils";
@@ -1833,27 +1834,27 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <div className="space-y-1">
                 {teamMembers.length > 0 ? (
                   teamMembers.map((member) => (
-                    <Button
-                      key={member.id}
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start gap-2 h-9 text-sm truncate"
-                      onClick={() => {
-                        setManagerId(member.id);
-                        setManagerPopoverOpen(false);
-                      }}
-                      title={member.label}
-                    >
-                      <AvatarBase
-                        src={member.avatarUrl ?? null}
-                        name={member.label}
-                        fallback={member.label.slice(0, 2).toUpperCase()}
-                        size={20}
-                        className="border-border/60 shrink-0"
-                        fallbackClassName="text-3xs font-semibold"
-                      />
-                      <span className="text-sm truncate max-w-[220px]">{member.label}</span>
-                    </Button>
+                    <HoverTip key={member.id} asChild label={member.label}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 h-9 text-sm truncate"
+                        onClick={() => {
+                          setManagerId(member.id);
+                          setManagerPopoverOpen(false);
+                        }}
+                      >
+                        <AvatarBase
+                          src={member.avatarUrl ?? null}
+                          name={member.label}
+                          fallback={member.label.slice(0, 2).toUpperCase()}
+                          size={20}
+                          className="border-border/60 shrink-0"
+                          fallbackClassName="text-3xs font-semibold"
+                        />
+                        <span className="text-sm truncate max-w-[220px]">{member.label}</span>
+                      </Button>
+                    </HoverTip>
                   ))
                 ) : (
                   <div className="text-xs text-muted-foreground p-2">

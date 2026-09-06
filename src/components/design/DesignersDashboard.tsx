@@ -36,6 +36,7 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { DesignersPrintReport, type PrintReportVariant } from "@/components/design/DesignersPrintReport";
 import {
   firstName,
@@ -1117,27 +1118,29 @@ export function DesignersDashboard({
                 поточний місяць
               </span>
             ) : null}
-            <button
-              type="button"
-              onClick={() => setRefreshNonce((value) => value + 1)}
-              disabled={refreshing}
-              className={cn(
-                "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-border bg-background/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors",
-                "hover:text-foreground disabled:cursor-default disabled:opacity-60"
-              )}
-              title="Перерахувати з бази"
-            >
-              <RotateCcw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
-              <span className="hidden tabular-nums sm:inline">
-                {refreshing
-                  ? "оновлюємо…"
-                  : fetchedAt == null
-                    ? "оновити"
-                    : now - fetchedAt < 60_000
-                      ? "щойно"
-                      : `${Math.round((now - fetchedAt) / 60_000)} хв тому`}
-              </span>
-            </button>
+            <HoverTip asChild label="Перерахувати з бази">
+              <button
+                type="button"
+                onClick={() => setRefreshNonce((value) => value + 1)}
+                disabled={refreshing}
+                className={cn(
+                  "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-border bg-background/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors",
+                  "hover:text-foreground disabled:cursor-default disabled:opacity-60"
+                )}
+                aria-label="Перерахувати з бази"
+              >
+                <RotateCcw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+                <span className="hidden tabular-nums sm:inline">
+                  {refreshing
+                    ? "оновлюємо…"
+                    : fetchedAt == null
+                      ? "оновити"
+                      : now - fetchedAt < 60_000
+                        ? "щойно"
+                        : `${Math.round((now - fetchedAt) / 60_000)} хв тому`}
+                </span>
+              </button>
+            </HoverTip>
             <Select value={String(mi)} onValueChange={(value) => setMonthIdx(Number(value))}>
               <SelectTrigger className="h-9 w-[180px] text-sm font-medium">
                 <SelectValue />
@@ -1156,7 +1159,7 @@ export function DesignersDashboard({
                 align="end"
                 contentClassName="w-[260px] p-1.5"
                 trigger={
-                  <Button variant="outline" size="sm" className="h-9" title={`Друк за ${monthTitle(months[mi].value)}`}>
+                  <Button variant="outline" size="sm" className="h-9" aria-label={`Друк за ${monthTitle(months[mi].value)}`}>
                     <Printer className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Друк / PDF</span>
                   </Button>
