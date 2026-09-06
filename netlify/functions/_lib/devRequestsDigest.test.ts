@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { TRIAGE_STALE_DAYS, inboxLine, summarizeInbox } from "./devRequestsDigest";
+import {
+  IN_PROGRESS_STALE_DAYS,
+  TRIAGE_STALE_DAYS,
+  type BoardCard,
+  inProgressLine,
+  inboxLine,
+  summarizeInbox,
+  todayLine,
+} from "./devRequestsDigest";
 
 /**
  * Цей рядок щодня читає власник. Помилка тут не падає — вона або мовчить, коли
@@ -93,5 +101,71 @@ describe("рядок про кошик", () => {
     expect(fresh(5)).toBe("📥 Кошик запитів: 5 нових");
     expect(fresh(11)).toBe("📥 Кошик запитів: 11 нових");
     expect(fresh(21)).toBe("📥 Кошик запитів: 21 нова");
+  });
+});
+
+/** Картка «в роботі», яку востаннє чіпали `days` діб тому. */
+function card(label: string, days: number | null): BoardCard {
+  return {
+    label,
+    updatedAt: days === null ? null : daysAgo(days),
+  };
+}
+
+describe("рядок про полицю «Сьогодні»", () => {
+  it("набрано — перелічує картки в порядку кладення", () => {
+    expect(todayLine([card("REQ-205", 0), card("REQ-210", 0)], 20)).toBe(
+      "🎯 Сьогодні: REQ-205 · REQ-210"
+    );
+  });
+
+  it("не набрано, але черга є — каже, скільки лежить напоготові", () => {
+    expect(todayLine([], 20)).toBe("🎯 Сьогодні: не набрано · у черзі 20");
+  });
+
+  it("порожньо і в полиці, і в черзі — рядка немає взагалі", () => {
+    expect(todayLine([], 0)).toBeNull();
+  });
+});
+
+describe("рядок про роботу в русі", () => {
+  it("нічого не взято — рядка немає", () => {
+    expect(inProgressLine([], NOW)).toBeNull();
+  });
+
+  it("усе рухається — лише кількість, про застій ані слова", () => {
+    const line = inProgressLine([card("REQ-1", 0), card("REQ-2", 3)], NOW);
+    expect(line).toBe("🔧 В роботі: 2 картки");
+    expect(line).not.toContain("без змін");
+  });
+
+  it("частина застигла — видно скільки саме", () => {
+    const line = inProgressLine([card("REQ-1", 0), card("REQ-2", 9), card("REQ-3", 30)], NOW);
+    expect(line).toBe("🔧 В роботі: 3 картки, з них 2 без змін понад тиждень");
+  });
+
+  it("застигло все — кваліфікатор не повторює загальне число", () => {
+    expect(inProgressLine([card("REQ-1", 9), card("REQ-2", 30)], NOW)).toBe(
+      "🔧 В роботі: 2 картки — усі без змін понад тиждень"
+    );
+  });
+
+  it("рівно на порозі — вже застигла, не «майже»", () => {
+    expect(inProgressLine([card("REQ-1", IN_PROGRESS_STALE_DAYS)], NOW)).toContain("без змін");
+    expect(inProgressLine([card("REQ-1", IN_PROGRESS_STALE_DAYS - 1)], NOW)).not.toContain("без змін");
+  });
+
+  it("картка без дати зміни не рахується застиглою — це незнання, а не застій", () => {
+    expect(inProgressLine([card("REQ-1", null)], NOW)).toBe("🔧 В роботі: 1 картка");
+  });
+
+  it("відмінювання карток на межових значеннях", () => {
+    const count = (n: number) =>
+      inProgressLine(Array.from({ length: n }, (_, i) => card(`REQ-${i}`, 0)), NOW);
+    expect(count(1)).toBe("🔧 В роботі: 1 картка");
+    expect(count(3)).toBe("🔧 В роботі: 3 картки");
+    expect(count(5)).toBe("🔧 В роботі: 5 карток");
+    expect(count(11)).toBe("🔧 В роботі: 11 карток");
+    expect(count(21)).toBe("🔧 В роботі: 21 картка");
   });
 });

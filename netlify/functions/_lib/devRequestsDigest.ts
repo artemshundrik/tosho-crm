@@ -123,3 +123,127 @@ export function inboxLine(summary: InboxSummary): string | null {
   const oldest = pluralUk(summary.oldestDays, "день", "дні", "днів");
   return `📥 Кошик запитів: ${summary.total}${partial} · найстаріша чекає ${oldest}`;
 }
+
+/* ------------------------------------------------------------------ *
+ * Полиця «Сьогодні» і робота в русі — решта ранкового брифінгу дошки.
+ *
+ * ЧОМУ ЦЕ ТУТ, А НЕ ОКРЕМИМ ЗВІТОМ: тех-звіт і так приходить уранці й і так
+ * має рядок про кошик. Другий ранковий лист про ту саму дошку почали б
+ * пропускати обидва — а окремий агент, який щоранку каже те саме іншими
+ * словами, лише подвоює вартість і кількість місць, де правило може розійтись.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Скільки днів картка може стояти «в роботі» без жодної зміни, поки це нормально.
+ *
+ * Сім, а не три як у кошика: кошик розгрібають, а взяту картку роблять, і
+ * велика справа тиждень без коміта — це ще робота, а не забуте. Друга поспіль
+ * тиша вже означає, що картку відклали й не сказали про це дошці.
+ */
+export const IN_PROGRESS_STALE_DAYS = 7;
+
+export type BoardCard = {
+  label: string;
+  /** Остання зміна картки — єдина позначка руху, яка в базі є. */
+  updatedAt: string | null;
+};
+
+/**
+ * Картки полиці «Сьогодні» та стовпчика «В роботі» одним запитом.
+ *
+ * `today_at` — це і є полиця: її наповнює сама людина в CRM, тож порядок
+ * беремо той, у якому клала (dev-requests-today.sql), а не за терміновістю.
+ * Полиця — намір на день, і переставляти його за своїм розумінням не можна.
+ */
+export async function fetchBoardBriefing(
+  admin: SupabaseClient,
+  teamIds: string[]
+): Promise<{ today: BoardCard[]; inProgress: BoardCard[]; queued: number }> {
+  if (teamIds.length === 0) return { today: [], inProgress: [], queued: 0 };
+
+  const { data, error } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .select("number,status,today_at,updated_at")
+    .in("team_id", teamIds)
+    .in("status", ["queued", "in_progress"])
+    .limit(MAX_ROWS);
+  if (error) throw new Error(`dev_requests: ${error.message}`);
+
+  const rows = (data ?? []) as Array<{
+    number?: number | null;
+    status?: string | null;
+    today_at?: string | null;
+    updated_at?: string | null;
+  }>;
+
+  const toCard = (row: (typeof rows)[number]): BoardCard => ({
+    label: `REQ-${row.number}`,
+    updatedAt: row.updated_at ?? null,
+  });
+
+  const today = rows
+    .filter((row) => Boolean(row.today_at))
+    .sort((a, b) => String(a.today_at).localeCompare(String(b.today_at)))
+    .map(toCard);
+
+  return {
+    today,
+    inProgress: rows.filter((row) => row.status === "in_progress").map(toCard),
+    queued: rows.filter((row) => row.status === "queued").length,
+  };
+}
+
+/**
+ * Рядок про полицю «Сьогодні».
+ *
+ *   набрано          → «🎯 Сьогодні: REQ-205 · REQ-210»
+ *   не набрано, є що → «🎯 Сьогодні: не набрано · у черзі 20»
+ *   не набрано й нічого в черзі → рядка немає
+ *
+ * ЧОМУ ПОРОЖНЯ ПОЛИЦЯ ВСЕ ОДНО ГОВОРИТЬ, на відміну від кошика: кошик — це
+ * докір («розберіть»), і щоденний нуль там привчає не читати. А тут порожньо
+ * означає «день ще не набраний» — і назвати, скільки лежить напоготові, це
+ * відповідь на питання, а не нагадування про борг. Мовчимо лише тоді, коли й
+ * черга порожня: тоді сказати справді нічого.
+ */
+export function todayLine(today: BoardCard[], queued: number): string | null {
+  if (today.length > 0) return `🎯 Сьогодні: ${today.map((card) => card.label).join(" · ")}`;
+  if (queued > 0) return `🎯 Сьогодні: не набрано · у черзі ${queued}`;
+  return null;
+}
+
+/**
+ * Рядок про роботу в русі.
+ *
+ *   нічого не взято     → рядка немає
+ *   усе рухається       → «🔧 В роботі: 3 картки»
+ *   щось застигло       → «🔧 В роботі: 8 карток, з них 2 без змін понад тиждень»
+ *
+ * ЧОМУ «БЕЗ ЗМІН», А НЕ «В РОБОТІ З»: у базі немає позначки, коли картку взяли
+ * в роботу, — є лише `updated_at`, останній дотик будь-якого поля. Назвати це
+ * віком картки означало б збрехати точністю, якої немає; «без змін» описує рівно
+ * те, що ми справді знаємо.
+ */
+export function inProgressLine(
+  inProgress: BoardCard[],
+  now: Date,
+  staleDays: number = IN_PROGRESS_STALE_DAYS
+): string | null {
+  if (inProgress.length === 0) return null;
+
+  const total = pluralUk(inProgress.length, "картка", "картки", "карток");
+  const stale = inProgress.filter((card) => {
+    const age = card.updatedAt ? ageInDays(card.updatedAt, now) : null;
+    return age !== null && age >= staleDays;
+  }).length;
+
+  // Той самий принцип, що й у кошика: кваліфікатор, який дорівнює самому
+  // числу, нічого не додає.
+  if (stale === 0 || stale === inProgress.length) {
+    return stale === 0
+      ? `🔧 В роботі: ${total}`
+      : `🔧 В роботі: ${total} — усі без змін понад тиждень`;
+  }
+  return `🔧 В роботі: ${total}, з них ${stale} без змін понад тиждень`;
+}

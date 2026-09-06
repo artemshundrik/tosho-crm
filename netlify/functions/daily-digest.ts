@@ -30,7 +30,14 @@ import {
   techReleaseLine,
   weeklyReleaseLine,
 } from "./_lib/releasesDigest";
-import { fetchTriageCreatedAt, inboxLine, summarizeInbox } from "./_lib/devRequestsDigest";
+import {
+  fetchBoardBriefing,
+  fetchTriageCreatedAt,
+  inProgressLine,
+  inboxLine,
+  summarizeInbox,
+  todayLine,
+} from "./_lib/devRequestsDigest";
 import { loadWorkSchedules, scheduleRowsForDates } from "./_lib/workSchedules";
 import {
   TONE_EMOJI,
@@ -215,21 +222,33 @@ async function buildTechDigest(admin: AdminClient, now: Date, todayKey: string, 
     // Релізи — прикраса тех-звіту, не його суть: без них звіт усе одно йде.
   }
 
-  // Скільки запитів чекає розбору. На порожньому кошику рядка немає.
+  // Брифінг дошки доробок: що взято на сьогодні, що в роботі, що чекає розбору.
+  // Три рядки одного блоку — «як стоїть робота над самою CRM».
   let inbox: string | null = null;
+  let today: string | null = null;
+  let inWork: string | null = null;
   try {
-    inbox = inboxLine(summarizeInbox(await fetchTriageCreatedAt(admin, teamIds), now));
+    const [triage, board] = await Promise.all([
+      fetchTriageCreatedAt(admin, teamIds),
+      fetchBoardBriefing(admin, teamIds),
+    ]);
+    inbox = inboxLine(summarizeInbox(triage, now));
+    today = todayLine(board.today, board.queued);
+    inWork = inProgressLine(board.inProgress, now);
   } catch {
-    // Той самий принцип, що й з релізами: кошик не має права завалити звіт.
+    // Той самий принцип, що й з релізами: дошка не має права завалити звіт.
   }
 
-  return renderTechMessage(signals, todayKey, { releaseLine, inboxLine: inbox });
+  return renderTechMessage(signals, todayKey, {
+    releaseLine,
+    boardLines: [today, inWork, inbox],
+  });
 }
 
 function renderTechMessage(
   signals: Signal[],
   todayKey: string,
-  tail: { releaseLine?: string | null; inboxLine?: string | null } = {}
+  tail: { releaseLine?: string | null; boardLines?: Array<string | null> } = {}
 ) {
   const tone = worstTone(signals);
   const problems = signals.filter((s) => s.tone === "warning" || s.tone === "danger");
@@ -248,13 +267,12 @@ function renderTechMessage(
     }
   }
   for (const s of neutral) lines.push(`${TONE_EMOJI[s.tone]} ${escapeTelegramHtml(s.text)}`);
-  // Реліз і кошик — один блок «про роботу над самою CRM», тож порожній рядок
-  // перед ним один на двох, а не по одному на кожен.
-  if (tail.releaseLine) lines.push("", escapeTelegramHtml(tail.releaseLine));
-  if (tail.inboxLine) {
-    if (!tail.releaseLine) lines.push("");
-    lines.push(escapeTelegramHtml(tail.inboxLine));
-  }
+  // Реліз і дошка — один блок «про роботу над самою CRM», тож порожній рядок
+  // перед ним один на всіх, а не по одному на кожен рядок.
+  const board = (tail.boardLines ?? []).filter((line): line is string => Boolean(line));
+  if (tail.releaseLine || board.length > 0) lines.push("");
+  if (tail.releaseLine) lines.push(escapeTelegramHtml(tail.releaseLine));
+  for (const line of board) lines.push(escapeTelegramHtml(line));
 
   return {
     tone,
