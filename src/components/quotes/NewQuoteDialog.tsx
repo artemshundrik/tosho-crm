@@ -2032,13 +2032,21 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   <div className="text-lg font-semibold text-foreground">Виберіть напрямок і продукт</div>
                 </div>
 
-                <div className="inline-flex rounded-full border border-border/50 bg-background/40 p-1">
+                {/* Ролі й `aria-checked` — те саме, що в білдері (REQ-175#p75): без них
+                    читач екрана називає обидві кнопки однаково й не каже, що обрано. */}
+                <div
+                  className="inline-flex rounded-full border border-border/50 bg-background/40 p-1"
+                  role="radiogroup"
+                  aria-label="Тип виробу"
+                >
                   {QUOTE_TYPES.map((type) => {
                     const active = quoteType === type.value;
                     return (
                       <button
                         key={type.value}
                         type="button"
+                        role="radio"
+                        aria-checked={active}
                         onClick={() => {
                           setQuoteType(type.value);
                           setCategoryId("");

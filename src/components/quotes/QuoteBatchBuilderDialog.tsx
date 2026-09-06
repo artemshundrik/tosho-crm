@@ -2140,7 +2140,19 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 space-y-3">
                         <SectionTitle icon={<Package />}>{getProductLabel(catalogTypes, activeProduct)}</SectionTitle>
-                        <div className="inline-flex rounded-full border border-border/50 bg-background/40 p-1">
+                        {/*
+                          РОЛІ ТУТ НЕ ПРИКРАСА (REQ-175#p75). Це був ряд голих
+                          <button>: обране малювалось лише кольором, тож читач
+                          екрана називав обидві кнопки однаково і не казав, що
+                          саме зараз рахуємо. Розмітка та сама, що у вікні
+                          «Новий прорахунок», — щоб обидва перемикачі звучали
+                          однаково.
+                        */}
+                        <div
+                          className="inline-flex rounded-full border border-border/50 bg-background/40 p-1"
+                          role="radiogroup"
+                          aria-label="Тип виробу"
+                        >
                           {QUOTE_TYPES.map((item) => {
                             const Icon = item.icon;
                             const active = activeProduct.quoteType === item.value;
@@ -2148,6 +2160,8 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                               <button
                                 key={item.value}
                                 type="button"
+                                role="radio"
+                                aria-checked={active}
                                 onClick={() => setProductQuoteType(item.value)}
                                 className={cn(
                                   "inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-all",
