@@ -155,6 +155,7 @@ import {
   QuoteUnsavedRunChip,
 } from "@/features/quotes/quote-details/QuoteHeaderFlags";
 import { useQuoteHeaderFlags } from "@/features/quotes/quote-details/useQuoteHeaderFlags";
+import { useApprovedRunPriceGuard } from "@/features/quotes/quote-details/useApprovedRunPriceGuard";
 import { pluralUk } from "@/lib/lastSeen";
 import {
   canOpenQuoteDetails,
@@ -1115,6 +1116,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setRuns((prev) => applyApprovedRunToggle(prev, runId, quoteItemId));
   };
 
+  const approvedPriceGuard = useApprovedRunPriceGuard(quoteId, quote?.currency);
+
   const saveRuns = async (nextRuns?: QuoteRun[] | unknown, options?: { silent?: boolean }) => {
     const silent = options?.silent === true;
     if (quoteRequirements.length > 0) {
@@ -1178,6 +1181,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       // Знімок ДО перезавантаження: `loadRuns` перепише `runsOriginal` новими
       // рядками, і порівнювати вже не буде з чим.
       const previousRuns = runsOriginal;
+
+      // Ціна, яку клієнт погодив, не міняється мовчки (REQ-178#p10). Питаємо на
+      // САНІТИЗОВАНИХ рядках — тобто на тому, що справді поїде в базу: порожнє
+      // поле накрутки тут уже стало ставкою за замовчуванням, і без цього
+      // порожній ввід читався б як падіння ціни до нуля.
+      const priceVerdict = await approvedPriceGuard.confirm(sanitized, previousRuns);
+      if (!priceVerdict.ok) {
+        setRuns((prev) => approvedPriceGuard.revert(prev, previousRuns, priceVerdict.changes));
+        setRunsSaving(false);
+        return;
+      }
 
       const saved = await persistQuoteRuns(quoteId, sanitized, idsToDelete);
       if (!saved.ok) return fail(saved.message);
@@ -6317,6 +6331,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {approvedPriceGuard.dialog}
 
       <ConfirmDialog
         open={deleteAttachmentOpen}
