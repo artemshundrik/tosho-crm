@@ -1,7 +1,7 @@
 import { useDictationField } from "@/components/dictation/DictationButton";
 
 /**
- * Диктування двох полів картки дизайн-задачі: ТЗ і правки.
+ * Диктування трьох полів картки дизайн-задачі: ТЗ, правка й коментар до прорахунку.
  *
  * ЧОМУ ОКРЕМИЙ МОДУЛЬ, А НЕ ДВА ВИКЛИКИ НА СТОРІНЦІ. `DesignTaskPage` стоїть
  * під ратчетом розміру, і два виклики `useDictationField` з усіма їхніми
@@ -23,6 +23,10 @@ export function useDesignTaskDictation(input: {
   changeValue: string;
   onChange: (next: string) => void;
   changeDisabled: boolean;
+  commentRef: React.RefObject<HTMLTextAreaElement | null>;
+  commentValue: string;
+  onComment: (next: string) => void;
+  commentDisabled: boolean;
 }) {
   const brief = useDictationField({
     textareaRef: input.briefRef,
@@ -43,5 +47,15 @@ export function useDesignTaskDictation(input: {
     withStrip: true,
   });
 
-  return { brief, changeRequest };
+  /* Коментар до прорахунку — теж велике поле, тож та сама смуга. */
+  const quoteComment = useDictationField({
+    textareaRef: input.commentRef,
+    value: input.commentValue,
+    onChange: input.onComment,
+    context: "comment",
+    disabled: input.commentDisabled,
+    withStrip: true,
+  });
+
+  return { brief, changeRequest, quoteComment };
 }

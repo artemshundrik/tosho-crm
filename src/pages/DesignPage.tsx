@@ -5783,10 +5783,7 @@ export default function DesignPage() {
               </div>
             ) : null}
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
-                {createBriefDictation.button}
-              </div>
+              <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
               {/* Сім рядків порожнім — приблизно ті самі 180px, що в полі ТЗ
                   у діалозі прорахунку. Доти тут стояв один рядок, і те саме
                   поле в двох діалогах виглядало по-різному: підпис обіцяв
@@ -5795,16 +5792,24 @@ export default function DesignPage() {
                   Стеля в 16 рядків — щоб довге ТЗ не розпихало діалог: він
                   центрований, тож росте симетрично, і все, що вище поля, повзе
                   з-під очей просто під час набору. */}
-              <AutoTextarea
-                ref={createBriefTextareaRef}
-                id="standalone-design-brief"
-                minRows={7}
-                maxRows={16}
-                value={createBrief}
-                onChange={(event) => setCreateBrief(event.target.value)}
-                placeholder="Опишіть задачу: ціль, референси, формат, текст, обмеження."
-              />
-              {createBriefDictation.strip}
+              {/* Мікрофон живе В ПОЛІ, а не в підписі над ним: у підписі він
+                  читався як значок-прикраса й губився, а тут це кнопка при
+                  самому тексті — і смуга запису виїжджає з-під неї, у тій самій
+                  рамці. */}
+              <div className="overflow-hidden rounded-xl border border-border bg-card transition-colors focus-within:border-foreground/40">
+                <AutoTextarea
+                  ref={createBriefTextareaRef}
+                  id="standalone-design-brief"
+                  minRows={7}
+                  maxRows={16}
+                  value={createBrief}
+                  onChange={(event) => setCreateBrief(event.target.value)}
+                  placeholder="Опишіть задачу: ціль, референси, формат, текст, обмеження."
+                  className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <div className="flex justify-end px-2 pb-2">{createBriefDictation.button}</div>
+                {createBriefDictation.strip}
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Файли / картинки</Label>

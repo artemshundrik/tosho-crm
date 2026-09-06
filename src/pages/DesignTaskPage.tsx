@@ -13,7 +13,6 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DictationButton } from "@/components/dictation/DictationButton";
 import { useDesignTaskDictation } from "@/features/designTask/useDesignTaskDictation";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1674,6 +1673,8 @@ export default function DesignTaskPage() {
     briefDisabled: briefSaving || designTaskLockedByOther,
     changeRef: changeRequestTextareaRef, changeValue: changeRequestDraft,
     onChange: setChangeRequestDraft, changeDisabled: changeRequestSaving || designTaskLockedByOther,
+    commentRef: quoteCommentTextareaRef, commentValue: quoteCommentDraft,
+    onComment: setQuoteCommentDraft, commentDisabled: quoteCommentSaving,
   });
 
   useEffect(() => {
@@ -10336,7 +10337,7 @@ export default function DesignTaskPage() {
                         onChange={(event) => void uploadChangeRequestDraftAttachments(event.target.files)}
                       />
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/30 pt-3">
+                      <div className="flex flex-wrap items-center gap-2 border-t border-border/30 pt-3">
                         <Button
                           size="sm"
                           variant="ghost"
@@ -10354,7 +10355,7 @@ export default function DesignTaskPage() {
                             : "Прикріпити файл"}
                         </Button>
                         {dictation.changeRequest.button}
-                        <div className="flex items-center gap-2">
+                        <div className="ml-auto flex items-center gap-2">
                           <Button
                             size="sm"
                             variant="ghost"
@@ -10938,13 +10939,7 @@ export default function DesignTaskPage() {
                   ) : null}
                 </div>
                 <div className="flex items-center justify-end gap-2">
-                  <DictationButton
-                    textareaRef={quoteCommentTextareaRef}
-                    value={quoteCommentDraft}
-                    onChange={setQuoteCommentDraft}
-                    context="comment"
-                    disabled={quoteCommentSaving}
-                  />
+                  {dictation.quoteComment.button}
                   <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
                     {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     Надіслати коментар

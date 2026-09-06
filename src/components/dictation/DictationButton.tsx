@@ -141,7 +141,10 @@ export function useDictationField({
         aria-label={label}
         aria-pressed={isRecording}
         title={label}
-        className={cn(isRecording && "gap-1.5 tabular-nums", className)}
+        /* Рамка обов'язкова: варіант `control` прозорий, і мікрофон читався
+           як значок-прикраса поруч із підписом, а не як кнопка. Саме через це
+           фічу не помічали. */
+        className={cn("border border-border/60", isRecording && "gap-1.5 tabular-nums", className)}
       >
         {isTranscribing ? (
           <Loader2 className="animate-spin" />
