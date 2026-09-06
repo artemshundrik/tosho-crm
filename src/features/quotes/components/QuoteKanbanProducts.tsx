@@ -88,16 +88,23 @@ export function QuoteKanbanProducts({ preview, isLoading, imageLoadStrategy }: Q
 
   return (
     <div className="mt-3 rounded-inner border border-border/60 bg-secondary px-3 py-2.5">
-      <div className="mb-2 inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
-        <Package className="h-3.5 w-3.5" />
-        {preview && preview.itemCount > 1 ? "Товари" : "Товар"}
-        {/* Список обрізаний — кількість каже, скільки їх насправді. */}
-        {collapsedProducts.length ? (
-          <span className="font-medium normal-case tracking-normal text-muted-foreground/70">
-            · {products.length}
-          </span>
-        ) : null}
-      </div>
+      {/*
+        ЗАГОЛОВКА «ТОВАРИ» БІЛЬШЕ НЕМАЄ. Слово стояло над рядками з фотографіями,
+        назвами й тиражами — підпис до очевидного, який щоразу з'їдав рядок
+        висоти на кожній картці дошки. Лишилось те єдине, чого з самих рядків не
+        видно: скільки позицій насправді, коли список обрізаний. Значок каже, що
+        рахуємо, число — скільки; читалці це саме й проговорює `aria-label`, бо
+        голе число їй нічого не каже.
+      */}
+      {collapsedProducts.length ? (
+        <div
+          aria-label={`Товарів: ${products.length}`}
+          className="mb-2 inline-flex items-center gap-1.5 text-2xs font-semibold tabular-nums text-muted-foreground"
+        >
+          <Package aria-hidden="true" className="h-3.5 w-3.5" />
+          {products.length}
+        </div>
+      ) : null}
       <div className="divide-y divide-border/50">
         {fullProducts.map((product, productIndex) => {
           const displayName = productDisplayName(product);

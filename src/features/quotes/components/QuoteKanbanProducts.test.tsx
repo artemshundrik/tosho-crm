@@ -61,6 +61,7 @@ function renderPreview(count: number) {
       ? Array.from(strip.querySelectorAll<HTMLElement>(":scope > div[title]")).map((node) => node.title)
       : [],
     overflowLabel: strip?.querySelector("span")?.textContent ?? null,
+    totalLabel: container.querySelector<HTMLElement>('[aria-label^="Товарів"]')?.textContent?.trim() ?? null,
   };
 }
 
@@ -87,8 +88,8 @@ describe("QuoteKanbanProducts", () => {
     expect(overflowLabel).toBe("+5");
   });
 
-  it("показує загальну кількість у заголовку, лише коли список обрізаний", () => {
-    expect(renderPreview(3).container.textContent).not.toContain("· 3");
-    expect(renderPreview(12).container.textContent).toContain("· 12");
+  it("показує загальну кількість, лише коли список обрізаний", () => {
+    expect(renderPreview(3).totalLabel).toBeNull();
+    expect(renderPreview(12).totalLabel).toBe("12");
   });
 });

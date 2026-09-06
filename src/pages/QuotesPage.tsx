@@ -981,8 +981,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     },
     [resolveManagerMember, teamMembersLoaded]
   );
-  const getPartyLabel = (row: Pick<QuoteListRow, "customer_id">) =>
-    row.customer_id ? "Замовник" : "Лід";
   const managerFilterOptions = useMemo(() => {
     const options = new Map<string, string>();
     const managerMembers = teamMembers.filter((member) => isManagerFilterMember(member));
@@ -1096,19 +1094,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     [isManagerInactive, memberRowById, onlineMemberIds]
   );
 
-  const getDateLabels = (value?: string | null) => {
+  /**
+   * Дата створення в списку — ОДИН рядок і ОДНЕ представлення.
+   *
+   * Було три на одну й ту саму мить: слово («Сьогодні») першим рядком, під ним
+   * число з часом другим, і те саме ще раз повністю в системній підказці.
+   * Слово ламало вирівнювання колонки, за якою й сортують, друга стрічка
+   * робила рядок таблиці вдвічі вищим, а підказка не існувала ні для
+   * клавіатури, ні для тачу.
+   */
+  const formatListDateTime = (value?: string | null) => {
     if (!value) return "Не вказано";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "Не вказано";
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const diffDays = Math.round((startOfToday.getTime() - startOfDate.getTime()) / (1000 * 60 * 60 * 24));
     const dateLabel = date.toLocaleDateString("uk-UA");
     const time = date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
-    if (diffDays === 0) return { primary: "Сьогодні", secondary: `${dateLabel} · ${time}` };
-    if (diffDays === 1) return { primary: "Вчора", secondary: `${dateLabel} · ${time}` };
-    return { primary: dateLabel, secondary: time };
+    return `${dateLabel} · ${time}`;
   };
 
   const parseDateOnly = (value: string) => {
@@ -6039,8 +6040,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 size={32}
               />
             </PartyHoverCard>
+            {/*
+              Підпис лишився ТІЛЬКИ для ліда. «ЗАМОВНИК» над назвою компанії з
+              її ж логотипом не додавав нічого — це підпис до очевидного. А от
+              «ЛІД» каже, що справа ще не має замовника, і це виняток, який
+              видно з першого погляду.
+            */}
             <div className="min-w-0">
-              <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">{getPartyLabel(row)}</div>
+              {row.customer_id ? null : (
+                <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">Лід</div>
+              )}
               <div className="truncate text-[14px] font-semibold">{row.customer_name ?? "Не вказано"}</div>
             </div>
           </div>
@@ -6652,13 +6661,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             </div>
                           ) : null}
                         </div>
-                        <div className="mt-1 text-sm text-muted-foreground">
-                          {row.created_at
-                            ? (() => {
-                                const labels = getDateLabels(row.created_at);
-                                return labels === "Не вказано" ? labels : labels.primary;
-                              })()
-                            : "Не вказано"}
+                        <div className="mt-1 text-sm tabular-nums text-muted-foreground">
+                          {formatListDateTime(row.created_at)}
                         </div>
                       </div>
                       <div onClick={(e) => e.stopPropagation()}>
@@ -6915,23 +6919,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">
-                          {row.created_at ? (
-                            (() => {
-                              const labels = getDateLabels(row.created_at);
-                              if (labels === "Не вказано") return "Не вказано";
-                              return (
-                                <div title={new Date(row.created_at).toLocaleString("uk-UA")}>
-                                  <div className="font-medium">{labels.primary}</div>
-                                  {labels.secondary ? (
-                                    <div className="text-xs text-muted-foreground">{labels.secondary}</div>
-                                  ) : null}
-                                </div>
-                              );
-                            })()
-                          ) : (
-                            "Не вказано"
-                          )}
+                        <TableCell className="whitespace-nowrap text-sm font-medium tabular-nums">
+                          {formatListDateTime(row.created_at)}
                         </TableCell>
                         <TableCell className="font-medium max-w-[260px]">
                           <div className="flex items-center gap-3 min-w-0">
@@ -7014,21 +7003,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             );
                           })()}
                         </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
+                        {/*
+                          СТАТУС — БЕЗ ЗАЛИТОЇ ПІГУЛКИ. Рядок мав дві кольорові
+                          пігулки поспіль: дедлайн і статус. Дедлайн каже про
+                          ВИНЯТОК («прострочено»), і саме йому потрібна заливка;
+                          статус є в кожного рядка, тож колонка залитих пігулок
+                          нічого не виділяла — вона просто рябіла. Тон лишається
+                          на значку, як у шапці картки на дошці.
+
+                          Клік крізь клітинку більше не глушиться: пігулка була
+                          з `cursor-pointer`, але без обробника, і клітинка
+                          мовчки з'їдала клік, яким відкривають прорахунок.
+                        */}
+                        <TableCell>
                           {(() => {
                             const normalizedStatus = normalizeStatus(row.status);
                             const Icon = statusIcons[normalizedStatus] ?? Clock;
                             return (
-                              <Badge
-                                className={cn(
-                                  "cursor-pointer transition-all",
-                                  statusClasses[normalizedStatus] ?? statusClasses.new
-                                )}
-                                variant="outline"
-                              >
-                                <Icon className="h-3.5 w-3.5 mr-1" />
+                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium">
+                                <Icon
+                                  className={cn(
+                                    "h-3.5 w-3.5 shrink-0",
+                                    statusColorClass[normalizedStatus] ?? "text-muted-foreground"
+                                  )}
+                                />
                                 {formatStatusLabel(normalizedStatus)}
-                              </Badge>
+                              </span>
                             );
                           })()}
                         </TableCell>
