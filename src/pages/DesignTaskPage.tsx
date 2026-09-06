@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { HoldButton } from "@/components/ui/hold-button";
 import { useDesignTaskDictation } from "@/features/designTask/useDesignTaskDictation";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1665,6 +1666,16 @@ export default function DesignTaskPage() {
     onBeforeRelease: () => saveBriefBeforeReleaseRef.current?.(),
   });
   const designTaskLockedByOther = designTaskLock.lockedByOther;
+  /** Стерти чернетку правки разом із її вкладеннями. */
+  const discardChangeRequestDraft = async () => {
+    const attachmentsCopy = [...changeRequestDraftAttachments];
+    setChangeRequestDraft("");
+    setChangeRequestDraftAttachments([]);
+    setChangeRequestOpen(false);
+    setChangeRequestContextExpanded(false);
+    await Promise.allSettled(attachmentsCopy.map((a) => removeAttachmentWithVariants(a.storage_bucket, a.storage_path)));
+  };
+
   /** Диктування ТЗ і правки — обидва смугою під полем. */
   const dictation = useDesignTaskDictation({
     briefRef: briefTextareaRef, briefValue: briefDraft,
@@ -10356,35 +10367,28 @@ export default function DesignTaskPage() {
                         </Button>
                         {dictation.changeRequest.button}
                         <div className="ml-auto flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={changeRequestSaving || designTaskLockedByOther}
-                            onClick={() => {
-                              const hasContent =
-                                changeRequestDraft.trim().length > 0 || changeRequestDraftAttachments.length > 0;
-                              const reset = async () => {
-                                const attachmentsCopy = [...changeRequestDraftAttachments];
-                                setChangeRequestDraft("");
-                                setChangeRequestDraftAttachments([]);
-                                setChangeRequestOpen(false);
-                                setChangeRequestContextExpanded(false);
-                                await Promise.allSettled(
-                                  attachmentsCopy.map((entry) =>
-                                    removeAttachmentWithVariants(entry.storage_bucket, entry.storage_path)
-                                  )
-                                );
-                              };
-                              confirmDiscardOr(
-                                hasContent,
-                                "Скасувати правку?",
-                                "Текст правки і прикріплені файли буде втрачено.",
-                                () => void reset()
-                              );
-                            }}
-                          >
-                            Скасувати
-                          </Button>
+                          {/* Затиск ЗАМІСТЬ вікна «Ви впевнені?»: один запобіжник, а не два
+                              поспіль. Порожню чернетку скасовує звичайний натиск. */}
+                          {changeRequestDraft.trim().length > 0 || changeRequestDraftAttachments.length > 0 ? (
+                            <HoldButton
+                              className="h-8 px-3 text-xs"
+                              disabled={changeRequestSaving || designTaskLockedByOther}
+                              holdingLabel="Не відпускайте — зітру"
+                              onConfirm={() => void discardChangeRequestDraft()}
+                              tone="neutral"
+                            >
+                              Скасувати
+                            </HoldButton>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={changeRequestSaving || designTaskLockedByOther}
+                              onClick={() => void discardChangeRequestDraft()}
+                            >
+                              Скасувати
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             className="gap-1.5"
