@@ -17,6 +17,11 @@ type QuoteSetKindFilter = "all" | "kp" | "set";
 type UseQuotesPageViewStateParams = {
   rows: QuoteListRow[];
   search: string;
+  /**
+   * Запит, під який приїхали `rows`, або `null`, якщо це кеш чи ще нічого не
+   * приїхало.
+   */
+  rowsSearchTerm?: string | null;
   quickFilter: QuickFilter;
   status: string;
   sortBy: SortBy;
@@ -52,6 +57,7 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
   const {
     rows,
     search,
+    rowsSearchTerm,
     quickFilter,
     status,
     sortBy,
@@ -77,7 +83,18 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
     let filtered = [...rows];
     const q = search.trim().toLowerCase();
 
-    if (q) {
+    /*
+      ПРОСІЮЄМО ЛИШЕ ЗАСТАРІЛЕ. Сервер шукає ширше за цей рядок: крім номера,
+      теми й замовника він дивиться в ТЗ, а з REQ-178#p8 ще й в артикул позиції.
+      Тому щойно приїхали рядки саме під це набране, другий фільтр у браузері
+      може тільки нашкодити — і шкодив: прорахунок, знайдений за артикулом
+      («51K054MHH») або за словом із ТЗ («termosumka»), сервер віддавав, а ця
+      гілка викидала, і сторінка казала «Немає прорахунків».
+
+      Фільтр лишається для того, заради чого він і є: поки відповідь у дорозі,
+      список звужується миттєво — по тому, що видно в рядку.
+    */
+    if (q && rowsSearchTerm !== q) {
       filtered = filtered.filter((row) => {
         const hay = [row.number, row.title, row.customer_name, row.quote_type]
           .filter(Boolean)
@@ -112,7 +129,7 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
     }
 
     return filtered;
-  }, [rows, search, quickFilter, status, sortBy, sortOrder]);
+  }, [rows, search, rowsSearchTerm, quickFilter, status, sortBy, sortOrder]);
 
   const filteredQuoteSets = useMemo(() => {
     const q = quoteSetSearch.trim().toLowerCase();

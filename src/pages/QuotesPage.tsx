@@ -585,6 +585,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
+  /**
+   * Запит, під який приїхали `rows`. Поки він збігається з набраним, повторно
+   * просіювати список у браузері НЕ треба — сервер уже це зробив, і зробив
+   * ширше: він дивиться ще й у ТЗ та в артикул позиції (REQ-178#p8).
+   */
+  const [rowsSearchTerm, setRowsSearchTerm] = useState<string | null>(null);
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "all");
   // Manager-filter default (see effect below) — role-agnostic, by ownership:
   //   • designer   → всі (they filter by designer, not manager)
@@ -1570,6 +1576,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         fullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
       }
       setRows(mergedRows);
+      setRowsSearchTerm(search.trim().toLowerCase());
       setQuoteMembershipByQuoteId(nextMembershipByQuoteId);
       setAttachmentCounts({});
 
@@ -1599,6 +1606,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setError(getErrorMessage(e, "Не вдалося завантажити список."));
       setHasMoreQuotes(false);
       setRows([]);
+      setRowsSearchTerm(null);
       setAttachmentCounts({});
       setQuoteMembershipByQuoteId(new Map());
       fetchedQuoteMembershipIdsRef.current = new Set();
@@ -1666,6 +1674,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const cached = readQuotesPageCache(teamId);
     if (cached && cached.rows.length > 0) {
       setRows(cached.rows);
+      // Кеш не пам'ятає, під який запит його зібрано, тож просіюємо, як раніше.
+      setRowsSearchTerm(null);
       setAttachmentCounts(cached.attachmentCounts ?? {});
       setQuoteMembershipByQuoteId(new Map(cached.quoteMembershipEntries ?? []));
       setKanbanProductByQuoteId(Object.fromEntries(cached.kanbanProductEntries ?? []));
@@ -3427,6 +3437,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   } = useQuotesPageViewState({
     rows: filteredRowsByManager,
     search,
+    rowsSearchTerm,
     quickFilter,
     status,
     sortBy,

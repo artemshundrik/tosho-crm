@@ -10,6 +10,7 @@ import {
 import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
+import { findQuoteIdsByProductSku } from "@/lib/quoteSkuMatches";
 import type { AvatarAbsence } from "@/lib/absenceIndicator";
 import { getCurrentUserId } from "./currentUser";
 
@@ -408,6 +409,7 @@ export async function listQuotes(params: ListQuotesParams) {
   const { teamId, search, status, statuses, managerUserId, limit, offset } = params;
   const q = search?.trim() ?? "";
   const escapedSearch = escapePostgrestIlikeTerm(q);
+  const skuQuoteIds = escapedSearch.length > 0 ? await findQuoteIdsByProductSku(teamId, q) : [];
 
   const listFromQuotes = async () => {
     const baseSearchableColumns = ["number", "comment", "title"] as const;
@@ -478,6 +480,10 @@ export async function listQuotes(params: ListQuotesParams) {
 
       if (escapedSearch.length > 0) {
         const searchFilters = variant.searchableColumns.map((column) => `${column}.ilike.%${escapedSearch}%`);
+        // Знайдене за артикулом іде ТИМ САМИМ фільтром, а не окремим добором:
+        // так сортування, статуси й посторінковість лишаються спільними, і
+        // прорахунок, знайдений за кодом товару, стоїть у списку на своєму місці.
+        if (skuQuoteIds.length > 0) searchFilters.push(`id.in.(${skuQuoteIds.join(",")})`);
         query = query.or(searchFilters.join(","));
       }
 

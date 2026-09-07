@@ -245,6 +245,14 @@ const GIANT_THRESHOLD = 2000;
  * заради того, щоб НЕ додавати вузла в дерево: без неї довелось би тягнути
  * класи розкладки на проміжний span.
  *
+ * ПІДНЯТО 07.09.2026 для toshoApi (+6) — пошук прорахунку за артикулом товару
+ * (REQ-178#p8). Спершу винесли все, що виноситься: сам пошук живе в
+ * `lib/quoteSkuMatches.ts`, а поріг «схоже на артикул» — у `lib/productSkuLike.ts`
+ * (його тепер читають і підказки товару у вікні прорахунку, і цей пошук). У
+ * `listQuotes` лишилось протягування: імпорт, один рядок виклику й одна гілка
+ * фільтра — знайдене за артикулом мусить іти ТИМ САМИМ `or`, інакше сортування
+ * й посторінковість розійдуться з рештою пошуку.
+ *
  */
 
 const CEILINGS = {
@@ -265,7 +273,7 @@ const CEILINGS = {
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2723,
   "src/components/design/DesignersDashboard.tsx": 2705,
   "src/features/orders/orderRecords.ts": 2614,
-  "src/lib/toshoApi.ts": 2634,
+  "src/lib/toshoApi.ts": 2640,
   "src/pages/TeamPage.tsx": 2182,
   "src/pages/ProfilePage.tsx": 2054,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,
