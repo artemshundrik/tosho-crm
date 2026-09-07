@@ -1167,14 +1167,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       // Окремим повідомленням, бо ця помилка означає не «щось пішло не так»,
       // а конкретну незастосовану міграцію — і підказка мусить бути дієвою.
       const fail = (message: string) => {
-        if (/record\s+"new"\s+has\s+no\s+field\s+"team_id"/i.test(message)) {
-          setRunsError(
-            "Потрібно оновити SQL hotfix для блокувань (scripts/entity-locks-hotfix-quote-child-team-id.sql)."
-          );
+        const reason = /record\s+"new"\s+has\s+no\s+field\s+"team_id"/i.test(message)
+          ? "Потрібно оновити SQL hotfix для блокувань (scripts/entity-locks-hotfix-quote-child-team-id.sql)."
+          : message;
+        if (silent) {
+          /* АВТОЗБЕРЕЖЕННЯ МОВЧИТЬ ПРО УСПІХ, А НЕ ПРО ВІДМОВУ (REQ-178#p12):
+             кнопки «Зберегти» ніхто не тиснув, тож тост — єдиний спосіб узнати,
+             що база відмовила («Накрутку задає менеджер прорахунку»).
+             І БЕЗ `runsError`: він замінює всю секцію «Товари і тиражі» одним
+             червоним рядком — правильно для нечитаного, згубно тут, бо разом із
+             тридцятьма полями зникало й щойно набране число. */
+          toast.error("Тираж не збережено", { description: reason });
         } else {
-          setRunsError(message);
+          setRunsError(reason);
+          toast.error("Помилка збереження");
         }
-        if (!silent) toast.error("Помилка збереження");
         setRunsSaving(false);
       };
 
