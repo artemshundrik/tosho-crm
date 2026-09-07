@@ -7,13 +7,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildCatalogImageAsset } from "@/lib/catalogAssetUrl";
+import { CATALOG_VARIANT_COLUMNS, groupCatalogVariantsByModel } from "@/lib/catalogVariantRows";
 import { supabase } from "@/lib/supabaseClient";
 import type {
   CatalogType,
   CatalogKind,
   CatalogModel,
   CatalogModelMetadata,
-  CatalogModelVariant,
   CatalogMethod,
   CatalogPrintPosition,
   CatalogPriceTier,
@@ -140,23 +140,9 @@ export function useCatalogData(teamId: string | null) {
 
       // Варіанти приїжджають окремою таблицею (REQ-250#p1), а їхні URL
       // виводяться зі шляху (REQ-250#p2) — сітці лишається та сама форма, що
-      // була в metadata, тож картка не змінилась ані рядком.
-      const variantsByModel = new Map<string, CatalogModelVariant[]>();
-      [...payload.variants]
-        .sort((left, right) => left.sort_order - right.sort_order)
-        .forEach((row) => {
-          const list = variantsByModel.get(row.model_id) ?? [];
-          const asset = buildCatalogImageAsset(row.image_bucket, row.image_path);
-          list.push({
-            id: row.id,
-            name: row.name,
-            sku: row.sku,
-            active: row.is_active,
-            imageUrl: asset?.previewUrl ?? asset?.originalUrl ?? null,
-            imageAsset: asset,
-          });
-          variantsByModel.set(row.model_id, list);
-        });
+      // була в metadata, тож картка не змінилась ані рядком. Перетворювач
+      // спільний із вікном прорахунку (REQ-178#p9).
+      const variantsByModel = groupCatalogVariantsByModel(payload.variants);
 
       const modelsByKind = new Map<string, CatalogModel[]>();
       payload.models.forEach((row) => {
@@ -231,7 +217,7 @@ export function useCatalogData(teamId: string | null) {
         supabase
           .schema("tosho")
           .from("catalog_variants")
-          .select("id,model_id,name,sku,image_bucket,image_path,is_active,sort_order")
+          .select(CATALOG_VARIANT_COLUMNS)
           .in("model_id", modelIds),
         supabase.schema("tosho").from("catalog_model_methods").select("model_id,method_id").in("model_id", modelIds),
         supabase

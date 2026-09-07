@@ -13,6 +13,15 @@ import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
 import { cn } from "@/lib/utils";
 import { useKanbanDrag } from "@/components/kanban/kanbanDrag";
 import { normalizeUnitLabel } from "@/lib/units";
+import {
+  CATALOG_MODEL_SCALAR_COLUMNS,
+  CATALOG_VARIANT_COLUMNS,
+  buildCatalogModelMetadata,
+  groupCatalogVariantsByModel,
+  type CatalogModelScalarRow,
+  type CatalogVariantRow,
+} from "@/lib/catalogVariantRows";
+import type { CatalogModelMetadata } from "@/types/catalog";
 import { supabase } from "@/lib/supabaseClient";
 import type { Database, Json } from "@/lib/database.types";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -241,54 +250,16 @@ type CatalogModel = {
   price?: number;
   methodIds?: string[];
   imageUrl?: string;
-  metadata?: {
-    sku?: string | null;
-    baseVariantName?: string | null;
-    variants?: Array<{
-      id: string;
-      name: string;
-      sku?: string | null;
-      imageUrl?: string | null;
-      imageAsset?: {
-        bucket: string;
-        path: string;
-        originalUrl?: string | null;
-        previewUrl?: string | null;
-        thumbUrl?: string | null;
-      } | null;
-      active?: boolean;
-    }>;
-    configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
-    /** Пресет описового виду — див. `lib/printSpec.ts`. */
-    specPreset?: string | null;
-    imageAsset?: {
-      bucket: string;
-      path: string;
-      originalUrl?: string | null;
-      previewUrl?: string | null;
-      thumbUrl?: string | null;
-    } | null;
-    source?: {
-      vendor?: string | null;
-      url?: string | null;
-      importedAt?: string | null;
-    } | null;
-    brand?: string | null;
-    description?: string | null;
-    specs?: Array<{ label: string; value: string }>;
-    sizes?: string[];
-  };
+  /** Той самий тип, що на сторінці «Каталог»: два описи однієї форми розходились. */
+  metadata?: CatalogModelMetadata;
 };
-type CatalogModelRow = {
+type CatalogModelRow = CatalogModelScalarRow & {
   id: string;
   kind_id: string;
   name: string;
   price?: number | null;
   image_url?: string | null;
   thumb_url?: string | null;
-  sku?: string | null;
-  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
-  metadata?: CatalogModel["metadata"] | null;
 };
 type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
 type CatalogKind = {
@@ -1296,6 +1267,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
         const kindIds = (kindRows ?? []).map((row) => row.id);
 
+        // НЕ `metadata` цілком (REQ-178#p9) — скаляри стрілками, варіанти
+        // окремим запитом. Було 1041 кБ на кожне відкриття вікна, стало ≈380.
         const loadModelRows = async (withImage: boolean) =>
           kindIds.length
             ? await supabase
@@ -1303,8 +1276,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 .from("catalog_models")
                 .select(
                   withImage
-                    ? "id,kind_id,name,price,image_url,metadata"
-                    : "id,kind_id,name,price,metadata"
+                    ? `id,kind_id,name,price,image_url,${CATALOG_MODEL_SCALAR_COLUMNS}`
+                    : `id,kind_id,name,price,${CATALOG_MODEL_SCALAR_COLUMNS}`
                 )
                 .eq("team_id", teamId)
                 .in("kind_id", kindIds)
@@ -1320,6 +1293,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ({ data: modelRows, error: modelError } = await loadModelRows(false));
         }
         if (modelError) throw modelError;
+
+        const modelIds = (((modelRows ?? []) as unknown) as CatalogModelRow[]).map((row) => row.id);
+        const { data: variantRows, error: variantError } = modelIds.length
+          ? await supabase
+              .schema("tosho")
+              .from("catalog_variants")
+              .select(CATALOG_VARIANT_COLUMNS)
+              .in("model_id", modelIds)
+          : { data: [], error: null };
+        if (variantError) throw variantError;
 
         const { data: methodRows, error: methodError } = kindIds.length
           ? await supabase
@@ -1350,13 +1333,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           methodsByKind.set(row.kind_id, list);
         });
 
+        // Варіанти — рядки таблиці (REQ-250#p1), а вікно чекає на них у тій самій
+        // формі, що лежала в metadata: URL виводяться зі шляху, тож жоден
+        // читач нижче не змінився.
+        const variantsByModel = groupCatalogVariantsByModel(
+          ((variantRows ?? []) as unknown) as CatalogVariantRow[]
+        );
+
         const modelsByKind = new Map<string, CatalogModel[]>();
         (((modelRows ?? []) as unknown) as CatalogModelRow[]).forEach((row) => {
           const list = modelsByKind.get(row.kind_id) ?? [];
-          const metadata =
-            row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-              ? row.metadata
-              : undefined;
+          const metadata = buildCatalogModelMetadata(row, variantsByModel.get(row.id));
           list.push({
             id: row.id,
             name: row.name,
