@@ -861,21 +861,31 @@ async function loadOpenAi(ctx: IntegrationsContext): Promise<IntegrationStatus> 
 // ---------------------------------------------------------------------------
 
 /**
- * Кредити Netlify. Тариф Personal ($9/міс) дає 1000 кредитів, і вони
- * поновлюються 2-го числа — не «за останні 30 днів», а рівно з початку
- * білінг-циклу.
+ * Кредити Netlify. Тариф Personal ($9/міс) дає 1000 кредитів на місяць.
  *
- * Формула звірена з кабінетом 15.08.2026: 26 релізів від 2 серпня × 15 = 390,
- * а Netlify показував 608.4 з 1000, тобто витрачено 391.6. Різниця в 1.6
- * кредита означає, що фон (трафік, функції) тут майже нічого не важить —
- * попередня версія цього коду віднімала на нього 330 кредитів «на око» і
- * занижувала залишок у сім разів.
+ * ЧИСЛА БЕРЕМО З КАБІНЕТУ, А НЕ ЗІ СВОЄЇ ГОЛОВИ (REQ-217). Раніше картка
+ * рахувала сама: «1000 мінус 15 за кожен реліз від 2-го числа». Формула була
+ * звірена з кабінетом 15.08.2026 і тоді сходилась до 1,6 кредита. За три тижні
+ * розійшлась двічі — цикл переїхав на 27-ме, а фон (функції, запити, трафік)
+ * виріс до чверті витрати, — і 07.09.2026 картка обіцяла 850 кредитів проти
+ * справжніх 621. Тепер справжній залишок дає `/.netlify/functions/netlify-usage`,
+ * тобто те саме джерело, з якого живуть сигнал «Здоров'я» й телеграм-бот.
+ *
+ * ОЦІНКА ЛИШИЛАСЬ — ЯК ЗАПАСНИЙ ШЛЯХ. Токена може не бути (локальна збірка),
+ * Netlify може не відповісти. Тоді картка показує підрахунок за нашими релізами
+ * і ПРЯМО каже, що це оцінка: мовчазна підміна точного числа приблизним і
+ * привела сюди.
  */
 const NETLIFY_PLAN_CREDITS = 1000;
 const NETLIFY_CREDITS_PER_DEPLOY = 15;
-const NETLIFY_CYCLE_DAY = 2;
+/**
+ * День поновлення для ЗАПАСНОГО підрахунку. Справжню дату циклу приносить API
+ * (він же єдиний, хто знає про її переїзди); тут вона потрібна лише для того,
+ * щоб було від чого рахувати релізи, коли API мовчить.
+ */
+const NETLIFY_CYCLE_DAY = 27;
 
-/** Початок поточного білінг-циклу Netlify (2-ге число). */
+/** Початок поточного білінг-циклу Netlify — для запасного підрахунку. */
 function netlifyCycleStart(): Date {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), NETLIFY_CYCLE_DAY);
@@ -883,15 +893,71 @@ function netlifyCycleStart(): Date {
   return start;
 }
 
+/** Те, що віддає `netlify-usage`: рівно числа для картки. */
+type NetlifyUsagePayload = {
+  planLeft: number;
+  planTotal: number;
+  addonLeft: number;
+  spent: number;
+  deploys: number;
+  deployCredits: number;
+  computeCredits: number;
+  requestCredits: number;
+  bandwidthCredits: number;
+  aiCredits: number;
+  backgroundPerDay: number;
+  backgroundYesterday: number | null;
+  insightsThrough: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  deployCost: number;
+  forecast: {
+    daysLeft: number;
+    deploysLeft: number;
+    burnPerDay: number;
+    runsOutBeforeCycleEnd: boolean;
+    zeroAt: string | null;
+  };
+};
+
+/** Той самий прийом, що в `loadDropboxSpace`: токен сесії і одна POST-ка. */
+async function fetchNetlifyUsage(): Promise<NetlifyUsagePayload | null> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return null;
+    const response = await fetch("/.netlify/functions/netlify-usage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: "{}",
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json().catch(() => null)) as
+      | { ok?: boolean; usage?: NetlifyUsagePayload }
+      | null;
+    return payload?.ok ? payload.usage ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
+/** «12,4» — кредити дробові, і округлення до цілого тут бреше на добу фону. */
+const credits = (value: number): string =>
+  Math.abs(value) >= 100
+    ? String(Math.round(value))
+    : String(Math.round(value * 10) / 10).replace(".", ",");
+
+const shortDate = (iso: string | null): string =>
+  iso ? new Date(iso).toLocaleDateString("uk-UA", { day: "numeric", month: "long" }) : "—";
+
 async function loadNetlify(): Promise<IntegrationStatus> {
   const cycleStart = netlifyCycleStart();
-  const since = cycleStart.toISOString();
-  const [monthly, latest] = await Promise.all([
+  const [monthly, latest, usage] = await Promise.all([
     supabase
       .schema("tosho")
       .from("releases")
       .select("id", { count: "exact", head: true })
-      .gte("released_at", since),
+      .gte("released_at", cycleStart.toISOString()),
     supabase
       .schema("tosho")
       .from("releases")
@@ -899,48 +965,110 @@ async function loadNetlify(): Promise<IntegrationStatus> {
       .order("released_at", { ascending: false })
       .limit(1)
       .maybeSingle<{ released_at: string | null; title: string | null }>(),
+    fetchNetlifyUsage(),
   ]);
 
-  const used = monthly.count ?? 0;
-  const creditsSpent = used * NETLIFY_CREDITS_PER_DEPLOY;
-  const creditsLeft = Math.max(0, NETLIFY_PLAN_CREDITS - creditsSpent);
-  const deploysLeft = Math.floor(creditsLeft / NETLIFY_CREDITS_PER_DEPLOY);
-  const cycleLabel = netlifyCycleStart().toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
-
-  const details = [
-    { label: "Останній реліз", value: latest.data?.title || "—" },
-    { label: "Тариф", value: `Personal — $9 на місяць, ${NETLIFY_PLAN_CREDITS} кредитів` },
-    { label: "Цикл", value: `кредити поновлюються ${NETLIFY_CYCLE_DAY}-го числа (поточний — з ${cycleLabel})` },
-    { label: "Ціна деплою", value: `${NETLIFY_CREDITS_PER_DEPLOY} кредитів плоскою ставкою, скільки б комітів у пуші` },
-    { label: "Коли скінчаться", value: "авто-поповнення вимкнене — сайт працює далі, нові деплої не проходять" },
-    { label: "Точний баланс", value: "у кабінеті Netlify; тут — підрахунок за нашими релізами" },
-  ];
   const activity: IntegrationActivity = {
     label: "останній деплой",
     at: latest.data?.released_at ?? null,
     emptyText: "деплоїв ще не було",
   };
-  const metrics: [IntegrationMetric, IntegrationMetric] = [
-    { label: "деплоїв у циклі", value: num(used) },
-    { label: "ще можна", value: num(deploysLeft) },
-  ];
-  const thirdMetric: IntegrationMetric = {
-    label: `кредитів із ${NETLIFY_PLAN_CREDITS}`,
-    value: num(creditsLeft),
+  const lastRelease = { label: "Останній реліз", value: latest.data?.title || "—" };
+  const noAutoTopUp = {
+    label: "Коли скінчаться",
+    value: "авто-поповнення вимкнене — Netlify зупиняє сайти, а не лише деплої",
   };
-  const creditWord = plural(creditsLeft, "кредит", "кредити", "кредитів");
+
+  if (usage) {
+    const { forecast } = usage;
+    const left = usage.planLeft + usage.addonLeft;
+    const deployWord = plural(forecast.deploysLeft, "деплой", "деплої", "деплоїв");
+    const reserve = usage.addonLeft > 0 ? ` плюс ${credits(usage.addonLeft)} запасу` : "";
+    return {
+      id: "netlify",
+      state: forecast.runsOutBeforeCycleEnd || forecast.deploysLeft <= 5 ? "warn" : "ok",
+      message: forecast.runsOutBeforeCycleEnd
+        ? `Лишилось ${credits(usage.planLeft)} кредитів${reserve} — за поточним темпом скінчаться до кінця циклу ${shortDate(usage.periodEnd)}. Фон з'їдає ${credits(usage.backgroundPerDay)} на добу.`
+        : `Лишилось ${credits(usage.planLeft)} кредитів${reserve} — приблизно ${forecast.deploysLeft} ${deployWord} до кінця циклу ${shortDate(usage.periodEnd)}. Фон з'їдає ${credits(usage.backgroundPerDay)} на добу.`,
+      metrics: [
+        { label: "деплоїв у циклі", value: num(usage.deploys) },
+        { label: "ще можна", value: num(forecast.deploysLeft) },
+      ],
+      details: [
+        lastRelease,
+        { label: "Тариф", value: `Personal — $9 на місяць, ${credits(usage.planTotal)} кредитів` },
+        {
+          label: "Цикл",
+          value: `${shortDate(usage.periodStart)} — ${shortDate(usage.periodEnd)}, лишилось ${usage.forecast.daysLeft} дн.`,
+        },
+        { label: "Ціна деплою", value: `${usage.deployCost} кредитів плоскою ставкою, скільки б комітів у пуші` },
+        {
+          label: "Фон",
+          value:
+            `${credits(usage.backgroundPerDay)} кредитів на добу — усе, крім деплоїв` +
+            (usage.backgroundYesterday === null ? "" : ` (за вчора ${credits(usage.backgroundYesterday)})`),
+        },
+        ...(usage.addonLeft > 0
+          ? [{ label: "Запас", value: `${credits(usage.addonLeft)} докуплених кредитів, вони не згорають` }]
+          : []),
+        noAutoTopUp,
+        { label: "Джерело", value: "білінг Netlify — ті самі числа, що в кабінеті" },
+      ],
+      extraSections: [
+        {
+          title: "На що пішли кредити за цикл",
+          // Розбивка приходить із credit_usage_insights, а вона відстає на добу
+          // — тож сума тут менша за витрачене, і це не помилка арифметики.
+          hint: usage.insightsThrough
+            ? `Розбивка порахована по ${shortDate(usage.insightsThrough)} — сьогоднішній день у неї ще не потрапив.`
+            : undefined,
+          rows: [
+            { label: "Деплої", value: `${credits(usage.deployCredits)} (${usage.deploys})` },
+            { label: "Обчислення", value: credits(usage.computeCredits) },
+            { label: "Веб-запити", value: credits(usage.requestCredits) },
+            { label: "Трафік", value: credits(usage.bandwidthCredits) },
+            ...(usage.aiCredits > 0 ? [{ label: "AI", value: credits(usage.aiCredits) }] : []),
+          ],
+        },
+      ],
+      activity,
+      cost: null,
+      thirdMetric: { label: `кредитів із ${credits(usage.planTotal)}`, value: credits(left) },
+    };
+  }
+
+  /* Запасний шлях: точного балансу немає, тож рахуємо за релізами — і КАЖЕМО,
+     що це оцінка. Саме мовчазна оцінка, видана за точне число, і привела до
+     розбіжності на 229 кредитів. */
+  const used = monthly.count ?? 0;
+  const creditsSpent = used * NETLIFY_CREDITS_PER_DEPLOY;
+  const creditsLeft = Math.max(0, NETLIFY_PLAN_CREDITS - creditsSpent);
+  const deploysLeft = Math.floor(creditsLeft / NETLIFY_CREDITS_PER_DEPLOY);
   const deployWord = plural(deploysLeft, "деплой", "деплої", "деплоїв");
 
   return {
     id: "netlify",
     state: deploysLeft <= 5 ? "warn" : "ok",
-    message: `Лишилось ${creditsLeft} ${creditWord} — приблизно ${deploysLeft} ${deployWord} до поновлення ${NETLIFY_CYCLE_DAY}-го числа.`,
-    metrics,
-    details,
+    message: `Точного балансу зараз не видно — за нашими релізами лишилось приблизно ${creditsLeft} кредитів, тобто ще ${deploysLeft} ${deployWord}. Фон сюди не входить, тож насправді менше.`,
+    metrics: [
+      { label: "деплоїв у циклі", value: num(used) },
+      { label: "ще можна", value: num(deploysLeft) },
+    ],
+    details: [
+      lastRelease,
+      { label: "Тариф", value: `Personal — $9 на місяць, ${NETLIFY_PLAN_CREDITS} кредитів` },
+      {
+        label: "Цикл",
+        value: `рахуємо з ${cycleStart.toLocaleDateString("uk-UA", { day: "numeric", month: "long" })} — справжню дату дає лише білінг`,
+      },
+      { label: "Ціна деплою", value: `${NETLIFY_CREDITS_PER_DEPLOY} кредитів плоскою ставкою, скільки б комітів у пуші` },
+      noAutoTopUp,
+      { label: "Точний баланс", value: "у кабінеті Netlify; тут — оцінка за нашими релізами" },
+    ],
     extraSections: [],
     activity,
     cost: null,
-    thirdMetric,
+    thirdMetric: { label: `приблизно кредитів із ${NETLIFY_PLAN_CREDITS}`, value: num(creditsLeft) },
   };
 }
 

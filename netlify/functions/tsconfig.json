@@ -32,6 +32,7 @@
     "create-workspace-invite.ts",
     "nova-poshta-marking.ts",
     "nova-poshta.ts",
+    "netlify-usage.ts",
     "team-absence-request.ts",
     "team-member-employment.ts",
     "team-member-probation.ts",

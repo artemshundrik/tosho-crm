@@ -565,6 +565,40 @@ export default defineConfig(({ command, mode }) => {
       : undefined,
     command === "serve"
       ? {
+          /**
+           * Кредити Netlify для картки «Інтеграції» (REQ-217).
+           *
+           * НАВІЩО ТУТ. Сесія користувача живе на порту дев-сервера, а
+           * `netlify dev` підіймає інший origin із порожнім localStorage —
+           * тобто без цього шматка картку з живими числами не побачити взагалі.
+           * `NETLIFY_API_TOKEN` при цьому лишається на сервері: у процес vite
+           * його вкладає той самий `netlify dev`, у бандл він не потрапляє.
+           * Функція сама перевіряє токен користувача й рівень доступу.
+           */
+          name: "dev-netlify-usage",
+          configureServer(server) {
+            server.middlewares.use(async (req, res, next) => {
+              if (req.url?.split("?")[0] !== "/.netlify/functions/netlify-usage") return next();
+
+              try {
+                const { handler } = await import("./netlify/functions/netlify-usage");
+                const response = await handler({
+                  httpMethod: req.method,
+                  headers: normalizeRequestHeaders(req.headers),
+                });
+
+                sendJson(res, response.statusCode, JSON.parse(response.body || "{}") as Record<string, unknown>);
+              } catch (error) {
+                sendJson(res, 500, {
+                  error: error instanceof Error ? error.message : "Netlify usage request failed",
+                });
+              }
+            });
+          },
+        }
+      : undefined,
+    command === "serve"
+      ? {
           name: "dev-telegram-admin-stats",
           configureServer(server) {
             server.middlewares.use(async (req, res, next) => {
