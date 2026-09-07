@@ -218,13 +218,34 @@ Practical implication:
 
 - `catalog_models`
   - core product model data for quotes and catalog UI
-  - `search_skus` — GENERATED ALWAYS column: every article of the model and of its
-    variants, one per line, from `metadata` via `tosho.catalog_model_search_skus()`.
-    Read-only; a trigram GIN index (`catalog_models_search_skus_trgm`) backs the
-    `ilike '%code%'` lookup behind the quote item field (REQ-248). Changing the rule
-    means `drop column` → `create or replace function` → `add column` — replacing the
-    function alone leaves already-stored rows untouched.
-    ([scripts/catalog-model-sku-search.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-model-sku-search.sql))
+  - `metadata` is a jsonb bag: `sku`, `supplierUrl`, `avantprintUrl`,
+    `configuratorPreset`, `specPreset`, `imageAsset {bucket, path}`, `source`,
+    `brand`, `description`, `specs`, `sizes`. **Never select it whole from a list
+    screen** — pull the scalars with `metadata->>key` arrows
+    (`CATALOG_MODEL_SCALAR_COLUMNS` in `src/lib/catalogVariantRows.ts`). The quote
+    window used to take the blob and paid 1041 kB per open (REQ-178#p9).
+  - `metadata.variants` is **gone** — colours live in `catalog_variants` (below).
+    The generated column `search_skus` and `tosho.catalog_model_search_skus()` are
+    gone with it; article search now goes to two trigram indexes:
+    `catalog_models_sku_trgm` on `(metadata->>'sku')` for the model's own article
+    and `catalog_variants_sku_trgm` for colour codes. Both are needed — of 71
+    models with an article, 15 have no variants at all.
+    ([scripts/catalog-drop-search-skus.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-drop-search-skus.sql))
+
+- `catalog_variants`
+  - one row per colour of a model: `sku`, `image_bucket` + `image_path`,
+    `is_active`, `sort_order`. **Source of truth** since REQ-178#p9; the app writes
+    rows through `persistCatalogVariants()` and never through `metadata`.
+  - image URLs are **derived** from `bucket` + `path` (`src/lib/catalogAssetUrl.ts`),
+    never stored — storing all four URLs cost 563 kB of the old blob.
+  - `quote_items.catalog_variant_id` references it `on delete set null`, so
+    deleting a row silently erases which colour a quote sold. That is why writes
+    upsert first and only then remove what is genuinely absent.
+  - `tosho.sync_catalog_variants()` still mirrors `metadata.variants` → rows, but
+    **only when the `variants` key is present**, as a bridge for code deployed
+    before the flip. Drop it once the new code has settled.
+    ([scripts/catalog-variants-table.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-variants-table.sql),
+    [scripts/catalog-variants-source-of-truth.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-variants-source-of-truth.sql))
 
 - `catalog_types`
 - `catalog_methods`

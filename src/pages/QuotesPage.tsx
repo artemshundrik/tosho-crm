@@ -18,10 +18,11 @@ import {
   CATALOG_VARIANT_COLUMNS,
   buildCatalogModelMetadata,
   groupCatalogVariantsByModel,
+  persistCatalogVariants,
   type CatalogModelScalarRow,
   type CatalogVariantRow,
 } from "@/lib/catalogVariantRows";
-import type { CatalogModelMetadata } from "@/types/catalog";
+import type { CatalogModelMetadata, CatalogModelVariant } from "@/types/catalog";
 import { supabase } from "@/lib/supabaseClient";
 import type { Database, Json } from "@/lib/database.types";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -2054,13 +2055,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       };
       if (sku) initialMetadata.sku = sku;
       if (baseVariantName) initialMetadata.baseVariantName = baseVariantName;
-      if (variantDrafts.length > 0) {
-        initialMetadata.variants = variantDrafts.map((variant) => ({
-          ...variant,
-          imageUrl: null,
-          imageAsset: null,
-        }));
-      }
+      // Кольори в `metadata` не пишемо (REQ-178#p9) — вони лягають рядками
+      // `catalog_variants` нижче, коли вже відомі їхні картинки.
       const { data, error } = await supabase
         .schema("tosho")
         .from("catalog_models")
@@ -2087,6 +2083,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       let imageAsset: NonNullable<NonNullable<CatalogModel["metadata"]>["imageAsset"]> | null = null;
       let finalMetadata: NonNullable<CatalogModel["metadata"]> = { ...initialMetadata };
       let linkedMethodIds: string[];
+      /** Кольори, що лягли рядками, — щоб білдер одразу знав id першого з них. */
+      let createdVariants: CatalogModelVariant[] = [];
       const uploadedCatalogAssetPaths: string[] = [];
       try {
         if (sourceImageUrl) {
@@ -2135,10 +2133,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               };
             })
           );
-          finalMetadata = {
-            ...finalMetadata,
+          createdVariants = finalVariants;
+          await persistCatalogVariants({
+            teamId,
+            modelId: data.id as string,
             variants: finalVariants,
-          };
+          });
         }
 
         if (sourceImageUrl || variantDrafts.length > 0) {
@@ -2182,7 +2182,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         price: data.price == null ? undefined : Number(data.price),
         methodIds: linkedMethodIds.length > 0 ? linkedMethodIds : undefined,
         imageUrl: imageUrl ?? undefined,
-        metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
+        metadata:
+          Object.keys(finalMetadata).length > 0 || createdVariants.length > 0
+            ? { ...finalMetadata, ...(createdVariants.length > 0 ? { variants: createdVariants } : {}) }
+            : undefined,
       };
 
       setCatalogTypes((current) =>

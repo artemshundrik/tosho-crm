@@ -7,6 +7,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { cloneCatalogVariants, fetchCatalogVariantImageAssets, persistCatalogVariants } from "@/lib/catalogVariantRows";
 import { toast } from "sonner";
 import {
   getAttachmentVariantPath,
@@ -612,7 +613,13 @@ export function useModelEditor({
     try {
       const fullModel = await loadFullModelMedia(model.id);
       fullImageUrl = fullModel?.image_url ?? fullImageUrl;
-      fullMetadata = (fullModel?.metadata as CatalogModelMetadata | null) ?? {};
+      // Кольори — з таблиці, решта — з `metadata` (REQ-178#p9). У сітці модель
+      // уже несе варіанти, зібрані з `catalog_variants`, тож окремий запит тут
+      // не потрібен; із блоба вони більше не приходять взагалі.
+      fullMetadata = {
+        ...((fullModel?.metadata as CatalogModelMetadata | null) ?? {}),
+        variants: model.metadata?.variants,
+      };
     } catch (error) {
       console.error("load full model media failed", error);
       toast.error("Не вдалося прочитати картку товару — спробуйте ще раз.");
@@ -1389,34 +1396,9 @@ export function useModelEditor({
             (variant): variant is CatalogModelVariant => Boolean(variant)
           )
         : [];
-    if (normalizedVariants.length > 0) {
-      nextMetadata.variants = normalizedVariants;
-    } else {
-      delete nextMetadata.variants;
-    }
-
-    const getInitialVariantMetadata = (variants?: CatalogModelVariant[]) =>
-      variants?.map((variant) => {
-        const hasFile = Boolean(variantImageFiles[variant.id]);
-        const imageUrl = variant.imageUrl?.trim() || null;
-        const imageAsset = variant.imageAsset ?? getCatalogImageAssetFromUrl(imageUrl);
-        const shouldKeepManagedImage =
-          !hasFile &&
-          Boolean(imageUrl) &&
-          !isInlineImageDataUrl(imageUrl) &&
-          isManagedCatalogImageUrl(imageUrl, imageAsset);
-
-        return {
-          ...variant,
-          imageUrl: shouldKeepManagedImage ? imageUrl : null,
-          imageAsset: shouldKeepManagedImage ? imageAsset : null,
-        };
-      });
-
-    const initialVariants = getInitialVariantMetadata(nextMetadata.variants);
-    if (initialVariants && initialVariants.length > 0) {
-      nextMetadata.variants = initialVariants;
-    }
+    // У `metadata` кольори більше не пишуться (REQ-178#p9) — вони їдуть рядками
+    // в `catalog_variants` наприкінці збереження, коли вже відомі їхні картинки.
+    delete nextMetadata.variants;
 
     const nextModel: CatalogModel = {
       id: modelId,
@@ -1651,12 +1633,16 @@ export function useModelEditor({
           })
         );
 
+        // Кольори лягають рядками, а не в `metadata` (REQ-178#p9): у блобі вони
+        // були другою копією того, що вже є в таблиці, і копії розходились би.
         currentMetadata = { ...currentMetadata };
-        if (finalVariants.length > 0) {
-          currentMetadata.variants = finalVariants;
-        } else {
-          delete currentMetadata.variants;
-        }
+        delete currentMetadata.variants;
+
+        await persistCatalogVariants({
+          teamId,
+          modelId: persistedModelId,
+          variants: finalVariants,
+        });
 
         const { error } = await supabase
           .schema("tosho")
@@ -1829,9 +1815,8 @@ export function useModelEditor({
       const model = await loadFullModelMedia(modelToDelete);
       const metadata = (model?.metadata as CatalogModelMetadata | null) ?? null;
       imageAssetToRemove = metadata?.imageAsset ?? null;
-      variantImageAssetsToRemove = (metadata?.variants ?? [])
-        .map((variant) => variant.imageAsset)
-        .filter((asset): asset is CatalogImageAsset => Boolean(asset?.bucket && asset.path));
+      // Картинки кольорів шукаємо в таблиці, а не в блобі (REQ-178#p9).
+      variantImageAssetsToRemove = await fetchCatalogVariantImageAssets(modelToDelete);
     } catch (error) {
       console.error("load model media before delete failed", error);
     }
@@ -1941,7 +1926,22 @@ export function useModelEditor({
         .insert(methodPayload);
     }
 
-    const nextModel = { ...clonedModel, id: newModelId };
+    // Кольори копії — власні рядки з власними id (REQ-178#p9). Раніше клон
+    // тягнув чужий масив у пам'ять і не мав його в базі: до перезавантаження
+    // сторінки копія показувала кольори, яких не існує.
+    const clonedVariants = await cloneCatalogVariants({
+      teamId,
+      modelId: newModelId,
+      source: clonedModel.metadata?.variants,
+    });
+
+    const nextModel = {
+      ...clonedModel,
+      id: newModelId,
+      metadata: clonedModel.metadata
+        ? { ...clonedModel.metadata, variants: clonedVariants.length > 0 ? clonedVariants : undefined }
+        : undefined,
+    };
     setCatalog((prev) =>
       syncKindModelCounts(prev.map((type) => {
         if (type.id !== item.typeId) return type;
