@@ -104,18 +104,20 @@ describe("розшифровка → рядки прев'ю", () => {
 });
 
 describe("рядки прев'ю → payload мутацій", () => {
-  it("вартість товару з пулу лягає в тираж одразу з позначкою «з ПДВ»", () => {
-    // Ціни постачальників домовились вважати з ПДВ (Артем, 08.09.2026), тож
-    // гейт про ПДВ на таких тиражах не спрацьовує — питати нема про що.
+  it("ціну браузер НЕ надсилає — тираж їде з нулем і власним id", () => {
+    // Число від браузера — це число від людини, і гейт посад слушно його
+    // зупиняє. Вартість ставить база окремим кроком, прочитавши рядок пулу;
+    // щоб було кому її ставити, id тиражу задаємо тут.
     const [run] = buildImportRunPayloads({
-      draft: draft({ unitCost: 190.43 }),
+      draft: draft({ supplierProductId: "pool-row-1" }),
       quoteId: "quote-1",
       quoteItemId: "item-1",
       defaults: { markupRate: 40, managerRate: 0, fixedCostRate: 0, vatRate: 20 },
     });
 
-    expect(run.unit_price_model).toBe(190.43);
-    expect(run.unit_price_model_vat).toBe("incl");
+    expect(run.unit_price_model).toBe(0);
+    expect(run.unit_price_model_vat).toBeNull();
+    expect(run.id).toMatch(/^[0-9a-f-]{36}$/);
     // Решта собівартості — нулі: їх не знає ніхто, крім людини.
     expect([run.unit_price_print, run.logistics_cost, run.desired_manager_income]).toEqual([0, 0, 0]);
   });
@@ -298,6 +300,8 @@ describe("рядки прев'ю → payload мутацій", () => {
 
     expect(runs).toEqual([
       {
+        // id тиражу задає клієнт: без нього нема кому ставити ціну з пулу.
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/),
         quote_id: "quote-1",
         quote_item_id: "item-1",
         quantity: 300,

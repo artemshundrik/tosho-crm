@@ -1260,6 +1260,42 @@ export async function findCatalogModelByKindAndName(
   }
 }
 
+/**
+ * Поставити тиражу вартість товару з пулу.
+ *
+ * Число сюди НЕ передається — лише рядок пулу, на який клікнули: ціну читає й
+ * пише сама база (`tosho.set_quote_run_cost_from_pool`). Так вартість
+ * перестає бути «чиїмось заповненням» і стає властивістю товару: вона
+ * з'являється у всіх, хто додав товар із пулу, а правити її й далі можуть
+ * лише ті, кому дозволено.
+ *
+ * Повертає поставлену ціну або null — «у того рядка нашої ціни немає». Це не
+ * помилка: поле лишається порожнім, і його заповнить людина.
+ *
+ * Через `supabase.schema("tosho")`, а не через `db`: типи `db` — це перетин
+ * схем, тож він приймає лише ті RPC, які є і в public, і в tosho.
+ */
+export async function setQuoteRunCostFromPool(
+  runId: string,
+  supplierProductId: string
+): Promise<number | null> {
+  try {
+    // `as never` — бо `database.types.ts` знімається з ПРОДА, а цієї функції
+    // там ще немає: SQL і код їдуть одним пушем, і до застосування міграції
+    // типи про неї не знають. Після наступного знімка типів каст можна зняти.
+    const { data, error } = await supabase.schema("tosho").rpc(
+      "set_quote_run_cost_from_pool" as never,
+      { p_run_id: runId, p_supplier_product_id: supplierProductId } as never
+    );
+    if (error) throw error;
+    return typeof data === "number" ? data : null;
+  } catch {
+    // Ціна — не умова існування тиражу. Не поставили — лишиться порожньою, і
+    // це видно на картці; валити через неї створення прорахунку не можна.
+    return null;
+  }
+}
+
 /** Дописати фото моделі — тільки в порожнє, щоб не затерти поставлене руками. */
 export async function updateCatalogModelImage(modelId: string, imageUrl: string): Promise<void> {
   try {

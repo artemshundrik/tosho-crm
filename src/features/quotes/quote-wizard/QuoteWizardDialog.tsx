@@ -392,10 +392,10 @@ export function QuoteWizardDialog({
       sku: product.article,
       supplierUrl: wholesale?.url ?? null,
       avantprintUrl: shop?.url ?? null,
-      // ВАРТІСТЬ ТОВАРУ — лише НАША. `wholesale` тут означає ціну, яку ми вже
-      // порахували за домовленістю з постачальником; `retail` — вітрину, з
-      // якої нічого не порахуєш, і в собівартість вона не має права.
-      unitCost: product.priceKind === "wholesale" ? product.priceMin : null,
+      // ВАРТІСТЬ ТОВАРУ — не число, а РЯДОК ПУЛУ, з якого його прочитає база.
+      // Що саме брати, вирішує вона ж: `retail` (вітрина постачальника) туди
+      // не пройде, бо з неї нічого не порахуєш.
+      supplierProductId: product.priceRowId,
       catalog: guess
         ? {
             modelId: null,

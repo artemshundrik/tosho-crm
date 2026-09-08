@@ -120,6 +120,7 @@ vi.mock("@/features/quotes/quote-details/queries", () => ({
   // сценарії заводять товар уперше.
   findCatalogModelByKindAndName: () => findCatalogModelByKindAndName(),
   updateCatalogModelImage: async () => undefined,
+  setQuoteRunCostFromPool: async () => null,
   fetchKindPrintPositions: async () => ({ ok: true as const, data: [] }),
   insertPrintPositionRow: (payload: Record<string, unknown>) => insertPrintPositionRow(payload),
   fetchCatalogVariantsBySku: () => fetchCatalogVariantsBySku(),

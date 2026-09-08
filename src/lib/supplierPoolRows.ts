@@ -101,6 +101,13 @@ export type SupplierPoolRow = {
 /** Одне виконання товару — здебільшого колір. Те, що менеджер зрештою замовляє. */
 export type SupplierPoolVariant = {
   id: string;
+  /**
+   * Рядок пулу, З ЯКОГО ВЗЯТА ЦІНА, — і це не завжди `id` самого варіанта.
+   * У злитій картці варіант носить id нашого магазину (там опис і фото), а
+   * ціну дає оптовик. Саме цей id їде в базу, коли вона сама ставить вартість
+   * товару: число через браузер більше не проходить.
+   */
+  priceRowId: string | null;
   article: string | null;
   /** «чорний», «колір білий (WH), розмір 1/2» — як його називає постачальник. */
   label: string | null;
@@ -145,6 +152,8 @@ export type SupplierPoolProduct = {
   variantsAreColors: boolean;
   /** Сайти, де ця річ є. Перший — той, чия ціна показана. Ніколи не порожній. */
   sources: SupplierPoolSource[];
+  /** Рядок пулу з показаною ціною — те, що поїде в базу замість самого числа. */
+  priceRowId: string | null;
 };
 
 /**
@@ -233,11 +242,14 @@ function collectDraftsByName(rows: SupplierPoolRow[]): SupplierPoolDraft[] {
     // Товар без назви лишається сам собою за id: у базі поле not null, але
     // порожній рядок туди пролізти може.
     const key = name ? `${row.supplier_slug}::${name.toLowerCase()}` : `id::${row.id}`;
+    const price = typeof row.price === "number" ? row.price : null;
     const variant: SupplierPoolVariant = {
       id: row.id,
+      // Ціну дає цей самий рядок — поки його не злили з чужим.
+      priceRowId: price !== null ? row.id : null,
       article: row.article,
       label: variantLabel(row),
-      price: typeof row.price === "number" ? row.price : null,
+      price,
       imageUrl: row.image_url,
       url: row.url,
     };
@@ -366,7 +378,12 @@ function mergeCluster(cluster: SupplierPoolDraft[]): SupplierPoolProduct {
       claimed.add(twin);
       // Той самий колір з іншого сайту: добираємо те, чого бракує. Ціна так
       // приходить від оптовика сама — в Аванпринта її немає.
-      if (twin.price === null && variant.price !== null) twin.price = variant.price;
+      if (twin.price === null && variant.price !== null) {
+        twin.price = variant.price;
+        // Разом із ціною переїжджає й адреса її джерела: далі база читатиме
+        // число саме звідти, а не з рядка нашого магазину, де ціни немає.
+        twin.priceRowId = variant.priceRowId;
+      }
       if (!twin.imageUrl && variant.imageUrl) twin.imageUrl = variant.imageUrl;
       if (!twin.url && variant.url) twin.url = variant.url;
       // НАЗВА КОЛЬОРУ Б'Є КОД. `variantLabel` за браком кольору підписує
@@ -427,6 +444,7 @@ function mergeCluster(cluster: SupplierPoolDraft[]): SupplierPoolProduct {
       variants.length > 0 &&
       variants.every((variant) => Boolean(variant.label) && variant.label !== variant.article),
     sources,
+    priceRowId: variants.find((variant) => variant.priceRowId)?.priceRowId ?? null,
   };
 }
 
@@ -525,6 +543,7 @@ export function applySupplierVariant(
     url: variant.url ?? product.url,
     priceMin: variant.price,
     priceMax: variant.price,
+    priceRowId: variant.priceRowId,
     variantCount: 1,
     variants: [variant],
   };

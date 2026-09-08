@@ -4,6 +4,7 @@ import {
   insertCatalogModelRow,
   insertQuoteItemRow,
   persistQuoteRuns,
+  setQuoteRunCostFromPool,
   updateCatalogModelImage,
 } from "@/features/quotes/quote-details/queries";
 import { supabase } from "@/lib/supabaseClient";
@@ -214,38 +215,33 @@ export async function writeDraftsToQuote(input: {
   const itemIds: string[] = [];
   const researchItemIds: string[] = [];
   const runPayloads: QuoteRun[] = [];
+  /** Кому ще треба поставити ціну з пулу — після спільного запису тиражів. */
+  const poolCosted: Array<{ draft: QuoteImportDraftItem; runs: QuoteRun[] }> = [];
   /** Місця нанесення, заведені в цьому заїзді: вид → підпис → id рядка. */
   const placeCache: PlaceCache = new Map();
 
   /**
-   * ЗБЕРЕГТИ ТИРАЖ, НАВІТЬ ЯКЩО ЦІНУ НЕ ПУСТИЛИ.
-   *
-   * На `quote_item_runs` стоїть тригер `enforce_quote_run_price_field_access`:
-   * ненульову вартість товару має право вписати лише pm/менеджер (owner, СЕО й
-   * головбух проходять наскрізь). Ми підставляємо цю вартість самі, з пулу — і
-   * для решти посад вставка почала падати з 42501 ЦІЛКОМ. Наслідок був куди
-   * гірший за незаповнене поле: у позиції не лишалось ЖОДНОГО тиражу, а
-   * прорахунок відкривався з «собівартість не внесена» (спіймано 08.09.2026,
-   * посада it_specialist).
-   *
-   * Тому зручність поступається: не пустили ціну — пишемо тираж без неї, як
-   * було до автопідстановки. Порожнє поле менеджер побачить і заповнить, а
-   * зниклий тираж він шукав би очима.
-   *
-   * Повторюємо лише те, що самі ж і додали: якщо ціни в тиражі не було, а
-   * запис усе одно впав — причина інша, і ховати її не можна.
+   * Вартість товару з пулу — окремим кроком ПІСЛЯ запису тиражу, бо ставить її
+   * база, а не ми (`set_quote_run_cost_from_pool`). Помилка тут нічого не
+   * скасовує: тираж уже є, а порожня вартість — звичайний стан, який людина
+   * побачить і заповнить.
    */
-  const saveRuns = async (runs: QuoteRun[]) => {
-    const first = await persistQuoteRuns(input.quoteId, runs, []);
-    if (first.ok || !runs.some((run) => Number(run.unit_price_model) > 0)) return first;
-    const retry = await persistQuoteRuns(
-      input.quoteId,
-      // Позначку ПДВ знімаємо разом із ціною: вона описує суму, а суми не стало.
-      runs.map((run) => ({ ...run, unit_price_model: 0, unit_price_model_vat: null })),
-      []
+  const applyPoolCost = async (draft: QuoteImportDraftItem, runs: QuoteRun[]) => {
+    const supplierProductId = draft.supplierProductId;
+    if (!supplierProductId) return;
+    await Promise.all(
+      runs.map((run) => (run.id ? setQuoteRunCostFromPool(run.id, supplierProductId) : null))
     );
-    return retry.ok ? retry : first;
   };
+
+  /**
+   * Тираж їде БЕЗ вартості товару — і саме тому запис проходить у будь-кого.
+   * Поки ціну надсилав браузер, гейт посад зупиняв вставку ЦІЛКОМ, і в
+   * позиції не лишалось жодного тиражу: замість незаповненого поля людина
+   * діставала зникле (спіймано 08.09.2026). Тепер ціну ставить база окремим
+   * кроком, і зачепити тираж вона вже не може.
+   */
+  const saveRuns = (runs: QuoteRun[]) => persistQuoteRuns(input.quoteId, runs, []);
 
   /** Позиції створені, тиражі — ні. Кажемо це прямо, а не самою помилкою бази. */
   const runsFailure = (message: string): ImportWriteOutcome => ({
@@ -285,14 +281,17 @@ export async function writeDraftsToQuote(input: {
     if (index === 0) {
       const probe = await saveRuns(runs);
       if (!probe.ok) return runsFailure(probe.message);
+      await applyPoolCost(draft, runs);
       continue;
     }
     runPayloads.push(...runs);
+    poolCosted.push({ draft, runs });
   }
 
   if (runPayloads.length > 0) {
     const savedRuns = await saveRuns(runPayloads);
     if (!savedRuns.ok) return runsFailure(savedRuns.message);
+    for (const entry of poolCosted) await applyPoolCost(entry.draft, entry.runs);
   }
 
   return { ok: true, itemIds, researchItemIds };
