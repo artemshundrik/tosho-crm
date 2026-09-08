@@ -830,7 +830,7 @@ async function loadMagentoGraphql(cfg) {
    * від Magento, ніколи не тіло запиту. Причина та сама, що в `pgEnvFrom` нижче
    * — цей скрипт ганяє крон у ПУБЛІЧНОМУ репозиторії.
    */
-  async function gql(query, variables, token) {
+  async function gql(query, variables, token, { partial = false } = {}) {
     const headers = { "Content-Type": "application/json", "User-Agent": UA };
     if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(endpoint, {
@@ -852,8 +852,19 @@ async function loadMagentoGraphql(cfg) {
      * виняток означало б втратити весь каталог через два товари.
      *
      * Дані відсутні цілком — це вже справжній збій, тоді падаємо.
+     *
+     * ⚠️ ТЕРПИМІСТЬ ВМИКАЄТЬСЯ ЯВНО, І ЦЕ ВИПРАВЛЕННЯ ПІСЛЯ ЖИВОГО ПРОМАХУ.
+     * Спершу вона стояла на всіх запитах — і проковтнула помилку логіна:
+     * `generateCustomerToken` віддає `data.generateCustomerToken: null` ПЛЮС
+     * `errors` із людською причиною («E-mail чи пароль введені невірно, або
+     * обліковий запис тимчасово заблокований»). `data` при цьому не порожня,
+     * тож помилка тихо лягала в лічильник, а назовні йшло моє беззмістовне
+     * «логін не дав токена». Причина була на руках і не доїхала до людини.
+     * Тому терпимість тепер лише там, де вона справді потрібна, — на сторінках
+     * товарів.
      */
     if (!json.data) throw new Error(messages || "порожня відповідь");
+    if (messages && !partial) throw new Error(messages);
     if (messages) {
       softErrors.count += json.errors.length;
       if (!softErrors.first) softErrors.first = messages.slice(0, 120);
@@ -965,7 +976,8 @@ async function loadMagentoGraphql(cfg) {
       `{ products(filter:{category_id:{in:[${idFilter}]}} pageSize:${pageSize} currentPage:${page}) {
          total_count items { ${PRODUCT_FIELDS} } } }`,
       {},
-      token
+      token,
+      { partial: true }
     );
     /**
      * ⚠️ РАХУЄМО СИРІ РЯДКИ, А НЕ ВІДФІЛЬТРОВАНІ, І ЦЕ НЕ ПРИСКІПЛИВІСТЬ.
