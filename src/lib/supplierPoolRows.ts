@@ -203,3 +203,26 @@ export function formatSupplierPoolPrice(product: SupplierPoolProduct): string | 
   }
   return `${money(product.priceMin)} ${suffix}`;
 }
+
+/**
+ * Звузити товар до одного варіанта. Потрібне там, де вибір кольору веде далі —
+ * у позицію прорахунку поїде артикул саме цього кольору, його фото й ціна, а не
+ * першого-ліпшого з групи. Колір дописується до назви: окремого поля під нього
+ * в позиції немає, а «яка це футболка» має лишитись видимим після вибору.
+ */
+export function applySupplierVariant(
+  product: SupplierPoolProduct,
+  variant: SupplierPoolVariant
+): SupplierPoolProduct {
+  return {
+    ...product,
+    name: variant.label ? `${product.name} · ${variant.label}` : product.name,
+    article: variant.article,
+    imageUrl: variant.imageUrl ?? product.imageUrl,
+    url: variant.url ?? product.url,
+    priceMin: variant.price,
+    priceMax: variant.price,
+    variantCount: 1,
+    variants: [variant],
+  };
+}

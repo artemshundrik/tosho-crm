@@ -21,6 +21,7 @@ import {
 } from "@/lib/supplierPoolRows";
 
 export {
+  applySupplierVariant,
   baseProductName,
   formatSupplierPoolPrice,
   groupSupplierPoolRows,

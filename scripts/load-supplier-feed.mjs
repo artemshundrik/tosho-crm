@@ -69,6 +69,10 @@ const SUPPLIERS = {
     feed: "https://totobi.com.ua/index.php?dispatch=yml.get&access_key=lg3bjy2gvww",
     format: "cscart",
     source: "feed:cscart",
+    // Фід віддає адреси картинок і товарів через http, хоч сайт працює по https
+    // (перевірено: та сама картинка по https віддає 200). На проді ми під https,
+    // тож http-картинка — це mixed content, який браузер просто НЕ покаже.
+    forceHttps: true,
     // НАША ЦІНА = ЦІНА САЙТУ × МНОЖНИК. Домовленість із Тотобі, підтверджена
     // 08.09.2026: сувенірка −44%, одяг −40%, а де стоїть статус «Єдина ціна» —
     // стандартний прайс 50% від сайту. Правило лежить ТУТ, а не в коді розбору:
@@ -210,6 +214,7 @@ function applyPriceRule(rule, price, ctx) {
 }
 
 function parseCscart(xml, cfg) {
+  const secure = (value) => (cfg.forceHttps && value ? value.replace(/^http:\/\//i, "https://") : value);
   const cats = {};
   for (const m of xml.matchAll(/<category id="(\d+)"[^>]*>([\s\S]*?)<\/category>/g)) {
     cats[m[1]] = unesc(m[2].trim());
@@ -236,7 +241,7 @@ function parseCscart(xml, cfg) {
     const section = param(b, "Розділ у каталозі");
     const ruled = applyPriceRule(cfg.priceRule, sitePrice, { priceType, section });
     const price = ruled.price;
-    const pics = [...b.matchAll(/<picture>([^<]+)<\/picture>/g)].map((p) => p[1].trim());
+    const pics = [...b.matchAll(/<picture>([^<]+)<\/picture>/g)].map((p) => secure(p[1].trim()));
     const attrs = {};
     // «Група Кольорів» — запасний варіант, а не синонім: вона грубша («Сірий»
     // замість «ash grey»), зате стоїть там, де точного кольору постачальник не
@@ -269,7 +274,7 @@ function parseCscart(xml, cfg) {
       category: cats[exactTag(b, "categoryId")] || null,
       price,
       currency: exactTag(b, "currencyId") || "UAH",
-      url: exactTag(b, "url") || null,
+      url: secure(exactTag(b, "url")) || null,
       image_url: pics[0] || null,
       images: JSON.stringify(pics),
       attrs: JSON.stringify(attrs),

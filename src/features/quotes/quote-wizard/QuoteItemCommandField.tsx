@@ -1,11 +1,12 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CornerDownLeft, Database, ImageOff, Link2, Loader2, Plus, Search } from "lucide-react";
+import { ChevronDown, CornerDownLeft, Database, ImageOff, Link2, Loader2, Plus, Search } from "lucide-react";
 
 import { SEARCH_LEFT_ICON } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import {
+  applySupplierVariant,
   formatSupplierPoolPrice,
   searchSupplierPool,
   type SupplierPoolProduct,
@@ -175,6 +176,10 @@ export function QuoteItemCommandField({
     onAddLinks(urls);
     onValueChange("");
   };
+
+  // Який товар зараз показує кольори. Один на весь список: два розкриті рядки
+  // одночасно перетворюють підказку на простирадло.
+  const [expandedPoolKey, setExpandedPoolKey] = React.useState<string | null>(null);
 
   const commitRow = (index: number) => {
     const suggestion = ranked[index];
@@ -357,34 +362,78 @@ export function QuoteItemCommandField({
           {pool.map((product, poolIndex) => {
             const index = ranked.length + poolIndex;
             const price = formatSupplierPoolPrice(product);
+            const expanded = expandedPoolKey === product.key;
+            const unit = product.variantsAreColors ? "кольор." : "вар.";
             return (
               <li
                 key={product.key}
                 role="option"
                 aria-selected={active === index}
                 className={cn(
-                  "flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
+                  "cursor-pointer rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
                   active === index ? "bg-muted" : "hover:bg-muted/50"
                 )}
                 onMouseEnter={() => setActive(index)}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => commitRow(index)}
               >
-                <SuggestionPhoto url={product.imageUrl} name={product.name} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{product.name}</span>
-                  <span className="block truncate text-2xs text-muted-foreground">
-                    {[product.article, product.supplierSlug].filter(Boolean).join(" · ")}
-                    {product.variantCount > 1 ? (
-                      <span className="text-muted-foreground/70"> · {product.variantCount} вар.</span>
-                    ) : null}
+                <span className="flex items-center gap-3">
+                  <SuggestionPhoto url={product.imageUrl} name={product.name} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{product.name}</span>
+                    <span className="block truncate text-2xs text-muted-foreground">
+                      {[product.article, product.supplierSlug].filter(Boolean).join(" · ")}
+                    </span>
                   </span>
+                  {/* Лічильник варіантів став кнопкою: клік розкриває кольори, а
+                      не додає товар. Тому й stopPropagation — рядок навколо
+                      комітить позицію. */}
+                  {product.variantCount > 1 ? (
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setExpandedPoolKey(expanded ? null : product.key);
+                      }}
+                      className="flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-2xs text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                    >
+                      {product.variantCount} {unit}
+                      <ChevronDown className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")} />
+                    </button>
+                  ) : null}
+                  {price ? (
+                    <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-muted-foreground">{price}</span>
+                  ) : null}
+                  {active === index ? (
+                    <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  ) : null}
                 </span>
-                {price ? (
-                  <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-muted-foreground">{price}</span>
-                ) : null}
-                {active === index ? (
-                  <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+
+                {expanded ? (
+                  <span className="mt-1.5 flex flex-wrap gap-1.5 pl-11">
+                    {product.variants.map((variant) => (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        title={[variant.label, variant.article].filter(Boolean).join(" · ")}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onPickSupplier(applySupplierVariant(product, variant));
+                          onValueChange("");
+                          setExpandedPoolKey(null);
+                        }}
+                        className="flex items-center gap-1.5 rounded-md border border-border/60 py-0.5 pl-0.5 pr-2 text-2xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
+                          {variant.imageUrl ? (
+                            <img src={variant.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                          ) : null}
+                        </span>
+                        <span className="max-w-[8rem] truncate">{variant.label ?? "Без підпису"}</span>
+                      </button>
+                    ))}
+                  </span>
                 ) : null}
               </li>
             );
