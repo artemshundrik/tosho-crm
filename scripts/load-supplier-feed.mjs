@@ -12,9 +12,13 @@
  * таблицю → один upsert у пул. Зниклі з фіда товари гасяться is_active=false
  * (не видаляються — на них можуть посилатися старі прорахунки).
  *
- * ЧОГО НЕ РОБИТЬ. Не чіпає catalog_models (перевірений каталог). Не вигадує
- * оптову ціну: кладе роздрібну з вітрини як price_kind='retail' — оптову
- * підставить менеджер або прайс-файл (§5).
+ * ЦІНА. За замовчуванням у пул лягає ціна вітрини як price_kind='retail'. Якщо
+ * в постачальника є домовленість — вона стоїть у його записі реєстру полем
+ * `priceRule`, і тоді в `price` лягає вже НАША ціна (price_kind='wholesale'), а
+ * ціна сайту лишається поруч в `attrs.sitePrice`. Правило — дані, не код: щоб
+ * змінити відсотки, правиш реєстр і переганяєш фід.
+ *
+ * ЧОГО НЕ РОБИТЬ. Не чіпає catalog_models (перевірений каталог).
  *
  * Запуск (потрібен BACKUP_DB_URL, як у db:apply):
  *   set -a; . ./.env.backup; set +a
@@ -65,6 +69,26 @@ const SUPPLIERS = {
     feed: "https://totobi.com.ua/index.php?dispatch=yml.get&access_key=lg3bjy2gvww",
     format: "cscart",
     source: "feed:cscart",
+    // НАША ЦІНА = ЦІНА САЙТУ × МНОЖНИК. Домовленість із Тотобі, підтверджена
+    // 08.09.2026: сувенірка −44%, одяг −40%, а де стоїть статус «Єдина ціна» —
+    // стандартний прайс 50% від сайту. Правило лежить ТУТ, а не в коді розбору:
+    // зміняться відсотки — правиш три числа й переганяєш фід (він однаково
+    // оновлюється щогодини).
+    //
+    // Порядок важливий: «Єдина ціна» б'є категорію. З 1353 товарів розділу
+    // «Одяг» 606 мають саме її, і за категорією вони отримали б −40% замість
+    // −50%. Останнє правило без `when` — це «все інше».
+    //
+    // Ціни у фіді з ПДВ, тому й наші з ПДВ (Артем, 08.09.2026).
+    priceRule: {
+      agreedOn: "2026-09-08",
+      rules: [
+        { when: { priceType: "Єдина ціна" }, multiplier: 0.5, label: "єдина ціна −50%" },
+        // Головні убори Артем відніс до одягу (08.09.2026) — 288 товарів.
+        { when: { section: ["Одяг", "Головні убори"] }, multiplier: 0.6, label: "одяг −40%" },
+        { multiplier: 0.56, label: "сувенірка −44%" },
+      ],
+    },
   },
   // НЕ ДОДАНИЙ, і причина в ньому, а не в коді (перевірено 05.09.2026):
   //   eney (OpenCart) — точка фіда index.php?route=extension/feed/google_base
@@ -108,6 +132,7 @@ function tag(block, name) {
 }
 
 function parseProm(xml) {
+  // Правила цін тут поки не застосовуються: у berrytex домовленості ще немає.
   const cats = {};
   for (const m of xml.matchAll(/<category id="(\d+)"[^>]*>([\s\S]*?)<\/category>/g)) {
     cats[m[1]] = unesc(m[2].trim());
@@ -169,7 +194,22 @@ function param(block, name) {
  * заливу: колір, групу нанесення (у фіді вона заповнена в 3142 з 3150 — це те,
  * що в нашому каталозі досі виколупується з описів) і розміри з їхніми кодами.
  */
-function parseCscart(xml) {
+function applyPriceRule(rule, price, ctx) {
+  if (!rule || price == null) return { price, label: null };
+  for (const item of rule.rules) {
+    const when = item.when;
+    if (when) {
+      if (when.priceType && when.priceType !== ctx.priceType) continue;
+      if (when.section && !when.section.includes(ctx.section)) continue;
+    }
+    // Округлення до копійки: множення на 0.56 дає хвости на 12 знаків, а ціна
+    // з такими хвостами лізе в документи й у порівняння «ціна не змінилась».
+    return { price: Math.round(price * item.multiplier * 100) / 100, label: item.label };
+  }
+  return { price, label: null };
+}
+
+function parseCscart(xml, cfg) {
   const cats = {};
   for (const m of xml.matchAll(/<category id="(\d+)"[^>]*>([\s\S]*?)<\/category>/g)) {
     cats[m[1]] = unesc(m[2].trim());
@@ -190,7 +230,12 @@ function parseCscart(xml) {
       price: num((s[1].match(/\bmodifier="([^"]*)"/) || [])[1]),
     }));
 
-    const price = num(exactTag(b, "price")) ?? sizes.map((s) => s.price).filter(Boolean).sort((a, z) => a - z)[0] ?? null;
+    const sitePrice = num(exactTag(b, "price")) ?? sizes.map((s) => s.price).filter(Boolean).sort((a, z) => a - z)[0] ?? null;
+    // «Базова ціна» і порожній тип — те саме відро (Артем, 08.09.2026).
+    const priceType = exactTag(b, "price_type") || "Базова ціна";
+    const section = param(b, "Розділ у каталозі");
+    const ruled = applyPriceRule(cfg.priceRule, sitePrice, { priceType, section });
+    const price = ruled.price;
     const pics = [...b.matchAll(/<picture>([^<]+)<\/picture>/g)].map((p) => p[1].trim());
     const attrs = {};
     // «Група Кольорів» — запасний варіант, а не синонім: вона грубша («Сірий»
@@ -200,7 +245,21 @@ function parseCscart(xml) {
     const methods = param(b, "Група нанесення");
     if (color) attrs.color = color;
     if (methods) attrs.methods = methods;
-    if (sizes.length) attrs.sizes = sizes;
+    // Ціну сайту тримаємо поруч навмисно. Показуємо в пошуку тільки нашу (так
+    // просив Артем — «не засмічувати»), але без вихідної цифри неможливо ні
+    // перевірити правило, ні побачити, що постачальник підняв ціну.
+    if (ruled.label) {
+      attrs.sitePrice = sitePrice;
+      attrs.priceRule = ruled.label;
+    }
+    attrs.priceType = priceType;
+    if (section) attrs.section = section;
+    if (sizes.length) {
+      attrs.sizes = sizes.map((s) => ({
+        ...s,
+        price: applyPriceRule(cfg.priceRule, s.price, { priceType, section }).price,
+      }));
+    }
 
     rows.push({
       external_key: (m[1].match(/\bid="([^"]+)"/) || [])[1] || exactTag(b, "url"),
@@ -300,7 +359,7 @@ try {
   process.exit(1);
 }
 const parser = PARSERS[cfg.format];
-const rows = parser(xml);
+const rows = parser(xml, cfg);
 console.log(`Розібрано товарів: ${rows.length}`);
 console.log(
   `  з артикулом: ${rows.filter((r) => r.article).length}, ` +
@@ -361,13 +420,14 @@ insert into tosho.supplier_products
 select
   sup.team_id, '${cfg.slug}', sup.contractor_id, '${cfg.source}', f.external_key,
   nullif(f.article,''), f.name, nullif(f.vendor,''), nullif(f.category,''),
-  nullif(f.price,'')::numeric, coalesce(nullif(f.currency,''),'UAH'), 'retail',
+  nullif(f.price,'')::numeric, coalesce(nullif(f.currency,''),'UAH'), '${cfg.priceRule ? "wholesale" : "retail"}',
   nullif(f.url,''), nullif(f.image_url,''), coalesce(f.images::jsonb,'[]'::jsonb),
   coalesce(f.attrs::jsonb,'{}'::jsonb), now(), true
 from _feed f cross join sup
 on conflict (supplier_slug, external_key) do update set
   article = excluded.article, name = excluded.name, vendor = excluded.vendor,
   category = excluded.category, price = excluded.price, currency = excluded.currency,
+  price_kind = excluded.price_kind,
   url = excluded.url, image_url = excluded.image_url, images = excluded.images,
   attrs = excluded.attrs,
   contractor_id = excluded.contractor_id, observed_at = now(), is_active = true,

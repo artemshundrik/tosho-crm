@@ -10,9 +10,11 @@
  * скільки і в кого, і може відкрити її на їхньому сайті. Раніше для цього треба
  * було відкрити сім сайтів руками.
  *
- * ЦІНА ТУТ ЧЕСНО ПІДПИСАНА. У фідах вона роздрібна (вітрина постачальника), а не
- * наша оптова — тому поруч стоїть підпис «роздріб». Оптова з'явиться, коли
- * приїдуть прайси з кабінетів (§5, p5), і підпис зміниться сам.
+ * ЦІНА ТУТ ЧЕСНО ПІДПИСАНА. Де є домовленість (totobi: сувенірка −44%, одяг
+ * −40%, «Єдина ціна» −50%), у пулі вже лежить НАША ціна, і підпис каже «наша».
+ * Де домовленості ще немає — ціна вітрини й підпис «роздріб». Ціни сайту поруч
+ * НЕ показуємо: Артем просив одну цифру, ту, за якою купуємо (08.09.2026).
+ * Вихідна ціна нікуди не дівається — вона в `attrs.sitePrice` для звірки.
  */
 
 import * as React from "react";
@@ -103,34 +105,56 @@ export const SupplierPoolSearch: React.FC<SupplierPoolSearchProps> = ({ classNam
   );
 };
 
+const money = (value: number) =>
+  value.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 /**
  * Картка товару. Кольори згорнуті всередину: у totobi «Футболка SoftStyle 153»
  * — це 55 окремих рядків фіда, і показувати їх поспіль означає сховати решту
- * знахідок під одним товаром. Розгортаються на клік, бо замовляють саме колір:
- * у нього свій артикул і часом своя ціна.
+ * знахідок під одним товаром.
+ *
+ * КОЛІР ВИБИРАЄТЬСЯ, А НЕ ПРОСТО ЧИТАЄТЬСЯ. У фіді фото своє в КОЖНОГО кольору,
+ * тож поки колір не вибрано, картка показує перший — і «Футболка Stage» на всі
+ * дев'ять кольорів виглядає чорною. Клік по кольору підмінює фото, ціну й
+ * артикул на його власні: далі саме цей артикул поїде в замовлення.
  */
 const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ product }) => {
-  const price = formatSupplierPoolPrice(product);
   const expandable = product.variantCount > 1;
   const [open, setOpen] = React.useState(false);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const selected = product.variants.find((variant) => variant.id === selectedId) ?? null;
+
+  const imageUrl = selected?.imageUrl ?? product.imageUrl;
+  const article = selected?.article ?? product.article;
+  const price =
+    selected && selected.price !== null
+      ? `${money(selected.price)} ${product.currency === "UAH" ? "грн" : product.currency}`
+      : formatSupplierPoolPrice(product);
+  const href = selected?.url ?? product.url;
+  const unit = product.variantsAreColors ? "кольор." : "вар.";
 
   return (
     <div className="rounded-lg transition-colors hover:bg-muted/40">
       <div className="flex items-center gap-3 px-2 py-2">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/20">
-          {product.imageUrl ? (
-            <img src={product.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+          {imageUrl ? (
+            <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
           ) : (
             <Package className="h-4 w-4 text-muted-foreground" />
           )}
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{product.name}</span>
+          <span className="block truncate text-sm font-medium">
+            {product.name}
+            {selected?.label ? (
+              <span className="font-normal text-muted-foreground"> · {selected.label}</span>
+            ) : null}
+          </span>
           {/* Артикул попереду: саме за ним менеджер звіряє товар, і саме він
               обрізався першим, коли стояв після виробника (видно в прев'ю). */}
           <span className="block truncate text-xs text-muted-foreground">
-            {[product.article, product.vendor, product.supplierSlug].filter(Boolean).join(" · ")}
+            {[article, product.vendor, product.supplierSlug].filter(Boolean).join(" · ")}
           </span>
         </span>
 
@@ -142,7 +166,7 @@ const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ product }
               aria-expanded={open}
               className="flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-2xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              {product.variantCount} вар.
+              {product.variantCount} {unit}
               <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
             </button>
           ) : null}
@@ -150,14 +174,14 @@ const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ product }
             <span className="text-right">
               <span className="block whitespace-nowrap text-sm font-medium tabular-nums">{price}</span>
               <span className="block text-2xs text-muted-foreground">
-                {product.priceKind === "retail" ? "роздріб" : "опт"}
+                {product.priceKind === "retail" ? "роздріб" : "наша"}
               </span>
             </span>
           ) : null}
-          {product.url ? (
+          {href ? (
             <Button asChild variant="outline" size="icon" className="h-8 w-8 shrink-0">
               <a
-                href={product.url}
+                href={href}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`Відкрити «${product.name}» у постачальника`}
@@ -170,21 +194,35 @@ const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ product }
       </div>
 
       {expandable && open ? (
-        <ul className="ml-14 mr-2 mb-2 space-y-0.5 border-l border-border/50 pl-3">
-          {product.variants.map((variant) => (
-            <li key={variant.id} className="flex items-baseline gap-2 py-0.5 text-xs">
-              <span className="min-w-0 flex-1 truncate">{variant.label ?? "Без підпису"}</span>
-              {variant.article ? (
-                <span className="shrink-0 font-mono text-2xs text-muted-foreground">{variant.article}</span>
-              ) : null}
-              {variant.price !== null ? (
-                <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {variant.price.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <div className="mb-2 ml-14 mr-2 flex flex-wrap gap-1.5">
+          {product.variants.map((variant) => {
+            const isSelected = variant.id === selectedId;
+            return (
+              <button
+                key={variant.id}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => setSelectedId(isSelected ? null : variant.id)}
+                title={[variant.label, variant.article].filter(Boolean).join(" · ")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md border py-0.5 pl-0.5 pr-2 text-2xs transition-colors",
+                  isSelected
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/30">
+                  {variant.imageUrl ? (
+                    <img src={variant.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <Package className="h-3 w-3" />
+                  )}
                 </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+                <span className="max-w-[9rem] truncate">{variant.label ?? "Без підпису"}</span>
+              </button>
+            );
+          })}
+        </div>
       ) : null}
     </div>
   );

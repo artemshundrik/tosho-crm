@@ -72,6 +72,8 @@ export type SupplierPoolProduct = {
   priceMax: number | null;
   variantCount: number;
   variants: SupplierPoolVariant[];
+  /** Усі варіанти названі кольором — тоді й підпис на картці «кольори». */
+  variantsAreColors: boolean;
 };
 
 /**
@@ -157,12 +159,14 @@ export function groupSupplierPoolRows(rows: SupplierPoolRow[], limit: number): S
         priceMax: price,
         variantCount: 1,
         variants: [variant],
+        variantsAreColors: Boolean(row.color?.trim()),
       });
       continue;
     }
 
     existing.variantCount += 1;
     existing.variants.push(variant);
+    if (!row.color?.trim()) existing.variantsAreColors = false;
     // Артикул лишається на картці, лише поки він у всіх варіантів однаковий.
     if (existing.article !== row.article) existing.article = null;
     if (price !== null) {
