@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applySupplierVariant,
   baseProductName,
   groupSupplierPoolRows,
   transliterateSearchTerm,
@@ -31,6 +32,28 @@ const row = (over: Partial<SupplierPoolRow>): SupplierPoolRow => ({
 });
 
 describe("groupSupplierPoolRows", () => {
+  it("не підставляє фото моделі колірному варіанту, але підставляє розмірному", () => {
+    // Живий випадок 08.09.2026: Артем вибрав «чорний антрацит», а в позицію
+    // лягло фото СИНЬОЇ футболки — у колірних рядків Бергамо свого фото тоді
+    // не було, і картка віддавала батьківське.
+    const rows = [
+      row({ id: "c1", name: "Футболка Prime T", price: 618, color: "темно-синій", image_url: "https://cdn/navy.jpg" }),
+      row({ id: "c2", name: "Футболка Prime T", price: 618, color: "чорний антрацит", image_url: null }),
+    ];
+    const [product] = groupSupplierPoolRows(rows, 40);
+    const black = product.variants.find((variant) => variant.label === "чорний антрацит")!;
+    expect(applySupplierVariant(product, black).imageUrl).toBeNull();
+
+    // А там, де варіанти НЕ кольори, успадкування доречне: XL виглядає як S.
+    const sized = [
+      row({ id: "s1", name: "Худі Basic", price: 900, article: "H-S", image_url: "https://cdn/hoodie.jpg" }),
+      row({ id: "s2", name: "Худі Basic", price: 900, article: "H-XL", image_url: null }),
+    ];
+    const [hoodie] = groupSupplierPoolRows(sized, 40);
+    const xl = hoodie.variants.find((variant) => variant.article === "H-XL")!;
+    expect(applySupplierVariant(hoodie, xl).imageUrl).toBe("https://cdn/hoodie.jpg");
+  });
+
   it("роздає місця по черзі між постачальниками, а не віддає всі одному", () => {
     // Живий випадок 08.09.2026: у бергамо назви на «Д» і «Ф» ішли за абеткою
     // першими серед тих, у кого є ціна, і забирали всі шість місць вікна
