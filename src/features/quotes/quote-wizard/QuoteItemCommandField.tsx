@@ -209,10 +209,25 @@ export function QuoteItemCommandField({
     }
     const product = pool[index];
     if (product) {
+      /**
+       * БЕЗ КОЛЬОРУ ТОВАР НЕ ДОДАЄТЬСЯ, якщо код у кольорів різний (Артем,
+       * 08.09.2026). Артикул у пулі — це код КОЛЬОРУ, і картка показує його
+       * лише тоді, коли він однаковий у всіх варіантів; таких меншість —
+       * заміряно на проді: 44% карток Аванпринта, 39% Тотобі, 32% Бергамо.
+       * Тобто клік по рядку в більшості випадків клав у прорахунок позицію
+       * БЕЗ коду — а за кодом товар і замовляють. Вгадати його не можна:
+       * неправильний гірший за порожній, бо його ніхто не перевіряє очима.
+       *
+       * Тому такий клік не додає, а РОЗКРИВАЄ кольори. Запасного «додати без
+       * кольору» немає навмисно: він би й лишився головним шляхом.
+       */
+      if (needsVariantChoice(product)) {
+        setExpandedPoolKey(product.key);
+        return;
+      }
       // Товар постачальника — це ще НЕ модель каталогу: у нього немає ні виду,
-      // ні пресетів. Але назву, фото й артикул він приносить із собою — саме те,
-      // що людина щойно бачила в підказці. Прив'язка позиції до самої пропозиції
-      // — наступний крок (p9/p10), і робити її тихо тут було б рішенням за людину.
+      // ні пресетів. Але назву, фото, артикул і посилання він приносить із
+      // собою — саме те, що людина щойно бачила в підказці.
       onPickSupplier(product);
       onValueChange("");
       return;
@@ -466,6 +481,17 @@ export function QuoteItemCommandField({
                 </span>
 
                 {expanded ? (
+                  <span className="block pl-11">
+                    {/* Каже, ЧОМУ клік по рядку не додав товар. Без цього
+                        розкриття кольорів виглядає як «не спрацювало». */}
+                    {needsVariantChoice(product) ? (
+                      <span className="mt-1.5 block text-2xs text-muted-foreground">
+                        Оберіть колір — його артикул поїде в замовлення
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+                {expanded ? (
                   <span className="mt-1.5 flex flex-wrap gap-1.5 pl-11">
                     {product.variants.map((variant) => (
                       <button
@@ -585,6 +611,15 @@ export function QuoteItemCommandField({
 }
 
 /** Пауза перед запитом до пулу: каталог уже в пам'яті, а пул — це база. */
+/**
+ * Чи треба спершу обрати колір. Так — коли картка не має спільного для всіх
+ * варіантів артикула, але артикули у варіантів є. Якщо їх немає ні в кого,
+ * вибирати нема з чого, і розкриття було б глухим кутом.
+ */
+function needsVariantChoice(product: SupplierPoolProduct): boolean {
+  return product.article === null && product.variants.some((variant) => variant.article);
+}
+
 function useDebouncedValue(value: string, delay: number) {
   const [debounced, setDebounced] = React.useState(value);
   React.useEffect(() => {
