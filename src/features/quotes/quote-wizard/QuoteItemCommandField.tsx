@@ -385,7 +385,12 @@ export function QuoteItemCommandField({
                   <SuggestionPhoto url={product.imageUrl} name={product.name} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium" title={product.name}>{product.name}</span>
-                    {/* Перехід на сайт живе НА САМОМУ ДОМЕНІ, а не в правому
+                    {/* Доменів у злитої картки два — та сама річ у нашому
+                        магазині й в оптовика, склеєна за артикулом. Першим
+                        стоїть той, чия ціна показана праворуч; підказка
+                        називає товар його ж словами, бо назва на картці —
+                        Аванпринтова.
+                        Перехід на сайт живе НА САМОМУ ДОМЕНІ, а не в правому
                         краю рядка. Спершу я поставив іконку праворуч, поруч із
                         ціною — і вона посунула всю праву частину рядка, бо
                         місце під неї резервується завжди, хоч видно її лише на
@@ -396,25 +401,40 @@ export function QuoteItemCommandField({
                         позицію, тож без нього «глянути» означало б «додати». */}
                     <span className="block truncate text-2xs text-muted-foreground">
                       {product.article ? `${product.article} · ` : null}
-                      {product.url ? (
-                        <a
-                          href={product.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Відкрити на сайті постачальника"
-                          onClick={(event) => event.stopPropagation()}
-                          onMouseDown={(event) => {
-                            event.stopPropagation();
-                            event.preventDefault();
-                          }}
-                          className="inline-flex items-center gap-0.5 align-baseline underline-offset-2 transition-colors group-hover:text-primary group-hover:underline"
-                        >
-                          {product.supplierSlug}
-                          <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
-                        </a>
-                      ) : (
-                        product.supplierSlug
-                      )}
+                      {product.sources.map((source, sourceIndex) => (
+                        <React.Fragment key={source.supplierSlug}>
+                          {sourceIndex > 0 ? " · " : null}
+                          {source.url ? (
+                            <a
+                              href={source.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`«${source.name}» на ${source.supplierSlug}`}
+                              onClick={(event) => event.stopPropagation()}
+                              onMouseDown={(event) => {
+                                event.stopPropagation();
+                                event.preventDefault();
+                              }}
+                              className="inline-flex items-center gap-0.5 align-baseline underline-offset-2 transition-colors group-hover:text-primary group-hover:underline"
+                            >
+                              {source.supplierSlug}
+                              {/* Іконка — тільки на ОСТАННЬОМУ домені. Вона
+                                  схована через opacity, а opacity місця не
+                                  звільняє: на першому з двох доменів вона
+                                  вибивала помітну дірку перед «· avanprint.ua»
+                                  (видно в прев'ї). У кінці рядка, після якого
+                                  нічого немає, не зсуває нічого — та сама
+                                  причина, з якої її колись прибрали з правого
+                                  краю. */}
+                              {sourceIndex === product.sources.length - 1 ? (
+                                <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+                              ) : null}
+                            </a>
+                          ) : (
+                            source.supplierSlug
+                          )}
+                        </React.Fragment>
+                      ))}
                     </span>
                   </span>
                   {/* Лічильник варіантів став кнопкою: клік розкриває кольори, а

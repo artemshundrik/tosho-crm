@@ -156,9 +156,33 @@ const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ product }
             ) : null}
           </span>
           {/* Артикул попереду: саме за ним менеджер звіряє товар, і саме він
-              обрізався першим, коли стояв після виробника (видно в прев'ю). */}
+              обрізався першим, коли стояв після виробника (видно в прев'ю).
+              Доменів буває два — це картка, злита за артикулом: та сама річ у
+              нашому магазині й в оптовика. Кожен домен веде на СВІЙ сайт, і
+              підказка називає товар його ж словами: картка носить назву
+              Аванпринта, і без цього менеджер не впізнає те, що знайшов за
+              словом оптовика. */}
           <span className="block truncate text-xs text-muted-foreground">
-            {[article, product.vendor, product.supplierSlug].filter(Boolean).join(" · ")}
+            {[article, product.vendor].filter(Boolean).join(" · ")}
+            {article || product.vendor ? " · " : null}
+            {product.sources.map((source, index) => (
+              <React.Fragment key={source.supplierSlug}>
+                {index > 0 ? " · " : null}
+                {source.url ? (
+                  <a
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`«${source.name}» на ${source.supplierSlug}`}
+                    className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+                  >
+                    {source.supplierSlug}
+                  </a>
+                ) : (
+                  source.supplierSlug
+                )}
+              </React.Fragment>
+            ))}
           </span>
         </span>
 

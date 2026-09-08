@@ -4,6 +4,7 @@ import {
   applySupplierVariant,
   baseProductName,
   groupSupplierPoolRows,
+  normalizeArticle,
   transliterateSearchTerm,
   type SupplierPoolRow,
 } from "./supplierPoolRows";
@@ -104,6 +105,10 @@ describe("groupSupplierPoolRows", () => {
 
     expect(product.name).toBe("JHK POLO");
     expect(product.article).toBe("JHK-PL");
+    // Кольори НЕ схлопуються, хоч код у них один: злиття за артикулом працює
+    // між картками, а не всередині однієї. Інакше 2098 рядків berrytex стали б
+    // 74 однобарвними картками.
+    expect(product.variantCount).toBe(2);
     // Підпис варіанта береться з дужкового хвоста — свого поля кольору тут немає.
     expect(product.variants.map((v) => v.label)).toEqual([
       "колір білий (WH), розмір 1/2",
@@ -156,5 +161,144 @@ describe("baseProductName", () => {
 describe("transliterateSearchTerm", () => {
   it("ловить латиничну назву за кириличним запитом", () => {
     expect(transliterateSearchTerm("поло")).toBe("polo");
+  });
+});
+
+/**
+ * Злиття карток за артикулом (правило Артема 08.09.2026). Аванпринт — наш
+ * магазин; він перепродає товар оптовиків і лишає їхні коди, тож збіг артикула
+ * означає ту саму річ на тому самому складі. Заміряно на проді: спільні коди є
+ * ТІЛЬКИ між Аванпринтом і оптовиками, між оптовиками — жодного.
+ */
+describe("groupSupplierPoolRows — злиття за артикулом", () => {
+  it("зливає картку магазину з карткою оптовика: назва наша, ціна його, посилання обидва", () => {
+    const rows = [
+      row({
+        id: "t1", supplier_slug: "totobi.com.ua", article: "7045-01", name: "Реглан LENNY, TM Floyd",
+        price: 675.18, price_kind: "wholesale", color: "чорний", vendor: "Floyd",
+        url: "https://totobi/7045-01", image_url: "https://totobi/black.jpg",
+      }),
+      row({
+        id: "a1", supplier_slug: "avanprint.ua", article: "7045-01", name: "Худі «LENNY»",
+        price: null, price_kind: "retail", color: "Чорний",
+        url: "https://avanprint/lenny/7045-01", image_url: "https://avanprint/black.jpg",
+      }),
+    ];
+
+    const products = groupSupplierPoolRows(rows, 40);
+
+    expect(products).toHaveLength(1);
+    const [product] = products;
+    // Назва — з нашого магазину, хоч знайшли товар за словом оптовика.
+    expect(product.name).toBe("Худі «LENNY»");
+    // Посилання на ОБИДВА сайти; першим той, чия ціна стоїть на картці.
+    expect(product.sources.map((source) => source.supplierSlug)).toEqual([
+      "totobi.com.ua",
+      "avanprint.ua",
+    ]);
+    expect(product.sources.map((source) => source.url)).toEqual([
+      "https://totobi/7045-01",
+      "https://avanprint/lenny/7045-01",
+    ]);
+    // Чужу назву не викидаємо: без неї менеджер не впізнає знайдене.
+    expect(product.sources[0].name).toBe("Реглан LENNY, TM Floyd");
+    expect(product.url).toBe("https://totobi/7045-01");
+    // ЦІНА ЇДЕ З ПІДПИСОМ. У Аванпринта price_kind = retail при порожній ціні,
+    // і взявши підпис із картки-господаря, ми підписали б оптову ціну словом
+    // «роздріб» — тобто збрехали б про гроші.
+    expect(product.priceMin).toBe(675.18);
+    expect(product.priceKind).toBe("wholesale");
+    // Той самий артикул — той самий колір, а не два.
+    expect(product.variantCount).toBe(1);
+    expect(product.article).toBe("7045-01");
+    // Фото й підпис кольору — наші; виробника Аванпринт не дає, беремо в оптовика.
+    expect(product.imageUrl).toBe("https://avanprint/black.jpg");
+    expect(product.variants[0].label).toBe("Чорний");
+    expect(product.vendor).toBe("Floyd");
+  });
+
+  it("об'єднує кольори, а не перетинає їх", () => {
+    // Застереження, з якого виросло правило: у «Stage» Тотобі має більше
+    // кольорів, ніж наш магазин. Картка мусить показати ВСІ — інакше злиття
+    // з'їдає кольори й виходить гірше за дві окремі картки.
+    const rows = [
+      row({ id: "t1", article: "812-01", name: "Футболка Stage 150", price: 120, color: "чорний" }),
+      row({ id: "t2", article: "812-77", name: "Футболка Stage 150", price: 120, color: "sage" }),
+      row({ id: "t3", article: "812-88", name: "Футболка Stage 150", price: 130, color: "orchid" }),
+      row({
+        id: "a1", supplier_slug: "avanprint.ua", article: "812-01", name: "Футболка «STAGE»",
+        price: null, price_kind: "retail", color: "Чорний",
+      }),
+    ];
+
+    const [product] = groupSupplierPoolRows(rows, 40);
+
+    expect(product.name).toBe("Футболка «STAGE»");
+    expect(product.variants.map((variant) => variant.article)).toEqual(["812-01", "812-77", "812-88"]);
+    expect([product.priceMin, product.priceMax]).toEqual([120, 130]);
+    // Артикул на картці лишається порожнім: кодів три.
+    expect(product.article).toBeNull();
+  });
+
+  it("не зливає картки, у яких немає спільного артикула", () => {
+    // По назві зливати не можна: «Рушник Nensi» і «Рушник Dora» обидва
+    // тягнуться до «Рушник NARA». Спільного коду немає — лишаються двома.
+    const rows = [
+      row({ id: "t1", article: "5509-01", name: "Рушник NARA", price: 100 }),
+      row({
+        id: "a1", supplier_slug: "avanprint.ua", article: "9114-02", name: "Рушник «NENSI»",
+        price: null, price_kind: "retail",
+      }),
+    ];
+
+    expect(groupSupplierPoolRows(rows, 40)).toHaveLength(2);
+  });
+
+  it("склеює здвоєні через одрук картки магазину — через картку оптовика", () => {
+    // Живі дані: «Парасолька складна «LIDO»» і «Парасолька скоадна «LIDO»» —
+    // одна річ, розбита одруком на дві картки. Спільного коду між собою в них
+    // немає, зате кожна ділить код із карткою оптовика, тож склеюються через неї.
+    const rows = [
+      row({
+        id: "a1", supplier_slug: "avanprint.ua", article: "5006-01", name: "Парасолька складна «LIDO»",
+        price: null, price_kind: "retail", color: "синій", image_url: "https://avanprint/lido.jpg",
+      }),
+      row({
+        id: "a2", supplier_slug: "avanprint.ua", article: "5006-06", name: "Парасолька скоадна «LIDO»",
+        price: null, price_kind: "retail", color: "жовтий",
+      }),
+      row({ id: "t1", article: "5006-01", name: "Парасоля складна Lido, TM Discover", price: 250, color: "синій" }),
+      row({ id: "t2", article: "5006-06", name: "Парасоля складна Lido, TM Discover", price: 250, color: "жовтий" }),
+    ];
+
+    const products = groupSupplierPoolRows(rows, 40);
+
+    expect(products).toHaveLength(1);
+    expect(products[0].name).toBe("Парасолька складна «LIDO»");
+    expect(products[0].variantCount).toBe(2);
+    expect(products[0].priceMin).toBe(250);
+    expect(products[0].sources.map((source) => source.supplierSlug)).toEqual([
+      "totobi.com.ua",
+      "avanprint.ua",
+    ]);
+  });
+
+  it("картка одного джерела теж має sources — щоб показ не мав двох гілок", () => {
+    const [product] = groupSupplierPoolRows(
+      [row({ id: "t1", article: "1-01", name: "Ліхтар", price: 90, url: "https://totobi/1-01" })],
+      40
+    );
+
+    expect(product.sources).toEqual([
+      { supplierSlug: "totobi.com.ua", name: "Ліхтар", url: "https://totobi/1-01" },
+    ]);
+  });
+});
+
+describe("normalizeArticle", () => {
+  it("не зважає на регістр і краї, але береже дефіси й пробіли всередині коду", () => {
+    expect(normalizeArticle("  18000-cg 3c ")).toBe("18000-CG 3C");
+    expect(normalizeArticle("   ")).toBeNull();
+    expect(normalizeArticle(null)).toBeNull();
   });
 });
