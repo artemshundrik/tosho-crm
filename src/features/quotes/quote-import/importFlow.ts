@@ -240,7 +240,8 @@ export async function writeDraftsToQuote(input: {
     if (first.ok || !runs.some((run) => Number(run.unit_price_model) > 0)) return first;
     const retry = await persistQuoteRuns(
       input.quoteId,
-      runs.map((run) => ({ ...run, unit_price_model: 0 })),
+      // Позначку ПДВ знімаємо разом із ціною: вона описує суму, а суми не стало.
+      runs.map((run) => ({ ...run, unit_price_model: 0, unit_price_model_vat: null })),
       []
     );
     return retry.ok ? retry : first;
