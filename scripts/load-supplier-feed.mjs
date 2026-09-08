@@ -50,9 +50,18 @@ const SUPPLIERS = {
   },
   avanprint: {
     slug: "avanprint.ua",
-    feed: "https://avanprint.ua/content/export/avanprint.ua/catalog-sitemap.xml",
-    format: "sitemap",
-    source: "sitemap",
+    // Профіль вивантаження в адмінці Хорошопа (Товари → Експорт → YML, валюта
+    // UAH, автогенерація «Так»), заведений 08.09.2026. До нього тут стояла мапа
+    // сайту: вона давала лише назву й фото — 1851 рядок БЕЗ артикула, ціни й
+    // кольору. Профіль дає 10234 пропозиції, кожна модифікація окремим рядком
+    // зі своїм vendorCode і своєю ціною.
+    //
+    // Адреса непостійна: Хорошоп зашиває в неї хеш профілю. Зникне файл —
+    // не вигадуй нову адресу, а візьми готову в адмінці, у списку «Всі варіанти
+    // експорту» (avanprint.ua/adminLegacy/data.php?handler=261).
+    feed: "https://avanprint.ua/content/export/c15ef418f98917515ed67a4f4bb26657.xml",
+    format: "horoshop",
+    source: "feed:horoshop",
   },
   bergamo: {
     slug: "bergamo.ua",
@@ -349,7 +358,113 @@ function parseSitemapSku(xml) {
   return rows;
 }
 
-const PARSERS = { prom: parseProm, cscart: parseCscart, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku };
+/**
+ * Хорошоп (avanprint) — YML із профілю вивантаження. Формат близький до
+ * prom-фіда, але три речі відрізняють його настільки, що спільний розбирач
+ * вийшов би плутанішим за окремий.
+ *
+ * 1. КЛЮЧ — АДРЕСА, А НЕ `id`. У пулі вже лежить 1851 рядок avanprint, залитий
+ *    свого часу з мапи сайту, і ключем там стоїть саме адреса товару. Звірено
+ *    перед заміною: усі 1851 адреси є і в новому фіді, розбіжностей нуль — тож
+ *    старі рядки ОНОВЛЮЮТЬСЯ на місці, дописуючи собі артикул, ціну й колір.
+ *    Взяли б `id` (він у фіді теж унікальний) — дістали б 10234 нові рядки, а
+ *    1851 старий згас би як «зниклий з фіда»: у пошуку це виглядало б як
+ *    дублі впереміш із дірами, і причину шукали б у показі, а не в ключі.
+ *
+ * 2. МОДИФІКАЦІЯ — ОКРЕМА ПРОПОЗИЦІЯ, як у CS-Cart: 10234 пропозиції на ~1836
+ *    товарів, у кожної свій `vendorCode` і своя ціна. Згортає їх назад у одну
+ *    картку читальний шар (`supplierPoolRows`), за назвою.
+ *
+ * 3. ХАРАКТЕРИСТИК У ЦЬОМУ ФІДІ ПРАКТИЧНО НЕМАЄ, і це варто знати заздалегідь.
+ *    `<param>` рівно двох видів — «Цвет» (9603 товари) і «Гарантия» (7216); ні
+ *    розмірів, ні матеріалу, ні методів нанесення. Справжня специфікація живе
+ *    в шаблоні даних «КАТАЛОГ: Товар» (`h_product_characteristics`) і
+ *    віддається окремою кнопкою «Експорт характеристик» — разовим xlsx, без
+ *    автогенерації й без сталої адреси. Тобто «характеристики з Аванпринта»
+ *    цим фідом НЕ закриваються: колір закривається, специфікація ні.
+ *
+ * Опис кладемо в `attrs.description` навмисно, хоч на весь фід це 5,3 МБ: за
+ * розподілом ролей (08.09.2026) текст для документів беремо саме з Аванпринта —
+ * це наш магазин і наші слова. У вікно пошуку він не поїде: `supplierPool`
+ * вибирає з `attrs` лише `color`, а не всю колонку.
+ */
+function parseHoroshop(xml) {
+  const cats = {};
+  for (const m of xml.matchAll(/<category id="(\d+)"[^>]*>([\s\S]*?)<\/category>/g)) {
+    cats[m[1]] = unesc(m[2].trim());
+  }
+  const num = (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const SKIP_PARAMS = new Set(["Цвет", "Колір", "Гарантия", "Гарантія"]);
+  const rows = [];
+  for (const m of xml.matchAll(/<offer\b([^>]*)>([\s\S]*?)<\/offer>/g)) {
+    const b = m[2];
+    const rawName = exactTag(b, "name");
+    const url = exactTag(b, "url");
+    // Без адреси рядок нічим не приткнути: вона тут одночасно ключ і посилання.
+    if (!rawName || !url) continue;
+
+    const pics = [...b.matchAll(/<picture>([^<]+)<\/picture>/g)].map((p) => p[1].trim());
+    const attrs = {};
+    const color = param(b, "Цвет") || param(b, "Колір");
+    if (color) attrs.color = color;
+
+    // КОЛІР ЗАШИТИЙ У НАЗВУ, і це доводиться прибирати тут. CS-Cart лишає
+    // модифікаціям спільну назву й віддає колір окремим полем — Хорошоп у
+    // частини товарів пише «Футболка «ACTION» жіноча, Бежевий». Читальний шар
+    // згортає картку САМЕ ЗА НАЗВОЮ, тож така пара розсипається на десяток
+    // майже однакових рядків: у прев'ї одна футболка з'їла вісім рядків із
+    // сорока, і в тій сороковці не лишилось місця нікому іншому.
+    //
+    // Ріжемо тільки тоді, коли хвіст ДОСЛІВНО дорівнює кольору з <param>.
+    // Здогадуватись «усе після коми — колір» не можна: 60 назв мають кому не
+    // про колір, і вони втратили б половину себе. Зачіпає 743 пропозиції з
+    // 10234 — вони згортаються у 120 карток замість 743.
+    const suffix = color ? `, ${color}` : "";
+    const name =
+      suffix && rawName.toLowerCase().endsWith(suffix.toLowerCase())
+        ? rawName.slice(0, rawName.length - suffix.length).trim() || rawName
+        : rawName;
+    const warranty = param(b, "Гарантия") || param(b, "Гарантія");
+    if (warranty) attrs.warranty = warranty;
+    const description = exactTag(b, "description");
+    if (description) attrs.description = description;
+    // Решта параметрів — на виріст: сьогодні їх нуль, але щойно в Аванпринті
+    // заповнять характеристики, вони приїдуть самі, без правки цього коду.
+    const rest = {};
+    for (const p of b.matchAll(/<param name="([^"]*)"[^>]*>([\s\S]*?)<\/param>/g)) {
+      const pname = unesc(p[1]);
+      if (SKIP_PARAMS.has(pname)) continue;
+      rest[pname] = unesc(p[2].trim());
+    }
+    if (Object.keys(rest).length) attrs.params = rest;
+    // `available="true"` Хорошоп ставить лише тим, що в наявності (9852 з
+    // 10234); решті атрибут просто не пише. Тому дивимось на присутність
+    // «true», а не шукаємо "false" — його у фіді немає взагалі.
+    attrs.available = /\bavailable="true"/.test(m[1]);
+
+    rows.push({
+      external_key: url,
+      article: exactTag(b, "vendorCode") || null,
+      name,
+      vendor: exactTag(b, "vendor") || null,
+      category: cats[exactTag(b, "categoryId")] || null,
+      // exactTag, а не tag: `<oldprice>` стоїть поруч, і регулярка з `[^>]*`
+      // рано чи пізно чіпляє сусіда — на CS-Cart цим уже обпікались.
+      price: num(exactTag(b, "price")),
+      currency: exactTag(b, "currencyId") || "UAH",
+      url,
+      image_url: pics[0] || null,
+      images: JSON.stringify(pics),
+      attrs: JSON.stringify(attrs),
+    });
+  }
+  return rows;
+}
+
+const PARSERS = { prom: parseProm, cscart: parseCscart, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku, horoshop: parseHoroshop };
 
 // ── тягнемо фід ─────────────────────────────────────────────────────────────
 console.log(`Фід: ${cfg.feed}`);
