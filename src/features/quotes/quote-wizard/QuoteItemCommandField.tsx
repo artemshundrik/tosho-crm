@@ -232,7 +232,20 @@ export function QuoteItemCommandField({
   // одночасно перетворюють підказку на простирадло.
   const [expandedPoolKey, setExpandedPoolKey] = React.useState<string | null>(null);
   const [allColors, setAllColors] = React.useState(false);
-  React.useEffect(() => setAllColors(false), [expandedPoolKey]);
+  /**
+   * ОБРАНИЙ КОЛІР СТАВ СТАНОМ, І ЦЕ ГОЛОВНА ЗМІНА (макет затверджено 08.09.2026).
+   *
+   * Раніше клік по кольору ОДРАЗУ додавав позицію, тож «обраного кольору» як
+   * поняття не існувало — а без нього фото не мало за чим іти й лишалось фотом
+   * випадкового кольору з фіда. Тепер клік обирає, фото рядка стає фотом того
+   * кольору, і аж потім «Додати». Два кліки замість одного, зате менеджер
+   * бачить, що саме він кладе в прорахунок.
+   */
+  const [pickedVariantId, setPickedVariantId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setAllColors(false);
+    setPickedVariantId(null);
+  }, [expandedPoolKey]);
 
   /**
    * ОДИН ТОВАР РОЗКРИВАЄТЬСЯ САМ (Артем, 08.09.2026, за макетом вузького пошуку).
@@ -490,6 +503,7 @@ export function QuoteItemCommandField({
           {visiblePool.map((product, index) => {
             const price = formatSupplierPoolPrice(product);
             const expanded = expandedPoolKey === product.key;
+            const picked = expanded ? product.variants.find((variant) => variant.id === pickedVariantId) ?? null : null;
             const unit = product.variantsAreColors ? "кольор." : "вар.";
             return (
               <li
@@ -505,7 +519,8 @@ export function QuoteItemCommandField({
                 onClick={() => commitRow(index)}
               >
                 <span className="flex items-center gap-3">
-                  <SuggestionPhoto url={product.imageUrl} name={product.name} />
+                  {/* Фото йде за обраним кольором; поки не обрано — фото моделі. */}
+                  <SuggestionPhoto url={picked?.imageUrl ?? product.imageUrl} name={product.name} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium" title={product.name}>{product.name}</span>
                     {/* Доменів у злитої картки два — та сама річ у нашому
@@ -608,7 +623,9 @@ export function QuoteItemCommandField({
                         розкриття кольорів виглядає як «не спрацювало». */}
                     {needsVariantChoice(product) ? (
                       <span className="mt-1.5 block text-2xs text-muted-foreground">
-                        Оберіть колір — його артикул поїде в замовлення
+                        {picked
+                          ? `У прорахунок поїде код ${picked.article ?? "—"}`
+                          : "Оберіть колір — його артикул поїде в замовлення"}
                       </span>
                     ) : null}
                   </span>
@@ -637,13 +654,17 @@ export function QuoteItemCommandField({
                         key={variant.id}
                         type="button"
                         title={[variant.label, variant.article].filter(Boolean).join(" · ")}
+                        aria-pressed={pickedVariantId === variant.id}
                         onClick={(event) => {
                           event.stopPropagation();
-                          onPickSupplier(applySupplierVariant(product, variant));
-                          onValueChange("");
-                          setExpandedPoolKey(null);
+                          setPickedVariantId(pickedVariantId === variant.id ? null : variant.id);
                         }}
-                        className="flex items-center gap-2 rounded-[var(--radius-md)] border border-border/60 py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground"
+                        className={cn(
+                          "flex items-center gap-2 rounded-[var(--radius-md)] border py-1 pl-1 pr-2.5 text-left transition-colors",
+                          pickedVariantId === variant.id
+                            ? "border-foreground bg-muted"
+                            : "border-border/60 hover:border-foreground"
+                        )}
                       >
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
                           <VariantPhoto url={variant.imageUrl} label={variant.label} />
@@ -660,6 +681,22 @@ export function QuoteItemCommandField({
                         </span>
                       </button>
                     ))}
+                    {picked ? (
+                      /* Додає саме кнопка, а не плитка: плитка тепер обирає. */
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onPickSupplier(applySupplierVariant(product, picked));
+                          onValueChange("");
+                          setExpandedPoolKey(null);
+                        }}
+                        className="ml-auto self-center rounded-[var(--radius-md)] bg-foreground px-3 py-1.5 text-2xs font-medium text-background transition-colors hover:bg-[var(--btn-solid-hover)]"
+                      >
+                        Додати в прорахунок
+                      </button>
+                    ) : null}
                     {!allColors && product.variants.length > COLOR_CAP ? (
                       <button
                         type="button"
