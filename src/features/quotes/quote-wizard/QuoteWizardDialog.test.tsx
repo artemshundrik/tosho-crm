@@ -283,6 +283,9 @@ describe("QuoteWizardDialog — один екран", () => {
     // «худі» знаходить реглан за ВИДОМ — слова «худі» в назві моделі немає.
     await user.type(field, "худі");
     const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    // Каталог тепер під постачальниками і згорнутий — розкриваємо його,
+    // перш ніж шукати модель (REQ-250, 08.09.2026).
+    await user.click(await within(list).findByRole("button", { name: /Уже в каталозі/ }));
     const option = await within(list).findByRole("option", { name: /Реглан LENNY/ });
     expect(within(option).getByText("Худі · Одяг")).toBeInTheDocument();
     expect(within(option).getByRole("img", { name: "Реглан LENNY" })).toHaveAttribute("src", "https://cdn/lenny.jpg");
@@ -313,6 +316,9 @@ describe("QuoteWizardDialog — один екран", () => {
 
     await user.type(field, "U0102-Green");
     const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    // Каталог тепер під постачальниками і згорнутий — розкриваємо його,
+    // перш ніж шукати модель (REQ-250, 08.09.2026).
+    await user.click(await within(list).findByRole("button", { name: /Уже в каталозі/ }));
     const option = await within(list).findByRole("option", { name: /Реглан LENNY/ });
     // У підказці видно ТОЙ артикул, який шукали.
     expect(within(option).getByText(/U0102-Green/)).toBeInTheDocument();
@@ -334,6 +340,9 @@ describe("QuoteWizardDialog — один екран", () => {
 
     await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "худі");
     const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    // Каталог тепер під постачальниками і згорнутий — розкриваємо його,
+    // перш ніж шукати модель (REQ-250, 08.09.2026).
+    await user.click(await within(list).findByRole("button", { name: /Уже в каталозі/ }));
     await user.click(await within(list).findByRole("option", { name: /Реглан LENNY/ }));
 
     const group = await screen.findByRole("group", { name: "Нанесення" });
@@ -378,6 +387,9 @@ describe("QuoteWizardDialog — один екран", () => {
 
     await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "худі");
     const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    // Каталог тепер під постачальниками і згорнутий — розкриваємо його,
+    // перш ніж шукати модель (REQ-250, 08.09.2026).
+    await user.click(await within(list).findByRole("button", { name: /Уже в каталозі/ }));
     await user.click(await within(list).findByRole("option", { name: /Реглан LENNY/ }));
 
     const group = await screen.findByRole("group", { name: "Нанесення" });
@@ -485,6 +497,9 @@ describe("QuoteWizardDialog — один екран", () => {
 
     await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "блокнот");
     const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    // Каталог тепер під постачальниками і згорнутий — розкриваємо його,
+    // перш ніж шукати модель (REQ-250, 08.09.2026).
+    await user.click(await within(list).findByRole("button", { name: /Уже в каталозі/ }));
     await user.click(await within(list).findByRole("option", { name: /Блокнот А5/ }));
 
     expect(screen.getByRole("radio", { name: /Поліграфія/ })).toBeChecked();

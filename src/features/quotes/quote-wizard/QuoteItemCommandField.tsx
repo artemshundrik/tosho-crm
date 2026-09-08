@@ -142,8 +142,12 @@ export function QuoteItemCommandField({
   const pool = poolTerm.length >= 2 ? poolData ?? [] : [];
 
   // Рядків у списку: каталог + постачальники + «Додати як нову позицію».
-  const rowCount = ranked.length + pool.length + 1;
-  const addRowIndex = ranked.length + pool.length;
+  // Каталог згорнутий за замовчуванням, тож його рядки в нумерації участі не
+  // беруть: інакше стрілки провалювалися б у невидимі рядки.
+  const [catalogOpen, setCatalogOpen] = React.useState(false);
+  const catalogRows = catalogOpen ? ranked.length : 0;
+  const rowCount = pool.length + catalogRows + 1;
+  const addRowIndex = pool.length + catalogRows;
   const open = focused && !dismissed && mode === "search" && trimmed.length > 0;
 
   // Новий текст — новий список: підсвітка повертається на перший рядок, а
@@ -151,6 +155,7 @@ export function QuoteItemCommandField({
   React.useEffect(() => {
     setActive(0);
     setDismissed(false);
+    setCatalogOpen(false);
   }, [trimmed]);
 
   const commitName = () => {
@@ -182,13 +187,13 @@ export function QuoteItemCommandField({
   const [expandedPoolKey, setExpandedPoolKey] = React.useState<string | null>(null);
 
   const commitRow = (index: number) => {
-    const suggestion = ranked[index];
+    const suggestion = catalogOpen ? ranked[index - pool.length] : undefined;
     if (suggestion) {
       onPickCatalog(suggestion);
       onValueChange("");
       return;
     }
-    const product = pool[index - ranked.length];
+    const product = pool[index];
     if (product) {
       // Товар постачальника — це ще НЕ модель каталогу: у нього немає ні виду,
       // ні пресетів. Але назву, фото й артикул він приносить із собою — саме те,
@@ -303,36 +308,6 @@ export function QuoteItemCommandField({
               {suggestionsLoading ? "Читаю каталог…" : "Шукаю за артикулом…"}
             </li>
           ) : null}
-          {ranked.map((suggestion, index) => (
-            <li
-              key={suggestion.modelId}
-              role="option"
-              aria-selected={active === index}
-              className={cn(
-                "flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
-                active === index ? "bg-muted" : "hover:bg-muted/50"
-              )}
-              onMouseEnter={() => setActive(index)}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => commitRow(index)}
-            >
-              <SuggestionPhoto url={suggestion.imageUrl} name={suggestion.name} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium" title={suggestion.name}>{suggestion.name}</span>
-                <span className="block truncate text-2xs text-muted-foreground">
-                  {suggestion.kindName} · {suggestion.typeName}
-                  {/* Артикул у другому рядку — щоб було видно, ЧОМУ модель
-                      знайшлась, коли шукали кодом, а не назвою (REQ-178#p7).
-                      Знайшлась за кодом кольору — показуємо САМЕ той код, а не
-                      артикул першого варіанта: інакше збіг виглядає випадковим,
-                      і менеджер не впізнає свій товар (REQ-248). */}
-                  {suggestion.matched?.sku ?? suggestion.sku ? (
-                    <span className="text-muted-foreground/70"> · арт. {suggestion.matched?.sku ?? suggestion.sku}</span>
-                  ) : null}
-                </span>
-              </span>
-            </li>
-          ))}
           {/*
             «Немає» не блимає, поки шукаємо за артикулом: код знаходиться
             запитом, і сказати «немає» до відповіді означало б збрехати на
@@ -349,15 +324,13 @@ export function QuoteItemCommandField({
             <li
               aria-hidden
               className={cn(
-                "px-2 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70",
-                ranked.length > 0 && "mt-1 border-t border-border/60"
+                "px-2 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
               )}
             >
               У постачальників
             </li>
           ) : null}
-          {pool.map((product, poolIndex) => {
-            const index = ranked.length + poolIndex;
+          {pool.map((product, index) => {
             const price = formatSupplierPoolPrice(product);
             const expanded = expandedPoolKey === product.key;
             const unit = product.variantsAreColors ? "кольор." : "вар.";
@@ -378,8 +351,36 @@ export function QuoteItemCommandField({
                   <SuggestionPhoto url={product.imageUrl} name={product.name} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium" title={product.name}>{product.name}</span>
+                    {/* Перехід на сайт живе НА САМОМУ ДОМЕНІ, а не в правому
+                        краю рядка. Спершу я поставив іконку праворуч, поруч із
+                        ціною — і вона посунула всю праву частину рядка, бо
+                        місце під неї резервується завжди, хоч видно її лише на
+                        наведенні. Тут вона дописується в кінець рядка, після
+                        якого нічого немає, тож не зсуває нічого. І читається
+                        як належить: «відкрити ось цей сайт».
+                        stopPropagation обов'язковий — клік по рядку КОМІТИТЬ
+                        позицію, тож без нього «глянути» означало б «додати». */}
                     <span className="block truncate text-2xs text-muted-foreground">
-                      {[product.article, product.supplierSlug].filter(Boolean).join(" · ")}
+                      {product.article ? `${product.article} · ` : null}
+                      {product.url ? (
+                        <a
+                          href={product.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Відкрити на сайті постачальника"
+                          onClick={(event) => event.stopPropagation()}
+                          onMouseDown={(event) => {
+                            event.stopPropagation();
+                            event.preventDefault();
+                          }}
+                          className="inline-flex items-center gap-0.5 align-baseline underline-offset-2 transition-colors group-hover:text-primary group-hover:underline"
+                        >
+                          {product.supplierSlug}
+                          <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+                        </a>
+                      ) : (
+                        product.supplierSlug
+                      )}
                     </span>
                   </span>
                   {/* Лічильник варіантів став кнопкою: клік розкриває кольори, а
@@ -401,29 +402,6 @@ export function QuoteItemCommandField({
                   ) : null}
                   {price ? (
                     <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-muted-foreground">{price}</span>
-                  ) : null}
-                  {/* Перехід на сайт постачальника. З'являється на наведенні —
-                      постійна іконка в кожному рядку сперечалася б за увагу з
-                      ціною, а потрібна вона зрідка: подивитись фото більшим і
-                      прочитати опис перед тим, як брати позицію.
-                      stopPropagation обов'язковий: клік по рядку КОМІТИТЬ
-                      позицію, тож без нього «глянути» означало б «додати». */}
-                  {product.url ? (
-                    <a
-                      href={product.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Відкрити «${product.name}» у постачальника`}
-                      title="Відкрити на сайті постачальника"
-                      onClick={(event) => event.stopPropagation()}
-                      onMouseDown={(event) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                      }}
-                      className="shrink-0 rounded-[var(--radius-sm)] p-1 text-primary opacity-0 transition-opacity hover:bg-primary/10 focus-visible:opacity-100 group-hover:opacity-100"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
                   ) : null}
                 </span>
 
@@ -455,6 +433,70 @@ export function QuoteItemCommandField({
               </li>
             );
           })}
+
+          {/* КАТАЛОГ ПІД ПОСТАЧАЛЬНИКАМИ І ЗГОРНУТИЙ (рішення Артема 08.09.2026).
+              Спершу він стояв першим: перевірене, що ми вже продавали, мало
+              бути вище прайсу на тисячі позицій. Але пул виріс до шістнадцяти
+              тисяч рядків з артикулами, цінами й фото — і каталог зі своїми
+              250 моделями почав не підтверджувати вибір, а відсувати те, за чим
+              прийшли. Тепер він унизу й за клацанням: видно, що річ ми вже
+              продавали, але місця в списку він не займає. */}
+          {/* Заголовок каталогу — БЕЗ aria-hidden, на відміну від заголовка
+              постачальників: там просто підпис, а тут кнопка. Схована гілка
+              дерева доступності робить її невидимою і для читалки екрана, і
+              для тестів. */}
+          {ranked.length > 0 ? (
+            <li
+              role="presentation"
+              className={cn("pt-1", pool.length > 0 && "mt-1 border-t border-border/60")}
+            >
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setCatalogOpen((value) => !value)}
+                className="flex w-full items-center gap-1 rounded-[var(--radius-md)] px-2 py-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70 transition-colors hover:text-foreground"
+              >
+                <ChevronDown className={cn("h-3 w-3 transition-transform", !catalogOpen && "-rotate-90")} />
+                Уже в каталозі
+                <span className="font-normal normal-case tracking-normal">({ranked.length})</span>
+              </button>
+            </li>
+          ) : null}
+          {catalogOpen ? (
+            ranked.map((suggestion, rankedIndex) => {
+              const index = pool.length + rankedIndex;
+              return (
+              <li
+                key={suggestion.modelId}
+                role="option"
+                aria-selected={active === index}
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
+                  active === index ? "bg-muted" : "hover:bg-muted/50"
+                )}
+                onMouseEnter={() => setActive(index)}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => commitRow(index)}
+              >
+                <SuggestionPhoto url={suggestion.imageUrl} name={suggestion.name} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium" title={suggestion.name}>{suggestion.name}</span>
+                  <span className="block truncate text-2xs text-muted-foreground">
+                    {suggestion.kindName} · {suggestion.typeName}
+                    {/* Артикул у другому рядку — щоб було видно, ЧОМУ модель
+                        знайшлась, коли шукали кодом, а не назвою (REQ-178#p7).
+                        Знайшлась за кодом кольору — показуємо САМЕ той код, а не
+                        артикул першого варіанта: інакше збіг виглядає випадковим,
+                        і менеджер не впізнає свій товар (REQ-248). */}
+                    {suggestion.matched?.sku ?? suggestion.sku ? (
+                      <span className="text-muted-foreground/70"> · арт. {suggestion.matched?.sku ?? suggestion.sku}</span>
+                    ) : null}
+                  </span>
+                </span>
+              </li>
+              );
+            })
+          ) : null}
 
           <li
             role="option"
