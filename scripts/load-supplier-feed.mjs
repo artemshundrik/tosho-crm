@@ -12,6 +12,16 @@
  * таблицю → один upsert у пул. Зниклі з фіда товари гасяться is_active=false
  * (не видаляються — на них можуть посилатися старі прорахунки).
  *
+ * ФІДА МОЖЕ Й НЕ БУТИ. Тоді в реєстрі стоїть `crawl`, і замість одного файлу
+ * скрипт бере з мапи сайту перелік адрес і обходить сторінки по одній
+ * (bergamo). Розбирач такої сторінки живе в `PAGE_PARSERS`.
+ *
+ * ЩО СТЕРЕЖЕ ВІД ТИХОЇ БІДИ. Порожній або обірваний прогін НЕ МОЖНА заливати:
+ * гасіння зниклих працює за часом, тож нуль рядків вимкнув би всього
+ * постачальника, а виглядало б це як «постачальник зник із пошуку». Три
+ * рубежі: `curl -f` (404 падає вголос), `maxFailRatio` в обході (частковий
+ * обхід не доходить до запису) і `minRows` у реєстрі (нижня межа рядків).
+ *
  * ЦІНА. За замовчуванням у пул лягає ціна вітрини як price_kind='retail'. Якщо
  * в постачальника є домовленість — вона стоїть у його записі реєстру полем
  * `priceRule`, і тоді в `price` лягає вже НАША ціна (price_kind='wholesale'), а
@@ -24,6 +34,7 @@
  *   set -a; . ./.env.backup; set +a
  *   node scripts/load-supplier-feed.mjs berrytex
  *   node scripts/load-supplier-feed.mjs berrytex --dry   (показати, не писати)
+ *   node scripts/load-supplier-feed.mjs bergamo --dry --limit=20  (коротка проба обходу)
  *   node scripts/load-supplier-feed.mjs --list           (перелік постачальників)
  */
 
@@ -47,6 +58,7 @@ const SUPPLIERS = {
     feed: "https://berrytex.com.ua/prom.xml",
     format: "prom",
     source: "feed:prom",
+    minRows: 1600, // у фіді 2083 (08.09.2026)
   },
   avanprint: {
     slug: "avanprint.ua",
@@ -62,12 +74,54 @@ const SUPPLIERS = {
     feed: "https://avanprint.ua/content/export/c15ef418f98917515ed67a4f4bb26657.xml",
     format: "horoshop",
     source: "feed:horoshop",
+    minRows: 8000, // у фіді 10234 (08.09.2026)
+    // ЦІНА АВАНПРИНТА — НЕ ЦІНА, А ДОВІДКА. avanprint.ua це наша власна
+    // вітрина, і число у фіді — наш РОЗДРІБ. Купуємо ми не в себе: товар
+    // береться в постачальників (Артем, 08.09.2026), тож рахувати
+    // собівартість від власної вітрини не можна — вийде накрутка на накрутку.
+    //
+    // Тому роздріб лягає в `attrs.sitePrice` (є з чим звіряти й видно, коли
+    // ціна на сайті поїхала), а `price` лишається порожнім. Фактична ціна
+    // прийде звідти ж, звідки товар, — парою «позиція Аванпринта → позиція
+    // постачальника», за правилом того постачальника (Тотобі −44/−40/−50%).
+    // До підтвердження пари чесніше не показувати ціни взагалі, ніж показати
+    // чужу: порожнє поле менеджер помітить, а неправильне число — ні.
+    priceIsReference: true,
   },
   bergamo: {
     slug: "bergamo.ua",
+    // Мапа сайту тут — не фід, а ПЕРЕЛІК АДРЕС: назви, ціни й фото беруться зі
+    // сторінок товарів (`crawl` нижче). Фіда в Бергамо немає, і це перевірено,
+    // а не припущено (08.09.2026): prom.xml, yml.xml, google.xml,
+    // route=feed/*, extension/feed/yandex_yml — 404; extension/feed/google_base
+    // віддає 200 і нуль байтів; extension/feed/google_sitemap — та сама мапа.
+    // В акаунті «Файли для завантаження» порожні, checkout/cart/export віддає
+    // xlsx самого кошика. Сторінки опису вигрузок, як у Тотобі, у них немає.
     feed: "https://bergamo.ua/sitemap.xml",
-    format: "sitemap-sku",
-    source: "sitemap",
+    format: "opencart-page",
+    source: "crawl:opencart",
+    // Обхід сторінок замість одного файлу. `index` каже, як дістати перелік
+    // адрес із мапи; далі кожна адреса тягнеться окремо.
+    crawl: { index: "sitemap-sku", concurrency: 4, retries: 1, delayMs: 250, maxFailRatio: 0.05 },
+    minRows: 2100, // у мапі 2658 (08.09.2026)
+    // ДИЛЕРСЬКА ЦІНА = ЦІНА САЙТУ × 0,525 (−47,5%). Заміряно 08.09.2026 на 10
+    // товарах із різних розділів — сувенірка, одяг, робочий одяг, термокружки,
+    // від 35 до 21 000 грн: коефіцієнт СКРІЗЬ однаковий, поділу за категоріями
+    // немає (на відміну від Тотобі). Це не оцінка й не домовленість зі слів:
+    // Бергамо сама показує цю ціну під нашим логіном, поруч із закресленою
+    // публічною.
+    //
+    // `agreedOn: null` — саме тому, що підтвердження «ставка стала, а не акція»
+    // від СЕО ще немає (питання відкрите з 08.09.2026). Коли назвуть іншу
+    // цифру — правиш множник, і ціни перераховуються з `attrs.sitePrice`
+    // одним UPDATE, без повторного обходу 2658 сторінок:
+    //   update tosho.supplier_products
+    //      set price = round((attrs->>'sitePrice')::numeric * <множник>, 2)
+    //    where supplier_slug = 'bergamo.ua' and attrs ? 'sitePrice';
+    priceRule: {
+      agreedOn: null,
+      rules: [{ multiplier: 0.525, label: "дилерська −47,5%" }],
+    },
   },
   totobi: {
     slug: "totobi.com.ua",
@@ -78,6 +132,7 @@ const SUPPLIERS = {
     feed: "https://totobi.com.ua/index.php?dispatch=yml.get&access_key=lg3bjy2gvww",
     format: "cscart",
     source: "feed:cscart",
+    minRows: 2500, // у фіді 3150 (08.09.2026)
     // Фід віддає адреси картинок і товарів через http, хоч сайт працює по https
     // (перевірено: та сама картинка по https віддає 200). На проді ми під https,
     // тож http-картинка — це mixed content, який браузер просто НЕ покаже.
@@ -118,7 +173,20 @@ if (args.includes("--list") || args.length === 0) {
   process.exit(0);
 }
 const dry = args.includes("--dry");
-const key = args.find((a) => !a.startsWith("--"));
+// `--limit N` — коротка пробіжка обходом, щоб подивитись, що взагалі
+// розбирається, не тягнучи 2658 сторінок. ЗАПИС ІЗ НЕЮ ЗАБОРОНЕНИЙ: неповний
+// набір рядків погасив би весь решту каталогу постачальника як «зниклий».
+const limitArg = args.find((a) => a.startsWith("--limit"));
+const limit = limitArg ? Number.parseInt(limitArg.split("=")[1] ?? args[args.indexOf(limitArg) + 1], 10) : 0;
+if (limitArg && (!Number.isFinite(limit) || limit <= 0)) {
+  console.error("--limit чекає додатне число: --limit=20");
+  process.exit(1);
+}
+if (limit && !dry) {
+  console.error("--limit можна лише разом із --dry: неповний обхід, залитий у базу, погасить решту каталогу.");
+  process.exit(1);
+}
+const key = args.find((a) => !a.startsWith("--") && a !== String(limit));
 const cfg = SUPPLIERS[key];
 if (!cfg) {
   console.error(`Немає постачальника «${key}». Доступні: ${Object.keys(SUPPLIERS).join(", ")}`);
@@ -388,7 +456,7 @@ function parseSitemapSku(xml) {
  * це наш магазин і наші слова. У вікно пошуку він не поїде: `supplierPool`
  * вибирає з `attrs` лише `color`, а не всю колонку.
  */
-function parseHoroshop(xml) {
+function parseHoroshop(xml, cfg) {
   const cats = {};
   for (const m of xml.matchAll(/<category id="(\d+)"[^>]*>([\s\S]*?)<\/category>/g)) {
     cats[m[1]] = unesc(m[2].trim());
@@ -408,6 +476,11 @@ function parseHoroshop(xml) {
 
     const pics = [...b.matchAll(/<picture>([^<]+)<\/picture>/g)].map((p) => p[1].trim());
     const attrs = {};
+    // exactTag, а не tag: `<oldprice>` стоїть поруч, і регулярка з `[^>]*`
+    // рано чи пізно чіпляє сусіда — на CS-Cart цим уже обпікались.
+    const listed = num(exactTag(b, "price"));
+    // Довідкову ціну тримаємо завжди, робочу — лише коли фід дає саме її.
+    if (listed != null) attrs.sitePrice = listed;
     const color = param(b, "Цвет") || param(b, "Колір");
     if (color) attrs.color = color;
 
@@ -451,9 +524,7 @@ function parseHoroshop(xml) {
       name,
       vendor: exactTag(b, "vendor") || null,
       category: cats[exactTag(b, "categoryId")] || null,
-      // exactTag, а не tag: `<oldprice>` стоїть поруч, і регулярка з `[^>]*`
-      // рано чи пізно чіпляє сусіда — на CS-Cart цим уже обпікались.
-      price: num(exactTag(b, "price")),
+      price: cfg?.priceIsReference ? null : listed,
       currency: exactTag(b, "currencyId") || "UAH",
       url,
       image_url: pics[0] || null,
@@ -464,13 +535,127 @@ function parseHoroshop(xml) {
   return rows;
 }
 
+/**
+ * OpenCart (bergamo) — розбір ОДНІЄЇ сторінки товару. Викликається обходом, а
+ * не по фіду: фіда в Бергамо немає (див. запис у реєстрі).
+ *
+ * ⚠️ ГОЛОВНА ПАСТКА, І ВОНА ТИХА. На сторінці є ДВІ ціни, і найзручніша з них
+ * неправильна. `application/ld+json` (`offers.price`) віддає ПУБЛІЧНУ ціну —
+ * і віддає її навіть залогіненому дилеру. Наша ціна живе тільки в DOM:
+ * `.product-price-old` — публічна, `.product-price` — наша. Тобто розбирач, який
+ * взяв би ціну звідти ж, звідки бере назву, бренд і фото (а це найприродніше
+ * рішення), мовчки записав би ціни майже вдвічі більші, і виглядало б це
+ * абсолютно нормально. Формою це той самий випадок, що `<price_type>` у CS-Cart
+ * і `<oldprice>` у Хорошопа: сусід, який ловиться раніше за потрібне поле.
+ *
+ * ТОМУ МИ ХОДИМО АНОНІМНО І МНОЖИМО. Публічну ціну беремо з JSON-LD (вона там
+ * чесна), а нашу рахує `priceRule` реєстру. Так обхід не потребує ані кукі, ані
+ * логіна — ні на ноутбуці, ні в кроні, де сесії взятись нізвідки. Публічна ціна
+ * лишається в `attrs.sitePrice`: зміниться ставка — перерахунок робиться з неї
+ * одним UPDATE, без повторного обходу.
+ *
+ * ГАЛЕРЕЯ — ЗА ПРЕФІКСОМ ГОЛОВНОГО ФОТО. На сторінці 46 адрес `catalog_images`,
+ * але майже всі — супутні товари й банери блогу. Кадри саме цього товару ділять
+ * шлях і основу імені з головним фото (`.../voyager/v3447_03_a-1000x1000.jpg`),
+ * розрізняючись хвостом `_a`/`_b` і розміром. Тому беремо ті, що починаються з
+ * тієї самої основи, і зрізаємо `-WxH`, щоб не тягти п'ять копій одного кадру.
+ *
+ * КАТЕГОРІЇ ТУТ НЕМАЄ, і це не недогляд. Хлібні крихти на сторінці товару
+ * містять лише його власну назву — розділ у них не потрапляє. Розділ можна
+ * дістати обходом 279 сторінок категорій із мапи, але це окрема робота на
+ * стільки ж запитів, тож поки `category: null`.
+ */
+function parseOpencartPage(html, ctx) {
+  const ld = [];
+  for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
+    try {
+      ld.push(JSON.parse(m[1].trim()));
+    } catch {
+      // Битий JSON-LD — не привід втрачати сторінку: нижче є запасні шляхи.
+    }
+  }
+  const product = ld.find((d) => d && d["@type"] === "Product");
+  if (!product) return null;
+
+  const name = typeof product.name === "string" ? product.name.trim() : "";
+  if (!name) return null;
+
+  const offers = product.offers && !Array.isArray(product.offers) ? product.offers : (product.offers || [])[0];
+  const sitePriceRaw = offers ? Number.parseFloat(offers.price) : Number.NaN;
+  const sitePrice = Number.isFinite(sitePriceRaw) && sitePriceRaw > 0 ? sitePriceRaw : null;
+
+  const mainImage = typeof product.image === "string" ? product.image : (product.image || [])[0] || null;
+  // Основа імені: без «-1000x1000» і без кадрового хвоста «_a».
+  const stripSize = (u) => u.replace(/-\d+x\d+[a-z]*\.(jpg|jpeg|png|webp)$/i, "");
+  let images = [];
+  if (mainImage) {
+    const base = stripSize(mainImage).replace(/_[a-z]$/i, "");
+    // Один кадр лежить у кількох розмірах: -250x250, -550x550, -600x315w. Хвіст
+    // «w» — соцмережевий кроп, широкий і з обрізаним товаром, і саме він
+    // трапляється в розмітці ПЕРШИМ (це og:image). Тому «перший, що трапився»
+    // брати не можна: на картці стояла б обрізана картинка. Для кожного кадру
+    // лишаємо найбільший КВАДРАТНИЙ варіант.
+    //
+    // Головне фото додаємо окремо: у JSON-LD слеші екрановані (`https:\/\/`),
+    // тож у сирому тексті сторінки регулярка його не бачить, а саме там лежить
+    // найбільший розмір (1000x1000).
+    const rankOf = (url) => {
+      const m = url.match(/-(\d+)x(\d+)([a-z]*)\.(?:jpg|jpeg|png|webp)$/i);
+      if (!m) return 1; // без розміру — оригінал, кращий за будь-який кроп
+      const [w, h] = [Number(m[1]), Number(m[2])];
+      return (w === h ? 1e9 : 0) + w * h;
+    };
+    const best = new Map();
+    const offer = (url) => {
+      const frame = stripSize(url);
+      if (!frame.startsWith(base)) return;
+      const prev = best.get(frame);
+      const rank = rankOf(url);
+      if (!prev || rank > prev.rank) best.set(frame, { url, rank });
+    };
+    offer(mainImage);
+    for (const m of html.matchAll(/https:\/\/[^\s"'\\)]*?\/image\/cache\/[^\s"'\\)]+?\.(?:jpg|jpeg|png|webp)/gi)) offer(m[0]);
+    images = [...best.keys()].sort().map((k) => best.get(k).url);
+    if (!images.length) images = [mainImage];
+  }
+
+  const ruled = applyPriceRule(ctx.cfg.priceRule, sitePrice, {});
+  const attrs = {};
+  if (sitePrice != null) attrs.sitePrice = sitePrice;
+  if (ruled.label) attrs.priceRule = ruled.label;
+  if (product.description) attrs.description = String(product.description).trim();
+  if (product.model) attrs.model = String(product.model).trim();
+  // schema.org/InStock vs OutOfStock — єдиний сигнал наявності на сторінці.
+  if (offers?.availability) attrs.available = /InStock/i.test(String(offers.availability));
+
+  return {
+    external_key: ctx.url,
+    article: typeof product.sku === "string" && product.sku.trim() ? product.sku.trim() : null,
+    name,
+    vendor: product.brand?.name ? String(product.brand.name).trim() : null,
+    category: null,
+    price: ruled.price,
+    currency: offers?.priceCurrency || "UAH",
+    url: ctx.url,
+    image_url: images[0] || mainImage || null,
+    images: JSON.stringify(images),
+    attrs: JSON.stringify(attrs),
+  };
+}
+
 const PARSERS = { prom: parseProm, cscart: parseCscart, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku, horoshop: parseHoroshop };
+const PAGE_PARSERS = { "opencart-page": parseOpencartPage };
 
 // ── тягнемо фід ─────────────────────────────────────────────────────────────
 console.log(`Фід: ${cfg.feed}`);
 let xml;
 try {
-  xml = execFileSync("curl", ["-sS", "--max-time", "60", "-A", UA, cfg.feed], {
+  // `-f` тут не косметика. Без нього 404 повертає HTML-сторінку помилки з
+  // нульовим кодом виходу: розбирач знаходить нуль товарів, залив «успішно»
+  // пише нуль рядків — і гасить УСЬОГО постачальника, бо зниклі з фіда
+  // вимикаються за часом. Адреси вивантажень непостійні (Хорошоп зашиває в них
+  // хеш профілю), тож це не гіпотетичний випадок. З `-f` curl падає вголос.
+  xml = execFileSync("curl", ["-fsS", "--max-time", "60", "-A", UA, cfg.feed], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -478,18 +663,143 @@ try {
   console.error("Не вдалося завантажити фід:", e.message);
   process.exit(1);
 }
-const parser = PARSERS[cfg.format];
-const rows = parser(xml, cfg);
+
+/**
+ * Обхід сторінок для постачальників без фіда. Мапа сайту дає лише перелік
+ * адрес, тож кожну сторінку доводиться тягти окремо.
+ *
+ * ТЕМП НАВМИСНО ВВІЧЛИВИЙ. Це сайт партнера, а не наш: 4 паралельні запити з
+ * паузою чверть секунди — приблизно 11 запитів на секунду, 2658 сторінок
+ * проходять хвилин за чотири. Ганяти швидше немає ніякої потреби: обхід
+ * ходить раз на тиждень.
+ *
+ * І ГОЛОВНЕ — ЧАСТКОВИЙ ОБХІД НЕ МОЖНА ЗАЛИВАТИ. Якщо мережа відвалиться на
+ * 1500-й сторінці, у нас на руках півтори тисячі товарів замість 2658, і
+ * звичайний залив погасив би решту 1158 як «зниклі з фіда». У пошуку це
+ * виглядало б як «половина Бергамо зникла», а причина була б у мережі. Тому
+ * рахуємо частку невдач і при перевищенні `maxFailRatio` падаємо ДО запису.
+ */
+async function crawlPages(indexXml, cfg) {
+  const { concurrency = 4, retries = 1, delayMs = 250, maxFailRatio = 0.05 } = cfg.crawl;
+  const parsePage = PAGE_PARSERS[cfg.format];
+  if (!parsePage) throw new Error(`Немає посторінкового розбирача «${cfg.format}»`);
+
+  const all = PARSERS[cfg.crawl.index](indexXml, cfg).map((r) => r.url);
+  const urls = limit ? all.slice(0, limit) : all;
+  console.log(`Адрес у мапі: ${all.length}${limit ? ` (беремо перші ${urls.length} — --limit)` : ""}`);
+
+  const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+  const rows = [];
+  const failures = [];
+  let skipped = 0;
+  let done = 0;
+  let cursor = 0;
+
+  async function worker() {
+    for (;;) {
+      const i = cursor++;
+      if (i >= urls.length) return;
+      const url = urls[i];
+      let html = null;
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30_000) });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          html = await res.text();
+          break;
+        } catch (e) {
+          if (attempt === retries) failures.push(`${url} — ${e.message}`);
+          else await nap(600);
+        }
+      }
+      if (html) {
+        const row = parsePage(html, { url, cfg });
+        // `null` — сторінка без товару (розділ, стаття). Це не збій: у мапі
+        // такі адреси теж є, просто вони не проходять фільтр «код з цифрою».
+        if (row) rows.push(row);
+        else skipped++;
+      }
+      done++;
+      if (done % 250 === 0 || done === urls.length) {
+        console.log(`  пройдено ${done}/${urls.length} — товарів ${rows.length}, без товару ${skipped}, невдач ${failures.length}`);
+      }
+      await nap(delayMs);
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, worker));
+
+  if (failures.length) {
+    console.log(`Не відповіли ${failures.length} сторінок, перші три:`);
+    for (const f of failures.slice(0, 3)) console.log(`  ${f}`);
+  }
+  const ratio = urls.length ? failures.length / urls.length : 0;
+  if (ratio > maxFailRatio) {
+    console.error(
+      `Обхід обірвався: не відповіли ${failures.length} з ${urls.length} сторінок ` +
+        `(${(ratio * 100).toFixed(1)}%, межа ${(maxFailRatio * 100).toFixed(1)}%). ` +
+        `Заливати частковий обхід НЕ можна — він погасив би решту каталогу.`
+    );
+    process.exit(1);
+  }
+  return rows;
+}
+
+const rows = cfg.crawl ? await crawlPages(xml, cfg) : PARSERS[cfg.format](xml, cfg);
 console.log(`Розібрано товарів: ${rows.length}`);
 console.log(
   `  з артикулом: ${rows.filter((r) => r.article).length}, ` +
     `з ціною: ${rows.filter((r) => r.price).length}, ` +
     `з фото: ${rows.filter((r) => r.image_url).length}`
 );
+// Розкладка за правилом ціни. Показуємо, бо мовчазний промах правила виглядає
+// так само, як усе гаразд: ціни на місці, просто не наші. «(без правила)» на
+// весь фід означає, що постачальник перейменував розділ або тип ціни.
+if (cfg.priceRule) {
+  const byLabel = {};
+  for (const r of rows) {
+    let label = null;
+    try {
+      label = JSON.parse(r.attrs || "{}").priceRule ?? null;
+    } catch {
+      // Битий attrs — рахуємо як «без правила», це й так сигнал.
+    }
+    const k = label || "(без правила)";
+    byLabel[k] = (byLabel[k] || 0) + 1;
+  }
+  const parts = Object.entries(byLabel).map(([k, v]) => `${k} — ${v}`);
+  console.log(`  за правилом ціни: ${parts.join(", ")}`);
+  if (!cfg.priceRule.agreedOn) {
+    console.log(`  ⚠ ставку «${key}» ще не підтверджено (agreedOn: null) — цифри робочі, але не остаточні`);
+  }
+}
 // дедуп за external_key усередині фіда (ON CONFLICT не любить дублів у одному COPY)
 const seen = new Set();
 const uniq = rows.filter((r) => (r.external_key && !seen.has(r.external_key) ? (seen.add(r.external_key), true) : false));
 if (uniq.length !== rows.length) console.log(`  унікальних за ключем: ${uniq.length}`);
+
+/**
+ * ПОРІГ РЯДКІВ. Останній рубіж перед записом, і найважливіший у цьому скрипті.
+ *
+ * Зниклі з фіда товари гасяться за часом: «усе, чого не торкнулись у цьому
+ * прогоні, — вимкнути». Це правильно, поки прогін чесний. Але якщо фід віддав
+ * порожнечу — змінилась адреса вивантаження, постачальник перебудував сайт,
+ * обхід обірвався — то залив «успішно» запише нуль рядків і ПОГАСИТЬ УСЬОГО
+ * ПОСТАЧАЛЬНИКА. Симптом («Аванпринт зник із пошуку») не схожий на причину
+ * (хеш у адресі), і шукали б його в показі.
+ *
+ * Тому кожен постачальник має в реєстрі `minRows` — грубу нижню межу з запасом
+ * від живого розміру фіда. Менше — це не «мало товарів», це зламане джерело:
+ * не пишемо нічого й падаємо вголос. Каталог у базі лишається таким, як був.
+ */
+if (cfg.minRows && !limit && uniq.length < cfg.minRows) {
+  console.error(
+    `Розібрано ${uniq.length} товарів, а нижня межа для «${key}» — ${cfg.minRows}. ` +
+      `Схоже, джерело зламалось: адреса вивантаження, розмітка сайту або обхід. ` +
+      `Нічого не записано, каталог постачальника не погашено.`
+  );
+  process.exit(1);
+}
 
 if (dry) {
   console.log("--- dry: перші 3 рядки ---");
@@ -567,13 +877,59 @@ notify pgrst, 'reload schema';
 const sqlFile = join(dir, "load.sql");
 writeFileSync(sqlFile, sql);
 
+/**
+ * РЯДОК ПІДКЛЮЧЕННЯ НЕ КЛАДЕМО В АРГУМЕНТИ. Раніше він ішов першим аргументом
+ * `psql`, і на будь-якій помилці сюди друкувався `e.message`, куди Node вкладає
+ * всю команду з аргументами — тобто пароль від бази. Відколи цей скрипт ганяє
+ * крон у GitHub Actions, це друк у ПУБЛІЧНИЙ лог (репозиторій відкритий).
+ * GitHub замальовує точне значення секрета сам, але будь-яке перетворення
+ * рядка це замальовування промахує, а на ноутбуці замальовувати нікому взагалі.
+ *
+ * Тому підключення передається змінними оточення (їх libpq читає так само), і
+ * в argv не лишається нічого таємного. Якщо в рядку трапиться параметр, якого
+ * ми не знаємо, — не викидаємо його мовчки, а чесно вертаємось до старого
+ * способу; на цей випадок увесь вивід проціджується через `redact`.
+ */
+const PG_PARAMS = { sslmode: "PGSSLMODE", options: "PGOPTIONS", connect_timeout: "PGCONNECT_TIMEOUT", application_name: "PGAPPNAME" };
+function pgEnvFrom(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!/^postgres(ql)?:$/.test(u.protocol)) return null;
+  const env = {};
+  if (u.hostname) env.PGHOST = decodeURIComponent(u.hostname);
+  if (u.port) env.PGPORT = u.port;
+  if (u.username) env.PGUSER = decodeURIComponent(u.username);
+  if (u.password) env.PGPASSWORD = decodeURIComponent(u.password);
+  const db = u.pathname.replace(/^\//, "");
+  if (db) env.PGDATABASE = decodeURIComponent(db);
+  for (const [k, v] of u.searchParams) {
+    const name = PG_PARAMS[k];
+    if (!name) return null; // незнайомий параметр — краще старий шлях, ніж тихо його загубити
+    env[name] = v;
+  }
+  return env.PGHOST ? env : null;
+}
+const redact = (text) => String(text ?? "").replace(/postgres(ql)?:\/\/\S+/gi, "postgres://«приховано»");
+
+const pgEnv = pgEnvFrom(dbUrl);
+const psqlArgs = ["-X", "-v", "ON_ERROR_STOP=1", "-f", sqlFile];
+if (!pgEnv) {
+  console.log("Рядок підключення розібрати не вдалось — передаю як є (вивід проціджується).");
+  psqlArgs.unshift(dbUrl);
+}
+
 try {
-  const out = execFileSync(PSQL, [dbUrl, "-X", "-v", "ON_ERROR_STOP=1", "-f", sqlFile], {
+  const out = execFileSync(PSQL, psqlArgs, {
     encoding: "utf8",
+    env: { ...process.env, ...(pgEnv || {}) },
   });
-  console.log(out.trim());
+  console.log(redact(out).trim());
   console.log("✓ Пул оновлено.");
 } catch (e) {
-  console.error("psql помилка:", e.stdout || e.message);
+  console.error("psql помилка:", redact(e.stdout || e.message));
   process.exit(1);
 }
