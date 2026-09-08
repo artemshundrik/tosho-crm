@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Database, ExternalLink, ImageOff, Link2, Loader2, Plus, Search } from "lucide-react";
+import { ChevronDown, ExternalLink, ImageOff, Link2, Loader2, Plus, Search } from "lucide-react";
 
 import { SEARCH_LEFT_ICON } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
@@ -16,13 +16,20 @@ import { cn } from "@/lib/utils";
 import { useCatalogSkuMatches } from "./catalogSkuSearch";
 import { detectCommandFieldMode, parseCommandFieldLinks, type CommandFieldMode } from "./commandFieldValue";
 import { rankCatalogSuggestions, type CatalogSuggestion } from "./catalogSuggestions";
+import {
+  filterSupplierPool,
+  POOL_FILTER_ALL,
+  SuggestListFooter,
+  SupplierPoolFilterBar,
+  type PoolFilter,
+} from "./SupplierPoolFilterBar";
 
 /**
  * Одне поле замість трьох вкладок (REQ-182#p14).
  *
  * ЩО ВОНО РОЗУМІЄ. Посилання — і поле каже «Посилання» праворуч: Enter додає
  * позицію, а сторінку читає розвідка. Будь-що інше — це назва, і поле каже
- * «З бази»: під ним підказки з каталогу, а останнім рядком «Додати як нову
+ * «Шукаю за назвою»: під ним підказки з каталогу, а останнім рядком «Додати як нову
  * позицію» — колишнє «руками», яке тепер не окремий шлях, а те, що лишається,
  * коли в базі такого немає.
  *
@@ -39,7 +46,7 @@ import { rankCatalogSuggestions, type CatalogSuggestion } from "./catalogSuggest
 
 const MODE_LABELS: Record<CommandFieldMode, { label: string; icon: typeof Link2 }> = {
   link: { label: "Посилання", icon: Link2 },
-  search: { label: "З бази", icon: Database },
+  search: { label: "Шукаю за назвою", icon: Search },
 };
 
 /**
@@ -135,11 +142,33 @@ export function QuoteItemCommandField({
   const poolTerm = useDebouncedValue(mode === "search" ? trimmed : "", 250);
   const { data: poolData, isFetching: poolSearching } = useQuery({
     queryKey: ["supplier-pool", poolTerm],
-    queryFn: () => searchSupplierPool(poolTerm, { limit: 6 }),
+    // ДВАДЦЯТЬ ЧОТИРИ, А НЕ ШІСТЬ. Шість карток на чотири джерела — це
+    // півтори на джерело, і список показував не найкраще, а першу-ліпшу пару з
+    // кожного (Артем, 08.09.2026: «давай не 6, а більше, у нас є місце»).
+    // Місце справді є: список тепер із власним скролом, тож довжина його не
+    // роздуває. Квота рядків на джерело в RPC від цього не залежить — вона й
+    // так не менша за двісті.
+    queryFn: () => searchSupplierPool(poolTerm, { limit: 24 }),
     enabled: poolTerm.length >= 2,
     staleTime: 60_000,
   });
-  const pool = poolTerm.length >= 2 ? poolData ?? [] : [];
+  const pool = React.useMemo(
+    () => (poolTerm.length >= 2 ? poolData ?? [] : []),
+    [poolTerm, poolData]
+  );
+
+  /**
+   * Фільтр джерел. Живе тут, а не в смузі, бо від нього залежить нумерація
+   * рядків для стрілок: сховане джерело не має «з'їдати» натиски вниз.
+   */
+  const [poolFilter, setPoolFilter] = React.useState<PoolFilter>(POOL_FILTER_ALL);
+  const visiblePool = React.useMemo(() => filterSupplierPool(pool, poolFilter), [pool, poolFilter]);
+  const changeFilter = (next: PoolFilter) => {
+    setPoolFilter(next);
+    // Підсвітка вертається на початок: рядок під нею щойно міг зникнути.
+    setActive(0);
+    setExpandedPoolKey(null);
+  };
 
   // ЛУПА СТАЄ КРУТІЛКОЮ. Пул шукається запитом у базу, і на широкому слові це
   // помітна пауза — а поле мовчало: людина не розуміла, чи воно думає, чи вже
@@ -160,8 +189,8 @@ export function QuoteItemCommandField({
   // беруть: інакше стрілки провалювалися б у невидимі рядки.
   const [catalogOpen, setCatalogOpen] = React.useState(false);
   const catalogRows = catalogOpen ? ranked.length : 0;
-  const rowCount = pool.length + catalogRows + 1;
-  const addRowIndex = pool.length + catalogRows;
+  const rowCount = visiblePool.length + catalogRows + 1;
+  const addRowIndex = visiblePool.length + catalogRows;
   const open = focused && !dismissed && mode === "search" && trimmed.length > 0;
 
   // Новий текст — новий список: підсвітка повертається на перший рядок, а
@@ -170,6 +199,9 @@ export function QuoteItemCommandField({
     setActive(0);
     setDismissed(false);
     setCatalogOpen(false);
+    // Фільтр теж скидається: він відповідав на ПОПЕРЕДНЄ слово, і залишений
+    // «Бергамо» на новому запиті виглядав би як «у нас нічого немає».
+    setPoolFilter(POOL_FILTER_ALL);
   }, [trimmed]);
 
   const commitName = () => {
@@ -201,13 +233,13 @@ export function QuoteItemCommandField({
   const [expandedPoolKey, setExpandedPoolKey] = React.useState<string | null>(null);
 
   const commitRow = (index: number) => {
-    const suggestion = catalogOpen ? ranked[index - pool.length] : undefined;
+    const suggestion = catalogOpen ? ranked[index - visiblePool.length] : undefined;
     if (suggestion) {
       onPickCatalog(suggestion);
       onValueChange("");
       return;
     }
-    const product = pool[index];
+    const product = visiblePool[index];
     if (product) {
       /**
        * БЕЗ КОЛЬОРУ ТОВАР НЕ ДОДАЄТЬСЯ, якщо код у кольорів різний (Артем,
@@ -260,6 +292,21 @@ export function QuoteItemCommandField({
       return;
     }
     if (!open) return;
+    /**
+     * ДЖЕРЕЛО ПЕРЕМИКАЄТЬСЯ З КЛАВІАТУРИ, І БЕЗ ЦЬОГО ФІЛЬТР БУВ БИ ЛИШЕ ДЛЯ
+     * МИШІ. Фокус у цьому полі навмисно нікуди не йде — ані на відкритті
+     * списку, ані на кліку по рядку, — тож дійти до чипів табом не можна не
+     * зламавши цього. Alt зі стрілками вбік не конфліктує ні з рухом по
+     * рядках (просто стрілки), ні з правкою тексту.
+     */
+    if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      event.preventDefault();
+      const slugs = [null, ...new Set(pool.flatMap((item) => item.sources.map((source) => source.supplierSlug)))];
+      const at = slugs.indexOf(poolFilter.source);
+      const step = event.key === "ArrowRight" ? 1 : -1;
+      changeFilter({ ...poolFilter, source: slugs[(at + step + slugs.length) % slugs.length] ?? null });
+      return;
+    }
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActive((index) => (index + 1) % rowCount);
@@ -340,7 +387,7 @@ export function QuoteItemCommandField({
       <PopoverContent
         align="start"
         sideOffset={6}
-        className="w-[var(--radix-popover-trigger-width)] p-1.5"
+        className="w-[var(--radix-popover-trigger-width)] p-0"
         // Фокус лишається в полі: список — це підказка до набору, а не форма.
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
@@ -350,11 +397,29 @@ export function QuoteItemCommandField({
           if (event.target instanceof Node && inputRef.current?.contains(event.target)) event.preventDefault();
         }}
       >
-        <ul id={listId} role="listbox" aria-label="Підказки з каталогу" className="space-y-0.5">
-          {(suggestionsLoading || skuSearching) && ranked.length === 0 ? (
-            <li className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {suggestionsLoading ? "Читаю каталог…" : "Шукаю за артикулом…"}
+        <SupplierPoolFilterBar products={pool} filter={poolFilter} onChange={changeFilter} />
+        {/* СКРОЛ ЖИВЕ НА СПИСКУ, а не на поповері: смуга фільтра зверху й
+            підвал знизу мусять лишатись на місці, поки рядки гортаються.
+            Стеля висоти — двадцять одна ремка, це рівно десять рядків: більше
+            перетворює підказку на сторінку, менше не виправдовує скрол. */}
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label="Підказки з каталогу"
+          className="max-h-[21rem] space-y-0.5 overflow-y-auto overscroll-contain p-1.5"
+        >
+          {searching && pool.length === 0 && ranked.length === 0 ? (
+            <li aria-live="polite" className="space-y-0.5" aria-label="Шукаю">
+              {[0, 1, 2, 3].map((row) => (
+                <span key={row} className="flex items-center gap-3 px-2 py-1.5">
+                  <span className="h-9 w-9 shrink-0 animate-pulse rounded-[var(--radius-md)] bg-muted" />
+                  <span className="min-w-0 flex-1 space-y-1.5">
+                    <span className="block h-3 animate-pulse rounded bg-muted" style={{ width: `${58 - row * 6}%` }} />
+                    <span className="block h-2 w-1/3 animate-pulse rounded bg-muted" />
+                  </span>
+                  <span className="h-3 w-14 shrink-0 animate-pulse rounded bg-muted" />
+                </span>
+              ))}
             </li>
           ) : null}
           {/*
@@ -362,24 +427,46 @@ export function QuoteItemCommandField({
             запитом, і сказати «немає» до відповіді означало б збрехати на
             двісті мілісекунд рівно тим людям, які вставили артикул.
           */}
-          {!suggestionsLoading && !skuSearching && ranked.length === 0 && pool.length === 0 && !poolSearching ? (
-            <li className="px-2 pb-1 pt-1.5 text-xs text-muted-foreground">У базі такого немає</li>
+          {!searching && ranked.length === 0 && pool.length === 0 ? (
+            <li className="px-2 pb-2 pt-2 text-center">
+              <span className="block text-xs text-muted-foreground">Ні в каталозі, ні в постачальників</span>
+              <span className="mt-1 block text-2xs text-muted-foreground/70">
+                Спробуйте коротше слово — «термокружка» замість «термокружка 350 мл»
+              </span>
+            </li>
+          ) : null}
+          {/* Знайшлось, але фільтр усе сховав — це ІНША ситуація, ніж «немає»,
+              і вихід із неї теж інший: не міняти слово, а зняти фільтр. */}
+          {!searching && pool.length > 0 && visiblePool.length === 0 ? (
+            <li className="px-2 pb-2 pt-2 text-center">
+              <span className="block text-xs text-muted-foreground">
+                {poolFilter.pricedOnly ? "У цьому джерелі немає позицій із ціною" : "У цьому джерелі нічого не знайшлось"}
+              </span>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => changeFilter(POOL_FILTER_ALL)}
+                className="mt-1.5 rounded-[var(--radius-md)] border border-border/60 px-2.5 py-1 text-2xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Показати всі джерела
+              </button>
+            </li>
           ) : null}
 
           {/* Постачальники — та сама вітрина, тільки вбудована в один список.
               Заголовок пояснює, чому ці рядки виглядають інакше: у них немає
               виду й пресетів, зате є ціна й сайт. */}
-          {pool.length > 0 ? (
+          {visiblePool.length > 0 ? (
             <li
               aria-hidden
               className={cn(
-                "px-2 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
+                "sticky top-0 z-10 bg-popover px-2 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
               )}
             >
               У постачальників
             </li>
           ) : null}
-          {pool.map((product, index) => {
+          {visiblePool.map((product, index) => {
             const price = formatSupplierPoolPrice(product);
             const expanded = expandedPoolKey === product.key;
             const unit = product.variantsAreColors ? "кольор." : "вар.";
@@ -421,7 +508,11 @@ export function QuoteItemCommandField({
                         stopPropagation обов'язковий — клік по рядку КОМІТИТЬ
                         позицію, тож без нього «глянути» означало б «додати». */}
                     <span className="block truncate text-2xs text-muted-foreground">
-                      {product.article ? `${product.article} · ` : null}
+                      {product.article ? (
+                        `${product.article} · `
+                      ) : needsVariantChoice(product) ? (
+                        <span className="text-muted-foreground/70">код у кожного кольору свій · </span>
+                      ) : null}
                       {product.sources.map((source, sourceIndex) => (
                         <React.Fragment key={source.supplierSlug}>
                           {sourceIndex > 0 ? " · " : null}
@@ -472,12 +563,22 @@ export function QuoteItemCommandField({
                       className="flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-2xs text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
                     >
                       {product.variantCount} {unit}
+                      {/* «Обрати» — не окраса. Клік по такому рядку не додає
+                          товар, а розкриває кольори (артикул у пулі — це код
+                          КОЛЬОРУ), і без цього слова кнопка читалась як
+                          «додати», а розкриття — як «не спрацювало». */}
+                      {needsVariantChoice(product) && !expanded ? " — обрати" : null}
                       <ChevronDown className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")} />
                     </button>
                   ) : null}
-                  {price ? (
-                    <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-muted-foreground">{price}</span>
-                  ) : null}
+                  <span
+                    className={cn(
+                      "shrink-0 whitespace-nowrap text-2xs tabular-nums",
+                      price ? "text-muted-foreground" : "text-muted-foreground/50"
+                    )}
+                  >
+                    {price ?? "ціни немає"}
+                  </span>
                 </span>
 
                 {expanded ? (
@@ -586,7 +687,7 @@ export function QuoteItemCommandField({
             role="option"
             aria-selected={active === addRowIndex}
             className={cn(
-              "flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
+              "sticky bottom-0 flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] bg-popover px-2 py-1.5 text-sm",
               addRowIndex > 0 && "mt-1 border-t border-border/60 pt-2",
               active === addRowIndex ? "bg-muted" : "hover:bg-muted/50"
             )}
@@ -605,6 +706,7 @@ export function QuoteItemCommandField({
             </span>
           </li>
         </ul>
+        <SuggestListFooter shown={visiblePool.length + catalogRows} total={pool.length + ranked.length} />
       </PopoverContent>
     </Popover>
   );

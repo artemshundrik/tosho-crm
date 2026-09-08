@@ -71,6 +71,15 @@ const SUPPLIER_NAMES: Record<string, string> = {
   "e-suvenir.com.ua": "Е-Сувенір",
 };
 
+/**
+ * Назва джерела за слугом. Та сама мапа, що й для адрес: підпис на чипі фільтра
+ * і підпис під ціною мусять збігатися, інакше «Тотобі» у фільтрі й
+ * «totobi.com.ua» у рядку читаються як два різні джерела.
+ */
+export function supplierDisplayName(slug: string): string {
+  return SUPPLIER_NAMES[slug] ?? slug;
+}
+
 /** Назва джерела з адреси товару; `null`, якщо адреса не розбирається. */
 export function supplierNameFromUrl(url: string | null | undefined): string | null {
   if (!url?.trim()) return null;

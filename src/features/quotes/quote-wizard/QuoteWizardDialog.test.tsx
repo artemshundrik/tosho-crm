@@ -252,9 +252,12 @@ describe("QuoteWizardDialog — один екран", () => {
 
     await user.type(field, "Кепка six-panel");
     // Поле каже, як воно це прочитало.
-    expect(screen.getByText("З бази")).toBeInTheDocument();
+    expect(screen.getByText("Шукаю за назвою")).toBeInTheDocument();
     const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
-    expect(within(list).getByText("У базі такого немає")).toBeInTheDocument();
+    // findBy, а не getBy: «нічого немає» тепер чекає на КІНЕЦЬ пошуку, разом із
+    // паузою перед запитом до пулу. Сказати «немає» посеред тієї паузи означало
+    // б збрехати рівно тим, хто ще друкує.
+    expect(await within(list).findByText("Ні в каталозі, ні в постачальників")).toBeInTheDocument();
     expect(within(list).getAllByRole("option")).toHaveLength(1);
 
     // Enter сюди більше не веде — рядок «додати як нову» вимагає свідомого
