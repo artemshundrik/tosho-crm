@@ -784,13 +784,22 @@ export function QuoteItemCommandField({
             role="option"
             aria-selected={active === addRowIndex}
             className={cn(
-              "sticky bottom-0 flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] bg-popover px-2 py-1.5 text-sm",
+              /**
+               * `z-10` ТУТ ОБОВ'ЯЗКОВИЙ, і без нього рядок ламає список.
+               * Липкий елемент без свого шару лишається в потоці: наступні
+               * рядки малюються ПОВЕРХ нього, і крізь «Додати як нову позицію»
+               * просвічує текст товару, що під ним (спіймано на знімку, запит
+               * «malfin»). Заголовок секції має `z-10` з тієї ж причини.
+               * `bg-popover` сам по собі не рятує — він фарбує тло, а не піднімає.
+               */
+              "sticky bottom-0 z-10 flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] bg-popover px-2 py-1.5 text-sm",
               addRowIndex > 0 && "mt-1 border-t border-border/60 pt-2",
               active === addRowIndex ? "bg-muted" : "hover:bg-muted/50"
             )}
             onMouseEnter={() => setActive(addRowIndex)}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => commitRow(addRowIndex)}
+            style={{ boxShadow: "0 -8px 12px -8px hsl(var(--foreground) / 0.10)" }}
           >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-md)] border border-dashed border-border text-muted-foreground">
               <Plus className="h-4 w-4" />
