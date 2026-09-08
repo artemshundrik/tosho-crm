@@ -172,6 +172,9 @@ const SUPPLIERS = {
     // відкритий GraphQL, яким ходить сам їхній магазин.
     api: {
       endpoint: "https://e-suvenir.com.ua/graphql",
+      // Вітрина, якою працює сам магазин. Не плутати з типовою `esouv_ukr`:
+      // це РІЗНІ website (2 і 1), і акаунт живе на другому — див. `Store` у gql.
+      store: "e_svnr_ukr",
       // Адреса товару — з `url_key`, і префікс `/ua/` обов'язковий: без нього
       // сторінка віддає 301 на головну (перевірено 08.09.2026).
       site: "https://e-suvenir.com.ua/ua",
@@ -195,7 +198,10 @@ const SUPPLIERS = {
     // Ціна тут не рахується правилом — постачальник каже її прямо, тому
     // `priceRule` немає, а підпис доводиться ставити руками.
     priceKind: "wholesale",
-    minRows: 2400, // 870 товарів дають 3041 рядок-колір (08.09.2026)
+    // 468 товарів вітрини `e_svnr_ukr` дають 1229 рядків-кольорів (08.09.2026).
+    // Не плутати з 863 товарами сусідньої вітрини `esouv_ukr` (es.com.ua,
+    // Євросувенір): той самий Magento, інший website і інший магазин.
+    minRows: 950,
   },
   // НЕ ДОДАНИЙ, і причина в ньому, а не в коді (перевірено 05.09.2026):
   //   eney (OpenCart) — точка фіда index.php?route=extension/feed/google_base
@@ -832,6 +838,21 @@ async function loadMagentoGraphql(cfg) {
    */
   async function gql(query, variables, token, { partial = false } = {}) {
     const headers = { "Content-Type": "application/json", "User-Agent": UA };
+    /**
+     * ⚠️ ЗАГОЛОВОК `Store` ТУТ ОБОВ'ЯЗКОВИЙ, І БЕЗ НЬОГО ЛОГІН НЕ ПРОЙДЕ НІКОЛИ.
+     * У Magento обліковий запис належить САЙТУ (website), а не вітрині. У
+     * e-suvenir вітрин дві пари: типова `esouv_ukr` — це website 1, а та, якою
+     * працює магазин, — `e_svnr_ukr`, website 2. Без заголовка API відповідає
+     * від імені website 1, де нашого користувача просто немає, і віддає
+     * «E-mail чи пароль введені невірно» — тобто ту саму відповідь, що й на
+     * справді неправильний пароль. Ми на це витратили чотири спроби входу,
+     * поки не подивились, що шле сам їхній сайт (`store_view_code` у бандлі).
+     *
+     * Заодно це визначає, ЯКИЙ каталог ми качаємо: у різних website можуть
+     * бути різні товари й ціни, тож заголовок іде на КОЖЕН запит, а не лише
+     * на логін.
+     */
+    if (cfg.api.store) headers.Store = cfg.api.store;
     if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(endpoint, {
       method: "POST",
