@@ -429,9 +429,13 @@ describe("QuoteWizardDialog — один екран", () => {
     await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "https://shop.example/hoodie{Enter}");
     await waitFor(() => expect(screen.getByDisplayValue("Худі оверсайз Classic")).toBeInTheDocument());
 
-    // «Худі оверсайз Classic» → вид «Худі», підписаний як припущення, і методи цього виду поруч.
+    // «Худі оверсайз Classic» → вид «Худі», і методи цього виду поруч.
     const kindChip = await screen.findByRole("button", { name: "Вид товару: Худі, припущення" });
-    expect(kindChip).toHaveTextContent("припущення");
+    // Здогад підписаний рамкою й доступною назвою, а не словом у чипі: «додасться
+    // в базу» під назвою каже те саме, і третій раз забирав ширину (REQ-250#p36).
+    expect(kindChip).toHaveTextContent("Худі");
+    expect(kindChip).not.toHaveTextContent("припущення");
+    expect(kindChip.className).toContain("border-dashed");
     expect(screen.getByText("додасться в базу")).toBeInTheDocument();
     expect(await screen.findByRole("group", { name: "Нанесення" })).toBeInTheDocument();
 

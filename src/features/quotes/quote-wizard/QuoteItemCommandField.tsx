@@ -434,13 +434,19 @@ export function QuoteItemCommandField({
         <SupplierPoolFilterBar products={pool} filter={poolFilter} onChange={changeFilter} />
         {/* СКРОЛ ЖИВЕ НА СПИСКУ, а не на поповері: смуга фільтра зверху й
             підвал знизу мусять лишатись на місці, поки рядки гортаються.
-            Стеля висоти — двадцять одна ремка, це рівно десять рядків: більше
-            перетворює підказку на сторінку, менше не виправдовує скрол. */}
+
+            ВИСОТА — СКІЛЬКИ МІСЦЯ Є, а не двадцять одна ремка. Стеля була
+            стала й розрахована на десять простих рядків; відтоді рядок уміє
+            розкриватись у картку з кольорами, і в неї лишалось три рядки
+            плиток при половині порожнього екрана під вікном (Артем, 08.09).
+            Radix сам міряє відстань до краю екрана — забираємо з неї смугу
+            фільтра з підвалом (≈5rem) і не даємо впасти нижче 21rem, щоб на
+            низькому екрані список не перетворився на щілину. */}
         <ul
           id={listId}
           role="listbox"
           aria-label="Підказки з каталогу"
-          className="max-h-[21rem] space-y-0.5 overflow-y-auto overscroll-contain p-1.5"
+          className="max-h-[max(21rem,calc(var(--radix-popover-content-available-height,31rem)-5rem))] space-y-0.5 overflow-y-auto overscroll-contain p-1.5"
         >
           {searching && pool.length === 0 && ranked.length === 0 ? (
             <li aria-live="polite" className="space-y-0.5" aria-label="Шукаю">
@@ -501,7 +507,11 @@ export function QuoteItemCommandField({
                  * крізь них видно, що проїжджає ПІД нею. Виглядає як
                  * артефакт-привид уздовж країв.
                  */
-                "sticky top-0 z-10 -mx-1.5 bg-popover px-3.5 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
+                // `-top-1.5` разом із `-mx-1.5`: липкий край рахується від
+                // ПАДІНГОВОЇ коробки списку, тож на `top-0` над заголовком
+                // лишалась шестипіксельна щілина, і крізь неї було видно
+                // рядок, що проїжджає (заміряно 08.09: рівно 6 px).
+                "sticky -top-1.5 z-10 -mx-1.5 bg-popover px-3.5 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
               )}
             >
               У постачальників
@@ -799,7 +809,10 @@ export function QuoteItemCommandField({
                * «malfin»). Заголовок секції має `z-10` з тієї ж причини.
                * `bg-popover` сам по собі не рятує — він фарбує тло, а не піднімає.
                */
-              "sticky bottom-0 z-10 -mx-1.5 -mb-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm",
+              // `-bottom-1.5` — та сама щілина знизу: `bottom-0` тримає рядок
+              // на шість пікселів вище краю прокрутки, і смуга під ним
+              // світилась товаром, що проїжджає (Артем прислав знімок).
+              "sticky -bottom-1.5 z-10 -mx-1.5 -mb-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm",
               addRowIndex > 0 && "mt-1 border-t border-border/60 pt-2",
               active === addRowIndex ? "bg-muted" : "hover:bg-muted/50"
             )}

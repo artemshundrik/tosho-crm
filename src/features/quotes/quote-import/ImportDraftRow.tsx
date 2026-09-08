@@ -223,6 +223,7 @@ export function ImportDraftRow({
     позиції з каталогу, а сказати їй нічого.
   */
   const hasMeta =
+    Boolean(color || sku) ||
     draft.sourceRows.length > 0 ||
     Boolean(draft.catalog && !draft.catalog.modelId) ||
     Boolean(draft.variant) ||
@@ -237,20 +238,6 @@ export function ImportDraftRow({
       <span className={cn(STATIC_CHIP, "gap-1.5")}>
         <Tag className="h-3.5 w-3.5" />
         {draft.catalog.kindName} · {draft.catalog.typeName}
-      </span>
-    ) : null;
-
-  /*
-    КОЛІР І КОД — ОДНИМ ЧИПОМ. Це одна відповідь на одне питання: яке саме
-    виконання товару замовляємо і яким кодом. Ми щойно змусили людину його
-    обрати (REQ-250#p26) — і до цієї смуги обране ніде не було видно.
-    Код без кольору теж чип: так виглядає товар, у якого виконання одне.
-  */
-  const colorChip =
-    color || sku ? (
-      <span className={cn(STATIC_CHIP, "gap-2")} title={sku ? `Артикул: ${sku}` : undefined}>
-        {color ? <span className="max-w-40 truncate">{color}</span> : null}
-        {sku ? <span className="tabular-nums text-2xs text-muted-foreground">{sku}</span> : null}
       </span>
     ) : null;
 
@@ -307,6 +294,21 @@ export function ImportDraftRow({
                 а це просто підпис, звідки взялась позиція. Пігулка лишилась
                 там, де вона щось означає, — на попередженні про діапазон.
               */}
+              {/*
+                КОЛІР І КОД — ПІД НАЗВОЮ, а не чипом у нижній смузі (Артем,
+                08.09.2026). Чип обіцяв дію, якої в нього немає: колір обрали
+                ще в підказці, і тут він просто паспорт товару — те саме, що
+                «додасться в базу», яке стоїть поруч.
+              */}
+              {color || sku ? (
+                <span
+                  className="inline-flex items-center gap-1.5 text-muted-foreground"
+                  title={sku ? `Артикул: ${sku}` : undefined}
+                >
+                  {color ? <span className="max-w-52 truncate">{color}</span> : null}
+                  {sku ? <span className="font-medium tabular-nums">{sku}</span> : null}
+                </span>
+              ) : null}
               {draft.sourceRows.length > 0 ? (
                 <span className="text-muted-foreground">рядок {draft.sourceRows.join(", ")}</span>
               ) : null}
@@ -418,7 +420,6 @@ export function ImportDraftRow({
           )}
         >
           {kindChip}
-          {colorChip}
           {imprintOptions && onChangeImprints ? (
             <ImprintChips
               imprints={draft.imprints}
@@ -429,8 +430,13 @@ export function ImportDraftRow({
             />
           ) : null}
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
-          <span className="text-2xs text-muted-foreground">тиражі</span>
+        {/*
+          Комірки стоять без підписів «тиражі» й «шт» (Артем, 08.09.2026):
+          порожня каже «к-ть» сама, а заповнена — це число в рядку позиції,
+          де інших чисел немає. Два підписи на кожній позиції коштували більше
+          за те, що пояснювали.
+        */}
+        <div className="ml-auto shrink-0 pl-2">
           <RunsField
             runs={draft.runs}
             disabled={disabled}
@@ -438,7 +444,6 @@ export function ImportDraftRow({
             onAddRun={onAddRun}
             onRemoveRun={onRemoveRun}
           />
-          <span className="text-2xs text-muted-foreground">шт</span>
         </div>
       </div>
     </div>
@@ -500,10 +505,14 @@ function KindChip({
           className={cn(!value || value.guessed ? "border-dashed" : undefined, value && !value.guessed && "bg-muted")}
         >
           {value ? (
-            <>
-              {value.kindName}
-              {value.guessed ? <span className="font-normal text-muted-foreground"> · припущення</span> : null}
-            </>
+            /*
+              БЕЗ СЛОВА «ПРИПУЩЕННЯ» (Артем, 08.09.2026). Те саме вже сказано
+              двічі: пунктирна рамка чипа й підпис «додасться в базу» під
+              назвою. Третій раз забирав ширину в смуги нанесення. Здогад
+              лишається здогадом — про це каже пунктир, і виправити його
+              однаково один клік.
+            */
+            value.kindName
           ) : (
             "Вид товару?"
           )}
