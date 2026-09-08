@@ -148,7 +148,9 @@ describe("прев'ю імпорту: тираж без собівартості
       sku: "5003-03",
     });
 
-    await waitFor(() => expect(screen.getByText("арт. 5003-03")).toBeInTheDocument());
+    // Код стоїть чипом у нижній смузі — поруч із кольором, коли він є (REQ-250#p34).
+    await waitFor(() => expect(screen.getByTitle("Артикул: 5003-03")).toBeInTheDocument());
+    expect(screen.getByText("5003-03")).toBeInTheDocument();
   });
 
   it("сторінка без фото, але з артикулом — артикул усе одно показуємо", async () => {
@@ -160,7 +162,7 @@ describe("прев'ю імпорту: тираж без собівартості
       sku: "S0801-6",
     });
 
-    await waitFor(() => expect(screen.getByText("арт. S0801-6")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("S0801-6")).toBeInTheDocument());
   });
 
   it("сайт артикула не назвав — рядок про нього мовчить", async () => {
@@ -172,7 +174,9 @@ describe("прев'ю імпорту: тираж без собівартості
     });
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Створити/ })).toBeInTheDocument());
-    expect(screen.queryByText(/^арт\. /)).not.toBeInTheDocument();
+    // Питаємо саме про чип коду, а не про текст «арт.»: підпис у нього в title,
+    // і перевірка не зіпсується від того, що напис колись перепишуть.
+    expect(screen.queryByTitle(/^Артикул: /)).not.toBeInTheDocument();
   });
 
   it("коли сайт не пустив — причина словами, а не мовчазний квадрат", async () => {

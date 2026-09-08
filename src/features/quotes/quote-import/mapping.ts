@@ -217,7 +217,17 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
     team_id: input.teamId,
     quote_id: input.quoteId,
     position: input.position,
-    name: draft.name,
+    /*
+      КОЛІР ПОВЕРТАЄТЬСЯ В НАЗВУ (REQ-250#p34). У чернетці він живе окремо —
+      там під нього є чип, — а в позиції окремого поля немає: `catalog_variant_id`
+      заповнюється лише тоді, коли колір знайшовся рядком каталогу, а товар із
+      пулу такого рядка ще не має. Без цього «Футболка SoftStyle · Сірий меланж»
+      і «… · Синій» ставали двома однаковими позиціями.
+
+      Саме ТУТ, а не в чернетці: модель каталогу заводиться раніше й за чистою
+      назвою (`bindCatalogModel`), інакше кожен колір ставав би окремою моделлю.
+    */
+    name: draft.color ? `${draft.name} · ${draft.color}` : draft.name,
     description: draft.comment || null,
     metadata,
     qty,

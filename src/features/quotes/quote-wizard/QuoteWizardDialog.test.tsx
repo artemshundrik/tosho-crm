@@ -308,7 +308,9 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(within(option).getByRole("img", { name: "Реглан LENNY" })).toHaveAttribute("src", "https://cdn/lenny.jpg");
 
     await user.click(option);
-    expect(screen.getByDisplayValue("Реглан LENNY")).toBeInTheDocument();
+    // Назва з бази — підпис, а не поле (REQ-250#p34): товар прийшов із готовою.
+    expect(screen.getByText("Реглан LENNY")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Назва позиції" })).not.toBeInTheDocument();
     expect(screen.getByText("Худі · Одяг")).toBeInTheDocument();
     expect(field).toHaveValue("");
 
@@ -538,7 +540,9 @@ describe("QuoteWizardDialog — один екран", () => {
     await waitFor(() => expect(screen.getByDisplayValue("Худі оверсайз Classic")).toBeInTheDocument());
     // Опис зі сторінки не тягнемо: у магазинів це рекламний абзац.
     expect(screen.queryByDisplayValue("Бавовна 80 %, начіс усередині.")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "shop.example/hoodie" })).toBeInTheDocument();
+    // Джерело підписане САЙТОМ, а не адресою (REQ-250#p34); повна лишилась у title.
+    const source = screen.getByRole("link", { name: "shop.example" });
+    expect(source).toHaveAttribute("href", "https://shop.example/hoodie");
 
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "300");
     expect(screen.getByRole("button", { name: /Створити прорахунок/ })).toBeEnabled();
@@ -562,7 +566,8 @@ describe("QuoteWizardDialog — один екран", () => {
     await user.type(input, "https://shop.example/b https://shop.example/c{Enter}");
     await waitFor(() => expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(3));
 
-    expect(screen.getByRole("link", { name: "shop.example/c" })).toBeInTheDocument();
+    // Три позиції — три джерела; підпис у всіх один, бо сайт справді один.
+    expect(screen.getAllByRole("link", { name: "shop.example" })).toHaveLength(3);
   });
 
   it("файл і поле живуть в одному списку: «Інший файл» прибирає лише рядки файлу", async () => {

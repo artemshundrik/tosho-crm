@@ -299,12 +299,12 @@ export function QuoteWizardDialog({
       ...prev,
       makeDraft({
         name: suggestion.name,
+        color: suggestion.matched?.variantName || null,
         catalog: {
           modelId: suggestion.modelId,
           // Товар знайшли за артикулом кольору — запам'ятовуємо САМЕ той колір
           // (REQ-250#p1), інакше в замовлення поїде артикул першого варіанта.
           variantId: suggestion.matched?.variantId ?? null,
-          variantName: suggestion.matched?.variantName || null,
           kindId: suggestion.kindId,
           typeId: suggestion.typeId,
           kindName: suggestion.kindName,
@@ -387,9 +387,22 @@ export function QuoteWizardDialog({
     // за роллю джерела, а не за порядком у списку.
     const shop = product.sources.find((source) => source.supplierSlug === SHOP_SUPPLIER_SLUG);
     const wholesale = product.sources.find((source) => source.supplierSlug !== SHOP_SUPPLIER_SLUG);
+    /*
+      ВАРІАНТ — ЦЕ ВІДПОВІДЬ ПРО КОЛІР. Товар приходить сюди вже звуженим
+      (`applySupplierVariant`) або з одним-єдиним виконанням — і в обох
+      випадках у нього рівно один варіант, тобто колір і його код відомі.
+      Кілька варіантів означає, що вибору не було: тоді кольору немає, і чип
+      під нього не малюється.
+    */
+    const variant = product.variants.length === 1 ? product.variants[0] : null;
     const draft = makeDraft({
       name: product.name,
-      sku: product.article,
+      color: variant?.label ?? null,
+      sku: variant?.article ?? product.article,
+      // Ціна — та сама, що стояла в підказці. Це показ, а не запис: у базу їде
+      // `supplierProductId`, і число там читає вона сама.
+      poolPrice:
+        product.priceMin !== null ? { amount: product.priceMin, currency: product.currency } : null,
       supplierUrl: wholesale?.url ?? null,
       avantprintUrl: shop?.url ?? null,
       // ВАРТІСТЬ ТОВАРУ — не число, а РЯДОК ПУЛУ, з якого його прочитає база.

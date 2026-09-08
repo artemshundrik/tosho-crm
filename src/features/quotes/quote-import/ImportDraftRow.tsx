@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ImageOff, Link2, Plus, Search, Tag, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, ImageOff, Plus, Search, Tag, Trash2, X } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { supplierNameFromUrl } from "@/lib/supplierPoolRows";
 import { cn } from "@/lib/utils";
 
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
@@ -30,27 +31,33 @@ export type DraftKindOption = Pick<QuoteImportDraftCatalog, "kindId" | "kindName
  * коментар; що лише бачить: фото, рядок файлу, зв'язок варіантів, ознаки,
  * посилання.
  *
- * РОЗКЛАДКА «ТИРАЖІ ОДНИМ ПОЛЕМ» (REQ-182#p22, варіант А з п'яти).
+ * РОЗКЛАДКА У ДВІ СМУГИ (REQ-250#p34, макет Б з чотирьох).
  *
- * ЩО БУЛО НЕ ТАК. Кожен тираж був окремим полем на 80 px, тож третій влазив
- * лише за рахунок назви (вона стискалась до свого мінімуму й ховала кінець), а
- * четвертий кидав увесь блок на новий рядок — картка росла зі 123 до 175 px.
- * Заміри проду 04.09.2026: три тиражі це 11 % позицій, чотири — 0,8 %, тобто
- * ламалось воно на кожній дев'ятій. Окремий рядок «Кепка · Одяг» з'їдав ще
- * 21 px на КОЖНІЙ позиції заради двох слів.
+ * ЩО БУЛО НЕ ТАК. Рядок складався для ексельки, де про товар відомі назва й
+ * тираж. Товар із пулу приносить утричі більше: обраний колір, його код, ціну,
+ * два сайти, вид і нанесення. В один рядок це лізло лише за рахунок назви, а
+ * половина фактів не показувалась узагалі — колір і код, які людина щойно
+ * обрала, ніде не було видно, ціна з пулу теж (Артем, 08.09.2026).
  *
- * ЯК ТЕПЕР. Тиражі живуть в ОДНОМУ полі з роздільниками: один чи чотири —
- * ширина росте на 49 px, висота не змінюється взагалі. Вид переїхав чипом на
- * початок смуги нанесення, тож окремого рядка метаданих у позиції з каталогу
- * більше немає — він лишається тільки там, де справді є що сказати (рядок
- * файлу, посилання, варіант, попередження).
+ * ЯК ТЕПЕР. Верхня смуга — ЩО ЦЕ ЗА ТОВАР: фото 52 px, назва, звідки він
+ * (сайти назвами, не адресами) і ціна за одиницю великим числом праворуч.
+ * Нижня — ЯК РАХУЄМО: вид, колір із кодом, нанесення, а праворуч тиражі
+ * рівними комірками з «плюсом».
  *
- * ПЕРШИЙ РЯДОК НЕ ПЕРЕНОСИТЬСЯ (`flex` без `flex-wrap`), і смуга нанесення
- * теж, поки на неї не відповіли: висота позиції — 102 px незалежно від
- * кількості тиражів, довжини назви й довжини назв методів. Названі пари
- * «метод + місце» — виняток (REQ-182#p24): їх переносить на другий рядок, бо
- * обрізана відповідь гірша за вищий рядок, а третя пара — це 0,9 % позицій.
+ * НАЗВА — ПІДПИС, КОЛИ ЇЇ ДАЛО ДЖЕРЕЛО. Полем вона лишається там, де її
+ * справді пишуть: рядок ексельки, товар за посиланням, позиція руками.
+ *
+ * ЦІНА — ЧИСЛО, А НЕ ПОЛЕ, і суми «тираж × ціна» немає навмисно: до націнки
+ * вона виглядала б як відповідь, не будучи нею.
  */
+
+/**
+ * Чип, який нічого не робить: вид, колір, код. Висота й радіус — ті самі, що в
+ * `Chip size="sm"` із нанесення, бо вони стоять в одній смузі; але це <span>, а
+ * не кнопка — пігулка, на яку не можна натиснути, не має вдавати кнопку.
+ */
+const STATIC_CHIP =
+  "inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full bg-muted px-3 text-xs font-medium text-muted-foreground";
 
 /** Гола іконка-дія в рядку позиції: та сама вага, що в кошика. */
 const ICON_ACTION =
@@ -59,6 +66,11 @@ const ICON_ACTION =
 const FLAG_LABELS: Record<QuoteImportFlag, string> = {
   quantity_range: "діапазон → два тиражі",
 };
+
+/** Ті самі копійки й той самий пробіл, що в підказці пошуку постачальників. */
+const formatAmount = (value: number) =>
+  value.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const currencyLabel = (code: string) => (code === "UAH" ? "грн" : code);
 
 /**
  * Фото товару в рядку прев'ю.
@@ -70,9 +82,12 @@ const FLAG_LABELS: Record<QuoteImportFlag, string> = {
  * відкривати нема сенсу.
  */
 export function ImportItemPhoto({ preview, name }: { preview: QuoteImportLinkPreview | undefined; name: string }) {
-  // 44 px, як у затвердженому прототипі (REQ-182#p20): фото тут упізнавання,
-  // а не розгляд, і на шести позиціях 64 px з'їдали пів екрана.
-  const base = "h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60";
+  // 52 px (REQ-250#p34). Було 44 — розмір із часів, коли позиція вміщалась в
+  // один рядок і фото лишалось упізнаванням. Тепер у смузі вміщається колір, і
+  // фото відповідає на «той самий колір я обрав?» — на 44 px відтінок не
+  // читався. 64 px, від яких відмовились у REQ-182#p20, і далі завеликі: на
+  // шести позиціях вони з'їдали пів екрана.
+  const base = "h-13 w-13 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60";
 
   if (!preview) {
     return (
@@ -169,20 +184,49 @@ export function ImportDraftRow({
     `preview`. Рядок не мусить знати, яке з вікон його малює.
   */
   const sku = draft.sku ?? (preview && preview.status !== "pending" ? preview.sku ?? null : null);
+  const color = draft.color ?? null;
+
+  /*
+    НАЗВА — ПІДПИС, А НЕ ПОЛЕ, коли її дало джерело (REQ-250#p34). Товар із
+    пулу й товар із каталогу приходять із готовою назвою, і поле під нею
+    питало те, на що вже відповіли: позиція виглядала як порожня форма, хоч
+    заповнити в ній лишалось тільки тираж.
+
+    Поле лишається там, де назву справді пишуть: рядок ексельки (її склала
+    модель із брудної таблиці), товар за посиланням (назва зі сторінки) і
+    позиція, набрана руками.
+  */
+  const nameIsGiven = Boolean(draft.catalog?.modelId || draft.supplierProductId || color);
+
+  /*
+    ДЖЕРЕЛА — НАЗВАМИ САЙТІВ, А НЕ АДРЕСАМИ. Голе посилання займало пів рядка
+    й нічого не додавало: «totobi.com.ua/product/12345» однаково читають як
+    «Тотобі», а решту домальовують очима. Повна адреса лишилась у підказці.
+
+    Підписів «наш магазин» і «оптовик» тут немає навмисно — у команді й так
+    знають, хто є хто, а порядок (спершу наш, потім оптовик) це й показує.
+  */
+  const sources = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ url: string; name: string }> = [];
+    for (const url of [draft.avantprintUrl, draft.supplierUrl, ...draft.links]) {
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      out.push({ url, name: supplierNameFromUrl(url) ?? "посилання" });
+    }
+    return out;
+  }, [draft.avantprintUrl, draft.supplierUrl, draft.links]);
 
   /*
     Рядок метаданих не просто ховається, а НЕ РЕНДЕРИТЬСЯ, коли сказати нема
-    чого. `space-y-2` у Tailwind v4 вішає відступ на кожну дитину, крім
-    останньої, — тож порожній прихований <div> лишався останнім і додавав
-    рядку зайві 8 px висоти (заміряно: 110 замість 102).
+    чого: порожня дитина в колонці з відступами додавала висоти кожній
+    позиції з каталогу, а сказати їй нічого.
   */
   const hasMeta =
     draft.sourceRows.length > 0 ||
     Boolean(draft.catalog && !draft.catalog.modelId) ||
     Boolean(draft.variant) ||
     draft.flags.length > 0 ||
-    draft.links.length > 0 ||
-    Boolean(sku) ||
     Boolean(preview && preview.status !== "pending" && preview.status !== "done");
 
   const kindChip =
@@ -190,19 +234,42 @@ export function ImportDraftRow({
       <KindChip value={draft.catalog ?? null} options={kindOptions} disabled={disabled} onChange={onChangeKind} />
     ) : draft.catalog ? (
       // Позиція з каталогу: вид — факт, а не вибір, тож це підпис, а не кнопка.
-      <span className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-muted px-3 text-xs font-medium text-muted-foreground">
+      <span className={cn(STATIC_CHIP, "gap-1.5")}>
         <Tag className="h-3.5 w-3.5" />
         {draft.catalog.kindName} · {draft.catalog.typeName}
       </span>
     ) : null;
+
+  /*
+    КОЛІР І КОД — ОДНИМ ЧИПОМ. Це одна відповідь на одне питання: яке саме
+    виконання товару замовляємо і яким кодом. Ми щойно змусили людину його
+    обрати (REQ-250#p26) — і до цієї смуги обране ніде не було видно.
+    Код без кольору теж чип: так виглядає товар, у якого виконання одне.
+  */
+  const colorChip =
+    color || sku ? (
+      <span className={cn(STATIC_CHIP, "gap-2")} title={sku ? `Артикул: ${sku}` : undefined}>
+        {color ? <span className="max-w-40 truncate">{color}</span> : null}
+        {sku ? <span className="tabular-nums text-2xs text-muted-foreground">{sku}</span> : null}
+      </span>
+    ) : null;
+
+  const price = draft.poolPrice ?? null;
+
   return (
     <div
       className={cn(
-        "rounded-xl border border-border/60 p-3 transition-colors",
+        "overflow-hidden rounded-xl border border-border/60 transition-colors",
         !draft.selected && "opacity-50"
       )}
     >
-      <div className="flex items-start gap-3">
+      {/*
+        ВЕРХНЯ СМУГА — ЩО ЦЕ ЗА ТОВАР: фото, назва, звідки він і скільки
+        коштує. Нижня — як ми його рахуємо. Дві смуги замість одного рядка
+        з'явились тому, що товар із пулу приносить утричі більше фактів, ніж
+        рядок ексельки, і в один рядок вони лізли лише за рахунок назви.
+      */}
+      <div className="flex items-center gap-3 px-3 py-2.5">
         {onRemove ? null : (
           <Checkbox
             checked={draft.selected}
@@ -211,16 +278,16 @@ export function ImportDraftRow({
             onCheckedChange={(checked) => onPatch({ selected: checked === true })}
             // Монохром: галочка тут не статус, а «беремо/не беремо» —
             // синій робив із неї акцент сильніший за саму позицію.
-            className="mt-1.5 data-[state=checked]:border-foreground data-[state=checked]:bg-foreground data-[state=checked]:text-background"
+            className="data-[state=checked]:border-foreground data-[state=checked]:bg-foreground data-[state=checked]:text-background"
           />
         )}
         <ImportItemPhoto preview={preview} name={draft.name} />
-        <div className="min-w-0 flex-1 space-y-2">
-          {/*
-            ПЕРШИЙ РЯДОК: назва, тиражі одним полем, кошик. Без `flex-wrap`
-            навмисно — саме перенесення цього блоку й розганяло висоту картки.
-          */}
-          <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          {nameIsGiven ? (
+            <div className="truncate text-sm font-medium" title={draft.name}>
+              {draft.name}
+            </div>
+          ) : (
             <Input
               value={draft.name}
               disabled={disabled}
@@ -228,131 +295,150 @@ export function ImportDraftRow({
               aria-label="Назва позиції"
               placeholder={namePlaceholder}
               autoFocus={autoFocusName}
-              className="min-w-0 flex-1"
+              className="min-w-0"
               onChange={(event) => onPatch({ name: event.target.value })}
             />
-            <RunsField
-              runs={draft.runs}
-              disabled={disabled}
-              onPatchRun={onPatchRun}
-              onAddRun={onAddRun}
-              onRemoveRun={onRemoveRun}
-            />
-            {onRemove ? (
-              <button
-                type="button"
-                disabled={disabled}
-                aria-label={`Прибрати «${draft.name || "позицію"}»`}
-                onClick={onRemove}
-                className={cn(ICON_ACTION, "hover:bg-danger-soft hover:text-danger-foreground")}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
+          )}
 
-          {/*
-            СМУГА НАНЕСЕННЯ. Вид стоїть тут першим чипом — методи належать саме
-            йому, тож вони поруч, а не через рядок. Смуга не переноситься:
-            «ще N» забирає все, що не влізло.
-          */}
-          {kindChip || (imprintOptions && onChangeImprints) ? (
-            <div
-              className={cn(
-                "flex items-center gap-1.5",
-                // Поки нанесення не назвали, смуга тримається одного рядка й
-                // ріже зайве; названі пари ховати не можна — вони переносяться.
-                draft.imprints.length > 0 ? "flex-wrap" : "overflow-hidden"
-              )}
-            >
-              {kindChip}
-              {imprintOptions && onChangeImprints ? (
-                <ImprintChips
-                  imprints={draft.imprints}
-                  methods={imprintOptions.methods}
-                  places={imprintOptions.places}
-                  disabled={disabled}
-                  onChange={onChangeImprints}
-                />
+          {hasMeta ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
+              {/*
+                Мітки рядка й варіанта не пігулки: пігулка обіцяє дію або стан,
+                а це просто підпис, звідки взялась позиція. Пігулка лишилась
+                там, де вона щось означає, — на попередженні про діапазон.
+              */}
+              {draft.sourceRows.length > 0 ? (
+                <span className="text-muted-foreground">рядок {draft.sourceRows.join(", ")}</span>
+              ) : null}
+              {draft.catalog && !draft.catalog.modelId ? (
+                // Вид є, моделі ще немає: на «Створити» товар стане рядком каталогу.
+                <span className="text-muted-foreground">додасться в базу</span>
+              ) : null}
+              {/* Зв'язок варіантів — словами. Бедж «альтернатива» казав, що щось
+                  не так, але не казав що саме: під номером 30 у файлі лежать два
+                  різних дзен-сади, і це вибір із двох, а не два товари. */}
+              {draft.variant ? (
+                <span className="font-medium text-muted-foreground">
+                  варіант {draft.variant.index} з {draft.variant.total} того самого товару
+                </span>
+              ) : null}
+              {draft.flags.map((flag) => (
+                <span
+                  key={flag}
+                  className="rounded-full border border-warning-soft-border bg-warning-soft px-2 py-0.5 font-medium text-warning-copy"
+                >
+                  {FLAG_LABELS[flag] ?? flag}
+                </span>
+              ))}
+              {/* Причина відсутнього фото стоїть поруч із джерелами: «сайт не
+                  пускає роботів» — це підказка відкрити його руками, а не
+                  повідомлення про поломку. */}
+              {preview && preview.status !== "pending" && preview.status !== "done" ? (
+                <span className="text-muted-foreground/70">{preview.reason}</span>
               ) : null}
             </div>
           ) : null}
 
-          {hasMeta ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
-            {/*
-              Мітки рядка й варіанта більше не пігулки: пігулка обіцяє дію або
-              стан, а це просто підпис звідки взялась позиція. Пігулка лишилась
-              там, де вона щось означає, — на попередженні про діапазон.
-            */}
-            {draft.sourceRows.length > 0 ? (
-              <span className="text-muted-foreground">рядок {draft.sourceRows.join(", ")}</span>
-            ) : null}
-            {/* Позиція з каталогу каже це категорією, а не плашкою «з бази»:
-                «Худі · Одяг» — і зрозуміло, звідки вона, і що це таке. */}
-            {/* Вид·тип переїхав у чип смуги нанесення — тут лишається лише те,
-                що більше ніде не видно. */}
-            {draft.catalog && !draft.catalog.modelId ? (
-              // Вид є, моделі ще немає: на «Створити» товар стане рядком каталогу.
-              <span className="text-muted-foreground">додасться в базу</span>
-            ) : null}
-            {/* Артикул зі сторінки постачальника (REQ-247). Стоїть у наявній
-                смузі метаданих, а не окремим рядком: це підпис, а не дія, і
-                висоти рядка він не додає. Показуємо, лише коли сайт його
-                справді назвав, — вгаданих артикулів тут не буває. */}
-            {sku ? (
-              <span className="font-medium text-muted-foreground" title={`Артикул зі сторінки постачальника: ${sku}`}>
-                арт. {sku}
-              </span>
-            ) : null}
-            {/* Зв'язок варіантів — словами. Бедж «альтернатива» казав, що щось
-                не так, але не казав що саме: під номером 30 у файлі лежать два
-                різних дзен-сади, і це вибір із двох, а не два товари. */}
-            {draft.variant ? (
-              <span className="font-medium text-muted-foreground">
-                варіант {draft.variant.index} з {draft.variant.total} того самого товару
-              </span>
-            ) : null}
-            {draft.flags.map((flag) => (
-              <span
-                key={flag}
-                className="rounded-full border border-warning-soft-border bg-warning-soft px-2 py-0.5 font-medium text-warning-copy"
-              >
-                {FLAG_LABELS[flag] ?? flag}
-              </span>
-            ))}
-            {draft.links.map((link) => (
-              <a
-                key={link}
-                href={link}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={link}
-                className="inline-flex max-w-[260px] items-center gap-1 text-muted-foreground transition-colors hover:text-primary"
-              >
-                <Link2 className="h-3 w-3 shrink-0" />
-                <span className="truncate underline underline-offset-2">{link.replace(/^https?:\/\//, "")}</span>
-              </a>
-            ))}
-            {/* Причина відсутнього фото стоїть саме тут, поруч із посиланням:
-                «сайт не пускає роботів» — це підказка відкрити його руками, а
-                не повідомлення про поломку. */}
-            {preview && preview.status !== "pending" && preview.status !== "done" ? (
-              <span className="text-muted-foreground/70">{preview.reason}</span>
-            ) : null}
-          </div>
+          {sources.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {sources.map((source) => (
+                <a
+                  key={source.url}
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={source.url}
+                  className="inline-flex items-center gap-1 text-2xs text-muted-foreground transition-colors hover:text-primary"
+                >
+                  <span className="underline underline-offset-2">{source.name}</span>
+                  <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-60" />
+                </a>
+              ))}
+            </div>
           ) : null}
 
           {draft.comment || draft.notes ? (
             <Input
               value={draft.comment}
               disabled={disabled}
-              controlSize="md"
+              controlSize="sm"
               aria-label="Коментар замовника"
               placeholder={draft.notes ?? "Коментар замовника"}
               onChange={(event) => onPatch({ comment: event.target.value })}
             />
           ) : null}
+        </div>
+
+        {/*
+          ЦІНА — ЧИСЛО, А НЕ ПОЛЕ. Вона приходить із пулу, її не набирають, і
+          підпис «закупівельна» їй не потрібен: у команді знають, яка це ціна,
+          а число такого розміру вже саме каже, що воно тут головне. Суми
+          «тираж × ціна» немає навмисно — до націнки вона виглядала б як
+          відповідь, не будучи нею.
+        */}
+        {price ? (
+          <div className="flex shrink-0 items-baseline gap-1" title="Ціна за одиницю з пулу постачальників">
+            <span className="text-xl font-semibold leading-none tabular-nums">{formatAmount(price.amount)}</span>
+            <span className="text-2xs text-muted-foreground">{currencyLabel(price.currency)}</span>
+          </div>
+        ) : null}
+
+        {onRemove ? (
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label={`Прибрати «${draft.name || "позицію"}»`}
+            onClick={onRemove}
+            className={cn(ICON_ACTION, "hover:bg-danger-soft hover:text-danger-foreground")}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+
+      {/*
+        НИЖНЯ СМУГА — ЯК РАХУЄМО: вид, колір, нанесення й тиражі. Тиражі
+        стоять праворуч рівними комірками з «плюсом»: вони ВЗАЄМОВИКЛЮЧНІ —
+        250 · 500 · 1000 означає три ціни на вибір замовника, а не 1750 штук, —
+        тому між ними немає ані знаків додавання, ані підсумку.
+      */}
+      <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/20 px-3 py-2">
+        {/*
+          Ліва частина стискається, права — ні. Поки нанесення не назвали,
+          смуга пропонує методи, і їх завжди більше, ніж влазить: без цього
+          пропозиції відсували тиражі на другий рядок, і смуга виростала
+          вдвічі на КОЖНІЙ позиції. «Ще N» усередині вже забирає зайве.
+          Названі пари — виняток (REQ-182#p24): відповідь ховати не можна,
+          тож вони переносяться.
+        */}
+        <div
+          className={cn(
+            "flex min-w-0 items-center gap-1.5",
+            draft.imprints.length > 0 ? "flex-wrap" : "overflow-hidden"
+          )}
+        >
+          {kindChip}
+          {colorChip}
+          {imprintOptions && onChangeImprints ? (
+            <ImprintChips
+              imprints={draft.imprints}
+              methods={imprintOptions.methods}
+              places={imprintOptions.places}
+              disabled={disabled}
+              onChange={onChangeImprints}
+            />
+          ) : null}
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
+          <span className="text-2xs text-muted-foreground">тиражі</span>
+          <RunsField
+            runs={draft.runs}
+            disabled={disabled}
+            onPatchRun={onPatchRun}
+            onAddRun={onAddRun}
+            onRemoveRun={onRemoveRun}
+          />
+          <span className="text-2xs text-muted-foreground">шт</span>
         </div>
       </div>
     </div>
@@ -480,18 +566,18 @@ function KindChip({
 }
 
 /**
- * Тиражі одним полем (REQ-182#p22).
+ * Тиражі — рівні комірки з «плюсом» (REQ-250#p34).
  *
- * ОДНЕ ПОЛЕ, А НЕ N ПОЛІВ. Тиражі взаємовиключні — це «а скільки буде, якщо
- * стільки», один запит клієнта, — тож і виглядати вони мусять як одна
- * відповідь із варіантами, а не як чотири різні поля. Практична ціна старого
- * вигляду: кожне поле 80 px, тож на трьох тиражах назва стискалась до
- * мінімуму, а на чотирьох рядок переносився й картка росла на 52 px.
+ * ВОНИ ВЗАЄМОВИКЛЮЧНІ, і розкладка мусить це казати. Тираж — це «а скільки
+ * буде, якщо стільки»: 250 · 500 · 1000 означає три ціни на вибір замовника,
+ * а не 1750 штук. Тому комірки стоять поруч рівними варіантами, без знаків
+ * додавання й без підсумку, а підписи «тиражі» й «шт» лишились по краях
+ * групи — одні на всі комірки, скільки б їх не було.
  *
- * Комірка 48 px тримає п'ятизначне число (найбільший тираж у базі — 25 000),
- * роздільники повторюють ті самі волосяні лінії, що в решті інтерфейсу, а
- * «плюс» стоїть усередині поля: додати тираж — це дописати варіант у ту саму
- * відповідь, а не окрема дія збоку.
+ * ДО ЦЬОГО вони жили одним полем із роздільниками (REQ-182#p22): так вони
+ * влазили в один рядок поруч із назвою, і саме заради цього все й робилось.
+ * Тепер тиражі переїхали на власну смугу, місця там вистачає й на чотири, і
+ * склеєне поле лишалось би рішенням для проблеми, якої більше немає.
  */
 function RunsField({
   runs,
@@ -506,80 +592,64 @@ function RunsField({
   onAddRun?: () => void;
   onRemoveRun?: (runKey: string) => void;
 }) {
-  const divider = <span aria-hidden className="my-2 w-px shrink-0 self-stretch bg-border/60" />;
   /*
     ЩЕ ОДИН ТИРАЖ — ЛИШЕ КОЛИ ПОПЕРЕДНІЙ ЗАПОВНЕНИЙ.
     Порожній тираж — це не варіант, це незадане питання: «Створити» на ньому
     однаково спиняється й каже вписати кількість. Кнопка, яка додає другу таку
-    саму зупинку, лише забирає ширину в назви. Тому «плюс» чекає на число.
+    саму зупинку, лише забирає місце.
   */
   const blocked = runs.some((run) => run.quantity <= 0);
 
   return (
-    <div
-      className={cn(
-        // Та сама поверхня, що в полів застосунку (CONTROL_BASE), лише зібрана
-        // вручну: всередині живуть кілька комірок, тож рамка спільна.
-        "flex h-9 shrink-0 items-center rounded-lg border border-border/50 bg-muted/40",
-        disabled && "opacity-50"
-      )}
-    >
-      <span className="shrink-0 pl-2.5 pr-2 text-2xs text-muted-foreground">Тираж</span>
+    <div className={cn("flex items-center gap-1.5", disabled && "opacity-50")}>
       {runs.map((run) => (
-        <React.Fragment key={run.key}>
-          {divider}
-          <div className="group/run relative">
-            <NumberInput
-              value={run.quantity > 0 ? run.quantity : null}
-              min={0}
-              emptyValue={0}
-              controlSize="md"
-              disabled={disabled}
-              aria-label="Кількість тиражу"
-              placeholder="к-ть"
-              className={cn(
-                "h-9 w-12 rounded-none border-0 bg-transparent px-0 text-center tabular-nums",
-                "placeholder:text-2xs focus:placeholder:text-transparent",
-                "focus-visible:border-0 focus-visible:bg-transparent"
-              )}
-              onValueChange={(next) => onPatchRun(run.key, { quantity: Math.max(0, next ?? 0) })}
-            />
-            {onRemoveRun && runs.length > 1 ? (
-              <button
-                type="button"
-                disabled={disabled}
-                aria-label="Прибрати тираж"
-                onClick={() => onRemoveRun(run.key)}
-                className="absolute right-0 top-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-muted text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/run:opacity-100"
-              >
-                <X className="h-2.5 w-2.5" strokeWidth={2.5} />
-              </button>
-            ) : null}
-          </div>
-        </React.Fragment>
-      ))}
-      {onAddRun ? (
-        <>
-          {divider}
-          <HoverTip
-            asChild
-            label={
-              blocked
-                ? "Спершу впишіть кількість — порожній тираж нема з чим порівнювати"
-                : "Клієнт просить порахувати кілька кількостей"
-            }
-          >
+        <div key={run.key} className="group/run relative">
+          <NumberInput
+            value={run.quantity > 0 ? run.quantity : null}
+            min={0}
+            emptyValue={0}
+            controlSize="sm"
+            disabled={disabled}
+            aria-label="Кількість тиражу"
+            placeholder="к-ть"
+            // Комірка 64 px тримає п'ятизначне число (найбільший тираж у базі —
+            // 25 000). Число праворуч: так вони читаються стовпчиком, а не
+            // стрибають за довжиною.
+            className="w-16 bg-background text-right tabular-nums placeholder:text-2xs focus:placeholder:text-transparent"
+            onValueChange={(next) => onPatchRun(run.key, { quantity: Math.max(0, next ?? 0) })}
+          />
+          {onRemoveRun && runs.length > 1 ? (
             <button
               type="button"
-              disabled={disabled || blocked}
-              aria-label="Додати ще тираж"
-              onClick={onAddRun}
-              className="grid h-9 w-8 shrink-0 place-items-center rounded-r-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              disabled={disabled}
+              aria-label="Прибрати тираж"
+              onClick={() => onRemoveRun(run.key)}
+              className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full border border-border/60 bg-background text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/run:opacity-100"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <X className="h-2.5 w-2.5" strokeWidth={2.5} />
             </button>
-          </HoverTip>
-        </>
+          ) : null}
+        </div>
+      ))}
+      {onAddRun ? (
+        <HoverTip
+          asChild
+          label={
+            blocked
+              ? "Спершу впишіть кількість — порожній тираж нема з чим порівнювати"
+              : "Клієнт просить порахувати кілька кількостей"
+          }
+        >
+          <button
+            type="button"
+            disabled={disabled || blocked}
+            aria-label="Додати ще тираж"
+            onClick={onAddRun}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-dashed border-border/60 text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </HoverTip>
       ) : null}
     </div>
   );
