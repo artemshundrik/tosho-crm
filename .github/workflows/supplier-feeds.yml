@@ -1,0 +1,218 @@
+# Перезалив товарних фідів постачальників у пул tosho.supplier_products.
+#
+# НАВІЩО ВІН ТУТ, А НЕ В NETLIFY. Завантажувач пише в базу через `psql`
+# (`scripts/load-supplier-feed.mjs`), а на Netlify psql немає — там лише HTTP.
+# Переписувати запис на REST заради розкладу означало б завести другий шлях у
+# ту саму таблицю, з іншими помилками й іншою поведінкою на конфліктах. Дешевше
+# віддати розклад тому, у кого вже є і Node, і psql, і секрети. Плюс сторож CRM
+# (`watchdog.yml`) з тієї ж причини живе тут — місце вже обжите.
+#
+# НАВІЩО ВЗАГАЛІ РОЗКЛАД. Фід Тотобі оновлюється щогодини, Аванпринт
+# перегенерує свій профіль сам. Перезалив досі робився РУКАМИ з ноутбука, тобто
+# ціни в базі тихо старіли, виглядаючи свіжими: у вікні пошуку немає нічого, що
+# сказало б менеджеру «цій цифрі три тижні». Прорахунок за старою ціною
+# помічають на погодженні, а не в CRM.
+#
+# ЩО САМЕ ГАНЯЄМО І ЧОМУ ПО-РІЗНОМУ. Файлові фіди (Тотобі, Беррітекс,
+# Аванпринт) — один запит і кілька мегабайт, їх не шкода щодня. Бергамо фіда не
+# має взагалі: там обхід 2656 сторінок товарів, тож раз на тиждень — і то з
+# запасом, бо їхні сторінки не міняються щогодини.
+#
+# ⚠️ ЗАПОБІЖНИК НА ПОРОЖНІЙ ФІД — ГОЛОВНЕ В ЦЬОМУ ФАЙЛІ.
+# Завантажувач гасить зниклі товари за часом: «усе, чого не торкнулись у цьому
+# прогоні, — вимкнути». Мінімуму рядків у ньому немає, а `curl` там без `-f`,
+# тож 404 повертає HTML-сторінку помилки з кодом успіху: розбирач знаходить нуль
+# товарів, залив «успішно» пише нуль рядків — і ГАСИТЬ УСЬОГО ПОСТАЧАЛЬНИКА.
+# Виглядає це як «Аванпринт зник із пошуку», а причина в тому, що Хорошоп
+# змінив хеш у адресі вивантаження. Тому кожен постачальник спершу йде `--dry`
+# (розбір без запису), і якщо товарів менше за поріг — залив НЕ починається.
+#
+# Пороги нижче — тимчасовий дім. Правильне місце для них — реєстр
+# постачальників у самому завантажувачі (`--min-rows`), разом із рештою даних
+# про постачальника. Поки їх немає там, вони стоять тут: краще грубий поріг у
+# workflow, ніж жодного.
+#
+# СЕКРЕТИ. `SUPPLIER_FEED_DB_URL` — той самий рядок підключення, що в
+# `.env.backup` під іменем `BACKUP_DB_URL`. Репозиторій ПУБЛІЧНИЙ, і хоч GitHub
+# сам замальовує в логах точне значення секрета, покладатись лише на це не
+# можна: завантажувач передає рядок першим аргументом `psql` і на помилці друкує
+# `e.message`, куди Node вкладає всю команду. Досить будь-якого перетворення
+# рядка — і замальовування промахнеться. Тому весь вивід додатково проціджується
+# через `hide`, а справжнє лікування (не класти пароль у аргументи) робиться в
+# самому завантажувачі.
+
+name: supplier-feeds
+
+on:
+  schedule:
+    # Щодня 06:00 за Києвом (влітку; GitHub рахує в UTC і точності не обіцяє).
+    - cron: "0 3 * * *"
+    # Неділя, 06:30 за Києвом — обхід Бергамо.
+    - cron: "30 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      suppliers:
+        description: "Кого перезалити через пробіл (totobi berrytex avanprint bergamo). Порожньо — усіх."
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: supplier-feeds
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Токен для пушу цій задачі не потрібен: вона лише читає репозиторій.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          # Має збігатися з CI та NODE_VERSION у netlify.toml.
+          node-version: "24"
+
+      - name: Кого заливаємо
+        id: pick
+        env:
+          # Через env, а не ${{ }} просто в тілі скрипта: вхід ручного запуску
+          # пише людина, і підставляти його в shell дослівно не можна.
+          SCHEDULE: ${{ github.event.schedule }}
+          REQUESTED: ${{ github.event.inputs.suppliers }}
+        run: |
+          set -euo pipefail
+          known="totobi berrytex avanprint bergamo"
+
+          if [ -n "${REQUESTED:-}" ]; then
+            # Ручний запуск: беремо лише знайомі імена, решту відкидаємо вголос.
+            list=""
+            for want in $REQUESTED; do
+              ok=0
+              for k in $known; do
+                if [ "$want" = "$k" ]; then ok=1; fi
+              done
+              if [ "$ok" = "1" ]; then list="$list $want"; else echo "Невідомий постачальник, пропускаю: $want"; fi
+            done
+            if [ -z "$list" ]; then
+              echo "::error::Жодного знайомого постачальника у вході."
+              exit 1
+            fi
+          else
+            case "${SCHEDULE:-}" in
+              "0 3 * * *")  list="totobi berrytex avanprint" ;;
+              "30 3 * * 0") list="bergamo" ;;
+              *)            list="$known" ;;
+            esac
+          fi
+
+          list=$(echo "$list" | tr -s ' ' | sed 's/^ //;s/ $//')
+          echo "Заливаємо: $list"
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+
+      - name: Залити фіди
+        id: load
+        env:
+          BACKUP_DB_URL: ${{ secrets.SUPPLIER_FEED_DB_URL }}
+          # Завантажувач за замовчуванням шукає psql у Homebrew — це шлях з
+          # ноутбука. На раннері psql лежить у PATH.
+          PSQL_BIN: psql
+          LIST: ${{ steps.pick.outputs.list }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BACKUP_DB_URL:-}" ]; then
+            echo "::error::Немає секрета SUPPLIER_FEED_DB_URL — заливати нема куди."
+            exit 1
+          fi
+
+          # Другий рубіж проти пароля в публічному лозі (перший — замальовування
+          # самим GitHub). Ловимо і postgres://, і postgresql://.
+          hide() { sed -E 's#postgres(ql)?://[^[:space:]]+#postgres://«приховано»#g'; }
+
+          floor_for() {
+            case "$1" in
+              totobi)    echo 2500 ;;   # у фіді 3150
+              berrytex)  echo 1600 ;;   # у фіді 2098
+              avanprint) echo 8000 ;;   # у фіді 10234
+              bergamo)   echo 2100 ;;   # у мапі 2656
+              *)         echo 1 ;;
+            esac
+          }
+
+          failed=""
+          for s in $LIST; do
+            echo "──────── $s ────────"
+            floor=$(floor_for "$s")
+
+            # 1. Суха пробіжка: розбір без запису. Дешевша за помилку.
+            if ! dry=$(node scripts/load-supplier-feed.mjs "$s" --dry 2>&1 | hide); then
+              printf '%s\n' "$dry"
+              echo "::error::$s — фід не читається, залив не починався."
+              failed="$failed $s(фід)"
+              continue
+            fi
+            # Тільки підсумок: далі `--dry` друкує ще три товари зразком.
+            printf '%s\n' "$dry" | grep -E '^(Фід:|Розібрано товарів:|  з артикулом:|  унікальних)' || true
+
+            n=$(printf '%s\n' "$dry" | sed -n 's/^Розібрано товарів: \([0-9][0-9]*\).*/\1/p' | head -1)
+            if [ -z "$n" ]; then
+              echo "::error::$s — не видно, скільки товарів розібрано. Залив не починався."
+              failed="$failed $s(розбір)"
+              continue
+            fi
+
+            # 2. Поріг. Менше — це не «мало товарів», це зламаний фід: заллємо
+            #    порожнечу й погасимо весь каталог постачальника.
+            if [ "$n" -lt "$floor" ]; then
+              echo "::error::$s — розібрано $n товарів, поріг $floor. Залив НЕ починався, каталог не погашено."
+              failed="$failed $s($n<$floor)"
+              continue
+            fi
+
+            # 3. Справжній залив.
+            if ! out=$(node scripts/load-supplier-feed.mjs "$s" 2>&1 | hide); then
+              printf '%s\n' "$out"
+              echo "::error::$s — залив упав."
+              failed="$failed $s(залив)"
+              continue
+            fi
+            printf '%s\n' "$out" | tail -8
+          done
+
+          failed=$(echo "$failed" | sed 's/^ //')
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          if [ -n "$failed" ]; then
+            echo "::error::Не залилось:$failed"
+            exit 1
+          fi
+          echo "✓ Усі фіди на місці."
+
+      - name: Сказати в Telegram, якщо не вийшло
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WATCHDOG_CHAT_IDS: ${{ secrets.WATCHDOG_CHAT_IDS }}
+          FAILED: ${{ steps.load.outputs.failed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # Мовчазний збій крона — це рівно та біда, від якої крон і рятує:
+          # ціни перестають оновлюватись, а виглядає все як завжди.
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${WATCHDOG_CHAT_IDS:-}" ]; then
+            echo "Секрети Telegram не налаштовані — повідомлення пропущено."
+            exit 0
+          fi
+          # Один рядок навмисно: у YAML перенос затягнув би сюди відступ файлу.
+          text="⚠️ Фіди постачальників не оновились: ${FAILED:-невідомо чому}. Ціни в пошуку постачальників лишились ті, що були. $RUN_URL"
+          IFS=',' read -ra ids <<< "$WATCHDOG_CHAT_IDS"
+          for id in "${ids[@]}"; do
+            curl -sS -m 10 -o /dev/null \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${id// /}" \
+              --data-urlencode "text=$text" || true
+          done
