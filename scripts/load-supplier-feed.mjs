@@ -628,10 +628,35 @@ function parseOpencartPage(html, ctx) {
   // schema.org/InStock vs OutOfStock — єдиний сигнал наявності на сторінці.
   if (offers?.availability) attrs.available = /InStock/i.test(String(offers.availability));
 
-  return {
+  /**
+   * КОЛІР ЗАШИТИЙ У НАЗВУ, А РЕШТА КОЛЬОРІВ — У РОЗМІТЦІ СТОРІНКИ.
+   *
+   * У мапі сайту рівно ОДНА адреса на модель, і вона веде на один колір
+   * (у футболок Printer Prime це завжди `…5360`, темно-синій). Через це в пулі
+   * кожна річ лежала одним кольором, хоч на сайті їх шість — і виглядало це як
+   * «Бергамо бідний», хоч насправді ми просто не спитали.
+   *
+   * Решта кольорів є ТУТ ЖЕ, у блоці `#hpmodel`: у кожного своя адреса, свій
+   * код і назва в `title` («6053 - синій»). Тобто повне покриття кольорів
+   * коштує НУЛЬ додаткових запитів — треба лише прочитати те, що вже завантажено.
+   * Обходити ще й кожну колірну сторінку окремо було б у шість разів довше й
+   * поклало б на чужий сайт зайве навантаження заради того, що вже в руках.
+   *
+   * ФОТО В КОЛЬОРІВ НЕ БУДЕ, і це перевірено, а не припущено. Ім'я файлу
+   * містить артикул (`22640315360_a-674x800.jpg`), тож напрошується підставити
+   * чужий код і дістати фото. Спробував три — усі 404: шлях кешу в них інший.
+   * Тому в братів `image_url` порожній, а на картці стоїть фото моделі. Краще
+   * без фото, ніж помаранчева футболка з темно-синім знімком.
+   */
+  const colorTail = name.match(/,\s*колір\s+(.+?)(?:\s+-\s+\S+)?\s*$/iu);
+  const baseName = colorTail ? name.slice(0, colorTail.index).trim() || name : name;
+  const selfArticle = typeof product.sku === "string" && product.sku.trim() ? product.sku.trim() : null;
+  if (colorTail) attrs.color = colorTail[1].trim();
+
+  const self = {
     external_key: ctx.url,
-    article: typeof product.sku === "string" && product.sku.trim() ? product.sku.trim() : null,
-    name,
+    article: selfArticle,
+    name: baseName,
     vendor: product.brand?.name ? String(product.brand.name).trim() : null,
     category: null,
     price: ruled.price,
@@ -641,6 +666,35 @@ function parseOpencartPage(html, ctx) {
     images: JSON.stringify(images),
     attrs: JSON.stringify(attrs),
   };
+
+  const rows = [self];
+  const seen = new Set([ctx.url]);
+  for (const m of html.matchAll(/<a\s[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)) {
+    const body = m[2];
+    if (!body.includes("hcol-attribute")) continue;
+    const href = m[1].trim();
+    // Активний колір — це сама сторінка, у нього href="javascript:void(0)".
+    if (!/^https?:\/\//i.test(href) || seen.has(href)) continue;
+    const title = (body.match(/title="([^"]*)"/) || [])[1] || "";
+    // «6053 - синій» → назва кольору без коду; код і так є в артикулі.
+    const label = title.includes(" - ") ? title.slice(title.indexOf(" - ") + 3).trim() : title.trim();
+    if (!label) continue;
+    // Спершу відрізаємо запит і якір, і лише ПОТІМ ділимо шляхом. Навпаки не
+    // можна: `[/?#].*$` зрізає від першого слеша, тобто від «https://», і
+    // артикул виходив «https:» (спіймано на сухій пробіжці).
+    const slug = href.split(/[?#]/)[0].replace(/\/+$/, "").split("/").pop() || "";
+    seen.add(href);
+    rows.push({
+      ...self,
+      external_key: href,
+      article: /\d/.test(slug) ? slug : null,
+      url: href,
+      image_url: null,
+      images: "[]",
+      attrs: JSON.stringify({ ...attrs, color: label }),
+    });
+  }
+  return rows;
 }
 
 const PARSERS = { prom: parseProm, cscart: parseCscart, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku, horoshop: parseHoroshop };
@@ -713,10 +767,16 @@ async function crawlPages(indexXml, cfg) {
         }
       }
       if (html) {
-        const row = parsePage(html, { url, cfg });
-        // `null` — сторінка без товару (розділ, стаття). Це не збій: у мапі
-        // такі адреси теж є, просто вони не проходять фільтр «код з цифрою».
-        if (row) rows.push(row);
+        const parsed = parsePage(html, { url, cfg });
+        // Сторінка може дати БІЛЬШЕ як один рядок: у Бергамо на картці товару
+        // висить перелік усіх його кольорів, і кожен колір — окремий товар зі
+        // своїм кодом. Тому розбирач повертає масив.
+        //
+        // `null` (або порожньо) — сторінка без товару (розділ, стаття). Це не
+        // збій: у мапі такі адреси теж є, просто вони не проходять фільтр
+        // «код з цифрою».
+        const produced = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+        if (produced.length) rows.push(...produced);
         else skipped++;
       }
       done++;
