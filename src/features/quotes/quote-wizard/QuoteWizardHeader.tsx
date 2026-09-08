@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Building2, CalendarIcon, Coins, User } from "lucide-react";
+import { CalendarIcon, User } from "lucide-react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 
@@ -269,17 +269,17 @@ export function QuoteWizardHeader({
     */
     return (
       <div className="flex flex-col gap-3">
-        <HeaderField label="Замовник / Лід" icon={Building2}>
+        <HeaderField label="Замовник / Лід">
           {partyPicker}
         </HeaderField>
-        <HeaderField label="Менеджер" icon={User}>
+        <HeaderField label="Менеджер">
           {managerPicker}
         </HeaderField>
         <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2">
-          <HeaderField label="Дедлайн" icon={CalendarIcon}>
+          <HeaderField label="Дедлайн">
             {deadlinePicker}
           </HeaderField>
-          <HeaderField label="Валюта" icon={Coins}>
+          <HeaderField label="Валюта">
             {currencyPicker}
           </HeaderField>
         </div>
@@ -310,19 +310,22 @@ export function QuoteWizardHeader({
  * ширину й отримує кут 8 px замість пігулки — у стовпчику підписаних полів
  * пігулка виглядає як кнопка, а тут це поле.
  */
+/**
+ * Підпис БЕЗ іконки (Артем, 08.09.2026). Іконка стояла і в підписі, і в самому
+ * полі під ним — та сама двічі поспіль, за 20 пікселів одна від одної. У полі
+ * вона потрібна: там вона єдина позначка, коли значення ще не вибрано
+ * («Замовник / Лід»). У підписі — чистий дубль.
+ */
 function HeaderField({
   label,
-  icon: Icon,
   children,
 }: {
   label: string;
-  icon: typeof User;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-        <Icon className="h-3 w-3 text-muted-foreground/70" />
+      <span className="block text-2xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
       {/*

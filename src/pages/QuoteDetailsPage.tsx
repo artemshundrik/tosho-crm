@@ -4708,7 +4708,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/50 pt-3">
                                 {resolvedKindId ? (
                                   <>
-                                    <span className="text-xs text-muted-foreground">Нанесення</span>
                                     <QuoteItemImprints
                                       teamId={teamId}
                                       itemId={item.id}
