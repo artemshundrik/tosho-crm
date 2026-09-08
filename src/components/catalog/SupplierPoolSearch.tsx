@@ -105,6 +105,29 @@ export const SupplierPoolSearch: React.FC<SupplierPoolSearchProps> = ({ classNam
   );
 };
 
+/**
+ * Фото товару або значок «фото немає». «Адреси немає» і «адреса є, але мертва»
+ * мають виглядати ОДНАКОВО: заміряно 08.09.2026 на запиті «футболка» — із 354
+ * карток 6 віддавали 404, усі шість Бергамо (адреси там виведені за правилом
+ * `<артикул>_a.jpg`, і частина кадрів на сайті названа інакше). Без `onError`
+ * браузер малює зламану картинку, і це читається як поломка CRM.
+ */
+const PoolPhoto: React.FC<{ url: string | null; className: string }> = ({ url, className }) => {
+  // Ловимо саме АДРЕСУ, а не прапорець: картка переживає вибір іншого кольору,
+  // і голий `failed` лишився б піднятим для наступного, живого фото.
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  if (!url || failedUrl === url) return <Package className={cn(className, "text-muted-foreground")} />;
+  return (
+    <img
+      src={url}
+      alt=""
+      loading="lazy"
+      onError={() => setFailedUrl(url)}
+      className="h-full w-full object-cover"
+    />
+  );
+};
+
 const money = (value: number) =>
   value.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -136,12 +159,8 @@ const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ product }
   return (
     <div className="rounded-lg transition-colors hover:bg-muted/40">
       <div className="flex items-center gap-3 px-2 py-2">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/20">
-          {imageUrl ? (
-            <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-          ) : (
-            <Package className="h-4 w-4 text-muted-foreground" />
-          )}
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50">
+          <PoolPhoto url={imageUrl} className="h-4 w-4" />
         </span>
 
         <span className="min-w-0 flex-1">
@@ -239,12 +258,8 @@ const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ product }
                     : "border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/30">
-                  {variant.imageUrl ? (
-                    <img src={variant.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <Package className="h-3 w-3" />
-                  )}
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/50">
+                  <PoolPhoto url={variant.imageUrl} className="h-3 w-3" />
                 </span>
                 <span className="max-w-[9rem] truncate">{variant.label ?? "Без підпису"}</span>
               </button>
