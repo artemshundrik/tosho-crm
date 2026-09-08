@@ -449,9 +449,39 @@ function mergeCluster(cluster: SupplierPoolDraft[]): SupplierPoolProduct {
   };
 }
 
+/**
+ * ДОРЕЧНІСТЬ: наскільки рано слово запиту стоїть у назві. Менше — краще,
+ * `Infinity` — не знайшлось у назві зовсім (збіг був за артикулом).
+ *
+ * Потрібно, бо в українських назвах головне слово стоїть ПЕРШИМ, а сортування
+ * за абеткою систематично ставить попереду те, де слово випадкове. Живий
+ * випадок (Артем, 08.09.2026): на запит «ручка» в e-suvenir перші дві картки
+ * були «ЕКО блокнот "Dickens" + ручка» і «ЕКО блокнот "Emory" + ручка», а
+ * сотня власне ручок не показувалась — бо «Е» стоїть перед «Р», а місць у
+ * випадайці шість. Виглядало це як «у постачальника немає ручок», хоч їх 100.
+ */
+function matchRank(name: string, terms: readonly string[]): number {
+  if (!terms.length) return 0;
+  const haystack = name.toLowerCase();
+  let best = Number.POSITIVE_INFINITY;
+  for (const term of terms) {
+    const at = haystack.indexOf(term);
+    if (at >= 0 && at < best) best = at;
+  }
+  return best;
+}
+
 /** Згорнути рядки в товари: назва в межах постачальника, потім артикул поміж. */
-export function groupSupplierPoolRows(rows: SupplierPoolRow[], limit: number): SupplierPoolProduct[] {
+export function groupSupplierPoolRows(
+  rows: SupplierPoolRow[],
+  limit: number,
+  terms: readonly string[] = []
+): SupplierPoolProduct[] {
   const products = clusterDraftsByArticle(collectDraftsByName(rows)).map(mergeCluster);
+  // Рахуємо доречність один раз на картку: у порівнювачі це був би пошук
+  // підрядка на кожну пару, тобто робота, що росте квадратом від кількості.
+  const lowered = terms.map((term) => term.toLowerCase());
+  const rank = new Map(products.map((product) => [product, matchRank(product.name, lowered)]));
 
   // ПОРЯДОК: спершу ті, у кого відома ціна. Показуємо 40 карток зі 120 знайдених
   // («футболка» на проді), тож саме сортування вирішує, кого менеджер побачить,
@@ -461,6 +491,11 @@ export function groupSupplierPoolRows(rows: SupplierPoolRow[], limit: number): S
   const ordered = [...products].sort((a, b) => {
     const byPrice = Number(b.priceMin !== null) - Number(a.priceMin !== null);
     if (byPrice !== 0) return byPrice;
+    // Доречність СТОЇТЬ ПІСЛЯ ЦІНИ, а не перед нею: картка без ціни лишається
+    // марною, як точно вона не збігалась би. Але перед абеткою — інакше вибір
+    // тих шести карток робить алфавіт, а не запит менеджера.
+    const byRank = (rank.get(a) ?? 0) - (rank.get(b) ?? 0);
+    if (byRank !== 0) return byRank;
     return a.name.localeCompare(b.name, "uk");
   });
 

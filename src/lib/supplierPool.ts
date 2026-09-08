@@ -89,6 +89,10 @@ export async function searchSupplierPool(
   });
 
   if (error) throw error;
-  return groupSupplierPoolRows((data ?? []) as unknown as SupplierPoolRow[], options.limit ?? 40);
+  // Слова запиту йдуть у згортання, щоб порядок карток вирішував запит, а не
+  // абетка: див. `matchRank` у supplierPoolRows.
+  return groupSupplierPoolRows((data ?? []) as unknown as SupplierPoolRow[], options.limit ?? 40, [
+    ...variants,
+  ]);
 }
 

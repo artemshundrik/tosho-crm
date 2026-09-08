@@ -78,6 +78,34 @@ describe("groupSupplierPoolRows", () => {
     expect(slugs).toContain("avanprint.ua");
   });
 
+  it("ставить попереду ті картки, де слово запиту стоїть раніше в назві", () => {
+    // Живий випадок 08.09.2026: на запит «ручка» в e-suvenir перші картки були
+    // «ЕКО блокнот ... + ручка» — бо «Е» стоїть перед «Р», — а сотня власне
+    // ручок не показувалась. У випадайці шість місць, тож вибір робив алфавіт.
+    const rows = [
+      row({ id: "e1", supplier_slug: "e-suvenir.com.ua", name: "ЕКО блокнот 'Dickens' А5 бамбуковий + ручка", price: 261 }),
+      row({ id: "e2", supplier_slug: "e-suvenir.com.ua", name: "ЕКО блокнот 'Emory' А6 + ручка", price: 47 }),
+      row({ id: "e3", supplier_slug: "e-suvenir.com.ua", name: "Ручка пластикова 'Trey'", price: 3.81 }),
+      row({ id: "e4", supplier_slug: "e-suvenir.com.ua", name: "ЕКО ручка 'Zian' з переробленого пластику", price: 9.13 }),
+    ];
+
+    const names = groupSupplierPoolRows(rows, 2, ["ручка"]).map((product) => product.name);
+
+    // Обидва місця дістаються тим, де «ручка» — про сам товар, а не хвіст назви.
+    expect(names).toEqual(["Ручка пластикова 'Trey'", "ЕКО ручка 'Zian' з переробленого пластику"]);
+  });
+
+  it("без слів запиту порядок лишається абетковим, як був", () => {
+    const rows = [
+      row({ id: "e3", supplier_slug: "e-suvenir.com.ua", name: "Ручка пластикова 'Trey'", price: 3.81 }),
+      row({ id: "e1", supplier_slug: "e-suvenir.com.ua", name: "ЕКО блокнот 'Emory' А6 + ручка", price: 47 }),
+    ];
+
+    const names = groupSupplierPoolRows(rows, 2).map((product) => product.name);
+
+    expect(names).toEqual(["ЕКО блокнот 'Emory' А6 + ручка", "Ручка пластикова 'Trey'"]);
+  });
+
   it("згортає кольори totobi в одну картку й лишає артикул у варіантах", () => {
     const rows = [
       row({ id: "a", article: "18000-CG 3C", name: "Реглан Heavy Blend 271", price: 675.18, color: "ash grey" }),
