@@ -11,7 +11,7 @@
  * Реекспорт нижче лишає споживачам одну адресу: `@/lib/supplierPool`.
  */
 
-import { db } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import {
   groupSupplierPoolRows,
   sanitizeSearchTerm,
@@ -48,33 +48,31 @@ export async function searchSupplierPool(
   const translit = transliterateSearchTerm(term);
   if (translit && translit !== term.toLowerCase()) variants.add(translit);
 
-  const filters: string[] = [];
-  for (const value of variants) {
-    filters.push(`name.ilike.*${value}*`);
-    filters.push(`article.ilike.*${value}*`);
-  }
+  // ЧЕСНА ЧАСТКА НА ПОСТАЧАЛЬНИКА, і саме тому це RPC, а не .or().limit().
+  // У PostgREST стеля рядків спрацьовує РАНІШЕ за сортування: 800 рядків
+  // набиралися за абеткою з усіх джерел упереміш, і найбільший постачальник
+  // з'їдав вікно цілком. Заміряно 08.09.2026 на «футболка»: із 2519 збігів у
+  // вікно не потрапив жоден рядок Тотобі — 36 карток Аванпринта і нуль
+  // Тотобі, при тому що закупівельна ціна є саме в Тотобі. Виглядало це як
+  // «у Тотобі немає футболок», хоч дані лежали на місці: їх не спитали.
+  //
+  // Квота роздається у вікні `partition by supplier_slug` (scripts/
+  // supplier-pool-search.sql), тож витіснити одне джерело іншим стало
+  // неможливо в принципі. Всередині квоти порядок за назвою — рядки одного
+  // товару сусідять, і зріз лягає по межі товару, а не посеред його кольорів.
+  //
+  // Множник 5, а не 20: раніше 800 рядків ділилися на всіх, тепер стільки ж
+  // дістається КОЖНОМУ (4 джерела × 200). Груп це вистачає з запасом —
+  // «Футболка SoftStyle 153» у totobi це 55 рядків, найтовща з відомих.
+  const perSupplier = (options.limit ?? 40) * 5;
 
-  // Беремо із запасом: після згортання за назвою записів стане помітно менше.
-  // Множник 20, а не 12, бо групи бувають товсті — «Футболка SoftStyle 153» у
-  // totobi це 55 рядків, тобто один товар з'їдає десяту частину вікна.
-  const rowLimit = (options.limit ?? 40) * 20;
-
-  const { data, error } = await db
-    .from("supplier_products" as never)
-    // `color:attrs->>color`, а не вся `attrs`: там ще лежать розміри (у текстилю
-    // це вісім записів на рядок), і на 800 рядках вони дали б сотні кілобайт
-    // заради підпису варіанта.
-    .select("id,supplier_slug,article,name,vendor,category,price,currency,price_kind,url,image_url,color:attrs->>color")
-    .eq("is_active", true)
-    .or(filters.join(","))
-    // Порядок обов'язковий, і саме за назвою. Без нього PostgREST віддає рядки
-    // у фізичному порядку таблиці, тобто в порядку заливу: щойно доданий
-    // постачальник опиняється в хвості й ризикує не влізти у вікно взагалі
-    // (спіймано на totobi — 3150 товарів, залитих останніми). Назва ще й тримає
-    // рядки одного товару поруч, тож вікно ріже по межі товару, а не посеред
-    // кольорів. Що з цих рядків показати першим — вирішує вже групування.
-    .order("name")
-    .limit(rowLimit);
+  // Через `supabase.schema("tosho")`, а не через `db`: типи `db` — це ПЕРЕТИН
+  // схем, тож він приймає лише ті RPC, які є і в public, і в tosho. Так само
+  // кличуть get_audit_log і get_ai_usage_summary.
+  const { data, error } = await supabase.schema("tosho").rpc("search_supplier_pool", {
+    p_terms: [...variants],
+    p_per_supplier: perSupplier,
+  });
 
   if (error) throw error;
   return groupSupplierPoolRows((data ?? []) as unknown as SupplierPoolRow[], options.limit ?? 40);

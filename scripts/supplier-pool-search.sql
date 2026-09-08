@@ -1,0 +1,105 @@
+-- Чесна частка постачальника у вікні пошуку пулу (REQ-250).
+--
+-- ЩО БУЛО НЕ ТАК. Пул шукався одним запитом PostgREST:
+--   .or(name.ilike.*термін*, article.ilike.*термін*).order("name").limit(ліміт × 20)
+-- Стеля тут спрацьовує РАНІШЕ за будь-яке сортування, і саме в цьому біда:
+-- 800 рядків набираються за абеткою з усіх постачальників упереміш, а вже
+-- потім картки сортуються «спершу ті, у кого відома ціна». Тобто сортування
+-- рятує лише те, що встигло приїхати.
+--
+-- Заміряно на проді 08.09.2026, запит «футболка»: 2519 рядків збігу — 1840
+-- Аванпринта, 665 Тотобі, 14 Berrytex. У 800 рядків вікна не потрапив ЖОДЕН
+-- рядок Тотобі: назви Аванпринта сортуються раніше й вичерпують стелю. На
+-- екрані менеджер бачив 36 карток Аванпринта і нуль Тотобі — при тому, що
+-- саме в Тотобі лежать 32 футболки з нашою закупівельною ціною, тобто єдині,
+-- з яких можна щось порахувати.
+--
+-- Симптом підступний тим, що виглядає як «у Тотобі немає футболок». Дані на
+-- місці, з ними все гаразд — їх просто не спитали.
+--
+-- ЩО РОБИМО. Стеля стає ПОСТАЧАЛЬНИЦЬКОЮ, а не спільною: `row_number()` у
+-- вікні `partition by supplier_slug` дає кожному джерелу однакову квоту. Один
+-- великий постачальник більше не може витіснити решту в принципі — не тому,
+-- що ми його пересортували, а тому, що він фізично не займає чужі місця.
+--
+-- ЧОМУ ВСЕРЕДИНІ КВОТИ ПОРЯДОК ЗА НАЗВОЮ. Рядки одного товару (кольори,
+-- розміри) мають однакову назву, тож сусідять. Ріжучи за назвою, ми ріжемо по
+-- межі товару, а не посеред його кольорів — інакше картка приїхала б у
+-- браузер половиною варіантів і показала б неправильний діапазон цін. Це та
+-- сама причина, з якої `.order("name")` стояв у первісному запиті; вона
+-- лишається чинною, просто діє тепер усередині кожного постачальника.
+--
+-- ЧОМУ НЕ ПОВЕРТАЄМО РЯДОК ТАБЛИЦІ ЦІЛКОМ. `attrs` на avanprint важить 5,3 МБ
+-- (там описи під документи), і `returns setof tosho.supplier_products` тягнув
+-- би його в кожну відповідь. Віддаємо рівно ті колонки, які малює вікно, а
+-- колір дістаємо як `attrs->>'color'` — точно як робив попередній .select().
+--
+-- ЧОМУ security invoker (за замовчуванням, лишено явно). На таблиці стоїть RLS
+-- `is_team_member(team_id)`. Definer зняв би її й віддав чужі команди — а тут
+-- немає жодної причини піднімати права: пошук читає рівно те, що користувачеві
+-- і так дозволено.
+--
+-- ilike any(масив) замість or-ланцюга — щоб і оригінал, і транслітерація
+-- («chashka» → «чашка») ішли одним проходом; терміни готує клієнт
+-- (`transliterateSearchTerm` у src/lib/supplierPoolRows.ts).
+--
+-- Ідемпотентний: повторний прогін нічого не дублює.
+
+-- Одна транзакція — від `npm run db:apply` (psql -1); свого `begin` тут немає
+-- навмисно: він закривав би її раніше й ламав атомарність усього файлу.
+\set ON_ERROR_STOP on
+
+create or replace function tosho.search_supplier_pool(
+  p_terms text[],
+  p_per_supplier integer default 200
+)
+returns table (
+  id            uuid,
+  supplier_slug text,
+  article       text,
+  name          text,
+  vendor        text,
+  category      text,
+  price         numeric,
+  currency      text,
+  price_kind    text,
+  url           text,
+  image_url     text,
+  color         text
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $fn$
+  with pat as (
+    -- Терміни коротші за два символи відкидаємо тут, а не покладаємось на
+    -- клієнта: «%а%» зібрав би пів пулу й з'їв би всі квоти сміттям.
+    select array_agg('%' || t || '%') as arr
+    from unnest(p_terms) as t
+    where length(btrim(t)) >= 2
+  ),
+  hit as (
+    select
+      sp.id, sp.supplier_slug, sp.article, sp.name, sp.vendor, sp.category,
+      sp.price, sp.currency, sp.price_kind, sp.url, sp.image_url,
+      sp.attrs->>'color' as color,
+      row_number() over (partition by sp.supplier_slug order by sp.name, sp.id) as rn
+    from tosho.supplier_products sp
+    cross join pat
+    where pat.arr is not null
+      and sp.is_active
+      and (sp.name ilike any (pat.arr) or sp.article ilike any (pat.arr))
+  )
+  select
+    hit.id, hit.supplier_slug, hit.article, hit.name, hit.vendor, hit.category,
+    hit.price, hit.currency, hit.price_kind, hit.url, hit.image_url, hit.color
+  from hit
+  where hit.rn <= greatest(p_per_supplier, 1)
+  -- Порядок на виході теж за назвою: групування в браузері не залежить від
+  -- нього, але стабільна відповідь робить і кеш, і очі передбачуваними.
+  order by hit.name, hit.supplier_slug, hit.id
+$fn$;
+
+revoke all on function tosho.search_supplier_pool(text[], integer) from public;
+grant execute on function tosho.search_supplier_pool(text[], integer) to authenticated;

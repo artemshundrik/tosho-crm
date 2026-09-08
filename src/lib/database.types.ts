@@ -5764,6 +5764,23 @@ export type Database = {
         Returns: undefined
       }
       refresh_feature_adoption: { Args: never; Returns: undefined }
+      search_supplier_pool: {
+        Args: { p_per_supplier?: number; p_terms: string[] }
+        Returns: {
+          article: string | null
+          category: string | null
+          color: string | null
+          currency: string
+          id: string
+          image_url: string | null
+          name: string
+          price: number | null
+          price_kind: string
+          supplier_slug: string
+          url: string | null
+          vendor: string | null
+        }[]
+      }
       set_quote_status: {
         Args: {
           p_new_status: Database["tosho"]["Enums"]["quote_status"]
