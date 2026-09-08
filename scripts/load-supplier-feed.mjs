@@ -56,13 +56,22 @@ const SUPPLIERS = {
     format: "sitemap-sku",
     source: "sitemap",
   },
-  // НЕ ДОДАНІ, і причина в них, а не в коді (перевірено 05.09.2026):
-  //   totobi (CS-Cart) — ні фіда, ні мапи: усе 404. Дані лише з кабінету.
-  //   eney (OpenCart)  — точка фіда index.php?route=extension/feed/google_base
-  //                      віддає 200 і НУЛЬ байт: розширення є, фід вимкнено в
-  //                      їхній адмінці. Мапа є, але без назв — самі адреси.
-  // Обом достатньо, щоб постачальник увімкнув вивантаження в себе; тоді сюди
-  // лягає рядок, а для google_base — ще й свій розбір (це Merchant XML, не YML).
+  totobi: {
+    slug: "totobi.com.ua",
+    // Адреса взята зі сторінки totobi.com.ua/opis-vigruzok/ — постачальник
+    // публікує її сам. Ключ у ній не наш і не секретний: фід відкритий, логін
+    // не потрібен. 05.09.2026 я записав «ні фіда, ні мапи — усе 404»: шукав
+    // /sitemap.xml і /prom.xml, а вивантаження в CS-Cart живе під dispatch.
+    feed: "https://totobi.com.ua/index.php?dispatch=yml.get&access_key=lg3bjy2gvww",
+    format: "cscart",
+    source: "feed:cscart",
+  },
+  // НЕ ДОДАНИЙ, і причина в ньому, а не в коді (перевірено 05.09.2026):
+  //   eney (OpenCart) — точка фіда index.php?route=extension/feed/google_base
+  //                     віддає 200 і НУЛЬ байт: розширення є, фід вимкнено в
+  //                     їхній адмінці. Мапа є, але без назв — самі адреси.
+  // Досить, щоб постачальник увімкнув вивантаження в себе; тоді сюди лягає
+  // рядок, а для google_base — ще й свій розбір (це Merchant XML, не YML).
 };
 
 const args = process.argv.slice(2);
@@ -122,6 +131,89 @@ function parseProm(xml) {
       url: tag(b, "url") || null,
       image_url: pics[0] || null,
       images: JSON.stringify(pics),
+    });
+  }
+  return rows;
+}
+
+/**
+ * Точна пара тегів, без атрибутів. Навмисно НЕ `tag()`: той бере `<price[^>]*>`
+ * і в CS-Cart чіпляє `<price_type>Базова ціна</price_type>`, який стоїть ВИЩЕ
+ * за `<price>`. Ціна тоді дорівнює рядку «Базова ціна» — і мовчки стає null
+ * при `::numeric`. Видно лише на живому фіді, тому окремий помічник.
+ */
+function exactTag(block, name) {
+  const m = block.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`));
+  return m ? unesc(m[1].trim()) : "";
+}
+
+function param(block, name) {
+  const m = block.match(new RegExp(`<param name="${name}">([\\s\\S]*?)</param>`));
+  return m ? unesc(m[1].trim()) : "";
+}
+
+/**
+ * CS-Cart YML (totobi). Багатший за prom-фід, і дві його особливості визначають
+ * усе інше в цьому розборі.
+ *
+ * 1. КОЛІР — ОКРЕМИЙ ТОВАР. 3150 пропозицій на 679 назв: кожен колір має свій
+ *    `vendorCode`, за яким його й замовляють. Тому рядок у пулі — колір, а не
+ *    «модель»; згортає їх назад у одну картку вже читальний шар (supplierPool).
+ *
+ * 2. У ТЕКСТИЛЮ ЦІНА НЕ В `<price>`. У 1367 товарів там 0.00, а справжня ціна
+ *    лежить в атрибуті `modifier` кожного розміру (у розмірів і свої артикули).
+ *    Беремо мінімальну з них — це ціна найдешевшого розміру, і саме її бачить
+ *    менеджер на сайті. Без цього кроку ціну втратили б у 43% фіда.
+ *
+ * `attrs` несе те, чого в колонках пулу немає, але шкода загубити до наступного
+ * заливу: колір, групу нанесення (у фіді вона заповнена в 3142 з 3150 — це те,
+ * що в нашому каталозі досі виколупується з описів) і розміри з їхніми кодами.
+ */
+function parseCscart(xml) {
+  const cats = {};
+  for (const m of xml.matchAll(/<category id="(\d+)"[^>]*>([\s\S]*?)<\/category>/g)) {
+    cats[m[1]] = unesc(m[2].trim());
+  }
+  const num = (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const rows = [];
+  for (const m of xml.matchAll(/<offer\b([^>]*)>([\s\S]*?)<\/offer>/g)) {
+    const b = m[2];
+    const name = exactTag(b, "name");
+    if (!name) continue;
+
+    const sizes = [...b.matchAll(/<size\b([^>]*)>([\s\S]*?)<\/size>/g)].map((s) => ({
+      size: unesc(s[2].trim()),
+      code: (s[1].match(/\bproduct_code="([^"]*)"/) || [])[1] || null,
+      price: num((s[1].match(/\bmodifier="([^"]*)"/) || [])[1]),
+    }));
+
+    const price = num(exactTag(b, "price")) ?? sizes.map((s) => s.price).filter(Boolean).sort((a, z) => a - z)[0] ?? null;
+    const pics = [...b.matchAll(/<picture>([^<]+)<\/picture>/g)].map((p) => p[1].trim());
+    const attrs = {};
+    // «Група Кольорів» — запасний варіант, а не синонім: вона грубша («Сірий»
+    // замість «ash grey»), зате стоїть там, де точного кольору постачальник не
+    // вказав. Без неї частина карток лишилась би з безіменними варіантами.
+    const color = param(b, "Колір") || param(b, "Група Кольорів");
+    const methods = param(b, "Група нанесення");
+    if (color) attrs.color = color;
+    if (methods) attrs.methods = methods;
+    if (sizes.length) attrs.sizes = sizes;
+
+    rows.push({
+      external_key: (m[1].match(/\bid="([^"]+)"/) || [])[1] || exactTag(b, "url"),
+      article: exactTag(b, "vendorCode") || null,
+      name,
+      vendor: param(b, "ТМ") || null,
+      category: cats[exactTag(b, "categoryId")] || null,
+      price,
+      currency: exactTag(b, "currencyId") || "UAH",
+      url: exactTag(b, "url") || null,
+      image_url: pics[0] || null,
+      images: JSON.stringify(pics),
+      attrs: JSON.stringify(attrs),
     });
   }
   return rows;
@@ -193,7 +285,7 @@ function parseSitemapSku(xml) {
   return rows;
 }
 
-const PARSERS = { prom: parseProm, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku };
+const PARSERS = { prom: parseProm, cscart: parseCscart, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku };
 
 // ── тягнемо фід ─────────────────────────────────────────────────────────────
 console.log(`Фід: ${cfg.feed}`);
@@ -230,7 +322,7 @@ if (dry) {
 const dir = mkdtempSync(join(tmpdir(), "feed-"));
 const tsv = join(dir, "rows.tsv");
 const esc = (v) => (v == null ? "\\N" : String(v).replace(/\\/g, "\\\\").replace(/\t/g, " ").replace(/\n/g, " ").replace(/\r/g, ""));
-const cols = ["external_key", "article", "name", "vendor", "category", "price", "currency", "url", "image_url", "images"];
+const cols = ["external_key", "article", "name", "vendor", "category", "price", "currency", "url", "image_url", "images", "attrs"];
 writeFileSync(tsv, uniq.map((r) => cols.map((c) => esc(r[c])).join("\t")).join("\n"));
 
 const sql = `
@@ -239,7 +331,7 @@ begin;
 
 create temp table _feed (
   external_key text, article text, name text, vendor text, category text,
-  price text, currency text, url text, image_url text, images text
+  price text, currency text, url text, image_url text, images text, attrs text
 ) on commit drop;
 
 \\copy _feed (${cols.join(", ")}) from '${tsv}' with (format text, null '\\N')
@@ -265,17 +357,19 @@ with sup as (
 )
 insert into tosho.supplier_products
   (team_id, supplier_slug, contractor_id, source, external_key,
-   article, name, vendor, category, price, currency, price_kind, url, image_url, images, observed_at, is_active)
+   article, name, vendor, category, price, currency, price_kind, url, image_url, images, attrs, observed_at, is_active)
 select
   sup.team_id, '${cfg.slug}', sup.contractor_id, '${cfg.source}', f.external_key,
   nullif(f.article,''), f.name, nullif(f.vendor,''), nullif(f.category,''),
   nullif(f.price,'')::numeric, coalesce(nullif(f.currency,''),'UAH'), 'retail',
-  nullif(f.url,''), nullif(f.image_url,''), coalesce(f.images::jsonb,'[]'::jsonb), now(), true
+  nullif(f.url,''), nullif(f.image_url,''), coalesce(f.images::jsonb,'[]'::jsonb),
+  coalesce(f.attrs::jsonb,'{}'::jsonb), now(), true
 from _feed f cross join sup
 on conflict (supplier_slug, external_key) do update set
   article = excluded.article, name = excluded.name, vendor = excluded.vendor,
   category = excluded.category, price = excluded.price, currency = excluded.currency,
   url = excluded.url, image_url = excluded.image_url, images = excluded.images,
+  attrs = excluded.attrs,
   contractor_id = excluded.contractor_id, observed_at = now(), is_active = true,
   updated_at = now();
 
