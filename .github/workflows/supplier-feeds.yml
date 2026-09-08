@@ -87,7 +87,7 @@ jobs:
           REQUESTED: ${{ github.event.inputs.suppliers }}
         run: |
           set -euo pipefail
-          known="totobi berrytex avanprint bergamo"
+          known="totobi berrytex avanprint bergamo e-suvenir"
 
           if [ -n "${REQUESTED:-}" ]; then
             # Ручний запуск: беремо лише знайомі імена, решту відкидаємо вголос.
@@ -105,7 +105,7 @@ jobs:
             fi
           else
             case "${SCHEDULE:-}" in
-              "0 3 * * *")  list="totobi berrytex avanprint" ;;
+              "0 3 * * *")  list="totobi berrytex avanprint e-suvenir" ;;
               "30 3 * * 0") list="bergamo" ;;
               *)            list="$known" ;;
             esac
@@ -119,6 +119,13 @@ jobs:
         id: load
         env:
           BACKUP_DB_URL: ${{ secrets.SUPPLIER_FEED_DB_URL }}
+          # Е-СУВЕНІР ХОДИТЬ ПІД ЛОГІНОМ, і без цих двох секретів його API
+          # віддає ПУБЛІЧНІ ціни замість наших. Мовчазним це не буде: завантажувач
+          # без них не стартує, а якщо логін відпаде посеред прогону — спрацює
+          # межа частки рядків із нашою ціною. Решті постачальників облікові
+          # дані не потрібні, тож порожні змінні їм не заважають.
+          E_SUVENIR_EMAIL: ${{ secrets.E_SUVENIR_EMAIL }}
+          E_SUVENIR_PASSWORD: ${{ secrets.E_SUVENIR_PASSWORD }}
           # Завантажувач за замовчуванням шукає psql у Homebrew — це шлях з
           # ноутбука. На раннері psql лежить у PATH.
           PSQL_BIN: psql
@@ -130,6 +137,18 @@ jobs:
             echo "::error::Немає секрета SUPPLIER_FEED_DB_URL — заливати нема куди."
             exit 1
           fi
+
+          # Кажемо про брак облікових даних ДО заливу й лише тоді, коли
+          # e-suvenir справді в списку: інакше нічний прогін падав би на ньому
+          # щоразу, коли хтось запустив руками сусіднє джерело.
+          case " $LIST " in
+            *" e-suvenir "*)
+              if [ -z "${E_SUVENIR_EMAIL:-}" ] || [ -z "${E_SUVENIR_PASSWORD:-}" ]; then
+                echo "::error::Немає секретів E_SUVENIR_EMAIL / E_SUVENIR_PASSWORD — без логіна API віддає публічні ціни."
+                exit 1
+              fi
+              ;;
+          esac
 
           # Другий рубіж проти пароля в публічному лозі (перший — замальовування
           # самим GitHub). Ловимо і postgres://, і postgresql://.

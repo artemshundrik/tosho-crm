@@ -364,3 +364,19 @@ describe("supplierNameFromUrl", () => {
     expect(supplierNameFromUrl("не адреса")).toBeNull();
   });
 });
+
+describe("порядок карток за доречністю", () => {
+  it("точний артикул стає першим, навіть коли за абеткою він останній", () => {
+    // Живий випадок: «4031» дає 37 рядків, і той, чий код із нього
+    // починається, стояв серед них випадково — доречність рахувалась лише
+    // по назві, тож збіг за кодом важив нуль.
+    const rows = [
+      row({ id: "a", supplier_slug: "totobi.com.ua", article: "4031-10", name: "Аврора рюкзак", price: 900 }),
+      row({ id: "b", supplier_slug: "totobi.com.ua", article: "4031-08", name: "Яскравий рюкзак", price: 1000 }),
+    ];
+
+    const names = groupSupplierPoolRows(rows, 2, ["4031-08"]).map((product) => product.name);
+
+    expect(names[0]).toBe("Яскравий рюкзак");
+  });
+});

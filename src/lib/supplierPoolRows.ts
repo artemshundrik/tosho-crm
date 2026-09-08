@@ -469,12 +469,29 @@ function mergeCluster(cluster: SupplierPoolDraft[]): SupplierPoolProduct {
  * сотня власне ручок не показувалась — бо «Е» стоїть перед «Р», а місць у
  * випадайці шість. Виглядало це як «у постачальника немає ручок», хоч їх 100.
  */
-function matchRank(name: string, terms: readonly string[]): number {
+function matchRank(product: SupplierPoolProduct, terms: readonly string[]): number {
   if (!terms.length) return 0;
-  const haystack = name.toLowerCase();
+  const article = product.article?.trim().toLowerCase() ?? "";
+  const name = product.name.toLowerCase();
   let best = Number.POSITIVE_INFINITY;
   for (const term of terms) {
-    const at = haystack.indexOf(term);
+    /**
+     * АРТИКУЛ Б'Є НАЗВУ, І ЦЕ НЕ ДРІБНИЦЯ (Артем, 08.09.2026: «менеджер не буде
+     * з двохсот ручок вибирати, він знає, яку йому треба»). Вузький пошук —
+     * головний спосіб користуватись цим полем, а не запасний: на точний код
+     * приїжджає 2 рядки, на модель «Zian» — 7, тоді як на слово «ручка» — 800.
+     *
+     * Раніше доречність рахувалась ЛИШЕ по назві, тож збіг за кодом отримував
+     * `Infinity` і падав у сортування за абеткою — тобто найсильніший сигнал,
+     * який узагалі буває, важив НУЛЬ. На точному коді це не стріляло (карток
+     * однаково одна-дві), а на частині коду вже так: «4031» дає 37 рядків, і
+     * той, чий код із нього починається, стояв серед них випадково.
+     */
+    if (article) {
+      if (article === term) return -2;
+      if (article.startsWith(term)) return -1;
+    }
+    const at = name.indexOf(term);
     if (at >= 0 && at < best) best = at;
   }
   return best;
@@ -490,7 +507,7 @@ export function groupSupplierPoolRows(
   // Рахуємо доречність один раз на картку: у порівнювачі це був би пошук
   // підрядка на кожну пару, тобто робота, що росте квадратом від кількості.
   const lowered = terms.map((term) => term.toLowerCase());
-  const rank = new Map(products.map((product) => [product, matchRank(product.name, lowered)]));
+  const rank = new Map(products.map((product) => [product, matchRank(product, lowered)]));
 
   // ПОРЯДОК: спершу ті, у кого відома ціна. Показуємо 40 карток зі 120 знайдених
   // («футболка» на проді), тож саме сортування вирішує, кого менеджер побачить,
