@@ -1229,6 +1229,51 @@ export async function fetchCatalogVariantsBySku(
  * стає справжньою моделлю свого виду. Під RLS користувача — так само, як
  * заводить моделі сторінка «Каталог».
  */
+/**
+ * Знайти рядок каталогу за видом і назвою.
+ *
+ * ПОТРІБНО ЧЕРЕЗ УНІКАЛЬНИЙ ІНДЕКС `catalog_models_kind_id_name_key`. Той самий
+ * товар, доданий у прорахунок удруге, не вставляється — і `bindCatalogModel`
+ * мовчки віддавав позицію БЕЗ моделі. Наслідок видно не там, де причина:
+ * у картці зникали фото й назва товару, хоч посилання й артикул лишались на
+ * місці (спіймано 08.09.2026 на «Кепці «POLO» · Червоний», доданій двічі).
+ * Той самий вид і та сама назва — це та сама модель, тож її треба взяти, а не
+ * заводити другу.
+ */
+export async function findCatalogModelByKindAndName(
+  kindId: string,
+  name: string
+): Promise<{ id: string; image_url: string | null } | null> {
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("catalog_models")
+      .select("id,image_url")
+      .eq("kind_id", kindId)
+      .eq("name", name)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as { id: string; image_url: string | null } | null) ?? null;
+  } catch {
+    // Не знайшли — не біда: далі спроба вставити, і вона скаже правду.
+    return null;
+  }
+}
+
+/** Дописати фото моделі — тільки в порожнє, щоб не затерти поставлене руками. */
+export async function updateCatalogModelImage(modelId: string, imageUrl: string): Promise<void> {
+  try {
+    await supabase
+      .schema("tosho")
+      .from("catalog_models")
+      .update({ image_url: imageUrl } as never)
+      .eq("id", modelId)
+      .is("image_url", null);
+  } catch {
+    // Фото — приємний додаток; позиція від його відсутності не ламається.
+  }
+}
+
 export async function insertCatalogModelRow(payload: {
   team_id: string;
   kind_id: string;

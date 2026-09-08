@@ -284,6 +284,25 @@ describe("groupSupplierPoolRows — злиття за артикулом", () =>
     ]);
   });
 
+  it("назва кольору б'є код: підпис-артикул поступається слову з іншого джерела", () => {
+    // Жива «Кепка «POLO»»: у Аванпринта чорний рядок без поля кольору, тож
+    // підпис падав на артикул — і плитка стояла «7077-08» поміж «Синій» і
+    // «Білий». У Тотобі той самий код названий словом.
+    const rows = [
+      row({ id: "a8", supplier_slug: "avanprint.ua", article: "7077-08", name: "Кепка «POLO»", price: null, price_kind: "retail", color: null }),
+      row({ id: "a4", supplier_slug: "avanprint.ua", article: "7077-04", name: "Кепка «POLO»", price: null, price_kind: "retail", color: "Червоний" }),
+      row({ id: "t8", article: "7077-08", name: "Кепка Polo, TM Floyd", price: 190.43, color: "чорний" }),
+      row({ id: "t4", article: "7077-04", name: "Кепка Polo, TM Floyd", price: 190.43, color: "червоний" }),
+    ];
+
+    const [product] = groupSupplierPoolRows(rows, 40);
+
+    expect(product.variants.map((variant) => variant.label)).toEqual(["чорний", "Червоний"]);
+    // І картка знову знає, що її варіанти — кольори: один підпис-код більше
+    // не гасить ознаку на всій картці.
+    expect(product.variantsAreColors).toBe(true);
+  });
+
   it("картка одного джерела теж має sources — щоб показ не мав двох гілок", () => {
     const [product] = groupSupplierPoolRows(
       [row({ id: "t1", article: "1-01", name: "Ліхтар", price: 90, url: "https://totobi/1-01" })],

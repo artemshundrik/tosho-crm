@@ -115,10 +115,17 @@ vi.mock("@/features/quotes/quote-details/queries", () => ({
   persistQuoteRuns: () => persistQuoteRuns(),
   fetchCatalogBase: () => fetchCatalogBase(),
   insertCatalogModelRow: (payload: Record<string, unknown>) => insertCatalogModelRow(payload),
+  // Пошук наявної моделі за видом і назвою — щоб той самий товар удруге не
+  // впирався в унікальний індекс (kind_id, name). Тут його немає завжди:
+  // сценарії заводять товар уперше.
+  findCatalogModelByKindAndName: () => findCatalogModelByKindAndName(),
+  updateCatalogModelImage: async () => undefined,
   fetchKindPrintPositions: async () => ({ ok: true as const, data: [] }),
   insertPrintPositionRow: (payload: Record<string, unknown>) => insertPrintPositionRow(payload),
   fetchCatalogVariantsBySku: () => fetchCatalogVariantsBySku(),
 }));
+
+const findCatalogModelByKindAndName = vi.fn(async () => null);
 
 const runDefaults = { markupRate: 40, managerRate: 10, fixedCostRate: 30, vatRate: 20 };
 

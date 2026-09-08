@@ -1,5 +1,11 @@
 import { resolveImprintPlaces, type PlaceCache } from "@/features/quotes/quote-details/imprintPlaces";
-import { insertCatalogModelRow, insertQuoteItemRow, persistQuoteRuns } from "@/features/quotes/quote-details/queries";
+import {
+  findCatalogModelByKindAndName,
+  insertCatalogModelRow,
+  insertQuoteItemRow,
+  persistQuoteRuns,
+  updateCatalogModelImage,
+} from "@/features/quotes/quote-details/queries";
 import { supabase } from "@/lib/supabaseClient";
 import type { QuoteRun } from "@/lib/toshoApi";
 
@@ -108,10 +114,28 @@ async function bindCatalogModel(draft: QuoteImportDraftItem, teamId: string): Pr
   const supplierUrl = draft.supplierUrl ?? draft.links[0] ?? null;
   const avantprintUrl = draft.avantprintUrl ?? null;
   const sku = draft.sku?.trim() || null;
+  const name = draft.name.trim().slice(0, 160);
+
+  // ТОЙ САМИЙ ТОВАР УДРУГЕ — це та сама модель, а не друга з тією ж назвою.
+  // На `catalog_models` стоїть унікальний індекс (kind_id, name), тож повторна
+  // вставка просто падала, а `bindCatalogModel` мовчки віддавав позицію БЕЗ
+  // моделі — і в картці зникали фото з назвою товару, хоч посилання й артикул
+  // лишались. Симптом читався як «фото не працює», а причина була в тому, що
+  // цю кепку вже додавали годину тому.
+  const existing = await findCatalogModelByKindAndName(catalog.kindId, name);
+  if (existing) {
+    // Фото добираємо ЛИШЕ В ПОРОЖНЄ — тим самим правилом, що й фонова
+    // розвідка: знімок, який хтось поставив руками, головніший за фід.
+    if (!existing.image_url && catalog.imageUrl) {
+      await updateCatalogModelImage(existing.id, catalog.imageUrl);
+    }
+    return { ...draft, catalog: { ...catalog, modelId: existing.id, guessed: false } };
+  }
+
   const inserted = await insertCatalogModelRow({
     team_id: teamId,
     kind_id: catalog.kindId,
-    name: draft.name.trim().slice(0, 160),
+    name,
     // ФОТО, ЯКЩО ВОНО ВЖЕ Є. Раніше тут стояв безумовний `null` із розрахунку
     // «доставить фонова розвідка»: для голого посилання інакше й не можна —
     // сторінку ще не читали. Але товар із пулу приходить із готовою адресою
@@ -132,7 +156,14 @@ async function bindCatalogModel(draft: QuoteImportDraftItem, teamId: string): Pr
       ...(sku ? { sku } : {}),
     },
   });
-  if (!inserted.ok) return draft;
+  if (!inserted.ok) {
+    // Гонка: між пошуком і вставкою модель завів хтось інший (або сусідня
+    // чернетка цього ж заїзду). Питаємо ще раз, перш ніж лишати позицію без
+    // моделі — мовчазна втрата фото коштувала дорожче за зайвий запит.
+    const raced = await findCatalogModelByKindAndName(catalog.kindId, name);
+    if (!raced) return draft;
+    return { ...draft, catalog: { ...catalog, modelId: raced.id, guessed: false } };
+  }
   return { ...draft, catalog: { ...catalog, modelId: inserted.data.id, guessed: false } };
 }
 

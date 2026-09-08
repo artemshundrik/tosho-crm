@@ -368,8 +368,15 @@ function mergeCluster(cluster: SupplierPoolDraft[]): SupplierPoolProduct {
       // приходить від оптовика сама — в Аванпринта її немає.
       if (twin.price === null && variant.price !== null) twin.price = variant.price;
       if (!twin.imageUrl && variant.imageUrl) twin.imageUrl = variant.imageUrl;
-      if (!twin.label && variant.label) twin.label = variant.label;
       if (!twin.url && variant.url) twin.url = variant.url;
+      // НАЗВА КОЛЬОРУ Б'Є КОД. `variantLabel` за браком кольору підписує
+      // варіант артикулом, і такий підпис виглядає як колір, хоч ним не є:
+      // у Аванпринта в «Кепці «POLO»» чорний рядок кольору не має, і плитка
+      // стояла «7077-08» поміж «Синій» і «Білий» (спіймано 08.09.2026).
+      // У Тотобі той самий код названий «чорний» — беремо його.
+      const twinIsCode = twin.label !== null && twin.label === twin.article;
+      const incomingIsName = Boolean(variant.label) && variant.label !== variant.article;
+      if ((!twin.label || twinIsCode) && incomingIsName) twin.label = variant.label;
     }
 
     for (const variant of own) {
@@ -414,7 +421,11 @@ function mergeCluster(cluster: SupplierPoolDraft[]): SupplierPoolProduct {
     priceMax: prices.length ? Math.max(...prices) : null,
     variantCount: variants.length,
     variants,
-    variantsAreColors: byContent.every((draft) => draft.variantsAreColors),
+    // Рахуємо по ЗЛИТОМУ списку, а не по картках: підпис-код в одного джерела
+    // гасив ознаку на всій картці, хоч у пари той самий колір названий словом.
+    variantsAreColors:
+      variants.length > 0 &&
+      variants.every((variant) => Boolean(variant.label) && variant.label !== variant.article),
     sources,
   };
 }
