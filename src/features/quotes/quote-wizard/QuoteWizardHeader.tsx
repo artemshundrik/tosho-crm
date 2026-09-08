@@ -72,19 +72,14 @@ export function getQuoteWizardHeaderIssue(value: QuoteWizardHeaderValue): string
 }
 
 /**
- * Перше незаповнене поле шапки — щоб «Створити» ВІДКРИВАЛО його, а не лаялось
- * (Артем, 09.09.2026: «щоб не помилка, а дедлайн одразу відкривався»).
+ * Перше незаповнене поле шапки — щоб «Створити» ВІДКРИВАЛО його, а не лаялось.
  *
- * Дедлайн тут поруч із замовником і менеджером, хоч і не обов'язковий: питання
- * ставиться один раз, а створення він не блокує — за це відповідає
- * `getQuoteWizardHeaderIssue`, і дедлайна в ньому немає.
+ * Дедлайна тут немає навмисно (Артем, 09.09.2026): порожній дедлайн — робочий
+ * стан прорахунку, а не пропуск, тож і питати про нього нема чого.
  */
-export function getQuoteWizardHeaderPrompt(
-  value: QuoteWizardHeaderValue
-): "party" | "manager" | "deadline" | null {
+function firstMissingHeaderField(value: QuoteWizardHeaderValue): "party" | "manager" | null {
   if (!value.partyId) return "party";
   if (!value.managerId) return "manager";
-  if (!value.deadlineAt) return "deadline";
   return null;
 }
 
@@ -132,13 +127,13 @@ export function QuoteWizardHeader({
   /*
     «СТВОРИТИ» ВЕДЕ ДО ПОЛЯ, А НЕ ЛАЄТЬСЯ. Дотепер натиск без замовника лише
     хитав поле, і людина мусила сама здогадатись клацнути по ньому. Тепер
-    сигнал відкриває перше незаповнене: замовник → менеджер → дедлайн.
+    сигнал відкриває перше незаповнене: замовник, потім менеджер.
     Хитання лишилось — воно каже, КУДИ дивитись, поки панель ще відкривається.
 
     Ефект слухає САМЕ сигнал, а не порожнє поле: інакше панель відкривалась би
     сама, щойно замовника прибрали хрестиком.
   */
-  const promptField = getQuoteWizardHeaderPrompt(value);
+  const promptField = firstMissingHeaderField(value);
   const promptRef = React.useRef(promptField);
   promptRef.current = promptField;
   React.useEffect(() => {
@@ -146,7 +141,6 @@ export function QuoteWizardHeader({
     const missing = promptRef.current;
     if (missing === "party") setPartyPickerOpen(true);
     else if (missing === "manager") setManagerPopoverOpen(true);
-    else if (missing === "deadline") setDeadlineOpen(true);
   }, [nudgeSignal]);
 
   // Пошук замовників — із тією ж паузою в 250 мс, що й у білдері: без неї

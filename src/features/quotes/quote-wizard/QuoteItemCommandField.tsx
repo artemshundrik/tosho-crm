@@ -233,18 +233,16 @@ export function QuoteItemCommandField({
   const [expandedPoolKey, setExpandedPoolKey] = React.useState<string | null>(null);
   const [allColors, setAllColors] = React.useState(false);
   /**
-   * ОБРАНИЙ КОЛІР СТАВ СТАНОМ, І ЦЕ ГОЛОВНА ЗМІНА (макет затверджено 08.09.2026).
+   * КЛІК ПО КОЛЬОРУ ДОДАЄ ПОЗИЦІЮ (Артем, 09.09.2026).
    *
-   * Раніше клік по кольору ОДРАЗУ додавав позицію, тож «обраного кольору» як
-   * поняття не існувало — а без нього фото не мало за чим іти й лишалось фотом
-   * випадкового кольору з фіда. Тепер клік обирає, фото рядка стає фотом того
-   * кольору, і аж потім «Додати». Два кліки замість одного, зате менеджер
-   * бачить, що саме він кладе в прорахунок.
+   * Один день між рішеннями: 08.09 колір став СТАНОМ — плитка обирала, а
+   * додавала окрема кнопка, щоб фото рядка встигло стати фотом того кольору.
+   * Відтоді плитка навчилась показувати і фото кольору, і його код просто на
+   * собі, тож підтверджувати стало нічого: кнопка повторювала вже зроблений
+   * вибір і до того ж накривала «ще N».
    */
-  const [pickedVariantId, setPickedVariantId] = React.useState<string | null>(null);
   React.useEffect(() => {
     setAllColors(false);
-    setPickedVariantId(null);
   }, [expandedPoolKey]);
 
   /**
@@ -421,6 +419,16 @@ export function QuoteItemCommandField({
       <PopoverContent
         align="start"
         sideOffset={6}
+        /*
+          МЕЖА — САМЕ ВІКНО, А НЕ ЕКРАН (Артем, 09.09.2026: «щоб цей поповер не
+          вилазив за модалку»). Поповер портується в body, тож за замовчуванням
+          Radix міряє відстань до краю ЕКРАНА — і на довгому списку підказка
+          звисала нижче вікна прорахунку, наче окрема сторінка поверх нього.
+          Межа рахується на кожному відкритті: вікно вже в DOM, коли поле
+          отримало фокус.
+        */
+        collisionBoundary={inputRef.current?.closest('[role="dialog"]') ?? null}
+        collisionPadding={12}
         className="w-[var(--radix-popover-trigger-width)] p-0"
         // Фокус лишається в полі: список — це підказка до набору, а не форма.
         onOpenAutoFocus={(event) => event.preventDefault()}
@@ -520,7 +528,6 @@ export function QuoteItemCommandField({
           {visiblePool.map((product, index) => {
             const price = formatSupplierPoolPrice(product);
             const expanded = expandedPoolKey === product.key;
-            const picked = expanded ? product.variants.find((variant) => variant.id === pickedVariantId) ?? null : null;
             const unit = product.variantsAreColors ? "кольор." : "вар.";
             return (
               <li
@@ -537,7 +544,7 @@ export function QuoteItemCommandField({
               >
                 <span className="flex items-center gap-3">
                   {/* Фото йде за обраним кольором; поки не обрано — фото моделі. */}
-                  <SuggestionPhoto url={picked?.imageUrl ?? product.imageUrl} name={product.name} />
+                  <SuggestionPhoto url={product.imageUrl} name={product.name} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium" title={product.name}>{product.name}</span>
                     {/* Доменів у злитої картки два — та сама річ у нашому
@@ -661,17 +668,21 @@ export function QuoteItemCommandField({
                         key={variant.id}
                         type="button"
                         title={[variant.label, variant.article].filter(Boolean).join(" · ")}
-                        aria-pressed={pickedVariantId === variant.id}
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={(event) => {
                           event.stopPropagation();
-                          setPickedVariantId(pickedVariantId === variant.id ? null : variant.id);
+                          // КЛІК ПО КОЛЬОРУ — ЦЕ Й Є ВИБІР (Артем, 09.09.2026).
+                          // Проміжний крок «спершу обери, потім натисни
+                          // Додати» був потрібен, поки плитка показувала самий
+                          // колір: тоді підтвердження давало побачити фото й
+                          // код. Тепер код стоїть на самій плитці, тож друга
+                          // кнопка лише повторювала вже зроблений вибір — і
+                          // накривала «ще N» (знімок Артема).
+                          onPickSupplier(applySupplierVariant(product, variant));
+                          onValueChange("");
+                          setExpandedPoolKey(null);
                         }}
-                        className={cn(
-                          "flex items-center gap-2 rounded-[var(--radius-md)] border py-1 pl-1 pr-2.5 text-left transition-colors",
-                          pickedVariantId === variant.id
-                            ? "border-foreground bg-muted"
-                            : "border-border/60 hover:border-foreground"
-                        )}
+                        className="flex items-center gap-2 rounded-[var(--radius-md)] border border-border/60 py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground hover:bg-muted/60"
                       >
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
                           <VariantPhoto url={variant.imageUrl} label={variant.label} />
@@ -688,22 +699,6 @@ export function QuoteItemCommandField({
                         </span>
                       </button>
                     ))}
-                    {picked ? (
-                      /* Додає саме кнопка, а не плитка: плитка тепер обирає. */
-                      <button
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onPickSupplier(applySupplierVariant(product, picked));
-                          onValueChange("");
-                          setExpandedPoolKey(null);
-                        }}
-                        className="ml-auto self-center rounded-[var(--radius-md)] bg-foreground px-3 py-1.5 text-2xs font-medium text-background transition-colors hover:bg-[var(--btn-solid-hover)]"
-                      >
-                        Додати в прорахунок
-                      </button>
-                    ) : null}
                     {!allColors && product.variants.length > COLOR_CAP ? (
                       <button
                         type="button"
@@ -712,7 +707,9 @@ export function QuoteItemCommandField({
                           event.stopPropagation();
                           setAllColors(true);
                         }}
-                        className="rounded-[var(--radius-md)] border border-dashed border-border px-2.5 text-2xs text-muted-foreground transition-colors hover:text-foreground"
+                        // Та сама висота, що в плитки кольору: інакше «ще N»
+                        // з'їжджало під ряд і ставало окремим рядком.
+                        className="self-stretch rounded-[var(--radius-md)] border border-dashed border-border px-2.5 text-2xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
                       >
                         ще {product.variants.length - COLOR_CAP}
                       </button>

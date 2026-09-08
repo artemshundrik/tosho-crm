@@ -13,7 +13,6 @@ import { QuoteWizardDialog } from "./QuoteWizardDialog";
 import {
   createEmptyQuoteWizardHeader,
   getQuoteWizardHeaderIssue,
-  getQuoteWizardHeaderPrompt,
   QuoteWizardHeader,
   type QuoteWizardHeaderValue,
 } from "./QuoteWizardHeader";
@@ -81,7 +80,6 @@ export function TestQuoteWizardButton({
   }, [currentUserId, header.managerId]);
 
   const headerIssue = getQuoteWizardHeaderIssue(header);
-  const headerPrompt = getQuoteWizardHeaderPrompt(header);
 
   /**
    * Прорахунок створюється тут — після чернеток, із шапки. Тиражі писатиме
@@ -153,7 +151,6 @@ export function TestQuoteWizardButton({
               />
             )}
             headerIssue={headerIssue}
-            headerPrompt={headerPrompt}
             runDefaultsFor={runDefaultsFor}
             onPrepareQuote={prepareQuote}
             onCreated={onCreated}
