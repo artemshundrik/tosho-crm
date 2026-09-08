@@ -390,6 +390,12 @@ export function QuoteItemCommandField({
                         стоїть той, чия ціна показана праворуч; підказка
                         називає товар його ж словами, бо назва на картці —
                         Аванпринтова.
+                        ПІДСВІЧУЄТЬСЯ ТОЙ, НА ЯКОМУ КУРСОР, а не обидва
+                        разом. Спершу тут стояв `group-hover` від рядка — і при
+                        наведенні будь-де синіли обидва домени одразу, ніби це
+                        одне посилання (Артем: «це якось странно, вони двома»).
+                        Тепер кожен домен сам собі група: свій колір, своє
+                        підкреслення, своя іконка.
                         Перехід на сайт живе НА САМОМУ ДОМЕНІ, а не в правому
                         краю рядка. Спершу я поставив іконку праворуч, поруч із
                         ціною — і вона посунула всю праву частину рядка, бо
@@ -415,7 +421,7 @@ export function QuoteItemCommandField({
                                 event.stopPropagation();
                                 event.preventDefault();
                               }}
-                              className="inline-flex items-center gap-0.5 align-baseline underline-offset-2 transition-colors group-hover:text-primary group-hover:underline"
+                              className="group/site inline-flex items-center gap-0.5 align-baseline underline-offset-2 transition-colors hover:text-primary hover:underline"
                             >
                               {source.supplierSlug}
                               {/* Іконка — тільки на ОСТАННЬОМУ домені. Вона
@@ -427,7 +433,7 @@ export function QuoteItemCommandField({
                                   причина, з якої її колись прибрали з правого
                                   краю. */}
                               {sourceIndex === product.sources.length - 1 ? (
-                                <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+                                <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-0 transition-opacity group-hover/site:opacity-100" />
                               ) : null}
                             </a>
                           ) : (
@@ -475,9 +481,7 @@ export function QuoteItemCommandField({
                         className="flex items-center gap-1.5 rounded-md border border-border/60 py-0.5 pl-0.5 pr-2 text-2xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
                       >
                         <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
-                          {variant.imageUrl ? (
-                            <img src={variant.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                          ) : null}
+                          <VariantPhoto url={variant.imageUrl} label={variant.label} />
                         </span>
                         <span className="max-w-[8rem] truncate">{variant.label ?? "Без підпису"}</span>
                       </button>
@@ -590,14 +594,54 @@ function useDebouncedValue(value: string, delay: number) {
   return debounced;
 }
 
+/**
+ * Фото рядка. «Немає адреси» і «адреса є, але мертва» мають виглядати ОДНАКОВО —
+ * значком «фото немає», а не битою картинкою браузера.
+ *
+ * Заміряно 08.09.2026 на запиті «футболка»: із 354 карток 6 показували порожню
+ * плитку, усі шість — Бергамо. Адреси там не з фіда, а виведені за правилом
+ * `<артикул>_a.jpg`, і частина таких кадрів на сайті просто називається інакше.
+ * Аванпринт і Тотобі віддали 124 з 124 живих. Без цієї підстраховки браузер
+ * малює зламану картинку, і виглядає це як поломка CRM, а не як дірка у фіді.
+ */
 function SuggestionPhoto({ url, name }: { url: string | null; name: string }) {
   const base = "h-9 w-9 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-background";
-  if (!url) {
+  // Ловимо саме АДРЕСУ, а не прапорець: рядок списку React переживає зміну
+  // товару, і голий `failed` лишився б піднятим для наступного, живого фото.
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  if (!url || failedUrl === url) {
     return (
       <span className={cn(base, "grid place-items-center bg-muted/40")} aria-hidden>
         <ImageOff className="h-3.5 w-3.5 text-muted-foreground/50" />
       </span>
     );
   }
-  return <img src={url} alt={name} loading="lazy" className={cn(base, "object-contain")} />;
+  return (
+    <img
+      src={url}
+      alt={name}
+      loading="lazy"
+      onError={() => setFailedUrl(url)}
+      className={cn(base, "object-contain")}
+    />
+  );
+}
+
+/** Плитка кольору — те саме правило, тільки дрібніше. У Бергамо ПОЛОВИНА
+ *  колірних рядків без власного фото (5135 із 10076), тож порожніх плиток тут
+ *  більше, ніж у списку, і значок потрібен ще дужче. */
+function VariantPhoto({ url, label }: { url: string | null; label: string | null }) {
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  if (!url || failedUrl === url) {
+    return <ImageOff className="h-3 w-3 text-muted-foreground/50" aria-hidden />;
+  }
+  return (
+    <img
+      src={url}
+      alt={label ?? ""}
+      loading="lazy"
+      onError={() => setFailedUrl(url)}
+      className="h-full w-full object-cover"
+    />
+  );
 }
