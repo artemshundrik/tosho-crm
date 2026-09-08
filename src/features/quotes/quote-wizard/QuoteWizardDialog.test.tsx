@@ -435,8 +435,10 @@ describe("QuoteWizardDialog — один екран", () => {
     // в базу» під назвою каже те саме, і третій раз забирав ширину (REQ-250#p36).
     expect(kindChip).toHaveTextContent("Худі");
     expect(kindChip).not.toHaveTextContent("припущення");
+    // Пунктир — єдина ознака, що моделі ще немає: службову помітку «додасться
+    // в базу» прибрано, вона описувала нашу кухню, а не товар (REQ-250#p43).
     expect(kindChip.className).toContain("border-dashed");
-    expect(screen.getByText("додасться в базу")).toBeInTheDocument();
+    expect(screen.queryByText("додасться в базу")).not.toBeInTheDocument();
     expect(await screen.findByRole("group", { name: "Нанесення" })).toBeInTheDocument();
 
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "50");

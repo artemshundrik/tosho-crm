@@ -236,7 +236,6 @@ export function ImportDraftRow({
   const hasMeta =
     Boolean(color || sku) ||
     draft.sourceRows.length > 0 ||
-    Boolean(draft.catalog && !draft.catalog.modelId) ||
     Boolean(draft.variant) ||
     draft.flags.length > 0 ||
     Boolean(preview && preview.status !== "pending" && preview.status !== "done");
@@ -323,10 +322,13 @@ export function ImportDraftRow({
               {draft.sourceRows.length > 0 ? (
                 <span className="text-muted-foreground">рядок {draft.sourceRows.join(", ")}</span>
               ) : null}
-              {draft.catalog && !draft.catalog.modelId ? (
-                // Вид є, моделі ще немає: на «Створити» товар стане рядком каталогу.
-                <span className="text-muted-foreground">додасться в базу</span>
-              ) : null}
+              {/*
+                Помітки «додасться в базу» тут більше немає (Артем, 09.09.2026).
+                Вона описувала не товар, а нашу внутрішню кухню — і стояла рівно
+                там, де людина читає паспорт товару: колір, код. Те, що моделі
+                ще немає в каталозі, і далі видно з пунктирного чипа виду, а
+                рядок каталогу як заводився на «Створити», так і заводиться.
+              */}
               {/* Зв'язок варіантів — словами. Бедж «альтернатива» казав, що щось
                   не так, але не казав що саме: під номером 30 у файлі лежать два
                   різних дзен-сади, і це вибір із двох, а не два товари. */}
