@@ -561,11 +561,10 @@ export function QuoteItemCommandField({
                         stopPropagation обов'язковий — клік по рядку КОМІТИТЬ
                         позицію, тож без нього «глянути» означало б «додати». */}
                     <span className="block truncate text-2xs text-muted-foreground">
-                      {product.article ? (
-                        `${product.article} · `
-                      ) : needsVariantChoice(product) ? (
-                        <span className="text-muted-foreground/70">код у кожного кольору свій · </span>
-                      ) : null}
+                      {/* Підпису «код у кожного кольору свій» тут більше немає
+                          (Артем, 09.09.2026): плитки під карткою показують код
+                          біля кожного кольору, тож пояснювати нема чого. */}
+                      {product.article ? `${product.article} · ` : null}
                       {product.sources.map((source, sourceIndex) => (
                         <React.Fragment key={source.supplierSlug}>
                           {sourceIndex > 0 ? " · " : null}
@@ -634,19 +633,10 @@ export function QuoteItemCommandField({
                   </span>
                 </span>
 
-                {expanded ? (
-                  <span className="block pl-11">
-                    {/* Каже, ЧОМУ клік по рядку не додав товар. Без цього
-                        розкриття кольорів виглядає як «не спрацювало». */}
-                    {needsVariantChoice(product) ? (
-                      <span className="mt-1.5 block text-2xs text-muted-foreground">
-                        {picked
-                          ? `У прорахунок поїде код ${picked.article ?? "—"}`
-                          : "Оберіть колір — його артикул поїде в замовлення"}
-                      </span>
-                    ) : null}
-                  </span>
-                ) : null}
+                {/* Рядка «Оберіть колір — його артикул поїде в замовлення»
+                    більше немає (Артем, 09.09.2026). Він писався тоді, коли
+                    плитки показували самі кольори; тепер під кожним кольором
+                    стоїть його код, і речення повторювало те, що видно. */}
                 {expanded ? (
                   /**
                    * ПЛИТКИ КОЛЬОРУ ПЕРЕРОБЛЕНІ (Артем, 08.09.2026: «мені не

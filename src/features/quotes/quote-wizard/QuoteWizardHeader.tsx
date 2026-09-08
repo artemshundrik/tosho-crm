@@ -71,6 +71,23 @@ export function getQuoteWizardHeaderIssue(value: QuoteWizardHeaderValue): string
   return null;
 }
 
+/**
+ * Перше незаповнене поле шапки — щоб «Створити» ВІДКРИВАЛО його, а не лаялось
+ * (Артем, 09.09.2026: «щоб не помилка, а дедлайн одразу відкривався»).
+ *
+ * Дедлайн тут поруч із замовником і менеджером, хоч і не обов'язковий: питання
+ * ставиться один раз, а створення він не блокує — за це відповідає
+ * `getQuoteWizardHeaderIssue`, і дедлайна в ньому немає.
+ */
+export function getQuoteWizardHeaderPrompt(
+  value: QuoteWizardHeaderValue
+): "party" | "manager" | "deadline" | null {
+  if (!value.partyId) return "party";
+  if (!value.managerId) return "manager";
+  if (!value.deadlineAt) return "deadline";
+  return null;
+}
+
 const CURRENCIES = ["UAH", "USD", "EUR"] as const;
 
 type MemberOption = { id: string; label: string; avatarUrl: string | null };
@@ -97,7 +114,8 @@ export function QuoteWizardHeader({
   layout?: "row" | "column";
   /**
    * Лічильник «покажи, що бракує саме тут». Зростає, коли натиснули «Створити»
-   * без замовника; зміна значення перезапускає анімацію через `key`.
+   * з незаповненою шапкою; зміна значення перезапускає анімацію через `key`
+   * і ВІДКРИВАЄ перше незаповнене поле.
    */
   nudgeSignal?: number;
 }) {
@@ -110,6 +128,26 @@ export function QuoteWizardHeader({
   const [deadlineOpen, setDeadlineOpen] = React.useState(false);
 
   const patch = (next: Partial<QuoteWizardHeaderValue>) => onChange({ ...value, ...next });
+
+  /*
+    «СТВОРИТИ» ВЕДЕ ДО ПОЛЯ, А НЕ ЛАЄТЬСЯ. Дотепер натиск без замовника лише
+    хитав поле, і людина мусила сама здогадатись клацнути по ньому. Тепер
+    сигнал відкриває перше незаповнене: замовник → менеджер → дедлайн.
+    Хитання лишилось — воно каже, КУДИ дивитись, поки панель ще відкривається.
+
+    Ефект слухає САМЕ сигнал, а не порожнє поле: інакше панель відкривалась би
+    сама, щойно замовника прибрали хрестиком.
+  */
+  const promptField = getQuoteWizardHeaderPrompt(value);
+  const promptRef = React.useRef(promptField);
+  promptRef.current = promptField;
+  React.useEffect(() => {
+    if (nudgeSignal <= 0) return;
+    const missing = promptRef.current;
+    if (missing === "party") setPartyPickerOpen(true);
+    else if (missing === "manager") setManagerPopoverOpen(true);
+    else if (missing === "deadline") setDeadlineOpen(true);
+  }, [nudgeSignal]);
 
   // Пошук замовників — із тією ж паузою в 250 мс, що й у білдері: без неї
   // кожна літера це два запити до бази.

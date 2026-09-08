@@ -105,6 +105,7 @@ export function QuoteWizardDialog({
   teamId,
   header,
   headerIssue,
+  headerPrompt,
   runDefaultsFor,
   onPrepareQuote,
   onCreated,
@@ -121,6 +122,12 @@ export function QuoteWizardDialog({
   header: (nudgeSignal: number) => React.ReactNode;
   /** Чого бракує в шапці, щоб створювати. Порожньо — можна. */
   headerIssue: string | null;
+  /**
+   * Перше незаповнене поле шапки — саму шапку малює батько, тож про дедлайн
+   * вікно інакше й не дізналося б. Потрібне лише для м'якого питання про
+   * дедлайн: решту гейтів тримає `headerIssue`.
+   */
+  headerPrompt?: "party" | "manager" | "deadline" | null;
   runDefaultsFor: (kind: QuoteKindValue) => QuoteImportRunDefaults;
   /** Створити прорахунок і віддати його id. Кличеться ПІСЛЯ прев'ю. */
   onPrepareQuote: (kind: QuoteKindValue) => Promise<string | null>;
@@ -145,6 +152,14 @@ export function QuoteWizardDialog({
   const [linkBusy, setLinkBusy] = React.useState(false);
   /** Скільки разів людина натиснула «Створити», а шапка була неповна. */
   const [headerNudge, setHeaderNudge] = React.useState(0);
+  /*
+    Дедлайн питається ОДИН РАЗ. Він не обов'язковий (у базу їде `null`), тож
+    робити з нього стіну не можна — але й мовчки створювати прорахунок без
+    дати теж не варто. Тому перший натиск «Створити» відкриває календар, а
+    другий створює як є: людина побачила питання й відповіла на нього тим, що
+    натиснула ще раз.
+  */
+  const [deadlineAsked, setDeadlineAsked] = React.useState(false);
   /** Фото й назви для позицій «за посиланням»: черга імпорту сюди не заходить. */
   const [linkPreviews, setLinkPreviews] = React.useState<Record<string, QuoteImportLinkPreview>>({});
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -197,6 +212,7 @@ export function QuoteWizardDialog({
     setFieldValue("");
     setLinkBusy(false);
     setHeaderNudge(0);
+    setDeadlineAsked(false);
     setLinkPreviews({});
     resetLinkPreviews();
     resetKindOptions();
@@ -509,6 +525,13 @@ export function QuoteWizardDialog({
   const handleCreate = async () => {
     if (!canSubmit) return;
     if (!appendTo && headerIssue) {
+      setHeaderNudge((count) => count + 1);
+      return;
+    }
+    // Дедлайн — м'яке питання: сигнал відкриє календар у шапці, а наступний
+    // натиск пройде далі, хоч би на що людина відповіла.
+    if (!appendTo && headerPrompt === "deadline" && !deadlineAsked) {
+      setDeadlineAsked(true);
       setHeaderNudge((count) => count + 1);
       return;
     }
@@ -887,7 +910,7 @@ export function QuoteWizardDialog({
               */}
               {/* Один рядок: підвал пояснює, а не переносить вікно — довше
                   речення обрізається, повний текст лишається в підказці. */}
-              <span className="min-w-0 truncate text-xs text-muted-foreground" title={footerMeta}>
+              <span className="min-w-0 flex-1 truncate text-center text-xs text-muted-foreground" title={footerMeta}>
                 {footerMeta}
               </span>
               <div className="flex gap-2">

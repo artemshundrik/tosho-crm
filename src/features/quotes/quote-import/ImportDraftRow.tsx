@@ -82,23 +82,34 @@ const currencyLabel = (code: string) => (code === "UAH" ? "грн" : code);
  * відкривати нема сенсу.
  */
 export function ImportItemPhoto({ preview, name }: { preview: QuoteImportLinkPreview | undefined; name: string }) {
-  // 52 px (REQ-250#p34). Було 44 — розмір із часів, коли позиція вміщалась в
-  // один рядок і фото лишалось упізнаванням. Тепер у смузі вміщається колір, і
-  // фото відповідає на «той самий колір я обрав?» — на 44 px відтінок не
-  // читався. 64 px, від яких відмовились у REQ-182#p20, і далі завеликі: на
-  // шести позиціях вони з'їдали пів екрана.
-  const base = "h-13 w-13 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60";
+  /*
+    ВИСОТА — ЯК У ТЕКСТУ ПОРУЧ, ШИРИНА — ЯК У САМОГО ЗНІМКА (Артем,
+    09.09.2026). Квадрат 52 px домальовував товару поля: реглан вертикальний,
+    кепка широка, а плитка в обох випадках однакова, і всередині лишалось
+    порожньо. Тепер висота стала — 60 px, рівно стільки, скільки займають три
+    рядки поруч (назва + колір з кодом + джерела; заміряно 61 px), — а ширину
+    рахує сам браузер за пропорціями знімка.
+
+    ЧОМУ НЕ `self-stretch`, ЯК ХОТІЛОСЬ. Розтягування бере висоту від найвищого
+    в рядку, а найвищим виявлявся сам знімок: із `w-auto` його власна висота
+    впиралась у стелю ширини (80 px) і піднімала весь рядок до 151 px замість
+    132. Стала висота тримає рядок незалежно від того, що прийшло з фіда.
+  */
+  const base =
+    "h-15 w-auto min-w-11 max-w-20 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60";
 
   if (!preview) {
     return (
-      <div className={cn(base, "flex items-center justify-center bg-muted/40")} aria-hidden>
+      <div className={cn(base, "aspect-square flex items-center justify-center bg-muted/40")} aria-hidden>
         <ImageOff className="h-3.5 w-3.5 text-muted-foreground/40" />
       </div>
     );
   }
 
   if (preview.status === "pending") {
-    return <div className={cn(base, "animate-pulse bg-muted/60")} aria-label={`Фото «${name}» ще їде`} />;
+    return (
+      <div className={cn(base, "aspect-square animate-pulse bg-muted/60")} aria-label={`Фото «${name}» ще їде`} />
+    );
   }
 
   if (preview.status === "done") {
@@ -119,7 +130,7 @@ export function ImportItemPhoto({ preview, name }: { preview: QuoteImportLinkPre
 
   return (
     <div
-      className={cn(base, "flex items-center justify-center bg-muted/40")}
+      className={cn(base, "aspect-square flex items-center justify-center bg-muted/40")}
       title={preview.reason}
       aria-label={`Фото «${name}» не доїхало: ${preview.reason}`}
     >
