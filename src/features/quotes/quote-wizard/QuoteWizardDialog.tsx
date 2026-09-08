@@ -29,7 +29,7 @@ import type {
 } from "@/features/quotes/quote-import/types";
 import { countSettledPreviews, fetchLinkPreview, useLinkPreviews } from "@/features/quotes/quote-import/useLinkPreviews";
 import { pluralWordUk } from "@/lib/lastSeen";
-import type { SupplierPoolProduct } from "@/lib/supplierPool";
+import { SHOP_SUPPLIER_SLUG, type SupplierPoolProduct } from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
 
 import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions";
@@ -357,8 +357,13 @@ export function QuoteWizardDialog({
    * станом, що й для позицій «за посиланням»: рядок прев'ю не розрізняє, звідки
    * картинка, і не мусить.
    *
-   * Посилання на товар у постачальника свідомо НЕ пишемо в links: це зробило б
-   * сайт джерелом закупівлі мовчки, а таке рішення ухвалює людина (p9/p10).
+   * ПОСИЛАННЯ ТЕПЕР ПИШЕМО, і це зміна рішення від 08.09.2026. Раніше тут
+   * стояло «свідомо не пишемо в links: це зробило б сайт джерелом закупівлі
+   * мовчки». Осторога лишається чинною саме про `links` — вони означають «цю
+   * позицію додали посиланням» і будять розвідку сторінки. Але дві кнопки на
+   * картці позиції — це не джерело закупівлі, а «подивитись товар», і сірими
+   * вони стояли рівно тому, що ми знали адреси й мовчали (Артем: «нема
+   * картинка, нема посилань»). Тому адреси йдуть окремими полями, повз `links`.
    */
   const handleAddSupplierProduct = (product: SupplierPoolProduct) => {
     setError(null);
@@ -378,9 +383,15 @@ export function QuoteWizardDialog({
      */
     const guess =
       guessKindFromTitle(catalog.kinds, product.category) ?? guessKindFromTitle(catalog.kinds, product.name);
+    // «Наш магазин» і «оптовик» — різні кнопки на картці, тож і розкладаємо їх
+    // за роллю джерела, а не за порядком у списку.
+    const shop = product.sources.find((source) => source.supplierSlug === SHOP_SUPPLIER_SLUG);
+    const wholesale = product.sources.find((source) => source.supplierSlug !== SHOP_SUPPLIER_SLUG);
     const draft = makeDraft({
       name: product.name,
       sku: product.article,
+      supplierUrl: wholesale?.url ?? null,
+      avantprintUrl: shop?.url ?? null,
       catalog: guess
         ? {
             modelId: null,
@@ -388,7 +399,10 @@ export function QuoteWizardDialog({
             typeId: guess.typeId,
             kindName: guess.kindName,
             typeName: guess.typeName,
-            imageUrl: null,
+            // Фото пулу — те саме, яке людина щойно бачила в підказці. Звідси
+            // воно доїжджає до моделі каталогу (`bindCatalogModel`), а з неї —
+            // на картку позиції.
+            imageUrl: product.imageUrl,
             guessed: true,
           }
         : null,

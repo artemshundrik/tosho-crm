@@ -105,16 +105,26 @@ export async function parseImportFile(
 async function bindCatalogModel(draft: QuoteImportDraftItem, teamId: string): Promise<QuoteImportDraftItem> {
   const catalog = draft.catalog;
   if (!catalog || catalog.modelId || !draft.name.trim()) return draft;
-  const supplierUrl = draft.links[0] ?? null;
+  const supplierUrl = draft.supplierUrl ?? draft.links[0] ?? null;
+  const avantprintUrl = draft.avantprintUrl ?? null;
   const sku = draft.sku?.trim() || null;
   const inserted = await insertCatalogModelRow({
     team_id: teamId,
     kind_id: catalog.kindId,
     name: draft.name.trim().slice(0, 160),
-    image_url: null,
+    // ФОТО, ЯКЩО ВОНО ВЖЕ Є. Раніше тут стояв безумовний `null` із розрахунку
+    // «доставить фонова розвідка»: для голого посилання інакше й не можна —
+    // сторінку ще не читали. Але товар із пулу приходить із готовою адресою
+    // знімка, і викидати її означало показувати сірий квадрат замість того, що
+    // менеджер щойно бачив у підказці (Артем, 08.09.2026).
+    image_url: catalog.imageUrl ?? null,
     metadata: {
       source: { vendor: "link", url: supplierUrl, importedAt: new Date().toISOString() },
       ...(supplierUrl ? { supplierUrl } : {}),
+      // Друга кнопка картки. Модель живе довше за прорахунок, тож посилання
+      // лягає і сюди — інакше наступний прорахунок із цією ж моделлю знову
+      // почався б із сірої кнопки.
+      ...(avantprintUrl ? { avantprintUrl } : {}),
       // Артикул у КАТАЛОЗІ, а не лише в позиції (REQ-247): каталог живе довше
       // за прорахунок, і пошук моделі по SKU на сторінці каталогу читає саме
       // `metadata.sku`. Без цього товар, доданий посиланням, лишався б у

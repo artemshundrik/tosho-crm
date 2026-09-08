@@ -72,6 +72,7 @@ import { parseQuoteItemMetadata } from "@/features/quotes/quote-details/quoteIte
 import { QuoteImportDialog } from "@/features/quotes/quote-import/QuoteImportDialog";
 import { useQuoteImportResearch } from "@/features/quotes/quote-import/useQuoteImportResearch";
 import { normalizeUnitLabel } from "@/lib/units";
+import { QuoteItemSupplierLinks } from "@/features/quotes/quote-details/QuoteItemSupplierLinks";
 import {
   DESIGN_TASK_TYPE_ICONS,
   DESIGN_TASK_TYPE_LABELS,
@@ -195,7 +196,6 @@ import {
   ChevronDown,
   Loader2,
   Package,
-  ExternalLink,
   Lock,
   Calculator,
   Palette,
@@ -4651,59 +4651,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               </div>
 
                               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                                {(() => {
-                                  const linkMeta = item.metadata as unknown as Record<string, unknown> | null;
-                                  const snapshotSupplier =
-                                    typeof linkMeta?.supplierUrl === "string" ? linkMeta.supplierUrl : "";
-                                  const snapshotAvantprint =
-                                    typeof linkMeta?.avantprintUrl === "string" ? linkMeta.avantprintUrl : "";
-                                  // Prefer the live catalog model link so editing the model updates
-                                  // every quote instantly; fall back to the snapshot on the item.
-                                  const linkModel = catalogTypes
-                                    .find((type) => type.id === resolvedTypeId)
-                                    ?.kinds.find((kind) => kind.id === resolvedKindId)
-                                    ?.models.find((model) => model.id === resolvedModelId);
-                                  const supplierUrl = (linkModel?.metadata?.supplierUrl ?? snapshotSupplier).trim();
-                                  const avantprintUrl = (
-                                    linkModel?.metadata?.avantprintUrl ?? snapshotAvantprint
-                                  ).trim();
-                                  const renderLinkButton = (url: string, label: string, hint: string) =>
-                                    url ? (
-                                      <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 transition-colors">
-                                        <a href={url} target="_blank" rel="noopener noreferrer">
-                                          {label}
-                                          <ExternalLink className="h-3.5 w-3.5" />
-                                        </a>
-                                      </Button>
-                                    ) : (
-                                      <HoverTip asChild label={hint}>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-8 gap-1.5 border-dashed text-muted-foreground/70"
-                                          disabled
-                                          aria-label={hint}
-                                        >
-                                          {label}
-                                          <ExternalLink className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </HoverTip>
-                                    );
-                                  return (
-                                    <>
-                                      {renderLinkButton(
-                                        supplierUrl,
-                                        "Постачальник",
-                                        "Посилання на товар у постачальника зʼявиться після його додавання в товарі"
-                                      )}
-                                      {renderLinkButton(
-                                        avantprintUrl,
-                                        "Аванпринт",
-                                        "Посилання на товар на Аванпринті зʼявиться після його додавання в товарі"
-                                      )}
-                                    </>
-                                  );
-                                })()}
+                                <QuoteItemSupplierLinks
+                                  metadata={item.metadata}
+                                  catalogTypes={catalogTypes}
+                                  typeId={resolvedTypeId}
+                                  kindId={resolvedKindId}
+                                  modelId={resolvedModelId}
+                                />
                                 {canEditQuoteContent ? (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>

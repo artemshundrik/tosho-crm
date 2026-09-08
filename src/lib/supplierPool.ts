@@ -25,11 +25,15 @@ export {
   baseProductName,
   formatSupplierPoolPrice,
   groupSupplierPoolRows,
+  normalizeArticle,
+  SHOP_SUPPLIER_SLUG,
+  supplierNameFromUrl,
   transliterateSearchTerm,
 } from "@/lib/supplierPoolRows";
 export type {
   SupplierPoolProduct,
   SupplierPoolRow,
+  SupplierPoolSource,
   SupplierPoolVariant,
 } from "@/lib/supplierPoolRows";
 

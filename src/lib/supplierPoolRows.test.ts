@@ -5,6 +5,7 @@ import {
   baseProductName,
   groupSupplierPoolRows,
   normalizeArticle,
+  supplierNameFromUrl,
   transliterateSearchTerm,
   type SupplierPoolRow,
 } from "./supplierPoolRows";
@@ -300,5 +301,19 @@ describe("normalizeArticle", () => {
     expect(normalizeArticle("  18000-cg 3c ")).toBe("18000-CG 3C");
     expect(normalizeArticle("   ")).toBeNull();
     expect(normalizeArticle(null)).toBeNull();
+  });
+});
+
+describe("supplierNameFromUrl", () => {
+  it("називає знайоме джерело по-людськи, а незнайоме — доменом", () => {
+    expect(supplierNameFromUrl("https://totobi.com.ua/kepka/")).toBe("Тотобі");
+    expect(supplierNameFromUrl("https://www.avanprint.ua/x")).toBe("Аванпринт");
+    expect(supplierNameFromUrl("https://some-shop.com/x")).toBe("some-shop.com");
+  });
+
+  it("на порожньому й ламаному значенні повертає null, а не вигадує назву", () => {
+    expect(supplierNameFromUrl(null)).toBeNull();
+    expect(supplierNameFromUrl("  ")).toBeNull();
+    expect(supplierNameFromUrl("не адреса")).toBeNull();
   });
 });

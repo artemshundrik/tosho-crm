@@ -55,6 +55,32 @@
  */
 export const SHOP_SUPPLIER_SLUG = "avanprint.ua";
 
+/**
+ * Як джерело звуть люди. Потрібне там, де домен не годиться — на кнопці картки
+ * позиції: «Постачальник» не каже нічого, а «Тотобі» каже все (Артем,
+ * 08.09.2026). Назви короткі, а не з `contractors.name`: у картці підрядника
+ * лежить «ТОВ «ТоТобі»» й «Бергамо Україна» — юридичні, задовгі для кнопки.
+ * Незнайомий домен повертається як є: показати «bergamo.ua» чесніше, ніж
+ * промовчати.
+ */
+const SUPPLIER_NAMES: Record<string, string> = {
+  "avanprint.ua": "Аванпринт",
+  "totobi.com.ua": "Тотобі",
+  "bergamo.ua": "Бергамо",
+  "berrytex.com.ua": "Беррітекс",
+};
+
+/** Назва джерела з адреси товару; `null`, якщо адреса не розбирається. */
+export function supplierNameFromUrl(url: string | null | undefined): string | null {
+  if (!url?.trim()) return null;
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    return SUPPLIER_NAMES[host] ?? host;
+  } catch {
+    return null;
+  }
+}
+
 export type SupplierPoolRow = {
   id: string;
   supplier_slug: string;

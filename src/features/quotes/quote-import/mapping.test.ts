@@ -104,6 +104,27 @@ describe("розшифровка → рядки прев'ю", () => {
 });
 
 describe("рядки прев'ю → payload мутацій", () => {
+  it("товар із пулу кладе обидві адреси названими, а не за порядком", () => {
+    // У пулу «наш магазин» і «оптовик» — різні кнопки на картці позиції, тож
+    // здогад «перше посилання = постачальник» тут не годиться.
+    const payload = buildImportItemPayload({
+      draft: draft({
+        supplierUrl: "https://totobi.com.ua/termos-calypso/",
+        avantprintUrl: "https://avanprint.ua/termos-calypso-15l/5678/",
+      }),
+      itemId: "item-9",
+      teamId: "team-1",
+      quoteId: "quote-1",
+      position: 1,
+      trace: { fileName: "kmz.xlsx", importedAt: "2026-09-08T10:00:00.000Z" },
+    });
+
+    expect(payload.metadata).toMatchObject({
+      supplierUrl: "https://totobi.com.ua/termos-calypso/",
+      avantprintUrl: "https://avanprint.ua/termos-calypso-15l/5678/",
+    });
+  });
+
   it("перше посилання йде в supplierUrl, усі — в importLinks", () => {
     const payload = buildImportItemPayload({
       draft: draft({ links: ["https://kmz.ua/a", "https://kmz.ua/b"] }),

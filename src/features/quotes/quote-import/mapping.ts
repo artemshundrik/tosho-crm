@@ -201,6 +201,11 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
     metadata.supplierUrl = draft.links[0];
     metadata.importLinks = draft.links;
   }
+  // Товар із пулу знає обидві свої адреси НАЗВАНИМИ, тож вони й перебивають
+  // здогад «перше посилання = постачальник»: у пулу «наш магазин» і «оптовик»
+  // це різні кнопки, а не порядок у списку.
+  if (draft.supplierUrl) metadata.supplierUrl = draft.supplierUrl;
+  if (draft.avantprintUrl) metadata.avantprintUrl = draft.avantprintUrl;
   // Артикул зі сторінки постачальника (REQ-247). Ключ `sku` вибрано не
   // випадково: картка позиції й картка на дошці читають саме його вже сьогодні,
   // тож «Артикул: …» з'являється без жодної зміни в тих читачах.
