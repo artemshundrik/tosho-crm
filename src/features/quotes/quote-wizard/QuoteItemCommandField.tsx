@@ -232,6 +232,25 @@ export function QuoteItemCommandField({
   // одночасно перетворюють підказку на простирадло.
   const [expandedPoolKey, setExpandedPoolKey] = React.useState<string | null>(null);
 
+  /**
+   * ОДИН ТОВАР РОЗКРИВАЄТЬСЯ САМ (Артем, 08.09.2026, за макетом вузького пошуку).
+   *
+   * Вузький пошук — головний спосіб користуватись цим полем: менеджер знає, яка
+   * модель йому потрібна, і шукає кодом або назвою. Заміряно на проді: точний код
+   * дає 2 рядки, «zian» і «marieta» — по одній картці. У такому списку вибирати
+   * нема з чого, а колір однаково доведеться обрати — без нього товар не
+   * додається. Тобто обов'язковий клік по єдиному рядку не ніс жодного рішення.
+   *
+   * Розкриваємо лише те, що САМЕ ПОТРЕБУЄ вибору кольору: у картки зі спільним
+   * артикулом розкривати нічого, її додають одним кліком як і раніше.
+   */
+  React.useEffect(() => {
+    if (visiblePool.length !== 1) return;
+    const only = visiblePool[0];
+    if (!only || !needsVariantChoice(only)) return;
+    setExpandedPoolKey(only.key);
+  }, [visiblePool]);
+
   const commitRow = (index: number) => {
     const suggestion = catalogOpen ? ranked[index - visiblePool.length] : undefined;
     if (suggestion) {
