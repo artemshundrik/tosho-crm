@@ -33,8 +33,8 @@ import { rankCatalogSuggestions, type CatalogSuggestion } from "./catalogSuggest
  *
  * ФОКУС ЛИШАЄТЬСЯ В ПОЛІ. Підказки не забирають фокус ані при відкритті, ані
  * при кліку по рядку: після вибору менеджер одразу набирає наступний товар.
- * Стрілки ходять по рядках, Enter бере підсвічений, Esc ховає список, не
- * стираючи набраного.
+ * Стрілки ходять по рядках, Enter бере підсвічену ПІДКАЗКУ (але не «додати як
+ * нову позицію» — та лише кліком), Esc ховає список, не стираючи набраного.
  */
 
 const MODE_LABELS: Record<CommandFieldMode, { label: string; icon: typeof Link2 }> = {
@@ -223,9 +223,25 @@ export function QuoteItemCommandField({
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      if (mode === "link") commitLinks();
-      else if (open) commitRow(active);
-      else commitName();
+      if (mode === "link") {
+        commitLinks();
+        return;
+      }
+      /**
+       * ENTER НЕ СТВОРЮЄ ПОЗИЦІЮ З НАБРАНОГО ТЕКСТУ (Артем, 08.09.2026).
+       *
+       * Раніше створював, і це давало сміття рівно там, де людина ні в чому не
+       * винна: поки пул шукається, список ще порожній, і рядок «Додати як нову
+       * позицію» лишається ЄДИНИМ, тобто підсвіченим. Той, хто набрав назву й
+       * за звичкою натиснув Enter, діставав позицію з голим текстом замість
+       * товару, який приїхав би за півсекунди.
+       *
+       * Тепер Enter бере лише СПРАВЖНЮ підказку — з каталогу або від
+       * постачальника. Рядок «додати як нову» нікуди не подівся (без нього
+       * нема чим порахувати нестандарт), але тепер він вимагає свідомого
+       * кліку, а не випадкового натиску.
+       */
+      if (open && !searching && active < addRowIndex) commitRow(active);
       return;
     }
     if (!open) return;

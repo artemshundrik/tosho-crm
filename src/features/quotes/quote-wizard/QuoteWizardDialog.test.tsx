@@ -249,7 +249,13 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(within(list).getByText("У базі такого немає")).toBeInTheDocument();
     expect(within(list).getAllByRole("option")).toHaveLength(1);
 
+    // Enter сюди більше не веде — рядок «додати як нову» вимагає свідомого
+    // кліку (REQ-250, 08.09.2026): поки пул шукається, він лишається єдиним у
+    // списку, і випадковий Enter робив із набраного тексту позицію.
     await user.keyboard("{Enter}");
+    expect(field).toHaveValue("Кепка six-panel");
+
+    await user.click(within(list).getByRole("option", { name: /як нову позицію/ }));
     expect(screen.getByDisplayValue("Кепка six-panel")).toBeInTheDocument();
     // Поле очистилось і лишилось у фокусі — далі набирають наступний товар.
     expect(field).toHaveValue("");
@@ -465,7 +471,8 @@ describe("QuoteWizardDialog — один екран", () => {
   it("назва руками без виду — каталог не чіпається", async () => {
     const user = userEvent.setup();
     const { prepareQuote } = renderWizard();
-    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "Кепка six-panel{Enter}");
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "Кепка six-panel");
+    await user.click(await screen.findByRole("option", { name: /як нову позицію/ }));
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "50");
     await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
     await waitFor(() => expect(prepareQuote).toHaveBeenCalled());
@@ -477,7 +484,8 @@ describe("QuoteWizardDialog — один екран", () => {
     const user = userEvent.setup();
     renderWizard();
 
-    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "Кепка six-panel{Enter}");
+    await user.type(screen.getByRole("combobox", { name: "Товар: посилання або назва" }), "Кепка six-panel");
+    await user.click(await screen.findByRole("option", { name: /як нову позицію/ }));
     const add = screen.getByRole("button", { name: "Додати ще тираж" });
     // Порожній тираж — це незадане питання, а не варіант: додавати другий нема сенсу.
     expect(add).toBeDisabled();
