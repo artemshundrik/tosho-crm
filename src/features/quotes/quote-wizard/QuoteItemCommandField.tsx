@@ -231,6 +231,8 @@ export function QuoteItemCommandField({
   // Який товар зараз показує кольори. Один на весь список: два розкриті рядки
   // одночасно перетворюють підказку на простирадло.
   const [expandedPoolKey, setExpandedPoolKey] = React.useState<string | null>(null);
+  const [allColors, setAllColors] = React.useState(false);
+  React.useEffect(() => setAllColors(false), [expandedPoolKey]);
 
   /**
    * ОДИН ТОВАР РОЗКРИВАЄТЬСЯ САМ (Артем, 08.09.2026, за макетом вузького пошуку).
@@ -612,8 +614,25 @@ export function QuoteItemCommandField({
                   </span>
                 ) : null}
                 {expanded ? (
-                  <span className="mt-1.5 flex flex-wrap gap-1.5 pl-11">
-                    {product.variants.map((variant) => (
+                  /**
+                   * ПЛИТКИ КОЛЬОРУ ПЕРЕРОБЛЕНІ (Артем, 08.09.2026: «мені не
+                   * подобається, як вони розкриваються та виглядають»).
+                   *
+                   * Було три вади одразу. Фото 24 пікселі — за ним кольору не
+                   * видно. Назва різалась на восьми ремках, тож «Королівський
+                   * синій» ставав «Королівський син…». І головне: КОДУ НЕ БУЛО
+                   * ВЗАГАЛІ, хоч саме він їде в замовлення й саме через нього
+                   * цей вибір узагалі існує.
+                   *
+                   * Стало: фото 28, назва повністю, під нею код. Плитка стала
+                   * вищою, тож більше сімнадцяти в один ряд не влізе — але їх і
+                   * не буває стільки: заміряно на 5602 картках пулу, 88% мають
+                   * вісім кольорів або менше, а 37% узагалі один. Довгий хвіст
+                   * ріже `COLOR_CAP`, інакше картка з 246 кольорами (є така в
+                   * Аванпринті) розсипала б увесь список.
+                   */
+                  <span className="mt-2 flex flex-wrap gap-1.5 pl-11">
+                    {(allColors ? product.variants : product.variants.slice(0, COLOR_CAP)).map((variant) => (
                       <button
                         key={variant.id}
                         type="button"
@@ -624,14 +643,36 @@ export function QuoteItemCommandField({
                           onValueChange("");
                           setExpandedPoolKey(null);
                         }}
-                        className="flex items-center gap-1.5 rounded-md border border-border/60 py-0.5 pl-0.5 pr-2 text-2xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                        className="flex items-center gap-2 rounded-[var(--radius-md)] border border-border/60 py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground"
                       >
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
                           <VariantPhoto url={variant.imageUrl} label={variant.label} />
                         </span>
-                        <span className="max-w-[8rem] truncate">{variant.label ?? "Без підпису"}</span>
+                        <span className="min-w-0">
+                          <span className="block whitespace-nowrap text-2xs text-foreground">
+                            {variant.label ?? "Без підпису"}
+                          </span>
+                          {variant.article ? (
+                            <span className="block whitespace-nowrap text-[0.625rem] tabular-nums text-muted-foreground/70">
+                              {variant.article}
+                            </span>
+                          ) : null}
+                        </span>
                       </button>
                     ))}
+                    {!allColors && product.variants.length > COLOR_CAP ? (
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setAllColors(true);
+                        }}
+                        className="rounded-[var(--radius-md)] border border-dashed border-border px-2.5 text-2xs text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        ще {product.variants.length - COLOR_CAP}
+                      </button>
+                    ) : null}
                   </span>
                 ) : null}
               </li>
@@ -737,6 +778,12 @@ export function QuoteItemCommandField({
  * варіантів артикула, але артикули у варіантів є. Якщо їх немає ні в кого,
  * вибирати нема з чого, і розкриття було б глухим кутом.
  */
+/**
+ * Скільки кольорів показуємо, поки не попросили решту. Дванадцять — це три ряди
+ * плиток: далі картка перестає бути підказкою й стає сторінкою товару.
+ */
+const COLOR_CAP = 12;
+
 function needsVariantChoice(product: SupplierPoolProduct): boolean {
   return product.article === null && product.variants.some((variant) => variant.article);
 }
