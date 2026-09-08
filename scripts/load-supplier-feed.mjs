@@ -12,9 +12,11 @@
  * таблицю → один upsert у пул. Зниклі з фіда товари гасяться is_active=false
  * (не видаляються — на них можуть посилатися старі прорахунки).
  *
- * ФІДА МОЖЕ Й НЕ БУТИ. Тоді в реєстрі стоїть `crawl`, і замість одного файлу
+ * ФІДА МОЖЕ Й НЕ БУТИ, І ТОДІ Є ДВА ЗАПАСНІ ШЛЯХИ. Перший — `crawl` у реєстрі:
  * скрипт бере з мапи сайту перелік адрес і обходить сторінки по одній
- * (bergamo). Розбирач такої сторінки живе в `PAGE_PARSERS`.
+ * (bergamo), розбирач такої сторінки живе в `PAGE_PARSERS`. Другий — `api`:
+ * джерело саме ходить по своєму інтерфейсу, без файлу й без мапи (e-suvenir,
+ * Magento GraphQL), і такий завантажувач живе в `API_LOADERS`.
  *
  * ЩО СТЕРЕЖЕ ВІД ТИХОЇ БІДИ. Порожній або обірваний прогін НЕ МОЖНА заливати:
  * гасіння зниклих працює за часом, тож нуль рядків вимкнув би всього
@@ -36,6 +38,9 @@
  *   node scripts/load-supplier-feed.mjs berrytex --dry   (показати, не писати)
  *   node scripts/load-supplier-feed.mjs bergamo --dry --limit=20  (коротка проба обходу)
  *   node scripts/load-supplier-feed.mjs --list           (перелік постачальників)
+ *
+ * Джерелам під логіном (e-suvenir) потрібні ще й свої змінні — які саме,
+ * написано в їхньому записі реєстру полем `auth`.
  */
 
 import { execFileSync } from "node:child_process";
@@ -157,6 +162,40 @@ const SUPPLIERS = {
         { multiplier: 0.56, label: "сувенірка −44%" },
       ],
     },
+  },
+  "e-suvenir": {
+    slug: "e-suvenir.com.ua",
+    // ФІДА НЕМАЄ, І ПЕРЕВІРЕНО ЦЕ ІНАКШЕ, НІЖ У РЕШТИ. Сайт — Magento PWA
+    // Studio: React поверх Magento, і будь-яка невідома адреса віддає оболонку
+    // з кодом 200. Тобто /sitemap.xml, /prom.xml, /google.xml тут «є» — усі
+    // віддають ту саму HTML-сторінку на 2312 байтів. Зате під оболонкою
+    // відкритий GraphQL, яким ходить сам їхній магазин.
+    api: {
+      endpoint: "https://e-suvenir.com.ua/graphql",
+      // Адреса товару — з `url_key`, і префікс `/ua/` обов'язковий: без нього
+      // сторінка віддає 301 на головну (перевірено 08.09.2026).
+      site: "https://e-suvenir.com.ua/ua",
+      rootCategory: "2",
+      pageSize: 50,
+      delayMs: 250,
+      // Категорія «Печать» — це прайс на нанесення (УФ друк, тиснення,
+      // деколь), а не товари. Корисна сама по собі, але не в пулі товарів.
+      skipCategories: ["Печать"],
+      // Частка рядків, де наша ціна нижча за публічну. Заміряно 08.09.2026:
+      // майже все джерело йде зі знижкою, тож просідання нижче межі означає
+      // не «постачальник підняв ціни», а «логін відпав».
+      minDiscountedRatio: 0.8,
+    },
+    format: "magento-graphql",
+    source: "api:magento",
+    // Логін обов'язковий для заливу: без нього API віддає публічні ціни, і
+    // вони лягли б у пул під підписом «оптова». Пошта й пароль — у .env.backup,
+    // поруч із BACKUP_DB_URL; сюди потрапляють лише ІМЕНА змінних.
+    auth: { emailEnv: "E_SUVENIR_EMAIL", passwordEnv: "E_SUVENIR_PASSWORD" },
+    // Ціна тут не рахується правилом — постачальник каже її прямо, тому
+    // `priceRule` немає, а підпис доводиться ставити руками.
+    priceKind: "wholesale",
+    minRows: 2400, // 870 товарів дають 3041 рядок-колір (08.09.2026)
   },
   // НЕ ДОДАНИЙ, і причина в ньому, а не в коді (перевірено 05.09.2026):
   //   eney (OpenCart) — точка фіда index.php?route=extension/feed/google_base
@@ -733,12 +772,383 @@ function parseOpencartPage(html, ctx) {
   return rows;
 }
 
+
+/**
+ * Magento GraphQL (e-suvenir) — третій спосіб узяти каталог. Ні файлу, як у
+ * фідах, ні обходу сторінок, як у Бергамо: посторінковий запит до API магазину.
+ *
+ * ЧОМУ НЕ ФІД, І ЧОМУ ЦЕ НЕ ВИДНО ПО КОДУ ВІДПОВІДІ. Сайт — Magento PWA Studio,
+ * тобто React поверх Magento. Будь-яка невідома адреса віддає ту саму оболонку
+ * з кодом 200: `/sitemap.xml`, `/prom.xml`, `/google.xml` — усі «знаходяться».
+ * Розбирач фіда дістав би з тієї оболонки нуль товарів, `curl -f` не спрацював
+ * би (200 же), і врятував би лише `minRows`. Мораль ширша за e-suvenir: на SPA
+ * перевіряй ВМІСТ відповіді, а не її код.
+ *
+ * ЧОМУ ПІД ЛОГІНОМ. Наша ціна тут не рахується множником, як у Бергамо й
+ * Тотобі, — постачальник каже її прямо: під нашим акаунтом той самий запит
+ * повертає `regular_price` (публічна, вона ж закреслена на сайті) і
+ * `final_price` (наша). Заміряно 08.09.2026 на 834 товарах: 781 має рівно
+ * −41%, 18 записників Mem'O! −50%, решта — розпродаж від −44% до −80%.
+ * Тобто множник 0,59 був би правильний для 94% і тихо збрехав би на 53
+ * позиціях, причому саме там, де знижка найбільша.
+ *
+ * ⚠️ ГОЛОВНА ПАСТКА ЦЬОГО ДЖЕРЕЛА, І ВОНА ТИХА. Якщо логін не вдався або токен
+ * протух посеред прогону, API далі відповідає — просто `final_price` починає
+ * дорівнювати `regular_price`. Тобто в пул лягли б ПУБЛІЧНІ ціни під виглядом
+ * наших: усе на місці, нічого не впало, ціни майже вдвічі більші. Це рівно та
+ * сама форма збою, що `<price_type>` у CS-Cart і JSON-LD у Бергамо — сусіднє
+ * поле, яке виглядає правильним. Стереже `minDiscountedRatio`: частка рядків,
+ * де наша ціна нижча за публічну, має лишатись високою, інакше падаємо ДО
+ * запису.
+ *
+ * РЯДОК — КОЛІР, А НЕ ПАРА «КОЛІР+РОЗМІР». Варіанти тут мають власний артикул
+ * на кожну пару (`7046L-01-S`), і рядок на кожну дав би 6265 рядків замість
+ * ~2500. Розміри лягають у `attrs.sizes` зі своїми кодами — точно так, як у
+ * Тотобі, тож читальний шар уже вміє їх показувати.
+ *
+ * АРТИКУЛ БЕРЕМО ТОЙ, ЯКИМ ЗАМОВЛЯЮТЬ. У кольору без розмірів це код самого
+ * варіанта (`95134949923`), у кольору з розмірами — код моделі (`7046L`), бо
+ * замовляють модель, а розмір вибирають окремо (його код лежить у `attrs.sizes`).
+ * Ставити код випадкового розміру не можна: саме це число менеджер скопіює.
+ */
+async function loadMagentoGraphql(cfg) {
+  const {
+    endpoint,
+    pageSize = 50,
+    delayMs = 250,
+    skipCategories = [],
+    minDiscountedRatio = 0.8,
+  } = cfg.api;
+  const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Часткові помилки відповіді: рахуємо, щоб сказати про них один раз у кінці,
+  // а не сипати однаковим рядком на кожній сторінці.
+  const softErrors = { count: 0, first: null };
+
+  /**
+   * Секрети йдуть ЗМІННИМИ запиту, а не в тексті. Так пароль не потрапляє ні в
+   * рядок запиту, ні у вивід помилки: назовні друкуємо лише `errors[].message`
+   * від Magento, ніколи не тіло запиту. Причина та сама, що в `pgEnvFrom` нижче
+   * — цей скрипт ганяє крон у ПУБЛІЧНОМУ репозиторії.
+   */
+  async function gql(query, variables, token) {
+    const headers = { "Content-Type": "application/json", "User-Agent": UA };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const messages = (json.errors || []).map((e) => e.message).join("; ");
+    /**
+     * ПОМИЛКА ПОРУЧ ІЗ ДАНИМИ — ТУТ НОРМА, і падати на ній не можна. Magento
+     * віддає GraphQL чесно частково: якщо в одного товару зламане поле, у
+     * відповіді приїжджають і `data` з рештою сторінки, і `errors` про той
+     * товар. Живий приклад: `print_logo_space_list` (місця нанесення) валиться
+     * «Internal server error» на кількох товарах кожної сотні — решта товарів
+     * сторінки при цьому цілі, лише в тих кількох це поле порожнє. Кидати
+     * виняток означало б втратити весь каталог через два товари.
+     *
+     * Дані відсутні цілком — це вже справжній збій, тоді падаємо.
+     */
+    if (!json.data) throw new Error(messages || "порожня відповідь");
+    if (messages) {
+      softErrors.count += json.errors.length;
+      if (!softErrors.first) softErrors.first = messages.slice(0, 120);
+    }
+    return json.data;
+  }
+
+  // ── логін ────────────────────────────────────────────────────────────────
+  const email = process.env[cfg.auth.emailEnv];
+  const password = process.env[cfg.auth.passwordEnv];
+  let token = null;
+  if (email && password) {
+    const data = await gql(
+      "mutation($email:String!,$password:String!){ generateCustomerToken(email:$email,password:$password){ token } }",
+      { email, password }
+    );
+    token = data?.generateCustomerToken?.token || null;
+    if (!token) throw new Error("Логін не дав токена — ціни були б публічними, зупиняюсь.");
+    // Перевіряємо, що токен справді працює, а не просто виданий: якщо тут
+    // порожньо, далі ми б тихо качали публічні ціни.
+    const who = await gql("{ customer { firstname lastname } }", {}, token);
+    if (!who?.customer) throw new Error("Токен не відкриває акаунт — зупиняюсь, щоб не залити публічні ціни.");
+    console.log(`Акаунт: ${[who.customer.firstname, who.customer.lastname].filter(Boolean).join(" ")}`);
+  } else if (dry) {
+    console.log(
+      `⚠ Немає ${cfg.auth.emailEnv}/${cfg.auth.passwordEnv} — суха пробіжка ПУБЛІЧНИМИ цінами. ` +
+        `Для заливу впишіть їх у .env.backup.`
+    );
+  } else {
+    console.error(
+      `Немає ${cfg.auth.emailEnv}/${cfg.auth.passwordEnv} у оточенні. Без логіна API віддає ` +
+        `публічні ціни, і вони лягли б у пул як наші. Впишіть їх у .env.backup і повторіть.`
+    );
+    process.exit(1);
+  }
+
+  // ── довідник значень атрибутів ───────────────────────────────────────────
+  /**
+   * Magento віддає атрибути-списки ЧИСЛАМИ, а не текстом: `brand: 624`,
+   * `material: 81`, `clothes_density: 217`. Числа виглядають осмислено (у
+   * поло `clothes_density: 220` навіть збігається зі щільністю з опису — і це
+   * ЗБІГ), тож записати їх як є означало б покласти в базу дані, які виглядають
+   * правильними й не є ними: 217 — це «135-145 г/м²». Тому один запит по
+   * довідник і підстановка підписів.
+   */
+  const OPTION_ATTRS = ["brand", "material", "clothes_density", "avail_print_methods", "search_color"];
+  const meta = await gql(
+    `{ customAttributeMetadata(attributes:[${OPTION_ATTRS.map(
+      (a) => `{attribute_code:"${a}",entity_type:"catalog_product"}`
+    ).join(",")}]) { items { attribute_code attribute_options { value label } } } }`
+  );
+  const labels = {};
+  for (const item of meta?.customAttributeMetadata?.items || []) {
+    const map = new Map();
+    for (const o of item.attribute_options || []) map.set(String(o.value), o.label);
+    labels[item.attribute_code] = map;
+  }
+  const labelOf = (code, value) => {
+    if (value == null || value === "") return null;
+    // Списки multiselect приходять через кому: "silk_stencil,thermal_transfer".
+    const parts = String(value).split(",").map((v) => v.trim()).filter(Boolean);
+    const named = parts.map((v) => labels[code]?.get(v) ?? v);
+    return named.length ? named.join(", ") : null;
+  };
+
+  // ── перелік категорій ────────────────────────────────────────────────────
+  /**
+   * Кореневої категорії «2» НЕ ДОСИТЬ: вона віддає 863 товари, а дерево цілком
+   * — 868. П'ять позицій висять у розділах, не прив'язаних до кореня, і мовчки
+   * випали б. Тому збираємо всі гілки й питаємо по них.
+   */
+  const tree = await gql(
+    `{ categories(filters:{ids:{in:["${cfg.api.rootCategory}"]}}) { items { children { id children { id children { id } } } } } }`
+  );
+  const ids = new Set([cfg.api.rootCategory]);
+  const walk = (node) => {
+    if (!node) return;
+    ids.add(String(node.id));
+    for (const c of node.children || []) walk(c);
+  };
+  for (const c of tree?.categories?.items?.[0]?.children || []) walk(c);
+  const idFilter = [...ids].map((i) => `"${i}"`).join(",");
+  console.log(`Категорій у дереві: ${ids.size}`);
+
+  // ── товари ───────────────────────────────────────────────────────────────
+  const PRODUCT_FIELDS = `
+    __typename sku name url_key stock_status
+    brand material country_of_manufacture clothes_density avail_print_methods
+    razmer_ypakovki ves_ypakovki
+    print_logo_space_list { name max_width max_height }
+    short_description { html }
+    categories { name level }
+    image { url } media_gallery { url }
+    price_range { minimum_price { regular_price { value currency } final_price { value } } }
+    ... on ConfigurableProduct {
+      variants {
+        product { sku stock_status media_gallery { url }
+          price_range { minimum_price { regular_price { value } final_price { value } } } }
+        attributes { code label }
+      }
+    }`;
+
+  const products = [];
+  let total = 0;
+  let seen = 0; // рядків у відповідях, разом із порожніми
+  let blanks = 0;
+  for (let page = 1; ; page++) {
+    const data = await gql(
+      `{ products(filter:{category_id:{in:[${idFilter}]}} pageSize:${pageSize} currentPage:${page}) {
+         total_count items { ${PRODUCT_FIELDS} } } }`,
+      {},
+      token
+    );
+    /**
+     * ⚠️ РАХУЄМО СИРІ РЯДКИ, А НЕ ВІДФІЛЬТРОВАНІ, І ЦЕ НЕ ПРИСКІПЛИВІСТЬ.
+     * Товар, у якого зламалось поле, приїжджає в масиві як `null` — тобто
+     * сторінка з 50 позицій після `filter(Boolean)` стає 49. Кінець вибірки
+     * визначався саме по «менше за pageSize», тож перший же такий товар
+     * обривав обхід достроково: спіймано живцем — 699 товарів із 870, і в
+     * логах це виглядало як звичайне завершення.
+     */
+    const raw = data?.products?.items || [];
+    const items = raw.filter(Boolean);
+    blanks += raw.length - items.length;
+    seen += raw.length;
+    products.push(...items);
+    if (page === 1) {
+      total = data?.products?.total_count ?? 0;
+      console.log(`Товарів у каталозі: ${total || "?"}`);
+    }
+    console.log(`  сторінка ${page}: ${items.length} товарів, разом ${products.length}`);
+    if (raw.length < pageSize || (total && seen >= total)) break;
+    if (limit && products.length >= limit) break;
+    await nap(delayMs);
+  }
+  if (blanks) console.log(`  порожніх рядків у відповідях: ${blanks}`);
+  /**
+   * Обхід мусить дійти до кінця. Недобрані сторінки — це той самий тихий збій,
+   * що обірваний обхід у Бергамо: рядки на місці, просто їх менше, і гасіння
+   * зниклих вимкнуло б решту каталогу.
+   */
+  if (!limit && total && seen < total) {
+    throw new Error(`Дійшли лише до ${seen} товарів із ${total} — вибірка обірвалась, заливати не можна.`);
+  }
+
+  // ── у рядки пулу ─────────────────────────────────────────────────────────
+  const num = (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const text = (html) =>
+    html ? String(html).replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim() : null;
+
+  const rows = [];
+  let skippedByCategory = 0;
+  for (const p of products) {
+    const cats = (p.categories || []).filter(Boolean);
+    // «Печать» — це послуги нанесення (УФ друк, тиснення, деколь), а не товари.
+    // Пропускаємо лише коли ІНШИХ розділів немає: товар, який заодно лежить у
+    // «Печаті», лишається товаром.
+    if (cats.length && cats.every((c) => skipCategories.includes(c.name))) {
+      skippedByCategory++;
+      continue;
+    }
+    // Найглибший розділ інформативніший за корінь: «Рюкзаки», а не «Сумки».
+    const category = cats.slice().sort((a, b) => (b.level ?? 0) - (a.level ?? 0))[0]?.name || null;
+
+    const base = {
+      vendor: labelOf("brand", p.brand),
+      category,
+      url: `${cfg.api.site}/${p.url_key}`,
+      currency: p.price_range?.minimum_price?.regular_price?.currency || "UAH",
+    };
+    const commonAttrs = {};
+    const put = (k, v) => {
+      if (v != null && v !== "") commonAttrs[k] = v;
+    };
+    put("description", text(p.short_description?.html));
+    put("material", labelOf("material", p.material));
+    put("density", labelOf("clothes_density", p.clothes_density));
+    put("methods", labelOf("avail_print_methods", p.avail_print_methods));
+    put("country", p.country_of_manufacture);
+    put("packageSize", p.razmer_ypakovki);
+    put("packageWeight", p.ves_ypakovki);
+    // Місця нанесення з розмірами поля в мм — цього не дає жодне інше джерело.
+    const places = (p.print_logo_space_list || []).filter(Boolean).map((s) => ({
+      name: s.name,
+      maxWidth: s.max_width ?? null,
+      maxHeight: s.max_height ?? null,
+    }));
+    if (places.length) commonAttrs.printPlaces = places;
+
+    const parentImages = (p.media_gallery || []).map((m) => m.url).filter(Boolean);
+    const variants = (p.variants || []).filter((v) => v?.product?.sku);
+
+    if (!variants.length) {
+      // Простий товар: колір і розмір не розділені, артикул один.
+      const reg = num(p.price_range?.minimum_price?.regular_price?.value);
+      const fin = num(p.price_range?.minimum_price?.final_price?.value);
+      const attrs = { ...commonAttrs, available: p.stock_status === "IN_STOCK" };
+      if (reg != null) attrs.sitePrice = reg;
+      rows.push({
+        ...base,
+        external_key: p.sku,
+        article: p.sku,
+        name: p.name,
+        price: fin,
+        image_url: parentImages[0] || p.image?.url || null,
+        images: JSON.stringify(parentImages),
+        attrs: JSON.stringify(attrs),
+      });
+      continue;
+    }
+
+    // Складений товар: групуємо варіанти за кольором, розміри лишаємо всередині.
+    const groups = new Map();
+    for (const v of variants) {
+      const attrsOf = Object.fromEntries((v.attributes || []).map((a) => [a.code, a.label]));
+      const color = attrsOf.color || "";
+      if (!groups.has(color)) groups.set(color, []);
+      groups.get(color).push({ v, size: attrsOf.clothes_size || null });
+    }
+    for (const [color, members] of groups) {
+      const prices = members.map((m) => num(m.v.product.price_range?.minimum_price?.final_price?.value)).filter((n) => n != null);
+      const sitePrices = members.map((m) => num(m.v.product.price_range?.minimum_price?.regular_price?.value)).filter((n) => n != null);
+      const sizes = members.filter((m) => m.size).map((m) => ({
+        size: m.size,
+        code: m.v.product.sku,
+        price: num(m.v.product.price_range?.minimum_price?.final_price?.value),
+      }));
+      const variantImages = members.flatMap((m) => (m.v.product.media_gallery || []).map((g) => g.url)).filter(Boolean);
+      const images = [...new Set(variantImages.length ? variantImages : parentImages)];
+
+      const attrs = { ...commonAttrs };
+      if (color) attrs.color = color;
+      if (sitePrices.length) attrs.sitePrice = Math.min(...sitePrices);
+      if (sizes.length) attrs.sizes = sizes;
+      // Код моделі тримаємо завжди: коли рядок — колір із розмірами, артикулом
+      // стоїть саме він, але й для однорозмірних кольорів корисно бачити, від
+      // якої моделі колір походить.
+      attrs.model = p.sku;
+      attrs.available = members.some((m) => m.v.product.stock_status === "IN_STOCK");
+
+      rows.push({
+        ...base,
+        external_key: color ? `${p.sku}::${color}` : p.sku,
+        article: members.length === 1 ? members[0].v.product.sku : p.sku,
+        name: p.name,
+        price: prices.length ? Math.min(...prices) : null,
+        image_url: images[0] || p.image?.url || null,
+        images: JSON.stringify(images),
+        attrs: JSON.stringify(attrs),
+      });
+    }
+  }
+  if (skippedByCategory) console.log(`  пропущено як послуги (${skipCategories.join(", ")}): ${skippedByCategory}`);
+  if (softErrors.count) {
+    console.log(`  ⚠ часткових помилок у відповідях: ${softErrors.count} (${softErrors.first})`);
+  }
+
+  /**
+   * ОСТАННІЙ РУБІЖ ПЕРЕД `minRows`: чи це справді НАШІ ціни. Якщо логін
+   * відпав, рядки будуть на місці й виглядатимуть нормально — просто дорожчі
+   * майже вдвічі. Тому дивимось не на кількість, а на суть: скільки рядків
+   * мають ціну НИЖЧУ за публічну.
+   */
+  const withBoth = rows.filter((r) => {
+    const a = JSON.parse(r.attrs || "{}");
+    return r.price != null && a.sitePrice != null;
+  });
+  const discounted = withBoth.filter((r) => r.price < JSON.parse(r.attrs).sitePrice);
+  const ratio = withBoth.length ? discounted.length / withBoth.length : 0;
+  console.log(`  наша ціна нижча за публічну: ${discounted.length} з ${withBoth.length} (${(ratio * 100).toFixed(1)}%)`);
+  if (token && withBoth.length && ratio < minDiscountedRatio) {
+    console.error(
+      `Лише ${(ratio * 100).toFixed(1)}% рядків мають нашу ціну (межа ${(minDiscountedRatio * 100).toFixed(0)}%). ` +
+        `Схоже, логін відпав посеред прогону і API віддає публічні ціни. Нічого не записано.`
+    );
+    process.exit(1);
+  }
+  return rows;
+}
+
 const PARSERS = { prom: parseProm, cscart: parseCscart, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku, horoshop: parseHoroshop };
 const PAGE_PARSERS = { "opencart-page": parseOpencartPage };
+// Завантажувачі, які самі ходять по джерелу: їм не потрібен ані файл фіда, ані
+// перелік адрес — вони тягнуть каталог по своєму протоколу.
+const API_LOADERS = { "magento-graphql": loadMagentoGraphql };
 
 // ── тягнемо фід ─────────────────────────────────────────────────────────────
+// Джерело з `api` не має файлу, який можна завантажити: воно саме ходить по
+// сторінках свого API. Тому весь блок нижче — тільки для фідів і обходів.
+let xml = null;
+if (!cfg.api) {
 console.log(`Фід: ${cfg.feed}`);
-let xml;
 try {
   // `-f` тут не косметика. Без нього 404 повертає HTML-сторінку помилки з
   // нульовим кодом виходу: розбирач знаходить нуль товарів, залив «успішно»
@@ -752,6 +1162,7 @@ try {
 } catch (e) {
   console.error("Не вдалося завантажити фід:", e.message);
   process.exit(1);
+}
 }
 
 /**
@@ -841,7 +1252,11 @@ async function crawlPages(indexXml, cfg) {
   return rows;
 }
 
-const rows = cfg.crawl ? await crawlPages(xml, cfg) : PARSERS[cfg.format](xml, cfg);
+const rows = cfg.api
+  ? await API_LOADERS[cfg.format](cfg)
+  : cfg.crawl
+    ? await crawlPages(xml, cfg)
+    : PARSERS[cfg.format](xml, cfg);
 console.log(`Розібрано товарів: ${rows.length}`);
 console.log(
   `  з артикулом: ${rows.filter((r) => r.article).length}, ` +
@@ -904,6 +1319,13 @@ if (dry) {
 }
 
 // ── у базу: TSV → тимчасова таблиця → upsert ────────────────────────────────
+/**
+ * Підпис ціни. Досі він виводився з наявності `priceRule`: є множник — значить
+ * ціна наша. Для e-suvenir це не працює: множника немає, бо постачальник каже
+ * нашу ціну прямо. Тому підпис став полем реєстру, а старе правило лишилось
+ * запасним — щоб чотири наявні джерела поводились точно як раніше.
+ */
+const priceKind = cfg.priceKind || (cfg.priceRule ? "wholesale" : "retail");
 const dir = mkdtempSync(join(tmpdir(), "feed-"));
 const tsv = join(dir, "rows.tsv");
 const esc = (v) => (v == null ? "\\N" : String(v).replace(/\\/g, "\\\\").replace(/\t/g, " ").replace(/\n/g, " ").replace(/\r/g, ""));
@@ -946,7 +1368,7 @@ insert into tosho.supplier_products
 select
   sup.team_id, '${cfg.slug}', sup.contractor_id, '${cfg.source}', f.external_key,
   nullif(f.article,''), f.name, nullif(f.vendor,''), nullif(f.category,''),
-  nullif(f.price,'')::numeric, coalesce(nullif(f.currency,''),'UAH'), '${cfg.priceRule ? "wholesale" : "retail"}',
+  nullif(f.price,'')::numeric, coalesce(nullif(f.currency,''),'UAH'), '${priceKind}',
   nullif(f.url,''), nullif(f.image_url,''), coalesce(f.images::jsonb,'[]'::jsonb),
   coalesce(f.attrs::jsonb,'{}'::jsonb), now(), true
 from _feed f cross join sup

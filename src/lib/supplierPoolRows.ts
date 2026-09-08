@@ -68,6 +68,7 @@ const SUPPLIER_NAMES: Record<string, string> = {
   "totobi.com.ua": "Тотобі",
   "bergamo.ua": "Бергамо",
   "berrytex.com.ua": "Беррітекс",
+  "e-suvenir.com.ua": "Е-Сувенір",
 };
 
 /** Назва джерела з адреси товару; `null`, якщо адреса не розбирається. */
