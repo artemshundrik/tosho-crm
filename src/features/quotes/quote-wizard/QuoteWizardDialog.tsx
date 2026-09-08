@@ -617,7 +617,10 @@ export function QuoteWizardDialog({
         ноутбуці з невисоким екраном вікно просто стискається до 88vh.
       */}
       <DialogContent
-        className="flex max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0 sm:max-w-[920px] md:h-[min(88vh,44rem)]"
+        // ШИРШЕ НА 200 ПІКСЕЛІВ (Артем, 08.09.2026): у списку підказок тепер плитки
+        // кольору з назвою й кодом, і на 920 вони переносились по три в ряд.
+        // 1120 лишає запас навіть на ноутбуці 1280 — з полями по 80.
+        className="flex max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0 sm:max-w-[1120px] md:h-[min(88vh,44rem)]"
         isDirty={hasContent}
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">

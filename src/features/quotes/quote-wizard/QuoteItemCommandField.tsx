@@ -494,7 +494,14 @@ export function QuoteItemCommandField({
             <li
               aria-hidden
               className={cn(
-                "sticky top-0 z-10 bg-popover px-2 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
+                /**
+                 * `-mx-1.5 px-3.5` — той самий повношириний прийом, що й у
+                 * дивайдерах меню. Список має падінг 1.5, тож липка шапка,
+                 * обмежена шириною вмісту, лишає по шість пікселів з боків — і
+                 * крізь них видно, що проїжджає ПІД нею. Виглядає як
+                 * артефакт-привид уздовж країв.
+                 */
+                "sticky top-0 z-10 -mx-1.5 bg-popover px-3.5 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
               )}
             >
               У постачальників
@@ -792,7 +799,7 @@ export function QuoteItemCommandField({
                * «malfin»). Заголовок секції має `z-10` з тієї ж причини.
                * `bg-popover` сам по собі не рятує — він фарбує тло, а не піднімає.
                */
-              "sticky bottom-0 z-10 flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] bg-popover px-2 py-1.5 text-sm",
+              "sticky bottom-0 z-10 -mx-1.5 -mb-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm",
               addRowIndex > 0 && "mt-1 border-t border-border/60 pt-2",
               active === addRowIndex ? "bg-muted" : "hover:bg-muted/50"
             )}
