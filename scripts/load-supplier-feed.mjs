@@ -667,6 +667,40 @@ function parseOpencartPage(html, ctx) {
     attrs: JSON.stringify(attrs),
   };
 
+  /**
+   * ФОТО КОЛЬОРУ ВИВОДИМО З БАТЬКІВСЬКОГО, і цього разу перевірено як слід.
+   *
+   * Спершу я спробував підставити чужий код у КЕШОВАНУ адресу
+   * (`/image/cache/.../22640316053_a-674x800.jpg`), отримав 404 на трьох
+   * пробах і записав «вивести не можна». Висновок був хибний: адреса
+   * правильна, а файл у кеші OpenCart створюється лише тоді, коли хтось
+   * ВІДКРИЄ сторінку того кольору. Відвіданий — 200, невідвіданий — 404;
+   * саме тому проби й падали.
+   *
+   * Оригінал же лежить поруч і БЕЗ кешу — `/image/catalog_images/<бренд>/…` —
+   * і віддається завжди, хоч сторінку кольору ніхто не відкривав. Перевірено
+   * на двох брендах (james_harvest, voyager) і на кодах, куди ми не ходили.
+   *
+   * Ім'я файлу — це артикул у нижньому регістрі з дефісами через підкреслення
+   * («V3447-03» → «v3447_03»), далі кадр («_a») і розширення. Кадр і
+   * розширення беремо з РЕАЛЬНОЇ батьківської адреси, а не вгадуємо: так
+   * правило не розсиплеться на товарі, у якого головний кадр названий інакше.
+   */
+  const stemOf = (art) => art.toLowerCase().replace(/-/g, "_");
+  const parentImage = images[0] || mainImage || "";
+  const parentStem = selfArticle ? stemOf(selfArticle) : null;
+  const parts = parentImage.match(
+    /^(.*)\/image\/cache\/(.+)\/([^/]+?)(?:-\d+x\d+[a-z]*)?(\.(?:jpg|jpeg|png|webp))$/i
+  );
+  const colorImage = (article) => {
+    if (!parts || !parentStem || !article) return null;
+    const [, origin, folder, file, ext] = parts;
+    // Основа імені має справді містити артикул батька — інакше підстановка
+    // була б здогадкою, а здогадка тут означає чуже фото на картці.
+    if (!file.toLowerCase().startsWith(parentStem)) return null;
+    return `${origin}/image/${folder}/${stemOf(article)}${file.slice(parentStem.length)}${ext}`;
+  };
+
   const rows = [self];
   const seen = new Set([ctx.url]);
   for (const m of html.matchAll(/<a\s[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)) {
@@ -683,14 +717,16 @@ function parseOpencartPage(html, ctx) {
     // можна: `[/?#].*$` зрізає від першого слеша, тобто від «https://», і
     // артикул виходив «https:» (спіймано на сухій пробіжці).
     const slug = href.split(/[?#]/)[0].replace(/\/+$/, "").split("/").pop() || "";
+    const siblingArticle = /\d/.test(slug) ? slug : null;
+    const siblingImage = colorImage(siblingArticle);
     seen.add(href);
     rows.push({
       ...self,
       external_key: href,
-      article: /\d/.test(slug) ? slug : null,
+      article: siblingArticle,
       url: href,
-      image_url: null,
-      images: "[]",
+      image_url: siblingImage,
+      images: siblingImage ? JSON.stringify([siblingImage]) : "[]",
       attrs: JSON.stringify({ ...attrs, color: label }),
     });
   }

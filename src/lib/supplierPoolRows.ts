@@ -258,7 +258,13 @@ export function applySupplierVariant(
     ...product,
     name: variant.label ? `${product.name} · ${variant.label}` : product.name,
     article: variant.article,
-    imageUrl: variant.imageUrl ?? product.imageUrl,
+    // ФОТО МОДЕЛІ КОЛЬОРУ НЕ ПІДХОДИТЬ. Раніше тут стояв простий запасний
+    // варіант «немає свого — бери батьківське», і на розмірах він доречний:
+    // XL виглядає як S. Але на КОЛЬОРАХ він бреше — вибираєш «чорний
+    // антрацит», а в позицію лягає знімок синьої футболки (спіймано на
+    // Бергамо 08.09.2026, у чиїх колірних рядків власного фото немає).
+    // Порожня плитка чесніша за чужий колір: її видно й про неї спитають.
+    imageUrl: variant.imageUrl ?? (product.variantsAreColors ? null : product.imageUrl),
     url: variant.url ?? product.url,
     priceMin: variant.price,
     priceMax: variant.price,

@@ -141,6 +141,20 @@ export function QuoteItemCommandField({
   });
   const pool = poolTerm.length >= 2 ? poolData ?? [] : [];
 
+  // ЛУПА СТАЄ КРУТІЛКОЮ. Пул шукається запитом у базу, і на широкому слові це
+  // помітна пауза — а поле мовчало: людина не розуміла, чи воно думає, чи вже
+  // нічого не знайшло, і встигала дописати ще пів слова. Крутілка на місці
+  // лупи не додає в поле жодного нового елемента, тож нічого не зсуває.
+  //
+  // Дебаунс теж рахується за пошук. `poolTerm` відстає від набраного на 250 мс,
+  // і поки він відстає, ЖОДЕН прапорець завантаження ще не піднятий — а пауза
+  // вже йде. Без цієї умови крутілка спалахувала б із запізненням і саме на
+  // короткі запити не з'являлась би взагалі.
+  const searching =
+    mode === "search" &&
+    trimmed.length >= 2 &&
+    (poolTerm !== trimmed || poolSearching || suggestionsLoading || skuSearching);
+
   // Рядків у списку: каталог + постачальники + «Додати як нову позицію».
   // Каталог згорнутий за замовчуванням, тож його рядки в нумерації участі не
   // беруть: інакше стрілки провалювалися б у невидимі рядки.
@@ -247,7 +261,11 @@ export function QuoteItemCommandField({
           «Пошук за назвою…». Іконка ліворуч — тим самим `SEARCH_LEFT_ICON`.
         */}
         <div className="relative">
-          <Search className={cn(SEARCH_LEFT_ICON, "h-4 w-4")} aria-hidden />
+          {searching ? (
+            <Loader2 className={cn(SEARCH_LEFT_ICON, "h-4 w-4 animate-spin")} aria-label="Шукаю" />
+          ) : (
+            <Search className={cn(SEARCH_LEFT_ICON, "h-4 w-4")} aria-hidden />
+          )}
           <Input
             ref={inputRef}
             value={value}
