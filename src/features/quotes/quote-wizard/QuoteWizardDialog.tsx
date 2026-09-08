@@ -392,6 +392,10 @@ export function QuoteWizardDialog({
       sku: product.article,
       supplierUrl: wholesale?.url ?? null,
       avantprintUrl: shop?.url ?? null,
+      // ВАРТІСТЬ ТОВАРУ — лише НАША. `wholesale` тут означає ціну, яку ми вже
+      // порахували за домовленістю з постачальником; `retail` — вітрину, з
+      // якої нічого не порахуєш, і в собівартість вона не має права.
+      unitCost: product.priceKind === "wholesale" ? product.priceMin : null,
       catalog: guess
         ? {
             modelId: null,
@@ -538,7 +542,7 @@ export function QuoteWizardDialog({
       return;
     }
 
-    await startImportResearch(quoteId, written.itemIds);
+    await startImportResearch(quoteId, written.researchItemIds);
     const count = written.itemIds.length;
     const word = pluralWordUk(count, "позицією", "позиціями", "позиціями");
     const created = appendTo ? `Додано ${count} ${word}` : `Створено прорахунок з ${count} ${word}`;

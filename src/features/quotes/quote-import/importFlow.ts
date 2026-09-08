@@ -142,9 +142,18 @@ async function bindPlaces(draft: QuoteImportDraftItem, cache: PlaceCache): Promi
   return imprints === draft.imprints ? draft : { ...draft, imprints };
 }
 
+/**
+ * `researchItemIds` — вужчий за `itemIds` навмисно. Фонова розвідка читає
+ * сторінку постачальника й кладе її головне фото в `metadata.catalogVariant`,
+ * а картка позиції показує саме це поле ПЕРШИМ. Для позиції, яка вже прийшла
+ * з фото потрібного кольору, це не доповнення, а підміна: Артем обрав червону
+ * кепку, а розвідка привезла зі сторінки товару темно-синю — знімок за
+ * замовчуванням (спіймано 08.09.2026). Тому досліджуємо лише те, про що ми
+ * справді нічого не знаємо.
+ */
 export type ImportWriteOutcome =
-  | { ok: true; itemIds: string[] }
-  | { ok: false; itemIds: string[]; error: string };
+  | { ok: true; itemIds: string[]; researchItemIds: string[] }
+  | { ok: false; itemIds: string[]; researchItemIds: string[]; error: string };
 
 /**
  * Записати чернетки в прорахунок: позиції, потім тиражі.
@@ -172,6 +181,7 @@ export async function writeDraftsToQuote(input: {
   onSaved?: (count: number) => void;
 }): Promise<ImportWriteOutcome> {
   const itemIds: string[] = [];
+  const researchItemIds: string[] = [];
   const runPayloads: QuoteRun[] = [];
   /** Місця нанесення, заведені в цьому заїзді: вид → підпис → id рядка. */
   const placeCache: PlaceCache = new Map();
@@ -182,6 +192,7 @@ export async function writeDraftsToQuote(input: {
   const runsFailure = (message: string): ImportWriteOutcome => ({
     ok: false,
     itemIds,
+    researchItemIds,
     error: `Позиції створено (${itemIds.length}), а тиражі до них — ні. ${message.replace(/[.\s]*$/, "")}. Впишіть тиражі руками або приберіть позиції.`,
   });
 
@@ -198,10 +209,12 @@ export async function writeDraftsToQuote(input: {
     });
     const inserted = await insertQuoteItemRow(payload);
     if (!inserted.ok) {
-      return { ok: false, itemIds, error: inserted.message };
+      return { ok: false, itemIds, researchItemIds, error: inserted.message };
     }
     const rowId = ((inserted.data as { id?: string } | null)?.id ?? itemId) as string;
     itemIds.push(rowId);
+    // Фото вже є — розвідці нема чого додати, зате є що зіпсувати.
+    if (!draft.catalog?.imageUrl) researchItemIds.push(rowId);
     input.onSaved?.(itemIds.length);
     const runs = buildImportRunPayloads({
       draft,
@@ -223,7 +236,7 @@ export async function writeDraftsToQuote(input: {
     if (!savedRuns.ok) return runsFailure(savedRuns.message);
   }
 
-  return { ok: true, itemIds };
+  return { ok: true, itemIds, researchItemIds };
 }
 
 /**

@@ -200,7 +200,7 @@ export function QuoteImportDialog({
     }
 
     setSavedCount(written.itemIds.length);
-    await startImportResearch(targetQuoteId, written.itemIds);
+    await startImportResearch(targetQuoteId, written.researchItemIds);
     await onImported(written.itemIds, targetQuoteId, true);
     const created = `Створено ${written.itemIds.length} ${pluralWordUk(written.itemIds.length, "позицію", "позиції", "позицій")}`;
     toast.success(`${created}. Ціни впишіть у прорахунку; картинки й назви доїжджають фоном.`);

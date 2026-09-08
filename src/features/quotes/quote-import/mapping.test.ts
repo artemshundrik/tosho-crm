@@ -104,6 +104,33 @@ describe("розшифровка → рядки прев'ю", () => {
 });
 
 describe("рядки прев'ю → payload мутацій", () => {
+  it("вартість товару з пулу лягає в тираж, а позначка ПДВ лишається порожньою", () => {
+    // Ціну ми знаємо (вона НАША, за домовленістю), а «з ПДВ чи без» — ні:
+    // у Тотобі з ПДВ, у Бергамо ніде не сказано. Гейт REQ-232 спитає людину.
+    const [run] = buildImportRunPayloads({
+      draft: draft({ unitCost: 190.43 }),
+      quoteId: "quote-1",
+      quoteItemId: "item-1",
+      defaults: { markupRate: 40, managerRate: 0, fixedCostRate: 0, vatRate: 20 },
+    });
+
+    expect(run.unit_price_model).toBe(190.43);
+    expect(run.unit_price_model_vat).toBeNull();
+    // Решта собівартості — нулі: їх не знає ніхто, крім людини.
+    expect([run.unit_price_print, run.logistics_cost, run.desired_manager_income]).toEqual([0, 0, 0]);
+  });
+
+  it("без ціни від джерела вартість товару лишається нулем", () => {
+    const [run] = buildImportRunPayloads({
+      draft: draft(),
+      quoteId: "quote-1",
+      quoteItemId: "item-1",
+      defaults: { markupRate: 40, managerRate: 0, fixedCostRate: 0, vatRate: 20 },
+    });
+
+    expect(run.unit_price_model).toBe(0);
+  });
+
   it("товар із пулу кладе обидві адреси названими, а не за порядком", () => {
     // У пулу «наш магазин» і «оптовик» — різні кнопки на картці позиції, тож
     // здогад «перше посилання = постачальник» тут не годиться.
