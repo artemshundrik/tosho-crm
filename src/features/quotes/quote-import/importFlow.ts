@@ -217,7 +217,34 @@ export async function writeDraftsToQuote(input: {
   /** Місця нанесення, заведені в цьому заїзді: вид → підпис → id рядка. */
   const placeCache: PlaceCache = new Map();
 
-  const saveRuns = (runs: QuoteRun[]) => persistQuoteRuns(input.quoteId, runs, []);
+  /**
+   * ЗБЕРЕГТИ ТИРАЖ, НАВІТЬ ЯКЩО ЦІНУ НЕ ПУСТИЛИ.
+   *
+   * На `quote_item_runs` стоїть тригер `enforce_quote_run_price_field_access`:
+   * ненульову вартість товару має право вписати лише pm/менеджер (owner, СЕО й
+   * головбух проходять наскрізь). Ми підставляємо цю вартість самі, з пулу — і
+   * для решти посад вставка почала падати з 42501 ЦІЛКОМ. Наслідок був куди
+   * гірший за незаповнене поле: у позиції не лишалось ЖОДНОГО тиражу, а
+   * прорахунок відкривався з «собівартість не внесена» (спіймано 08.09.2026,
+   * посада it_specialist).
+   *
+   * Тому зручність поступається: не пустили ціну — пишемо тираж без неї, як
+   * було до автопідстановки. Порожнє поле менеджер побачить і заповнить, а
+   * зниклий тираж він шукав би очима.
+   *
+   * Повторюємо лише те, що самі ж і додали: якщо ціни в тиражі не було, а
+   * запис усе одно впав — причина інша, і ховати її не можна.
+   */
+  const saveRuns = async (runs: QuoteRun[]) => {
+    const first = await persistQuoteRuns(input.quoteId, runs, []);
+    if (first.ok || !runs.some((run) => Number(run.unit_price_model) > 0)) return first;
+    const retry = await persistQuoteRuns(
+      input.quoteId,
+      runs.map((run) => ({ ...run, unit_price_model: 0 })),
+      []
+    );
+    return retry.ok ? retry : first;
+  };
 
   /** Позиції створені, тиражі — ні. Кажемо це прямо, а не самою помилкою бази. */
   const runsFailure = (message: string): ImportWriteOutcome => ({
