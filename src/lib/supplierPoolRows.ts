@@ -189,13 +189,47 @@ export function groupSupplierPoolRows(rows: SupplierPoolRow[], limit: number): S
   // а кого ні. За абеткою в цю сорокову лізли самі лише назви з мапи avanprint —
   // рядки без ціни, з яких нічого не порахуєш, — а 32 картки totobi з цінами не
   // влізали жодного разу. Ціна тут не «краще», а «є з чим працювати».
-  return [...byKey.values()]
-    .sort((a, b) => {
-      const byPrice = Number(b.priceMin !== null) - Number(a.priceMin !== null);
-      if (byPrice !== 0) return byPrice;
-      return a.name.localeCompare(b.name, "uk");
-    })
-    .slice(0, limit);
+  const ordered = [...byKey.values()].sort((a, b) => {
+    const byPrice = Number(b.priceMin !== null) - Number(a.priceMin !== null);
+    if (byPrice !== 0) return byPrice;
+    return a.name.localeCompare(b.name, "uk");
+  });
+
+  /**
+   * ПО ЧЕРЗІ МІЖ ПОСТАЧАЛЬНИКАМИ, і це та сама біда, що в SQL, лише на рівень
+   * вище. Квоту рядків уже роздано чесно (`tosho.search_supplier_pool`), але
+   * карток у вікні візарда всього шість — і сортування вище віддавало всі
+   * шість одному: у Бергамо назви на «Д» і «Ф» ішли за абеткою першими серед
+   * тих, у кого є ціна, тож Тотобі знову не було видно (перевірено в прев'ї
+   * 08.09.2026 на запиті «футболка»).
+   *
+   * Тому обхід по колу: спершу найкраща картка кожного постачальника, потім
+   * друга кожного, і так далі. Порядок УСЕРЕДИНІ постачальника не міняється —
+   * там і далі спершу ті, у кого відома ціна. Шість місць на три джерела
+   * стають двома-двома-двома замість шести-нуля-нуля.
+   */
+  const queues = new Map<string, SupplierPoolProduct[]>();
+  for (const product of ordered) {
+    const queue = queues.get(product.supplierSlug);
+    if (queue) queue.push(product);
+    else queues.set(product.supplierSlug, [product]);
+  }
+
+  const roundRobin: SupplierPoolProduct[] = [];
+  // Порядок самих постачальників — за їхньою найкращою карткою: джерело з
+  // цінами йде попереду джерела без цін, бо його перша картка стоїть вище.
+  const lanes = [...queues.values()];
+  for (let depth = 0; roundRobin.length < limit; depth += 1) {
+    let added = false;
+    for (const lane of lanes) {
+      if (depth >= lane.length) continue;
+      roundRobin.push(lane[depth]);
+      added = true;
+      if (roundRobin.length >= limit) break;
+    }
+    if (!added) break;
+  }
+  return roundRobin;
 }
 
 /** «544,84 грн» або «544,84 – 612,00 грн», коли варіанти коштують по-різному. */

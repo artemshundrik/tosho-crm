@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, CornerDownLeft, Database, ImageOff, Link2, Loader2, Plus, Search } from "lucide-react";
+import { ChevronDown, Database, ExternalLink, ImageOff, Link2, Loader2, Plus, Search } from "lucide-react";
 
 import { SEARCH_LEFT_ICON } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
@@ -318,7 +318,7 @@ export function QuoteItemCommandField({
             >
               <SuggestionPhoto url={suggestion.imageUrl} name={suggestion.name} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{suggestion.name}</span>
+                <span className="block truncate font-medium" title={suggestion.name}>{suggestion.name}</span>
                 <span className="block truncate text-2xs text-muted-foreground">
                   {suggestion.kindName} · {suggestion.typeName}
                   {/* Артикул у другому рядку — щоб було видно, ЧОМУ модель
@@ -331,9 +331,6 @@ export function QuoteItemCommandField({
                   ) : null}
                 </span>
               </span>
-              {active === index ? (
-                <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              ) : null}
             </li>
           ))}
           {/*
@@ -370,7 +367,7 @@ export function QuoteItemCommandField({
                 role="option"
                 aria-selected={active === index}
                 className={cn(
-                  "cursor-pointer rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
+                  "group cursor-pointer rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
                   active === index ? "bg-muted" : "hover:bg-muted/50"
                 )}
                 onMouseEnter={() => setActive(index)}
@@ -380,7 +377,7 @@ export function QuoteItemCommandField({
                 <span className="flex items-center gap-3">
                   <SuggestionPhoto url={product.imageUrl} name={product.name} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{product.name}</span>
+                    <span className="block truncate font-medium" title={product.name}>{product.name}</span>
                     <span className="block truncate text-2xs text-muted-foreground">
                       {[product.article, product.supplierSlug].filter(Boolean).join(" · ")}
                     </span>
@@ -405,8 +402,28 @@ export function QuoteItemCommandField({
                   {price ? (
                     <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-muted-foreground">{price}</span>
                   ) : null}
-                  {active === index ? (
-                    <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  {/* Перехід на сайт постачальника. З'являється на наведенні —
+                      постійна іконка в кожному рядку сперечалася б за увагу з
+                      ціною, а потрібна вона зрідка: подивитись фото більшим і
+                      прочитати опис перед тим, як брати позицію.
+                      stopPropagation обов'язковий: клік по рядку КОМІТИТЬ
+                      позицію, тож без нього «глянути» означало б «додати». */}
+                  {product.url ? (
+                    <a
+                      href={product.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Відкрити «${product.name}» у постачальника`}
+                      title="Відкрити на сайті постачальника"
+                      onClick={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                      }}
+                      className="shrink-0 rounded-[var(--radius-sm)] p-1 text-primary opacity-0 transition-opacity hover:bg-primary/10 focus-visible:opacity-100 group-hover:opacity-100"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
                   ) : null}
                 </span>
 
@@ -460,9 +477,6 @@ export function QuoteItemCommandField({
               </span>
               <span className="block text-2xs text-muted-foreground">Без каталогу — назва й тираж, решта в картці</span>
             </span>
-            {active === addRowIndex ? (
-              <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            ) : null}
           </li>
         </ul>
       </PopoverContent>

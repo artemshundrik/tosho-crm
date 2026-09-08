@@ -145,7 +145,11 @@ const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ product }
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">
+          {/* title, а не Tooltip-компонент: рядків у списку до сорока, і вішати
+              на кожен Radix-обгортку означало б сорок зайвих вузлів заради
+              підказки, яку читають зрідка. Довгі назви тут ріжуться завжди —
+              «Футболка «SOFTSTYLE» чоловіча» вже не влазить. */}
+          <span className="block truncate text-sm font-medium" title={product.name}>
             {product.name}
             {selected?.label ? (
               <span className="font-normal text-muted-foreground"> · {selected.label}</span>
