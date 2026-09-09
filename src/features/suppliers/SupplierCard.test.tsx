@@ -30,7 +30,7 @@ const renderCard = (definition: SupplierDefinition, status: SupplierStatus) =>
 describe("SupplierCard", () => {
   it("веде на сторінку постачальника й показує три числа", () => {
     renderCard(totobi, supplierStatus(totobi, summary, now));
-    expect(screen.getByRole("link", { name: /Totobi/ })).toHaveAttribute("href", "/suppliers/totobi");
+    expect(screen.getByRole("link", { name: /Totobi/ })).toHaveAttribute("href", "/integrations/suppliers/totobi");
     expect(screen.getByText("679")).toBeInTheDocument();
     expect(screen.getByText("98%")).toBeInTheDocument();
     expect(screen.getByText("2 години тому")).toBeInTheDocument();

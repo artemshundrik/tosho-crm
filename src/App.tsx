@@ -334,6 +334,8 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/activity", scope: "page", group: "account", test: (value) => value.startsWith("/activity") },
     { pattern: "/profile", scope: "page", group: "account", test: (value) => value === "/profile" },
     { pattern: "/settings/members", scope: "page", group: "account", test: (value) => value.startsWith("/settings/members") },
+    { pattern: "/integrations/suppliers/:id", scope: "details", group: "account", test: (value) => /^\/integrations\/suppliers\/[^/]+$/.test(value) },
+    { pattern: "/integrations/suppliers", scope: "page", group: "account", test: (value) => value === "/integrations/suppliers" },
     { pattern: "/integrations", scope: "page", group: "account", test: (value) => value.startsWith("/integrations") },
     { pattern: "/admin", scope: "page", group: "admin", test: (value) => value === "/admin" },
     { pattern: "/admin/observability", scope: "page", group: "admin", test: (value) => value.startsWith("/admin/observability") },
@@ -352,8 +354,6 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/design", scope: "page", group: "operations", test: (value) => value === "/design" },
     { pattern: "/design/:id", scope: "details", group: "operations", test: (value) => /^\/design\/[^/]+$/.test(value) },
     { pattern: "/contractors", scope: "page", group: "operations", test: (value) => value.startsWith("/contractors") },
-    { pattern: "/suppliers", scope: "page", group: "operations", test: (value) => value === "/suppliers" },
-    { pattern: "/suppliers/:id", scope: "details", group: "operations", test: (value) => /^\/suppliers\/[^/]+$/.test(value) },
     { pattern: "/stock/samples", scope: "page", group: "operations", test: (value) => value.startsWith("/stock/samples") },
     { pattern: "/finances", scope: "page", group: "operations", test: (value) => value.startsWith("/finances") },
   ];
@@ -1186,29 +1186,6 @@ function AppRoutes() {
             </ModuleRouteGate>
           }
         />
-        {/* «Постачальники» — стан під'єднаних кабінетів і пошук по їхніх
-            товарах (картка 259). Сторінка одного постачальника — окремою
-            адресою: під товари потрібна ширина, у шторку вони не влазять. */}
-        <Route
-          path="suppliers"
-          element={
-            <ModuleRouteGate moduleKey="suppliers">
-              <RouteSuspense shell>
-                <SuppliersPage />
-              </RouteSuspense>
-            </ModuleRouteGate>
-          }
-        />
-        <Route
-          path="suppliers/:id"
-          element={
-            <ModuleRouteGate moduleKey="suppliers">
-              <RouteSuspense shell>
-                <SupplierPage />
-              </RouteSuspense>
-            </ModuleRouteGate>
-          }
-        />
         <Route
           path="stock/samples"
           element={
@@ -1258,6 +1235,29 @@ function AppRoutes() {
             <ModuleRouteGate moduleKey="nova_poshta">
               <RouteSuspense shell>
                 <IntegrationsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        {/* «Постачальники» — друга вкладка «Інтеграцій» (картка 259): стан
+            під'єднаних кабінетів і пошук по їхніх товарах. Сторінка одного
+            постачальника — окремою адресою: під товари потрібна ширина. */}
+        <Route
+          path="integrations/suppliers"
+          element={
+            <ModuleRouteGate moduleKey="nova_poshta">
+              <RouteSuspense shell>
+                <SuppliersPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="integrations/suppliers/:id"
+          element={
+            <ModuleRouteGate moduleKey="nova_poshta">
+              <RouteSuspense shell>
+                <SupplierPage />
               </RouteSuspense>
             </ModuleRouteGate>
           }

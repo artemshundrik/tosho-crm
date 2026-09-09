@@ -13,6 +13,7 @@
  * «Інтеграцій», і крихта загубить, де ми є.
  */
 
+import { INTEGRATIONS_SUPPLIERS } from "@/components/app/IntegrationsTabs";
 import { WHATS_NEW_FEATURES } from "@/components/app/WhatsNewTabs";
 import { DEV_LABELS, DEV_PATHS, DEV_ROOT, resolveDevSurface } from "@/lib/devSection";
 
@@ -102,14 +103,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.contractors,
       showPageHeader: false,
     };
-  if (pathname.startsWith(ROUTES.suppliers))
-    return {
-      title: "Постачальники",
-      subtitle: "Під'єднані кабінети, умови цін і товари кожного постачальника.",
-      breadcrumbLabel: "Постачальники",
-      breadcrumbTo: ROUTES.suppliers,
-      showPageHeader: false,
-    };
   if (pathname.startsWith(ROUTES.sampleStock))
     return {
       title: "Склад",
@@ -194,6 +187,16 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Люди, матриця доступів, посади, Пульс і запрошення.",
       breadcrumbLabel: "Люди та доступи",
       breadcrumbTo: ROUTES.membersAccess,
+      showPageHeader: false,
+    };
+  // Друга вкладка розділу — перед загальною гілкою, з тієї ж причини, що й
+  // «Нова Пошта»: інакше startsWith забере підмаршрут собі.
+  if (pathname.startsWith(INTEGRATIONS_SUPPLIERS))
+    return {
+      title: "Постачальники",
+      subtitle: "Під'єднані кабінети, умови цін і товари кожного постачальника.",
+      breadcrumbLabel: "Постачальники",
+      breadcrumbTo: INTEGRATIONS_SUPPLIERS,
       showPageHeader: false,
     };
   // Налаштування конкретного сервісу — перед загальною гілкою, інакше

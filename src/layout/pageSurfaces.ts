@@ -170,10 +170,6 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "logistics", path: "/logistics", page: "src/pages/LogisticsPage.tsx", toolbar: "none", shape: "list" },
   { id: "design-task", path: "/design/:id", page: "src/pages/DesignTaskPage.tsx", toolbar: "none", shape: "design-record", canvas: true },
   { id: "design", path: "/design", page: "src/pages/DesignPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: boardColumnCount("design"), columnWidth: KANBAN_FLUID_COLUMN } },
-  // Картка постачальника — перед списком: збіг нежорсткий, як у «/design/:id».
-  { id: "supplier", path: "/suppliers/:id", page: "src/pages/SupplierPage.tsx", toolbar: "none", shape: "detail" },
-  // Пошук і заголовок малюються в тілі сторінки, як в «Інтеграціях».
-  { id: "suppliers", path: "/suppliers", page: "src/pages/SuppliersPage.tsx", toolbar: "none", shape: "grid" },
   { id: "contractors", path: "/contractors", page: "src/pages/ContractorsPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "stock", path: "/stock/samples", page: "src/pages/SampleStockPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "finances", path: "/finances", page: "src/pages/FinancesPage.tsx", toolbar: "none", shape: "dashboard", canvas: true },
@@ -182,8 +178,12 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "members-access", path: "/settings/members", page: "src/pages/TeamMembersPage.tsx", toolbar: "compact", shape: "split", canvas: true },
   // Налаштування конкретного сервісу — перед загальною гілкою «Інтеграцій».
   { id: "nova-poshta", path: "/integrations/nova-poshta", page: "src/pages/NovaPoshtaSettingsPage.tsx", toolbar: "none", shape: "detail" },
-  // Тулбар малюється всередині тіла сторінки — макету резервувати нічого.
-  { id: "integrations", path: "/integrations", page: "src/pages/IntegrationsPage.tsx", toolbar: "none", shape: "list" },
+  // Картка постачальника — перед списком: збіг нежорсткий, як у «/design/:id».
+  { id: "supplier", path: "/integrations/suppliers/:id", page: "src/pages/SupplierPage.tsx", toolbar: "none", shape: "detail" },
+  // Обидві вкладки «Інтеграцій» віддають смугу в шапку через
+  // usePageHeaderActions, тож макет резервує її висоту заздалегідь.
+  { id: "suppliers", path: "/integrations/suppliers", page: "src/pages/SuppliersPage.tsx", toolbar: "full", shape: "grid" },
+  { id: "integrations", path: "/integrations", page: "src/pages/IntegrationsPage.tsx", toolbar: "full", shape: "list" },
   { id: "profile", path: "/profile", page: "src/pages/ProfilePage.tsx", toolbar: "compact", shape: "detail" },
 
   // Той самий випадок, що й «Інтеграції»: власний тулбар у тілі сторінки.

@@ -267,7 +267,7 @@ const ROUTE_RULES: ToShoAiRouteRule[] = [
     domainHint: "contractors",
   },
   {
-    test: (pathname) => pathname.startsWith("/suppliers"),
+    test: (pathname) => pathname.startsWith("/integrations/suppliers"),
     title: "Постачальники",
     routeLabel: "Постачальники",
     // Домен «каталог»: товари постачальників — це той самий пул, з якого

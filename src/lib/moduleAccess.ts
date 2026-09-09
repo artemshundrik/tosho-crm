@@ -23,7 +23,6 @@ export type ModuleKey =
   | "orders"
   | "shipping"
   | "catalog"
-  | "suppliers"
   | "logistics"
   | "design"
   | "contractors"
@@ -116,15 +115,6 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: "shipping", label: "До відвантаження", group: "orders", inheritsFrom: "orders" },
 
   { key: "catalog", label: "Каталог", group: "operations" },
-  {
-    key: "suppliers",
-    label: "Постачальники",
-    group: "operations",
-    // Товари й закупівельні ціни постачальників — властивість товару, а не
-    // чиєсь заповнення (правило REQ-250#p32), тому сторінка за замовчуванням у
-    // всіх посад. Власник може прибрати її окремій посаді винятком.
-    hint: "Стан під'єднаних кабінетів, умови цін і товари постачальників; за замовчуванням у всіх посад",
-  },
   { key: "logistics", label: "Логістика", group: "operations" },
   { key: "design", label: "Дизайн", group: "operations" },
   {
@@ -228,7 +218,7 @@ export const MODULE_KEYS = MODULE_DEFINITIONS.map((item) => item.key);
  */
 
 /** Продажі: замовник → прорахунок → замовлення, плюс каталог і дизайн-дошка. */
-const SALES_MENU: ModuleKey[] = ["overview", "customers", "quotes", "orders", "catalog", "suppliers", "design"];
+const SALES_MENU: ModuleKey[] = ["overview", "customers", "quotes", "orders", "catalog", "design"];
 
 /** Бухгалтерія: документи ходять навколо замовлення, від складу до підрядника. */
 const ACCOUNTING_MENU: ModuleKey[] = [
@@ -238,7 +228,6 @@ const ACCOUNTING_MENU: ModuleKey[] = [
   "orders",
   "shipping",
   "catalog",
-  "suppliers",
   "logistics",
   "stock",
   "contractors",
@@ -246,7 +235,7 @@ const ACCOUNTING_MENU: ModuleKey[] = [
 ];
 
 /** Маркетинг: матеріал — готові візуали, а не замовлення й ціни. */
-const MARKETING_MENU: ModuleKey[] = ["overview", "design", "marketing", "suppliers"];
+const MARKETING_MENU: ModuleKey[] = ["overview", "design", "marketing"];
 
 const ROLE_MENUS: Record<string, ModuleKey[]> = {
   // — Продажі —
@@ -265,14 +254,14 @@ const ROLE_MENUS: Record<string, ModuleKey[]> = {
   // — Виробництво —
   head_of_production: [...SALES_MENU, "stock", "logistics", "contractors"],
   // Друкар і пакувальник цін не бачать: їм треба замовлення, макет і склад.
-  printer: ["overview", "orders", "catalog", "suppliers", "design", "stock"],
-  packer: ["overview", "orders", "shipping", "catalog", "suppliers", "stock"],
+  printer: ["overview", "orders", "catalog", "design", "stock"],
+  packer: ["overview", "orders", "shipping", "catalog", "stock"],
 
   // — Логістика —
   head_of_logistics: [...SALES_MENU, "shipping", "logistics", "contractors"],
   // Прорахунки логісту потрібні: у них лежить, що саме й куди їде, ще до того
   // як прорахунок став замовленням.
-  logistics: ["overview", "customers", "quotes", "orders", "shipping", "catalog", "suppliers", "logistics"],
+  logistics: ["overview", "customers", "quotes", "orders", "shipping", "catalog", "logistics"],
 
   // — Бухгалтерія —
   // Усі три бухгалтерські посади мають «Фінанси» (рішення CEO 26.08.2026), але
@@ -287,7 +276,7 @@ const ROLE_MENUS: Record<string, ModuleKey[]> = {
 
   // — Решта —
   // IT тримає ключі до зовнішніх сервісів, але не веде продажі.
-  it_specialist: ["overview", "orders", "catalog", "suppliers", "design", "nova_poshta"],
+  it_specialist: ["overview", "orders", "catalog", "design", "nova_poshta"],
   // CEO — заступник власника: бачить усе, що йому дозволяє роль.
   seo: MODULE_KEYS,
 };
@@ -296,7 +285,7 @@ const ROLE_MENUS: Record<string, ModuleKey[]> = {
  * Посада не з довідника (вписана руками або порожня) — найбезпечніший мінімум,
  * а не «нічого»: людині все одно треба кудись зайти.
  */
-const FALLBACK_MENU: ModuleKey[] = ["overview", "orders", "design", "suppliers"];
+const FALLBACK_MENU: ModuleKey[] = ["overview", "orders", "design"];
 
 /** Rule 0: власник відкриває будь-яку сторінку повз галочки — див. docs/SECURITY.md. */
 function roleMenu(ctx: RoleContext): ModuleKey[] {

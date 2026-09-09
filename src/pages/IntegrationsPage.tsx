@@ -4,6 +4,8 @@ import { RefreshCw } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
+import { IntegrationsTabs } from "@/components/app/IntegrationsTabs";
 import { Button } from "@/components/ui/button";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { hasDefaultFinanceAccess, hasModuleAccess } from "@/lib/moduleAccess";
@@ -107,76 +109,72 @@ export default function IntegrationsPage() {
   const openDefinition = openId ? definitions.find((item) => item.id === openId) ?? null : null;
   const refreshedAgo = formatAgo(loadedAt);
 
+  usePageHeaderActions(
+    <UnifiedPageToolbar
+      topLeft={<IntegrationsTabs />}
+      topRight={
+        // Кнопка стоїть навпроти вкладок, а не в окремій смузі над сторінкою:
+        // та смуга була порожня на 95% ширини й лише відсувала контент униз.
+        <div className="flex items-center gap-3">
+          {refreshedAgo ? (
+            <span className="text-2xs text-muted-foreground">Оновлено {refreshedAgo}</span>
+          ) : null}
+          <Button variant="outline" size="sm" onClick={() => void load()} loading={loading}>
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            Оновити
+          </Button>
+        </div>
+      }
+      filters={
+        // На вузькому екрані чотири підписи не влазять у рядок, і останній
+        // зрізало краєм. Горизонтальна прокрутка замість переносу: перемикач
+        // має лишатись однією смугою.
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+          <SegmentedGroup className="inline-flex w-max gap-1 rounded-lg bg-muted/50 p-1">
+            {FILTERS.map((key) => (
+              <Button
+                key={key}
+                variant="segmented"
+                size="sm"
+                aria-pressed={filter === key}
+                onClick={() => setFilter(key)}
+              >
+                {INTEGRATION_FILTER_LABEL[key]}
+              </Button>
+            ))}
+          </SegmentedGroup>
+        </div>
+      }
+      meta={
+        statuses ? (
+          // Приглушено навмисно: це довідка про фон, а не заголовок. Раніше
+          // поруч стояли ще лічильник і «N сервісів у списку» — три однакові
+          // числа в одному рядку, з яких жодне не додавало нового.
+          <div className="flex items-center gap-2 text-2xs text-muted-foreground/70">
+            <span>
+              Працюють {working} з {definitions.length}
+            </span>
+            <span className="flex items-center gap-1">
+              {definitions.map((definition) => (
+                <span
+                  key={definition.id}
+                  className={cn(
+                    "h-1 w-4 rounded-full opacity-70",
+                    toneDotClass[INTEGRATION_STATE_TONE[statuses[definition.id]?.state ?? "unknown"]]
+                  )}
+                  aria-hidden="true"
+                />
+              ))}
+            </span>
+          </div>
+        ) : null
+      }
+    />,
+    [filter, loading, refreshedAgo, statuses, working, definitions.length]
+  );
+
   return (
     <div className="pb-10">
-      <UnifiedPageToolbar
-        topLeft={
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">Інтеграції</h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Зовнішні сервіси, з якими працює CRM: що зараз живе, що потребує уваги і що плануємо підключити.
-            </p>
-          </div>
-        }
-        topRight={
-          // Кнопка стоїть навпроти заголовка, а не в окремій смузі над сторінкою:
-          // та смуга була порожня на 95% ширини й лише відсувала контент униз.
-          <div className="flex items-center gap-3">
-            {refreshedAgo ? (
-              <span className="text-2xs text-muted-foreground">Оновлено {refreshedAgo}</span>
-            ) : null}
-            <Button variant="outline" size="sm" onClick={() => void load()} loading={loading}>
-              <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
-              Оновити
-            </Button>
-          </div>
-        }
-        filters={
-          // На вузькому екрані чотири підписи не влазять у рядок, і останній
-          // зрізало краєм. Горизонтальна прокрутка замість переносу: перемикач
-          // має лишатись однією смугою.
-          <div className="-mx-1 overflow-x-auto px-1 pb-1">
-            <SegmentedGroup className="inline-flex w-max gap-1 rounded-lg bg-muted/50 p-1">
-              {FILTERS.map((key) => (
-                <Button
-                  key={key}
-                  variant="segmented"
-                  size="sm"
-                  aria-pressed={filter === key}
-                  onClick={() => setFilter(key)}
-                >
-                  {INTEGRATION_FILTER_LABEL[key]}
-                </Button>
-              ))}
-            </SegmentedGroup>
-          </div>
-        }
-        meta={
-          statuses ? (
-            // Приглушено навмисно: це довідка про фон, а не заголовок. Раніше
-            // поруч стояли ще лічильник і «N сервісів у списку» — три однакові
-            // числа в одному рядку, з яких жодне не додавало нового.
-            <div className="flex items-center gap-2 text-2xs text-muted-foreground/70">
-              <span>
-                Працюють {working} з {definitions.length}
-              </span>
-              <span className="flex items-center gap-1">
-                {definitions.map((definition) => (
-                  <span
-                    key={definition.id}
-                    className={cn(
-                      "h-1 w-4 rounded-full opacity-70",
-                      toneDotClass[INTEGRATION_STATE_TONE[statuses[definition.id]?.state ?? "unknown"]]
-                    )}
-                    aria-hidden="true"
-                  />
-                ))}
-              </span>
-            </div>
-          ) : null
-        }
-      />
-
       {!statuses && loading ? (
         <AppSectionLoader label="Читаємо стан інтеграцій…" className="mt-6" />
       ) : null}

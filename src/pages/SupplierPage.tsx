@@ -5,7 +5,7 @@ import { EntityAvatar } from "@/components/app/avatar-kit";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ROUTES } from "@/layout/routes";
+import { INTEGRATIONS_SUPPLIERS } from "@/components/app/IntegrationsTabs";
 import { faviconUrl } from "@/lib/brandFavicon";
 
 import { contractorForSupplier, useSupplierContractors, useSupplierPoolSummary } from "@/features/suppliers/queries";
@@ -34,7 +34,7 @@ export default function SupplierPage() {
     return (
       <div className="pb-10">
         <p className="mt-6 text-sm text-muted-foreground">Такого постачальника немає.</p>
-        <Link to={ROUTES.suppliers} className="mt-2 inline-block text-sm underline underline-offset-2">
+        <Link to={INTEGRATIONS_SUPPLIERS} className="mt-2 inline-block text-sm underline underline-offset-2">
           До списку постачальників
         </Link>
       </div>
@@ -49,7 +49,7 @@ export default function SupplierPage() {
   return (
     <div className="pb-10">
       <Link
-        to={ROUTES.suppliers}
+        to={INTEGRATIONS_SUPPLIERS}
         className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />

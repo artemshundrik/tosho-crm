@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { EntityAvatar } from "@/components/app/avatar-kit";
 import { useIsClamped } from "@/components/app/useIsClamped";
 import { Badge } from "@/components/ui/badge";
-import { ROUTES } from "@/layout/routes";
+import { INTEGRATIONS_SUPPLIERS } from "@/components/app/IntegrationsTabs";
 import { faviconUrl } from "@/lib/brandFavicon";
 import { toneSubtleClass, toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
@@ -59,7 +59,7 @@ export function SupplierCard({ definition, status }: { definition: SupplierDefin
 
   return (
     <Link
-      to={`${ROUTES.suppliers}/${definition.id}`}
+      to={`${INTEGRATIONS_SUPPLIERS}/${definition.id}`}
       className={cn(
         "grid w-full gap-3 rounded-section border border-border/60 bg-card p-4 text-left",
         CARD_ROWS,

@@ -23,7 +23,6 @@ export const ROUTES = {
   logistics: "/logistics",
   design: "/design",
   contractors: "/contractors",
-  suppliers: "/suppliers",
   sampleStock: "/stock/samples",
   finances: "/finances",
   marketing: "/marketing",

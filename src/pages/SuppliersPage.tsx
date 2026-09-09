@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { RefreshCw } from "lucide-react";
 
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import { IntegrationsTabs } from "@/components/app/IntegrationsTabs";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { Button } from "@/components/ui/button";
 import { formatAgo } from "@/lib/formatAgo";
 
@@ -13,11 +15,15 @@ import { SUPPLIER_DEFINITIONS } from "@/features/suppliers/suppliersCatalog";
 import { supplierStatus } from "@/features/suppliers/suppliersStatus";
 
 /**
- * «Постачальники» — список (картка 259).
+ * «Постачальники» — друга вкладка «Інтеграцій» (картка 259).
  *
- * Зверху — пошук по товарах усіх під'єднаних джерел, нижче — картки
- * стану за зразком «Інтеграцій», унизу — черга на під'єднання. Тулбар
- * малюється в тілі, макет смуги дій не резервує (pageSurfaces: toolbar none).
+ * Зверху — пошук по товарах усіх під'єднаних джерел, нижче — картки стану за
+ * зразком сусідньої вкладки, унизу — черга на під'єднання.
+ *
+ * ТУЛБАР ВІДДАЄТЬСЯ В ШАПКУ, а не малюється в тілі: смуга з вкладками мусить
+ * стояти на тому самому місці, що й у сервісів, і не з'їжджати вниз, поки
+ * вантажиться зведення. Висоту макет резервує за `pageSurfaces` ще до першого
+ * кадру сторінки.
  */
 const CONNECTED = SUPPLIER_DEFINITIONS.filter((definition) => !definition.planned);
 const PLANNED = SUPPLIER_DEFINITIONS.filter((definition) => definition.planned);
@@ -30,29 +36,25 @@ export default function SuppliersPage() {
   );
   const refreshedAgo = formatAgo(summary.dataUpdatedAt ? new Date(summary.dataUpdatedAt).toISOString() : null);
 
+  usePageHeaderActions(
+    <UnifiedPageToolbar
+      topLeft={<IntegrationsTabs />}
+      topRight={
+        <div className="flex items-center gap-3">
+          {refreshedAgo ? <span className="text-2xs text-muted-foreground">Оновлено {refreshedAgo}</span> : null}
+          <Button variant="outline" size="sm" onClick={() => void summary.refetch()} loading={summary.isFetching}>
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            Оновити
+          </Button>
+        </div>
+      }
+    />,
+    [refreshedAgo, summary.isFetching]
+  );
+
   return (
     <div className="pb-10">
-      <UnifiedPageToolbar
-        topLeft={
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">Постачальники</h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Під'єднані кабінети, умови цін і товари кожного постачальника.
-            </p>
-          </div>
-        }
-        topRight={
-          <div className="flex items-center gap-3">
-            {refreshedAgo ? <span className="text-2xs text-muted-foreground">Оновлено {refreshedAgo}</span> : null}
-            <Button variant="outline" size="sm" onClick={() => void summary.refetch()} loading={summary.isFetching}>
-              <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
-              Оновити
-            </Button>
-          </div>
-        }
-      />
-
-      <SupplierProductSearch className="mt-5" />
+      <SupplierProductSearch />
 
       {summary.isPending ? <AppSectionLoader label="Читаємо стан пулу…" className="mt-6" /> : null}
 

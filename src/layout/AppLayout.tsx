@@ -35,7 +35,6 @@ import {
   PinOff,
   PanelLeftOpen,
   SlidersHorizontal,
-  Store,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -532,7 +531,6 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "До відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "shipping" },
   // Операції
   { label: "Каталог", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban, moduleKey: "catalog" },
-  { label: "Постачальники", to: ROUTES.suppliers, group: "operations", icon: Store, moduleKey: "suppliers" },
   { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette, moduleKey: "design" },
   {
     label: "Підрядники",

@@ -261,19 +261,6 @@ describe("стартове меню посади", () => {
     }
   });
 
-  it("«Постачальники» — у кожної посади: товари й ціни постачальників видно всім (картка 259)", () => {
-    for (const role of [...Object.keys(JOB_ROLE_NAMES), "вписана-руками", ""]) {
-      const access = defaultModuleAccess({ accessRole: "member", jobRole: role });
-      expect(access.suppliers, `suppliers / ${role}`).toBe(true);
-    }
-  });
-
-  it("власник може вимкнути «Постачальників» окремій посаді винятком", () => {
-    const overrides = new Map([["marketer", { suppliers: false }]]) as never;
-    expect(defaultModuleAccess({ accessRole: "member", jobRole: "marketer" }, overrides).suppliers).toBe(false);
-    expect(defaultModuleAccess({ accessRole: "member", jobRole: "manager" }, overrides).suppliers).toBe(true);
-  });
-
   it("власник відкриває все — Rule 0", () => {
     const access = defaultModuleAccess(OWNER);
     expect(Object.values(access).every(Boolean)).toBe(true);
