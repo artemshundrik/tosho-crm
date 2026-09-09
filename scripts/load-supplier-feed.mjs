@@ -67,6 +67,11 @@ const PSQL = process.env.PSQL_BIN || "/opt/homebrew/opt/libpq/bin/psql";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
 
+// Перелік параметрів рядка підключення, які вміємо передати через оточення.
+// Стоїть тут, а не біля psql: фото-прохід читає базу ДО того місця, і на
+// пізньому `const` спіткнувся б об тимчасову мертву зону.
+const PG_PARAMS = { sslmode: "PGSSLMODE", options: "PGOPTIONS", connect_timeout: "PGCONNECT_TIMEOUT", application_name: "PGAPPNAME" };
+
 /**
  * Реєстр постачальників. Додати нового — рядок сюди, а не новий скрипт.
  * slug — домен (ключ прив'язки до contractors.website і до пулу).
@@ -270,15 +275,15 @@ const SUPPLIERS = {
        * картки (`/categories/view/6704/`). Тобто одна мапа «артикул → id»
        * закриває і фото, і посилання.
        *
-       * Збираємо її зі сторінок розділів: 20 товарів на сторінку, розмір не
-       * піддається (перевірено десять назв параметра — усі дають 20). На весь
-       * каталог це ~350 сторінок — увосьмеро менше за щотижневий обхід Бергамо.
+       * Збираємо її ЇХНІМ ЖЕ ПОШУКОМ (`/sphinx/find/`), а не обходом розділів:
+       * чому саме так — довго розписано над `attachPapirusPhotos`, коротко —
+       * меню показує не весь каталог, і обхід упирається в 75,6%.
        *
        * Самі картинки ПУБЛІЧНІ: `/img/goods/{id}.jpg` віддається без куки
        * (перевірено 09.09.2026 — 200, JPEG 1000×701). Тому в CRM вони просто
        * покажуться, класти їх до себе не треба.
        */
-      photos: { concurrency: 4, delayMs: 250, maxPages: 40, minCoverage: 0.8 },
+      photos: { concurrency: 4, delayMs: 250, minCoverage: 0.9 },
     },
     format: "xls-price",
     source: "cabinet:xls",
@@ -1435,82 +1440,117 @@ async function loadPapirusPrice(cfg) {
 }
 
 /**
- * Фото й посилання для Папіруса: мапа «артикул → внутрішній id».
+ * Папірус: фото, посилання й id товару — ЇХНІМ ЖЕ ПОШУКОМ, а не обходом розділів.
  *
- * У прайсі id немає, а він потрібен двічі — ім'я файлу картинки
- * (`/img/goods/{id}.jpg`) і адреса картки (`/categories/view/{id}/`). Єдине
- * місце, де артикул стоїть поруч із id, — сторінки розділів, по 20 товарів.
+ * ЧОМУ НЕ РОЗДІЛИ, ХОЧ СПОЧАТКУ БУЛО САМЕ ТАК. Обхід `/categories/view/cid.N/`
+ * упирається в стелю: 4101 сторінка дала пари лише для 5062 з 6697 товарів
+ * (75,6%, заміряно 09.09.2026). Причина не в обході — сайт віддав 8090 пар,
+ * більше, ніж товарів у прайсі, — а в тому, що МЕНЮ ПОКАЗУЄ НЕ ВЕСЬ КАТАЛОГ:
+ * 1635 позицій прайсу просто не лежать у жодному розділі з меню. Це не
+ * лікується ні пагінацією, ні регістром: я пробував обидва, разом вони дали
+ * +59 товарів ціною вп'ятеро довшого проходу.
  *
- * ЧОМУ ЦЕ НЕ ЗУПИНЯЄ ЗАЛИВ. Прайс уже на руках, і він самодостатній: артикул,
- * назва, наша ціна, залишок. Фото — прикраса картки, а не дані. Тому обірваний
- * прохід НЕ валить прогін, як у Бергамо (там обхід — єдине джерело товарів, і
- * половина сторінок означала б погашену половину каталогу): тут ми лише не
- * доклали картинок і чесно кажемо, скільки їх вийшло.
+ * Пошук же знаходить УСЕ: 25 випадкових артикулів прайсу — 25 влучень, усі з
+ * фото. Він і дешевший за сторінку розділу: маленький JSON проти 250 кБ HTML.
+ *
+ * ОДИН ЗАПИТ ЗАКРИВАЄ БАГАТО АРТИКУЛІВ. Відповідь несе до 100 товарів, а в
+ * прайсі сусідні рядки — родичі (той самий товар у різних кольорах, та сама
+ * серія). Тому йдемо списком і питаємо лише про те, чого ще не знаємо: решту
+ * забираємо з чужих відповідей.
  */
 async function attachPapirusPhotos(rows, cfg, cookieHeader) {
-  const { concurrency = 4, delayMs = 250, maxPages = 40, minCoverage = 0.8 } = cfg.api.photos;
+  const { concurrency = 4, delayMs = 250, minCoverage = 0.8 } = cfg.api.photos;
   const site = cfg.api.site;
   const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+  const norm = (a) => String(a ?? "").trim().toLowerCase();
 
-  const index = await fetch(cfg.api.homePage, {
-    headers: { "User-Agent": UA, cookie: cookieHeader },
-    signal: AbortSignal.timeout(30_000),
-  })
-    .then((r) => r.text())
-    .catch(() => "");
-  const all = [...new Set([...index.matchAll(/\/categories\/view\/cid\.(\d+)\//g)].map((m) => m[1]))];
-  if (!all.length) {
-    console.log("  ⚠ меню розділів не прочиталось — фото цього разу без змін");
-    return;
-  }
-  const cids = limit ? all.slice(0, 5) : all;
-  console.log(
-    `Фото: обходимо ${cids.length} розділів по 20 товарів на сторінку` +
-      (limit ? ` (з ${all.length} — --limit)` : "")
-  );
-
+  // id товару: з нього ж будуються і фото, і адреса картки.
   const byArticle = new Map();
+
+  /**
+   * ПЕРШИЙ ПРОХІД ПИТАЄ ПРО ВСЕ, ДАЛІ — ЛИШЕ ПРО НОВЕ. Внутрішній id товару
+   * сталий: він не міняється ні від ціни, ні від залишку. Тому перепитувати
+   * шість із половиною тисяч артикулів двічі на день — це навантажувати чужий
+   * сайт заради відповіді, яка вже лежить у нас у базі.
+   *
+   * Числа, які до цього призвели (09.09.2026): без засіву прохід робить 6469
+   * запитів і триває чверть години — більше, ніж тижневий обхід Бергамо, і це
+   * двічі на добу. Із засівом стільки коштує лише перший прогін.
+   *
+   * Ідемо в базу тим самим psql, що й запис. Не вийшло — не біда: працюємо як
+   * раніше, просто дорожче.
+   */
+  seed: {
+    if (!dbUrl) break seed;
+    try {
+      const env = pgEnvFrom(dbUrl);
+      const args = ["-X", "-A", "-t", "-F", "\t", "-c",
+        `select article, image_url from tosho.supplier_products
+          where supplier_slug = '${cfg.slug}' and article is not null and image_url is not null`];
+      if (!env) args.unshift(dbUrl);
+      const out = execFileSync(PSQL, args, {
+        encoding: "utf8",
+        env: { ...process.env, ...(env || {}) },
+        maxBuffer: 32 * 1024 * 1024,
+      });
+      for (const line of out.split("\n")) {
+        const [article, url] = line.split("\t");
+        const id = (String(url || "").match(/\/img\/goods\/(\d+)\.jpg/) || [])[1];
+        if (article && id) byArticle.set(norm(article), id);
+      }
+      if (byArticle.size) console.log(`  з бази вже відомо id для ${byArticle.size} артикулів — про них не питаємо`);
+    } catch {
+      // База недоступна або таблиці ще немає — просто питаємо про все.
+    }
+  }
+
+  const want = rows.map((r) => r.article);
+  let asked = 0;
   let cursor = 0;
-  let pages = 0;
+
   async function worker() {
     for (;;) {
       const i = cursor++;
-      if (i >= cids.length) return;
-      const cid = cids[i];
-      for (let p = 1; p <= maxPages; p++) {
-        const url = p === 1 ? `${site}/categories/view/cid.${cid}/` : `${site}/categories/view/cid.${cid}/p.${p}/`;
-        let html = "";
-        try {
-          const res = await fetch(url, {
-            headers: { "User-Agent": UA, cookie: cookieHeader },
-            signal: AbortSignal.timeout(30_000),
-          });
-          html = await res.text();
-        } catch {
-          break;
-        }
-        pages++;
-        // Плитка товару: мініатюра `/img/goods/tb/{id}.jpg`, а поруч «Арт. XXX».
-        // Ідемо парами по розмітці — так надійніше, ніж зіставляти два списки
-        // за порядком: товар без картинки зсунув би всі решта на один.
-        let added = 0;
-        for (const m of html.matchAll(
-          /img\/goods\/tb\/(\d+)\.jpg[\s\S]{0,4000}?Арт\.\s*([^\s<][^<]{0,40}?)\s*</g
-        )) {
-          const [, id, article] = m;
-          const key = article.trim();
-          if (key && !byArticle.has(key)) (byArticle.set(key, id), added++);
-        }
-        await nap(delayMs);
-        if (!added) break;
+      if (i >= want.length) return;
+      const article = want[i];
+      // Уже приїхав у чиїйсь відповіді — питати окремо нема потреби.
+      if (byArticle.has(norm(article))) continue;
+      let json = null;
+      try {
+        const res = await fetch(`${site}/sphinx/find/`, {
+          method: "POST",
+          headers: {
+            "User-Agent": UA,
+            cookie: cookieHeader,
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          body: `js=1&st=catalog&q=${encodeURIComponent(article)}`,
+          signal: AbortSignal.timeout(30_000),
+        });
+        json = JSON.parse(await res.text());
+      } catch {
+        // Мовчазний пропуск: фото — прикраса картки, і одна невдала відповідь
+        // не має валити прогін. Загальне покриття все одно перевіряється нижче.
       }
+      asked++;
+      for (const it of json?.items ?? []) {
+        const key = norm(it.article);
+        // `img == false` у них означає «фото немає» — їхній же скрипт підставляє
+        // на це місце заглушку comingsoon. Такий рядок лишаємо без картинки.
+        const hasImg = it.img && !/comingsoon/i.test(String(it.img));
+        if (key && it.id && hasImg && !byArticle.has(key)) byArticle.set(key, String(it.id));
+      }
+      if (asked % 250 === 0) console.log(`  запитів ${asked}, знайдено ${byArticle.size}`);
+      await nap(delayMs);
     }
   }
+  console.log(`Фото: питаємо їхній пошук про ${want.length} артикулів (сусідні закриваються гуртом)`);
   await Promise.all(Array.from({ length: concurrency }, worker));
 
   let hit = 0;
   for (const r of rows) {
-    const id = byArticle.get(r.article);
+    const id = byArticle.get(norm(r.article));
     if (!id) continue;
     hit++;
     r.image_url = `${site}/img/goods/${id}.jpg`;
@@ -1519,17 +1559,16 @@ async function attachPapirusPhotos(rows, cfg, cookieHeader) {
   }
   const coverage = rows.length ? hit / rows.length : 0;
   console.log(
-    `  сторінок ${pages}, пар «артикул → id» ${byArticle.size}, з фото ${hit} з ${rows.length} ` +
-      `(${(coverage * 100).toFixed(1)}%)`
+    `  запитів ${asked} на ${rows.length} товарів, з фото ${hit} (${(coverage * 100).toFixed(1)}%)`
   );
-  // Під `--limit` обходимо жменю розділів, тож низьке покриття — норма, а не сигнал.
   if (!limit && coverage < minCoverage) {
     console.log(
-      `  ⚠ фото менше за очікуване (межа ${(minCoverage * 100).toFixed(0)}%): прохід міг обірватись. ` +
-        `Прайс від цього не постраждав — ціни й залишки на місці.`
+      `  ⚠ фото менше за очікуване (межа ${(minCoverage * 100).toFixed(0)}%): пошук міг відповідати ` +
+        `порожньо. Прайс від цього не постраждав — ціни й залишки на місці.`
     );
   }
 }
+
 
 async function applyAccountPricing(rows, cfg) {
   const ap = cfg.accountPricing;
@@ -2124,7 +2163,6 @@ writeFileSync(sqlFile, sql);
  * ми не знаємо, — не викидаємо його мовчки, а чесно вертаємось до старого
  * способу; на цей випадок увесь вивід проціджується через `redact`.
  */
-const PG_PARAMS = { sslmode: "PGSSLMODE", options: "PGOPTIONS", connect_timeout: "PGCONNECT_TIMEOUT", application_name: "PGAPPNAME" };
 function pgEnvFrom(url) {
   let u;
   try {
