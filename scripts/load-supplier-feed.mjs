@@ -39,8 +39,8 @@
  *   node scripts/load-supplier-feed.mjs bergamo --dry --limit=20  (коротка проба обходу)
  *   node scripts/load-supplier-feed.mjs --list           (перелік постачальників)
  *
- * Джерелам під логіном (e-suvenir) потрібні ще й свої змінні — які саме,
- * написано в їхньому записі реєстру полем `auth`.
+ * Джерелам під логіном (e-suvenir, berrytex) потрібні ще й свої змінні — які
+ * саме, написано в їхньому записі реєстру полем `auth`.
  */
 
 import { execFileSync } from "node:child_process";
@@ -64,6 +64,35 @@ const SUPPLIERS = {
     format: "prom",
     source: "feed:prom",
     minRows: 1600, // у фіді 2083 (08.09.2026)
+    // ЦІНА ФІДА ТУТ РОЗДРІБНА, А НАША ЛЕЖИТЬ ЗА ЛОГІНОМ — І ЦЕ НЕ ПРАВИЛО,
+    // А ЧИСЛО З КАБІНЕТУ. Знижка не одна на весь каталог (заміряно 09.09.2026
+    // на десяти товарах різних брендів): вісім дали множник 0,625, кепка
+    // Reis 6P — 0,72, жилет Moontex — 0,60. `priceRule`, як у Тотобі, поставив
+    // би трьом товарам з десяти чужу ціну, а помітили б це вже на погодженні.
+    //
+    // Зате ВСЕРЕДИНІ товару множник сталий: 54 кольори на п'яти товарах дали
+    // розкид 0,6247–0,6276, і весь він від округлення сайту до цілих гривень.
+    // Тому ходимо не по 2071 рядку, а по 74 сторінках товару: беремо множник
+    // сторінки й множимо на копійчані ціни фіда. Сторінка сама точних копійок
+    // не знає — вона показує гривні.
+    auth: { emailEnv: "BERRYTEX_EMAIL", passwordEnv: "BERRYTEX_PASSWORD" },
+    accountPricing: {
+      loginPage: "https://berrytex.com.ua/customer/account/login/",
+      loginPost: "https://berrytex.com.ua/customer/account/loginPost/",
+      accountPage: "https://berrytex.com.ua/customer/account/",
+      concurrency: 4,
+      delayMs: 250,
+      // Частка СТОРІНОК, де множник справді нижчий за роздріб. Логін може
+      // відпасти посеред проходу, і тоді сторінки почнуть віддавати роздріб:
+      // рядки на місці, виглядають нормально, просто дорожчі в півтора раза.
+      // Той самий рубіж, що `minDiscountedRatio` в Е-Сувеніра.
+      minDiscountedRatio: 0.8,
+      // Частка РЯДКІВ, які дістали множник своєї сторінки. Решта лишається без
+      // ціни (див. нижче), і якщо таких більше десятої частини — це вже не
+      // «кілька сторінок не відповіли», а зламаний прохід.
+      minCoverage: 0.9,
+    },
+    priceKind: "wholesale",
   },
   avanprint: {
     slug: "avanprint.ua",
@@ -258,7 +287,8 @@ function tag(block, name) {
 }
 
 function parseProm(xml) {
-  // Правила цін тут поки не застосовуються: у berrytex домовленості ще немає.
+  // Ціни тут роздрібні: наша лежить за логіном і приїжджає окремим проходом
+  // (`applyAccountPricing`), а не правилом.
   const cats = {};
   for (const m of xml.matchAll(/<category id="(\d+)"[^>]*>([\s\S]*?)<\/category>/g)) {
     cats[m[1]] = unesc(m[2].trim());
@@ -1170,6 +1200,349 @@ async function loadMagentoGraphql(cfg) {
   return rows;
 }
 
+/**
+ * Ціни з кабінету для джерел, чий фід віддає роздріб (berrytex).
+ *
+ * НАВІЩО ОКРЕМИЙ ПРОХІД, А НЕ ЩЕ ОДИН `priceRule`. Правило описує домовленість
+ * одним числом на весь каталог або на розділ. У Беррітекса так не виходить:
+ * знижка різна в різних товарів (0,625 у більшості, 0,72 в кепки Reis 6P, 0,60
+ * в жилета Moontex — заміряно 09.09.2026), і вгадати її з фіда нічим. Число
+ * лежить у кабінеті, тож по нього треба сходити.
+ *
+ * ЧОМУ 74 ЗАПИТИ, А НЕ 2071. Ціна варіанта на сайті показана цілими гривнями, а
+ * у фіді вона з копійками. Якщо взяти число сайту як є, у пул ляже округлення —
+ * до півгривні на рядок, і воно поїде в прорахунок. Тому зі сторінки беремо не
+ * ціну, а МНОЖНИК (сума цін сайту / сума цін фіда по тих самих кольорах), і
+ * множимо на копійчану ціну фіда. Сума замість середнього навмисно: округлення
+ * сайту так усереднюється, і на п'яти перевірених товарах перерахунок сходиться
+ * з числом сайту до гривні.
+ *
+ * ⚠️ РЯДОК БЕЗ МНОЖНИКА ЛИШАЄТЬСЯ БЕЗ ЦІНИ. Спокуса лишити йому роздріб велика
+ * — рядок виглядатиме повним. Але `price_kind` у цього постачальника вже
+ * 'wholesale', тож роздріб у цій колонці означав би «наша ціна» з числом,
+ * більшим у півтора раза. Та сама причина, що в Аванпринта: порожнє поле
+ * менеджер помітить, а неправильне число — ні.
+ */
+async function applyAccountPricing(rows, cfg) {
+  const ap = cfg.accountPricing;
+  const { concurrency = 4, delayMs = 250, minDiscountedRatio = 0.8, minCoverage = 0.9, retries = 1 } = ap;
+
+  const email = process.env[cfg.auth.emailEnv];
+  const password = process.env[cfg.auth.passwordEnv];
+  if (!email || !password) {
+    if (dry) {
+      console.log(
+        `⚠ Немає ${cfg.auth.emailEnv}/${cfg.auth.passwordEnv} — суха пробіжка з РОЗДРІБНИМИ цінами фіда. ` +
+          `Для заливу впишіть їх у .env.backup.`
+      );
+      return;
+    }
+    console.error(
+      `Немає ${cfg.auth.emailEnv}/${cfg.auth.passwordEnv} у оточенні. Без логіна сайт показує роздріб, ` +
+        `а він ліг би в пул як наша ціна. Впишіть їх у .env.backup і повторіть.`
+    );
+    process.exit(1);
+  }
+
+  // ── сесія ─────────────────────────────────────────────────────────────────
+  const jar = new Map();
+  const cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+  const keep = (res) => {
+    for (const c of res.headers.getSetCookie?.() ?? []) {
+      const [pair] = c.split(";");
+      const i = pair.indexOf("=");
+      if (i > 0) jar.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+    }
+  };
+  /**
+   * `...opts` СТОЇТЬ ПЕРШИМ НАВМИСНО. Якщо розсипати його після `headers`,
+   * власні заголовки виклику затруть зібрані тут — разом із кукою. Magento на
+   * запит без сесії відповідає редиректом на `/enable-cookies`, і виглядає це
+   * як «неправильний пароль». Півгодини на цьому вже втрачено (09.09.2026).
+   */
+  const req = async (url, opts = {}) => {
+    const res = await fetch(url, {
+      ...opts,
+      redirect: "manual",
+      headers: { "User-Agent": UA, cookie: cookie(), ...(opts.headers || {}) },
+      signal: AbortSignal.timeout(30_000),
+    });
+    keep(res);
+    return res;
+  };
+
+  const loginHtml = await (await req(ap.loginPage)).text();
+  const formKey = (loginHtml.match(/id="login-form"[\s\S]*?name="form_key"[^>]*value="([^"]+)"/) ||
+    loginHtml.match(/name="form_key"[^>]*value="([^"]+)"/) || [])[1];
+  if (!formKey) {
+    console.error("Сторінка входу не віддала form_key — форма змінилась, вхід зібрати нічим.");
+    process.exit(1);
+  }
+  const posted = await req(ap.loginPost, {
+    method: "POST",
+    body: new URLSearchParams({ form_key: formKey, "login[username]": email, "login[password]": password }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Referer: ap.loginPage },
+  });
+  const landed = posted.headers.get("location") || "";
+  if (/enable-cookies/.test(landed)) {
+    console.error("Magento відповів «увімкніть куки»: сесія не доїхала до запиту входу, а не пароль поганий.");
+    process.exit(1);
+  }
+
+  let acc = await req(ap.accountPage);
+  for (let hop = 0; hop < 3 && acc.status >= 300 && acc.status < 400; hop++) {
+    acc = await req(new URL(acc.headers.get("location"), ap.accountPage).href);
+  }
+  const accHtml = await acc.text();
+  if (!/customer\/account\/logout/.test(accHtml)) {
+    console.error("Кабінет не відкрився — далі сайт показував би роздріб. Перевірте пошту й пароль.");
+    process.exit(1);
+  }
+  console.log("Кабінет відкрито — ціни беремо з-під логіна.");
+
+  // ── множник сторінки ──────────────────────────────────────────────────────
+  // Код кольору у фіді стоїть у назві: «(колір білий (WH), розмір 1/2)». Він же
+  // — у класі плитки на сторінці (`color-WH`), тож це і є ключ звірки.
+  const colourOf = (name) => {
+    const s = String(name || "");
+    const m = s.match(/колір[^()]*\(([A-Z0-9]+)\)/) || s.match(/\(([A-Z0-9]{1,6})\)/);
+    return m ? m[1] : null;
+  };
+  // Атрибути в тезі йдуть у довільному порядку, тому спершу беремо весь тег із
+  // ціною, а колір шукаємо всередині нього.
+  const pagePrices = (html) => {
+    const out = new Map();
+    for (const m of html.matchAll(/<[^>]*\bdata-price="([\d.]+)"[^>]*>/g)) {
+      const colour = (m[0].match(/\bcolor-([A-Z0-9]+)\b/) || [])[1];
+      const price = Number.parseFloat(m[1]);
+      if (!colour || !Number.isFinite(price) || price <= 0) continue;
+      if (!out.has(colour) || price < out.get(colour)) out.set(colour, price);
+    }
+    return out;
+  };
+  /**
+   * Множник сторінки — насправді множник КОЛЬОРУ, і це не педантизм.
+   * На `jhk-polo-regular-man` білий іде за 0,630, а решта 26 кольорів за 0,623
+   * (09.09.2026). Один множник на сторінку дав би білому 333,61 замість 337 —
+   * 3,40 грн повз, причому мовчки й на найпопулярнішому кольорі.
+   *
+   * Але й брати відношення кожного кольору окремо не можна: сайт показує цілі
+   * гривні, тож у відношенні сидить шум до половини гривні, і на дешевому
+   * товарі він більший за справжню різницю ставок.
+   *
+   * ЗВІДСИ ПРАВИЛО ГРУПУВАННЯ, У ЯКОМУ НЕМАЄ ЖОДНОГО ПІДІБРАНОГО ЧИСЛА: колір
+   * належить ставці, якщо ставка ВІДТВОРЮЄ показане сайтом ціле число, тобто
+   * різниця менша за пів гривні — рівно те округлення, яке сайт і робить.
+   * Беремо медіанне відношення як припущення, залишаємо тих, кого воно
+   * відтворює, перераховуємо ставку сумою по них (шум усереднюється), а хто не
+   * вписався — той збирається в наступну групу тим самим способом.
+   *
+   * Перша редакція розділяла кольори за «розривом утричі більшим за шум», і на
+   * футболці `jhk-regular-t-shirt` це проковтнуло колір CM: 315 грн проти 316,56
+   * за спільною ставкою. Підібраний поріг завжди комусь завеликий.
+   */
+  const tierFor = (page, group) => {
+    if (!page.size) return null;
+    // Сайт показує ціну НАЙДЕШЕВШОГО розміру кольору («ціна від»), тож і з фіда
+    // по кожному кольору беремо мінімум — інакше множник поїде на товарах, де
+    // розміри коштують по-різному.
+    const feedMin = new Map();
+    for (const r of group) {
+      const c = colourOf(r.name);
+      const price = Number.parseFloat(r.price);
+      if (!c || !Number.isFinite(price) || price <= 0) continue;
+      if (!feedMin.has(c) || price < feedMin.get(c)) feedMin.set(c, price);
+    }
+    const pairs = [];
+    for (const [c, sp] of page) {
+      const fp = feedMin.get(c);
+      if (fp) pairs.push({ c, sp, fp, ratio: sp / fp });
+    }
+    const sane = (t) => t > 0.2 && t <= 1.05;
+
+    if (!pairs.length) {
+      // Кольори не зійшлись (у назві їх немає зовсім) — лишається порівняти
+      // найдешевше з найдешевшим: на сайті це «ціна від», у фіді — мінімум.
+      const fp = Math.min(...group.map((r) => Number.parseFloat(r.price)).filter((n) => Number.isFinite(n) && n > 0));
+      if (!Number.isFinite(fp)) return null;
+      const tier = Math.round((Math.min(...page.values()) / fp) * 10000) / 10000;
+      return sane(tier) ? { byColour: new Map(), fallback: tier, groups: 1, matched: 0, worst: 0 } : null;
+    }
+
+    // Округлення сайту: показане число відрізняється від справжнього не більше
+    // ніж на пів гривні. 0,51 — щоб не спіткнутись на рівно половині.
+    const ROUNDING = 0.51;
+    const sumTier = (list) => {
+      const site = list.reduce((a, x) => a + x.sp, 0);
+      const feed = list.reduce((a, x) => a + x.fp, 0);
+      return feed ? Math.round((site / feed) * 10000) / 10000 : 0;
+    };
+    const clusters = [];
+    let rest = pairs.slice();
+    while (rest.length) {
+      const sorted = rest.map((x) => x.ratio).sort((a, z) => a - z);
+      // Медіана, а не середнє: одна ставка-виняток не має тягнути припущення на себе.
+      let tier = sorted[Math.floor(sorted.length / 2)];
+      let fits = [];
+      for (let step = 0; step < 5; step++) {
+        const next = rest.filter((x) => Math.abs(x.fp * tier - x.sp) <= ROUNDING);
+        if (!next.length) break;
+        const nt = sumTier(next);
+        const settled = next.length === fits.length && Math.abs(nt - tier) < 1e-6;
+        fits = next;
+        tier = nt;
+        if (settled) break;
+      }
+      // Медіанна ставка не відтворила нікого (буває на двох кольорах із різними
+      // ставками) — тоді група з одного кольору й точним його відношенням.
+      if (!fits.length) {
+        fits = [rest[0]];
+        tier = Math.round(rest[0].ratio * 10000) / 10000;
+      }
+      clusters.push({ tier, members: fits });
+      rest = rest.filter((x) => !fits.includes(x));
+    }
+
+    const byColour = new Map();
+    let biggest = null;
+    for (const { tier, members } of clusters) {
+      // Ставка поза межами — не знижка, а розсинхрон (інша сторінка, ціна за
+      // комплект). Кольори такої групи лишаються без множника, решта сторінки
+      // від цього не страждає.
+      if (!sane(tier)) continue;
+      for (const x of members) byColour.set(x.c, tier);
+      if (!biggest || members.length > biggest.n) biggest = { tier, n: members.length };
+    }
+    if (!biggest) return null;
+    let worst = 0;
+    for (const x of pairs) {
+      const tier = byColour.get(x.c);
+      if (tier) worst = Math.max(worst, Math.abs(x.fp * tier - x.sp));
+    }
+    return { byColour, fallback: biggest.tier, groups: byColour.size ? new Set(byColour.values()).size : 1, matched: pairs.length, worst };
+  };
+
+  const byUrl = new Map();
+  for (const r of rows) {
+    if (!r.url) continue;
+    if (!byUrl.has(r.url)) byUrl.set(r.url, []);
+    byUrl.get(r.url).push(r);
+  }
+  const urls = [...byUrl.keys()];
+  const candidates = rows.filter((r) => Number.parseFloat(r.price) > 0).length;
+  console.log(`Сторінок товару: ${urls.length} на ${rows.length} рядків — по множнику з кожної.`);
+
+  const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+  const tiers = new Map();
+  const failures = [];
+  let cursor = 0;
+  let done = 0;
+  async function worker() {
+    for (;;) {
+      const i = cursor++;
+      if (i >= urls.length) return;
+      const url = urls[i];
+      let html = null;
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const res = await req(url);
+          if (res.status >= 300 && res.status < 400) throw new Error(`редирект на ${res.headers.get("location") || "?"}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          html = await res.text();
+          break;
+        } catch (e) {
+          if (attempt === retries) failures.push(`${url} — ${e.message}`);
+          else await nap(600);
+        }
+      }
+      if (html) {
+        const t = tierFor(pagePrices(html), byUrl.get(url));
+        if (t) tiers.set(url, t);
+      }
+      done++;
+      if (done % 25 === 0 || done === urls.length) {
+        console.log(`  пройдено ${done}/${urls.length} — множників ${tiers.size}, невдач ${failures.length}`);
+      }
+      await nap(delayMs);
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker));
+
+  if (failures.length) {
+    console.log(`Не відповіли ${failures.length} сторінок, перші три:`);
+    for (const f of failures.slice(0, 3)) console.log(`  ${f}`);
+  }
+
+  // ── перерахунок ───────────────────────────────────────────────────────────
+  let priced = 0;
+  let cleared = 0;
+  // Ідемо по ВСІХ рядках, а не по сторінках: рядок без адреси в жодну групу не
+  // потрапив, і обхід по групах лишив би йому роздріб під виглядом нашої ціни.
+  for (const r of rows) {
+    const site = Number.parseFloat(r.price);
+    if (!Number.isFinite(site) || site <= 0) continue;
+    const t = r.url ? tiers.get(r.url) : null;
+    const attrs = JSON.parse(r.attrs || "{}");
+    attrs.sitePrice = site;
+    if (t) {
+      const colour = colourOf(r.name);
+      // Колір, якого на сторінці немає (зняли з продажу, але у фіді ще є),
+      // рахується найпоширенішою ставкою товару.
+      const tier = (colour && t.byColour.get(colour)) || t.fallback;
+      attrs.accountTier = tier;
+      r.price = (Math.round(site * tier * 100) / 100).toFixed(2);
+      priced++;
+    } else {
+      r.price = null;
+      cleared++;
+    }
+    r.attrs = JSON.stringify(attrs);
+  }
+
+  const spread = new Map();
+  for (const t of tiers.values()) {
+    const k = t.fallback.toFixed(3);
+    spread.set(k, (spread.get(k) || 0) + 1);
+  }
+  const top = [...spread.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  console.log(`  ціну з кабінету дістали ${priced} рядків з ${candidates}; без ціни лишилось ${cleared}`);
+  const multi = [...tiers.values()].filter((t) => t.groups > 1).length;
+  if (multi) console.log(`  сторінок, де ставка різна для різних кольорів: ${multi}`);
+  console.log(`  множники: ${top.map(([k, n]) => `${k} — ${n} сторінок`).join(", ")}${spread.size > top.length ? ", …" : ""}`);
+  // Розбіжність — це перевірка самої гіпотези «множник у товарі сталий». Поки
+  // вона в межах гривні, множник справді один на товар; помітно більша означає,
+  // що на сторінці цін кілька, і її треба дивитись очима.
+  const byWorst = [...tiers].sort((a, b) => b[1].worst - a[1].worst);
+  const worst = byWorst.length ? byWorst[0][1].worst : 0;
+  console.log(`  найбільша розбіжність перерахунку з числом сайту: ${worst.toFixed(2)} грн`);
+  for (const [url, t] of byWorst.slice(0, 3).filter(([, t]) => t.worst >= 1)) {
+    console.log(`    ${t.worst.toFixed(2)} грн — ${url} (множник ${t.fallback.toFixed(3)}, кольорів ${t.matched})`);
+  }
+
+  const coverage = candidates ? priced / candidates : 0;
+  if (coverage < minCoverage) {
+    console.error(
+      `Ціну з кабінету дістали лише ${(coverage * 100).toFixed(1)}% рядків (межа ${(minCoverage * 100).toFixed(0)}%). ` +
+        `Заливати такий прохід не можна: більшість каталогу лишилась би без ціни. Нічого не записано.`
+    );
+    process.exit(1);
+  }
+  const discounted = [...tiers.values()].filter((t) => t.fallback < 0.95).length;
+  const ratio = tiers.size ? discounted / tiers.size : 0;
+  console.log(`  сторінок із ціною, нижчою за роздріб: ${discounted} з ${tiers.size} (${(ratio * 100).toFixed(1)}%)`);
+  const noDiscount = [...tiers].filter(([, t]) => t.fallback >= 0.95);
+  for (const [url, t] of noDiscount.slice(0, 5)) {
+    console.log(`    без знижки: множник ${t.fallback.toFixed(3)} — ${url}`);
+  }
+  if (ratio < minDiscountedRatio) {
+    console.error(
+      `Лише ${(ratio * 100).toFixed(1)}% сторінок дали ціну нижчу за роздрібну (межа ${(minDiscountedRatio * 100).toFixed(0)}%). ` +
+        `Схоже, логін відпав посеред проходу і сайт показує роздріб. Нічого не записано.`
+    );
+    process.exit(1);
+  }
+}
+
 const PARSERS = { prom: parseProm, cscart: parseCscart, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku, horoshop: parseHoroshop };
 const PAGE_PARSERS = { "opencart-page": parseOpencartPage };
 // Завантажувачі, які самі ходять по джерелу: їм не потрібен ані файл фіда, ані
@@ -1296,6 +1669,8 @@ console.log(
     `з ціною: ${rows.filter((r) => r.price).length}, ` +
     `з фото: ${rows.filter((r) => r.image_url).length}`
 );
+// Фід дав роздріб — наша ціна лежить за логіном, і по неї треба сходити окремо.
+if (cfg.accountPricing) await applyAccountPricing(rows, cfg);
 // Розкладка за правилом ціни. Показуємо, бо мовчазний промах правила виглядає
 // так само, як усе гаразд: ціни на місці, просто не наші. «(без правила)» на
 // весь фід означає, що постачальник перейменував розділ або тип ціни.
