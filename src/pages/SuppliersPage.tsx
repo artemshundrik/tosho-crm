@@ -8,13 +8,14 @@ import { formatAgo } from "@/lib/formatAgo";
 
 import { useSupplierPoolSummary } from "@/features/suppliers/queries";
 import { SupplierCard } from "@/features/suppliers/SupplierCard";
+import { SupplierProductSearch } from "@/features/suppliers/SupplierProductSearch";
 import { SUPPLIER_DEFINITIONS } from "@/features/suppliers/suppliersCatalog";
 import { supplierStatus } from "@/features/suppliers/suppliersStatus";
 
 /**
  * «Постачальники» — список (картка 259).
  *
- * Зверху — пошук по товарах усіх під'єднаних джерел (Task 6), нижче — картки
+ * Зверху — пошук по товарах усіх під'єднаних джерел, нижче — картки
  * стану за зразком «Інтеграцій», унизу — черга на під'єднання. Тулбар
  * малюється в тілі, макет смуги дій не резервує (pageSurfaces: toolbar none).
  */
@@ -50,6 +51,8 @@ export default function SuppliersPage() {
           </div>
         }
       />
+
+      <SupplierProductSearch className="mt-5" />
 
       {summary.isPending ? <AppSectionLoader label="Читаємо стан пулу…" className="mt-6" /> : null}
 
