@@ -29,6 +29,7 @@ export {
   SHOP_SUPPLIER_SLUG,
   supplierDisplayName,
   supplierNameFromUrl,
+  supplierVariantUnit,
   transliterateSearchTerm,
 } from "@/lib/supplierPoolRows";
 export type {

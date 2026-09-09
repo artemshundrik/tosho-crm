@@ -20,6 +20,7 @@ const product = (over: Partial<SupplierPoolProduct> & { key: string }): Supplier
     variantCount: 1,
     variants: [],
     variantsAreColors: false,
+  variantsHaveSizes: false,
     sources: over.sources ?? [{ supplierSlug: over.supplierSlug ?? "totobi.com.ua", name: "Ручка", url: null }],
     priceRowId: null,
   }) as unknown as SupplierPoolProduct;

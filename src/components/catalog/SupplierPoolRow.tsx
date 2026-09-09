@@ -10,7 +10,12 @@ import { ChevronDown, ExternalLink, Package } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatSupplierPoolPrice, supplierDisplayName, type SupplierPoolProduct } from "@/lib/supplierPool";
+import {
+  formatSupplierPoolPrice,
+  supplierDisplayName,
+  supplierVariantUnit,
+  type SupplierPoolProduct,
+} from "@/lib/supplierPool";
 
 /**
  * Фото товару або значок «фото немає». «Адреси немає» і «адреса є, але мертва»
@@ -61,7 +66,7 @@ export const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ pr
       ? `${money(selected.price)} ${product.currency === "UAH" ? "грн" : product.currency}`
       : formatSupplierPoolPrice(product);
   const href = selected?.url ?? product.url;
-  const unit = product.variantsAreColors ? "кольор." : "вар.";
+  const unit = supplierVariantUnit(product);
 
   return (
     <div className="rounded-lg transition-colors hover:bg-muted/40">

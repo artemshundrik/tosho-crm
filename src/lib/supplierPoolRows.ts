@@ -131,9 +131,15 @@ export type SupplierPoolRow = {
   price_kind: "retail" | "wholesale";
   url: string | null;
   image_url: string | null;
-  /** `attrs->>color` з фіда, а не вся `attrs`: там ще лежать розміри, і тягти
-   *  їх у типовий пошук означало б качати сотні кілобайт заради підпису. */
+  /** `attrs->>color` з фіда, а не вся `attrs`: там ще лежить опис під
+   *  документи, і тягти його в кожен пошук означало б качати мегабайти. */
   color: string | null;
+  /**
+   * `attrs->>size` — і лише в тих джерел, де рядок це пара «колір + розмір»
+   * (trele). У решти тут порожньо: у Тотобі й Е-Сувеніра рядок — колір, а
+   * розміри лежать усередині `attrs.sizes` і в підпис не йдуть.
+   */
+  size: string | null;
 };
 
 /** Одне виконання товару — здебільшого колір. Те, що менеджер зрештою замовляє. */
@@ -186,8 +192,19 @@ export type SupplierPoolProduct = {
   priceMax: number | null;
   variantCount: number;
   variants: SupplierPoolVariant[];
-  /** Усі варіанти названі кольором — тоді й підпис на картці «кольори». */
+  /**
+   * Варіанти прив'язані до кольору. Керує ДВОМА речами, і плутати їх не можна:
+   * підписом лічильника («кольор.») і забороною підставляти батьківське фото —
+   * див. `applySupplierVariant`.
+   */
   variantsAreColors: boolean;
+  /**
+   * Серед варіантів є розміри, тобто рядок — це пара «колір + розмір» (trele).
+   * Тоді їх 74, а кольорів серед них 11: лічильник має казати «вар.», інакше
+   * картка обіцяє сімдесят чотири кольори. Фото при цьому все одно лишається
+   * колірним, тож `variantsAreColors` не годиться на обидві ролі.
+   */
+  variantsHaveSizes: boolean;
   /** Сайти, де ця річ є. Перший — той, чия ціна показана. Ніколи не порожній. */
   sources: SupplierPoolSource[];
   /** Рядок пулу з показаною ціною — те, що поїде в базу замість самого числа. */
@@ -244,13 +261,19 @@ export function baseProductName(name: string): string {
 }
 
 /**
- * Підпис варіанта. Порядок джерел — від точного до запасного: колір із фіда,
- * потім дужковий хвіст назви (berrytex несе колір і розмір саме там), потім
- * артикул. Порожній підпис кращий за вигаданий, тому в кінці null.
+ * Підпис варіанта. Порядок джерел — від точного до запасного: колір і розмір із
+ * фіда, потім дужковий хвіст назви (berrytex несе колір і розмір саме там),
+ * потім артикул. Порожній підпис кращий за вигаданий, тому в кінці null.
+ *
+ * РОЗМІР У ПІДПИСІ — НЕ ПРИКРАСА. У trele рядок пулу це пара «колір + розмір»,
+ * і без розміру футболка з шістьма розмірами дає шість чипів «Червоний (Red
+ * 004)» поспіль: вибрати з них можна лише навмання, а вибір веде в замовлення
+ * артикулом саме цього рядка. Джерела, де рядок — колір, розміру не кладуть, і
+ * їхній підпис лишається таким, як був.
  */
 function variantLabel(row: SupplierPoolRow): string | null {
-  const color = row.color?.trim();
-  if (color) return color;
+  const parts = [row.color?.trim(), row.size?.trim()].filter(Boolean);
+  if (parts.length) return parts.join(", ");
   const tail = row.name.match(/\(([\s\S]*)\)\s*$/)?.[1]?.trim();
   if (tail) return tail;
   return row.article ?? null;
@@ -269,6 +292,7 @@ type SupplierPoolDraft = {
   priceKind: "retail" | "wholesale";
   variants: SupplierPoolVariant[];
   variantsAreColors: boolean;
+  variantsHaveSizes: boolean;
 };
 
 /** Захід перший: рядки → картки постачальника за назвою. */
@@ -306,12 +330,14 @@ function collectDraftsByName(rows: SupplierPoolRow[]): SupplierPoolDraft[] {
         priceKind: row.price_kind,
         variants: [variant],
         variantsAreColors: Boolean(row.color?.trim()),
+        variantsHaveSizes: Boolean(row.size?.trim()),
       });
       continue;
     }
 
     existing.variants.push(variant);
     if (!row.color?.trim()) existing.variantsAreColors = false;
+    if (row.size?.trim()) existing.variantsHaveSizes = true;
     if (!existing.imageUrl && row.image_url) existing.imageUrl = row.image_url;
     if (!existing.vendor && row.vendor) existing.vendor = row.vendor;
     if (!existing.category && row.category) existing.category = row.category;
@@ -481,6 +507,9 @@ function mergeCluster(cluster: SupplierPoolDraft[]): SupplierPoolProduct {
     variantsAreColors:
       variants.length > 0 &&
       variants.every((variant) => Boolean(variant.label) && variant.label !== variant.article),
+    // А ця ознака — з карток: у злитому списку розмір уже сидить усередині
+    // підпису, і витягати його звідти означало б розбирати рядок назад.
+    variantsHaveSizes: byLink.some((draft) => draft.variantsHaveSizes),
     sources,
     priceRowId: variants.find((variant) => variant.priceRowId)?.priceRowId ?? null,
   };
@@ -604,6 +633,18 @@ export function formatSupplierPoolPrice(product: SupplierPoolProduct): string | 
     return `${money(product.priceMin)} – ${money(product.priceMax)} ${suffix}`;
   }
   return `${money(product.priceMin)} ${suffix}`;
+}
+
+/**
+ * Як лічити варіанти на картці. «Кольор.» — лише коли варіант і є колір; щойно
+ * серед них з'являються розміри (trele: 74 рядки на 11 кольорів), лічильник
+ * мусить казати «вар.», інакше картка обіцяє сімдесят чотири кольори.
+ *
+ * Живе тут, а не в двох компонентах: вікно прорахунку й сторінка постачальника
+ * малюють той самий рядок, і розійтись їм нема з чого.
+ */
+export function supplierVariantUnit(product: SupplierPoolProduct): string {
+  return product.variantsAreColors && !product.variantsHaveSizes ? "кольор." : "вар.";
 }
 
 /**

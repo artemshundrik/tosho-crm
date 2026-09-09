@@ -36,6 +36,7 @@ const product = (key: string, name: string): SupplierPoolProduct => ({
   variantCount: 1,
   variants: [],
   variantsAreColors: true,
+  variantsHaveSizes: false,
   sources: [{ supplierSlug: "totobi.com.ua", name, url: `https://totobi.com.ua/${key}` }],
   priceRowId: key,
 });

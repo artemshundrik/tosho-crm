@@ -49,6 +49,10 @@
 -- навмисно: він закривав би її раніше й ламав атомарність усього файлу.
 \set ON_ERROR_STOP on
 
+-- Спершу знімаємо стару: `create or replace` не вміє міняти перелік колонок
+-- результату, а `size` тут з'явився пізніше за саму функцію (10.09.2026).
+drop function if exists tosho.search_supplier_pool(text[], integer);
+
 create or replace function tosho.search_supplier_pool(
   p_terms text[],
   p_per_supplier integer default 200
@@ -65,7 +69,8 @@ returns table (
   price_kind    text,
   url           text,
   image_url     text,
-  color         text
+  color         text,
+  size          text
 )
 language sql
 stable
@@ -84,6 +89,12 @@ as $fn$
       sp.id, sp.supplier_slug, sp.article, sp.name, sp.vendor, sp.category,
       sp.price, sp.currency, sp.price_kind, sp.url, sp.image_url,
       sp.attrs->>'color' as color,
+      -- РОЗМІР ПОТРІБЕН САМЕ ТУТ, а не «колись у attrs». У Trele рядок — це
+      -- пара «колір + розмір», і без розміру шість рядків одного кольору
+      -- виглядають шістьма однаковими чипами: менеджер тицяє навмання й тягне
+      -- в замовлення артикул чужого розміру. Решта джерел розміру не кладе —
+      -- у них тут порожньо, і підпис лишається таким, як був.
+      sp.attrs->>'size' as size,
       row_number() over (partition by sp.supplier_slug order by sp.name, sp.id) as rn
     from tosho.supplier_products sp
     cross join pat
@@ -123,7 +134,15 @@ as $fn$
       -- його прайсу — канцтовари, школа й творчість, тобто не промо-продукція,
       -- і питання «чи не буде це шумом у пошуку менеджера» вирішувалось окремо
       -- від того, що фід залився. Ціна в нього наша просто з кабінету, з ПДВ.
-      and sp.supplier_slug in ('avanprint.ua', 'totobi.com.ua', 'bergamo.ua', 'e-suvenir.com.ua', 'berrytex.com.ua', 'papirus-opt.com')
+      --
+      -- TRELE ДОДАНО 10.09.2026: однотонний одяг під друк (B&C, Fruit of the
+      -- Loom, Gildan, Roly, Russell, Atlantis, Kariban, Just Hoods, Anvil) —
+      -- рівно те, з чого починається половина прорахунків. Ціна наша, з-під
+      -- логіна, і вона нижча за вітрину в 98,6% рядків.
+      and sp.supplier_slug in (
+        'avanprint.ua', 'totobi.com.ua', 'bergamo.ua', 'e-suvenir.com.ua',
+        'berrytex.com.ua', 'papirus-opt.com', 'trele.com.ua'
+      )
       -- Друга сторожа лишається: навіть із дозволених джерел не показуємо
       -- рядок, у якому ціна є, але вона НЕ наша. Домовленість про знижку може
       -- відпасти, і тоді джерело замовкне саме, не чекаючи, поки хтось згадає.
@@ -132,7 +151,7 @@ as $fn$
   )
   select
     hit.id, hit.supplier_slug, hit.article, hit.name, hit.vendor, hit.category,
-    hit.price, hit.currency, hit.price_kind, hit.url, hit.image_url, hit.color
+    hit.price, hit.currency, hit.price_kind, hit.url, hit.image_url, hit.color, hit.size
   from hit
   where hit.rn <= greatest(p_per_supplier, 1)
   -- Порядок на виході теж за назвою: групування в браузері не залежить від

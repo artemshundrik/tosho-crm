@@ -55,6 +55,10 @@ revoke all on function tosho.supplier_pool_summary() from public;
 grant execute on function tosho.supplier_pool_summary() to authenticated;
 
 -- 2. Товари одного постачальника, сторінками по ТОВАРАХ (різних назвах).
+-- Стару знімаємо: `create or replace` не вміє міняти перелік колонок
+-- результату, а `size` тут з'явився пізніше за саму функцію (10.09.2026).
+drop function if exists tosho.list_supplier_products(text, text[], text, integer, integer);
+
 create or replace function tosho.list_supplier_products(
   p_slug     text,
   p_terms    text[]  default null,
@@ -75,6 +79,7 @@ returns table (
   url           text,
   image_url     text,
   color         text,
+  size          text,
   total         bigint
 )
 language sql
@@ -117,7 +122,10 @@ as $fn$
   select
     sp.id, sp.supplier_slug, sp.article, sp.name, sp.vendor, sp.category,
     sp.price, sp.currency, sp.price_kind, sp.url, sp.image_url,
-    sp.attrs->>'color' as color, page.total
+    -- Розмір поруч із кольором: у Trele рядок — це пара «колір + розмір», і
+    -- без нього варіанти одного кольору стають однаковими підписами. Тим самим
+    -- рухом, що в search_supplier_pool.
+    sp.attrs->>'color' as color, sp.attrs->>'size' as size, page.total
   from page
   join hit on hit.name = page.name
   join tosho.supplier_products sp on sp.id = hit.id

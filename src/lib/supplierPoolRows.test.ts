@@ -7,6 +7,7 @@ import {
   normalizeArticle,
   supplierNameFromUrl,
   transliterateSearchTerm,
+  supplierVariantUnit,
   type SupplierPoolRow,
 } from "./supplierPoolRows";
 
@@ -30,6 +31,7 @@ const row = (over: Partial<SupplierPoolRow>): SupplierPoolRow => ({
   url: null,
   image_url: null,
   color: null,
+  size: null,
   ...over,
 });
 
@@ -54,6 +56,37 @@ describe("groupSupplierPoolRows", () => {
     const [hoodie] = groupSupplierPoolRows(sized, 40);
     const xl = hoodie.variants.find((variant) => variant.article === "H-XL")!;
     expect(applySupplierVariant(hoodie, xl).imageUrl).toBe("https://cdn/hoodie.jpg");
+  });
+
+  it("розмір іде в підпис варіанта, а лічильник перестає казати «кольори»", () => {
+    // Живий випадок trele (10.09.2026): «Футболка Gildan Softstyle» — 74 рядки
+    // на 11 кольорів, бо рядок це пара «колір + розмір». Без розміру в підписі
+    // виходило шість однакових чипів «Яскраво-Синій (Royal RO)» поспіль, а
+    // артикул за кожним свій — і 3XL там ще й дорожчий за решту.
+    const rows = [
+      row({ id: "t1", supplier_slug: "trele.com.ua", name: "Футболка Gildan Softstyle", price: 145.04,
+        article: "GI64000ROL", color: "Яскраво-Синій (Royal RO)", size: "L" }),
+      row({ id: "t2", supplier_slug: "trele.com.ua", name: "Футболка Gildan Softstyle", price: 231.77,
+        article: "GI64000RO3XL", color: "Яскраво-Синій (Royal RO)", size: "3XL" }),
+    ];
+    const [product] = groupSupplierPoolRows(rows, 40);
+    expect(product.variants.map((variant) => variant.label)).toEqual([
+      "Яскраво-Синій (Royal RO), L",
+      "Яскраво-Синій (Royal RO), 3XL",
+    ]);
+    expect(supplierVariantUnit(product)).toBe("вар.");
+
+    // Фото при цьому лишається колірним: підставляти батьківське не можна.
+    const big = product.variants.find((variant) => variant.article === "GI64000RO3XL")!;
+    expect(applySupplierVariant(product, big).imageUrl).toBeNull();
+    expect(applySupplierVariant(product, big).priceMin).toBe(231.77);
+
+    // Джерело, де рядок — це колір, лічиться як раніше.
+    const colorsOnly = [
+      row({ id: "c1", name: "Кухоль Stage", price: 100, color: "білий" }),
+      row({ id: "c2", name: "Кухоль Stage", price: 100, color: "чорний" }),
+    ];
+    expect(supplierVariantUnit(groupSupplierPoolRows(colorsOnly, 40)[0])).toBe("кольор.");
   });
 
   it("роздає місця по черзі між постачальниками, а не віддає всі одному", () => {

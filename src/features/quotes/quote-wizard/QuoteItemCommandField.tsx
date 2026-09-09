@@ -10,6 +10,7 @@ import {
   formatSupplierPoolPrice,
   searchSupplierPool,
   supplierDisplayName,
+  supplierVariantUnit,
   type SupplierPoolProduct,
 } from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
@@ -529,7 +530,7 @@ export function QuoteItemCommandField({
           {visiblePool.map((product, index) => {
             const price = formatSupplierPoolPrice(product);
             const expanded = expandedPoolKey === product.key;
-            const unit = product.variantsAreColors ? "кольор." : "вар.";
+            const unit = supplierVariantUnit(product);
             return (
               <li
                 key={product.key}

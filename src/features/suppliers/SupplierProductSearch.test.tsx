@@ -33,6 +33,7 @@ const product = (key: string, slug: string, name: string): SupplierPoolProduct =
   variantCount: 1,
   variants: [],
   variantsAreColors: true,
+  variantsHaveSizes: false,
   sources: [{ supplierSlug: slug, name, url: `https://${slug}/${key}` }],
   priceRowId: key,
 });
