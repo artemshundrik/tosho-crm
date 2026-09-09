@@ -5733,6 +5733,30 @@ export type Database = {
             Args: { p_user_id: string; p_workspace_id: string }
             Returns: boolean
           }
+      list_supplier_products: {
+        Args: {
+          p_slug: string
+          p_terms?: string[] | null
+          p_category?: string | null
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          article: string | null
+          category: string | null
+          color: string | null
+          currency: string
+          id: string
+          image_url: string | null
+          name: string
+          price: number | null
+          price_kind: string
+          supplier_slug: string
+          total: number
+          url: string | null
+          vendor: string | null
+        }[]
+      }
       merge_catalog_method: {
         Args: { p_loser: string; p_winner: string }
         Returns: undefined
@@ -5788,6 +5812,24 @@ export type Database = {
           p_quote_id: string
         }
         Returns: boolean
+      }
+      supplier_pool_categories: {
+        Args: { p_slug: string }
+        Returns: { category: string; products: number }[]
+      }
+      supplier_pool_summary: {
+        Args: never
+        Returns: {
+          categories: number
+          contractor_id: string | null
+          first_loaded: string | null
+          last_observed: string | null
+          products: number
+          rows_active: number
+          supplier_slug: string
+          with_photo: number
+          with_price: number
+        }[]
       }
       swap_method_id: {
         Args: { p_from: string; p_methods: Json; p_to: string }
