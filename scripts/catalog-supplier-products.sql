@@ -72,8 +72,25 @@ create index if not exists supplier_products_supplier_idx
 alter table tosho.supplier_products enable row level security;
 
 drop policy if exists supplier_products_select on tosho.supplier_products;
+-- ДОСТУП РАХУЄМО ОДИН РАЗ НА ЗАПИТ, А НЕ НА КОЖЕН РЯДОК. Зміст умови той самий,
+-- що в `is_team_member(team_id)`: рядок видно членові тієї самої команди, якщо
+-- його не заблоковано. Але `is_team_member` приймає team_id, тобто залежить від
+-- рядка, — і планувальник кличе її для кожного рядка таблиці.
+--
+-- Заміряно 09.09.2026 на запиті «футболка» у вікні прорахунку: пошук пулу від
+-- власника 1,0 с, під роллю застосунку 5,8 с, а самі дані з trgm-індексу
+-- віддаються за 0,26 с. Тобто 26 799 однакових перевірок членства коштували
+-- чотирьох з половиною секунд очікування на кожне слово в пошуку.
+--
+-- Обидва підзапити НЕСКОРЕЛЬОВАНІ (не згадують рядок), тож виконуються до
+-- сканування й один раз, а на рядку лишається перевірка входження в маленький
+-- набір. `get_my_team_ids` і `is_user_blocked` — ті самі definer-функції, з яких
+-- складається `is_team_member`, тож нових дверей тут не з'являється.
 create policy supplier_products_select on tosho.supplier_products
-  for select using (is_team_member(team_id));
+  for select using (
+    team_id in (select public.get_my_team_ids())
+    and not (select tosho.is_user_blocked((select auth.uid())))
+  );
 
 grant select on tosho.supplier_products to authenticated;
 
