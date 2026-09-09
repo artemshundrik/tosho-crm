@@ -326,7 +326,8 @@ These tables together power the product catalog and quote item configuration.
 - `supplier_products`
   - the supplier pool: one row per colour/size offer of a supplier, keyed by
     `(supplier_slug, external_key)`; loaded by `scripts/load-supplier-feed.mjs`
-    (GitHub Actions `supplier-feeds`, daily 06:00 Kyiv; Bergamo crawled weekly).
+    (GitHub Actions `supplier-feeds`, twice daily at 10:00 and 17:00 Kyiv;
+    Bergamo crawled weekly).
     `attrs` carries per-source extras (`color`, `sizes`, `sitePrice`, `methods`,
     `printPlaces`, Avanprint `description` — 9.5 MB in total, never select it whole).
   - the app reads it only through RPCs, all `security invoker` under the

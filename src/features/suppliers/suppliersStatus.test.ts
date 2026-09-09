@@ -24,9 +24,9 @@ const row = (over: Partial<SupplierPoolSummaryRow> = {}): SupplierPoolSummaryRow
 });
 
 describe("застарілість", () => {
-  it("щоденне джерело старіє після 36 годин, щотижневе — після 8 днів, ручне — ніколи", () => {
-    expect(isSupplierStale(totobi, hoursAgo(35), now)).toBe(false);
-    expect(isSupplierStale(totobi, hoursAgo(37), now)).toBe(true);
+  it("денне джерело старіє після 30 годин, щотижневе — після 8 днів, ручне — ніколи", () => {
+    expect(isSupplierStale(totobi, hoursAgo(29), now)).toBe(false);
+    expect(isSupplierStale(totobi, hoursAgo(31), now)).toBe(true);
     expect(isSupplierStale(bergamo, hoursAgo(7 * 24), now)).toBe(false);
     expect(isSupplierStale(bergamo, hoursAgo(8 * 24 + 1), now)).toBe(true);
     expect(isSupplierStale(toptime, hoursAgo(400), now)).toBe(false);
@@ -74,7 +74,7 @@ describe("стан картки", () => {
     const status = supplierStatus(totobi, row({ last_observed: "2026-09-07T10:00:00Z" }), now);
     expect(status.state).toBe("stale");
     expect(status.message).toContain("Останній прогін 07.09");
-    expect(status.message).toContain("щодня о 06:00");
+    expect(status.message).toContain("двічі на день, о 10:00 і 17:00");
   });
 
   it("поза пошуком — повідомлення з реєстру", () => {

@@ -77,9 +77,17 @@ export type SupplierDefinition = {
   planned?: { since: string; blocker: string };
 };
 
-/** Після скількох годин без прогону дані вважаємо застарілими. `manual` не старіє. */
+/**
+ * Після скількох годин без прогону дані вважаємо застарілими. `manual` не старіє.
+ *
+ * 30 годин для денного розкладу — це «пропущено щонайменше два прогони поспіль».
+ * Прогони йдуть о 10:00 і 17:00, тож найдовший нормальний розрив — 17 годин, а
+ * GitHub до того ж спізнюється (фіксували 4 год 40 хв). Тому нижчий поріг ловив
+ * би не поломку, а звичайне спізнення крона, і плашка «дані застаріли» швидко
+ * стала б фоном, на який перестають дивитись.
+ */
 export const STALE_AFTER_HOURS: Record<SupplierSchedule, number | null> = {
-  daily: 36,
+  daily: 30,
   weekly: 8 * 24,
   manual: null,
 };
@@ -94,7 +102,7 @@ export const SUPPLIER_INTAKE_LABEL: Record<SupplierIntakeKind, string> = {
 };
 
 export const SUPPLIER_SCHEDULE_LABEL: Record<SupplierSchedule, string> = {
-  daily: "щодня о 06:00",
+  daily: "двічі на день, о 10:00 і 17:00",
   weekly: "щотижня, у неділю о 06:30",
   manual: "руками",
 };
@@ -119,7 +127,8 @@ export const SUPPLIER_DEFINITIONS: readonly SupplierDefinition[] = [
       summary:
         "Відкритий YML-фід з їхньої сторінки опису вигрузок; логін не потрібен. У них оновлюється щогодини.",
       schedule: "daily",
-      scheduleNote: "Перезалив щодня о 06:00 за Києвом (GitHub Actions, supplier-feeds).",
+      scheduleNote:
+        "Перезалив двічі на день, о 10:00 і 17:00 за Києвом (GitHub Actions, supplier-feeds); узимку на годину раніше.",
     },
     price: {
       basis: "rule",
@@ -187,7 +196,8 @@ export const SUPPLIER_DEFINITIONS: readonly SupplierDefinition[] = [
       summary:
         "Публічний фід prom.xml дає товари з роздрібними цінами; далі завантажувач заходить у кабінет і з 74 сторінок товарів бере множник нашої ціни.",
       schedule: "daily",
-      scheduleNote: "Перезалив щодня о 06:00 за Києвом (GitHub Actions, supplier-feeds).",
+      scheduleNote:
+        "Перезалив двічі на день, о 10:00 і 17:00 за Києвом (GitHub Actions, supplier-feeds); узимку на годину раніше.",
     },
     price: {
       basis: "account",
@@ -216,7 +226,8 @@ export const SUPPLIER_DEFINITIONS: readonly SupplierDefinition[] = [
       kind: "feed",
       summary: "Профіль експорту YML в адмінці Хорошопа з автогенерацією; адреса файлу містить хеш профілю.",
       schedule: "daily",
-      scheduleNote: "Перезалив щодня о 06:00 за Києвом (GitHub Actions, supplier-feeds).",
+      scheduleNote:
+        "Перезалив двічі на день, о 10:00 і 17:00 за Києвом (GitHub Actions, supplier-feeds); узимку на годину раніше.",
     },
     price: {
       basis: "reference",
@@ -245,7 +256,8 @@ export const SUPPLIER_DEFINITIONS: readonly SupplierDefinition[] = [
       summary:
         "GraphQL під нашим логіном; заголовок вітрини e_svnr_ukr обов'язковий — без нього акаунт «не існує». Фіда немає й бути не може: сайт віддає оболонку з кодом 200 на будь-яку адресу.",
       schedule: "daily",
-      scheduleNote: "Перезалив щодня о 06:00 за Києвом (GitHub Actions, supplier-feeds).",
+      scheduleNote:
+        "Перезалив двічі на день, о 10:00 і 17:00 за Києвом (GitHub Actions, supplier-feeds); узимку на годину раніше.",
     },
     price: {
       basis: "account",
