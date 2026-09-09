@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { EntityAvatar } from "@/components/app/avatar-kit";
@@ -6,8 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toneSubtleClass, toneTextClass } from "@/lib/statusTones";
 
+import { useIsClamped } from "@/components/app/useIsClamped";
+import { formatAgo } from "@/lib/formatAgo";
+
 import { integrationFaviconUrl, type IntegrationDefinition } from "./integrationsCatalog";
-import { plural } from "./integrationsStatus";
 import {
   INTEGRATION_PLATE_TONE,
   INTEGRATION_STATE_ICON,
@@ -29,30 +30,6 @@ import type { IntegrationActivity, IntegrationMetric, IntegrationStatus } from "
  * обрізання справді сталось (див. useIsClamped).
  */
 const CARD_ROWS = "grid-rows-[36px_18px_46px_65px_32px]";
-
-/**
- * Чи текст справді не вліз у відведені йому рядки.
- *
- * Перевірка потрібна саме в рантаймі: те саме речення влазить у два рядки на
- * широкій колонці й не влазить на вузькій. Підказка, що дослівно повторює вже
- * видимий текст, — це шум, який ще й перекриває сусідні картки.
- */
-function useIsClamped(text: string) {
-  const ref = useRef<HTMLParagraphElement | null>(null);
-  const [clamped, setClamped] = useState(false);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-    const measure = () => setClamped(node.scrollHeight > node.clientHeight + 1);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [text]);
-
-  return { ref, clamped };
-}
 
 /** «89», «5 з 130», «$0.34» — число; «увімкнено», «—» — ні. */
 const hasDigits = (value: string | null): boolean => value != null && /\d/.test(value);
@@ -200,20 +177,7 @@ export function IntegrationCard({
   );
 }
 
-/** «2 год тому», «5 днів тому», «26 червня». Порожньо — null. */
-export function formatAgo(iso: string | null): string | null {
-  if (!iso) return null;
-  const then = new Date(iso).getTime();
-  if (!Number.isFinite(then)) return null;
-  const minutes = Math.max(0, Math.round((Date.now() - then) / 60000));
-  if (minutes < 1) return "щойно";
-  if (minutes < 60) return `${minutes} ${plural(minutes, "хвилину", "хвилини", "хвилин")} тому`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} ${plural(hours, "годину", "години", "годин")} тому`;
-  const days = Math.round(hours / 24);
-  if (days < 30) return `${days} ${plural(days, "день", "дні", "днів")} тому`;
-  return new Date(iso).toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
-}
+export { formatAgo };
 
 /**
  * «остання накладна — 3 дні тому». Підпис приходить разом із датою саме тому,

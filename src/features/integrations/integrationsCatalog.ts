@@ -270,6 +270,5 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
 export const getIntegration = (id: IntegrationId): IntegrationDefinition | undefined =>
   INTEGRATIONS.find((item) => item.id === id);
 
-/** Лого домену — тим самим сервісом фавіконів, що й бренди підписок. */
-export const integrationFaviconUrl = (domain: string): string =>
-  `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+// Одна адреса фавікона на CRM — див. src/lib/brandFavicon.ts.
+export { faviconUrl as integrationFaviconUrl } from "@/lib/brandFavicon";

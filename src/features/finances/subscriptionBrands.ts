@@ -3,6 +3,7 @@
 // не тягне бандл, працює для будь-якого сервісу, який користувач допише сам.
 // Якщо лого не завантажилось — EntityAvatar сам покаже монограму, нічого не ламається.
 
+import { faviconUrl } from "@/lib/brandFavicon";
 import type { FxCurrency } from "@/lib/fxRates";
 
 export type SubscriptionBrand = {
@@ -91,9 +92,6 @@ export const isServiceExpense = (input: {
   if (brand?.group === "shop") return false;
   return Boolean(resolveSubscriptionLogo(input));
 };
-
-const faviconUrl = (domain: string) =>
-  `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
 
 /** Лого підписки: ручне перевизначення → бренд із довідника → домен із назви. */
 export function resolveSubscriptionLogo(input: {

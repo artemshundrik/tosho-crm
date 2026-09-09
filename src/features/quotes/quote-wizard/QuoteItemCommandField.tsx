@@ -23,7 +23,7 @@ import {
   SuggestListFooter,
   SupplierPoolFilterBar,
   type PoolFilter,
-} from "./SupplierPoolFilterBar";
+} from "@/components/catalog/SupplierPoolFilterBar";
 
 /**
  * Одне поле замість трьох вкладок (REQ-182#p14).
