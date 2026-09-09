@@ -9,6 +9,7 @@ import {
   applySupplierVariant,
   formatSupplierPoolPrice,
   searchSupplierPool,
+  supplierDisplayName,
   type SupplierPoolProduct,
 } from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
@@ -588,7 +589,11 @@ export function QuoteItemCommandField({
                               }}
                               className="group/site inline-flex items-center gap-0.5 align-baseline underline-offset-2 transition-colors hover:text-primary hover:underline"
                             >
-                              {source.supplierSlug}
+                              {/* Назва бренду, а не домен: «Тотобі» й «Berrytex»
+                                  читаються з відстані, «totobi.com.ua» — ні.
+                                  Повна адреса лишилась у підказці (Артем,
+                                  09.09.2026). */}
+                              {supplierDisplayName(source.supplierSlug)}
                               {/* Іконка — тільки на ОСТАННЬОМУ домені. Вона
                                   схована через opacity, а opacity місця не
                                   звільняє: на першому з двох доменів вона
@@ -602,7 +607,7 @@ export function QuoteItemCommandField({
                               ) : null}
                             </a>
                           ) : (
-                            source.supplierSlug
+                            supplierDisplayName(source.supplierSlug)
                           )}
                         </React.Fragment>
                       ))}

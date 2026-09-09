@@ -27,6 +27,7 @@ export {
   groupSupplierPoolRows,
   normalizeArticle,
   SHOP_SUPPLIER_SLUG,
+  supplierDisplayName,
   supplierNameFromUrl,
   transliterateSearchTerm,
 } from "@/lib/supplierPoolRows";

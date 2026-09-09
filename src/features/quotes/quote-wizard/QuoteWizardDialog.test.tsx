@@ -547,7 +547,7 @@ describe("QuoteWizardDialog — один екран", () => {
     // Опис зі сторінки не тягнемо: у магазинів це рекламний абзац.
     expect(screen.queryByDisplayValue("Бавовна 80 %, начіс усередині.")).not.toBeInTheDocument();
     // Джерело підписане САЙТОМ, а не адресою (REQ-250#p34); повна лишилась у title.
-    const source = screen.getByRole("link", { name: "shop.example" });
+    const source = screen.getByRole("link", { name: "Shop" });
     expect(source).toHaveAttribute("href", "https://shop.example/hoodie");
 
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "300");
@@ -573,7 +573,7 @@ describe("QuoteWizardDialog — один екран", () => {
     await waitFor(() => expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(3));
 
     // Три позиції — три джерела; підпис у всіх один, бо сайт справді один.
-    expect(screen.getAllByRole("link", { name: "shop.example" })).toHaveLength(3);
+    expect(screen.getAllByRole("link", { name: "Shop" })).toHaveLength(3);
   });
 
   it("файл і поле живуть в одному списку: «Інший файл» прибирає лише рядки файлу", async () => {

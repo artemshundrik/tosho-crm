@@ -60,16 +60,40 @@ export const SHOP_SUPPLIER_SLUG = "avanprint.ua";
  * позиції: «Постачальник» не каже нічого, а «Тотобі» каже все (Артем,
  * 08.09.2026). Назви короткі, а не з `contractors.name`: у картці підрядника
  * лежить «ТОВ «ТоТобі»» й «Бергамо Україна» — юридичні, задовгі для кнопки.
- * Незнайомий домен повертається як є: показати «bergamo.ua» чесніше, ніж
- * промовчати.
+ *
+ * ПРАВОПИС ІДЕ ЗА САМИМ БРЕНДОМ (Артем, 09.09.2026): у кого назва українська —
+ * пишемо українською, у кого латиницею — так, як на його сайті, з великої
+ * літери. Тому Bergamo (у них лого `alt="Bergamo"`) і Berrytex (заголовок
+ * сайту «…в Україні | Berrytex»), але Тотобі, Аванпринт і Е-Сувенір
+ * («Е-Сувенір UA» в заголовку). До цього Berrytex стояв як «Беррітекс» —
+ * транслітерація латинського бренду, якої не вживає ніхто, включно з ними.
  */
 const SUPPLIER_NAMES: Record<string, string> = {
   "avanprint.ua": "Аванпринт",
   "totobi.com.ua": "Тотобі",
-  "bergamo.ua": "Бергамо",
-  "berrytex.com.ua": "Беррітекс",
+  "bergamo.ua": "Bergamo",
+  "berrytex.com.ua": "Berrytex",
   "e-suvenir.com.ua": "Е-Сувенір",
 };
+
+/**
+ * Незнайомий домен теж має виглядати назвою, а не адресою: поруч із «Тотобі»
+ * рядок «rozetka.com.ua» читається як недороблений. Зона відкидається навмисно
+ * — вона нічого не додає, а повна адреса лишається в підказці кнопки.
+ *
+ * Беремо НЕ перше слово, а останнє перед зоною: у «shop.epicentrk.ua» назва
+ * магазину — «Epicentrk», а «Shop» не сказав би нічого. Двоскладові зони
+ * (`com.ua`, `co.uk`) відкидаються обидві, інакше «rozetka.com.ua» дало б «Com».
+ */
+const SECOND_LEVEL_ZONES = new Set(["com", "co", "net", "org", "gov", "edu", "in"]);
+
+function labelFromHost(host: string): string {
+  const parts = host.replace(/^www\./, "").split(".").filter(Boolean);
+  if (parts.length > 1) parts.pop();
+  if (parts.length > 1 && SECOND_LEVEL_ZONES.has(parts[parts.length - 1] ?? "")) parts.pop();
+  const name = parts[parts.length - 1] ?? host;
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : host;
+}
 
 /**
  * Назва джерела за слугом. Та сама мапа, що й для адрес: підпис на чипі фільтра
@@ -77,7 +101,7 @@ const SUPPLIER_NAMES: Record<string, string> = {
  * «totobi.com.ua» у рядку читаються як два різні джерела.
  */
 export function supplierDisplayName(slug: string): string {
-  return SUPPLIER_NAMES[slug] ?? slug;
+  return SUPPLIER_NAMES[slug] ?? labelFromHost(slug);
 }
 
 /** Назва джерела з адреси товару; `null`, якщо адреса не розбирається. */
@@ -85,7 +109,7 @@ export function supplierNameFromUrl(url: string | null | undefined): string | nu
   if (!url?.trim()) return null;
   try {
     const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-    return SUPPLIER_NAMES[host] ?? host;
+    return SUPPLIER_NAMES[host] ?? labelFromHost(host);
   } catch {
     return null;
   }

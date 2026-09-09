@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import {
   formatSupplierPoolPrice,
   searchSupplierPool,
+  supplierDisplayName,
   type SupplierPoolProduct,
 } from "@/lib/supplierPool";
 
@@ -195,10 +196,10 @@ const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ product }
                     title={`«${source.name}» на ${source.supplierSlug}`}
                     className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
                   >
-                    {source.supplierSlug}
+                    {supplierDisplayName(source.supplierSlug)}
                   </a>
                 ) : (
-                  source.supplierSlug
+                  supplierDisplayName(source.supplierSlug)
                 )}
               </React.Fragment>
             ))}
