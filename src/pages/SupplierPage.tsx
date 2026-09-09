@@ -10,6 +10,7 @@ import { faviconUrl } from "@/lib/brandFavicon";
 
 import { contractorForSupplier, useSupplierContractors, useSupplierPoolSummary } from "@/features/suppliers/queries";
 import { SupplierPassport } from "@/features/suppliers/SupplierPassport";
+import { SupplierProducts } from "@/features/suppliers/SupplierProducts";
 import { supplierById } from "@/features/suppliers/suppliersCatalog";
 import {
   SUPPLIER_STATE_ICON,
@@ -98,6 +99,16 @@ export default function SupplierPage() {
           <SupplierPassport definition={definition} status={status} contractor={contractor} />
         </div>
       )}
+
+      {!definition.planned ? (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold text-foreground">Товари</h2>
+          <p className="mt-0.5 text-2xs text-muted-foreground">
+            Усе, що лежить у пулі від цього постачальника, — і те, чого немає в пошуку прорахунку.
+          </p>
+          <SupplierProducts definition={definition} className="mt-3" />
+        </section>
+      ) : null}
     </div>
   );
 }
