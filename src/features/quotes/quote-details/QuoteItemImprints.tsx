@@ -33,6 +33,10 @@ export type QuoteItemMethodInput = {
   count?: number;
 };
 
+/** Відбиток набору пар — щоб бачити, чи взагалі щось змінилось. */
+const signatureOf = (imprints: QuoteImportDraftImprint[]) =>
+  imprints.map((imprint) => `${imprint.methodId}:${imprint.positionId ?? ""}:${imprint.positionLabel ?? ""}`).join("|");
+
 const toImprints = (methods: QuoteItemMethodInput[]) =>
   methods.map((method, index) => ({
     key: `${method.methodId}-${index}`,
@@ -59,7 +63,7 @@ export function QuoteItemImprints({
   onSaved?: () => void;
 }) {
   const initial = React.useMemo(() => toImprints(methods), [methods]);
-  const signature = initial.map((imprint) => `${imprint.methodId}:${imprint.positionId ?? ""}:${imprint.positionLabel ?? ""}`).join("|");
+  const signature = signatureOf(initial);
   const [imprints, setImprints] = React.useState<QuoteImportDraftImprint[]>(initial);
   const [seen, setSeen] = React.useState(signature);
   const [saving, setSaving] = React.useState(false);
@@ -100,6 +104,13 @@ export function QuoteItemImprints({
   if (!kindId || !options) return null;
 
   const apply = async (next: QuoteImportDraftImprint[]) => {
+    /* НІЧОГО НЕ ЗМІНИЛОСЬ — НІЧОГО Й НЕ ПИШЕМО. «Без нанесення» — єдиний чип,
+       який малюється саме тоді, коли нанесень немає, тож клік по ньому лише
+       підтверджує наявний стан. А коштував він запису в базу плюс
+       перечитування всіх позицій прорахунку з каталогом (заміряно: PATCH +
+       чотири GET, близько півтори секунди) — і все заради того, щоб лишити
+       все як було. */
+    if (signatureOf(next) === signatureOf(imprints)) return;
     setImprints(next);
     setSaving(true);
     const resolved = await resolveImprintPlaces(next, kindId, placeCache.current);

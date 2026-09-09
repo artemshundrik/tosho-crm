@@ -4438,9 +4438,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               ) : null}
 
-              {quoteSectionsBootstrapping ? (
-                <AppSectionLoader label="Завантаження..." />
-              ) : itemsLoading ? (
+              {/*
+                КАРКАС — ЛИШЕ КОЛИ ПОКАЗУВАТИ НІЧОГО. `itemsLoading` піднімає
+                не тільки перше читання, а й КОЖНЕ перечитування після
+                збереження — нанесення, підміна моделі, друк-специфікація,
+                додані товари. Через це клік по чипу «Без нанесення» чи «ДТФ»
+                прибирав з екрана всю смугу товарів: заміряно живцем на
+                прорахунку з 12 позицій — сторінка складалась з 11871 px до
+                990 px на секунду, прокрутка зліталась на початок, і виглядало
+                це як перезавантаження сторінки. Старі рядки лишаються на
+                місці, поки не приїхали нові.
+              */}
+              {quoteSectionsBootstrapping || (itemsLoading && items.length === 0) ? (
                 <AppSectionLoader label="Завантаження..." />
               ) : itemsError || runsError ? (
                 // runsError сюди додано разом із REQ-243: він малювався ЛИШЕ в

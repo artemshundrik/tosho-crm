@@ -67,6 +67,25 @@ describe("Нанесення в картці товару", () => {
     });
   });
 
+  it("клік по вже увімкненому «Без нанесення» не пише в базу й не просить сторінку перечитатись", async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    render(
+      <QuoteItemImprints teamId="team-1" itemId="item-1" kindId="k-cap" methods={[]} onSaved={onSaved} />
+    );
+
+    const group = screen.getByRole("group", { name: "Нанесення" });
+    const none = within(group).getByRole("button", { name: "Без нанесення" });
+    expect(none).toHaveAttribute("aria-pressed", "true");
+    await user.click(none);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(updateQuoteItemRow).not.toHaveBeenCalled();
+    // `onSaved` — це перечитування всіх позицій сторінкою; саме через нього
+    // смуга товарів блимала каркасом на клік, що нічого не міняє.
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   it("розмір давнього нанесення переживає правку місця", async () => {
     const user = userEvent.setup();
     renderRow([{ methodId: "m-emb", printWidthMm: 100, printHeightMm: 30, count: 2 }]);
