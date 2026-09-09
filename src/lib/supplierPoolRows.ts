@@ -74,6 +74,10 @@ const SUPPLIER_NAMES: Record<string, string> = {
   "bergamo.ua": "Bergamo",
   "berrytex.com.ua": "Berrytex",
   "e-suvenir.com.ua": "E-Suvenir",
+  // Без запису вийшло б «Papirus-opt»: у домені сидить «-opt», і відкидання
+  // зони його не прибирає. Самі вони пишуться «Папірус Гурт», але в цьому
+  // рядку всі джерела латиницею — див. коментар вище.
+  "papirus-opt.com": "Papirus",
 };
 
 /**

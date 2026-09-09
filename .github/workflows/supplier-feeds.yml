@@ -74,7 +74,7 @@ on:
   workflow_dispatch:
     inputs:
       suppliers:
-        description: "Кого перезалити через пробіл (totobi berrytex avanprint bergamo). Порожньо — усіх."
+        description: "Кого перезалити через пробіл (totobi berrytex avanprint bergamo e-suvenir papirus). Порожньо — усіх."
         required: false
         default: ""
 
@@ -108,7 +108,7 @@ jobs:
           REQUESTED: ${{ github.event.inputs.suppliers }}
         run: |
           set -euo pipefail
-          known="totobi berrytex avanprint bergamo e-suvenir"
+          known="totobi berrytex avanprint bergamo e-suvenir papirus"
 
           if [ -n "${REQUESTED:-}" ]; then
             # Ручний запуск: беремо лише знайомі імена, решту відкидаємо вголос.
@@ -127,8 +127,8 @@ jobs:
           else
             case "${SCHEDULE:-}" in
               # Обидва денні прогони заливають те саме — різниця лише в годині.
-              "0 7 * * *")  list="totobi berrytex avanprint e-suvenir" ;;
-              "0 14 * * *") list="totobi berrytex avanprint e-suvenir" ;;
+              "0 7 * * *")  list="totobi berrytex avanprint e-suvenir papirus" ;;
+              "0 14 * * *") list="totobi berrytex avanprint e-suvenir papirus" ;;
               "30 3 * * 0") list="bergamo" ;;
               *)            list="$known" ;;
             esac
@@ -154,6 +154,12 @@ jobs:
           # стартує, бо роздріб ліг би в пул із підписом «оптова».
           BERRYTEX_EMAIL: ${{ secrets.BERRYTEX_EMAIL }}
           BERRYTEX_PASSWORD: ${{ secrets.BERRYTEX_PASSWORD }}
+          # ПАПІРУС — ЗАКРИТИЙ ПОРТАЛ ЦІЛКОМ: без логіна там немає ні прайсу, ні
+          # товарів, сама лише сторінка-візитівка. Тому тихого збою тут бути не
+          # може — завантажувач падає на типі файлу, — але й стартувати без цих
+          # двох йому нема сенсу.
+          PAPIRUS_EMAIL: ${{ secrets.PAPIRUS_EMAIL }}
+          PAPIRUS_PASSWORD: ${{ secrets.PAPIRUS_PASSWORD }}
           # Завантажувач за замовчуванням шукає psql у Homebrew — це шлях з
           # ноутбука. На раннері psql лежить у PATH.
           PSQL_BIN: psql
@@ -181,6 +187,14 @@ jobs:
             *" berrytex "*)
               if [ -z "${BERRYTEX_EMAIL:-}" ] || [ -z "${BERRYTEX_PASSWORD:-}" ]; then
                 echo "::error::Немає секретів BERRYTEX_EMAIL / BERRYTEX_PASSWORD — без логіна сайт показує роздріб."
+                exit 1
+              fi
+              ;;
+          esac
+          case " $LIST " in
+            *" papirus "*)
+              if [ -z "${PAPIRUS_EMAIL:-}" ] || [ -z "${PAPIRUS_PASSWORD:-}" ]; then
+                echo "::error::Немає секретів PAPIRUS_EMAIL / PAPIRUS_PASSWORD — кабінет віддає візитівку замість прайсу."
                 exit 1
               fi
               ;;

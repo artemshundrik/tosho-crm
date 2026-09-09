@@ -48,6 +48,21 @@ import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// Папірус віддає прайс книжкою Excel, а не XML. Пакет уже в залежностях
+// (SheetJS 0.20.3) — його ж читає розбір ексельок у прорахунках.
+import * as XLSX from "xlsx";
+/**
+ * ТАБЛИЦЯ КОДУВАНЬ — НЕ ФАКУЛЬТАТИВНА, І САМЕ ТУТ. Прайс Папіруса — старий
+ * формат BIFF, де кирилиця лежить у CP1251. Під `require()` SheetJS підвантажує
+ * `cpexcel` сам, а в ESM — ні, і мовчки читає байти як Latin-1: «Швабра для
+ * миття вікон» перетворюється на «Øâàáðà äëÿ ìèòòÿ â³êîí». Ціни, артикули й
+ * залишки при цьому правильні, тож на око прогін виглядає здоровим — сміттям
+ * стають самі назви, усі 6697. Знайдено 09.09.2026 на живому файлі.
+ */
+import * as cptable from "xlsx/dist/cpexcel.full.mjs";
+
+XLSX.set_cptable(cptable);
+
 const PSQL = process.env.PSQL_BIN || "/opt/homebrew/opt/libpq/bin/psql";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
@@ -231,6 +246,55 @@ const SUPPLIERS = {
     // Не плутати з 863 товарами сусідньої вітрини `esouv_ukr` (es.com.ua,
     // Євросувенір): той самий Magento, інший website і інший магазин.
     minRows: 950,
+  },
+  papirus: {
+    slug: "papirus-opt.com",
+    // ЄДИНЕ НАШЕ ДЖЕРЕЛО, ДЕ ПОСТАЧАЛЬНИК САМ КЛАДЕ НАМ ФАЙЛ. Публічно в
+    // Папіруса немає нічого: сайт — сторінка-візитівка, prom.xml / yml.xml /
+    // sitemap.xml усі 404, а robots.txt каже `Disallow: /` геть усім (на
+    // відміну від Бергамо й Беррітекса, які закривають лише окремі шляхи).
+    // Зате в кабінеті партнера лежить готова вигрузка — один XLS на 1,19 МБ,
+    // аркуш `Price`, 6697 товарів. Тобто прайс — це не обхід чужого сайту, а
+    // файл, який нам віддають; обхід тут лише за фото (`photos` нижче).
+    api: {
+      loginPage: "https://www.papirus-opt.com/",
+      loginPost: "https://www.papirus-opt.com/auth/",
+      // Сторінка, куди кабінет кидає після входу. Її ж перевіряємо як доказ
+      // сесії: без логіна будь-яка адреса віддає ту саму візитівку з кодом 200.
+      homePage: "https://www.papirus-opt.com/promo/",
+      priceUrl: "https://www.papirus-opt.com/cabinet/pricelist/",
+      site: "https://www.papirus-opt.com",
+      /**
+       * ФОТО В ПРАЙСІ НЕМАЄ, І ВИВЕСТИ ЙОГО З АРТИКУЛА НЕ ВИЙДЕ. Ім'я файлу —
+       * це внутрішній id товару (`/img/goods/6704.jpg`), і він же адреса
+       * картки (`/categories/view/6704/`). Тобто одна мапа «артикул → id»
+       * закриває і фото, і посилання.
+       *
+       * Збираємо її зі сторінок розділів: 20 товарів на сторінку, розмір не
+       * піддається (перевірено десять назв параметра — усі дають 20). На весь
+       * каталог це ~350 сторінок — увосьмеро менше за щотижневий обхід Бергамо.
+       *
+       * Самі картинки ПУБЛІЧНІ: `/img/goods/{id}.jpg` віддається без куки
+       * (перевірено 09.09.2026 — 200, JPEG 1000×701). Тому в CRM вони просто
+       * покажуться, класти їх до себе не треба.
+       */
+      photos: { concurrency: 4, delayMs: 250, maxPages: 40, minCoverage: 0.8 },
+    },
+    format: "xls-price",
+    source: "cabinet:xls",
+    // Пошта й пароль — у .env.backup поруч із BACKUP_DB_URL; сюди потрапляють
+    // лише ІМЕНА змінних. Пароль тут видає їхній менеджер: самореєстрації немає.
+    auth: { emailEnv: "PAPIRUS_EMAIL", passwordEnv: "PAPIRUS_PASSWORD" },
+    // ЦІНА ВЖЕ НАША, І ЦЕ ПЕРЕВІРЕНО, А НЕ ПРИПУЩЕНО. 09.09.2026 звірив 12
+    // товарів із тим, що портал показує під нашим логіном: лампа O74015 на
+    // сайті «285.53 → 228.42» (−20% від базової), у прайсі рівно 228.42;
+    // ручка E10240-14 в акції −50% на сайті 2.76, у прайсі 2.76. Збіглися всі
+    // дванадцять, разом з акцією місяця й персональною пропозицією. Тому ні
+    // priceRule, ні accountPricing тут не потрібні — як у Е-Сувеніра.
+    priceKind: "wholesale",
+    // У прайсі 6697 товарів (09.09.2026). Межа з запасом: сесія, що відпала,
+    // дає не «мало рядків», а HTML замість XLS — і падає раніше, на типі файлу.
+    minRows: 5500,
   },
   // НЕ ДОДАНИЙ, і причина в ньому, а не в коді (перевірено 05.09.2026):
   //   eney (OpenCart) — точка фіда index.php?route=extension/feed/google_base
@@ -1223,6 +1287,250 @@ async function loadMagentoGraphql(cfg) {
  * більшим у півтора раза. Та сама причина, що в Аванпринта: порожнє поле
  * менеджер помітить, а неправильне число — ні.
  */
+/**
+ * Папірус: вигрузка з кабінету партнера (XLS) + прохід за фото.
+ *
+ * ЧОМУ ЦЕ `api`, А НЕ `feed`. Звичайний шлях фіда тягне файл одним `curl` без
+ * куки — тут так не можна: `/cabinet/pricelist/` без сесії віддає не помилку,
+ * а сторінку-візитівку з кодом 200. `curl -f` таке пропустив би, розбирач знайшов
+ * би нуль товарів, і залив погасив би всього постачальника. Тож джерело ходить
+ * по собі само: логін, файл, перевірка що це справді книжка Excel.
+ *
+ * СТОРОЖА ТУТ ДЕШЕВША, НІЖ У РЕШТИ. Беррітекс і Е-Сувенір стережуть частку
+ * знижених рядків, бо в них сесія, що відпала, віддає ті самі товари, тільки з
+ * роздрібними цінами — тихо й правдоподібно. Папірус так не вміє: без логіна
+ * немає ані файлу, ані товарів. Тому досить перевірити ТИП ФАЙЛУ — книжка
+ * Excel починається з підпису OLE2 (D0 CF 11 E0), а візитівка з `<!DOCTYPE`.
+ */
+async function loadPapirusPrice(cfg) {
+  const { api } = cfg;
+  const email = process.env[cfg.auth.emailEnv];
+  const password = process.env[cfg.auth.passwordEnv];
+  if (!email || !password) {
+    console.error(
+      `Немає ${cfg.auth.emailEnv}/${cfg.auth.passwordEnv} у оточенні. Без логіна кабінет віддає ` +
+        `сторінку-візитівку замість прайсу. Впишіть їх у .env.backup і повторіть.`
+    );
+    process.exit(1);
+  }
+
+  // ── сесія ─────────────────────────────────────────────────────────────────
+  const jar = new Map();
+  const cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+  const keep = (res) => {
+    for (const c of res.headers.getSetCookie?.() ?? []) {
+      const [pair] = c.split(";");
+      const i = pair.indexOf("=");
+      if (i > 0) jar.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+    }
+  };
+  // `...opts` першим — з тієї ж причини, що в applyAccountPricing: інакше
+  // заголовки виклику затруть зібрану куку, і вхід виглядав би як поганий пароль.
+  const req = async (url, opts = {}) =>
+    fetch(url, {
+      ...opts,
+      redirect: "manual",
+      headers: { "User-Agent": UA, cookie: cookie(), ...(opts.headers || {}) },
+      signal: AbortSignal.timeout(60_000),
+    }).then((res) => (keep(res), res));
+
+  // Спершу порожній GET — по куку сесії, інакше форма входу її не отримає.
+  keep(await req(api.loginPage));
+  await req(api.loginPost, {
+    method: "POST",
+    body: new URLSearchParams({ login: email, password, autoauth: "1", redirect: "/promo/" }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Referer: api.loginPage },
+  });
+
+  // Доказ входу — не код відповіді (він і без логіна 200), а посилання «Вийти».
+  const home = await (await req(api.homePage)).text();
+  if (!/\/\?logout/.test(home)) {
+    console.error(
+      "Кабінет не відкрився: сторінка не показує «Вийти». Портал сам каже, що пароль видає їхній " +
+        "менеджер і що акаунт буває неактивним — перевірте доступи."
+    );
+    process.exit(1);
+  }
+  console.log("Кабінет відкрито — прайс беремо з-під логіна.");
+
+  // ── прайс ─────────────────────────────────────────────────────────────────
+  const res = await req(api.priceUrl);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const isXls = buf.length > 8 && buf.readUInt32BE(0) === 0xd0cf11e0;
+  if (!isXls) {
+    console.error(
+      `Кабінет віддав не книжку Excel, а ${buf.length} байт типу «${res.headers.get("content-type") || "?"}». ` +
+        `Так виглядає відпала сесія: замість файлу приїжджає сторінка-візитівка. Нічого не записано.`
+    );
+    process.exit(1);
+  }
+  console.log(`Прайс: ${(buf.length / 1024 / 1024).toFixed(2)} МБ`);
+
+  const sheet = XLSX.read(buf, { type: "buffer" }).Sheets.Price;
+  if (!sheet) {
+    console.error("У книжці немає аркуша «Price» — вигрузку перебудували, розбирати нічим.");
+    process.exit(1);
+  }
+  const table = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
+
+  /**
+   * РОЗДІЛИ ЗАШИТІ ВІДСТУПАМИ В ПЕРШІЙ КОЛОНЦІ, а не окремим полем: рядок
+   * товару має шість колонок, рядок розділу — саму назву з пробілами спереду.
+   * Глибина рахується стеком, а не діленням відступу на чотири: один розділ
+   * («Ділові подарунки та аксесуари») набраний п'ятьма пробілами замість
+   * чотирьох, і арифметика поклала б його не туди.
+   */
+  const clean = (s) => String(s).replace(/<[^>]*>/g, "").trim();
+  const rows = [];
+  const stack = [];
+  for (const r of table.slice(1)) {
+    const first = r[0];
+    if (typeof r[3] === "number") {
+      const article = clean(first);
+      const name = clean(r[1]);
+      if (!article || !name) continue;
+      // Дерево без кореня «Каталог продукції»: він однаковий у всіх рядків.
+      const path = stack.slice(1).map((s) => s.name);
+      rows.push({
+        external_key: article,
+        article,
+        name,
+        // Окремої колонки бренду немає — він сидить у назві («ECONOMIX», «SCHNEIDER»).
+        // Виколупувати його регуляркою з назви не будемо: у половини товарів марки
+        // немає взагалі, і вигадана «Папка» як виробник гірша за порожнє поле.
+        vendor: null,
+        category: path[path.length - 1] || null,
+        price: r[3],
+        currency: "UAH",
+        url: null,
+        image_url: null,
+        images: JSON.stringify([]),
+        attrs: JSON.stringify({
+          // РРЦ — рекомендована роздрібна, не наша й не базова. Кладемо поруч,
+          // щоб було з чим звіряти, але в `price` йде саме наша (колонка «Ціна»).
+          ...(typeof r[4] === "number" && r[4] > 0 ? { rrp: r[4] } : {}),
+          ...(r[2] ? { pack: clean(r[2]) } : {}),
+          ...(typeof r[5] === "number" ? { stock: r[5] } : {}),
+          ...(path.length ? { categoryPath: path.join(" / ") } : {}),
+        }),
+      });
+      continue;
+    }
+    if (typeof first !== "string" || !first.trim()) continue;
+    const indent = first.match(/^ */)[0].length;
+    while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
+    stack.push({ indent, name: clean(first) });
+  }
+  console.log(`У прайсі товарів: ${rows.length}`);
+
+  // `--limit` для проби: беремо початок прайсу й обходимо лічені розділи, щоб
+  // не ганяти 350 сторінок заради перевірки, що розбір живий. `minRows` при
+  // `--limit` і так не діє, тож урізаний прогін не дійде до запису.
+  const out = limit ? rows.slice(0, limit) : rows;
+  if (limit) console.log(`  беремо перші ${out.length} — --limit`);
+
+  // Сторінки розділів теж під логіном: без куки вони віддають ту саму візитівку.
+  if (api.photos) await attachPapirusPhotos(out, cfg, cookie());
+  return out;
+}
+
+/**
+ * Фото й посилання для Папіруса: мапа «артикул → внутрішній id».
+ *
+ * У прайсі id немає, а він потрібен двічі — ім'я файлу картинки
+ * (`/img/goods/{id}.jpg`) і адреса картки (`/categories/view/{id}/`). Єдине
+ * місце, де артикул стоїть поруч із id, — сторінки розділів, по 20 товарів.
+ *
+ * ЧОМУ ЦЕ НЕ ЗУПИНЯЄ ЗАЛИВ. Прайс уже на руках, і він самодостатній: артикул,
+ * назва, наша ціна, залишок. Фото — прикраса картки, а не дані. Тому обірваний
+ * прохід НЕ валить прогін, як у Бергамо (там обхід — єдине джерело товарів, і
+ * половина сторінок означала б погашену половину каталогу): тут ми лише не
+ * доклали картинок і чесно кажемо, скільки їх вийшло.
+ */
+async function attachPapirusPhotos(rows, cfg, cookieHeader) {
+  const { concurrency = 4, delayMs = 250, maxPages = 40, minCoverage = 0.8 } = cfg.api.photos;
+  const site = cfg.api.site;
+  const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const index = await fetch(cfg.api.homePage, {
+    headers: { "User-Agent": UA, cookie: cookieHeader },
+    signal: AbortSignal.timeout(30_000),
+  })
+    .then((r) => r.text())
+    .catch(() => "");
+  const all = [...new Set([...index.matchAll(/\/categories\/view\/cid\.(\d+)\//g)].map((m) => m[1]))];
+  if (!all.length) {
+    console.log("  ⚠ меню розділів не прочиталось — фото цього разу без змін");
+    return;
+  }
+  const cids = limit ? all.slice(0, 5) : all;
+  console.log(
+    `Фото: обходимо ${cids.length} розділів по 20 товарів на сторінку` +
+      (limit ? ` (з ${all.length} — --limit)` : "")
+  );
+
+  const byArticle = new Map();
+  let cursor = 0;
+  let pages = 0;
+  async function worker() {
+    for (;;) {
+      const i = cursor++;
+      if (i >= cids.length) return;
+      const cid = cids[i];
+      for (let p = 1; p <= maxPages; p++) {
+        const url = p === 1 ? `${site}/categories/view/cid.${cid}/` : `${site}/categories/view/cid.${cid}/p.${p}/`;
+        let html = "";
+        try {
+          const res = await fetch(url, {
+            headers: { "User-Agent": UA, cookie: cookieHeader },
+            signal: AbortSignal.timeout(30_000),
+          });
+          html = await res.text();
+        } catch {
+          break;
+        }
+        pages++;
+        // Плитка товару: мініатюра `/img/goods/tb/{id}.jpg`, а поруч «Арт. XXX».
+        // Ідемо парами по розмітці — так надійніше, ніж зіставляти два списки
+        // за порядком: товар без картинки зсунув би всі решта на один.
+        let added = 0;
+        for (const m of html.matchAll(
+          /img\/goods\/tb\/(\d+)\.jpg[\s\S]{0,4000}?Арт\.\s*([^\s<][^<]{0,40}?)\s*</g
+        )) {
+          const [, id, article] = m;
+          const key = article.trim();
+          if (key && !byArticle.has(key)) (byArticle.set(key, id), added++);
+        }
+        await nap(delayMs);
+        if (!added) break;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker));
+
+  let hit = 0;
+  for (const r of rows) {
+    const id = byArticle.get(r.article);
+    if (!id) continue;
+    hit++;
+    r.image_url = `${site}/img/goods/${id}.jpg`;
+    r.url = `${site}/categories/view/${id}/`;
+    r.images = JSON.stringify([`${site}/img/goods/${id}.jpg`]);
+  }
+  const coverage = rows.length ? hit / rows.length : 0;
+  console.log(
+    `  сторінок ${pages}, пар «артикул → id» ${byArticle.size}, з фото ${hit} з ${rows.length} ` +
+      `(${(coverage * 100).toFixed(1)}%)`
+  );
+  // Під `--limit` обходимо жменю розділів, тож низьке покриття — норма, а не сигнал.
+  if (!limit && coverage < minCoverage) {
+    console.log(
+      `  ⚠ фото менше за очікуване (межа ${(minCoverage * 100).toFixed(0)}%): прохід міг обірватись. ` +
+        `Прайс від цього не постраждав — ціни й залишки на місці.`
+    );
+  }
+}
+
 async function applyAccountPricing(rows, cfg) {
   const ap = cfg.accountPricing;
   const { concurrency = 4, delayMs = 250, minDiscountedRatio = 0.8, minCoverage = 0.9, retries = 1 } = ap;
@@ -1547,7 +1855,7 @@ const PARSERS = { prom: parseProm, cscart: parseCscart, sitemap: parseSitemap, "
 const PAGE_PARSERS = { "opencart-page": parseOpencartPage };
 // Завантажувачі, які самі ходять по джерелу: їм не потрібен ані файл фіда, ані
 // перелік адрес — вони тягнуть каталог по своєму протоколу.
-const API_LOADERS = { "magento-graphql": loadMagentoGraphql };
+const API_LOADERS = { "magento-graphql": loadMagentoGraphql, "xls-price": loadPapirusPrice };
 
 // ── тягнемо фід ─────────────────────────────────────────────────────────────
 // Джерело з `api` не має файлу, який можна завантажити: воно саме ходить по
