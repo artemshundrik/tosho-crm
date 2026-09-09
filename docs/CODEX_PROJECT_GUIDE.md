@@ -38,7 +38,7 @@ These are important and current as of April 19, 2026:
   - production / orders / ready-to-ship / logistics
   - product catalog
   - contractors
-  - suppliers (connected supplier cabinets, pool search, per-supplier products)
+  - suppliers (second tab of Integrations: connected cabinets, pool search, per-supplier products)
   - sample stock / warehouse samples
   - team management and HR
   - notifications
@@ -158,12 +158,14 @@ Current catalog variant contract:
 
 ### Suppliers
 
-- [src/pages/SuppliersPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/SuppliersPage.tsx) — list: pool search on top, supplier state cards, «Плануємо підключити» block
+- Lives under **Integrations** as its second tab (`/integrations/suppliers`), not as its own menu entry: it answers the same question as Integrations (what is connected, is it alive, when did it last run) and is gated the same way.
+- [src/components/app/IntegrationsTabs.tsx](/Users/artem/Projects/tosho-crm/src/components/app/IntegrationsTabs.tsx) — the «Сервіси» / «Постачальники» switch and both paths
+- [src/pages/SuppliersPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/SuppliersPage.tsx) — the tab: pool search on top, supplier state cards, «Плануємо підключити» block
 - [src/pages/SupplierPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/SupplierPage.tsx) — one supplier: cabinet passport, contact from `contractors`, products with search / categories / paging by product name
 - [src/features/suppliers/suppliersCatalog.ts](/Users/artem/Projects/tosho-crm/src/features/suppliers/suppliersCatalog.ts) — the registry; adding a supplier means a record here **and** in `scripts/load-supplier-feed.mjs` **and** in the source list of `scripts/supplier-pool-search.sql` (a test keeps the three in sync)
 - [scripts/supplier-pool-page.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-page.sql) — read-only RPCs: `supplier_pool_summary`, `list_supplier_products`, `supplier_pool_categories`
 - Design: [docs/superpowers/specs/2026-09-09-suppliers-page-design.md](/Users/artem/Projects/tosho-crm/docs/superpowers/specs/2026-09-09-suppliers-page-design.md)
-- Module key `suppliers` is on by default for every job role (prices from the pool are visible to everyone by decision REQ-250#p32).
+- No module key of its own: both tabs are gated by `nova_poshta`, the gate Integrations already uses (owner, CEO, IT). Managers reach supplier products where they need them, in the quote wizard.
 
 ### Sample Stock
 
@@ -273,10 +275,11 @@ Current UI contract:
 - `/design`
 - `/design/:id`
 - `/contractors`
-- `/suppliers`
-- `/suppliers/:id` — one supplier; `:id` is the loader registry key (`totobi`, `bergamo`, …), not the domain
 - `/stock/samples`
 - `/settings/members` — адмін-центр «Люди та доступи» (Огляд · Люди · Матриця · Пульс · Запрошення)
+- `/integrations` — tab «Сервіси»
+- `/integrations/suppliers` — tab «Постачальники»
+- `/integrations/suppliers/:id` — one supplier; `:id` is the loader registry key (`totobi`, `bergamo`, …), not the domain
 - `/team/:userId` — картка людини, спільна для «Команди» й адмін-центру
 - `/profile`
 - `/admin/observability`

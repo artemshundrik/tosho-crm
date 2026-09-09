@@ -332,7 +332,7 @@ These tables together power the product catalog and quote item configuration.
   - the app reads it only through RPCs, all `security invoker` under the
     uncorrelated RLS policy described above:
     `tosho.search_supplier_pool(p_terms, p_per_supplier)` (quote wizard and the
-    `/suppliers` search; the list of visible sources lives in the function body),
+    `/integrations/suppliers` search; the list of visible sources lives in the function body),
     `tosho.supplier_pool_summary()`,
     `tosho.list_supplier_products(p_slug, p_terms, p_category, p_limit, p_offset)`
     (pages by distinct `name`, so one product's colours never split across pages;
@@ -452,7 +452,7 @@ generator refuses the marker if the table has no `BEFORE INSERT` trigger at all.
     numbers live in system catalogs, gated by the owner/CEO predicate inside
 
 - `tosho.supplier_pool_summary()`, `tosho.list_supplier_products(...)`, `tosho.supplier_pool_categories(p_slug)`
-  - read-only RPCs behind `/suppliers`; SECURITY INVOKER on purpose — the pool's
+  - read-only RPCs behind `/integrations/suppliers`; SECURITY INVOKER on purpose — the pool's
     RLS already answers "which team", so there is nothing to elevate
 
 - `public.assert_quote_lock_from_quote_id()`
