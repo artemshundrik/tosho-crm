@@ -36,6 +36,12 @@ not about limiting the owner. Full role model:
 - Sensitive HR/finance/payroll tables: gate reads to owner/admin via the canonical
   helpers `tosho.is_workspace_admin/owner/member(workspace_id)` or
   `public.has_team_role(team_id, roles[])` / `is_team_member(team_id)`.
+- On a large table the check may be computed once per query instead of once per row,
+  but only by keeping **both** halves of the helper — the block gate included. Dropping
+  the `is_user_blocked` conjunct is a lockout bypass, not an optimisation. Recipe,
+  threshold and verification steps: "RLS: per-row check vs once-per-query" in
+  [DB_MAP](DB_MAP.md). `npm run check:db-guards` reports any policy that resolves
+  membership without reaching a block gate.
 - Directory-type tables (names/emails): readable by members, never by `anon`.
 - Reference/catalog data may be world-readable, but decide it on purpose.
 

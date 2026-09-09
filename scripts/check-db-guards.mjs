@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Чотири перевірки безпеки бази — перед пушем, поки помилка ще безкоштовна (REQ-104).
+ * П'ять перевірок безпеки бази — перед пушем, поки помилка ще безкоштовна (REQ-104).
  *
  * НАВІЩО. Схема їде на прод руками, через psql, і жоден автоматичний захист її
  * не дивиться. Ціна вже траплялась: у серпні 2026 таблиці `user_profiles` і
@@ -18,6 +18,10 @@
  *      RLS таблиць під ними.
  *   4. SECURITY DEFINER-функції без закріпленого search_path: викликач може
  *      підсунути свою схему й підмінити таблицю під функцією з правами власника.
+ *   5. Політики, які вирішують доступ по членству, але не доходять до гейта
+ *      заблокованих (REQ-257). Канонічний `is_team_member` тримає цей гейт
+ *      усередині; хто розкладає хелпер на частини заради швидкості, легко
+ *      забирає половину — і звільнений знову бачить дані.
  *
  * ЦЕ РАТЧЕТ, А НЕ ІДЕАЛ. На день заведення на проді вже було 69 таких місць —
  * якби перевірка падала на них, її б вимкнули першого ж дня. Тому знімок боргу
@@ -38,6 +42,7 @@ import { existsSync } from "node:fs";
 import {
   ANON_GRANTS,
   DEFINER_WITHOUT_SEARCH_PATH,
+  POLICIES_WITHOUT_BLOCK_GATE,
   TABLES_WITHOUT_RLS,
   VIEWS_WITHOUT_INVOKER,
 } from "./db-guards-baseline.mjs";
@@ -104,7 +109,25 @@ const CHECKS = [
                     where cfg like 'search_path=%')
            order by 1`,
   },
+  {
+    key: "block-gate",
+    title: "політики без гейта заблокованих",
+    baseline: POLICIES_WITHOUT_BLOCK_GATE,
+    hint: "допишіть `and not tosho.is_user_blocked((select auth.uid()))` або поверніться на одноаргументний хелпер — див. «RLS: per-row check vs once-per-query» у docs/DB_MAP.md.",
+    sql: `select p.schemaname || '.' || p.tablename || ': ' || p.policyname
+            from pg_policies p
+           where p.schemaname in ('tosho', 'public')
+             and (coalesce(p.qual, '') || ' ' || coalesce(p.with_check, '')) not like '%is_user_blocked%'
+             and (
+                   (coalesce(p.qual, '') || ' ' || coalesce(p.with_check, '')) like '%get_my_team_ids%'
+                or (coalesce(p.qual, '') || ' ' || coalesce(p.with_check, '')) ~ 'is_workspace_(admin|owner)\\([^()]*,'
+                or (coalesce(p.qual, '') || ' ' || coalesce(p.with_check, '')) ~ '(from|join)\\s+(public\\.)?team_members'
+                or (coalesce(p.qual, '') || ' ' || coalesce(p.with_check, '')) ~ '(from|join)\\s+tosho\\.memberships'
+                 )
+           order by 1`,
+  },
 ];
+
 
 const ask = (sql) =>
   execFileSync(psql, [dbUrl, "-X", "-A", "-t", "-c", sql], {
@@ -161,4 +184,4 @@ if (нове.length > 0) {
 }
 
 const total = CHECKS.reduce((sum, check) => sum + check.baseline.size, 0);
-console.log(`Захист БД: 4 перевірки, нового немає (у базовому рівні ${total} відомих місць).`);
+console.log(`Захист БД: ${CHECKS.length} перевірок, нового немає (у базовому рівні ${total} відомих місць).`);

@@ -58,6 +58,56 @@ The conventions, the helpers to use, and how to choose between them:
 - `workspace_member_directory`
   - directory-like member view/shape with module access information
 
+### RLS: per-row check vs once-per-query — read this before writing a policy
+
+The default way to express access is the canonical helper
+`public.is_team_member(team_id)`. It carries **two** conditions, not one:
+membership in the team, and the block gate (`and not
+tosho.is_user_blocked(auth.uid())`). Swapping it for a bare `exists` over
+`public.team_members` silently drops the second one — that is why the standing
+rule has always been "go through the helper".
+
+But the helper takes `team_id`, so it is row-correlated: the planner calls it
+for **every row** of the table. On the 26 799-row supplier pool that cost 5.8 s
+instead of 0.3 s on every word typed into quote search (measured 09.09.2026) —
+26 799 identical membership checks, every one returning the same answer.
+
+So on a large table the same two conditions may be written **uncorrelated**, so
+that each is computed once per query instead of once per row:
+
+```sql
+using (
+  team_id in (select public.get_my_team_ids())
+  and not (select tosho.is_user_blocked((select auth.uid())))
+)
+```
+
+`get_my_team_ids()` and `is_user_blocked()` are exactly the two halves that
+`is_team_member` is built from, so this opens no new door — **provided both
+halves are present**. The second conjunct is not optional: without it a blocked
+employee reads the table again.
+
+When to switch:
+
+- the table is over ~10 000 rows **and** some query scans many of its rows
+  (search, feed, export) — both conditions together, not either one;
+- below that line keep `is_team_member(team_id)`: it is shorter and harder to
+  get wrong.
+
+How to verify (both steps, not one):
+
+- before — compare query time under `authenticated` against the owner; that gap
+  *is* the price of the access check, and it tells you whether this is even the
+  problem;
+- after — check that old and new expressions agree for **every** real member,
+  blocked ones included, and run the `rls-verifier` agent.
+
+As of 09.09.2026 exactly one table uses the uncorrelated form,
+`tosho.supplier_products`. The other 39 tables (124 policies) stay on the
+helper; the largest of them is `audit_log` at 3 694 rows, well under the line.
+`check:db-guards` watches the dangerous half of this: a policy that resolves
+membership without reaching any block gate gets reported.
+
 ## Core Quote And CRM Tables
 
 - `quotes`
