@@ -38,6 +38,7 @@ These are important and current as of April 19, 2026:
   - production / orders / ready-to-ship / logistics
   - product catalog
   - contractors
+  - suppliers (connected supplier cabinets, pool search, per-supplier products)
   - sample stock / warehouse samples
   - team management and HR
   - notifications
@@ -155,6 +156,15 @@ Current catalog variant contract:
 - [src/pages/ContractorsPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/ContractorsPage.tsx)
 - [scripts/contractors-schema.sql](/Users/artem/Projects/tosho-crm/scripts/contractors-schema.sql)
 
+### Suppliers
+
+- [src/pages/SuppliersPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/SuppliersPage.tsx) — list: pool search on top, supplier state cards, «Плануємо підключити» block
+- [src/pages/SupplierPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/SupplierPage.tsx) — one supplier: cabinet passport, contact from `contractors`, products with search / categories / paging by product name
+- [src/features/suppliers/suppliersCatalog.ts](/Users/artem/Projects/tosho-crm/src/features/suppliers/suppliersCatalog.ts) — the registry; adding a supplier means a record here **and** in `scripts/load-supplier-feed.mjs` **and** in the source list of `scripts/supplier-pool-search.sql` (a test keeps the three in sync)
+- [scripts/supplier-pool-page.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-page.sql) — read-only RPCs: `supplier_pool_summary`, `list_supplier_products`, `supplier_pool_categories`
+- Design: [docs/superpowers/specs/2026-09-09-suppliers-page-design.md](/Users/artem/Projects/tosho-crm/docs/superpowers/specs/2026-09-09-suppliers-page-design.md)
+- Module key `suppliers` is on by default for every job role (prices from the pool are visible to everyone by decision REQ-250#p32).
+
 ### Sample Stock
 
 - [src/pages/SampleStockPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/SampleStockPage.tsx)
@@ -263,6 +273,8 @@ Current UI contract:
 - `/design`
 - `/design/:id`
 - `/contractors`
+- `/suppliers`
+- `/suppliers/:id` — one supplier; `:id` is the loader registry key (`totobi`, `bergamo`, …), not the domain
 - `/stock/samples`
 - `/settings/members` — адмін-центр «Люди та доступи» (Огляд · Люди · Матриця · Пульс · Запрошення)
 - `/team/:userId` — картка людини, спільна для «Команди» й адмін-центру

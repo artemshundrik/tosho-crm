@@ -323,6 +323,25 @@ Practical implication:
 
 These tables together power the product catalog and quote item configuration.
 
+- `supplier_products`
+  - the supplier pool: one row per colour/size offer of a supplier, keyed by
+    `(supplier_slug, external_key)`; loaded by `scripts/load-supplier-feed.mjs`
+    (GitHub Actions `supplier-feeds`, daily 06:00 Kyiv; Bergamo crawled weekly).
+    `attrs` carries per-source extras (`color`, `sizes`, `sitePrice`, `methods`,
+    `printPlaces`, Avanprint `description` — 9.5 MB in total, never select it whole).
+  - the app reads it only through RPCs, all `security invoker` under the
+    uncorrelated RLS policy described above:
+    `tosho.search_supplier_pool(p_terms, p_per_supplier)` (quote wizard and the
+    `/suppliers` search; the list of visible sources lives in the function body),
+    `tosho.supplier_pool_summary()`,
+    `tosho.list_supplier_products(p_slug, p_terms, p_category, p_limit, p_offset)`
+    (pages by distinct `name`, so one product's colours never split across pages;
+    its CTE keeps only `id`+`name` on purpose — materialising `attrs` cost 1–3 s),
+    `tosho.supplier_pool_categories(p_slug)`.
+    ([scripts/catalog-supplier-products.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-supplier-products.sql),
+    [scripts/supplier-pool-search.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-search.sql),
+    [scripts/supplier-pool-page.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-page.sql))
+
 ## Sample Stock / Warehouse Samples
 
 - `sample_stock_items`
@@ -431,6 +450,10 @@ generator refuses the marker if the table has no `BEFORE INSERT` trigger at all.
   - Postgres version, `tosho` table/function counts, active cron count, database
     and storage size for the Dev → Стек footnote; SECURITY DEFINER because the
     numbers live in system catalogs, gated by the owner/CEO predicate inside
+
+- `tosho.supplier_pool_summary()`, `tosho.list_supplier_products(...)`, `tosho.supplier_pool_categories(p_slug)`
+  - read-only RPCs behind `/suppliers`; SECURITY INVOKER on purpose — the pool's
+    RLS already answers "which team", so there is nothing to elevate
 
 - `public.assert_quote_lock_from_quote_id()`
   - quote lock helper
