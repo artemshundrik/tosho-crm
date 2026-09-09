@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -45,9 +45,30 @@ const renderPassport = (props: Partial<ComponentProps<typeof SupplierPassport>> 
     </MemoryRouter>
   );
 
+/**
+ * Паспорт згорнутий за замовчуванням, тож майже кожна перевірка починається з
+ * розгортання. Окремим помічником, а не рядком у кожному тесті: інакше перший
+ * же новий тест забуде клікнути й «не знайшов текст» читатиметься як поламаний
+ * паспорт, а не як закритий згортач.
+ */
+const openPassport = (props: Partial<ComponentProps<typeof SupplierPassport>> = {}) => {
+  const result = renderPassport(props);
+  fireEvent.click(screen.getByRole("button", { name: /Паспорт кабінету/ }));
+  return result;
+};
+
 describe("SupplierPassport", () => {
-  it("паспорт: спосіб забору, правило ціни з датою, що дає фід, контакт", () => {
+  it("за замовчуванням згорнутий: видно числа пулу, а не платформу з розкладом", () => {
     renderPassport();
+    // Три числа зі зведення — те, заради чого сюди дивляться щоразу.
+    expect(screen.getByText("679")).toBeInTheDocument();
+    // А довідка про кабінет чекає за кнопкою й на дорозі до товарів не стоїть.
+    expect(screen.queryByText("CS-Cart")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Паспорт кабінету/ })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("паспорт: спосіб забору, правило ціни з датою, що дає фід, контакт", () => {
+    openPassport();
     expect(screen.getByText("CS-Cart")).toBeInTheDocument();
     expect(screen.getByText(/сувенірка −44%/)).toBeInTheDocument();
     expect(screen.getByText("08.09.2026")).toBeInTheDocument();
@@ -60,21 +81,21 @@ describe("SupplierPassport", () => {
 
   it("доступ до кабінету: місце, де лежить пароль, а не сам пароль", () => {
     const berrytex = supplierById("berrytex")!;
-    renderPassport({ definition: berrytex, status: supplierStatus(berrytex, null, now), contractor: null });
+    openPassport({ definition: berrytex, status: supplierStatus(berrytex, null, now), contractor: null });
     expect(screen.getByText(/BERRYTEX_EMAIL і BERRYTEX_PASSWORD/)).toBeInTheDocument();
     expect(screen.getByText(/У CRM зберігаємо лише імена змінних/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "berrytex.com.ua/customer/account/login/" })).toBeInTheDocument();
   });
 
   it("без картки підрядника — чесний порожній стан і посилання на «Підрядників»", () => {
-    renderPassport({ contractor: null });
+    openPassport({ contractor: null });
     expect(screen.getByText("У картці підрядника контактів ще немає.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Підрядниках" })).toHaveAttribute("href", "/contractors");
   });
 
   it("запланований — «що заважає» замість ціни й фіда", () => {
     const toptime = supplierById("toptime")!;
-    renderPassport({ definition: toptime, status: supplierStatus(toptime, null, now), contractor: null });
+    openPassport({ definition: toptime, status: supplierStatus(toptime, null, now), contractor: null });
     expect(screen.getByText("Що заважає")).toBeInTheDocument();
     expect(screen.getByText(toptime.planned!.blocker)).toBeInTheDocument();
     expect(screen.queryByText("Ціна")).not.toBeInTheDocument();

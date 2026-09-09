@@ -1397,19 +1397,33 @@ async function loadPapirusPrice(cfg) {
    * так не починається. Знак питання всередині назви лишається недоторканим.
    */
   const clean = (s) =>
-    String(s)
-      .replace(/<[^>]*>/g, "")
-      .replace(/^﻿+/, "")
-      .replace(/^\?\s+/, "")
-      .trim();
+    // ПОРОЖНЯ КОМІРКА — ЦЕ ПОРОЖНІЙ РЯДОК, А НЕ СЛОВО «undefined». `String(undefined)`
+    // дає рядок із семи літер, а він проходить перевірку «назва є» як справжня
+    // назва: 17 товарів залились у пул під іменем `undefined` і так і показались
+    // менеджеру в пошуку (09.09.2026). Ловиться лише очима — тому окремий рядок.
+    s == null
+      ? ""
+      : String(s)
+          .replace(/<[^>]*>/g, "")
+          .replace(/^﻿+/, "")
+          .replace(/^\?\s+/, "")
+          .trim();
   const rows = [];
   const stack = [];
+  let skippedNameless = 0;
   for (const r of table.slice(1)) {
     const first = r[0];
     if (typeof r[3] === "number") {
       const article = clean(first);
       const name = clean(r[1]);
-      if (!article || !name) continue;
+      // Безіменний товар у пул не йде. Їх 17 із 6709, і назви немає не в нас, а
+      // в них: сторінка того ж артикула на порталі теж показує саму ціну. Ставити
+      // замість назви артикул було б вигадуванням даних, а рядок без назви в
+      // пошуку менеджера — просто сміття: за назвою він не знайдеться однаково.
+      if (!article || !name) {
+        skippedNameless++;
+        continue;
+      }
       // Дерево без кореня «Каталог продукції»: він однаковий у всіх рядків.
       const path = stack.slice(1).map((s) => s.name);
       rows.push({
@@ -1442,7 +1456,10 @@ async function loadPapirusPrice(cfg) {
     while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
     stack.push({ indent, name: clean(first) });
   }
-  console.log(`У прайсі товарів: ${rows.length}`);
+  console.log(
+    `У прайсі товарів: ${rows.length}` +
+      (skippedNameless ? ` (плюс ${skippedNameless} без назви — пропущено)` : "")
+  );
 
   // `--limit` для проби: беремо початок прайсу й обходимо лічені розділи, щоб
   // не ганяти 350 сторінок заради перевірки, що розбір живий. `minRows` при
