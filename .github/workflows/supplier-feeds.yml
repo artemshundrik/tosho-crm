@@ -16,10 +16,10 @@
 # ЩО САМЕ ГАНЯЄМО І ЧОМУ ПО-РІЗНОМУ. Файлові фіди (Тотобі, Аванпринт) — один
 # запит і кілька мегабайт, їх не шкода й двічі на день. Беррітекс теж фід, але
 # після нього йдуть ще 74 сторінки товару під логіном: у файлі роздріб, а наша
-# ціна лише в кабінеті. Разом увесь денний прогін укладається у півтори хвилини,
-# тож друга ходка нічого не коштує. Бергамо фіда не має взагалі: там обхід 2658
-# сторінок товарів, тож раз на тиждень — і то з запасом, бо їхні сторінки не
-# міняються щогодини.
+# ціна лише в кабінеті. Trele — обхід під логіном цілком, але маленький: 364
+# сторінки, півтори хвилини, тобто сьома частина Бергамо, і в денний прогін він
+# уміщається. Бергамо фіда не має взагалі: там обхід 2658 сторінок товарів, тож
+# раз на тиждень — і то з запасом, бо їхні сторінки не міняються щогодини.
 #
 # ⚠️ ЗАПОБІЖНИКИ ЖИВУТЬ У ЗАВАНТАЖУВАЧІ, А НЕ ТУТ — І ЦЕ НАВМИСНО.
 # Небезпека така: зниклі товари гасяться за часом («усе, чого не торкнулись у
@@ -74,7 +74,7 @@ on:
   workflow_dispatch:
     inputs:
       suppliers:
-        description: "Кого перезалити через пробіл (totobi berrytex avanprint bergamo e-suvenir papirus). Порожньо — усіх."
+        description: "Кого перезалити через пробіл (totobi berrytex avanprint bergamo e-suvenir papirus trele). Порожньо — усіх."
         required: false
         default: ""
 
@@ -108,7 +108,7 @@ jobs:
           REQUESTED: ${{ github.event.inputs.suppliers }}
         run: |
           set -euo pipefail
-          known="totobi berrytex avanprint bergamo e-suvenir papirus"
+          known="totobi berrytex avanprint bergamo e-suvenir papirus trele"
 
           if [ -n "${REQUESTED:-}" ]; then
             # Ручний запуск: беремо лише знайомі імена, решту відкидаємо вголос.
@@ -127,8 +127,8 @@ jobs:
           else
             case "${SCHEDULE:-}" in
               # Обидва денні прогони заливають те саме — різниця лише в годині.
-              "0 7 * * *")  list="totobi berrytex avanprint e-suvenir papirus" ;;
-              "0 14 * * *") list="totobi berrytex avanprint e-suvenir papirus" ;;
+              "0 7 * * *")  list="totobi berrytex avanprint e-suvenir papirus trele" ;;
+              "0 14 * * *") list="totobi berrytex avanprint e-suvenir papirus trele" ;;
               "30 3 * * 0") list="bergamo" ;;
               *)            list="$known" ;;
             esac
@@ -160,6 +160,12 @@ jobs:
           # двох йому нема сенсу.
           PAPIRUS_EMAIL: ${{ secrets.PAPIRUS_EMAIL }}
           PAPIRUS_PASSWORD: ${{ secrets.PAPIRUS_PASSWORD }}
+          # TRELE — НАЙТИХІШИЙ ІЗ ЧОТИРЬОХ. Гостю сторінка товару віддається та
+          # сама, з тими самими полями, — лише ціни в ній роздрібні. Без цих двох
+          # обхід привіз би 4 185 роздрібних цін під підписом «оптова» й затер
+          # нормальні, нічого не зламавши на вигляд.
+          TRELE_EMAIL: ${{ secrets.TRELE_EMAIL }}
+          TRELE_PASSWORD: ${{ secrets.TRELE_PASSWORD }}
           # Завантажувач за замовчуванням шукає psql у Homebrew — це шлях з
           # ноутбука. На раннері psql лежить у PATH.
           PSQL_BIN: psql
@@ -195,6 +201,14 @@ jobs:
             *" papirus "*)
               if [ -z "${PAPIRUS_EMAIL:-}" ] || [ -z "${PAPIRUS_PASSWORD:-}" ]; then
                 echo "::error::Немає секретів PAPIRUS_EMAIL / PAPIRUS_PASSWORD — кабінет віддає візитівку замість прайсу."
+                exit 1
+              fi
+              ;;
+          esac
+          case " $LIST " in
+            *" trele "*)
+              if [ -z "${TRELE_EMAIL:-}" ] || [ -z "${TRELE_PASSWORD:-}" ]; then
+                echo "::error::Немає секретів TRELE_EMAIL / TRELE_PASSWORD — без логіна сайт показує роздріб."
                 exit 1
               fi
               ;;

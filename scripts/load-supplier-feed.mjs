@@ -301,6 +301,83 @@ const SUPPLIERS = {
     // дає не «мало рядків», а HTML замість XLS — і падає раніше, на типі файлу.
     minRows: 5500,
   },
+  trele: {
+    slug: "trele.com.ua",
+    // Мапа сайту тут — ПЕРЕЛІК АДРЕС, як у Бергамо: назви, ціни, кольори й
+    // фото беруться зі сторінок товарів. Фіда немає взагалі (перевірено
+    // 09.09.2026): ні prom.xml, ні yml.xml, ні вивантажень у кабінеті.
+    //
+    // ПУБЛІЧНІ XLSX-ПРАЙСИ /prices/ — ПАСТКА, І ЦЕ ЗАМІРЯНО. Виглядають
+    // готовою вигрузкою (4 834 артикули з залишками), але ціна в них
+    // РОЗДРІБНА, і під логіном той самий файл віддається байт у байт. Тобто
+    // сценарій Папіруса («кабінет кладе нам прайс») тут не працює, а помітити
+    // це можна лише звіркою з сайтом — самі числа виглядають здоровими.
+    feed: "https://trele.com.ua/sitemap-shop.xml",
+    format: "webasyst-page",
+    source: "crawl:webasyst",
+    crawl: {
+      index: "sitemap-url",
+      // Мапа несе і розділи, і бренди, і сторінки на кшталт /faq/. Товар лежить
+      // у корені (`trele.com.ua/kepka-atlantis-air/`), тож беремо один сегмент
+      // і відкидаємо два відомі префікси. Решта («про нас», «вакансії») відсіється
+      // сама: сторінка без товару не має `skus_data` і повертає null.
+      include: "^https://trele\\.com\\.ua/(?!category/|brand/)[^/]+/$",
+      concurrency: 4,
+      retries: 1,
+      delayMs: 250,
+      maxFailRatio: 0.05,
+      // ОБХІД ІДЕ ПІД ЛОГІНОМ, і без нього він безглуздий: гість бачить роздріб.
+      login: {
+        page: "https://trele.com.ua/login/",
+        post: "https://trele.com.ua/login/",
+        // Доказ сесії — редирект у кабінет. Сама сторінка кабінету доказом бути
+        // не може: Webasyst віддає гостю ту саму оболонку з кодом 200.
+        landing: "/my",
+      },
+      /**
+       * ⚠️ ВІДПАЛИЙ СЕАНС ТУТ НЕ ВИДНО ОЧИМА — і це головна пастка джерела.
+       * Сторінка під логіном і без нього структурно ОДНАКОВА: ті самі ключі, ті
+       * самі кольори, ті самі розміри. Різні лише числа в `price`. Тобто прогін
+       * без сесії тихо привезе 5 000 роздрібних цін під підписом «оптова» й
+       * затре нормальні — рівно та сама форма збою, що в Е-Сувеніра.
+       *
+       * Стереже частка рядків, у яких наша ціна НИЖЧА за роздріб (сторінка
+       * показує обидві). Заміряно 10.09.2026 на повному обході: 3967 рядків із
+       * 4025 зі знижкою, тобто 98,6%. Межа 0,8 лишає запас на товари, яким
+       * гуртової сходинки не проставлено взагалі, — там ми платимо роздріб.
+       */
+      minDiscountedRatio: 0.8,
+    },
+    // Пошта й пароль — у .env.backup поруч із BACKUP_DB_URL; сюди потрапляють
+    // лише ІМЕНА змінних. TRELE_EMAIL — це ТЕЛЕФОН: кабінет пускає за ним.
+    auth: { emailEnv: "TRELE_EMAIL", passwordEnv: "TRELE_PASSWORD" },
+    /**
+     * ЦІНУ КАЖЕ САМ САЙТ ПІД НАШИМ ЛОГІНОМ — множника тут немає й бути не може.
+     * 43 заміряні пари «роздріб → наша» дали розкид 0,356–0,787, і за брендом
+     * він не групується (Gildan 0,356–0,490). Правило «ціна сайту × ставка», як
+     * у Тотобі й Бергамо, збрехало б у півтора раза на кожному другому товарі.
+     *
+     * Наша ціна — це гуртова сходинка «від 500 штук»: із 562 заміряних рядків
+     * 560 збіглися з нею до копійки (10.09.2026). Двом товарам сходинок не
+     * проставлено взагалі, і там ми платимо роздріб.
+     */
+    priceKind: "wholesale",
+    /**
+     * 4 185 рядків «колір + розмір» із 355 сторінок товару (10.09.2026; ще
+     * дев'ять адрес у мапі — це «про нас», «вакансії» тощо, вони мовчки
+     * пропускаються). Межа 3400 — приблизно чотири п'ятих, як у решти обходів.
+     *
+     * ЧОМУ НЕ 6 500, ЯК ЧЕКАЛОСЬ. Сторінка публікує не всі варіанти з їхнього
+     * прайсу: у 463 запис у JSON «схудлий» — є назва кольору й розмір, але
+     * немає ні артикула, ні ціни (сайт вважає їх недоступними), а ще 283 на
+     * сторінці не згадані взагалі. Звірено з їхніми ж публічними прайсами:
+     * серед цих 746 варіантів залишок більший за нуль мають лише 77, тобто
+     * 1,7% каталогу. Натомість 328 наших рядків у прайсах відсутні. Коротше:
+     * розбіжність — це різниця між двома джерелами постачальника, а не втрата
+     * розбору.
+     */
+    minRows: 3400,
+  },
   // НЕ ДОДАНИЙ, і причина в ньому, а не в коді (перевірено 05.09.2026):
   //   eney (OpenCart) — точка фіда index.php?route=extension/feed/google_base
   //                     віддає 200 і НУЛЬ байт: розширення є, фід вимкнено в
@@ -558,6 +635,37 @@ function parseSitemapSku(xml) {
       external_key: url,
       article: slug,
       name: slug,
+      vendor: null,
+      category: null,
+      price: null,
+      currency: "UAH",
+      url,
+      image_url: null,
+      images: "[]",
+    });
+  }
+  return rows;
+}
+
+/**
+ * Мапа, з якої потрібні САМІ АДРЕСИ: ні назв, ні артикулів у ній немає, а
+ * товар пізнається лише формою шляху (trele: `/kepka-atlantis-air/`). Тому
+ * фільтр — не здогадка розбирача, а рядок `crawl.include` у реєстрі: правило
+ * «що тут товар» належить постачальнику, а не коду.
+ *
+ * Рядки звідси йдуть ЛИШЕ в обхід (`crawlPages` бере з них `url`), тож решта
+ * полів заповнена мінімально — справжні беруться зі сторінки.
+ */
+function parseSitemapUrl(xml, cfg) {
+  const include = cfg.crawl?.include ? new RegExp(cfg.crawl.include) : null;
+  const rows = [];
+  for (const m of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) {
+    const url = m[1].trim();
+    if (include && !include.test(url)) continue;
+    rows.push({
+      external_key: url,
+      article: null,
+      name: url,
       vendor: null,
       category: null,
       price: null,
@@ -877,6 +985,170 @@ function parseOpencartPage(html, ctx) {
   return rows;
 }
 
+/**
+ * Вирізати збалансований об'єкт JSON, що починається після позиції `from`.
+ * Потрібне там, де JSON лежить не окремим тегом, а полем усередині виклику
+ * («…, skus_data: {…}, services: {…}»): регулярка тут не годиться, бо всередині
+ * є і вкладені дужки, і лапки з екранованими дужками.
+ */
+function bracedObject(text, from) {
+  const start = text.indexOf("{", from);
+  if (start < 0) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) return text.slice(start, i + 1);
+  }
+  return null;
+}
+
+/**
+ * Значення ознаки в `skus_data` буває трьох видів, і всі три трапляються на
+ * сусідніх сторінках того самого магазину: рядком («3XL»), мапою «id → підпис»
+ * ({"740":"100% бавовна"}) і посиланням на значення ({id, feature_id}) — так
+ * лежить колір, бо його підпис і зразок живуть у формі товару.
+ */
+function webasystFeatureText(value) {
+  if (value == null) return null;
+  if (typeof value === "string" || typeof value === "number") return String(value).trim() || null;
+  if (typeof value !== "object") return null;
+  if (value.feature_id) return null;
+  const parts = Object.values(value).filter((v) => typeof v === "string" && v.trim());
+  return parts.length ? parts.join(", ") : null;
+}
+
+/**
+ * Сторінка товару Webasyst Shop-Script (trele). Усе потрібне лежить у JSON
+ * усередині HTML — окремого API просити не треба.
+ *
+ * ⚠️ ЦЕЙ РОЗБІР МАЄ СЕНС ЛИШЕ ПІД ЛОГІНОМ. `price` — це те, що платимо МИ, і
+ * гостю в тому самому полі приїжджає роздріб. Сторінки при цьому не
+ * відрізняються нічим іншим: ані ключем, ані структурою, ані складом полів.
+ * Сторожить `crawl.minDiscountedRatio` (див. реєстр і `assertDiscounted`).
+ *
+ * РЯДОК — ПАРА «КОЛІР + РОЗМІР», А НЕ КОЛІР, і це не за звичкою. У Е-Сувеніра
+ * рядком стоїть колір, бо там замовляють модель, а розмір вибирають окремо. Тут
+ * інакше: артикул свій у кожної пари (`GI64000RO3XL`, 567 унікальних із 568
+ * заміряних), і ціна теж буває своя — у Gildan Softstyle 3XL коштує 231,77 проти
+ * 145,04 в решти розмірів. Рядок-колір показав би менеджеру одну ціну на всі
+ * розміри й артикул випадкового з них — тобто саме те число, яке він скопіює.
+ *
+ * ФОТО БЕРЕМО ЛИШЕ СВОЄ. У кольору, у якого власного знімка немає (11% рядків),
+ * плитка лишається порожньою — батьківське фото поставило б поруч із «чорним
+ * антрацитом» знімок синьої футболки. Те саме правило, що в Бергамо.
+ *
+ * HEX КОЛЬОРУ ТУТ НЕМАЄ, хоч атрибут є: `background-color` у зразку кольору
+ * стоїть `#000000` геть у всіх, включно з білим (перевірено 10.09.2026 на 153
+ * зразках). Справжній колір — картинка `/wa-data/…/76_1116_color.png`, а підпис
+ * несе код виробника («Червоний (Red 004)»), і саме він іде в `attrs.color`.
+ */
+function parseWebasystPage(html, ctx) {
+  const at = html.indexOf("skus_data:");
+  if (at < 0) return null; // не сторінка товару: розділ, стаття, «про нас»
+  let skus;
+  try {
+    skus = JSON.parse(bracedObject(html, at));
+  } catch {
+    return null;
+  }
+
+  const site = new URL(ctx.url).origin;
+  const abs = (u) => (u ? new URL(u, site).href : null);
+
+  // Галерея: id="product-image-{image_id}" href="…430.jpg". Ключ той самий
+  // `image_id`, що стоїть у рядку варіанта, тож колір знаходить своє фото сам.
+  const photos = new Map();
+  for (const m of html.matchAll(/id="product-image-(\d+)"[^>]*href="([^"]+)"/g)) photos.set(m[1], abs(m[2]));
+
+  // Підписи кольорів беремо з форми товару: у самому рядку варіанта лежить лише
+  // id значення ознаки.
+  const colors = new Map();
+  for (const m of html.matchAll(
+    /class="product-option__value product-option__value_color[^"]*"\s+data-value="(\d+)"[\s\S]{0,300}?data-color-name="([^"]*)"/g
+  )) {
+    colors.set(m[1], unesc(m[2]));
+  }
+
+  const title = unesc((html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/) || ["", ""])[1].replace(/<[^>]+>/g, ""));
+  if (!title) return null;
+
+  // Розділ — передостання крихта хлібного сліду: остання це сам товар.
+  let category = null;
+  const crumbs = html.match(/"@type":\s*"BreadcrumbList"[\s\S]*?"itemListElement":\s*\[([\s\S]*?)\]\s*\}/);
+  if (crumbs) {
+    const names = [...crumbs[1].matchAll(/"name":\s*"([^"]*)"/g)].map((m) => unesc(m[1]));
+    if (names.length >= 2) category = names[names.length - 2];
+  }
+
+  const rows = [];
+  for (const [id, sku] of Object.entries(skus)) {
+    // Половина ключів — не товари, а порожні комбінації ознак для форми вибору:
+    // ні артикула, ні ціни, ні фото (45 із 613 заміряних). Пропускаємо мовчки.
+    if (!sku?.sku) continue;
+    const features = sku.features || {};
+    const size = webasystFeatureText(features.razmer);
+    // Підпис кольору: спершу зразок із форми, далі — початок назви варіанта
+    // («Червоний 3XL» без розміру), і лише потім загальна «розцвітка». Другий
+    // шлях потрібен для кольорів, яких у формі немає: їх не показують, а рядки
+    // з ними в `skus_data` лишаються.
+    let color = features.cvet ? (colors.get(String(features.cvet.id)) ?? null) : null;
+    const variant = String(sku.name || "").trim();
+    if (!color && size && variant.endsWith(size)) color = variant.slice(0, -size.length).trim() || null;
+    if (!color) color = webasystFeatureText(features.rascvetka);
+
+    const price = Number.parseFloat(sku.price);
+    const sitePrice = Number.parseFloat(sku.compare_price) || Number.parseFloat(sku.primary_price) || null;
+    const image = photos.get(String(sku.image_id)) || null;
+    const count = Number.parseInt(sku.count, 10);
+
+    /**
+     * НАША ЦІНА НЕ БУВАЄ ВИЩОЮ ЗА ВІТРИНУ, і рядок, який це стверджує, —
+     * помилка постачальника, а не знахідка. Живий приклад (10.09.2026):
+     * футболка Gildan Softstyle, колір Military Green 3XL — 2 142,77 грн при
+     * вітрині 411,11, тобто в п'ять разів дорожче. Рядок один із 4 025, але
+     * менеджер побачив би його не окремо, а діапазоном на картці: «111,23 –
+     * 2 142,77 грн» замість «111,23 – 231,77». Порожня ціна тут чесніша:
+     * порожню помітять і спитають, а п'ятикратну просто скопіюють.
+     */
+    const priceIsSane = Number.isFinite(price) && price > 0 && !(sitePrice && price > sitePrice);
+
+    const attrs = {};
+    if (color) attrs.color = color;
+    if (size) attrs.size = size;
+    if (sitePrice) attrs.sitePrice = sitePrice;
+    if (Number.isFinite(price) && price > 0 && !priceIsSane) attrs.priceAboveSite = price;
+    attrs.available = sku.available === "1" || sku.available === true;
+    if (Number.isFinite(count)) attrs.stock = count;
+
+    rows.push({
+      // Ключ — внутрішній id варіанта, а не артикул: артикул у Trele майже
+      // унікальний, але «майже» — це шапка VOGUNV, що стоїть двома рядками
+      // («58 см» і «one size»), і за ним вони затирали б одна одну.
+      external_key: id,
+      article: String(sku.sku).trim(),
+      name: title,
+      vendor: webasystFeatureText(features.brend),
+      category,
+      price: priceIsSane ? price : null,
+      currency: "UAH",
+      url: ctx.url,
+      image_url: image,
+      images: image ? JSON.stringify([image]) : "[]",
+      attrs: JSON.stringify(attrs),
+    });
+  }
+  return rows;
+}
 
 /**
  * Magento GraphQL (e-suvenir) — третій спосіб узяти каталог. Ні файлу, як у
@@ -1923,8 +2195,96 @@ async function applyAccountPricing(rows, cfg) {
   }
 }
 
-const PARSERS = { prom: parseProm, cscart: parseCscart, sitemap: parseSitemap, "sitemap-sku": parseSitemapSku, horoshop: parseHoroshop };
-const PAGE_PARSERS = { "opencart-page": parseOpencartPage };
+/**
+ * Вхід у кабінет перед обходом. Потрібен там, де сторінка під логіном і без
+ * нього виглядає ОДНАКОВО, а різниця лише в цифрі ціни (trele): без сесії обхід
+ * привіз би роздріб під підписом «оптова», нічого не зламавши на вигляд.
+ *
+ * Повертає рядок куки для `crawlPages`. Не вийшло — падаємо тут, ДО обходу:
+ * 364 сторінки роздрібу нікому не потрібні.
+ */
+async function loginForCrawl(cfg) {
+  const { login } = cfg.crawl;
+  const email = process.env[cfg.auth.emailEnv];
+  const password = process.env[cfg.auth.passwordEnv];
+  if (!email || !password) {
+    console.error(
+      `Немає ${cfg.auth.emailEnv}/${cfg.auth.passwordEnv} у оточенні. Без логіна сайт показує роздріб, ` +
+        `а він ліг би в пул як наша ціна. Впишіть їх у .env.backup і повторіть.`
+    );
+    process.exit(1);
+  }
+
+  const jar = new Map();
+  const cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+  const keep = (res) => {
+    for (const c of res.headers.getSetCookie?.() ?? []) {
+      const pair = c.split(";")[0];
+      const i = pair.indexOf("=");
+      if (i > 0) jar.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+    }
+  };
+
+  // Перший GET потрібен заради самої сесії: форма входу без куки не приймається.
+  keep(await fetch(login.page, { headers: { "User-Agent": UA }, redirect: "manual", signal: AbortSignal.timeout(30_000) }));
+  const res = await fetch(login.post, {
+    method: "POST",
+    headers: {
+      "User-Agent": UA,
+      Cookie: cookie(),
+      "Content-Type": "application/x-www-form-urlencoded",
+      Referer: login.page,
+    },
+    body: new URLSearchParams({ login: email, password, remember: "1", wa_auth_login: "1" }),
+    redirect: "manual",
+    signal: AbortSignal.timeout(30_000),
+  });
+  keep(res);
+
+  // ДОКАЗ — САМЕ РЕДИРЕКТ У КАБІНЕТ. Невдалий вхід віддає ту саму сторінку
+  // форми з кодом 200, тобто «сторінка відкрилась» тут не означає нічого.
+  const landed = res.headers.get("location") || "";
+  if (res.status !== 302 || !landed.includes(login.landing)) {
+    console.error(
+      `Кабінет не пустив (${res.status} → ${landed || "без переходу"}). Далі сайт показував би роздріб. ` +
+        `Перевірте ${cfg.auth.emailEnv} і ${cfg.auth.passwordEnv}.`
+    );
+    process.exit(1);
+  }
+  console.log("Кабінет відкрито — ціни беремо з-під логіна.");
+  return cookie();
+}
+
+/**
+ * Сторожа тихого роздробу для обходів: частка рядків, у яких наша ціна нижча за
+ * ціну вітрини. Сторінка показує обидві, тож коли сесія відпаде посеред обходу,
+ * ця частка провалиться — а більше нічого не зміниться. Пара до
+ * `minDiscountedRatio` в Е-Сувеніра, тільки рахується по рядках, а не по товарах.
+ */
+function assertDiscounted(rows, cfg) {
+  const minRatio = cfg.crawl.minDiscountedRatio;
+  const priced = rows.filter((r) => Number(r.price) > 0 && Number(JSON.parse(r.attrs || "{}").sitePrice) > 0);
+  const discounted = priced.filter((r) => Number(r.price) < Number(JSON.parse(r.attrs).sitePrice));
+  const ratio = priced.length ? discounted.length / priced.length : 0;
+  console.log(`Рядків із ціною, нижчою за вітрину: ${discounted.length} з ${priced.length} (${(ratio * 100).toFixed(1)}%)`);
+  if (ratio < minRatio) {
+    console.error(
+      `Лише ${(ratio * 100).toFixed(1)}% рядків дали ціну нижчу за вітрину (межа ${(minRatio * 100).toFixed(0)}%). ` +
+        `Схоже, сесія відпала й сайт показує роздріб. Нічого не записано.`
+    );
+    process.exit(1);
+  }
+}
+
+const PARSERS = {
+  prom: parseProm,
+  cscart: parseCscart,
+  sitemap: parseSitemap,
+  "sitemap-sku": parseSitemapSku,
+  "sitemap-url": parseSitemapUrl,
+  horoshop: parseHoroshop,
+};
+const PAGE_PARSERS = { "opencart-page": parseOpencartPage, "webasyst-page": parseWebasystPage };
 // Завантажувачі, які самі ходять по джерелу: їм не потрібен ані файл фіда, ані
 // перелік адрес — вони тягнуть каталог по своєму протоколу.
 const API_LOADERS = { "magento-graphql": loadMagentoGraphql, "xls-price": loadPapirusPrice };
@@ -1966,10 +2326,11 @@ try {
  * виглядало б як «половина Бергамо зникла», а причина була б у мережі. Тому
  * рахуємо частку невдач і при перевищенні `maxFailRatio` падаємо ДО запису.
  */
-async function crawlPages(indexXml, cfg) {
+async function crawlPages(indexXml, cfg, cookie) {
   const { concurrency = 4, retries = 1, delayMs = 250, maxFailRatio = 0.05 } = cfg.crawl;
   const parsePage = PAGE_PARSERS[cfg.format];
   if (!parsePage) throw new Error(`Немає посторінкового розбирача «${cfg.format}»`);
+  const headers = cookie ? { "User-Agent": UA, Cookie: cookie } : { "User-Agent": UA };
 
   const all = PARSERS[cfg.crawl.index](indexXml, cfg).map((r) => r.url);
   const urls = limit ? all.slice(0, limit) : all;
@@ -1990,7 +2351,7 @@ async function crawlPages(indexXml, cfg) {
       let html = null;
       for (let attempt = 0; attempt <= retries; attempt++) {
         try {
-          const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30_000) });
+          const res = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           html = await res.text();
           break;
@@ -2038,10 +2399,13 @@ async function crawlPages(indexXml, cfg) {
   return rows;
 }
 
+// Обхід під логіном: сесію беремо ДО першої сторінки, інакше 364 запити принесли б
+// роздріб, і дізнались би ми про це вже зі сторожі знижки.
+const crawlCookie = cfg.crawl?.login ? await loginForCrawl(cfg) : null;
 const rows = cfg.api
   ? await API_LOADERS[cfg.format](cfg)
   : cfg.crawl
-    ? await crawlPages(xml, cfg)
+    ? await crawlPages(xml, cfg, crawlCookie)
     : PARSERS[cfg.format](xml, cfg);
 console.log(`Розібрано товарів: ${rows.length}`);
 console.log(
@@ -2049,6 +2413,8 @@ console.log(
     `з ціною: ${rows.filter((r) => r.price).length}, ` +
     `з фото: ${rows.filter((r) => r.image_url).length}`
 );
+// Обхід приніс і нашу ціну, і ціну вітрини — звіряємо, чи сесія дожила до кінця.
+if (cfg.crawl?.minDiscountedRatio) assertDiscounted(rows, cfg);
 // Фід дав роздріб — наша ціна лежить за логіном, і по неї треба сходити окремо.
 if (cfg.accountPricing) await applyAccountPricing(rows, cfg);
 // Розкладка за правилом ціни. Показуємо, бо мовчазний промах правила виглядає
