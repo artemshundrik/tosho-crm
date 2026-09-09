@@ -108,6 +108,23 @@ helper; the largest of them is `audit_log` at 3 694 rows, well under the line.
 `check:db-guards` watches the dangerous half of this: a policy that resolves
 membership without reaching any block gate gets reported.
 
+One more thing the text of a policy does not tell you: a helper that is **not**
+`SECURITY DEFINER` reads its tables through RLS, so its answer already depends on
+what the caller is allowed to see. The two-argument
+`tosho.is_workspace_admin/owner(workspace_id, user_id)` overloads are plain
+`STABLE` functions, and on `tosho.memberships` that is precisely what supplies the
+block gate their bodies are missing: `memberships_select_member` is block-aware, a
+blocked caller sees zero rows (their own included), and an `UPDATE`/`DELETE` whose
+`WHERE` touches table columns must satisfy the SELECT policies too — so no row is
+ever found. Verified on prod 09.09.2026 inside `begin/rollback`: blocked admin
+`DELETE 0`, blocked owner `UPDATE 0`, self-delete `DELETE 0`, active admin
+`DELETE 1`; the same two-argument helper evaluated around RLS returns `true`.
+
+Read that as a warning, not a pattern to copy. The gate is real but indirect, and
+it holds only while the SELECT policy stays block-aware — change that policy and
+two other policies silently open. In a new policy put the gate where it can be
+read: the one-argument helper, or an explicit conjunct.
+
 ## Core Quote And CRM Tables
 
 - `quotes`
