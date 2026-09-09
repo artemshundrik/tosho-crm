@@ -353,8 +353,8 @@ describe("normalizeArticle", () => {
 
 describe("supplierNameFromUrl", () => {
   it("називає знайоме джерело по-людськи, а незнайоме — доменом", () => {
-    expect(supplierNameFromUrl("https://totobi.com.ua/kepka/")).toBe("Тотобі");
-    expect(supplierNameFromUrl("https://www.avanprint.ua/x")).toBe("Аванпринт");
+    expect(supplierNameFromUrl("https://totobi.com.ua/kepka/")).toBe("Totobi");
+    expect(supplierNameFromUrl("https://www.avanprint.ua/x")).toBe("Avanprint");
     expect(supplierNameFromUrl("https://some-shop.com/x")).toBe("Some-shop");
     expect(supplierNameFromUrl("https://berrytex.com.ua/x")).toBe("Berrytex");
     expect(supplierNameFromUrl("https://bergamo.ua/x")).toBe("Bergamo");

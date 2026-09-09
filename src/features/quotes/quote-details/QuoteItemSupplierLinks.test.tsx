@@ -42,7 +42,7 @@ describe("QuoteItemSupplierLinks", () => {
   it("називає джерело за адресою, а не словом «Постачальник»", () => {
     renderLinks({ metadata: { supplierUrl: "https://totobi.com.ua/kepka-polo/" } });
 
-    expect(screen.getByRole("link", { name: /Тотобі/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Totobi/ })).toHaveAttribute(
       "href",
       "https://totobi.com.ua/kepka-polo/"
     );
@@ -56,7 +56,7 @@ describe("QuoteItemSupplierLinks", () => {
       catalogTypes: catalog({ supplierUrl: "https://totobi.com.ua/new" }),
     });
 
-    expect(screen.getByRole("link", { name: /Тотобі/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Totobi/ })).toHaveAttribute(
       "href",
       "https://totobi.com.ua/new"
     );
@@ -70,8 +70,8 @@ describe("QuoteItemSupplierLinks", () => {
       },
     });
 
-    expect(screen.getByRole("link", { name: /Тотобі/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Аванпринт/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Totobi/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Avanprint/ })).toHaveAttribute(
       "href",
       "https://avanprint.ua/termos-calypso-15l/5678/"
     );
@@ -87,7 +87,7 @@ describe("QuoteItemSupplierLinks", () => {
   it("незнайомий домен підписує назвою сайту, а не адресою й не роллю", () => {
     renderLinks({ metadata: { supplierUrl: "https://www.some-new-shop.com/item/1" } });
 
-    // Назва, а не «some-new-shop.com»: поруч із «Тотобі» адреса читалась як
+    // Назва, а не «some-new-shop.com»: поруч із «Totobi» адреса читалась як
     // недороблений підпис (Артем, 09.09.2026). Сама адреса лишилась у href.
     const link = screen.getByRole("link", { name: /Some-new-shop/ });
     expect(link).toHaveAttribute("href", "https://www.some-new-shop.com/item/1");

@@ -88,8 +88,8 @@ export const QuoteItemSupplierLinks: React.FC<QuoteItemSupplierLinksProps> = ({
       />
       <LinkButton
         url={avantprintUrl}
-        label="Аванпринт"
-        hint="Посилання на товар на Аванпринті зʼявиться після його додавання в товарі"
+        label="Avanprint"
+        hint="Посилання на товар на Avanprint зʼявиться після його додавання в товарі"
       />
     </>
   );

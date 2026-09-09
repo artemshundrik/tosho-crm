@@ -65,8 +65,8 @@ describe("supplierSourceOptions", () => {
       product({ key: "e1", supplierSlug: "e-suvenir.com.ua" }),
     ]);
     expect(options.map((option) => [option.name, option.count])).toEqual([
-      ["Тотобі", 2],
-      ["Е-Сувенір", 1],
+      ["Totobi", 2],
+      ["E-Suvenir", 1],
     ]);
   });
 });
