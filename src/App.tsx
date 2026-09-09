@@ -150,6 +150,8 @@ const LogisticsPage = lazyWithRetry(() => import("./pages/LogisticsPage"));
 const DesignPage = lazyWithRetry(() => import("./pages/DesignPage"));
 const DesignTaskPage = lazyWithRetry(() => import("./pages/DesignTaskPage"));
 const ContractorsPage = lazyWithRetry(() => import("./pages/ContractorsPage"));
+const SuppliersPage = lazyWithRetry(() => import("./pages/SuppliersPage"));
+const SupplierPage = lazyWithRetry(() => import("./pages/SupplierPage"));
 const SampleStockPage = lazyWithRetry(() => import("./pages/SampleStockPage"));
 const FinancesPage = lazyWithRetry(() => import("./pages/FinancesPage"));
 const MarketingPage = lazyWithRetry(() => import("./pages/MarketingPage"));
@@ -350,6 +352,8 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/design", scope: "page", group: "operations", test: (value) => value === "/design" },
     { pattern: "/design/:id", scope: "details", group: "operations", test: (value) => /^\/design\/[^/]+$/.test(value) },
     { pattern: "/contractors", scope: "page", group: "operations", test: (value) => value.startsWith("/contractors") },
+    { pattern: "/suppliers", scope: "page", group: "operations", test: (value) => value === "/suppliers" },
+    { pattern: "/suppliers/:id", scope: "details", group: "operations", test: (value) => /^\/suppliers\/[^/]+$/.test(value) },
     { pattern: "/stock/samples", scope: "page", group: "operations", test: (value) => value.startsWith("/stock/samples") },
     { pattern: "/finances", scope: "page", group: "operations", test: (value) => value.startsWith("/finances") },
   ];
@@ -1178,6 +1182,29 @@ function AppRoutes() {
             <ModuleRouteGate moduleKey="contractors">
               <RouteSuspense shell>
                 <ContractorsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        {/* «Постачальники» — стан під'єднаних кабінетів і пошук по їхніх
+            товарах (картка 259). Сторінка одного постачальника — окремою
+            адресою: під товари потрібна ширина, у шторку вони не влазять. */}
+        <Route
+          path="suppliers"
+          element={
+            <ModuleRouteGate moduleKey="suppliers">
+              <RouteSuspense shell>
+                <SuppliersPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="suppliers/:id"
+          element={
+            <ModuleRouteGate moduleKey="suppliers">
+              <RouteSuspense shell>
+                <SupplierPage />
               </RouteSuspense>
             </ModuleRouteGate>
           }

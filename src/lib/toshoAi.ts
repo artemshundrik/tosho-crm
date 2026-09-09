@@ -266,6 +266,14 @@ const ROUTE_RULES: ToShoAiRouteRule[] = [
     routeLabel: "Підрядники",
     domainHint: "contractors",
   },
+  {
+    test: (pathname) => pathname.startsWith("/suppliers"),
+    title: "Постачальники",
+    routeLabel: "Постачальники",
+    // Домен «каталог»: товари постачальників — це той самий пул, з якого
+    // менеджер бере позиції; окремого домену помічнику не заводимо.
+    domainHint: "catalog",
+  },
 ];
 
 export function buildToShoAiRouteContext(input: {

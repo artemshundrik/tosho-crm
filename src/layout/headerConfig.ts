@@ -102,6 +102,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.contractors,
       showPageHeader: false,
     };
+  if (pathname.startsWith(ROUTES.suppliers))
+    return {
+      title: "Постачальники",
+      subtitle: "Під'єднані кабінети, умови цін і товари кожного постачальника.",
+      breadcrumbLabel: "Постачальники",
+      breadcrumbTo: ROUTES.suppliers,
+      showPageHeader: false,
+    };
   if (pathname.startsWith(ROUTES.sampleStock))
     return {
       title: "Склад",

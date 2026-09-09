@@ -113,6 +113,7 @@ export const SCOPE_LABEL: Record<string, string> = {
   orders: "Замовлення",
   customers: "Замовники",
   contractors: "Підрядники",
+  suppliers: "Постачальники",
   catalog: "Каталог",
   marketing: "Маркетинг",
   print: "Друк",
