@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { db, supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 
 import type { SupplierDefinition } from "./suppliersCatalog";
 import type { SupplierPoolSummaryRow } from "./suppliersStatus";
@@ -52,9 +52,14 @@ export type SupplierContractor = {
   notes: string | null;
 };
 
-/** Усі картки постачальників із «Підрядників» — їх два десятки, читаємо разом. */
+/**
+ * Усі картки постачальників із «Підрядників» — їх два десятки, читаємо разом.
+ * Теж через `supabase.schema("tosho")`: таблиця contractors є лише в tosho,
+ * а `db` типізований перетином схем і такої таблиці «не бачить».
+ */
 export async function fetchSupplierContractors(): Promise<SupplierContractor[]> {
-  const { data, error } = await db
+  const { data, error } = await supabase
+    .schema("tosho")
     .from("contractors")
     .select("id, name, contact_name, phones, emails, website, notes")
     .eq("kind", "supplier");
