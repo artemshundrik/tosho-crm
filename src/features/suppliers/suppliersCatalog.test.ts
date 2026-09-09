@@ -49,6 +49,25 @@ describe("реєстр постачальників", () => {
     for (const s of connected) expect(s.name).toBe(supplierDisplayName(s.slug));
   });
 
+  it("доступ до кабінету описаний іменами змінних, а не значеннями", () => {
+    const loader = read("../../../scripts/load-supplier-feed.mjs");
+    for (const s of SUPPLIER_DEFINITIONS) {
+      if (!s.access) continue;
+      expect(loader, `${s.id}: ${s.access.emailEnv} немає в завантажувачі`).toContain(
+        `emailEnv: "${s.access.emailEnv}"`
+      );
+      expect(loader, `${s.id}: ${s.access.passwordEnv} немає в завантажувачі`).toContain(
+        `passwordEnv: "${s.access.passwordEnv}"`
+      );
+    }
+    // Найдешевша сторожа проти «та впишу сюди пошту, щоб не шукати»: у реєстрі
+    // не має бути ні адрес пошти, ні пар «пароль: значення». Репозиторій
+    // публічний, і одного такого рядка достатньо.
+    const registry = read("./suppliersCatalog.ts");
+    expect(registry).not.toMatch(/[\w.-]+@[\w-]+\.[a-z]{2,}/i);
+    expect(registry).not.toMatch(/\bpassword\s*:/i);
+  });
+
   it("ідентифікатори придатні для адреси, «поза пошуком» пояснено, заплановані не в пошуку", () => {
     for (const s of SUPPLIER_DEFINITIONS) {
       expect(s.id).toMatch(/^[a-z0-9-]+$/);

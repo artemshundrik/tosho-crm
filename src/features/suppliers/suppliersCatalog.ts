@@ -61,6 +61,13 @@ export type SupplierDefinition = {
     agreedOn: string | null;
     vat?: string;
   };
+  /**
+   * Під яким акаунтом заходить завантажувач. Тут лише ІМЕНА змінних оточення —
+   * самі пошта й пароль лежать у `.env.backup` поруч із BACKUP_DB_URL і в код
+   * не потрапляють ніколи: репозиторій публічний, а секрет, що доїхав до
+   * браузера, живе далі в бекапах, у кеші й у чужих стенограмах.
+   */
+  access?: { emailEnv: string; passwordEnv: string };
   gives: string[];
   lacks: string[];
   quirks: string[];
@@ -188,6 +195,7 @@ export const SUPPLIER_DEFINITIONS: readonly SupplierDefinition[] = [
         "Наша ціна з кабінету: множник свій у кожного товару (0,60–0,72), тож єдиного правила немає — ціна фіда множиться на множник його сторінки.",
       agreedOn: null,
     },
+    access: { emailEnv: "BERRYTEX_EMAIL", passwordEnv: "BERRYTEX_PASSWORD" },
     gives: ["артикул", "фото", "ціна", "виробник", "розділи"],
     lacks: ["методи нанесення", "характеристики"],
     quirks: [
@@ -245,6 +253,7 @@ export const SUPPLIER_DEFINITIONS: readonly SupplierDefinition[] = [
         "Постачальник віддає нашу ціну сам: типово −41%, записники Mem'O! −50%, розпродаж до −80%.",
       agreedOn: null,
     },
+    access: { emailEnv: "E_SUVENIR_EMAIL", passwordEnv: "E_SUVENIR_PASSWORD" },
     gives: [
       "методи нанесення",
       "місця друку з розмірами в мм",

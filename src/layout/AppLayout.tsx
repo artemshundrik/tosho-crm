@@ -97,6 +97,7 @@ import { MINFIN_MB_URL, type MinfinFxResponse } from "@/lib/minfinFx";
 import { FX_RATES_UPDATED_EVENT } from "@/lib/fxRates";
 
 import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
+import { SidebarSubLinks } from "@/components/app/SidebarSubLinks";
 import { ToShoAiLauncherButton } from "@/components/app/ToShoAiLauncherButton";
 
 import { DesignerEarningsWidget } from "@/components/design/DesignerEarningsWidget";
@@ -2945,41 +2946,44 @@ function SidebarGroup({
           );
 
           return (
-            <SidebarIconTooltip key={link.to} label={link.label} collapsed={collapsed}>
-              {navLink}
-              {/* Шпилька — сусід посилання, а не вкладена в нього кнопка:
-                  <button> усередині <a> ламає і клавіатуру, і скрінрідер.
-                  Проявляється на ховері рядка й на власному фокусі, тож із
-                  клавіатури до неї теж можна дійти. */}
-              {showPin ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onTogglePin?.(link.to);
-                  }}
-                  aria-label={pinned ? `Відкріпити «${link.label}»` : `Закріпити «${link.label}» вгорі`}
-                  title={pinned ? "Відкріпити" : "Закріпити вгорі"}
-                  className={cn(
-                    "absolute right-1 top-1/2 z-[1] grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md",
-                    "text-muted-foreground/70 transition-[opacity,color,background-color] duration-150",
-                    "hover:bg-foreground/[0.07] hover:text-foreground",
-                    "focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-foreground/20",
-                    // Мовчить, поки на рядок не навели: те, що пункт
-                    // закріплений, і так видно з секції, у якій він стоїть, —
-                    // а стовпчик постійних шпильок праворуч це просто шум.
-                    "opacity-0 group-hover/row:opacity-100"
-                  )}
-                >
-                  {pinned ? (
-                    <PinOff className="h-3.5 w-3.5" aria-hidden="true" />
-                  ) : (
-                    <Pin className="h-3.5 w-3.5" aria-hidden="true" />
-                  )}
-                </button>
-              ) : null}
-            </SidebarIconTooltip>
+            <React.Fragment key={link.to}>
+              <SidebarIconTooltip label={link.label} collapsed={collapsed}>
+                {navLink}
+                {/* Шпилька — сусід посилання, а не вкладена в нього кнопка:
+                    <button> усередині <a> ламає і клавіатуру, і скрінрідер.
+                    Проявляється на ховері рядка й на власному фокусі, тож із
+                    клавіатури до неї теж можна дійти. */}
+                {showPin ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onTogglePin?.(link.to);
+                    }}
+                    aria-label={pinned ? `Відкріпити «${link.label}»` : `Закріпити «${link.label}» вгорі`}
+                    title={pinned ? "Відкріпити" : "Закріпити вгорі"}
+                    className={cn(
+                      "absolute right-1 top-1/2 z-[1] grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md",
+                      "text-muted-foreground/70 transition-[opacity,color,background-color] duration-150",
+                      "hover:bg-foreground/[0.07] hover:text-foreground",
+                      "focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-foreground/20",
+                      // Мовчить, поки на рядок не навели: те, що пункт
+                      // закріплений, і так видно з секції, у якій він стоїть, —
+                      // а стовпчик постійних шпильок праворуч це просто шум.
+                      "opacity-0 group-hover/row:opacity-100"
+                    )}
+                  >
+                    {pinned ? (
+                      <PinOff className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <Pin className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </button>
+                ) : null}
+              </SidebarIconTooltip>
+            <SidebarSubLinks parentTo={link.to} currentPath={currentPath} collapsed={collapsed} isMobileDrawer={isMobileDrawer} onNavigate={onNavigate} onPreload={preloadRoute} />
+            </React.Fragment>
           );
         })}
       </div>

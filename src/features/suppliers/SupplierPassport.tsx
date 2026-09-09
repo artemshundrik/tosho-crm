@@ -62,6 +62,30 @@ export function SupplierPassport({
         <Row label="Платформа" value={definition.platform} />
         <Row label="Спосіб" value={`${SUPPLIER_INTAKE_LABEL[definition.intake.kind]}: ${definition.intake.summary}`} />
         <Row label="Розклад" value={definition.intake.scheduleNote} />
+        {definition.cabinetUrl ? (
+          <Row
+            label="Кабінет"
+            value={
+              <a
+                href={definition.cabinetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2"
+              >
+                {definition.cabinetUrl.replace(/^https?:\/\//, "")}
+              </a>
+            }
+          />
+        ) : null}
+        {/* Пароля тут немає й не буде: сторінка називає лише МІСЦЕ, де він
+            лежить. Секрет, показаний у CRM, далі живе в бекапах бази, у кеші
+            браузера й у стенограмах — і жодне з цих місць ми не контролюємо. */}
+        {definition.access ? (
+          <Row
+            label="Доступ"
+            value={`Заходимо під нашим акаунтом. Пошта й пароль — у .env.backup поруч із BACKUP_DB_URL: ${definition.access.emailEnv} і ${definition.access.passwordEnv}. У CRM зберігаємо лише імена змінних.`}
+          />
+        ) : null}
         {summary ? (
           <>
             <Row

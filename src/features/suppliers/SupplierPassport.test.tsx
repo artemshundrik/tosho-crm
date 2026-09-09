@@ -58,6 +58,14 @@ describe("SupplierPassport", () => {
     expect(screen.getByText("+380 67 000 00 00")).toBeInTheDocument();
   });
 
+  it("доступ до кабінету: місце, де лежить пароль, а не сам пароль", () => {
+    const berrytex = supplierById("berrytex")!;
+    renderPassport({ definition: berrytex, status: supplierStatus(berrytex, null, now), contractor: null });
+    expect(screen.getByText(/BERRYTEX_EMAIL і BERRYTEX_PASSWORD/)).toBeInTheDocument();
+    expect(screen.getByText(/У CRM зберігаємо лише імена змінних/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "berrytex.com.ua/customer/account/login/" })).toBeInTheDocument();
+  });
+
   it("без картки підрядника — чесний порожній стан і посилання на «Підрядників»", () => {
     renderPassport({ contractor: null });
     expect(screen.getByText("У картці підрядника контактів ще немає.")).toBeInTheDocument();
