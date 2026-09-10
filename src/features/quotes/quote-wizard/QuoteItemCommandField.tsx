@@ -879,10 +879,18 @@ function SuggestionPhoto({ url, name }: { url: string | null; name: string }) {
     );
   }
   return (
+    // Порядок, а не вага: фото тут чуже й необроблене (оригінал вітрини, у
+    // середньому 209 кБ на кадр — замір 10.09.2026), а менеджер прийшов по
+    // назву, артикул і ціну. `fetchPriority="low"` і `decoding="async"`
+    // пропускають дані пулу вперед, `loading="lazy"` качає лише видимі рядки.
+    // Те саме стоїть у PoolPhoto (src/components/catalog/SupplierPoolRow.tsx):
+    // це ТІ САМІ картинки, просто вікно прорахунку малює їх своїм компонентом.
     <img
       src={url}
       alt={name}
       loading="lazy"
+      fetchPriority="low"
+      decoding="async"
       onError={() => setFailedUrl(url)}
       className={cn(base, "object-contain")}
     />
@@ -898,10 +906,15 @@ function VariantPhoto({ url, label }: { url: string | null; label: string | null
     return <ImageOff className="h-3 w-3 text-muted-foreground/50" aria-hidden />;
   }
   return (
+    // Пріоритет той самий, що в SuggestionPhoto, і тут він важить найбільше:
+    // розгорнута картка Бергамо це десятки колірних плиток, тобто десятки
+    // повнорозмірних кадрів одним залпом.
     <img
       src={url}
       alt={label ?? ""}
       loading="lazy"
+      fetchPriority="low"
+      decoding="async"
       onError={() => setFailedUrl(url)}
       className="h-full w-full object-cover"
     />

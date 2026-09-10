@@ -75,4 +75,41 @@ describe("SupplierPoolRow", () => {
       "https://e-suvenir.com.ua/ua/valueweight"
     );
   });
+
+  /**
+   * Фото пулу мусить іти ОСТАННЬОЮ чергою — REQ-264#p4.
+   *
+   * НАВІЩО ЦЕ ТЕСТУВАТИ, ЯКЩО ЦЕ ТРИ АТРИБУТИ. Бо промах тут беззвучний:
+   * `fetchPriority` пишеться в JSX камелкейсом, а в DOM має вийти малими
+   * (`fetchpriority`), і React виводить його лише з 19-ї версії. Помилишся в
+   * регістрі чи відкотиш React — атрибут просто не з'явиться, жодна перевірка
+   * не почервоніє, а фото знов почнуть тіснити ціни в черзі завантаження.
+   * Заміряно 10.09.2026: кадр із вітрини важить у середньому 209 кБ (розкид
+   * 30–737 кБ), а малюється в коробці 40×40, тож черга тут вирішує все.
+   */
+  it("фото товару вантажиться останнім і не блокує показ ціни", () => {
+    const [product] = groupSupplierPoolRows(
+      [
+        row({
+          id: "t1",
+          name: "Футболка Valueweight",
+          article: "061036040S",
+          price: 161.7,
+          url: "https://trele.com.ua/valueweight/",
+          image_url: "https://trele.com.ua/wa-data/valueweight.430.jpg",
+        }),
+      ],
+      10,
+      ["футболка"]
+    );
+
+    render(<SupplierPoolRow product={product} />);
+
+    const photo = screen.getByRole("presentation");
+    expect(photo).toHaveAttribute("src", "https://trele.com.ua/wa-data/valueweight.430.jpg");
+    // Саме малими: так атрибут виглядає в DOM, і саме так його читає браузер.
+    expect(photo).toHaveAttribute("fetchpriority", "low");
+    expect(photo).toHaveAttribute("decoding", "async");
+    expect(photo).toHaveAttribute("loading", "lazy");
+  });
 });
