@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { ENTITY_CARD_ROWS } from "@/components/app/CardsSkeleton";
 import { EntityAvatar } from "@/components/app/avatar-kit";
 import { useIsClamped } from "@/components/app/useIsClamped";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +32,8 @@ import {
  * одних лініях. Довгий текст стану обрізається, повний — у підказці, і лише
  * коли обрізання справді сталось.
  */
-const CARD_ROWS = "grid-rows-[36px_18px_46px_65px_32px]";
+// Рамка й рядки — спільні з каркасом завантаження, див. CardsSkeleton.tsx.
+const CARD_ROWS = ENTITY_CARD_ROWS;
 
 export function SupplierCard({
   definition,

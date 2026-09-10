@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 
+import { ENTITY_CARD_ROWS } from "@/components/app/CardsSkeleton";
 import { EntityAvatar } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -29,7 +30,8 @@ import type { IntegrationActivity, IntegrationMetric, IntegrationStatus } from "
  * а обрізається трикрапкою. Повний текст показує підказка — але тільки там, де
  * обрізання справді сталось (див. useIsClamped).
  */
-const CARD_ROWS = "grid-rows-[36px_18px_46px_65px_32px]";
+// Рамка й рядки — спільні з каркасом завантаження, див. CardsSkeleton.tsx.
+const CARD_ROWS = ENTITY_CARD_ROWS;
 
 /** «89», «5 з 130», «$0.34» — число; «увімкнено», «—» — ні. */
 const hasDigits = (value: string | null): boolean => value != null && /\d/.test(value);

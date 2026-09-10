@@ -56,8 +56,18 @@ export type PageShape =
   | "design-record"
   /** Дашборд: плитки з числами й панелі під ними. */
   | "dashboard"
-  /** Галерея однакових карток. */
+  /** Галерея однакових карток із фото: каталог. */
   | "grid"
+  /**
+   * Сітка інформаційних карток 2/3 колонки — «Сервіси», «Постачальники».
+   *
+   * Не `grid` і не `list`, і саме через це форма й заведена. `grid` малює
+   * фотогалерею: 4-5 колонок, у кожної плитки заглушка під картинку 4:3 —
+   * а на цих сторінках картинок немає взагалі. `list` малює стрічку вузьких
+   * рядків, якої тут теж немає. Обидві сторінки насправді роблять
+   * `grid gap-4 sm:grid-cols-2 xl:grid-cols-3` з текстових карток.
+   */
+  | "cards"
   /** Список ліворуч, деталі праворуч (Каталог, Ролі та доступи). */
   | "split";
 
@@ -114,6 +124,12 @@ export type PageSurface = {
    * `columnWidth` — значення flex-basis як у самій дошці, слово в слово.
    */
   board?: { columns: number; columnWidth: string };
+  /**
+   * Подробиці форми `cards`. `search` — сторінка починається смугою пошуку
+   * (у «Постачальників» це пошук по товарах усіх джерел), і не зарезервувати
+   * її означає, що в момент готовності даних усе з'їде вниз.
+   */
+  cards?: { search?: boolean };
   /**
    * Сторінка, яка вміє показувати той самий розділ двома виглядами.
    *
@@ -182,8 +198,21 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "supplier", path: "/integrations/suppliers/:id", page: "src/pages/SupplierPage.tsx", toolbar: "none", shape: "detail" },
   // Обидві вкладки «Інтеграцій» віддають смугу в шапку через
   // usePageHeaderActions, тож макет резервує її висоту заздалегідь.
-  { id: "suppliers", path: "/integrations/suppliers", page: "src/pages/SuppliersPage.tsx", toolbar: "full", shape: "grid" },
-  { id: "integrations", path: "/integrations", page: "src/pages/IntegrationsPage.tsx", toolbar: "full", shape: "list" },
+  {
+    id: "suppliers",
+    path: "/integrations/suppliers",
+    page: "src/pages/SuppliersPage.tsx",
+    toolbar: "full",
+    shape: "cards",
+    cards: { search: true },
+  },
+  {
+    id: "integrations",
+    path: "/integrations",
+    page: "src/pages/IntegrationsPage.tsx",
+    toolbar: "full",
+    shape: "cards",
+  },
   { id: "profile", path: "/profile", page: "src/pages/ProfilePage.tsx", toolbar: "compact", shape: "detail" },
 
   // Той самий випадок, що й «Інтеграції»: власний тулбар у тілі сторінки.

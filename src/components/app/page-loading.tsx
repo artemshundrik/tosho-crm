@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useLocation } from "react-router-dom";
 
+import { CardsSkeleton } from "@/components/app/CardsSkeleton";
 import { useSkeletonVisible } from "@/components/app/loadingHandoff";
 import { KanbanSkeleton } from "@/components/kanban/KanbanSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +36,8 @@ type ShapeProps = {
   canvas: boolean;
   /** Скільки колонок і якої ширини — у кожної дошки своє (див. pageSurfaces). */
   board?: BoardGeometry;
+  /** Подробиці сітки карток: чи резервувати смугу пошуку згори. */
+  cards?: { search?: boolean };
 };
 
 /** Запасна геометрія: коли поверхня дошки в реєстрі не описана. */
@@ -405,6 +408,36 @@ function GridShape() {
   );
 }
 
+/**
+ * Сітка інформаційних карток — «Сервіси» й «Постачальники».
+ *
+ * Малює ТОЙ САМИЙ `CardsSkeleton`, що й сама сторінка, поки читає числа пулу.
+ * Доти цим двом сторінкам стояли чужі форми (`list` і `grid`), і на
+ * «Постачальниках» це давало три різні розмітки поспіль: фотогалерея на 4-5
+ * колонок → напис «Читаємо стан пулу…» → картки в три колонки.
+ *
+ * Смуга пошуку — не прикраса каркаса: на «Постачальниках» сторінка починається
+ * саме з неї, і без резерву вміст з'їжджає вниз у момент готовності даних.
+ */
+function CardsShape({ cards }: ShapeProps) {
+  return (
+    <div className="pb-10">
+      {cards?.search ? (
+        <div className="rounded-section border border-border/60 bg-card/70 p-3">
+          <Skeleton className="h-9 w-full rounded-xl opacity-80" />
+        </div>
+      ) : null}
+      <div className={cn(cards?.search && "mt-6")}>
+        <div className="mb-3 space-y-1">
+          <Line w="w-24" h="h-3" />
+          <Line w="w-[46%]" h="h-2.5" dim />
+        </div>
+        <CardsSkeleton count={6} />
+      </div>
+    </div>
+  );
+}
+
 /** Стрічка однакових рядків. */
 function ListShape({ canvas }: ShapeProps) {
   return (
@@ -500,6 +533,7 @@ const SHAPES: Record<PageShape, (props: ShapeProps) => React.ReactElement> = {
   "design-record": DesignRecordShape,
   dashboard: DashboardShape,
   grid: GridShape,
+  cards: CardsShape,
   split: SplitShape,
 };
 
@@ -552,7 +586,7 @@ export function PageLoading({
       style={maxWidth ? { maxWidth } : undefined}
     >
       <span className="sr-only">Завантаження</span>
-      <Shape canvas={isCanvas} board={surface?.board} />
+      <Shape canvas={isCanvas} board={surface?.board} cards={surface?.cards} />
     </div>
   );
 }

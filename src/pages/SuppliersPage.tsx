@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { RefreshCw } from "lucide-react";
 
-import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import { CardsSkeleton } from "@/components/app/CardsSkeleton";
 import { IntegrationsTabs } from "@/components/app/IntegrationsTabs";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
@@ -56,8 +56,6 @@ export default function SuppliersPage() {
     <div className="pb-10">
       <SupplierProductSearch />
 
-      {summary.isPending ? <AppSectionLoader label="Читаємо стан пулу…" className="mt-6" /> : null}
-
       {summary.isError ? (
         <p className="mt-6 text-sm text-destructive">
           Не вдалося прочитати стан пулу — картки нижче без чисел.{" "}
@@ -67,14 +65,23 @@ export default function SuppliersPage() {
         </p>
       ) : null}
 
-      {!summary.isPending ? (
-        <section className="mt-6">
-          <div className="mb-3">
-            <h2 className="text-xs font-semibold text-foreground">Під'єднані</h2>
-            <p className="mt-0.5 text-2xs text-muted-foreground">
-              Товари лежать у пулі й оновлюються за розкладом; клік по картці — паспорт кабінету й товари.
-            </p>
-          </div>
+      {/*
+        Заголовок розділу стоїть НАЗОВНІ перевірки на завантаження, а картки
+        всередині: доти на час читання чисел показувався напис «Читаємо стан
+        пулу…» замість секції, тож заголовок і сітка з'являлись разом і зсували
+        все, що нижче. Тепер рухаються самі картки, і рухаються в межах своєї ж
+        сітки — каркас той самий `CardsSkeleton`, що малює форма сторінки.
+      */}
+      <section className="mt-6">
+        <div className="mb-3">
+          <h2 className="text-xs font-semibold text-foreground">Під'єднані</h2>
+          <p className="mt-0.5 text-2xs text-muted-foreground">
+            Товари лежать у пулі й оновлюються за розкладом; клік по картці — паспорт кабінету й товари.
+          </p>
+        </div>
+        {summary.isPending ? (
+          <CardsSkeleton count={CONNECTED.length} />
+        ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {CONNECTED.map((definition) => (
               <SupplierCard
@@ -86,8 +93,8 @@ export default function SuppliersPage() {
               />
             ))}
           </div>
-        </section>
-      ) : null}
+        )}
+      </section>
 
       {PLANNED.length > 0 ? (
         <section className="mt-8">
