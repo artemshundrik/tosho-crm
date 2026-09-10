@@ -330,6 +330,8 @@ const SUPPLIERS = {
       login: {
         page: "https://trele.com.ua/login/",
         post: "https://trele.com.ua/login/",
+        fields: { email: "login", password: "password" },
+        extra: { remember: "1", wa_auth_login: "1" },
         // Доказ сесії — редирект у кабінет. Сама сторінка кабінету доказом бути
         // не може: Webasyst віддає гостю ту саму оболонку з кодом 200.
         landing: "/my",
@@ -378,12 +380,90 @@ const SUPPLIERS = {
      */
     minRows: 3400,
   },
-  // НЕ ДОДАНИЙ, і причина в ньому, а не в коді (перевірено 05.09.2026):
-  //   eney (OpenCart) — точка фіда index.php?route=extension/feed/google_base
-  //                     віддає 200 і НУЛЬ байт: розширення є, фід вимкнено в
-  //                     їхній адмінці. Мапа є, але без назв — самі адреси.
-  // Досить, щоб постачальник увімкнув вивантаження в себе; тоді сюди лягає
-  // рядок, а для google_base — ще й свій розбір (це Merchant XML, не YML).
+  eney: {
+    slug: "eney.com.ua",
+    // Мапа сайту — ПЕРЕЛІК АДРЕС, як у Бергамо й Trele: назви, ціни, кольори,
+    // розділи й фото беруться зі сторінок товарів. Фіда немає, і це перевірено
+    // двічі (05.09.2026 і 10.09.2026): `extension/feed/google_base` та
+    // `extension/feed/google_sitemap` віддають 200 і НУЛЬ байтів — розширення
+    // стоїть, вивантаження вимкнено в їхній адмінці; решта маршрутів
+    // (`feed/*`, `extension/feed/prom|rozetka|hotline|facebook`) і статичні
+    // `prom.xml`, `yml.xml`, `export.xml` — 404.
+    //
+    // АЛЕ ЦЕЙ ОБХІД МАЄ ЗАКІНЧИТИСЬ. На їхній сторінці /dealers/ написано
+    // прямо: дилерам дають «оновлюваний XML-файл», де залишки, ціна й резерви
+    // оновлюються кожні 30 хвилин, а описи й фото — кожні 12 годин; посилання
+    // видає персональний менеджер (у нас це Юрій Чевельча). Щойно воно буде на
+    // руках — джерело переїде на розбір файлу, і 4367 запитів стануть одним.
+    feed: "https://eney.com.ua/sitemap.xml",
+    format: "eney-page",
+    source: "crawl:eney",
+    crawl: {
+      index: "sitemap-url",
+      // Товар лежить у корені одним сегментом (`eney.com.ua/iceland_600/`), а
+      // розділи мають два й більше (`eney.com.ua/bags/backpack/`). Сторінки без
+      // товару, що все ж пролізли, відсіються самі: розбирач без артикула
+      // повертає null.
+      // `%2F` — чотири зіпсовані рядки їхньої мапи («…nedat_krem%2F/»). Сторінок
+      // немає ні в такому вигляді, ні без нього (обидві форми 404, перевірено
+      // 10.09.2026), тобто це не товари, а сміття вигрузки. Відсіюємо названо, бо
+      // інакше кожен тижневий прогін друкував би чотири «не відповіли» — і до
+      // цього переліку швидко перестають придивлятись.
+      include: "^https://eney\\.com\\.ua/(?!index\\.php)(?![^/]*%2F)[^/]+/$",
+      concurrency: 4,
+      retries: 1,
+      delayMs: 250,
+      maxFailRatio: 0.05,
+      // ОБХІД ІДЕ ПІД ЛОГІНОМ, і без нього він безглуздий: гість бачить роздріб.
+      login: {
+        page: "https://eney.com.ua/index.php?route=account/login",
+        post: "https://eney.com.ua/index.php?route=account/login",
+        fields: { email: "email", password: "password" },
+        extra: { rememberme: "1" },
+        // Доказ — саме перехід у кабінет: OpenCart на невдалий вхід малює ту
+        // саму форму з кодом 200, тобто «сторінка відкрилась» не означає нічого
+        // (перевірено 10.09.2026 неіснуючою поштою: 200 і жодного переходу).
+        //
+        // Береться ВЕСЬ розділ, а не `account/account`: у ENEY вхід веде на
+        // `route=account/edit`, і точний шлях відкинув би вдалий логін. Форма
+        // входу живе в тому ж розділі, тому виняток названо окремо.
+        landing: "route=account/",
+        landingNot: "route=account/login",
+      },
+      /**
+       * ⚠️ ВІДПАЛИЙ СЕАНС ТУТ НЕ ВИДНО ОЧИМА — як у Trele й Е-Сувеніра.
+       * Сторінка під логіном і без нього структурно однакова: ті самі кольори,
+       * розміри, залишки. Різні лише ціни — гостю одна, дилеру дві. Тобто
+       * прогін без сесії тихо привіз би 4367 роздрібних цін під підписом
+       * «оптова» й затер нормальні.
+       *
+       * Стереже частка рядків, у яких наша ціна нижча за роздріб. Заміряно
+       * 10.09.2026 на 50 товарах із різних розділів: 49 показали обидві ціни,
+       * тобто 98%. Межа 0,8 лишає запас на позиції, яким знижки не проставлено.
+       */
+      minDiscountedRatio: 0.8,
+    },
+    // Пошта й пароль — у .env.backup поруч із BACKUP_DB_URL; сюди потрапляють
+    // лише ІМЕНА змінних.
+    auth: { emailEnv: "ENEY_EMAIL", passwordEnv: "ENEY_PASSWORD" },
+    /**
+     * ЦІНУ КАЖЕ САМ САЙТ ПІД НАШИМ ЛОГІНОМ, і знижка тут РІВНА — на відміну від
+     * Беррітекса, де вона гуляла 0,60–0,72 за товарами. Заміряно 10.09.2026 на
+     * 50 товарах із різних розділів: множник 0,70 скрізь, розкид 0,6889–0,7000,
+     * і весь він від округлення сайту до копійок. Кабінет ENEY каже те саме
+     * числом: «Знижка 30%» (компанія «tosho agency»).
+     *
+     * ЧОМУ ТОДІ НЕ `priceRule` ×0,70, ЯК У БЕРГАМО. Бо запитів це не зекономить
+     * (ціна лежить на тій самій сторінці, куди ми й так ідемо), зате ціна з-під
+     * сесії САМА виправиться, коли ENEY змінить нам ставку, а множник у реєстрі
+     * мовчки збрехав би — і помітили б це вже на погодженні прорахунку.
+     * Роздріб лишається поруч у `attrs.sitePrice`, тож звіряти є з чим.
+     */
+    priceKind: "wholesale",
+    // У мапі 4367 адрес товарів (10.09.2026). Межа приблизно чотири п'ятих, як
+    // у решти обходів: сесія, що відпала, ловиться не тут, а на minDiscountedRatio.
+    minRows: 3400,
+  },
 };
 
 const args = process.argv.slice(2);
@@ -1148,6 +1228,254 @@ function parseWebasystPage(html, ctx) {
     });
   }
   return rows;
+}
+
+/**
+ * ENEY (eney.com.ua) — розбір ОДНІЄЇ сторінки товару. Рушій той самий OpenCart,
+ * що в Бергамо, але тема інша, і `parseOpencartPage` тут не годиться: JSON-LD у
+ * них немає взагалі (0 блоків `application/ld+json` на сторінці), тож усе
+ * береться з розмітки.
+ *
+ * ЧОМУ ФІДА НЕМАЄ І ЧОМУ ЦЕ НЕ КІНЕЦЬ. `extension/feed/google_base` і
+ * `extension/feed/google_sitemap` віддають 200 і НУЛЬ байтів (розширення є,
+ * вивантаження вимкнено), решта маршрутів OpenCart — 404. Зате на сторінці
+ * /dealers/ ENEY сам пропонує дилерам «оновлюваний XML-файл» із цінами й
+ * залишками, який дає персональний менеджер. Тобто цей обхід — тимчасовий: як
+ * тільки посилання буде на руках, джерело переїде на `format: "prom"` (чи що
+ * там виявиться), і 4367 запитів стануть одним.
+ *
+ * МАПА САЙТУ ТУТ ПОВНА, І ЦЕ ВАЖЛИВО. Кожен КОЛІР — окрема адреса зі своїм
+ * артикулом, і всі вони є в sitemap.xml (перевірено 10.09.2026 на трьох
+ * моделях: усі брати знайшлись). Тому, на відміну від Бергамо, добудовувати
+ * колірних братів із розмітки не треба — обхід і так зайде на кожного. А ось
+ * обхід самих РОЗДІЛІВ замість мапи не годиться: 85 розділів по `limit=100`
+ * дали 941 плитку + 3074 посилання на кольори = 3085 адрес, тобто 71%
+ * каталогу; решта 1282 товари з меню просто не досяжні.
+ *
+ * ⚠️ ГОЛОВНА ПАСТКА, І ВОНА ТИХА — ТА САМА, ЩО В TRELE. Сторінка під логіном і
+ * без нього структурно ОДНАКОВА: ті самі блоки, ті самі кольори й розміри.
+ * Різниця лише в тому, що гостю показують одну ціну (`<span>901,87 ₴</span>`), а
+ * дилеру дві — `.price-new` (наша) і `.price-old` (роздріб). Тобто прогін без
+ * сесії привіз би 4367 роздрібних цін під підписом «оптова». Стереже
+ * `minDiscountedRatio`: `sitePrice` лягає в attrs саме для цього.
+ *
+ * ЗНИЖКА РІВНА 30% НА ВЕСЬ КАТАЛОГ, і це заміряно, а не взято зі слів
+ * (10.09.2026, 50 товарів із різних розділів під нашим акаунтом): 49 показали
+ * обидві ціни, множник скрізь 0,70 із розкидом 0,6889–0,7000, і весь розкид —
+ * від округлення сайту до копійок. Кабінет каже те саме числом: «Знижка 30%».
+ * Попри це ходимо ПІД ЛОГІНОМ, а не множимо роздріб, як у Бергамо: ціна з
+ * сесії сама виправиться, коли ставку змінять, а множник у реєстрі мовчки
+ * збрехав би.
+ *
+ * РЯДОК — КОЛІР, А НЕ ПАРА «КОЛІР+РОЗМІР». Артикул тут належить КОЛЬОРУ
+ * (`NTNP220WH1`), а не розміру: у розмірів свої `data-id`, але не свої коди, і
+ * ціна в них майже завжди однакова (з десяти заміряних текстильних сторінок
+ * різні ціни за розмір мала одна). Тому розміри лягають у `attrs.sizes` зі
+ * своєю ціною й залишком — як у Тотобі й Е-Сувеніра.
+ */
+const ENEY_ENTITIES = { "&nbsp;": " ", "&amp;": "&", "&quot;": '"', "&#039;": "'", "&apos;": "'", "&lt;": "<", "&gt;": ">" };
+
+function eneyText(raw) {
+  if (raw == null) return null;
+  const out = String(raw)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&amp;|&quot;|&#039;|&apos;|&lt;|&gt;/g, (m) => ENEY_ENTITIES[m])
+    .replace(/ /g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return out || null;
+}
+
+/**
+ * «631,26 ₴» → 631.26, «444.9/» → 444.9, «5 125,14 ₴» → 5125.14.
+ *
+ * Два формати на одній сторінці — не примха розбирача: у шапці ціна
+ * відформатована людською («444,90 ₴»), а в рядку розміру лежить сире число зі
+ * скісною («444.9/»). Регулярка «лише цифри, кома й крапка» покриває обидва.
+ */
+function eneyPrice(raw) {
+  if (raw == null) return null;
+  const digits = String(raw).replace(/[^\d.,]/g, "");
+  if (!digits) return null;
+  const n = Number.parseFloat(digits.replace(/,/g, "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Вміст `<div>`, що починається на `at`, до ПАРНОГО `</div>` (опис вкладений). */
+function eneyDivSlice(html, at) {
+  const open = html.indexOf(">", at);
+  if (open < 0) return "";
+  let depth = 1;
+  const re = /<div\b|<\/div>/gi;
+  re.lastIndex = open + 1;
+  for (let m; (m = re.exec(html)); ) {
+    if (m[0] === "</div>") {
+      if (--depth === 0) return html.slice(open + 1, m.index);
+    } else depth++;
+  }
+  return "";
+}
+
+/** Адреси в мапі закодовані (`%20`), у розмітці — теж; звіряємо в одному вигляді. */
+function eneyNormUrl(url) {
+  let u = String(url).trim();
+  try {
+    u = decodeURIComponent(u);
+  } catch {
+    // Битий відсотковий код — звіряємо як є, це все одно рідкість.
+  }
+  return u.replace(/\/+$/, "").toLowerCase();
+}
+
+function parseEneyPage(html, ctx) {
+  // Сторінка без артикула — це не товар: розділ, стаття, «про нас». У мапі
+  // такі теж трапляються, і мовчазний пропуск для них — норма, а не збій.
+  const article = eneyText((html.match(/<div class="sku">([\s\S]*?)<\/div>/) || [])[1])?.replace(/^Артикул:?\s*/iu, "") || null;
+  // Заголовок у них двох виглядів: `<div class="heading"><h1>…</h1></div>` на
+  // сувенірних сторінках і `<div class="heading h1">…</div>` на текстильних.
+  // Теги всередині зрізає eneyText, тож досить не чіплятись за точний клас.
+  const name = eneyText((html.match(/<div class="heading[^"]*">([\s\S]*?)<\/div>/) || [])[1]);
+  if (!article || !name) return null;
+
+  /**
+   * ЦІНА ШАПКИ — ТІЛЬКИ З БЛОКУ ДО `#product`. Далі на сторінці лежать рядки
+   * розмірів, і в них ті самі класи `price-new`/`price-old`. Регулярка по всій
+   * сторінці взяла б ціну випадкового розміру — числа схожі, збій тихий.
+   */
+  const infoAt = html.indexOf('class="price-info');
+  const productAt = html.indexOf('<div id="product"');
+  const head = infoAt >= 0 && productAt > infoAt ? html.slice(infoAt, productAt) : "";
+  const ourPrice = eneyPrice((head.match(/class="price-new"[^>]*>([^<]*)</) || [])[1]);
+  const sitePrice = eneyPrice((head.match(/class="price-old"[^>]*>([^<]*)</) || [])[1]);
+  // Гість бачить одну ціну без класів — беремо її, щоб рядок не лишився зовсім
+  // без числа. Що вона роздрібна, помітить сторожа `minDiscountedRatio`.
+  const guestPrice = eneyPrice((head.match(/<div class="price">\s*<span[^>]*>([^<]*)</) || [])[1]);
+
+  /** Розміри: свій залишок і своя ціна, спільний артикул. */
+  const sizes = [];
+  for (const chunk of html.split("sizes-item").slice(1)) {
+    const body = chunk.split('<div class="product-tabs"')[0];
+    const size = eneyText((body.match(/<div class="size-title">([\s\S]*?)<\/div>/) || [])[1]);
+    if (!size) continue;
+    const stockText = eneyText((body.match(/<div class="size-stock">([\s\S]*?)<\/div>/) || [])[1]);
+    const stock = stockText ? Number.parseInt(stockText.replace(/[^\d]/g, ""), 10) : Number.NaN;
+    sizes.push({
+      size,
+      price: eneyPrice((body.match(/class="price-new"[^>]*>([^<]*)</) || [])[1]),
+      sitePrice: eneyPrice((body.match(/class="price-old"[^>]*>([^<]*)</) || [])[1]),
+      stock: Number.isFinite(stock) ? stock : null,
+    });
+  }
+
+  /**
+   * КОЛІР — З ТАБЛИЦІ НАЯВНОСТІ, А НЕ З НАЗВИ Й НЕ З ПІДКАЗКИ ЗРАЗКА.
+   * У заголовку кольору немає («Поло унісекс Neutraltex ECO 220 G, білий» —
+   * це назва самої моделі й вона однакова в усіх кольорів), а `title` на
+   * зразках теми ENEY заповнює однаково для всіх (перевірено: чотири кольори
+   * поло мають однаковий `title`). Правда лежить у таблиці «Наявність»:
+   * «Чорний NTNP220BL1» — назва кольору плюс його артикул.
+   */
+  const self = eneyNormUrl(ctx.url);
+  let label = null;
+  for (const m of html.matchAll(/<div class="name text-uppercase"><a href="([^"]+)">([^<]*)<\/a>/g)) {
+    if (eneyNormUrl(m[1]) !== self) continue;
+    label = eneyText(m[2]);
+    break;
+  }
+  // Хвіст підпису — артикул того ж варіанта; він у нас уже є окремим полем.
+  // Ріжемо за ознакою «остання група з цифрою», бо в таблиці код буває довшим
+  // за `.sku` (`NTNP220WH1` проти `NTNP220W`) і точним збігом не відрізався б.
+  if (label) label = label.replace(/\s+[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*$/u, "").trim() || null;
+  /**
+   * ⚠️ ВІСЬ ВАРІАНТА В НИХ НЕ ЗАВЖДИ КОЛІР, і мовчки взяти підпис за колір не
+   * можна. У ручок і павербанків таблиця каже «Білий», «Чорний» — це справді
+   * колір. А в щоденників тією ж таблицею йде БЛОК: «Блок: Недатований
+   * кремовий». Записали б як є — у пошуку прорахунку колірний чип показував би
+   * тип блока, а сам колір («бордовий», «Зелений») лежав би поруч у
+   * характеристиках невикористаний.
+   *
+   * Відрізняє їх двокрапка: підписана вісь («Блок: …») — це варіант, голе
+   * слово — колір. Коли вісь підписана, колір беремо з характеристик, які
+   * ENEY заповнює на кожній сторінці окремо.
+   */
+  const namedAxis = label ? /:\s/u.test(label) : false;
+  const variant = namedAxis ? label : null;
+
+  /** Розділ. На відміну від Бергамо, хлібні крихти тут його несуть. */
+  const crumbs = [...((html.match(/<ul class="[^"]*breadcrumb[^"]*">([\s\S]*?)<\/ul>/) || [])[1] || "").matchAll(/<a href="[^"]*">([\s\S]*?)<\/a>/g)]
+    .map((m) => eneyText(m[1]))
+    .filter((c) => c && !/^головна$/iu.test(c));
+  const category = crumbs.length ? crumbs[crumbs.length - 1] : null;
+
+  /** Характеристики парами. Серед них «Нанесення» — методи, яких не дає майже ніхто. */
+  const specs = {};
+  const attrsAt = html.indexOf('<div class="attributes">');
+  if (attrsAt >= 0) {
+    for (const m of eneyDivSlice(html, attrsAt).matchAll(/<li[^>]*><span>([\s\S]*?)<\/span><span class="value">([\s\S]*?)<\/span><\/li>/g)) {
+      const k = eneyText(m[1]);
+      const v = eneyText(m[2]);
+      if (k && v) specs[k] = v;
+    }
+  }
+
+  /** Залишки складів парами «підпис → число» (Львів, Європа, доступно, очікується). */
+  const stocks = {};
+  for (const m of html.matchAll(/<div class="stock-label">([\s\S]*?)<\/div>\s*<div class="stock-value">([\s\S]*?)<\/div>/g)) {
+    const k = eneyText(m[1]);
+    const v = eneyText(m[2]);
+    if (k) stocks[k] = v;
+  }
+
+  /**
+   * ФОТО — ЛИШЕ З ГАЛЕРЕЇ `data-fancybox`. У розмітці сотні адрес `image/cache`:
+   * зразки сусідніх кольорів (100×100), іконки розділів, банери. Галерея ж
+   * містить рівно кадри цього кольору й у найбільшому розмірі (500×500).
+   */
+  const images = [...new Set([...html.matchAll(/<a href="(https:\/\/eney\.com\.ua\/image\/cache\/[^"]+?\.(?:jpg|jpeg|png|webp))"\s+data-fancybox="gallery"/gi)].map((m) => m[1]))];
+
+  /**
+   * ЗАПАСНИЙ ШЛЯХ — РЯДКИ РОЗМІРІВ. У текстилю ціна шапки лежить у блоці
+   * `price-info hidden`, і поки він на місці, беремо саме її. Але блок цей
+   * службовий, і якби тема перестала його малювати, ціни в рядка не стало б
+   * зовсім — при тому, що на сторінці вона є, просто в розмірах. Беремо
+   * найменшу: сайт і сам показує «від 635,59 ₴», тобто мінімум.
+   */
+  const sizePrices = sizes.map((s) => s.price).filter((v) => v != null);
+  const sizeSitePrices = sizes.map((s) => s.sitePrice).filter((v) => v != null);
+  const price = ourPrice ?? (sizePrices.length ? Math.min(...sizePrices) : null) ?? guestPrice ?? null;
+  const shownSitePrice = sitePrice ?? (sizeSitePrices.length ? Math.min(...sizeSitePrices) : null);
+
+  const color = namedAxis ? specs["Колір"] || specs["Колір матеріалу"] || specs["Колір товару"] || null : label;
+
+  const attrs = {};
+  if (shownSitePrice != null) attrs.sitePrice = shownSitePrice;
+  if (color) attrs.color = color;
+  if (variant) attrs.variant = variant;
+  if (sizes.length) attrs.sizes = sizes;
+  if (Object.keys(specs).length) attrs.specs = specs;
+  if (specs["Нанесення"]) attrs.printMethods = specs["Нанесення"];
+  if (Object.keys(stocks).length) attrs.stocks = stocks;
+  const available = Object.values(stocks).some((v) => Number.parseInt(String(v).replace(/[^\d]/g, ""), 10) > 0) || sizes.some((s) => (s.stock ?? 0) > 0);
+  attrs.available = available;
+  // Опис беремо, але коротким: `attrs` avanprint уже виріс до 5,3 МБ саме на
+  // описах, і кожен пошук по пулу тягне таблицю разом із ними.
+  const descAt = html.indexOf('<div class="description">');
+  const desc = descAt >= 0 ? eneyText(eneyDivSlice(html, descAt)) : null;
+  if (desc) attrs.description = desc.slice(0, 1500);
+
+  return {
+    external_key: ctx.url,
+    article,
+    name,
+    vendor: specs["Торгівельна марка"] || specs["Бренд"] || null,
+    category,
+    price,
+    currency: "UAH",
+    url: ctx.url,
+    image_url: images[0] || null,
+    images: JSON.stringify(images),
+    attrs: JSON.stringify(attrs),
+  };
 }
 
 /**
@@ -2205,6 +2533,14 @@ async function applyAccountPricing(rows, cfg) {
  */
 async function loginForCrawl(cfg) {
   const { login } = cfg.crawl;
+  /**
+   * Імена полів форми — з реєстру, бо в кожного рушія вони свої: Webasyst
+   * приймає `login`/`password` плюс службовий `wa_auth_login`, OpenCart —
+   * `email`/`password` плюс `rememberme`. Доки джерело було одне, вони стояли
+   * прямо тут; із другим рушієм це стало б `if (slug === ...)`, а такий if —
+   * перший крок до трьох.
+   */
+  const { fields, extra = {} } = login;
   const email = process.env[cfg.auth.emailEnv];
   const password = process.env[cfg.auth.passwordEnv];
   if (!email || !password) {
@@ -2235,16 +2571,26 @@ async function loginForCrawl(cfg) {
       "Content-Type": "application/x-www-form-urlencoded",
       Referer: login.page,
     },
-    body: new URLSearchParams({ login: email, password, remember: "1", wa_auth_login: "1" }),
+    body: new URLSearchParams({ [fields.email]: email, [fields.password]: password, ...extra }),
     redirect: "manual",
     signal: AbortSignal.timeout(30_000),
   });
   keep(res);
 
-  // ДОКАЗ — САМЕ РЕДИРЕКТ У КАБІНЕТ. Невдалий вхід віддає ту саму сторінку
-  // форми з кодом 200, тобто «сторінка відкрилась» тут не означає нічого.
+  /**
+   * ДОКАЗ — САМЕ РЕДИРЕКТ У КАБІНЕТ. Невдалий вхід віддає ту саму сторінку
+   * форми з кодом 200, тобто «сторінка відкрилась» тут не означає нічого
+   * (перевірено на ENEY 10.09.2026 неіснуючою поштою: 200 і жодного переходу).
+   *
+   * `landingNot` — для випадку, коли кабінет широкий. В ENEY після входу
+   * OpenCart веде на `route=account/edit`, а не на `account/account`, тож
+   * точний шлях у `landing` не годиться — там стоїть увесь розділ
+   * `route=account/`. А що в тому ж розділі живе й сама форма входу, треба
+   * сказати окремо: повернення на `account/login` — це відмова, а не кабінет.
+   */
   const landed = res.headers.get("location") || "";
-  if (res.status !== 302 || !landed.includes(login.landing)) {
+  const bounced = login.landingNot ? landed.includes(login.landingNot) : false;
+  if ((res.status !== 302 && res.status !== 303) || !landed.includes(login.landing) || bounced) {
     console.error(
       `Кабінет не пустив (${res.status} → ${landed || "без переходу"}). Далі сайт показував би роздріб. ` +
         `Перевірте ${cfg.auth.emailEnv} і ${cfg.auth.passwordEnv}.`
@@ -2284,7 +2630,7 @@ const PARSERS = {
   "sitemap-url": parseSitemapUrl,
   horoshop: parseHoroshop,
 };
-const PAGE_PARSERS = { "opencart-page": parseOpencartPage, "webasyst-page": parseWebasystPage };
+const PAGE_PARSERS = { "opencart-page": parseOpencartPage, "webasyst-page": parseWebasystPage, "eney-page": parseEneyPage };
 // Завантажувачі, які самі ходять по джерелу: їм не потрібен ані файл фіда, ані
 // перелік адрес — вони тягнуть каталог по своєму протоколу.
 const API_LOADERS = { "magento-graphql": loadMagentoGraphql, "xls-price": loadPapirusPrice };
@@ -2332,7 +2678,13 @@ async function crawlPages(indexXml, cfg, cookie) {
   if (!parsePage) throw new Error(`Немає посторінкового розбирача «${cfg.format}»`);
   const headers = cookie ? { "User-Agent": UA, Cookie: cookie } : { "User-Agent": UA };
 
-  const all = PARSERS[cfg.crawl.index](indexXml, cfg).map((r) => r.url);
+  /**
+   * Адреси в мапі бувають ПОВТОРЕНІ, і платимо за це запитами. У ENEY чотири
+   * кольори поло перелічені по п'ять разів кожен — разом 40 зайвих сторінок,
+   * які привозять ті самі рядки й гинуть в `uniq` уже після обходу. Дешевше
+   * не ходити, ніж згортати потім.
+   */
+  const all = [...new Set(PARSERS[cfg.crawl.index](indexXml, cfg).map((r) => r.url))];
   const urls = limit ? all.slice(0, limit) : all;
   console.log(`Адрес у мапі: ${all.length}${limit ? ` (беремо перші ${urls.length} — --limit)` : ""}`);
 
