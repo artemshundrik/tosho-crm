@@ -58,6 +58,35 @@ describe("groupSupplierPoolRows", () => {
     expect(applySupplierVariant(hoodie, xl).imageUrl).toBe("https://cdn/hoodie.jpg");
   });
 
+  it("коли ціна є в обох оптовиків, картка показує дешевшу — і обидва сайти", () => {
+    // Живий випадок 10.09.2026: вісім артикулів Fruit of the Loom є і в Trele,
+    // і в Е-Сувеніра. Правило «заповни порожнє» лишало першу ціну, і Е-Сувенір
+    // із його −40% просто не показувався.
+    const rows = [
+      row({ id: "t1", supplier_slug: "trele.com.ua", name: "Футболка Valueweight", price: 161.7,
+        article: "061036040S", color: "Білий", size: "S", price_kind: "wholesale",
+        url: "https://trele.com.ua/valueweight/" }),
+      row({ id: "e1", supplier_slug: "e-suvenir.com.ua", name: "Футболка 'Valueweight T'", price: 97.17,
+        article: "061036040S", color: "Білий", price_kind: "wholesale",
+        url: "https://e-suvenir.com.ua/ua/valueweight" }),
+    ];
+    const [product] = groupSupplierPoolRows(rows, 40);
+    expect(product.variantCount).toBe(1);
+    expect(product.priceMin).toBe(97.17);
+    // Число їде в базу рядком того постачальника, у якого воно взяте.
+    expect(product.priceRowId).toBe("e1");
+    // Але обидва сайти лишаються на картці: річ справді є в обох.
+    expect(product.sources.map((source) => source.supplierSlug).sort()).toEqual([
+      "e-suvenir.com.ua",
+      "trele.com.ua",
+    ]);
+
+    // Порядок карток на вході нічого не міняє.
+    const [flipped] = groupSupplierPoolRows([rows[1], rows[0]], 40);
+    expect(flipped.priceMin).toBe(97.17);
+    expect(flipped.priceRowId).toBe("e1");
+  });
+
   it("розмір іде в підпис варіанта, а лічильник перестає казати «кольори»", () => {
     // Живий випадок trele (10.09.2026): «Футболка Gildan Softstyle» — 74 рядки
     // на 11 кольорів, бо рядок це пара «колір + розмір». Без розміру в підписі
