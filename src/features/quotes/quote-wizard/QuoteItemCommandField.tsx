@@ -115,6 +115,18 @@ export function QuoteItemCommandField({
   onInvalid: (message: string) => void;
 }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  /**
+   * Вікно, за межі якого поповер не вилазить. Запам'ятовується, коли поле
+   * стає в DOM, а не читається з рефа під час рендеру: реф у рендері — це
+   * значення, якого React у цей момент ще не гарантує, і компілятор має рацію,
+   * коли на це свариться. Поле живе всередині вікна прорахунку, тож предок
+   * `[role="dialog"]` на місці вже на монтуванні.
+   */
+  const [dialogBoundary, setDialogBoundary] = React.useState<Element | null>(null);
+  const attachInput = React.useCallback((node: HTMLInputElement | null) => {
+    inputRef.current = node;
+    setDialogBoundary(node?.closest('[role="dialog"]') ?? null);
+  }, []);
   const [focused, setFocused] = React.useState(false);
   const [dismissed, setDismissed] = React.useState(false);
   const [active, setActive] = React.useState(0);
@@ -233,7 +245,14 @@ export function QuoteItemCommandField({
   // Який товар зараз показує кольори. Один на весь список: два розкриті рядки
   // одночасно перетворюють підказку на простирадло.
   const [expandedPoolKey, setExpandedPoolKey] = React.useState<string | null>(null);
-  const [allColors, setAllColors] = React.useState(false);
+  /**
+   * «Показати всі кольори» пам'ятає ТОВАР, а не так/ні. Раніше це був прапорець
+   * плюс ефект, який гасив його на зміну розкритого рядка, — тобто зайвий прохід
+   * рендеру на кожне розкриття. Ключ дає те саме: розкрили інший товар — умова
+   * перестала збігатись, і список кольорів знову підрізаний.
+   */
+  const [allColorsKey, setAllColorsKey] = React.useState<string | null>(null);
+  const allColors = allColorsKey !== null && allColorsKey === expandedPoolKey;
   /**
    * КЛІК ПО КОЛЬОРУ ДОДАЄ ПОЗИЦІЮ (Артем, 09.09.2026).
    *
@@ -243,10 +262,6 @@ export function QuoteItemCommandField({
    * собі, тож підтверджувати стало нічого: кнопка повторювала вже зроблений
    * вибір і до того ж накривала «ще N».
    */
-  React.useEffect(() => {
-    setAllColors(false);
-  }, [expandedPoolKey]);
-
   /**
    * ОДИН ТОВАР РОЗКРИВАЄТЬСЯ САМ (Артем, 08.09.2026, за макетом вузького пошуку).
    *
@@ -379,7 +394,7 @@ export function QuoteItemCommandField({
             <Search className={cn(SEARCH_LEFT_ICON, "h-4 w-4")} aria-hidden />
           )}
           <Input
-            ref={inputRef}
+            ref={attachInput}
             value={value}
             disabled={disabled}
             role="combobox"
@@ -426,10 +441,10 @@ export function QuoteItemCommandField({
           вилазив за модалку»). Поповер портується в body, тож за замовчуванням
           Radix міряє відстань до краю ЕКРАНА — і на довгому списку підказка
           звисала нижче вікна прорахунку, наче окрема сторінка поверх нього.
-          Межа рахується на кожному відкритті: вікно вже в DOM, коли поле
-          отримало фокус.
+          Межа запам'ятовується на монтуванні поля — вікно на той час уже в
+          DOM, бо поле живе всередині нього.
         */
-        collisionBoundary={inputRef.current?.closest('[role="dialog"]') ?? null}
+        collisionBoundary={dialogBoundary}
         collisionPadding={12}
         className="w-[var(--radix-popover-trigger-width)] p-0"
         // Фокус лишається в полі: список — це підказка до набору, а не форма.
@@ -711,7 +726,7 @@ export function QuoteItemCommandField({
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={(event) => {
                           event.stopPropagation();
-                          setAllColors(true);
+                          setAllColorsKey(expandedPoolKey);
                         }}
                         // Та сама висота, що в плитки кольору: інакше «ще N»
                         // з'їжджало під ряд і ставало окремим рядком.

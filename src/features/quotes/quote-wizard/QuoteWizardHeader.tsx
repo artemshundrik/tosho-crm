@@ -135,7 +135,13 @@ export function QuoteWizardHeader({
   */
   const promptField = firstMissingHeaderField(value);
   const promptRef = React.useRef(promptField);
-  promptRef.current = promptField;
+  // Синхронізація рефа — ефектом, а не присвоєнням у тілі: у тілі це запис під
+  // час рендеру, тобто те саме, від чого стереже правило `refs`. Ефект стоїть
+  // ВИЩЕ за той, що читає реф, — ефекти виконуються в порядку оголошення, тож
+  // до читання значення вже свіже.
+  React.useEffect(() => {
+    promptRef.current = promptField;
+  }, [promptField]);
   React.useEffect(() => {
     if (nudgeSignal <= 0) return;
     const missing = promptRef.current;

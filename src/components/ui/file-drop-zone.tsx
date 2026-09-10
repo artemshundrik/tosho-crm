@@ -330,10 +330,14 @@ export function useFileDropPanel({
   const carriesFiles = (event: React.DragEvent<HTMLElement>) =>
     Array.from(event.dataTransfer.types).includes("Files");
 
-  React.useEffect(() => {
-    if (disabled) setOver(false);
-  }, [disabled]);
-
+  /*
+    ПІДСВІТКУ ГАСИТЬ ПОХІДНЕ ЗНАЧЕННЯ, А НЕ ЕФЕКТ. Тут стояв
+    `useEffect(() => { if (disabled) setOver(false) })` — зайвий прохід рендеру
+    щоразу, коли панель блокують, і при цьому нічого не додавав: назовні `over`
+    і так віддається через `&& !disabled`. Увімкнути прапорець можна лише в
+    `onDragOver`, а той при `disabled` виходить одразу; гасить його `onDragLeave`
+    без жодних умов.
+  */
   return {
     over: over && !disabled,
     dropHandlers: {

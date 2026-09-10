@@ -1734,7 +1734,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
           option.kindId === activeProduct?.kindId &&
           option.modelId === activeProduct?.modelId
       ) ?? null,
-    [activeProduct?.categoryId, activeProduct?.kindId, activeProduct?.modelId, configuratorProductOptions]
+    [activeProduct, configuratorProductOptions]
   );
   const availablePackageDensities = React.useMemo(
     () => listPackageDensities(activePrintPackageConfig),
@@ -1797,14 +1797,14 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
    */
   const activeSpecPreset = React.useMemo(
     () => getPrintSpecPreset(activeRefs.model?.metadata?.specPreset ?? null),
-    [activeRefs.model?.metadata?.specPreset]
+    [activeRefs.model]
   );
   const activeSpecValues = React.useMemo(
     () =>
       activeSpecPreset
         ? { ...createEmptyPrintSpecValues(activeSpecPreset), ...(activeProduct?.printSpecValues ?? {}) }
         : {},
-    [activeProduct?.printSpecValues, activeSpecPreset]
+    [activeProduct, activeSpecPreset]
   );
   const activeHasDesignSurface = activeProduct ? productHasDesignSurface(activeProduct) : false;
   const selectableManagerMembers = React.useMemo(
