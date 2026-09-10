@@ -467,6 +467,106 @@ const SUPPLIERS = {
     // minDiscountedRatio.
     minRows: 3400,
   },
+  toptime: {
+    slug: "toptime.com.ua",
+    /**
+     * ⚠️ ПЕРЕЛІК АДРЕС — СТОРІНКА «ВСЕ», А НЕ МАПА САЙТУ, і це не смак.
+     * `sitemap.xml` у них протух: із 181 адреси товару 58 віддають чесний 404
+     * (перевірено 10.09.2026 поштучно). Обхід по мапі щоразу впирався б у
+     * `maxFailRatio` на цілком здоровому сайті, а лікували б ми не те.
+     * `/catalog/all/` натомість малює рівно наявне й сама себе перевіряє:
+     * `itemprop="offerCount"` каже 166, стільки ж плиток у блоці каталогу.
+     *
+     * Фіда немає взагалі: `prom.xml`, `yml.xml`, `export.xml`,
+     * `sitemap_index.xml` — усі 404 (не заглушка SPA, а справжній Apache), у
+     * розділі «Каталоги» лише PDF-брошури брендів.
+     */
+    feed: "https://toptime.com.ua/catalog/all/",
+    format: "toptime-page",
+    source: "crawl:toptime",
+    crawl: {
+      index: "links-html",
+      base: "https://toptime.com.ua",
+      include: "^https://toptime\\.com\\.ua/catalog/product/[^/]+/$",
+      concurrency: 4,
+      retries: 1,
+      delayMs: 250,
+      maxFailRatio: 0.05,
+      // ОБХІД ІДЕ ПІД ЛОГІНОМ, і без нього він безглуздий: гість бачить лише
+      // першу колонку драбини (рекомендовану роздрібну), а решта три — це
+      // посилання «Реєстрація».
+      login: {
+        page: "https://toptime.com.ua/login/",
+        post: "https://toptime.com.ua/login/",
+        fields: { email: "email", password: "password" },
+        extra: { submit: "Надіслати" },
+        /**
+         * Доказом тут не може бути редирект: форма відповідає з тієї ж адреси.
+         * Питаємо сторінку й дивимось на шапку — у дилера там вихід із
+         * кабінету, у гостя «Вхід | Реєстрація».
+         */
+        proof: { url: "https://toptime.com.ua/catalog/all/", contains: "/login/logout" },
+      },
+      /**
+       * Сесія, що відпала, тут не підмінює числа, а прибирає їх: три колонки з
+       * чотирьох стають посиланнями «Реєстрація», рядки лишаються без ціни, і
+       * частка знижених провалюється в нуль. Заміряно 10.09.2026 на всьому
+       * каталозі під логіном: знижені 227 цінових рядків із 228 — єдиний виняток
+       * gi18500, у якого всі чотири сходинки однакові.
+       */
+      minDiscountedRatio: 0.8,
+    },
+    // Пошта й пароль — у .env.backup поруч із BACKUP_DB_URL; сюди потрапляють
+    // лише ІМЕНА змінних.
+    auth: { emailEnv: "TOPTIME_EMAIL", passwordEnv: "TOPTIME_PASSWORD" },
+    /**
+     * ЯКУ СХОДИНКУ БЕРЕМО. Драбина в них із чотирьох, пороги кількості в
+     * кожного товару свої, а підписи сталі — тому колонка шукається за
+     * ПІДПИСОМ. Партнерська — рішення Артема 10.09.2026, до пари з Trele, де
+     * ми так само взяли найглибшу гуртову сходинку. Це 0,73–0,74 від
+     * рекомендованої на всьому каталозі.
+     *
+     * Рекомендована лишається в `attrs.sitePrice` — з нею звіряється сторожа
+     * сесії, — а всі чотири сходинки лягають у `attrs.priceTiers`: коли
+     * знадобиться рахувати дрібний тираж, ходити на сайт удруге не доведеться.
+     */
+    priceTier: "Партнерськ",
+    sitePriceTier: "Рекомендован",
+    /**
+     * УКРАЇНСЬКЕ СЛОВО ДЛЯ НАЗВИ, за слугом розділу з крихт. Заголовки в
+     * Toptime англійські («Classic Men», «COLLEGE HOODIE»), а пошук пулу
+     * дивиться лише в `name` й `article` — залили б як є, і на «футболка»
+     * джерело мовчало б усі 166 товарів. Слово беремо з їхнього ж розділу, а
+     * не вигадуємо: підрозділ точніший за розділ, тому питається першим.
+     */
+    nameNouns: {
+      kepky: "Кепка",
+      shapky: "Шапка",
+      futbolky: "Футболка",
+      majky: "Майка",
+      polo: "Поло",
+      svetry: "Світшот",
+      reglany: "Реглан",
+      kenguru: "Худі",
+      "kenguru-na-zamok": "Худі на замок",
+      flisy: "Фліс",
+      kurtky: "Куртка",
+      shtany: "Штани",
+    },
+    /** Бренд знає лише фільтр каталогу — див. applyBrandMap. */
+    brands: {
+      indexUrl: "https://toptime.com.ua/catalog/all/",
+      param: "id_brands[]",
+      labels: { Headwear: "Headwear", Stedman: "Stedman", JH: "Just Hoods", GI: "Gildan", KA: "Kariban", SO: "SOL'S" },
+      minCoverage: 0.9,
+    },
+    priceKind: "wholesale",
+    /**
+     * 166 товарів × кольори = 1823 рядки (заміряно 10.09.2026 обходом каталогу
+     * під логіном). Межа приблизно чотири п'ятих, як у решти обходів.
+     */
+    minRows: 1500,
+  },
 };
 
 const args = process.argv.slice(2);
@@ -745,6 +845,41 @@ function parseSitemapUrl(xml, cfg) {
   for (const m of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) {
     const url = m[1].trim();
     if (include && !include.test(url)) continue;
+    rows.push({
+      external_key: url,
+      article: null,
+      name: url,
+      vendor: null,
+      category: null,
+      price: null,
+      currency: "UAH",
+      url,
+      image_url: null,
+      images: "[]",
+    });
+  }
+  return rows;
+}
+
+/**
+ * Перелік адрес зі СТОРІНКИ СПИСКУ, а не з мапи сайту. Потрібен там, де мапа
+ * бреше: у Toptime `sitemap.xml` тримає 181 адресу товару, і 58 із них — 404
+ * (перевірено 10.09.2026). Обхід по такій мапі щоразу друкував би третину
+ * невдач, а `maxFailRatio` зупиняв би прогін на здоровому сайті.
+ *
+ * Сторінка «Все» натомість малює рівно те, що в них є, і сама це підтверджує:
+ * `itemprop="offerCount"` каже 166, стільки ж плиток у блоці `#products`.
+ */
+function parseLinksHtml(html, cfg) {
+  const include = cfg.crawl?.include ? new RegExp(cfg.crawl.include) : null;
+  const base = cfg.crawl?.base ?? "";
+  const rows = [];
+  const seen = new Set();
+  for (const m of html.matchAll(/href="([^"#?]+)"/g)) {
+    const url = m[1].startsWith("http") ? m[1] : `${base}${m[1]}`;
+    if (include && !include.test(url)) continue;
+    if (seen.has(url)) continue;
+    seen.add(url);
     rows.push({
       external_key: url,
       article: null,
@@ -1276,13 +1411,21 @@ function parseWebasystPage(html, ctx) {
  * різні ціни за розмір мала одна). Тому розміри лягають у `attrs.sizes` зі
  * своєю ціною й залишком — як у Тотобі й Е-Сувеніра.
  */
-const ENEY_ENTITIES = { "&nbsp;": " ", "&amp;": "&", "&quot;": '"', "&#039;": "'", "&apos;": "'", "&lt;": "<", "&gt;": ">" };
+// `&sup2;` і `&deg;` тут не про красу: без них щільність приїжджає як
+// «155 г/м&sup2;», і саме цей рядок менеджер бачить у характеристиках.
+const HTML_ENTITIES = {
+  "&nbsp;": " ", "&amp;": "&", "&quot;": '"', "&#039;": "'", "&apos;": "'", "&lt;": "<", "&gt;": ">",
+  "&sup2;": "²", "&sup3;": "³", "&deg;": "°", "&times;": "×", "&mdash;": "—", "&ndash;": "–",
+  "&laquo;": "«", "&raquo;": "»", "&hellip;": "…",
+};
 
-function eneyText(raw) {
+/** Розмітка → людський рядок. Спільний для посторінкових розбирачів (ENEY, Toptime). */
+function htmlText(raw) {
   if (raw == null) return null;
   const out = String(raw)
     .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;|&amp;|&quot;|&#039;|&apos;|&lt;|&gt;/g, (m) => ENEY_ENTITIES[m])
+    .replace(/&[a-z0-9]+;/gi, (m) => HTML_ENTITIES[m] ?? m)
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
     .replace(/ /g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -1333,11 +1476,11 @@ function eneyNormUrl(url) {
 function parseEneyPage(html, ctx) {
   // Сторінка без артикула — це не товар: розділ, стаття, «про нас». У мапі
   // такі теж трапляються, і мовчазний пропуск для них — норма, а не збій.
-  const article = eneyText((html.match(/<div class="sku">([\s\S]*?)<\/div>/) || [])[1])?.replace(/^Артикул:?\s*/iu, "") || null;
+  const article = htmlText((html.match(/<div class="sku">([\s\S]*?)<\/div>/) || [])[1])?.replace(/^Артикул:?\s*/iu, "") || null;
   // Заголовок у них двох виглядів: `<div class="heading"><h1>…</h1></div>` на
   // сувенірних сторінках і `<div class="heading h1">…</div>` на текстильних.
-  // Теги всередині зрізає eneyText, тож досить не чіплятись за точний клас.
-  const name = eneyText((html.match(/<div class="heading[^"]*">([\s\S]*?)<\/div>/) || [])[1]);
+  // Теги всередині зрізає htmlText, тож досить не чіплятись за точний клас.
+  const name = htmlText((html.match(/<div class="heading[^"]*">([\s\S]*?)<\/div>/) || [])[1]);
   if (!article || !name) return null;
 
   /**
@@ -1358,9 +1501,9 @@ function parseEneyPage(html, ctx) {
   const sizes = [];
   for (const chunk of html.split("sizes-item").slice(1)) {
     const body = chunk.split('<div class="product-tabs"')[0];
-    const size = eneyText((body.match(/<div class="size-title">([\s\S]*?)<\/div>/) || [])[1]);
+    const size = htmlText((body.match(/<div class="size-title">([\s\S]*?)<\/div>/) || [])[1]);
     if (!size) continue;
-    const stockText = eneyText((body.match(/<div class="size-stock">([\s\S]*?)<\/div>/) || [])[1]);
+    const stockText = htmlText((body.match(/<div class="size-stock">([\s\S]*?)<\/div>/) || [])[1]);
     const stock = stockText ? Number.parseInt(stockText.replace(/[^\d]/g, ""), 10) : Number.NaN;
     sizes.push({
       size,
@@ -1382,7 +1525,7 @@ function parseEneyPage(html, ctx) {
   let label = null;
   for (const m of html.matchAll(/<div class="name text-uppercase"><a href="([^"]+)">([^<]*)<\/a>/g)) {
     if (eneyNormUrl(m[1]) !== self) continue;
-    label = eneyText(m[2]);
+    label = htmlText(m[2]);
     break;
   }
   // Хвіст підпису — артикул того ж варіанта; він у нас уже є окремим полем.
@@ -1406,7 +1549,7 @@ function parseEneyPage(html, ctx) {
 
   /** Розділ. На відміну від Бергамо, хлібні крихти тут його несуть. */
   const crumbs = [...((html.match(/<ul class="[^"]*breadcrumb[^"]*">([\s\S]*?)<\/ul>/) || [])[1] || "").matchAll(/<a href="[^"]*">([\s\S]*?)<\/a>/g)]
-    .map((m) => eneyText(m[1]))
+    .map((m) => htmlText(m[1]))
     .filter((c) => c && !/^головна$/iu.test(c));
   const category = crumbs.length ? crumbs[crumbs.length - 1] : null;
 
@@ -1415,8 +1558,8 @@ function parseEneyPage(html, ctx) {
   const attrsAt = html.indexOf('<div class="attributes">');
   if (attrsAt >= 0) {
     for (const m of eneyDivSlice(html, attrsAt).matchAll(/<li[^>]*><span>([\s\S]*?)<\/span><span class="value">([\s\S]*?)<\/span><\/li>/g)) {
-      const k = eneyText(m[1]);
-      const v = eneyText(m[2]);
+      const k = htmlText(m[1]);
+      const v = htmlText(m[2]);
       if (k && v) specs[k] = v;
     }
   }
@@ -1424,8 +1567,8 @@ function parseEneyPage(html, ctx) {
   /** Залишки складів парами «підпис → число» (Львів, Європа, доступно, очікується). */
   const stocks = {};
   for (const m of html.matchAll(/<div class="stock-label">([\s\S]*?)<\/div>\s*<div class="stock-value">([\s\S]*?)<\/div>/g)) {
-    const k = eneyText(m[1]);
-    const v = eneyText(m[2]);
+    const k = htmlText(m[1]);
+    const v = htmlText(m[2]);
     if (k) stocks[k] = v;
   }
 
@@ -1463,7 +1606,7 @@ function parseEneyPage(html, ctx) {
   // Опис беремо, але коротким: `attrs` avanprint уже виріс до 5,3 МБ саме на
   // описах, і кожен пошук по пулу тягне таблицю разом із ними.
   const descAt = html.indexOf('<div class="description">');
-  const desc = descAt >= 0 ? eneyText(eneyDivSlice(html, descAt)) : null;
+  const desc = descAt >= 0 ? htmlText(eneyDivSlice(html, descAt)) : null;
   if (desc) attrs.description = desc.slice(0, 1500);
 
   return {
@@ -1479,6 +1622,267 @@ function parseEneyPage(html, ctx) {
     images: JSON.stringify(images),
     attrs: JSON.stringify(attrs),
   };
+}
+
+/** «191.10 грн» → 191.1. Порожня клітинка й посилання «Реєстрація» дають null. */
+function toptimePrice(raw) {
+  if (raw == null) return null;
+  const digits = String(raw).replace(/[^\d.,]/g, "");
+  if (!digits) return null;
+  const n = Number.parseFloat(digits.replace(/\s/g, "").replace(/,/g, "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Вміст першої `<table>` ПІСЛЯ заголовка `needle`. */
+function toptimeTableAfter(html, needle) {
+  const at = html.indexOf(needle);
+  if (at < 0) return "";
+  const open = html.indexOf("<table", at);
+  if (open < 0) return "";
+  const close = html.indexOf("</table>", open);
+  return close < 0 ? "" : html.slice(open, close);
+}
+
+/**
+ * Вміст `<table>`, яка САМА містить `marker`. Окремо від попередньої, бо для
+ * таблиці замовлення прикметою є її ж атрибут (`id="table_colors"`), а він
+ * стоїть УСЕРЕДИНІ відкривального тега: пошук «наступна таблиця» промахнувся б
+ * повз неї на наступну — і залишки мовчки поїхали б порожні.
+ */
+function toptimeTableWith(html, marker) {
+  const at = html.indexOf(marker);
+  if (at < 0) return "";
+  const open = html.lastIndexOf("<table", at);
+  if (open < 0) return "";
+  const close = html.indexOf("</table>", open);
+  return close < 0 ? "" : html.slice(open, close);
+}
+
+/**
+ * Toptime — однотонний одяг і головні убори під друк. Рядок пулу — КОЛІР
+ * моделі, як у Тотобі й Е-Сувеніра: розміри своєї ціни не мають, вони лягають
+ * у `attrs.sizes` разом із залишком.
+ *
+ * ⚠️ ЦІНА — ЦЕ ДРАБИНА З ЧОТИРЬОХ СХОДИНОК, І БЕРЕМО МИ ОСТАННЮ. Сторінка
+ * показує «Рекомендована / Посередницька роздрібна / Посередницька гуртова /
+ * Партнерська», причому пороги кількості в кожного товару свої (десь
+ * 1‑9/10‑49/50‑99/>100, десь 1‑5/6‑29/30‑49/50). Тому колонку шукаємо ЗА
+ * ПІДПИСОМ, а не за номером: підпис сталий, порядок і пороги — ні. Рішення
+ * Артема 10.09.2026 — партнерська; заміряно на всьому каталозі, це 0,73–0,74
+ * від рекомендованої (одна позиція, gi18500, без знижки взагалі).
+ *
+ * ⚠️ ГІСТЬ БАЧИТЬ ЛИШЕ ПЕРШУ КОЛОНКУ, решта — посилання «Реєстрація». Це
+ * найчесніша сторожа сесії з усіх наших джерел: відпалий логін не підмінює
+ * числа, а прибирає їх зовсім. Ловить це `minDiscountedRatio` — без сесії
+ * рядки лишаються без ціни й частка знижених падає в нуль.
+ *
+ * ДВА РЯДКИ ЦІНИ, «White» І «Color», і білий у них дешевший. Приміряно до всіх
+ * 166 товарів: у 68 із них рядки два, і в кожного РІВНО ОДИН колір названий
+ * дослівно «White». Тобто правило «дослівний White → перший рядок, решта →
+ * другий» однозначне. Чотири сорочки SOL'S мають ще «Absolute White» і «Off
+ * White» — вони свідомо йдуть за ціною Color: дорожче, ніж могло б бути,
+ * зате не дешевше, ніж є.
+ *
+ * НАЗВА ЗБИРАЄТЬСЯ З УКРАЇНСЬКОГО СЛОВА Й ЗАГОЛОВКА САЙТУ («Футболка Classic
+ * Men»). Причина не в красі: пошук пулу шукає лише по `name` й `article`, а в
+ * Toptime заголовки англійські — «Classic Men», «COLLEGE HOODIE». Залили б як
+ * є — постачальник із 166 товарами був би невидимий на запит «футболка», і
+ * виглядало б це як «у Toptime футболок немає». Слово береться з ЇХНЬОГО ж
+ * розділу (слуг крихти), перелік — у реєстрі, не в коді.
+ *
+ * ЗАГОЛОВОК БЕРЕМО З КРИХТИ, А НЕ З h1: у h1 він склеєний з кодом («ST2000
+ * Classic Men»), а крихта тримає чистий («Classic Men»).
+ */
+function parseToptimePage(html, ctx) {
+  const { cfg, url } = ctx;
+  /**
+   * ⚠️ ЗАКОМЕНТОВАНА РОЗМІТКА ТУТ НЕ ДРІБНИЦЯ. Після кожного кольору в таблиці
+   * замовлення лежить `<!-- <h4>ST2000 ASH</h4><table>…</table> -->` — лишки
+   * старого шаблону. Пошук «до першого </table>» упирався в ту таблицю, що в
+   * коментарі, і залишки приїжджали лише для ПЕРШОГО кольору: рядки на місці,
+   * ціни на місці, просто в тридцяти трьох із тридцяти чотирьох порожньо в
+   * розмірах. Тому коментарі знімаємо ДО будь-якого розбору.
+   */
+  const page = html.replace(/<!--[\s\S]*?-->/g, " ");
+  // Сторінка без коду моделі — це не товар (розділ, стаття). Мовчазний пропуск.
+  const model = htmlText((page.match(/<h3 class="code">([\s\S]*?)<\/h3>/) || [])[1]);
+  if (!model) return [];
+
+  const crumbs = [...page.matchAll(/<a href="([^"]*)"[^>]*itemprop="url"><span itemprop="title">([^<]*)<\/span>/g)].map(
+    (m) => ({ href: m[1], title: htmlText(m[2]) })
+  );
+  const sections = crumbs.filter((c) => c.href.startsWith("/catalog/") && c.href !== "/catalog/" && !c.href.startsWith("/catalog/product/"));
+  const title = crumbs.find((c) => c.href.startsWith("/catalog/product/"))?.title || null;
+  if (!title) return [];
+  const category = sections.length ? sections[sections.length - 1].title : null;
+  const slugs = sections.map((c) => c.href.replace(/^\/catalog\/|\/$/g, "").split("/").pop());
+  const nouns = cfg.nameNouns || {};
+  // Підрозділ точніший за розділ («Майки» в «Футболках»), тому питаємо його першим.
+  const noun = [...slugs].reverse().map((s) => nouns[s]).find(Boolean) || null;
+  const name = noun ? `${noun} ${title}` : title;
+
+  /** Драбина цін: підпис колонки → число, окремо для рядків «White» і «Color». */
+  const priceTable = toptimeTableAfter(page, "Детальні ціни");
+  const trs = [...priceTable.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => m[1]);
+  const cells = (tr) => [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map((m) => m[1]);
+  const headers = trs.length ? cells(trs[0]).map((c) => htmlText(c) || "") : [];
+  const priceRows = new Map();
+  for (const tr of trs.slice(1)) {
+    const cs = cells(tr);
+    const label = htmlText(cs[0]);
+    if (!label) continue;
+    const tiers = {};
+    for (let i = 1; i < cs.length; i++) {
+      const head = headers[i] || `колонка ${i}`;
+      // «Реєстрація» замість числа — це гість, а не безцінний товар.
+      const value = /\/register\//.test(cs[i]) ? null : toptimePrice(htmlText(cs[i]));
+      if (value != null) tiers[head] = value;
+    }
+    priceRows.set(label.toLowerCase(), { label, tiers });
+  }
+  /** Колонку шукаємо за підписом: пороги кількості в кожного товару свої. */
+  const pickTier = (tiers, needle) => {
+    const hit = Object.keys(tiers).find((k) => k.toLowerCase().includes(needle.toLowerCase()));
+    return hit ? { label: hit, value: tiers[hit] } : null;
+  };
+  const whiteRow = priceRows.get("white") || null;
+  const colorRow = priceRows.get("color") || [...priceRows.values()][0] || null;
+
+  /** Кольори: значення — код («ASH»), підпис — «Ash(ASH)», код із нього зрізаємо. */
+  const colorBlock = (page.match(/<select name="color" id="colorbox">([\s\S]*?)<\/select>/) || [])[1] || "";
+  const colors = [...colorBlock.matchAll(/<option[^>]*value="([^"]*)"[^>]*>([\s\S]*?)<\/option>/g)]
+    .map((m) => ({ code: m[1].trim(), label: (htmlText(m[2]) || "").replace(/\s*\([^)]*\)\s*$/, "").trim() }))
+    .filter((c) => c.code);
+
+  /** Фото кольору — з таблиці замовлення: адреса вже готова, виводити не треба. */
+  const photos = {};
+  for (const m of page.matchAll(/<a href="(\/photos\/[^"]+)"[^>]*data-color="([^"]+)"/g)) {
+    photos[m[2]] = photos[m[2]] || `${cfg.crawl.base}${m[1]}`;
+  }
+
+  /** Залишки: комірка таблиці замовлення тримає «доступно» (aval) і «Європу» (eu). */
+  const matrix = toptimeTableWith(page, 'id="table_colors"');
+  const stock = {};
+  for (const cell of matrix.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)) {
+    const td = cell[1];
+    const input = td.match(/<input[^>]*data-color="([^"]+)"[^>]*data-size="([^"]*)"/);
+    if (!input) continue;
+    const [, code, size] = input;
+    const aval = Number.parseInt((td.match(/<span class="aval">\s*(\d+)\s*<\/span>/) || [])[1] ?? "", 10);
+    const eu = Number.parseInt(((td.match(/<span class="eu">\s*([\d\s]+)\s*<\/span>/) || [])[1] || "").replace(/\s/g, ""), 10);
+    (stock[code] = stock[code] || []).push({
+      size,
+      stock: Number.isFinite(aval) ? aval : 0,
+      ...(Number.isFinite(eu) && eu > 0 ? { stockEu: eu } : {}),
+    });
+  }
+
+  /** Характеристики — пари `<span>Ключ:</span><i>значення</i>` в описі. */
+  const specs = {};
+  for (const m of page.matchAll(/<li><span>([^<]*?):?<\/span>\s*<i>([\s\S]*?)<\/i><\/li>/g)) {
+    const k = htmlText(m[1])?.replace(/:$/, "");
+    const v = htmlText(m[2]);
+    if (k && v) specs[k] = v;
+  }
+  const decoration = (page.match(/<div class="decoration">([\s\S]*?)<\/div>/) || [])[1] || "";
+  const methods = [...decoration.matchAll(/<a[^>]*>([\s\S]*?)<\/a>/g)].map((m) => htmlText(m[1])).filter(Boolean);
+  const descAt = page.indexOf("Детальний опис:");
+  const description = descAt >= 0 ? htmlText((page.slice(descAt).match(/<p>([\s\S]*?)<\/p>/) || [])[1]) : null;
+
+  const rows = [];
+  for (const color of colors.length ? colors : [{ code: "", label: null }]) {
+    const row = whiteRow && /^white$/i.test(color.label || "") ? whiteRow : colorRow;
+    const tier = row ? pickTier(row.tiers, cfg.priceTier) : null;
+    const site = row ? pickTier(row.tiers, cfg.sitePriceTier) : null;
+    const sizes = stock[color.code] || [];
+    const attrs = {};
+    if (color.label) attrs.color = color.label;
+    if (color.code) attrs.colorCode = color.code;
+    if (site?.value != null) attrs.sitePrice = site.value;
+    if (row) {
+      attrs.priceRow = row.label;
+      attrs.priceTiers = row.tiers;
+      if (tier) attrs.priceTier = tier.label;
+    }
+    // Один розмір — це головний убір, і «розмір» там дорівнює назві моделі:
+    // класти таке в чипи розмірів означало б малювати сміття.
+    if (sizes.length > 1) attrs.sizes = sizes;
+    if (Object.keys(specs).length) attrs.specs = specs;
+    if (methods.length) attrs.printMethods = methods.join(", ");
+    if (description) attrs.description = description.slice(0, 1500);
+    attrs.available = sizes.some((s) => s.stock > 0);
+
+    const image = photos[color.code] || null;
+    rows.push({
+      external_key: color.code ? `${url}#${color.code}` : url,
+      // Артикул — код моделі: у Toptime замовляють саме його, а колір і розмір
+      // добирають окремо. Він же industry-код Stedman/Gildan, тож картки
+      // склеюються з іншими джерелами тих самих брендів.
+      article: model,
+      name,
+      vendor: null, // проставляє applyBrandMap: на сторінці бренда немає
+      category,
+      price: tier?.value ?? null,
+      currency: "UAH",
+      url,
+      image_url: image,
+      images: JSON.stringify(image ? [image] : []),
+      attrs: JSON.stringify(attrs),
+    });
+  }
+  return rows;
+}
+
+/**
+ * Бренд у Toptime НЕ ЛЕЖИТЬ НА СТОРІНЦІ ТОВАРУ — його знає лише фільтр
+ * каталогу. Шість запитів (по одному на бренд) розкладають усі 166 товарів
+ * без жодного перетину й без залишку — перевірено 10.09.2026.
+ *
+ * ЧОМУ НЕ ЗА ПРЕФІКСОМ КОДУ. Спокуса очевидна («st» → Stedman, «gi» → Gildan)
+ * і нуль запитів. Але тоді новий бренд із новим префіксом мовчки поїхав би в
+ * пул під чужим іменем — а помітили б це вже в пошуку менеджера. Фільтр
+ * натомість сам себе виправляє: перелік брендів читається з їхньої ж форми.
+ */
+async function applyBrandMap(rows, cfg, cookie) {
+  const { indexUrl, param, labels = {}, minCoverage = 0.9 } = cfg.brands;
+  const headers = cookie ? { "User-Agent": UA, Cookie: cookie } : { "User-Agent": UA };
+  const index = await (await fetch(indexUrl, { headers, signal: AbortSignal.timeout(30_000) })).text();
+  const values = [...new Set([...index.matchAll(new RegExp(`name="${param}" value="([^"]+)"`, "g"))].map((m) => m[1]))];
+  if (!values.length) {
+    console.error(`У фільтрі «${param}» не знайшлось жодного бренда — розмітку сторінки змінили. Нічого не записано.`);
+    process.exit(1);
+  }
+  const byUrl = new Map();
+  for (const value of values) {
+    const url = `${indexUrl}${indexUrl.includes("?") ? "&" : "?"}${encodeURIComponent(param)}=${encodeURIComponent(value)}`;
+    const html = await (await fetch(url, { headers, signal: AbortSignal.timeout(30_000) })).text();
+    // Плитки беремо лише з блоку каталогу: нижче на сторінці висить «Популярні
+    // товари», і ті вісім записались би в кожен бренд поспіль.
+    const at = html.indexOf('<div id="products"');
+    const till = html.indexOf("Популярні товари", at);
+    const block = at < 0 ? "" : html.slice(at, till > 0 ? till : undefined);
+    let n = 0;
+    for (const m of block.matchAll(/href="(\/catalog\/product\/[^"]+)"/g)) {
+      const full = `${cfg.crawl.base}${m[1]}`;
+      if (!byUrl.has(full)) { byUrl.set(full, labels[value] || value); n++; }
+    }
+    console.log(`  бренд ${labels[value] || value}: ${n} товарів`);
+    await new Promise((r) => setTimeout(r, cfg.crawl.delayMs ?? 250));
+  }
+  let hit = 0;
+  for (const row of rows) {
+    const vendor = byUrl.get(row.url);
+    if (vendor) { row.vendor = vendor; hit++; }
+  }
+  const ratio = rows.length ? hit / rows.length : 0;
+  console.log(`Бренд проставлено ${hit} рядкам із ${rows.length} (${(ratio * 100).toFixed(1)}%)`);
+  if (ratio < minCoverage) {
+    console.error(
+      `Бренд знайшовся лише для ${(ratio * 100).toFixed(1)}% рядків (межа ${(minCoverage * 100).toFixed(0)}%). ` +
+        `Схоже, фільтр каталогу перебудували. Нічого не записано.`
+    );
+    process.exit(1);
+  }
 }
 
 /**
@@ -2591,6 +2995,30 @@ async function loginForCrawl(cfg) {
    * `route=account/`. А що в тому ж розділі живе й сама форма входу, треба
    * сказати окремо: повернення на `account/login` — це відмова, а не кабінет.
    */
+  /**
+   * ДРУГИЙ ВИД ДОКАЗУ — САМА СТОРІНКА, а не перехід. У Toptime форма входу
+   * відповідає з тієї ж адреси й без редиректу, тож ловити нічого: питаємо
+   * будь-яку сторінку й дивимось, чи є в шапці вихід із кабінету. Це не
+   * послаблення перевірки, а точніший її бік — саме цей рядок і відрізняє
+   * гостя від дилера на кожній сторінці, куди ми потім підемо по ціни.
+   */
+  if (login.proof) {
+    const page = await fetch(login.proof.url, {
+      headers: { "User-Agent": UA, Cookie: cookie() },
+      signal: AbortSignal.timeout(30_000),
+    });
+    const html = page.ok ? await page.text() : "";
+    if (!html.includes(login.proof.contains)) {
+      console.error(
+        `Кабінет не пустив: на ${login.proof.url} немає ознаки входу («${login.proof.contains}»). ` +
+          `Далі сайт показував би лише роздрібну колонку. Перевірте ${cfg.auth.emailEnv} і ${cfg.auth.passwordEnv}.`
+      );
+      process.exit(1);
+    }
+    console.log("Кабінет відкрито — ціни беремо з-під логіна.");
+    return cookie();
+  }
+
   const landed = res.headers.get("location") || "";
   const bounced = login.landingNot ? landed.includes(login.landingNot) : false;
   if ((res.status !== 302 && res.status !== 303) || !landed.includes(login.landing) || bounced) {
@@ -2631,9 +3059,15 @@ const PARSERS = {
   sitemap: parseSitemap,
   "sitemap-sku": parseSitemapSku,
   "sitemap-url": parseSitemapUrl,
+  "links-html": parseLinksHtml,
   horoshop: parseHoroshop,
 };
-const PAGE_PARSERS = { "opencart-page": parseOpencartPage, "webasyst-page": parseWebasystPage, "eney-page": parseEneyPage };
+const PAGE_PARSERS = {
+  "opencart-page": parseOpencartPage,
+  "webasyst-page": parseWebasystPage,
+  "eney-page": parseEneyPage,
+  "toptime-page": parseToptimePage,
+};
 // Завантажувачі, які самі ходять по джерелу: їм не потрібен ані файл фіда, ані
 // перелік адрес — вони тягнуть каталог по своєму протоколу.
 const API_LOADERS = { "magento-graphql": loadMagentoGraphql, "xls-price": loadPapirusPrice };
@@ -2768,6 +3202,9 @@ console.log(
     `з ціною: ${rows.filter((r) => r.price).length}, ` +
     `з фото: ${rows.filter((r) => r.image_url).length}`
 );
+// Бренд не завжди лежить на сторінці товару: у Toptime його знає лише фільтр
+// каталогу, і шість запитів розкладають увесь каталог без здогадок за префіксом.
+if (cfg.brands) await applyBrandMap(rows, cfg, crawlCookie);
 // Обхід приніс і нашу ціну, і ціну вітрини — звіряємо, чи сесія дожила до кінця.
 if (cfg.crawl?.minDiscountedRatio) assertDiscounted(rows, cfg);
 // Фід дав роздріб — наша ціна лежить за логіном, і по неї треба сходити окремо.

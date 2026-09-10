@@ -94,10 +94,19 @@ describe("SupplierPassport", () => {
   });
 
   it("запланований — «що заважає» замість ціни й фіда", () => {
-    const toptime = supplierById("toptime")!;
-    openPassport({ definition: toptime, status: supplierStatus(toptime, null, now), contractor: null });
+    // Синтетичний, а не реальний: під'єднаний постачальник забирає з реєстру
+    // приклад «плануємо», і перевірка падає на успіху — див. suppliersStatus.test.ts.
+    const planned = {
+      ...supplierById("totobi")!,
+      slug: "example.com",
+      name: "Example",
+      inQuoteSearch: false,
+      searchNote: "Ще не під'єднано.",
+      planned: { since: "2026-09-05", blocker: "Потрібно з'ясувати, як віддають ціни." },
+    };
+    openPassport({ definition: planned, status: supplierStatus(planned, null, now), contractor: null });
     expect(screen.getByText("Що заважає")).toBeInTheDocument();
-    expect(screen.getByText(toptime.planned!.blocker)).toBeInTheDocument();
+    expect(screen.getByText(planned.planned.blocker)).toBeInTheDocument();
     expect(screen.queryByText("Ціна")).not.toBeInTheDocument();
     expect(screen.queryByText("Що дає фід")).not.toBeInTheDocument();
   });

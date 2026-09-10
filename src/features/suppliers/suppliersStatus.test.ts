@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { supplierById } from "./suppliersCatalog";
+import { supplierById, type SupplierDefinition } from "./suppliersCatalog";
 import { isSupplierStale, supplierStatus, type SupplierPoolSummaryRow } from "./suppliersStatus";
 
 const now = new Date("2026-09-09T12:00:00Z");
@@ -8,7 +8,22 @@ const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000).toISOStr
 const totobi = supplierById("totobi")!;
 const bergamo = supplierById("bergamo")!;
 const avanprint = supplierById("avanprint")!;
-const toptime = supplierById("toptime")!;
+
+/**
+ * Запланований постачальник тут СИНТЕТИЧНИЙ, і це не примха. Досі цю перевірку
+ * тримав Toptime — єдине джерело з `planned` у реєстрі. 10.09.2026 його
+ * під'єднали, і два тести впали на УСПІХУ, а не на поломці: стан «плануємо
+ * підключити» нікуди не подівся, просто прикладу для нього не стало.
+ */
+const planned: SupplierDefinition = {
+  ...totobi,
+  slug: "example.com",
+  name: "Example",
+  intake: { ...totobi.intake, schedule: "manual", scheduleNote: "Ще не під'єднано." },
+  inQuoteSearch: false,
+  searchNote: "Ще не під'єднано.",
+  planned: { since: "2026-09-05", blocker: "Потрібно з'ясувати, як віддають ціни." },
+};
 
 const row = (over: Partial<SupplierPoolSummaryRow> = {}): SupplierPoolSummaryRow => ({
   supplier_slug: "totobi.com.ua",
@@ -29,16 +44,16 @@ describe("застарілість", () => {
     expect(isSupplierStale(totobi, hoursAgo(31), now)).toBe(true);
     expect(isSupplierStale(bergamo, hoursAgo(7 * 24), now)).toBe(false);
     expect(isSupplierStale(bergamo, hoursAgo(8 * 24 + 1), now)).toBe(true);
-    expect(isSupplierStale(toptime, hoursAgo(400), now)).toBe(false);
+    expect(isSupplierStale(planned, hoursAgo(400), now)).toBe(false);
     expect(isSupplierStale(totobi, null, now)).toBe(false);
   });
 });
 
 describe("стан картки", () => {
   it("запланований — без чисел, повідомлення про те, що заважає", () => {
-    const status = supplierStatus(toptime, null, now);
+    const status = supplierStatus(planned, null, now);
     expect(status.state).toBe("planned");
-    expect(status.message).toBe(toptime.planned!.blocker);
+    expect(status.message).toBe(planned.planned!.blocker);
     expect(status.metrics.map((m) => m.value)).toEqual([null, null, null]);
   });
 

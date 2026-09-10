@@ -18,7 +18,7 @@
 # після нього йдуть ще 74 сторінки товару під логіном: у файлі роздріб, а наша
 # ціна лише в кабінеті. Trele — обхід під логіном цілком, але маленький: 364
 # сторінки, півтори хвилини, тобто сьома частина Бергамо, і в денний прогін він
-# уміщається. Бергамо фіда не має взагалі: там обхід 2658 сторінок товарів, тож
+# уміщається. Toptime — теж обхід під логіном і найменший із усіх: 166 сторінок. Бергамо фіда не має взагалі: там обхід 2658 сторінок товарів, тож
 # раз на тиждень — і то з запасом, бо їхні сторінки не міняються щогодини. ENEY
 # у тій самій вазі, тільки більший: 4367 сторінок під логіном, теж тижневий.
 #
@@ -77,7 +77,7 @@ on:
   workflow_dispatch:
     inputs:
       suppliers:
-        description: "Кого перезалити через пробіл (totobi berrytex avanprint bergamo e-suvenir papirus trele eney). Порожньо — усіх."
+        description: "Кого перезалити через пробіл (totobi berrytex avanprint bergamo e-suvenir papirus trele eney toptime). Порожньо — усіх."
         required: false
         default: ""
 
@@ -113,7 +113,7 @@ jobs:
           REQUESTED: ${{ github.event.inputs.suppliers }}
         run: |
           set -euo pipefail
-          known="totobi berrytex avanprint bergamo e-suvenir papirus trele eney"
+          known="totobi berrytex avanprint bergamo e-suvenir papirus trele eney toptime"
 
           if [ -n "${REQUESTED:-}" ]; then
             # Ручний запуск: беремо лише знайомі імена, решту відкидаємо вголос.
@@ -132,8 +132,8 @@ jobs:
           else
             case "${SCHEDULE:-}" in
               # Обидва денні прогони заливають те саме — різниця лише в годині.
-              "0 7 * * *")  list="totobi berrytex avanprint e-suvenir papirus trele" ;;
-              "0 14 * * *") list="totobi berrytex avanprint e-suvenir papirus trele" ;;
+              "0 7 * * *")  list="totobi berrytex avanprint e-suvenir papirus trele toptime" ;;
+              "0 14 * * *") list="totobi berrytex avanprint e-suvenir papirus trele toptime" ;;
               "30 3 * * 0") list="bergamo eney" ;;
               *)            list="$known" ;;
             esac
@@ -177,6 +177,12 @@ jobs:
           # обхід привіз би 4367 роздрібних цін під підписом «оптова».
           ENEY_EMAIL: ${{ secrets.ENEY_EMAIL }}
           ENEY_PASSWORD: ${{ secrets.ENEY_PASSWORD }}
+          # TOPTIME — ЄДИНИЙ, ДЕ ВІДПАЛА СЕСІЯ НЕ ПІДМІНЮЄ ЧИСЛА, А ПРИБИРАЄ ЇХ:
+          # гість бачить лише першу колонку драбини, решта три — посилання
+          # «Реєстрація». Без цих двох рядки приїхали б зовсім без ціни, і
+          # прогін упав би на межі частки знижених — тобто до запису.
+          TOPTIME_EMAIL: ${{ secrets.TOPTIME_EMAIL }}
+          TOPTIME_PASSWORD: ${{ secrets.TOPTIME_PASSWORD }}
           # Завантажувач за замовчуванням шукає psql у Homebrew — це шлях з
           # ноутбука. На раннері psql лежить у PATH.
           PSQL_BIN: psql
@@ -228,6 +234,14 @@ jobs:
             *" eney "*)
               if [ -z "${ENEY_EMAIL:-}" ] || [ -z "${ENEY_PASSWORD:-}" ]; then
                 echo "::error::Немає секретів ENEY_EMAIL / ENEY_PASSWORD — без логіна сайт показує роздріб."
+                exit 1
+              fi
+              ;;
+          esac
+          case " $LIST " in
+            *" toptime "*)
+              if [ -z "${TOPTIME_EMAIL:-}" ] || [ -z "${TOPTIME_PASSWORD:-}" ]; then
+                echo "::error::Немає секретів TOPTIME_EMAIL / TOPTIME_PASSWORD — гість бачить лише роздрібну колонку."
                 exit 1
               fi
               ;;

@@ -44,10 +44,19 @@ describe("SupplierCard", () => {
   });
 
   it("запланований — без чисел, з тим, що заважає", () => {
-    const toptime = supplierById("toptime")!;
-    renderCard(toptime, supplierStatus(toptime, null, now));
+    // Синтетичний, а не реальний: під'єднаний постачальник забирає з реєстру
+    // приклад «плануємо», і перевірка падає на успіху — див. suppliersStatus.test.ts.
+    const planned = {
+      ...totobi,
+      slug: "example.com",
+      name: "Example",
+      inQuoteSearch: false,
+      searchNote: "Ще не під'єднано.",
+      planned: { since: "2026-09-05", blocker: "Потрібно з'ясувати, як віддають ціни." },
+    };
+    renderCard(planned, supplierStatus(planned, null, now));
     expect(screen.getByText("Плануємо")).toBeInTheDocument();
-    expect(screen.getByText(toptime.planned!.blocker)).toBeInTheDocument();
+    expect(screen.getByText(planned.planned.blocker)).toBeInTheDocument();
     expect(screen.queryByText("товарів")).not.toBeInTheDocument();
   });
 });
