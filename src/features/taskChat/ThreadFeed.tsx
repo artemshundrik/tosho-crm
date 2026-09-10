@@ -306,13 +306,20 @@ export function ThreadFeed({
                     ) : null}
 
                     {/* Файл — окремою нейтральною карткою ПОЗА бабблом: у нього
-                        і так є власна форма, а на синьому будь-яка плашка світиться. */}
-                    {entry.attachments?.map((attachment) => (
-                      <ThreadAttachmentCard
-                        key={`${attachment.bucket}:${attachment.path}`}
-                        attachment={attachment}
-                      />
-                    ))}
+                        і так є власна форма, а на синьому будь-яка плашка світиться.
+
+                        `deletedAt` тут обов'язковий: видалення ставить позначку,
+                        а `thread_meta.attachments` лишається на місці — і без
+                        цієї умови картинка видаленого повідомлення й далі висіла
+                        в стрічці під плашкою «Повідомлення видалено». */}
+                    {entry.deletedAt
+                      ? null
+                      : entry.attachments?.map((attachment) => (
+                          <ThreadAttachmentCard
+                            key={`${attachment.bucket}:${attachment.path}`}
+                            attachment={attachment}
+                          />
+                        ))}
 
                     </div>
 
@@ -324,7 +331,10 @@ export function ThreadFeed({
                       onToggle={(emoji, mine) => onToggleReaction(entry.id, emoji, mine)}
                     />
 
-                    {!entry.body && entry.attachments?.length ? (
+                    {/* Час під файлом — лише коли файл справді показано.
+                        Видалене повідомлення часу не має взагалі, хоч із
+                        текстом, хоч із файлом: у плашці його теж немає. */}
+                    {!entry.deletedAt && !entry.body && entry.attachments?.length ? (
                       <span className="inline-flex items-center gap-1 whitespace-nowrap px-1 text-3xs tabular-nums text-muted-foreground">
                         {entry.pending ? "надсилаю…" : timeOf(entry.createdAt)}
                       </span>
