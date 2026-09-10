@@ -863,13 +863,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     ((permissions.isAdmin || permissions.isManagerJob || isQuoteManagerJobRole(viewerJobRole)) &&
       userId !== null &&
       (quoteManagerUserId === userId || quoteCreatedByUserId === userId));
-  const canManagerDeleteOwnDesignerBriefFiles = quoteManagerUserId === userId;
+  const canManagerDeleteOwnDesignerBriefFiles = userId !== null && quoteManagerUserId === userId;
+  // Керівник прибирає будь-який файл справи — та сама пара, що видаляє чужі
+  // повідомлення в обговоренні цієї ж картки, і той самий набір, що пропускає
+  // правило бази (`quote_attachments_delete`: super_admin і manager). Доти
+  // кошик бачив лише менеджер прорахунку, який сам той файл завантажив, — тож
+  // на чужому прорахунку його не було ні в кого, включно з власником системи.
+  const canDeleteAnyQuoteAttachment = accessRole === "owner" || jobRole === "seo";
   const canDeleteDesignerBriefAttachment = useCallback(
     (attachment: QuoteAttachment) =>
-      canManagerDeleteOwnDesignerBriefFiles &&
-      Boolean(userId) &&
-      (attachment.uploadedBy ?? null) === userId,
-    [canManagerDeleteOwnDesignerBriefFiles, userId]
+      canDeleteAnyQuoteAttachment ||
+      (canManagerDeleteOwnDesignerBriefFiles && (attachment.uploadedBy ?? null) === userId),
+    [canDeleteAnyQuoteAttachment, canManagerDeleteOwnDesignerBriefFiles, userId]
   );
 
   const loadCurrentManagerRate = useCallback(async () => {
@@ -3059,10 +3064,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const attachment = target ?? deleteAttachmentTarget;
     if (!attachment || attachmentsDeletingId) return;
     if (!canDeleteDesignerBriefAttachment(attachment)) {
-      setAttachmentsDeleteError("Видаляти ці файли може лише менеджер прорахунку, який їх завантажив.");
+      setAttachmentsDeleteError("Видаляти ці файли може керівник або менеджер прорахунку, який їх завантажив.");
       setDeleteAttachmentTarget(null);
       toast.error("Недостатньо прав", {
-        description: "Видаляти ці файли може лише менеджер прорахунку, який їх завантажив.",
+        description: "Видаляти ці файли може керівник або менеджер прорахунку, який їх завантажив.",
       });
       return;
     }
