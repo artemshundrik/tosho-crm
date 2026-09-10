@@ -43,9 +43,11 @@ create table if not exists tosho.supplier_products (
   url           text,
   image_url     text,                         -- перше фото
   images        jsonb not null default '[]'::jsonb,
-  -- Кольори/розміри й сире поле — щоб не втратити те, чого схема ще не знає.
+  -- Кольори, розміри й усе, чого схема ще не знає. Сусідньої колонки `raw` тут
+  -- більше немає: її завели під сирий шматок фіда, і за сім джерел жоден
+  -- розбирач у неї не написав — незнайомі поля лягають сюди (REQ-264#p2,
+  -- прибрано scripts/supplier-pool-cleanup.sql).
   attrs         jsonb not null default '{}'::jsonb,
-  raw           jsonb,
   -- Службове.
   observed_at   timestamptz not null default now(),   -- коли знято з джерела
   is_active     boolean not null default true,
@@ -61,8 +63,12 @@ create index if not exists supplier_products_name_trgm
 create index if not exists supplier_products_article_trgm
   on tosho.supplier_products using gin (article gin_trgm_ops)
   where article is not null;
-create index if not exists supplier_products_contractor_idx
-  on tosho.supplier_products (contractor_id);
+-- Покажчика за `contractor_id` тут свідомо немає. Він стояв під екран «товари
+-- цього контрагента», який так і не написали: пул питається за `supplier_slug`
+-- (див. SupplierProducts.tsx). За все життя таблиці — нуль звернень, при 122 412
+-- у сусіднього `uniq`, і при цьому кожен із двох денних заливів мусив його
+-- переписувати. Прибрано REQ-264#p1 (scripts/supplier-pool-cleanup.sql); якщо
+-- такий екран з'явиться — повертається одним рядком за секунди.
 create index if not exists supplier_products_supplier_idx
   on tosho.supplier_products (supplier_slug, is_active);
 
