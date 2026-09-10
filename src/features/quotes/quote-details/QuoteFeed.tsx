@@ -14,11 +14,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatActivityClock, formatActivityDayLabel } from "@/lib/activity";
 import { getAttachmentDisplayFileName } from "@/lib/attachmentPreview";
+import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { FileDropOverlay, useFileDropPanel } from "@/components/ui/file-drop-zone";
 import { HoldButton } from "@/components/ui/hold-button";
 import { cn } from "@/lib/utils";
 
-import { getFileExtension } from "./config";
+import { canPreviewDocumentThumb, canPreviewImage, getFileExtension } from "./config";
 import type { QuoteAttachment } from "./queries";
 import type { QuoteFeedEvent, QuoteFeedKind } from "./quoteFeedEvents";
 
@@ -70,6 +71,12 @@ function FeedRow({
 }) {
   const Icon = event.icon;
   const isTalk = event.kind === "talk";
+  const attachmentName = event.attachment
+    ? getAttachmentDisplayFileName(event.attachment.name, event.attachment.storagePath, event.attachment.mimeType)
+    : "";
+  const attachmentExtension = getFileExtension(attachmentName);
+  const attachmentThumb =
+    canPreviewImage(attachmentExtension) || canPreviewDocumentThumb(attachmentExtension);
 
   return (
     <div className="flex items-start gap-3 py-3">
@@ -111,14 +118,30 @@ function FeedRow({
         ) : null}
         {event.meta ? <p className="mt-0.5 text-xs text-muted-foreground">{event.meta}</p> : null}
         {event.attachment && event.attachment.storageBucket && event.attachment.storagePath ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="mt-1 h-7 px-2 text-2xs text-muted-foreground"
-            onClick={() => onDownload(event.attachment as QuoteAttachment)}
-          >
-            Завантажити
-          </Button>
+          /* Мініатюра поруч із «Завантажити», а не замість значка події:
+             кружечок ліворуч каже, ЩО сталося, і підміна його картинкою
+             зламала б мову стрічки. Файл упізнають по самій картинці — тож
+             вона стоїть у рядку дії, з тим самим розкриттям під курсором. */
+          <div className="mt-1 flex items-center gap-2">
+            {attachmentThumb ? (
+              <StorageObjectImage
+                bucket={event.attachment.storageBucket}
+                path={event.attachment.storagePath}
+                alt={attachmentName}
+                variant="thumb"
+                hoverPreview
+                className="h-9 w-9 shrink-0 rounded-lg border border-border/60 bg-muted/30"
+              />
+            ) : null}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-2xs text-muted-foreground"
+              onClick={() => onDownload(event.attachment as QuoteAttachment)}
+            >
+              Завантажити
+            </Button>
+          </div>
         ) : null}
       </div>
     </div>
@@ -193,14 +216,31 @@ function FilesRegister({
             files.map((file) => {
               const displayName = getAttachmentDisplayFileName(file.name, file.storagePath, file.mimeType);
               const extension = getFileExtension(displayName);
+              // Тризначний хвостик назви — не те, за чим людина впізнає макет.
+              // Мініатюра тут та сама, що на канбані й у матеріалах дизайну:
+              // квадрат у рядку, а під курсором він розкривається великим прев'ю.
+              const previewable =
+                (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
+                Boolean(file.storageBucket && file.storagePath);
               return (
                 <div
                   key={file.id}
                   className="flex items-center gap-3 border-b border-border/40 py-2.5 last:border-b-0"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">
-                    {extension ?? <Paperclip className="h-4 w-4" />}
-                  </span>
+                  {previewable ? (
+                    <StorageObjectImage
+                      bucket={file.storageBucket}
+                      path={file.storagePath}
+                      alt={displayName}
+                      variant="thumb"
+                      hoverPreview
+                      className="h-9 w-9 shrink-0 rounded-lg border border-border/60 bg-muted/30"
+                    />
+                  ) : (
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">
+                      {extension ?? <Paperclip className="h-4 w-4" />}
+                    </span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-sm font-medium text-foreground" title={displayName}>

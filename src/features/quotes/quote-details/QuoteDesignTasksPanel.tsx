@@ -541,14 +541,31 @@ export function QuoteDesignTasksPanel({
                 {materials.map((file) => {
                   const displayName = getAttachmentDisplayFileName(file.name, file.storagePath, file.mimeType);
                   const extension = getFileExtension(displayName);
+                  // Та сама мініатюра з розкриттям під курсором, що й у «Файлах
+                  // справи»: обидва списки показують ті самі `quote_attachments`,
+                  // і впізнавати файл в одному з них по хвостику назви — дивно.
+                  const previewable =
+                    (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
+                    Boolean(file.storageBucket && file.storagePath);
                   return (
                     <div
                       key={file.id}
                       className="flex items-center gap-3 border-b border-border/40 py-2.5 last:border-b-0"
                     >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">
-                        {extension ?? <Paperclip className="h-4 w-4" />}
-                      </span>
+                      {previewable ? (
+                        <StorageObjectImage
+                          bucket={file.storageBucket}
+                          path={file.storagePath}
+                          alt={displayName}
+                          variant="thumb"
+                          hoverPreview
+                          className="h-9 w-9 shrink-0 rounded-lg border border-border/60 bg-muted/30"
+                        />
+                      ) : (
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">
+                          {extension ?? <Paperclip className="h-4 w-4" />}
+                        </span>
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-foreground" title={displayName}>
                           {displayName}
