@@ -945,6 +945,14 @@ export async function persistQuoteRuns(
  * По одному файлу навмисно: у циклі сторінка збирає список тих, що не
  * долетіли, і показує «не всі файли завантажилися» — а не падає на першому.
  */
+export type UploadedQuoteAttachment = {
+  fileName: string;
+  fileSize: number | null;
+  mimeType: string | null;
+  bucket: string;
+  path: string;
+};
+
 export async function uploadQuoteAttachmentFile(input: {
   teamId: string;
   quoteId: string;
@@ -954,7 +962,7 @@ export async function uploadQuoteAttachmentFile(input: {
   bucket: string;
   /** Позиція, до якої кріпимо файл. Не задано — файл усього прорахунку. */
   quoteItemId?: string | null;
-}): Promise<QueryResult<null>> {
+}): Promise<QueryResult<UploadedQuoteAttachment>> {
   try {
     const safeName = input.file.name.replace(/[^\w.-]+/g, "_");
     const storagePathCandidate = `teams/${input.teamId}/quote-attachments/${input.quoteId}/${Date.now()}-${safeName}`;
@@ -966,6 +974,9 @@ export async function uploadQuoteAttachmentFile(input: {
       cacheControl: "31536000, immutable",
     });
 
+    const mimeType = uploadResult.contentType || input.file.type || null;
+    const fileSize = uploadResult.size || input.file.size;
+
     const { error: insertError } = await supabase
       .schema("tosho")
       .from("quote_attachments")
@@ -973,8 +984,8 @@ export async function uploadQuoteAttachmentFile(input: {
         team_id: input.teamId,
         quote_id: input.quoteId,
         file_name: input.file.name,
-        mime_type: uploadResult.contentType || input.file.type || null,
-        file_size: uploadResult.size || input.file.size,
+        mime_type: mimeType,
+        file_size: fileSize,
         storage_bucket: input.bucket,
         storage_path: uploadResult.storagePath,
         uploaded_by: input.uploadedBy,
@@ -986,7 +997,19 @@ export async function uploadQuoteAttachmentFile(input: {
       });
     if (insertError) throw insertError;
 
-    return { ok: true, data: null };
+    // Куди саме ліг файл, знає тільки цей виклик: рядок вставляється без
+    // .select(), а обговоренню справи потрібні bucket і path, щоб показати
+    // вкладення в бабблі одразу, не чекаючи перечитування списку.
+    return {
+      ok: true,
+      data: {
+        fileName: input.file.name,
+        fileSize,
+        mimeType,
+        bucket: input.bucket,
+        path: uploadResult.storagePath,
+      },
+    };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити файл.") };
   }

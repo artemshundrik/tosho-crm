@@ -239,6 +239,7 @@ import {
   fetchDesignTasksLinkedToQuote,
   updateActivityMetadata,
   uploadQuoteAttachmentFile,
+  type UploadedQuoteAttachment,
   persistQuoteRuns,
   logQuoteActivity,
   logQuoteRunChanges,
@@ -2952,31 +2953,43 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setAttachmentsLoading(false);
   }, [quoteId, teamId]);
 
+  /**
+   * Повертає те, що справді долетіло, і причину відмови.
+   *
+   * Смуга «Файли справи» показує помилку своїм рядком, а обговорення справи
+   * стоїть в іншій колонці й того рядка не бачить — тому текст помилки
+   * віддається викликачу, а не лишається тільки в стані сторінки.
+   */
   const uploadAttachments = async (
     files: FileList | File[] | null,
     audience: QuoteAttachmentAudience = "project",
     /** Позиція, до якої кріпимо файли (REQ-246). Не задано — файл усього прорахунку. */
     quoteItemId?: string | null
-  ) => {
-    if (!files || files.length === 0) return;
-    if (attachmentsUploading) return;
+  ): Promise<{ files: UploadedQuoteAttachment[]; error: string | null }> => {
+    const nothing = (error: string | null = null) => ({ files: [], error });
+
+    if (!files || files.length === 0) return nothing();
+    if (attachmentsUploading) return nothing();
     setAttachmentsUploadError(null);
 
     const existingCount = attachments.length;
     const remainingSlots = Math.max(0, MAX_QUOTE_ATTACHMENTS - existingCount);
     if (remainingSlots === 0) {
-      setAttachmentsUploadError(`Можна додати не більше ${MAX_QUOTE_ATTACHMENTS} файлів.`);
-      return;
+      const message = `Можна додати не більше ${MAX_QUOTE_ATTACHMENTS} файлів.`;
+      setAttachmentsUploadError(message);
+      return nothing(message);
     }
 
     const selected = Array.from(files).slice(0, remainingSlots);
     const oversized = selected.filter((file) => file.size > MAX_ATTACHMENT_SIZE_BYTES);
     const allowed = selected.filter((file) => file.size <= MAX_ATTACHMENT_SIZE_BYTES);
 
+    let uploadError: string | null = null;
     if (oversized.length > 0) {
-      setAttachmentsUploadError("Деякі файли завеликі (максимум 50 MB).");
+      uploadError = "Деякі файли завеликі (максимум 50 MB).";
+      setAttachmentsUploadError(uploadError);
     }
-    if (allowed.length === 0) return;
+    if (allowed.length === 0) return nothing(uploadError);
 
     setAttachmentsUploading(true);
 
@@ -2989,14 +3002,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
     const uploadedBy = await getCurrentUserId();
     if (!uploadedBy) {
-      setAttachmentsUploadError("Користувач не авторизований");
+      const message = "Користувач не авторизований";
+      setAttachmentsUploadError(message);
       finish();
-      return;
+      return nothing(message);
     }
 
     // Кожен файл окремо: один невдалий не має скасовувати решту, тому список
     // тих, що не долетіли, збирається й показується разом.
     const failures: string[] = [];
+    const uploadedFiles: UploadedQuoteAttachment[] = [];
     for (const file of allowed) {
       const uploaded = await uploadQuoteAttachmentFile({
         teamId,
@@ -3007,22 +3022,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         quoteItemId: quoteItemId ?? null,
         bucket: ITEM_VISUAL_BUCKET,
       });
-      if (!uploaded.ok) {
+      if (uploaded.ok) {
+        uploadedFiles.push(uploaded.data);
+      } else {
         failures.push(file.name);
         console.error("Attachment upload failed", uploaded.message);
       }
     }
 
     if (failures.length > 0) {
-      setAttachmentsUploadError(
+      uploadError =
         failures.length === allowed.length
           ? "Не вдалося завантажити файли."
-          : `Не всі файли завантажилися (${failures.length}/${allowed.length}).`
-      );
+          : `Не всі файли завантажилися (${failures.length}/${allowed.length}).`;
+      setAttachmentsUploadError(uploadError);
     }
 
     await loadAttachments();
     finish();
+    return { files: uploadedFiles, error: uploadError };
   };
 
   /*
@@ -5958,10 +5976,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               можна було лише з дизайн-задачі. Тепер розмова відкрита з обох
               боків, без другої копії даних і без нової таблиці.
 
-              Файли поки не чіпляємо: завантажувач вкладень прорахунку кладе їх
-              у вкладення картки, а рейка чекає вкладення повідомлення — це
-              різні місця, і зшивати їх наосліп означало б втрачати файли.
-              Тому скріпка тут просто не показується (`canAttach` = false).
+              Файли йдуть тим самим шляхом, що й «Файли справи» картки:
+              `quote_attachments` з `audience=project`. Спершу скріпку тут не
+              підключили — і вона лишилась на екрані замкненою, тобто виглядала
+              як зламана кнопка. Візуалів це не чіпає: ними рахується лише те,
+              що лежить у теці `design-outputs/`, а сюди файл кладеться в
+              `quote-attachments/`.
             */}
             {teamId ? (
               // Обгортка навмисно `div`, а не `section`: рейка сама рендерить
@@ -5974,6 +5994,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   quoteId={quoteId}
                   teamId={teamId}
                   canManage={accessRole === "owner" || jobRole === "seo"}
+                  onAttachFiles={async (files) => {
+                    const result = await uploadAttachments(files);
+                    // Рейка на порожньому списку мовчки не надсилає повідомлення,
+                    // тож причину відмови показуємо тостом — рядок помилки
+                    // «Файлів справи» лежить в іншій вкладці.
+                    if (result.error) {
+                      toast.error("Не вдалося прикріпити файл", { description: result.error });
+                    }
+                    return result.files;
+                  }}
+                  attaching={attachmentsUploading}
                 />
               </div>
             ) : null}
