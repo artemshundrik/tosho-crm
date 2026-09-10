@@ -1624,12 +1624,27 @@ function parseEneyPage(html, ctx) {
   };
 }
 
-/** «191.10 грн» → 191.1. Порожня клітинка й посилання «Реєстрація» дають null. */
+/**
+ * «191.10 грн» → 191.1, «1,252.44 грн» → 1252.44. Порожня клітинка й посилання
+ * «Реєстрація» дають null.
+ *
+ * ⚠️ РОЗДІЛЮВАЧ ТИСЯЧ ТУТ Є, І ВІН КОМА — англійським зразком. Перша редакція
+ * міняла кому на крапку (як в ENEY, де кома десяткова) і мовчки робила з
+ * 1 252,44 грн число 1.252: помилка вилазила ЛИШЕ на цінах понад тисячу, тобто
+ * на худі й фліс — 133 рядки з 1820, решта виглядала правильно.
+ *
+ * Тому розділювачі розрізняються не за виглядом, а за місцем: десятковий — той,
+ * що стоїть ОСТАННІМ, будь-який попередній відкидається. Так само правильно
+ * читається і «1 252,44», якщо вони колись перейдуть на місцевий формат.
+ */
 function toptimePrice(raw) {
   if (raw == null) return null;
   const digits = String(raw).replace(/[^\d.,]/g, "");
   if (!digits) return null;
-  const n = Number.parseFloat(digits.replace(/\s/g, "").replace(/,/g, "."));
+  const cut = Math.max(digits.lastIndexOf("."), digits.lastIndexOf(","));
+  const whole = (cut < 0 ? digits : digits.slice(0, cut)).replace(/[.,]/g, "");
+  const frac = cut < 0 ? "" : digits.slice(cut + 1).replace(/[.,]/g, "");
+  const n = Number.parseFloat(frac ? `${whole}.${frac}` : whole);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
@@ -1719,7 +1734,15 @@ function parseToptimePage(html, ctx) {
   const nouns = cfg.nameNouns || {};
   // Підрозділ точніший за розділ («Майки» в «Футболках»), тому питаємо його першим.
   const noun = [...slugs].reverse().map((s) => nouns[s]).find(Boolean) || null;
-  const name = noun ? `${noun} ${title}` : title;
+  /**
+   * ⚠️ КОД МОДЕЛІ В НАЗВІ ОБОВ'ЯЗКОВИЙ, і сам сайт пише його так само («ST2000
+   * Classic Men»). Картка пулу згортається ЗА НАЗВОЮ, а заголовки в Toptime
+   * повторюються: «Active 140 Raglan» носять ST8410, ST8500 і ST8570 — три
+   * різні моделі з різними цінами. Без коду вони злипались би в одну картку на
+   * тридцять кольорів, артикул на ній зник би (бо різний), і менеджер брав би
+   * ціну навмання. Заміряно на заливі 10.09.2026: 13 назв на 30 моделей.
+   */
+  const name = [noun, model, title].filter(Boolean).join(" ");
 
   /** Драбина цін: підпис колонки → число, окремо для рядків «White» і «Color». */
   const priceTable = toptimeTableAfter(page, "Детальні ціни");
@@ -1847,7 +1870,11 @@ async function applyBrandMap(rows, cfg, cookie) {
   const { indexUrl, param, labels = {}, minCoverage = 0.9 } = cfg.brands;
   const headers = cookie ? { "User-Agent": UA, Cookie: cookie } : { "User-Agent": UA };
   const index = await (await fetch(indexUrl, { headers, signal: AbortSignal.timeout(30_000) })).text();
-  const values = [...new Set([...index.matchAll(new RegExp(`name="${param}" value="([^"]+)"`, "g"))].map((m) => m[1]))];
+  // Ім'я поля треба екранувати: у HTML-формах масиви звуться `id_brands[]`, і
+  // дужки в регулярці стали б порожнім класом символів — збіг не траплявся б
+  // ніколи, а виглядало б це як «постачальник прибрав фільтр брендів».
+  const field = param.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const values = [...new Set([...index.matchAll(new RegExp(`name="${field}" value="([^"]+)"`, "g"))].map((m) => m[1]))];
   if (!values.length) {
     console.error(`У фільтрі «${param}» не знайшлось жодного бренда — розмітку сторінки змінили. Нічого не записано.`);
     process.exit(1);
