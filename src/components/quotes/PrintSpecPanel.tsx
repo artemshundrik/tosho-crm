@@ -2,6 +2,7 @@ import * as React from "react";
 import { Pencil, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,9 +51,11 @@ export type PrintSpecPanelProps = {
   saved?: PrintSpecMetadata | null;
   canEdit: boolean;
   onSaved: () => void;
+  /** Відступи задає той, хто ставить панель: вона тепер поверх картки, а не вставка. */
+  className?: string;
 };
 
-export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved }: PrintSpecPanelProps) {
+export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved, className }: PrintSpecPanelProps) {
   const preset = React.useMemo(() => getPrintSpecPreset(saved?.presetKey ?? presetKey), [presetKey, saved?.presetKey]);
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<PrintSpecValues>({});
@@ -151,7 +154,7 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
   const filled = summary.length > 0;
 
   return (
-    <div className="mt-4 rounded-xl border border-border/50 p-4">
+    <div className={cn("rounded-xl border border-border/50 p-4", className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Settings2 className="h-4 w-4 text-muted-foreground" />

@@ -3,7 +3,14 @@ import { Check, RefreshCw, Search } from "lucide-react";
 
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useCatalogSkuMatches } from "@/features/quotes/quote-wizard/catalogSkuSearch";
 import {
   rankCatalogSuggestions,
@@ -22,6 +29,15 @@ import { updateQuoteItemRow } from "./queries";
  * це тим самим пошуком по каталогу, що у вікні створення прорахунку: набрав
  * кілька літер — обрав модель.
  *
+ * ВІКНО, А НЕ ПОПОВЕР (Артем, 11.09.2026). Дія переїхала в меню «⋮», де вже
+ * живе «Видалити»: заради однієї пунктирної кнопки картка тримала цілу смугу під
+ * назвою, а в поліграфії ця смуга взагалі стояла порожня — нанесення там не
+ * питають. Поповер не можна відкрити з пункта меню (два накладені шари Radix
+ * б'ються за фокус), тож пошук лишився той самий, а оболонка стала вікном.
+ *
+ * ВЛАСНА КНОПКА ЛИШИЛАСЬ для тих, хто відкриває компонент напряму: якщо `open`
+ * не передали, він так само вміє бути самостійним чипом.
+ *
  * ЗАМІНА МОДЕЛІ НЕ ЧІПАЄ ТИРАЖІ Й ЦІНИ: міняється товар, а не те, скільки
  * його й почім. А от нанесення при зміні ВИДУ стирається — методи належать
  * виду (`catalog_methods.kind_id`), і чужі id у позиції були б брехнею, яку
@@ -34,6 +50,8 @@ export function QuoteItemModelSwap({
   currentKindId,
   disabled,
   onSaved,
+  open: openProp,
+  onOpenChange,
 }: {
   teamId: string;
   itemId: string;
@@ -41,8 +59,21 @@ export function QuoteItemModelSwap({
   currentKindId: string | null;
   disabled?: boolean;
   onSaved?: () => void;
+  /** Керований стан — коли вікно відкриває меню «⋮». Без нього малюється власний чип. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const [openSelf, setOpenSelf] = React.useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : openSelf;
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      if (controlled) onOpenChange?.(next);
+      else setOpenSelf(next);
+      if (!next) setQuery("");
+    },
+    [controlled, onOpenChange]
+  );
   const [query, setQuery] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const { suggestions } = useCatalogSuggestions(teamId, open);
@@ -74,20 +105,23 @@ export function QuoteItemModelSwap({
   };
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) setQuery("");
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Chip size="sm" disabled={disabled || saving} icon={<RefreshCw />} className="border-dashed text-muted-foreground">
-          замінити товар
-        </Chip>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-1.5">
-        <div className="flex items-center gap-2 px-1.5 pb-1.5">
+    <Dialog open={open} onOpenChange={setOpen}>
+      {controlled ? null : (
+        <DialogTrigger asChild>
+          <Chip size="sm" disabled={disabled || saving} icon={<RefreshCw />} className="border-dashed text-muted-foreground">
+            замінити товар
+          </Chip>
+        </DialogTrigger>
+      )}
+      {/* Вибір із каталогу нічого не втрачає: клік повз — це «передумав». */}
+      <DialogContent dismissible className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Замінити товар</DialogTitle>
+          <DialogDescription>
+            Тиражі й ціни лишаться як є. Якщо зміниться вид — нанесення доведеться поставити заново.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex items-center gap-2 rounded-lg border border-border/60 px-3">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <Input
             value={query}
@@ -99,7 +133,7 @@ export function QuoteItemModelSwap({
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <div className="max-h-72 overflow-y-auto">
+        <div className="-mx-1 max-h-72 overflow-y-auto px-1">
           {found.map((suggestion) => (
             <button
               key={suggestion.modelId ?? suggestion.name}
@@ -130,13 +164,8 @@ export function QuoteItemModelSwap({
               Нічого не знайшли. Товар заводять у «Каталозі» або посиланням у вікні створення.
             </p>
           ) : null}
-          {!query.trim() ? (
-            <p className="px-2 py-3 text-xs text-muted-foreground">
-              Заміна не чіпає тиражі й ціни. Якщо вид зміниться — нанесення доведеться поставити заново.
-            </p>
-          ) : null}
         </div>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 }

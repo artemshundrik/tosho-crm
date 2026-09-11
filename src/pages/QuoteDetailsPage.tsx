@@ -200,6 +200,7 @@ import {
   Loader2,
   Package,
   Printer,
+  RefreshCw,
   Lock,
   Calculator,
   Palette,
@@ -701,6 +702,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   /** Що саме додаємо — товар чи поліграфію. Вибір робиться кнопкою, до відкриття. */
   const [addItemsKind, setAddItemsKind] = useState<QuoteKindValue>("merch");
+  /** Позиція, якій зараз міняють товар: дія переїхала в меню «⋮». */
+  const [swapItemId, setSwapItemId] = useState<string | null>(null);
   /** Вікно «Додати товар» — той самий візард, що створює прорахунок. */
   const [addItemsOpen, setAddItemsOpen] = useState(false);
 
@@ -4682,6 +4685,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
+                                      {/* Заміна товару живе ТУТ (Артем, 11.09.2026): чип
+                                          у власній смузі коштував картці 45 px, а в
+                                          поліграфії та смуга стояла порожня. */}
+                                      <DropdownMenuItem
+                                        disabled={!canManageItems}
+                                        onSelect={() => setSwapItemId(item.id)}
+                                      >
+                                        <RefreshCw className="mr-2 h-4 w-4" />
+                                        Замінити товар
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
                                       {/* «Редагувати» тут більше немає (REQ-157#p6):
                                           товар, нанесення й тиражі правлять у самій
                                           картці. Без preventDefault: меню має
@@ -4715,43 +4729,36 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 вікно редагування прорахунку віддало продукцію цій
                                 вкладці, а вікно позиції лишилось для рідкісного —
                                 одиниці, артикула, коментаря, вкладення. */}
-                            {teamId ? (
-                              <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/50 pt-3">
-                                {/* Нанесення в поліграфії не питають: оздоблення
-                                    живе в параметрах виробу (тиснення, лак, УФ). */}
-                                {resolvedKindId && !modelSpecPreset ? (
-                                  <>
-                                    <QuoteItemImprints
-                                      teamId={teamId}
-                                      itemId={item.id}
-                                      kindId={resolvedKindId}
-                                      methods={item.methods ?? []}
-                                      disabled={!canManageItems}
-                                      onSaved={() => void loadItems()}
-                                    />
-                                  </>
-                                ) : null}
-                                <span className="flex-1" />
-                                <QuoteItemModelSwap
+                            {/* Смуга тепер існує ЛИШЕ заради нанесення. У поліграфії
+                                його не питають — оздоблення живе в параметрах виробу
+                                (тиснення, лак, УФ), — тож там її просто немає. */}
+                            {teamId && resolvedKindId && !modelSpecPreset ? (
+                              <div className="mt-4 border-t border-border/50 pt-3">
+                                <QuoteItemImprints
                                   teamId={teamId}
                                   itemId={item.id}
-                                  currentModelId={resolvedModelId ?? null}
-                                  currentKindId={resolvedKindId ?? null}
+                                  kindId={resolvedKindId}
+                                  methods={item.methods ?? []}
                                   disabled={!canManageItems}
                                   onSaved={() => void loadItems()}
                                 />
                               </div>
                             ) : null}
 
-                            <QuoteItemSpec sections={renderedSections} />
+                            {teamId ? (
+                              <QuoteItemModelSwap
+                                teamId={teamId}
+                                itemId={item.id}
+                                currentModelId={resolvedModelId ?? null}
+                                currentKindId={resolvedKindId ?? null}
+                                disabled={!canManageItems}
+                                open={swapItemId === item.id}
+                                onOpenChange={(next) => setSwapItemId(next ? item.id : null)}
+                                onSaved={() => void loadItems()}
+                              />
+                            ) : null}
 
-                            <PrintSpecPanel
-                              quoteItemId={item.id}
-                              presetKey={modelSpecPreset}
-                              saved={item.metadata?.printSpec ?? null}
-                              canEdit={canEditPrintSpec}
-                              onSaved={() => void loadItems()}
-                            />
+                            <QuoteItemSpec sections={renderedSections} />
 
                             {shouldShowDescription ? (
                               <div className="mt-5">
@@ -4775,6 +4782,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             ) : null}
                           </div>
                         </div>
+
+                        {/* ПАРАМЕТРИ ВИРОБУ — НА ВСЮ ШИРИНУ (Артем, 11.09.2026): вони
+                            стояли в текстовій колонці, тобто з відступом на ширину
+                            мініатюри — 88 px порожнечі під двадцятьма парами
+                            «підпис — значення». Тепер це поверх картки, як ярус тиражів. */}
+                        <PrintSpecPanel
+                          quoteItemId={item.id}
+                          presetKey={modelSpecPreset}
+                          saved={item.metadata?.printSpec ?? null}
+                          canEdit={canEditPrintSpec}
+                          onSaved={() => void loadItems()}
+                          className="mx-3 mb-3 sm:mx-4 sm:mb-4"
+                        />
 
                         {/*
                           Ярус тиражів — власний ПОВЕРХ картки, а не вставка в
