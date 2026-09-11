@@ -92,6 +92,7 @@ import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChang
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { KanbanImageZoomPreview } from "@/components/kanban";
+import { QuoteItemThumb } from "@/features/quotes/quote-details/QuoteItemThumb";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import { LiveCursorsLayer } from "@/components/app/LiveCursorsLayer";
@@ -4645,20 +4646,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         */}
                         <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
                           <div className="shrink-0">
-                            {productPreview?.type === "image" ? (
-                              <KanbanImageZoomPreview
-                                imageUrl={productPreview.url}
-                                zoomImageUrl={productPreview.zoomUrl}
-                                alt={modelLabel ?? "Товар"}
-                                loadStrategy="eager"
-                                className="h-20 w-20 rounded-xl border-border/50 bg-muted/20 ring-1 ring-border/50 [&>div]:rounded-xl"
-                                imageClassName="object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-border/50 bg-muted">
-                                <Package className="h-6 w-6 text-muted-foreground/50" />
-                              </div>
-                            )}
+                            <QuoteItemThumb
+                              specPreset={modelSpecPreset}
+                              preview={
+                                productPreview?.type === "image"
+                                  ? { url: productPreview.url, zoomUrl: productPreview.zoomUrl }
+                                  : null
+                              }
+                              alt={modelLabel ?? "Товар"}
+                            />
                           </div>
 
                           <div className="min-w-0 flex-1">

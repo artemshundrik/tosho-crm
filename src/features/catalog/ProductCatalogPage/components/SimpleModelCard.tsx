@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { ModelWithContext } from "@/types/catalog";
+import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 
 interface SimpleModelCardProps {
   item: ModelWithContext;
@@ -114,6 +115,7 @@ function SimpleModelCardBase({
   };
 
   const productTypeLabel = getProductTypeLabel(kindName);
+  const specPreset = model.metadata?.specPreset ?? null;
 
   useEffect(() => {
     setFailedImageUrls(new Set());
@@ -226,6 +228,15 @@ function SimpleModelCardBase({
             decoding="async"
             onError={() => markImageFailed(displayImageUrl)}
           />
+        ) : specPreset ? (
+          /*
+            Поліграфія, яку ми виробляємо, фото не має й не матиме: замість
+            назви виду великими літерами картка показує саму річ — ту саму, що
+            у вікні прорахунку.
+          */
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground/60">
+            <PrintModelArt presetKey={specPreset} className="h-24 w-24" />
+          </div>
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <span className="text-4xl font-bold text-muted-foreground/30 tracking-tight">

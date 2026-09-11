@@ -101,6 +101,7 @@ export function useCatalogData(teamId: string | null) {
           price: number | null;
           image_url: string | null;
           sku: string | null;
+          specPreset: string | null;
           imageBucket: string | null;
           imagePath: string | null;
         }>;
@@ -150,6 +151,9 @@ export function useCatalogData(teamId: string | null) {
         const variants = variantsByModel.get(row.id);
         const metadata: CatalogModelMetadata = {
           sku: row.sku,
+          // Скаляр, як і `sku`: важить нуль, а без нього картка поліграфії не
+          // знає, що малювати замість фото, якого в неї немає.
+          specPreset: row.specPreset ?? null,
           imageAsset: buildCatalogImageAsset(row.imageBucket, row.imagePath),
           ...(variants ? { variants } : {}),
         };
@@ -190,7 +194,7 @@ export function useCatalogData(teamId: string | null) {
         // metadata читає `loadFullModelMedia`, коли модель відкривають на
         // редагування, — там він справді потрібен.
         .select(
-          "id,kind_id,name,price,image_url,sku:metadata->>sku,imageBucket:metadata->imageAsset->>bucket,imagePath:metadata->imageAsset->>path"
+          "id,kind_id,name,price,image_url,sku:metadata->>sku,specPreset:metadata->>specPreset,imageBucket:metadata->imageAsset->>bucket,imagePath:metadata->imageAsset->>path"
         )
         .eq("team_id", teamId)
         .order("name", { ascending: true });
@@ -239,6 +243,7 @@ export function useCatalogData(teamId: string | null) {
           price: number | null;
           image_url: string | null;
           sku: string | null;
+          specPreset: string | null;
           imageBucket: string | null;
           imagePath: string | null;
         }>,
