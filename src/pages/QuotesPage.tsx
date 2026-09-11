@@ -7625,7 +7625,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   {documentHasVariantGroup(quoteSetCommercialDoc) ? (
                     <p className="text-xs text-muted-foreground">{VARIANT_GROUP_NOTE}</p>
                   ) : null}
-                  {isMoneyRangeSpread(quoteSetCommercialDoc.totalRange) ? (
+                  {/* І межі, І справді кілька тиражів. Сама лише «сума — це
+                      діапазон» більше не доводить тиражів: відколи є роль
+                      «варіант», межі беруться й від неї, і пам'ятка про тиражі
+                      вискакувала там, де тираж у кожної позиції один. */}
+                  {isMoneyRangeSpread(quoteSetCommercialDoc.totalRange) &&
+                  quoteSetCommercialDoc.sections.some((section) =>
+                    section.items.some((item) => item.runs.length > 1)
+                  ) ? (
                     <p className="text-xs text-muted-foreground">
                       У КП є позиції з кількома тиражами. Тиражі взаємовиключні — замовник обирає
                       один, тому підсумок показано межами: від найменшого тиражу до найбільшого.

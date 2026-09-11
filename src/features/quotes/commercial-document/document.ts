@@ -367,7 +367,9 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .run-line { padding: 2px 0; }
   .run-line + .run-line { border-top: 1px dashed #e2e8f0; }
   .run-hint { color: #475569; font-size: 12px; }
-  .variant-tag { display: inline-block; margin-bottom: 4px; padding: 1px 6px; border: 1px solid #cbd5e1; border-radius: 999px; font-size: 11px; color: #334155; background: #f8fafc; }
+  /* block + fit-content: назва товару має починатись із нового рядка, інакше
+     довга назва обтікає пігулку й ламається навпіл. */
+  .variant-tag { display: block; width: fit-content; margin-bottom: 4px; padding: 1px 6px; border: 1px solid #cbd5e1; border-radius: 999px; font-size: 11px; color: #334155; background: #f8fafc; }
   .total { margin-top: 20px; padding-top: 10px; border-top: 2px solid #0f172a; display: flex; justify-content: flex-end; font-size: 20px; font-weight: 700; }
   @media print {
     body { background: #fff; }
