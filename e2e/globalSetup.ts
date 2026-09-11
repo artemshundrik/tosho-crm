@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { chromium, type FullConfig } from "@playwright/test";
+import { chromium, type FullConfig, type Page } from "@playwright/test";
 
 import { AUTH_STATE_FILE, loadLocalEnv } from "./env";
 
@@ -77,14 +77,47 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
         );
       }
       await page.getByLabel(/e-?mail/i).fill(email);
-      await page.getByLabel(/пароль/i).fill(password);
+      // `exact` тут обов'язковий: поруч із полем стоїть кнопка «Показати
+      // пароль», і нестрогий /пароль/i знаходить обидва елементи — вхід падав
+      // на strict mode violation ще до першого сценарію (11.09.2026).
+      await page.getByLabel("Пароль", { exact: true }).fill(password);
       await page.getByRole("button", { name: /увійти/i }).click();
       await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
     }
 
+    await seedBrowserState(page);
     await context.storageState({ path: AUTH_STATE_FILE });
     await context.close();
   } finally {
     await browser.close();
   }
+}
+
+/**
+ * СТАН БРАУЗЕРА, ЯКИЙ У ЖИВОЇ ЛЮДИНИ ВЖЕ Є, А В ЧИСТОГО ПРОФІЛЮ НЕМАЄ.
+ *
+ * Службовий акаунт заходить щоразу з порожнього профілю, і застосунок зустрічає
+ * його як новачка. Перший прогін 11.09.2026 це й показав: усі вісім сценаріїв
+ * упали, і сім із них — через вікно «Підключи Telegram-бот», яке накрило
+ * сторінку й перехопило кожен клік. Закрити його сценарієм не вийде по колу:
+ * відмову застосунок пам'ятає в localStorage, а сторінка щоразу починається з
+ * чистого.
+ *
+ * Тому потрібний стан кладемо ДО збереження сесії — один раз на весь набір.
+ * З'явиться нове вікно «для новачка» — його прапорець дописується сюди, а не
+ * обходиться кліками в кожному сценарії.
+ */
+async function seedBrowserState(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    try {
+      // Промо телеграм-бота: лічильник показів на стелі = «більше не показувати».
+      localStorage.setItem("promo_telegram_v1_count", "3");
+      localStorage.setItem("promo_telegram_v1_last", String(Date.now()));
+      // Прорахунки за замовчуванням відкриваються списком, а сценарії описують
+      // ДОШКУ. Перемикач запам'ятовується тут же, тож ставимо його наперед.
+      localStorage.setItem("quotes_view_mode", "kanban");
+    } catch {
+      // Профіль без доступу до сховища — не привід валити вхід.
+    }
+  });
 }

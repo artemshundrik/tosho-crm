@@ -35,7 +35,16 @@ test.describe("Прорахунки", () => {
     await expect(page.locator(columns)).toHaveCount(5);
   });
 
-  test("картка прорахунку відкривається за UUID", async ({ page }) => {
+  test("картка прорахунку відкривається за UUID", async ({ page, guard }) => {
+    /**
+     * Відкрита картка БЕРЕ ЗАМОК РЕДАГУВАННЯ — застосунок робить це сам, щойно
+     * сторінка змонтувалась, щоб двоє не правили одне й те саме. Обійти це,
+     * лишаючись на картці, не можна, тож дозволяємо саме тут, а не в спільному
+     * переліку: в інших сценаріях спроба взяти замок означала б, що сценарій
+     * поліз редагувати.
+     */
+    guard.allowWrite(/acquire_entity_lock/);
+
     await page.goto(ESTIMATES);
     await waitForPageBody(page, page.locator(columns));
 

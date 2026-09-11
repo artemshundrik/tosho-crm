@@ -45,6 +45,12 @@ describe("що вважається записом", () => {
   it("завантаження у сховище глушиться", () => {
     expect(classifyRequest("POST", url("/storage/v1/object/attachments/x.png"), HOST).blocked).toBe(true);
     expect(classifyRequest("GET", url("/storage/v1/object/public/avatars/a.png"), HOST).blocked).toBe(false);
+    // Підпис посилання на завантаження — читання, хоч і POST: так показується
+    // кожна аватарка. А ось підпис на ВИВАНТАЖЕННЯ (/upload/sign/) — запис.
+    expect(classifyRequest("POST", url("/storage/v1/object/sign/avatars/a.png"), HOST).blocked).toBe(false);
+    expect(
+      classifyRequest("POST", url("/storage/v1/object/upload/sign/avatars/a.png"), HOST).blocked
+    ).toBe(true);
   });
 
   it("не-GET у Netlify-функцію глушиться на будь-якому хості", () => {
