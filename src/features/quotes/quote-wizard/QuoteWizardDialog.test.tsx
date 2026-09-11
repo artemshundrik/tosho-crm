@@ -282,7 +282,8 @@ describe("QuoteWizardDialog — один екран", () => {
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "250");
     await user.click(screen.getByRole("radio", { name: /Поліграфія/ }));
     // Поліграфія вимагає типу угоди — від нього залежить дно ціни (REQ-182#p25).
-    await user.click(screen.getByRole("button", { name: /Стандартний виробничий/ }));
+    await user.click(screen.getByRole("button", { name: /Оберіть тип угоди/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /Стандартний виробничий/ }));
     expect(create).toBeEnabled();
     await user.click(create);
 
@@ -628,9 +629,10 @@ describe("тип угоди при створенні", () => {
     const create = screen.getByRole("button", { name: /Створити прорахунок/ });
     await user.click(create);
     expect(prepareQuote).not.toHaveBeenCalled();
-    expect(screen.getByText(/Оберіть тип угоди/)).toBeInTheDocument();
+    expect(screen.getByText(/Тип угоди не обрано/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Тендер/ }));
+    await user.click(screen.getByRole("button", { name: /Оберіть тип угоди/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /Тендер/ }));
     await user.click(create);
     await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("print", "tender"));
   });

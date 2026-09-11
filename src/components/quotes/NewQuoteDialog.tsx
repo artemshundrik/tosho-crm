@@ -1963,7 +1963,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             {quoteType === "print" ? (
               <div className="space-y-2 md:col-span-2">
                 <div className="text-sm text-muted-foreground">Тип угоди</div>
-                <QuoteDealTypePicker value={dealType} onChange={setDealType} />
+                {/* Чип не розтягуємо на дві колонки форми: він короткий, і на
+                    всю ширину читався б як порожнє поле вводу. */}
+                <div className="max-w-xs">
+                  <QuoteDealTypePicker value={dealType} onChange={setDealType} />
+                </div>
               </div>
             ) : null}
 

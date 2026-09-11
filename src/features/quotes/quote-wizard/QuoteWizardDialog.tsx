@@ -569,7 +569,7 @@ export function QuoteWizardDialog({
     // створюємо, бо від нього залежить дно, нижче якого ціну погоджує СЕО.
     if (!appendTo && kind === "print" && !dealType) {
       setDealTypeNudge((count) => count + 1);
-      setError("Оберіть тип угоди — від нього залежить накрутка й дно ціни.");
+      setError("Тип угоди не обрано — від нього залежить накрутка й дно ціни.");
       return;
     }
     // Дедлайна тут навмисно немає (Артем, 09.09.2026: «дедлайн не відкривайте,
@@ -771,26 +771,18 @@ export function QuoteWizardDialog({
             {kind === "print" ? (
               <div className="flex flex-col gap-1.5">
                 <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Тип угоди</span>
-                <div
-                  className={cn(
-                    "rounded-xl transition-colors",
-                    // Підсвічуємо лише після спроби створити: до неї порожній
-                    // вибір — це «ще не дійшли», а не помилка.
-                    dealTypeNudge > 0 && !dealType && "ring-2 ring-destructive/40"
-                  )}
-                >
-                  <QuoteDealTypePicker
-                    value={dealType}
-                    onChange={(next) => {
-                      setDealType(next);
-                      setError(null);
-                    }}
-                    disabled={busy}
-                  />
-                </div>
-                <span className="text-2xs leading-snug text-muted-foreground/80">
-                  Задає накрутку в тиражах і дно, нижче якого ціну погоджує СЕО. Змінити можна в картці.
-                </span>
+                {/* Пояснення «що це задає» живе в самому меню — по рядку під
+                    кожним варіантом. Абзац під чипом повторював би його втретє
+                    і був би довшим за сам контрол. */}
+                <QuoteDealTypePicker
+                  value={dealType}
+                  onChange={(next) => {
+                    setDealType(next);
+                    setError(null);
+                  }}
+                  disabled={busy}
+                  invalid={dealTypeNudge > 0}
+                />
               </div>
             ) : null}
           </aside>
