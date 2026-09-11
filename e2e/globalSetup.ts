@@ -78,7 +78,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
      * неї ніхто не знав. Вхід від цього не страждає: `/auth/v1/*` гальмо
      * пропускає навмисно, інакше сесія не народилась би.
      */
-    installWriteGuard(page);
+    const blockedAtLogin = installWriteGuard(page);
 
     await page.goto("/overview", { waitUntil: "domcontentloaded" });
     // Сторінка входу може з'явитись не миттєво: AuthProvider спершу перевіряє
@@ -99,6 +99,17 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
       await page.getByLabel("Пароль", { exact: true }).fill(password);
       await page.getByRole("button", { name: /увійти/i }).click();
       await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
+    }
+
+    /**
+     * КАЖЕМО ВГОЛОС, ЩО ГАЛЬМО СПИНИЛО. Інакше воно працює невидимо, і єдиний
+     * спосіб перевірити, чи взагалі щось спинялось, — шукати рядки в проді й
+     * дивитись, чи вони НЕ з'явились. Доводити роботу відсутністю слідів —
+     * погана угода: точно так само виглядає гальмо, яке не встановилось.
+     */
+    if (blockedAtLogin.length > 0) {
+      const summary = [...new Set(blockedAtLogin.map((write) => write.why))].join(", ");
+      console.log(`[вхід] гальмо спинило записів: ${blockedAtLogin.length} — ${summary}`);
     }
 
     await seedBrowserState(page);
