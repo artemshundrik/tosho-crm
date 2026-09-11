@@ -76,6 +76,19 @@ export type PrintSpecPreset = {
   /** Порядок розділів на картці. */
   sections: string[];
   fields: PrintSpecField[];
+  /**
+   * Поля стрічки «головне» на картці прорахунку — 3–4 id у тому порядку, в
+   * якому вони стоять у стрічці. Решта полів іде дрібною сіткою під рискою.
+   *
+   * ЧОМУ ЦЕ ЧАСТИНА ОПИСУ ВИДУ, А НЕ ПРАВИЛО «ПЕРШІ ЧОТИРИ»: головне — те,
+   * від чого залежить ціна, а воно в кожному виді своє (у щоденника — формат,
+   * матеріал обкладинки й сторінки; у квартального — розміри основ і метод
+   * друку). Порядок полів у формі відповідає порядку заповнення, не важливості.
+   *
+   * Стартові набори (11.09.2026) вибрані за тим, що вливає на ціну; з тими,
+   * хто прораховує, ще не звірені — правити тут, без коду.
+   */
+  summary?: string[];
 };
 
 /** Один підписаний розмір у полі `sizeRows`. Рядки — бо поле може бути порожнім. */
@@ -122,6 +135,7 @@ export const PRINT_SPEC_CALENDAR_QUARTERLY: PrintSpecPreset = {
   key: "print_calendar_quarterly",
   label: "Квартальний календар",
   sections: ["Основи", "Календарна сітка", "Матеріал і друк", "Кріплення"],
+  summary: ["baseSizes", "material", "printMethod", "mount"],
   fields: [
     {
       id: "baseSizes",
@@ -272,6 +286,7 @@ export const PRINT_SPEC_CALENDAR_FLIP: PrintSpecPreset = {
   key: "print_calendar_flip",
   label: "Перекидний календар",
   sections: ["Формат", "Обкладинка і підложка", "Блок", "Оздоблення", "Кріплення"],
+  summary: ["format", "blockPages", "coverPaper", "blockPrint"],
   fields: [
     {
       id: "format",
@@ -449,6 +464,7 @@ export const PRINT_SPEC_CALENDAR_HOUSE: PrintSpecPreset = {
   key: "print_calendar_house",
   label: "Календар-хатинка",
   sections: ["Основа", "Блок", "Кріплення"],
+  summary: ["gridSize", "sheets", "blockPaper", "blockPrint"],
   fields: [
     {
       id: "cashing",
@@ -564,6 +580,7 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
   key: "print_brochure",
   label: "Брошура",
   sections: ["Формат", "Папір", "Друк", "Скріплення"],
+  summary: ["format", "pageCount", "coverPaper", "binding"],
   fields: [
     {
       id: "format",
@@ -703,6 +720,7 @@ export const PRINT_SPEC_FLYER: PrintSpecPreset = {
   key: "print_flyer",
   label: "Листівка",
   sections: ["Формат", "Папір"],
+  summary: ["format", "paper", "lamination"],
   fields: [
     {
       id: "format",
@@ -780,6 +798,7 @@ export const PRINT_SPEC_CERTIFICATE: PrintSpecPreset = {
   key: "print_certificate",
   label: "Сертифікат",
   sections: ["Формат", "Матеріал", "Друк", "Оздоблення"],
+  summary: ["formatType", "material", "printMethod", "embossing"],
   fields: [
     {
       id: "formatType",
@@ -998,6 +1017,7 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
   key: "print_diary",
   label: "Щоденник",
   sections: ["Загальне", "Обкладинка", "Блок", "Кути й торець", "Вставки", "Ляссе", "Резинка й шильда", "Пакування"],
+  summary: ["format", "coverMaterial", "blockPages", "layout"],
   fields: [
     {
       id: "format",
@@ -1423,15 +1443,17 @@ export function isPrintSpecFieldVisible(field: PrintSpecField, values: PrintSpec
 const optionLabel = (field: PrintSpecField, value: string): string =>
   field.options?.find((option) => option.value === value)?.label ?? value;
 
+/** Одне заповнене поле специфікації — те, що показують і в картці, і в рядку. */
+export type PrintSpecEntry = { id: string; label: string; value: string };
+
 /**
- * Один рядок специфікації на поле — «Друк сітки: 4+0».
- *
- * Формат свідомо той самий «Підпис: значення», що віддає `formatPrintProductSummary`
- * для старих пресетів: картка прорахунку, список і дизайн-задача розбирають рядки
- * по «: », і другий формат означав би другий розбирач у кожному з трьох місць.
+ * Заповнені поля в порядку пресету — по одному запису на поле, лише видимі й
+ * лише з відповіддю. Спільне джерело для картки прорахунку (стрічка й сітка)
+ * та для рядкового зведення нижче: другий розбір «що вважати значенням»
+ * розійшовся б із першим при першій же правці типу поля.
  */
-export function formatPrintSpecSummary(preset: PrintSpecPreset, values: PrintSpecValues): string[] {
-  const lines: string[] = [`Виріб: ${preset.label.toLowerCase()}`];
+export function formatPrintSpecEntries(preset: PrintSpecPreset, values: PrintSpecValues): PrintSpecEntry[] {
+  const entries: PrintSpecEntry[] = [];
 
   for (const field of preset.fields) {
     if (!isPrintSpecFieldVisible(field, values)) continue;
@@ -1449,27 +1471,65 @@ export function formatPrintSpecSummary(preset: PrintSpecPreset, values: PrintSpe
           return rows.length === 1 ? value : `${rowLabel} ${value}`;
         })
         .filter(Boolean);
-      if (parts.length > 0) lines.push(`${field.label}: ${parts.join(", ")}`);
+      if (parts.length > 0) entries.push({ id: field.id, label: field.label, value: parts.join(", ") });
       continue;
     }
 
     if (field.type === "multi") {
       const selected = asListValue(raw).map((value) => optionLabel(field, value));
-      if (selected.length > 0) lines.push(`${field.label}: ${selected.join(" + ")}`);
+      if (selected.length > 0) entries.push({ id: field.id, label: field.label, value: selected.join(" + ") });
       continue;
     }
 
     const value = asStringValue(raw).trim();
     if (field.type === "single" && value === CUSTOM_OPTION_VALUE) {
-      if (custom) lines.push(`${field.label}: ${custom}`);
+      if (custom) entries.push({ id: field.id, label: field.label, value: custom });
       continue;
     }
     if (!value) continue;
     const label = field.type === "single" ? optionLabel(field, value) : value;
-    lines.push(`${field.label}: ${label}${field.unit && field.type === "number" ? ` ${field.unit}` : ""}`);
+    entries.push({
+      id: field.id,
+      label: field.label,
+      value: `${label}${field.unit && field.type === "number" ? ` ${field.unit}` : ""}`,
+    });
   }
 
-  return lines;
+  return entries;
+}
+
+/**
+ * Один рядок специфікації на поле — «Друк сітки: 4+0».
+ *
+ * Формат свідомо той самий «Підпис: значення», що віддає `formatPrintProductSummary`
+ * для старих пресетів: картка прорахунку, список і дизайн-задача розбирають рядки
+ * по «: », і другий формат означав би другий розбирач у кожному з трьох місць.
+ */
+export function formatPrintSpecSummary(preset: PrintSpecPreset, values: PrintSpecValues): string[] {
+  return [
+    `Виріб: ${preset.label.toLowerCase()}`,
+    ...formatPrintSpecEntries(preset, values).map((entry) => `${entry.label}: ${entry.value}`),
+  ];
+}
+
+/**
+ * Записи, поділені на стрічку «головне» й решту — так їх малює картка прорахунку.
+ *
+ * Стрічка йде в порядку `preset.summary`, а не в порядку форми: «головне» — це
+ * те, що читають першим, і його порядок — рішення того, хто описував вид.
+ * Порожнє головне поле у стрічку не потрапляє: стрічка з прочерком казала б
+ * «не заповнено» голосніше за сам факт, а порожнє поле тут — робочий стан.
+ */
+export function splitPrintSpecEntries(
+  preset: PrintSpecPreset,
+  entries: PrintSpecEntry[]
+): { hero: PrintSpecEntry[]; rest: PrintSpecEntry[] } {
+  const wanted = preset.summary ?? [];
+  const hero = wanted
+    .map((id) => entries.find((entry) => entry.id === id))
+    .filter((entry): entry is PrintSpecEntry => entry !== undefined);
+  const rest = entries.filter((entry) => !wanted.includes(entry.id));
+  return { hero, rest };
 }
 
 /**

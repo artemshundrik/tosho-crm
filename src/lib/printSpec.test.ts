@@ -4,9 +4,11 @@ import {
   PRINT_SPEC_DIARY,
   PRINT_SPEC_PRESETS,
   createEmptyPrintSpecValues,
+  formatPrintSpecEntries,
   formatPrintSpecSummary,
   isPrintSpecFilled,
   parsePrintSpecValues,
+  splitPrintSpecEntries,
   type PrintSpecPreset,
 } from "./printSpec";
 
@@ -25,6 +27,12 @@ describe("описи видів поліграфії", () => {
     (_label, preset) => {
       const ids = preset.fields.map((field) => field.id);
       expect(new Set(ids).size).toBe(ids.length);
+
+      // Стрічка «головне» посилається на поля за id — одрук тут означав би
+      // порожню стрічку на картці без жодної помилки.
+      for (const id of preset.summary ?? []) {
+        expect(ids, `${preset.key}: у стрічці поле ${id}, якого немає`).toContain(id);
+      }
 
       for (const field of preset.fields) {
         expect(preset.sections).toContain(field.section);
@@ -108,5 +116,36 @@ describe("щоденник", () => {
 
   it("порожня конфігурація — нормальний стан, а не заповнена", () => {
     expect(isPrintSpecFilled(PRINT_SPEC_DIARY, createEmptyPrintSpecValues(PRINT_SPEC_DIARY))).toBe(false);
+  });
+});
+
+/**
+ * Картка прорахунку малює стрічку «головне» й сітку решти з тих самих записів,
+ * з яких складається рядкове зведення для списку й дизайн-задачі. Розійтись
+ * вони не можуть за побудовою — але порядок стрічки й те, що порожнє головне
+ * поле в неї не потрапляє, варто тримати перевіреним.
+ */
+describe("стрічка «головне» на картці", () => {
+  const values = {
+    ...createEmptyPrintSpecValues(PRINT_SPEC_DIARY),
+    blockPages: "100",
+    format: "a5",
+    corners: "round",
+  };
+
+  it("іде в порядку опису виду, а не в порядку заповнення, і без порожніх", () => {
+    const entries = formatPrintSpecEntries(PRINT_SPEC_DIARY, values);
+    const { hero, rest } = splitPrintSpecEntries(PRINT_SPEC_DIARY, entries);
+    expect(hero.map((entry) => entry.id)).toEqual(["format", "blockPages"]);
+    expect(hero.map((entry) => entry.value)).toEqual(["А5", "100 стор"]);
+    expect(rest.map((entry) => entry.id)).toEqual(["corners"]);
+  });
+
+  it("рядкове зведення — ті самі записи з «Виріб» попереду", () => {
+    const entries = formatPrintSpecEntries(PRINT_SPEC_DIARY, values);
+    expect(formatPrintSpecSummary(PRINT_SPEC_DIARY, values)).toEqual([
+      "Виріб: щоденник",
+      ...entries.map((entry) => `${entry.label}: ${entry.value}`),
+    ]);
   });
 });

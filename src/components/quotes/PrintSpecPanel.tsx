@@ -18,10 +18,12 @@ import { PrintSpecSectionRail } from "@/features/quotes/quote-details/PrintSpecS
 import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 import {
   createEmptyPrintSpecValues,
-  formatPrintSpecSummary,
+  formatPrintSpecEntries,
   getPrintSpecPreset,
   isPrintSpecFilled,
   parsePrintSpecValues,
+  splitPrintSpecEntries,
+  type PrintSpecEntry,
   type PrintSpecMetadata,
   type PrintSpecValues,
 } from "@/lib/printSpec";
@@ -66,10 +68,38 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
     [preset, saved?.values]
   );
 
-  const summary = React.useMemo(
-    () => (preset && isPrintSpecFilled(preset, savedValues) ? formatPrintSpecSummary(preset, savedValues) : []),
+  /*
+    ГОЛОВНЕ ВЕЛИКЕ, РЕШТА СІТКОЮ (вигляд В, обраний 11.09.2026 з чотирьох).
+
+    Було двадцять пар «підпис — значення» двома колонками: щоденник займав
+    півекрана, і формат читався так само дрібно, як колір резинки. Тепер 3–4
+    поля, від яких залежить ціна (`preset.summary`), стоять стрічкою великим, а
+    решта — дрібною сіткою в три колонки під рискою: удвічі нижче, і кожне
+    поле досі знаходиться за підписом. Рядка «Виріб: щоденник» тут немає — назва
+    виду стоїть заголовком позиції; у рядковому зведенні для списку й
+    дизайн-задачі він лишається.
+  */
+  const entries = React.useMemo(
+    () => (preset && isPrintSpecFilled(preset, savedValues) ? formatPrintSpecEntries(preset, savedValues) : []),
     [preset, savedValues]
   );
+  const { hero, rest } = React.useMemo(
+    () => (preset ? splitPrintSpecEntries(preset, entries) : { hero: [], rest: [] }),
+    [preset, entries]
+  );
+
+  /*
+    Лічильник «17 з 19» у заголовку — лише поки є порожні поля. Це підказка тому,
+    хто рахує, що є куди дозаповнити, а не оцінка: заповнили до кінця — і він
+    зникає, бо «19 з 19» нічого не каже. Той самий рахунок, що в рейці вікна.
+  */
+  const progress = React.useMemo(() => {
+    if (!preset) return null;
+    const sections = getPrintSpecSections(preset, savedValues);
+    const total = sections.reduce((sum, section) => sum + section.fields.length, 0);
+    const done = sections.reduce((sum, section) => sum + section.filled, 0);
+    return total > 0 && done < total ? { done, total } : null;
+  }, [preset, savedValues]);
 
   /*
     Розділи рахуються з ЧЕРНЕТКИ, а не зі збереженого: умовні поля з'являються й
@@ -151,7 +181,7 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
     }
   };
 
-  const filled = summary.length > 0;
+  const filled = entries.length > 0;
 
   return (
     <div className={cn("rounded-xl border border-border/50 p-4", className)}>
@@ -163,6 +193,17 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
               підпису. У вікні редагування вона лишається — там заголовка немає. */}
           <span>Параметри виробу</span>
         </div>
+        {filled && progress ? (
+          <span className="ml-auto mr-2 flex items-center gap-2.5 text-xs tabular-nums text-muted-foreground">
+            {progress.done} з {progress.total}
+            <span className="h-1 w-24 overflow-hidden rounded-full bg-border/60">
+              <span
+                className="block h-full bg-foreground"
+                style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+              />
+            </span>
+          </span>
+        ) : null}
         {canEdit ? (
           <Button variant={filled ? "ghost" : "primary"} size="sm" onClick={openEditor}>
             {filled ? <Pencil className="mr-1.5 h-3.5 w-3.5" /> : null}
@@ -172,19 +213,24 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
       </div>
 
       {filled ? (
-        <div className="mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
-          {summary.map((line) => {
-            const separator = line.indexOf(": ");
-            const label = separator < 0 ? line : line.slice(0, separator);
-            const value = separator < 0 ? "" : line.slice(separator + 2);
-            return (
-              <div key={line} className="grid grid-cols-[minmax(96px,0.9fr)_minmax(0,1.1fr)] gap-3 text-sm">
-                <div className="min-w-0 text-muted-foreground">{label}</div>
-                <div className="min-w-0 font-semibold leading-snug text-foreground">{value}</div>
-              </div>
-            );
-          })}
-        </div>
+        <>
+          {hero.length > 0 ? <PrintSpecHero entries={hero} /> : null}
+          {rest.length > 0 ? (
+            <div
+              className={cn(
+                "grid gap-x-7 sm:grid-cols-2 xl:grid-cols-3",
+                hero.length > 0 ? "mt-4 border-t border-border/50 pt-3" : "mt-3"
+              )}
+            >
+              {rest.map((entry) => (
+                <div key={entry.id} className="flex items-baseline justify-between gap-4 py-1 text-sm">
+                  <span className="min-w-0 text-muted-foreground">{entry.label}</span>
+                  <span className="min-w-0 text-right font-medium tabular-nums text-foreground">{entry.value}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </>
       ) : (
         <div className="mt-2 text-sm text-muted-foreground">
           Параметри ще не заповнені{canEdit ? "" : " — їх заповнює той, хто прораховує"}.
@@ -243,6 +289,44 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/** Скільки клітинок у ряд стрічки: сітка Tailwind не читає число з пропса. */
+const HERO_COLUMNS: Record<number, string> = {
+  1: "sm:grid-cols-1",
+  2: "sm:grid-cols-2",
+  3: "sm:grid-cols-3",
+  4: "sm:grid-cols-4",
+};
+
+/**
+ * Стрічка «головне»: значення великим, підпис під ним, між клітинками риска.
+ *
+ * На телефоні — по дві в ряд без рисок: чотири клітинки в один ряд на 360 px
+ * дали б по 80 px на «Шкірзамінник». Значення не переноситься, а обрізається:
+ * стрічка — це те, що читають з відстані, і два рядки в одній клітинці
+ * зруйнували б лінію, на якій стоять решта.
+ */
+function PrintSpecHero({ entries }: { entries: PrintSpecEntry[] }) {
+  return (
+    <div className={cn("mt-3.5 grid grid-cols-2 gap-y-3", HERO_COLUMNS[Math.min(entries.length, 4)])}>
+      {entries.map((entry, index) => (
+        <div
+          key={entry.id}
+          className={cn(
+            "min-w-0 sm:px-5",
+            index === 0 && "sm:pl-0",
+            index > 0 && "sm:border-l sm:border-border/60"
+          )}
+        >
+          <div className="truncate text-xl font-semibold leading-6 tracking-tight text-foreground" title={entry.value}>
+            {entry.value}
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{entry.label}</div>
+        </div>
+      ))}
     </div>
   );
 }
