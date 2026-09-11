@@ -74,14 +74,16 @@ export const PAYROLL_MONTHS = [
 ] as const;
 
 /**
- * Accounts intentionally kept off the payroll sheet (owner / management / a
- * duplicate account). Excluded by user id since display names change.
+ * Accounts intentionally kept off the payroll sheet (owner / management, a
+ * duplicate account, the Playwright service account). Excluded by user id
+ * since display names change.
  * Used by the finance "Виплати команді" view.
  */
 export const PAYROLL_EXCLUDED_USER_IDS = new Set<string>([
   "9753ba06-3911-40fe-a9d4-bea1a92f1667", // В'ячеслав Хом'яков
   "ceade688-2792-4814-b0f4-c4e4b6d058e1", // Олена Борщ
   "e73aee8c-ebc8-449f-af12-6420a363498a", // Євгенія Безручко
+  "e328c5fc-1773-48c0-a5d4-a73f42687c66", // Тиць Клікович — службовий акаунт перевірок
 ]);
 
 /** People paid through the sheet without a CRM account (fixed placeholder ids). */
