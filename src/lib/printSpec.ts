@@ -962,6 +962,399 @@ export const PRINT_SPEC_CERTIFICATE: PrintSpecPreset = {
   ],
 };
 
+// ---------------------------------------------------------------------------
+// Щоденник
+// ---------------------------------------------------------------------------
+
+/**
+ * Джерело — фірмовий паперовий «Чеклист · Щоденники», який менеджери надсилають
+ * замовникам, плюс відповіді Тані від 04.09, 07.09 і 11.09 (REQ-36#p14, #p22…#p34).
+ *
+ * ЧОМУ ЦЕЙ ВИД ПЕРШИЙ: у прорахунках 312 товарних позицій і лише 5 із них
+ * поліграфія — не тому, що її не продають, а тому, що для щоденника в CRM немає
+ * куди вписати тридцять питань чекліста. Уся розмова про нього йде повз систему.
+ *
+ * ТРИ МІСЦЯ, ДЕ ОПИС РОЗХОДИТЬСЯ З ПАПЕРОМ, і всі три — за словами Тані:
+ *
+ * 1. Датування й розліновка — ОДНЕ поле `layout`, а не два. На папері стояли
+ *    «Датований / Не датований» і «Клітинка / Лінія» незалежними галочками, і з
+ *    них складалась неможлива пара: лінія і клітинка — це блок БЕЗ інфоблоку
+ *    («має вигляд як блокнот»), тоді як датований і недатований завжди з ним.
+ * 2. Кольоровість стандартного блока не питається взагалі: вона виведена з
+ *    макета (2+2 бордовий+сірий, напівдатований 2+2 сірий+синій, лінія і
+ *    клітинка 1+1 сірий). Питаємо її лише для індивідуального блока.
+ * 3. Форзац і нахзац — одне поле на три значення замість «Стандарт/
+ *    Індивідуальний» плюс уточнення: за замовчуванням карти, у лінії, клітинки
+ *    й Moleskine — чисті.
+ *
+ * ЩО НАВМИСНО НЕ ВИРАЖЕНЕ МЕХАНІЗМОМ: «папір з друком» тягне за собою
+ * обовʼязкові друк 4+0 і матову ламінацію 1+0, а поролонова обкладинка лишає
+ * тільки резинку під ручку. Умова `showIf` однорівнева й такого не опише, тому
+ * перше стоїть окремим полем з єдиним варіантом (щоб факт потрапив у
+ * специфікацію, а не лишився знанням у голові), а друге — підказкою до резинки.
+ * Складніші залежності підуть у механізм тоді, коли їх стане більше двох.
+ */
+export const PRINT_SPEC_DIARY: PrintSpecPreset = {
+  key: "print_diary",
+  label: "Щоденник",
+  sections: ["Загальне", "Обкладинка", "Блок", "Кути й торець", "Вставки", "Ляссе", "Резинка й шильда", "Пакування"],
+  fields: [
+    {
+      id: "format",
+      label: "Формат",
+      type: "single",
+      section: "Загальне",
+      options: [
+        { value: "a5", label: "А5" },
+        { value: "a4", label: "А4" },
+        { value: "moleskine", label: "Moleskine 130 × 210 мм" },
+      ],
+      allowCustom: true,
+      hint: "Нестандартний — «Інше» й розміри текстом",
+    },
+    {
+      id: "designNeeded",
+      label: "Дизайн",
+      type: "single",
+      section: "Загальне",
+      options: [
+        { value: "by_us", label: "Розробляємо ми" },
+        { value: "by_customer", label: "Макет від замовника" },
+      ],
+    },
+    {
+      id: "coverType",
+      label: "Тип",
+      type: "single",
+      section: "Обкладинка",
+      options: [
+        { value: "flex", label: "Гнучка" },
+        { value: "hard", label: "Тверда" },
+        { value: "book", label: "Книжна" },
+      ],
+    },
+    {
+      id: "coverFoam",
+      label: "Поролон",
+      type: "single",
+      section: "Обкладинка",
+      options: [
+        { value: "yes", label: "З поролоном" },
+        { value: "no", label: "Без поролону" },
+      ],
+    },
+    {
+      id: "coverMaterial",
+      label: "Матеріал",
+      type: "single",
+      section: "Обкладинка",
+      options: [
+        { value: "leatherette", label: "Шкірзамінник" },
+        { value: "printed_paper", label: "Папір з друком" },
+        { value: "designer_paper", label: "Дизайнерський папір" },
+      ],
+      allowCustom: true,
+    },
+    {
+      id: "leatheretteName",
+      label: "Шкірзамінник — який саме",
+      type: "text",
+      section: "Обкладинка",
+      showIf: { field: "coverMaterial", equals: "leatherette" },
+      hint: "Balacron Nappa, темно-синій",
+    },
+    {
+      id: "leatheretteFinishing",
+      label: "Нанесення",
+      type: "multi",
+      section: "Обкладинка",
+      options: [
+        { value: "varnish", label: "Лак" },
+        { value: "uv_print", label: "УФ друк" },
+        { value: "embossing", label: "Тиснення" },
+        { value: "screen", label: "Шовкотрафарет" },
+      ],
+      showIf: { field: "coverMaterial", equals: "leatherette" },
+    },
+    {
+      id: "printedPaperBase",
+      label: "Друк і ламінація",
+      type: "single",
+      section: "Обкладинка",
+      options: [{ value: "4_0_matt", label: "4+0 + матова ламінація 1+0" }],
+      showIf: { field: "coverMaterial", equals: "printed_paper" },
+      hint: "Для паперу з друком це обовʼязково, інших варіантів немає",
+    },
+    {
+      id: "printedPaperFinishing",
+      label: "Оздоблення",
+      type: "multi",
+      section: "Обкладинка",
+      options: [
+        { value: "foil", label: "Тиснення фольгою" },
+        { value: "blind", label: "Сліпе тиснення" },
+        { value: "spot_uv", label: "Вибірковий УФ-лак" },
+      ],
+      showIf: { field: "coverMaterial", equals: "printed_paper" },
+    },
+    {
+      id: "designerPaperName",
+      label: "Дизайнерський папір — назва",
+      type: "text",
+      section: "Обкладинка",
+      showIf: { field: "coverMaterial", equals: "designer_paper" },
+      hint: "Назву обовʼязково вказати менеджеру",
+    },
+    {
+      id: "designerPaperFinishing",
+      label: "Оздоблення",
+      type: "multi",
+      section: "Обкладинка",
+      options: [
+        { value: "foil", label: "Тиснення фольгою" },
+        { value: "blind", label: "Сліпе тиснення" },
+        { value: "uv_print", label: "УФ друк" },
+      ],
+      showIf: { field: "coverMaterial", equals: "designer_paper" },
+      hint: "Дизайнерський папір — без ламінації",
+    },
+    {
+      id: "blockKind",
+      label: "Виконання блока",
+      type: "single",
+      section: "Блок",
+      options: [
+        { value: "standard", label: "Стандартний" },
+        { value: "individual", label: "Індивідуальний" },
+      ],
+    },
+    {
+      id: "layout",
+      label: "Макет",
+      type: "single",
+      section: "Блок",
+      options: [
+        { value: "dated", label: "Датований" },
+        { value: "semi_dated", label: "Напівдатований" },
+        { value: "undated", label: "Недатований" },
+        { value: "line", label: "Лінія" },
+        { value: "grid", label: "Клітинка" },
+      ],
+      hint: "Датований і недатований — 2+2 бордовий+сірий, напівдатований — 2+2 сірий+синій, лінія і клітинка — 1+1 сірий без інфоблоку",
+    },
+    {
+      id: "blockPaperColor",
+      label: "Колір паперу",
+      type: "single",
+      section: "Блок",
+      options: [
+        { value: "white", label: "Білий" },
+        { value: "cream", label: "Кремовий" },
+      ],
+    },
+    {
+      id: "blockPages",
+      label: "Кількість сторінок",
+      type: "number",
+      section: "Блок",
+      unit: "стор",
+      hint: "Стандартно 352, Moleskine — 224. Кратність індивідуального блока: 70 г — 32, 80/90/100 г — 24",
+    },
+    {
+      id: "blockPaper",
+      label: "Папір блока",
+      type: "single",
+      section: "Блок",
+      options: [
+        { value: "munken_cream", label: "Munken кремовий" },
+        { value: "offset_white", label: "Офсет білий" },
+      ],
+      allowCustom: true,
+      showIf: { field: "blockKind", equals: "individual" },
+    },
+    {
+      id: "blockDensity",
+      label: "Щільність паперу",
+      type: "single",
+      section: "Блок",
+      options: [
+        { value: "80", label: "80 г/м²" },
+        { value: "90", label: "90 г/м²" },
+        { value: "100", label: "100 г/м²" },
+      ],
+      allowCustom: true,
+      showIf: { field: "blockKind", equals: "individual" },
+      hint: "Стандартний блок — 70 г/м²",
+    },
+    {
+      id: "blockPrint",
+      label: "Кольоровість друку",
+      type: "single",
+      section: "Блок",
+      options: [
+        { value: "1_1", label: "1+1" },
+        { value: "2_2", label: "2+2" },
+        { value: "3_3", label: "3+3" },
+        { value: "4_4", label: "4+4" },
+      ],
+      allowCustom: true,
+      showIf: { field: "blockKind", equals: "individual" },
+    },
+    {
+      id: "corners",
+      label: "Кути",
+      type: "single",
+      section: "Кути й торець",
+      options: [
+        { value: "round", label: "Заокруглені" },
+        { value: "straight", label: "Прямі" },
+      ],
+    },
+    {
+      id: "edge",
+      label: "Торець",
+      type: "single",
+      section: "Кути й торець",
+      options: [
+        { value: "painted", label: "Фарбований" },
+        { value: "plain", label: "Не фарбований" },
+      ],
+    },
+    {
+      id: "endpaper",
+      label: "Форзац",
+      type: "single",
+      section: "Вставки",
+      options: [
+        { value: "maps", label: "Карти" },
+        { value: "plain", label: "Чисті" },
+        { value: "individual", label: "Індивідуальний друк" },
+      ],
+      allowCustom: true,
+      hint: "За замовчуванням карти; у лінії, клітинки й Moleskine — чисті",
+    },
+    {
+      id: "backpaper",
+      label: "Нахзац",
+      type: "single",
+      section: "Вставки",
+      options: [
+        { value: "maps", label: "Карти" },
+        { value: "plain", label: "Чисті" },
+        { value: "individual", label: "Індивідуальний друк" },
+      ],
+      allowCustom: true,
+      hint: "Те саме правило, що й для форзаца",
+    },
+    {
+      id: "adInserts",
+      label: "Рекламні вставки",
+      type: "number",
+      section: "Вставки",
+      unit: "шт",
+      hint: "Кратне двом — вставка друкується з двох боків аркуша",
+    },
+    {
+      id: "ribbon",
+      label: "Вид ляссе",
+      type: "single",
+      section: "Ляссе",
+      options: [
+        { value: "standard", label: "Стандартне" },
+        { value: "individual", label: "Індивідуальне" },
+        { value: "none", label: "Без ляссе" },
+      ],
+    },
+    {
+      id: "ribbonColorStandard",
+      label: "Колір ляссе",
+      type: "text",
+      section: "Ляссе",
+      showIf: { field: "ribbon", equals: "standard" },
+      hint: "З наявних",
+    },
+    {
+      id: "ribbonOptions",
+      label: "Виконання",
+      type: "multi",
+      section: "Ляссе",
+      options: [
+        { value: "branding", label: "Брендування" },
+        { value: "single", label: "Одинарне" },
+        { value: "double", label: "Подвійне" },
+      ],
+      showIf: { field: "ribbon", equals: "individual" },
+    },
+    {
+      id: "ribbonWidth",
+      label: "Ширина ляссе",
+      type: "number",
+      section: "Ляссе",
+      unit: "мм",
+      showIf: { field: "ribbon", equals: "individual" },
+    },
+    {
+      id: "ribbonColor",
+      label: "Колір ляссе",
+      type: "text",
+      section: "Ляссе",
+      showIf: { field: "ribbon", equals: "individual" },
+      hint: "Pantone або опис",
+    },
+    {
+      id: "elastic",
+      label: "Резинка",
+      type: "single",
+      section: "Резинка й шильда",
+      options: [
+        { value: "yes", label: "Наявна" },
+        { value: "no", label: "Відсутня" },
+      ],
+    },
+    {
+      id: "elasticPosition",
+      label: "Розташування",
+      type: "single",
+      section: "Резинка й шильда",
+      options: [
+        { value: "vertical", label: "Вертикальна" },
+        { value: "horizontal", label: "Горизонтальна" },
+        { value: "pen_loop", label: "Під ручку" },
+      ],
+      showIf: { field: "elastic", equals: "yes" },
+      hint: "З поролоновою обкладинкою можлива лише резинка під ручку",
+    },
+    {
+      id: "elasticColor",
+      label: "Колір резинки",
+      type: "text",
+      section: "Резинка й шильда",
+      showIf: { field: "elastic", equals: "yes" },
+    },
+    {
+      id: "badge",
+      label: "Шильда",
+      type: "single",
+      section: "Резинка й шильда",
+      options: [
+        { value: "yes", label: "Наявна" },
+        { value: "no", label: "Відсутня" },
+      ],
+    },
+    {
+      id: "packing",
+      label: "Спосіб пакування",
+      type: "single",
+      section: "Пакування",
+      options: [
+        { value: "standard", label: "Стандартне" },
+        { value: "split", label: "Сплітовка" },
+      ],
+      hint: "Сплітовка — окреме завдання логісту-пакувальнику",
+    },
+  ],
+};
+
 /** Реєстр описових пресетів. Новий вид додається сюди одним рядком. */
 export const PRINT_SPEC_PRESETS: PrintSpecPreset[] = [
   PRINT_SPEC_CALENDAR_QUARTERLY,
@@ -970,6 +1363,7 @@ export const PRINT_SPEC_PRESETS: PrintSpecPreset[] = [
   PRINT_SPEC_BROCHURE,
   PRINT_SPEC_FLYER,
   PRINT_SPEC_CERTIFICATE,
+  PRINT_SPEC_DIARY,
 ];
 
 export const getPrintSpecPreset = (key: string | null | undefined): PrintSpecPreset | null =>
