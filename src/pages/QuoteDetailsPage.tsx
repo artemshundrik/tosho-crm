@@ -93,6 +93,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { QuoteItemThumb } from "@/features/quotes/quote-details/QuoteItemThumb";
+import { QuoteAddItemsActions } from "@/features/quotes/quote-details/QuoteAddItemsActions";
 import { QuoteItemTitle } from "@/features/quotes/quote-details/QuoteItemTitle";
 import { catalogPlaceSlash } from "@/features/quotes/quote-wizard/catalogPlace";
 import { NewQuoteDialog } from "@/components/quotes";
@@ -182,7 +183,6 @@ import {
   Banknote,
   Copy,
   FileDown,
-  FileSpreadsheet,
   FileText,
   Pencil,
   MoreHorizontal,
@@ -199,6 +199,7 @@ import {
   ChevronDown,
   Loader2,
   Package,
+  Printer,
   Lock,
   Calculator,
   Palette,
@@ -520,6 +521,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    * не питав.
    */
   const dealType = resolveQuoteDealType(quote?.quote_type, quote?.deal_type);
+  const isPrintQuote = dealType !== null;
   const [loading, setLoading] = useState(() => !initialCache?.quote);
   const [error, setError] = useState<string | null>(null);
 
@@ -697,6 +699,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // синхронізацію на півдорозі. Заодно зник зайвий перемальовок (REQ-109).
   const designVisualizationSyncingRef = useRef(false);
 
+  /** Що саме додаємо — товар чи поліграфію. Вибір робиться кнопкою, до відкриття. */
+  const [addItemsKind, setAddItemsKind] = useState<QuoteKindValue>("merch");
   /** Вікно «Додати товар» — той самий візард, що створює прорахунок. */
   const [addItemsOpen, setAddItemsOpen] = useState(false);
 
@@ -2023,10 +2027,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         permissions,
         viewerUserId: userId,
         // На поліграфії правило іменне (REQ-182): dealType не null саме там.
-        isPrintQuote: dealType !== null,
+        isPrintQuote,
         printApproverUserId: companyRates.printMarkupApproverUserId,
       }),
-    [companyRates.printMarkupApproverUserId, dealType, permissions, userId, viewerJobRole]
+    [companyRates.printMarkupApproverUserId, isPrintQuote, permissions, userId, viewerJobRole]
   );
 
 
@@ -4415,38 +4419,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {canEditQuoteContent ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={!canManageItems}
-                      title={itemsLockedHint ?? undefined}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setAddItemsOpen(true);
-                      }}
-                      className="h-10 gap-2 rounded-xl"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Додати товар
-                    </Button>
-                  ) : null}
-                  {canEditQuoteContent ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={!canManageItems}
-                      title={itemsLockedHint ?? "Excel від клієнта → позиції з тиражами. Ціни вписуються тут, у прорахунку"}
-                      onClick={() => setImportOpen(true)}
-                      className="h-10 gap-2 rounded-xl"
-                    >
-                      <FileSpreadsheet className="h-4 w-4" />
-                      Імпорт з файлу
-                    </Button>
-                  ) : null}
-                </div>
+                {canEditQuoteContent ? (
+                  <QuoteAddItemsActions
+                    disabled={!canManageItems}
+                    lockedHint={itemsLockedHint ?? null}
+                    onAdd={(kind) => {
+                      setAddItemsKind(kind);
+                      setAddItemsOpen(true);
+                    }}
+                    onImport={() => setImportOpen(true)}
+                  />
+                ) : null}
               </div>
 
               {itemsLockedHint ? (
@@ -4491,13 +4474,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                   <Button
                     size="sm"
-                    onClick={() => setAddItemsOpen(true)}
+                    onClick={() => {
+                      setAddItemsKind(isPrintQuote ? "print" : "merch");
+                      setAddItemsOpen(true);
+                    }}
                     disabled={!canManageItems}
                     title={itemsLockedHint ?? undefined}
                     className="gap-2"
                   >
-                    <Plus className="h-4 w-4" />
-                    Додати товар
+                    {isPrintQuote ? <Printer className="h-4 w-4" /> : <Package className="h-4 w-4" />}
+                    {isPrintQuote ? "Додати поліграфію" : "Додати товар"}
                   </Button>
                 </div>
               ) : (
@@ -6594,7 +6580,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           appendTo={{
             quoteId,
             nextPosition: items.length === 0 ? 1 : Math.max(...items.map((item) => item.position ?? 0)) + 1,
-            kind: (quote?.quote_type ?? "merch") as QuoteKindValue,
+            kind: addItemsKind,
             label: quote?.number ?? null,
           }}
         />

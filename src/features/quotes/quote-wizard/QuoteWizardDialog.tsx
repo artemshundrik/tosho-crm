@@ -134,7 +134,14 @@ export function QuoteWizardDialog({
    */
   appendTo?: { quoteId: string; nextPosition: number; kind: QuoteKindValue; label: string | null } | null;
 }) {
-  const [kind, setKind] = React.useState<QuoteKindValue>("merch");
+  /*
+    РЕЖИМ ПРИХОДИТЬ ЗЗОВНІ, коли дописуємо в наявний прорахунок (Артем,
+    11.09.2026). Тут завжди стартував «мерч», а ліва панель із вибором у режимі
+    дописування не малюється — тож рейка видів поліграфії не з'являлась НІКОЛИ,
+    хоч `appendTo.kind` уже приходив. Вибір тепер робить кнопка на картці
+    прорахунку, до відкриття вікна.
+  */
+  const [kind, setKind] = React.useState<QuoteKindValue>(appendTo?.kind ?? "merch");
   const [stage, setStage] = React.useState<Stage>("compose");
   const [drafts, setDrafts] = React.useState<QuoteImportDraftItem[]>([]);
   const [warnings, setWarnings] = React.useState<string[]>([]);
@@ -720,10 +727,12 @@ export function QuoteWizardDialog({
           <div className="flex min-w-0 flex-1 flex-col md:min-h-0">
             {appendTo ? (
               <DialogHeader className="px-5 pb-1 pt-5 text-left">
-                <DialogTitle>Додати товари</DialogTitle>
+                <DialogTitle>{kind === "print" ? "Додати поліграфію" : "Додати товари"}</DialogTitle>
                 <DialogDescription>
-                  {appendTo.label ? `У прорахунок ${appendTo.label}` : "У цей прорахунок"} — замовник і дедлайн
-                  у нього вже є.
+                  {appendTo.label ? `У прорахунок ${appendTo.label}` : "У цей прорахунок"} —{" "}
+                  {kind === "print"
+                    ? "те, що виробляємо самі. Готове від постачальника шукайте в «Товарі»."
+                    : "замовник і дедлайн у нього вже є."}
                 </DialogDescription>
               </DialogHeader>
             ) : null}
