@@ -158,8 +158,10 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Settings2 className="h-4 w-4 text-muted-foreground" />
+          {/* Назви виду тут немає (Артем, 11.09.2026): вона стоїть заголовком
+              позиції на три рядки вище, і другий раз читалась як підпис до
+              підпису. У вікні редагування вона лишається — там заголовка немає. */}
           <span>Параметри виробу</span>
-          <span className="text-xs font-normal text-muted-foreground">{preset.label}</span>
         </div>
         {canEdit ? (
           <Button variant={filled ? "ghost" : "primary"} size="sm" onClick={openEditor}>

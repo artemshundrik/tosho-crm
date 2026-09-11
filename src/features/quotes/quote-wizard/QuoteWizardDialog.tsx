@@ -315,6 +315,19 @@ export function QuoteWizardDialog({
     [kind, catalog.suggestions]
   );
 
+  /*
+    ЩО МАЛЮВАТИ — ВИРІШУЄ РЕЖИМ, А НЕ ТЕ, ЧИ ДОЇХАВ КАТАЛОГ (Артем, 11.09.2026).
+    Умовою був `printModels.length > 0`, а список порожній, поки триває запит,
+    — тож «Додати поліграфію» встигало показати поле пошуку товарів і аж потім
+    перескакувало на рейку видів. Тепер у режимі поліграфії поле не з'являється
+    взагалі: спершу стоїть каркас рейки, потім самі види.
+
+    Порожній список ПІСЛЯ завантаження — інша річ: жодній моделі не проставили
+    `specPreset`, і тоді повертаємось до пошуку, бо краще старий шлях, ніж
+    вікно без способу додати позицію.
+  */
+  const showPrintRail = kind === "print" && (catalog.loading || printModels.length > 0);
+
   const handlePickCatalog = (suggestion: CatalogSuggestion) => {
     setError(null);
     if (drafts.length === 0 && suggestion.quoteType) {
@@ -662,7 +675,13 @@ export function QuoteWizardDialog({
         // ШИРШЕ НА 200 ПІКСЕЛІВ (Артем, 08.09.2026): у списку підказок тепер плитки
         // кольору з назвою й кодом, і на 920 вони переносились по три в ряд.
         // 1120 лишає запас навіть на ноутбуці 1280 — з полями по 80.
-        className="flex max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0 sm:max-w-[1120px] md:h-[min(88vh,44rem)]"
+        // 1120 розраховані на ліву панель «Рахуємо» плюс список позицій. У режимі
+        // дописування панелі немає, і та сама ширина лишала праворуч порожнє поле
+        // на 272 px — рівно ту панель, якої вже нема (Артем, 11.09.2026).
+        className={cn(
+          "flex max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0 md:h-[min(88vh,44rem)]",
+          appendTo ? "sm:max-w-[840px]" : "sm:max-w-[1120px]"
+        )}
         isDirty={hasContent}
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
@@ -740,7 +759,7 @@ export function QuoteWizardDialog({
               <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Позиції
               </span>
-              {printModels.length > 0 ? null : (
+              {showPrintRail ? null : (
                 <span className="truncate text-2xs text-muted-foreground/70">поле розуміє саме: посилання чи назва</span>
               )}
             </div>
@@ -753,13 +772,22 @@ export function QuoteWizardDialog({
                 </div>
               ) : null}
 
-              {printModels.length > 0 ? (
-                <PrintModelPicker
-                  suggestions={catalog.suggestions}
-                  onPick={handlePickCatalog}
-                  addedModelIds={addedModelIds}
-                  disabled={busy}
-                />
+              {showPrintRail ? (
+                printModels.length > 0 ? (
+                  <PrintModelPicker
+                    suggestions={catalog.suggestions}
+                    onPick={handlePickCatalog}
+                    addedModelIds={addedModelIds}
+                    disabled={busy}
+                  />
+                ) : (
+                  // Каркас на місці рейки: вікно не має міняти форму на очах.
+                  <div className="-mx-1 flex gap-2 px-1 pb-1" aria-hidden>
+                    {[0, 1, 2, 3, 4].map((slot) => (
+                      <div key={slot} className="h-[104px] w-[104px] shrink-0 animate-pulse rounded-xl bg-muted/60" />
+                    ))}
+                  </div>
+                )
               ) : (
               <QuoteItemCommandField
                 teamId={teamId}
@@ -914,7 +942,7 @@ export function QuoteWizardDialog({
                 позиціями присилають під товар, а поліграфію збирають рейкою —
                 там файл лише займав місце під позиціями.
               */}
-              {printModels.length > 0 ? null : (
+              {showPrintRail ? null : (
                 <ExcelPanel
                   stage={stage}
                   parseStep={parseStep}
