@@ -34,9 +34,9 @@
 секретах GitHub, і заборона «тимчасово вимкнути writeGuard, щоб перевірити
 запис» — для записів є окрема сесія під живою людиною.
 
-## Що лишилось зробити людині
+## Нічний прогін
 
-Чотири секрети в Settings → Secrets репозиторію — `E2E_EMAIL`, `E2E_PASSWORD`
-(з `.env.local`), `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — і
-розкоментувати `schedule` у `.github/workflows/e2e.yml`. Доти нічний прогін
-вимкнено навмисно: див. шапку того файлу.
+Увімкнено 11.09.2026. Чотири секрети (`E2E_EMAIL`, `E2E_PASSWORD`,
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) лежать у Settings → Secrets,
+`schedule` у `.github/workflows/e2e.yml` розкоментовано: 04:20 UTC, тобто 07:20
+за Києвом — результат готовий до початку робочого дня.
