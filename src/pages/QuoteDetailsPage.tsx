@@ -93,6 +93,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { QuoteItemThumb } from "@/features/quotes/quote-details/QuoteItemThumb";
+import { catalogPlaceSlash } from "@/features/quotes/quote-wizard/catalogPlace";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import { LiveCursorsLayer } from "@/components/app/LiveCursorsLayer";
@@ -4519,7 +4520,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       resolvedKindId,
                       resolvedModelId
                     );
-                    const metaLine = [typeLabel, kindLabel].filter(Boolean).join(" / ");
+                    const metaLine = catalogPlaceSlash(typeLabel, kindLabel);
                     const positionLabel = getPrintPositionLabel(
                       catalogTypes,
                       resolvedTypeId,
@@ -4586,7 +4587,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       run.quote_item_id ? run.quote_item_id === item.id : items.length === 1
                     );
                     const specHighlights = [
-                      ...(!isMerchQuote
+                      // Тираж стоїть нижче своїм блоком: «Кількість / Одиниця»
+                      // повторювали його вдруге й першими (Артем, 11.09.2026).
+                      ...(!isMerchQuote && !modelSpecPreset
                         ? [
                             { label: "Кількість", value: `${item.qty}` },
                             { label: "Одиниця", value: normalizeUnitLabel(item.unit) },
@@ -4734,7 +4737,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 одиниці, артикула, коментаря, вкладення. */}
                             {teamId ? (
                               <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/50 pt-3">
-                                {resolvedKindId ? (
+                                {/* Нанесення в поліграфії не питають: оздоблення
+                                    живе в параметрах виробу (тиснення, лак, УФ). */}
+                                {resolvedKindId && !modelSpecPreset ? (
                                   <>
                                     <QuoteItemImprints
                                       teamId={teamId}

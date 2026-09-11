@@ -1,4 +1,6 @@
 import { Package } from "lucide-react";
+
+import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -17,6 +19,8 @@ export type QuoteKanbanProduct = {
   }>;
   imageUrl: string | null;
   zoomImageUrl?: string | null;
+  /** `metadata.specPreset` моделі: наш виріб малюється замість фото. */
+  specPreset?: string | null;
 };
 
 export type QuoteKanbanProductPreview = {
@@ -117,7 +121,11 @@ export function QuoteKanbanProducts({ preview, isLoading, imageLoadStrategy }: Q
                 productIndex < fullProducts.length - 1 && "pb-2"
               )}
             >
-              {product.imageUrl ? (
+              {product.specPreset ? (
+                <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-border/60 bg-secondary text-foreground/70">
+                  <PrintModelArt presetKey={product.specPreset} className="h-8 w-8" />
+                </div>
+              ) : product.imageUrl ? (
                 <KanbanImageZoomPreview
                   imageUrl={product.imageUrl}
                   zoomImageUrl={product.zoomImageUrl ?? undefined}

@@ -207,6 +207,7 @@ import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeS
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { KanbanBoard, KanbanCard, KanbanCardList, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard, MobileStatusChips } from "@/components/kanban";
+import { fetchSpecPresetsByModelId } from "@/features/quotes/quote-details/catalogSpecPresets";
 import {
   QuoteKanbanProducts,
   type QuoteKanbanProductPreview as KanbanProductPreview,
@@ -3637,6 +3638,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               .filter(Boolean)
           )
         );
+        const specPresetById = await fetchSpecPresetsByModelId(modelIds);
         const modelImageById = new Map<string, { imageUrl: string | null; zoomImageUrl?: string | null; sku?: string | null }>();
         if (modelIds.length > 0) {
           const modelRows = await listCatalogModelsByIds(modelIds);
@@ -3712,6 +3714,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               variantName,
               variantImageUrl,
               qtyLabel: formatQtyLabel(item.qty, item.unit),
+              specPreset: specPresetById.get(item.catalog_model_id ?? "") ?? null,
               runLabels,
               imageUrl: attachmentImage || variantImageUrl || catalogImage?.imageUrl || null,
               zoomImageUrl: attachmentImage || variantImageUrl || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null,
