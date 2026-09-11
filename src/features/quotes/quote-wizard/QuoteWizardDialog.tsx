@@ -297,6 +297,12 @@ export function QuoteWizardDialog({
    * по всьому каталогу (REQ-36#p37). Порожній список — пошук лишається: краще
    * старий шлях, ніж вікно без способу додати позицію.
    */
+  /** Види, які вже стоять у чернетках, — рейка позначає їх «додано». */
+  const addedModelIds = React.useMemo(
+    () => new Set(drafts.map((draft) => draft.catalog?.modelId).filter((id): id is string => Boolean(id))),
+    [drafts]
+  );
+
   const printModels = React.useMemo(
     () => (kind === "print" ? selectPrintModels(catalog.suggestions) : []),
     [kind, catalog.suggestions]
@@ -736,7 +742,12 @@ export function QuoteWizardDialog({
               ) : null}
 
               {printModels.length > 0 ? (
-                <PrintModelPicker suggestions={catalog.suggestions} onPick={handlePickCatalog} disabled={busy} />
+                <PrintModelPicker
+                  suggestions={catalog.suggestions}
+                  onPick={handlePickCatalog}
+                  addedModelIds={addedModelIds}
+                  disabled={busy}
+                />
               ) : (
               <QuoteItemCommandField
                 teamId={teamId}

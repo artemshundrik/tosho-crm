@@ -1,36 +1,52 @@
 import * as React from "react";
-import { Printer } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { scoreCompanyNameMatch } from "@/lib/companyNameSearch";
 
+import { PrintModelArt } from "./printModelArt";
 import type { CatalogSuggestion } from "./catalogSuggestions";
 
 /**
- * Вибір поліграфії картками замість пошуку (11.09.2026).
+ * Рейка видів поліграфії замість пошуку по каталогу (11.09.2026).
  *
  * ЩО ЦЕ ЛІКУЄ. Під «Поліграфією» те саме поле шукало по всьому каталогу разом
  * із товарами постачальників: на слово «щоденник» приходило 24 готові
- * щоденники з картинками й цінами і одна наша модель без фото. Менеджер
- * природно брав перший-ліпший — а на ньому немає опису полів виробу, тож
- * чекліст не з'являвся взагалі, і Таня отримувала «щоденник, 500 шт».
+ * щоденники з фото й цінами і одна наша модель без фото. Менеджер брав
+ * перший-ліпший — а на ньому немає опису полів виробу, тож чекліст не
+ * з'являвся, і Таня отримувала «щоденник, 500 шт».
  *
- * ЧОМУ КАРТКИ, А НЕ ФІЛЬТР ПОШУКУ. Того, що ми виробляємо самі, одиниці —
- * шість моделей на 11.09. Шукати серед шести нема чого: список коротший за
- * підказку, яку той пошук видає. Пошук лишається для «Товару», де каталог на
- * 244 моделі.
+ * ЧОМУ РЕЙКА, А НЕ СІТКА. Менеджер робить тут рівно два вибори: вид і тираж.
+ * Види займають один рядок угорі й гортаються вбік, а вся решта висоти
+ * належить позиціям — їх у прорахунку буває десяток, і саме вони ростуть.
+ *
+ * ЧОМУ ПОЗИЦІЇ МАЛЮЄ НЕ ЦЕЙ КОМПОНЕНТ. Обраний вид стає такою самою
+ * чернеткою, як товар: ті самі рядки, ті самі тиражі, та сама кнопка
+ * видалення. Другий вигляд рядка позиції означав би дві правди про одне й те
+ * саме — і поліграфія виглядала б чужою у власному вікні.
  *
  * МЕЖА ТУТ НЕ КОСМЕТИЧНА, а рішення Олени (REQ-36#p36): повний чекліст — лише
- * для того, що робимо під замовника; у готового щоденника з Е-Сувеніра питаємо
- * тільки нанесення, і його місце в «Товарі».
+ * для того, що робимо під замовника; у готового щоденника з Е-Сувеніра
+ * питаємо тільки нанесення, і його місце в «Товарі».
  *
  * Порожній список означає, що жодній моделі не проставили `specPreset`, — тоді
  * компонент не малює нічого, а вікно лишає звичайне поле: краще старий шлях,
  * ніж екран без жодного способу додати позицію.
  */
 
+/**
+ * Від скількох видів з'являється пошук. Сім штук перебираються оком швидше,
+ * ніж набирається слово, і поле над ними було б шумом; коли видів стане
+ * більше за екран, пошук з'явиться сам, без правки коду.
+ */
+const SEARCH_FROM = 9;
+
 export type PrintModelPickerProps = {
   suggestions: CatalogSuggestion[];
   onPick: (suggestion: CatalogSuggestion) => void;
+  /** `modelId` видів, які вже стоять у чернетках — щоб показати «додано». */
+  addedModelIds?: ReadonlySet<string>;
   disabled?: boolean;
 };
 
@@ -40,38 +56,69 @@ export const selectPrintModels = (suggestions: CatalogSuggestion[]): CatalogSugg
     .filter((suggestion) => Boolean(suggestion.specPreset))
     .sort((a, b) => a.name.localeCompare(b.name, "uk"));
 
-export function PrintModelPicker({ suggestions, onPick, disabled }: PrintModelPickerProps) {
+export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled }: PrintModelPickerProps) {
   const models = React.useMemo(() => selectPrintModels(suggestions), [suggestions]);
+  const [query, setQuery] = React.useState("");
+
+  const shown = React.useMemo(() => {
+    const needle = query.trim();
+    if (!needle) return models;
+    // Шукаємо і за назвою виду, і за назвою вигляду з типом: менеджер думає
+    // «календар», а моделі звуться «Квартальний», «Перекидний», «Хатинка».
+    return models.filter((model) => scoreCompanyNameMatch(needle, [model.name, model.kindName, model.typeName]) > 0);
+  }, [models, query]);
+
   if (models.length === 0) return null;
 
   return (
     <div className="space-y-2.5">
-      <div className="grid gap-2 sm:grid-cols-2">
-        {models.map((model) => (
-          <button
-            key={model.modelId ?? model.name}
-            type="button"
+      {models.length >= SEARCH_FROM ? (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
             disabled={disabled}
-            onClick={() => onPick(model)}
-            className={cn(
-              "flex items-center gap-3 rounded-xl border border-border/50 bg-background/60 px-3.5 py-3 text-left transition-colors",
-              "hover:border-primary/40 hover:bg-primary/5",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-              "disabled:cursor-not-allowed disabled:opacity-60"
-            )}
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <Printer className="h-4 w-4" />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-foreground">{model.name}</span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {model.kindName} · {model.typeName}
-              </span>
-            </span>
-          </button>
-        ))}
-      </div>
+            placeholder="Знайти вид"
+            className="h-9 bg-background/60 pl-9"
+          />
+        </div>
+      ) : null}
+
+      {shown.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
+          Такого виду немає. Готове від постачальника шукайте в «Товарі».
+        </div>
+      ) : (
+        <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1">
+          {shown.map((model) => {
+            const added = Boolean(model.modelId && addedModelIds?.has(model.modelId));
+            return (
+              <button
+                key={model.modelId ?? model.name}
+                type="button"
+                disabled={disabled}
+                onClick={() => onPick(model)}
+                title={`${model.kindName} · ${model.typeName}`}
+                className={cn(
+                  "flex h-[104px] w-[104px] shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-xl border px-2 text-center transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                  "disabled:cursor-not-allowed disabled:opacity-60",
+                  added
+                    ? "border-primary/40 bg-primary/5 text-primary"
+                    : "border-border/50 bg-background/60 text-muted-foreground hover:border-border hover:bg-muted/40"
+                )}
+              >
+                <PrintModelArt presetKey={model.specPreset} className={added ? "text-primary" : "text-foreground/70"} />
+                <span className="line-clamp-2 text-2xs font-semibold leading-tight text-foreground">
+                  {model.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
         Це те, що виробляємо під замовника. Готовий щоденник чи блокнот від постачальника шукайте в «Товарі» — там
         питаємо тільки нанесення.
