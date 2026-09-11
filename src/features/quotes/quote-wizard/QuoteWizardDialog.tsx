@@ -900,14 +900,21 @@ export function QuoteWizardDialog({
                 другий шлях, а не головний: за сім місяців із ексельки прийшло
                 менше позицій, ніж за посиланнями за місяць.
               */}
-              <ExcelPanel
-                stage={stage}
-                parseStep={parseStep}
-                fileName={fileName}
-                hasFileDrafts={fileDrafts.length > 0}
-                inputRef={fileInputRef}
-                onFile={(file) => void handleFile(file)}
-              />
+              {/*
+                У «Поліграфії» дропзони немає (REQ-178#p19): ексельку з
+                позиціями присилають під товар, а поліграфію збирають рейкою —
+                там файл лише займав місце під позиціями.
+              */}
+              {printModels.length > 0 ? null : (
+                <ExcelPanel
+                  stage={stage}
+                  parseStep={parseStep}
+                  fileName={fileName}
+                  hasFileDrafts={fileDrafts.length > 0}
+                  inputRef={fileInputRef}
+                  onFile={(file) => void handleFile(file)}
+                />
+              )}
             </div>
 
             <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">

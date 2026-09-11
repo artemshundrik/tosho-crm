@@ -680,6 +680,18 @@ function RunsField({
             // стрибають за довжиною.
             className="w-16 bg-background text-right tabular-nums placeholder:text-2xs focus:placeholder:text-transparent"
             onValueChange={(next) => onPatchRun(run.key, { quantity: Math.max(0, next ?? 0) })}
+            /*
+              ENTER ЗАСТОСОВУЄ ЧИСЛО (REQ-178#p21). До цього набране в комірці
+              «зависало»: людина тиснула Enter, нічого видимого не ставалось, і
+              вона клацала повз поле, щоб переконатись. Тепер Enter знімає
+              фокус — число лягає так само, як від кліку, — і НЕ надсилає форму:
+              вікно створення закривалось би посеред набору тиражу.
+            */
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              event.currentTarget.blur();
+            }}
           />
           {onRemoveRun && runs.length > 1 ? (
             <button

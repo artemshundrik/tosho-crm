@@ -99,7 +99,13 @@ export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled 
                 key={model.modelId ?? model.name}
                 type="button"
                 disabled={disabled}
-                onClick={() => onPick(model)}
+                // Вибрав раз — і досить (REQ-178#p20): другий клік по тому
+                // самому виду давав другу таку саму позицію, і людина бачила
+                // це вже в списку, а не в мить кліку.
+                onClick={() => {
+                  if (added) return;
+                  onPick(model);
+                }}
                 title={catalogPlace(model.kindName, model.typeName)}
                 className={cn(
                   "flex h-[104px] w-[104px] shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-xl border px-2 text-center transition-colors",
