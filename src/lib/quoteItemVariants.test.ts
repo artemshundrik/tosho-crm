@@ -5,6 +5,7 @@ import {
   isVariantQuoteItem,
   moneyRangeOf,
   quoteItemsTotalRange,
+  variantGroupRange,
 } from "./quoteItemVariants";
 
 describe("isVariantQuoteItem", () => {
@@ -146,5 +147,43 @@ describe("hasVariantGroup", () => {
 
   it("без позначок групи немає", () => {
     expect(hasVariantGroup([{}, { isVariant: false }])).toBe(false);
+  });
+});
+
+describe("variantGroupRange", () => {
+  it("межі групи — те саме, що підсумок підставляє замість доданків", () => {
+    expect(
+      variantGroupRange([
+        { isVariant: true, range: { min: 13_199, max: 13_199 } },
+        { isVariant: true, range: { min: 9_624, max: 9_624 } },
+        { isVariant: true, range: { min: 21_000, max: 21_000 } },
+        { range: { min: 2_000, max: 2_000 } },
+      ])
+    ).toEqual({ min: 9_624, max: 21_000 });
+  });
+
+  it("порожня ціна варіанта опускає нижню межу до нуля — і це видно", () => {
+    expect(
+      variantGroupRange([
+        { isVariant: true, range: { min: 0, max: 0 } },
+        { isVariant: true, range: { min: 18_583, max: 18_583 } },
+      ])
+    ).toEqual({ min: 0, max: 18_583 });
+  });
+
+  it("менше двох позначених — рядка немає", () => {
+    expect(variantGroupRange([{ isVariant: true, range: { min: 5_000, max: 7_000 } }])).toBeNull();
+    expect(variantGroupRange([{ range: { min: 1_000, max: 1_000 } }])).toBeNull();
+    expect(variantGroupRange([])).toBeNull();
+  });
+
+  /** Поріг той самий, що в `hasVariantGroup`: рядок і пам'ятка в КП з'являються разом. */
+  it("поріг збігається з hasVariantGroup", () => {
+    const items = [
+      { isVariant: true, range: { min: 1, max: 1 } },
+      { isVariant: true, range: { min: 2, max: 2 } },
+    ];
+    expect(hasVariantGroup(items)).toBe(true);
+    expect(variantGroupRange(items)).not.toBeNull();
   });
 });

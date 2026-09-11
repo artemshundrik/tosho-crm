@@ -72,6 +72,7 @@ import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
 import { parseQuoteItemMetadata } from "@/features/quotes/quote-details/quoteItemMetadata";
 import { QuoteItemVariantToggle } from "@/features/quotes/quote-details/QuoteItemVariantToggle";
 import { isVariantQuoteItem } from "@/lib/quoteItemVariants";
+import { useQuoteVariantRange } from "@/features/quotes/quote-details/useQuoteVariantRange";
 import { QuoteImportDialog } from "@/features/quotes/quote-import/QuoteImportDialog";
 import { useQuoteImportResearch } from "@/features/quotes/quote-import/useQuoteImportResearch";
 import { normalizeUnitLabel } from "@/lib/units";
@@ -1521,6 +1522,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return `${Math.round((markup / sale) * 100)}%`;
   }, [activeRunPricingTotals.markupTotal, activeRunPricingTotals.saleTotal]);
 
+  // Клієнт у КП бачить варіанти межами, а підсумок картки складає їх усі. Щоб
+  // числа не розходились мовчки, межі показуємо ОКРЕМИМ рядком поруч — самого
+  // підсумку не чіпаючи (@/features/quotes/quote-details/useQuoteVariantRange).
+  const activeVariantRange = useQuoteVariantRange(includedItems, activeRunPricingSummaries);
   const hasMultipleActiveProductSummaries = items.length > 1;
   const activeManagerRateLabel = useMemo(() => {
     const rates = Array.from(
@@ -6068,6 +6073,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 markupTitle={`Надцінка ${formatCurrency(activeRunPricingTotals.markupTotal, quote.currency)}`}
                 markupShareLabel={markupShareLabel}
                 managerRateNeedsAttention={managerRateNeedsAttention}
+                variantRange={activeVariantRange}
                 managerRateLabel={activeManagerRateLabel}
                 parts={priceBreakdownParts}
                 formatFull={(value) => formatCurrency(value, quote.currency)}

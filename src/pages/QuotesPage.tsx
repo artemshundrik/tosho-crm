@@ -224,23 +224,24 @@ import { getCurrentUserId } from "@/lib/currentUser";
 import {
   buildCommercialExcelTsv,
   commercialSectionTotalRange,
-  documentHasVariantGroup,
   formatDateTime,
   formatMoney,
   formatMoneyPlain,
   formatMoneyRange,
   getCommercialDocFilename,
-  isMoneyRangeSpread,
   parseMethodsSummary,
   parsePlacementSummary,
   renderCommercialDocumentHtml,
-  VARIANT_GROUP_NOTE,
   VARIANT_ROW_LABEL,
   type CommercialDocument,
   type CommercialItemRow,
   type CommercialQuoteSection,
   type CommercialRunRow,
 } from "@/features/quotes/commercial-document/document";
+import {
+  CommercialPreviewSummary,
+  CommercialPreviewVariantWarning,
+} from "@/features/quotes/commercial-document/CommercialPreviewSummary";
 import {
   hasVariantGroup,
   isVariantQuoteItem,
@@ -7461,6 +7462,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <span className="font-medium">{quoteSetCommercialDoc.sections.length}</span>
                   </div>
                 </div>
+                <CommercialPreviewVariantWarning doc={quoteSetCommercialDoc} />
                 {quoteSetCommercialDoc.sections.map((section, sectionIndex) => (
                   <div key={`preview-group-${section.quoteId}`} className="rounded-xl border border-border/60 overflow-hidden">
                     <div className="px-4 py-3 border-b border-border/60 bg-muted/20 flex flex-wrap items-center justify-between gap-2">
@@ -7615,30 +7617,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </div>
                   </div>
                 ))}
-                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 space-y-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-muted-foreground">Загальна сума</span>
-                    <span className="text-lg font-semibold">
-                      {formatMoneyRange(quoteSetCommercialDoc.totalRange)}
-                    </span>
-                  </div>
-                  {documentHasVariantGroup(quoteSetCommercialDoc) ? (
-                    <p className="text-xs text-muted-foreground">{VARIANT_GROUP_NOTE}</p>
-                  ) : null}
-                  {/* І межі, І справді кілька тиражів. Сама лише «сума — це
-                      діапазон» більше не доводить тиражів: відколи є роль
-                      «варіант», межі беруться й від неї, і пам'ятка про тиражі
-                      вискакувала там, де тираж у кожної позиції один. */}
-                  {isMoneyRangeSpread(quoteSetCommercialDoc.totalRange) &&
-                  quoteSetCommercialDoc.sections.some((section) =>
-                    section.items.some((item) => item.runs.length > 1)
-                  ) ? (
-                    <p className="text-xs text-muted-foreground">
-                      У КП є позиції з кількома тиражами. Тиражі взаємовиключні — замовник обирає
-                      один, тому підсумок показано межами: від найменшого тиражу до найбільшого.
-                    </p>
-                  ) : null}
-                </div>
+                <CommercialPreviewSummary doc={quoteSetCommercialDoc} />
               </>
             )}
           </div>

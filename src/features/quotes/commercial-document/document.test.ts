@@ -4,6 +4,7 @@ import {
   buildCommercialExcelTsv,
   commercialSectionTotalRange,
   documentHasVariantGroup,
+  pricelessVariantRows,
   renderCommercialDocumentHtml,
   type CommercialDocument,
   type CommercialItemRow,
@@ -190,5 +191,78 @@ describe("вихід 4 — TSV для Excel", () => {
     const firstRow = norm(tsv).split("\r\n").find((line) => line.startsWith("1\t")) ?? "";
     expect(firstRow.split("\t")).toHaveLength(12);
     expect(firstRow.split("\t")[9]).toBe("10 000");
+  });
+});
+
+/**
+ * ВИХІД 1 — ПРЕВ'Ю, і єдине, що є лише в ньому: попередження менеджерові.
+ *
+ * Сама смуга живе в `CommercialPreviewSummary.tsx`; тут перевіряється правило,
+ * за яким вона з'являється, і те, що в документ для клієнта воно не тече.
+ */
+describe("прев'ю — варіанти без ціни", () => {
+  const pricelessVariant = item({
+    id: "z",
+    name: "Зарядний пристрій «BOLL»",
+    position: 3,
+    isVariant: true,
+    runs: [{ id: "z-run", qty: 30, unitPrice: 0, lineTotal: 0 }],
+  });
+
+  it("документ без варіантів не має про що попереджати", () => {
+    expect(pricelessVariantRows(doc([section(threeProducts)]))).toEqual([]);
+    expect(pricelessVariantRows(doc([section(threeVariants)]))).toEqual([]);
+  });
+
+  it("порожня ціна у групі варіантів названа поіменно", () => {
+    const rows = pricelessVariantRows(
+      doc([section([item({ id: "a", name: "Термопляшка «BRUNO»", isVariant: true }), pricelessVariant])])
+    );
+    expect(rows).toEqual([
+      { quoteNumber: "TS-0926-0022", position: 3, name: "Зарядний пристрій «BOLL»" },
+    ]);
+  });
+
+  /**
+   * Одна позначена позиція групи не утворює: її нуль входить у підсумок тим
+   * самим доданком, що й у звичайної позиції, і нижньої межі не опускає.
+   */
+  it("одна позначена позиція без ціни попередження не дає", () => {
+    const rows = pricelessVariantRows(
+      doc([section([item({ id: "a", name: "Термопляшка «BRUNO»" }), pricelessVariant])])
+    );
+    expect(rows).toEqual([]);
+  });
+
+  /** Ловиться найдешевший тираж: саме він потрапляє в нижню межу документа. */
+  it("порожній дешевший тираж помітний, навіть коли дорожчий пораховано", () => {
+    const halfPriced = item({
+      id: "y",
+      name: "Термопляшка MORI",
+      position: 2,
+      isVariant: true,
+      runs: [
+        { id: "y-30", qty: 30, unitPrice: 0, lineTotal: 0 },
+        { id: "y-100", qty: 100, unitPrice: 200, lineTotal: 20_000 },
+      ],
+    });
+    const rows = pricelessVariantRows(
+      doc([section([item({ id: "a", name: "Термопляшка «BRUNO»", isVariant: true }), halfPriced])])
+    );
+    expect(rows.map((row) => row.name)).toEqual(["Термопляшка MORI"]);
+  });
+
+  /** Службова записка не їде клієнтові — ні в друк, ні в Excel. */
+  it("у документ для клієнта попередження не тече", () => {
+    const withPriceless = doc([
+      section([item({ id: "a", name: "Термопляшка «BRUNO»", isVariant: true }), pricelessVariant]),
+    ]);
+    for (const output of [
+      renderCommercialDocumentHtml(withPriceless),
+      buildCommercialExcelTsv(withPriceless),
+    ]) {
+      expect(norm(output)).not.toContain("не внесена ціна");
+      expect(norm(output)).not.toContain("Внесіть ціну");
+    }
   });
 });

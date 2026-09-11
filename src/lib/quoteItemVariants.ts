@@ -24,11 +24,17 @@
  *     позиції, з яких клієнт візьме одну. Вона нічого не відсіває й нічого не
  *     затверджує, лише міняє арифметику підсумку в документі.
  *
- * МЕЖІ, і про них треба знати. Прапорець читає лише КП; підсумок картки
- * прорахунку, `orderRecords` і `netlify/functions/_lib/quotePricing` рахують так
- * само, як рахували, — сумою. Це свідомо: картка показує все, що порахували, а
- * замовлення збирається вже після відповіді клієнта, коли взаємовиключності
- * немає (непогоджені позиції відсіяв p1).
+ * МЕЖІ, і про них треба знати. Число підсумку прапорець не міняє НІДЕ, крім
+ * документа: підсумок картки прорахунку, `orderRecords` і
+ * `netlify/functions/_lib/quotePricing` рахують так само, як рахували, — сумою.
+ * Це свідомо: картка показує все, що порахували, а замовлення збирається вже
+ * після відповіді клієнта, коли взаємовиключності немає (непогоджені позиції
+ * відсіяв p1).
+ *
+ * Єдиний виняток — ПОКАЗ: поруч із підсумком картки стоїть окремий рядок «з них
+ * варіанти: від X до Y» (`variantGroupRange`). Саме число підсумку він не
+ * чіпає, але менеджер бачить ті самі межі, що й клієнт у КП, — інакше по
+ * телефону легко назвати суму, якої в жодному замовленні не буде.
  *
  * ОДНА ГРУПА НА ПРОРАХУНОК. Позначені позиції прорахунку утворюють рівно одну
  * взаємовиключну групу — іменованих груп немає. Прорахунок «два різні вироби,
@@ -93,14 +99,38 @@ export function quoteItemsTotalRange(items: readonly QuoteItemRangeEntry[]): Mon
   const variants = items.filter((item) => item.isVariant === true);
   if (variants.length === 0) return base;
 
-  const span = variants.reduce<MoneyRange>(
+  const span = spanOf(variants);
+  return { min: base.min + span.min, max: base.max + span.max };
+}
+
+/** Спільні межі позначених позицій — «від найдешевшого варіанта до найдорожчого». */
+function spanOf(variants: readonly QuoteItemRangeEntry[]): MoneyRange {
+  return variants.reduce<MoneyRange>(
     (acc, item) => ({
       min: Math.min(acc.min, item.range.min),
       max: Math.max(acc.max, item.range.max),
     }),
     { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY }
   );
-  return { min: base.min + span.min, max: base.max + span.max };
+}
+
+/**
+ * Ті самі межі групи, але ОКРЕМИМ числом — для рядка «з них варіанти» поруч із
+ * підсумком картки прорахунку.
+ *
+ * ЧОМУ ЦЕ НЕ ЧАСТИНА ПІДСУМКУ КАРТКИ. Підсумок лишається сумою всього, що
+ * порахували: на ньому висять замовлення, дайджести й `_lib/quotePricing`.
+ * Рядок поруч лише показує ту частину, яку клієнт у КП побачить межами, — щоб
+ * два екрани того самого прорахунку не називали різні числа мовчки.
+ *
+ * `null` — групи немає, і рядка бути не повинно. Поріг той самий, що в
+ * `hasVariantGroup`: одна позначена позиція групи не утворює, а «від 21 000 до
+ * 21 000» поруч із сумою читалось би як поломка.
+ */
+export function variantGroupRange(items: readonly QuoteItemRangeEntry[]): MoneyRange | null {
+  const variants = items.filter((item) => item.isVariant === true);
+  if (variants.length < 2) return null;
+  return spanOf(variants);
 }
 
 /**

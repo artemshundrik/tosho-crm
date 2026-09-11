@@ -7,6 +7,7 @@ import {
   useFigureReveal,
 } from "@/components/app/animated-figure";
 import { HoverTip } from "@/components/ui/hover-tip";
+import type { MoneyRange } from "@/lib/quoteItemVariants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -44,6 +45,12 @@ type QuotePriceSummaryProps = {
   markupShareLabel: string | null;
   /** Ставки різні між тиражами — єдиний випадок, коли її показуємо. */
   managerRateNeedsAttention: boolean;
+  /**
+   * Межі групи взаємовиключних варіантів — або `null`, коли групи немає.
+   * Число підсумку вище лишається сумою всіх позицій; цей рядок лише показує
+   * ту його частину, яку клієнт у КП побачить межами «від–до».
+   */
+  variantRange?: MoneyRange | null;
   parts: PriceBreakdownPart[];
   managerRateLabel: string;
   formatFull: (value: number) => string;
@@ -60,6 +67,7 @@ export function QuotePriceSummary({
   markupTitle,
   markupShareLabel,
   managerRateNeedsAttention,
+  variantRange = null,
   parts,
   managerRateLabel,
   formatFull,
@@ -69,6 +77,13 @@ export function QuotePriceSummary({
 }: QuotePriceSummaryProps) {
   // Число й смуга складу ціни рушать від одного прапорця.
   const ready = useFigureReveal();
+  // Рівні межі — не діапазон: «від 21 000 до 21 000» читалось би як поломка.
+  // Копійки тут зайві — число над рядком їх теж не показує (formatCompact).
+  const variantLabel = !variantRange
+    ? null
+    : Math.abs(variantRange.max - variantRange.min) < 0.005
+      ? formatCompact(variantRange.min)
+      : `від ${formatCompact(variantRange.min)} до ${formatCompact(variantRange.max)}`;
 
   return (
     <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
@@ -120,6 +135,25 @@ export function QuotePriceSummary({
             </button>
           ) : null}
         </div>
+
+        {/*
+          ДРУГЕ ЧИСЛО ПРО ТОЙ САМИЙ ПРОРАХУНОК, і воно свідомо стоїть під першим.
+
+          Підсумок вище складає ВСІ позиції — так рахують замовлення, дайджести
+          й `_lib/quotePricing`, і міняти це через показ не можна. Але позиції з
+          роллю «варіант» взаємовиключні: клієнт у КП бачить не їхню суму, а
+          межі. Без цього рядка менеджер називав би вголос число, якого не буде
+          в жодному замовленні.
+        */}
+        {variantLabel ? (
+          <div
+            className="mt-1.5 text-pretty text-2xs text-muted-foreground"
+            title="Позиції з позначкою «Варіант» взаємовиключні — замовник бере один. У КП вони не складаються, а показані межами; підсумок вище рахує всі."
+          >
+            з них варіанти: <span className="font-medium tabular-nums">{variantLabel}</span> — клієнт
+            бере один
+          </div>
+        ) : null}
 
         {open && parts.length > 0 ? (
           <>

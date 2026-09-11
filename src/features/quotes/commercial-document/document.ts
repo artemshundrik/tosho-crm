@@ -126,6 +126,53 @@ export function commercialSectionTotalRange(items: readonly CommercialItemRow[])
 export const documentHasVariantGroup = (doc: CommercialDocument) =>
   doc.sections.some((section) => hasVariantGroup(section.items));
 
+/** Позиція-варіант, у якій ціни немає: номер прорахунку, місце в ньому й назва. */
+export type PricelessVariantRow = {
+  quoteNumber: string;
+  position: number;
+  name: string;
+};
+
+/**
+ * Варіанти без ціни — те, про що прев'ю попереджає менеджера ПЕРЕД відправкою.
+ *
+ * НАВІЩО. Позиція з роллю «варіант» і без внесеної ціни дає нульові межі, а
+ * нижня межа групи береться по найдешевшому варіанту — тобто по цьому нулю.
+ * Клієнт бачить «від 0 грн» там, де насправді порахували дірку в прорахунку.
+ *
+ * НУЛЬ НЕ ХОВАЄМО. Прибрати таку позицію з арифметики означало б показати
+ * клієнту дно ВИЩЕ, ніж воно є в самому прорахунку, і менеджер про порожню ціну
+ * так і не дізнався б — документ виглядав би здоровим. Тому документ рахує як
+ * рахував, а попередження бачить той, хто може це виправити.
+ *
+ * ЛИШЕ ПРЕВ'Ю. Ні HTML, ні PDF, ні TSV цього не показують: то документ для
+ * клієнта, а не наша службова записка.
+ *
+ * ЧОМУ `min`, А НЕ `max`. У нижню межу документа потрапляє найдешевший сценарій
+ * позиції, тож саме порожній `min` тягне підсумок униз — навіть якщо на іншому
+ * тиражі тієї ж позиції ціна є.
+ *
+ * ЧОМУ ЛИШЕ В ГРУПІ. Одна позначена позиція входить у підсумок тим самим
+ * доданком, що й звичайна (див. `quoteItemsTotalRange`): її нуль нічого не
+ * опускає, і попереджати про нього означало б попереджати про будь-яку
+ * непораховану позицію документа — розмова іншого розміру.
+ */
+export const pricelessVariantRows = (doc: CommercialDocument): PricelessVariantRow[] =>
+  doc.sections.flatMap((section) =>
+    hasVariantGroup(section.items)
+      ? section.items
+          .filter(
+            (item) =>
+              item.isVariant && moneyRangeOf(item.runs.map((run) => run.lineTotal)).min <= 0
+          )
+          .map((item) => ({
+            quoteNumber: section.quoteNumber,
+            position: item.position,
+            name: item.name,
+          }))
+      : []
+  );
+
 export const formatMoney = (value: number) =>
   `${new Intl.NumberFormat("uk-UA", {
     minimumFractionDigits: 0,
