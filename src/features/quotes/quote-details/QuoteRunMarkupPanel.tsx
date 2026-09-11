@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Check, ChevronDown, CircleAlert, Clock, Eye, Info, Lock } from "lucide-react";
 
@@ -43,10 +43,46 @@ import { formatCurrency } from "./config";
  * стоїш відносно дна й орієнтира.
  */
 
-/** Права межа смуги. 120 % — стеля показу, а не обмеження поля. */
-const TRACK_MAX = 120;
+/**
+ * ПРАВА МЕЖА СМУГИ РОЗСУВАЄТЬСЯ, А НЕ ТРИМАЄ (REQ-178#p26).
+ *
+ * До 11.09.2026 тут стояла константа 120 з підписом «стеля показу, а не
+ * обмеження поля». Поле й справді без верхньої межі — набрати 150 чи 200 можна
+ * було завжди, — але з екрана це читалось навпаки: повзунок упирався в край,
+ * смуга залита на всі сто, підпис справа каже «120 %». Менеджер прочитала це як
+ * правило й спитала дозволу підняти накрутку.
+ *
+ * Гірше за непорозуміння те, що смуга БРЕХАЛА. У проді 493 тиражі, з них 14
+ * стоять вище 120 % (найбільший — 332 %), і всі малювались однаково: 121 і 332
+ * давали той самий кадр, підписаний третім числом.
+ *
+ * Тепер край іде сходинками 120 → 200 → 300 → … і завжди СТРОГО вищий за число.
+ * Строго — бо кружечок на краю сам по собі й читається як стіна: рівні 120 або
+ * 200 інакше давали б рівно той кадр, з якого виросла скарга.
+ *
+ * Щоденної роботи це не торкається: медіана накрутки — 40 %, дев'ята десята —
+ * 75 %, тобто 479 тиражів із 493 лишаються на тій самій шкалі 0–120.
+ */
+const TRACK_BASE_MAX = 120;
+const TRACK_STEP = 100;
 
-const pctOfTrack = (value: number) => Math.min(100, Math.max(0, (value / TRACK_MAX) * 100));
+export function markupTrackMax(
+  rate: number,
+  marks: Array<number | null | undefined> = []
+): number {
+  // Відмітки рахуються нарівні з числом: орієнтир вище краю інакше прилипав би
+  // до правого кінця смуги — та сама брехня, тільки про інше число.
+  const top = [rate, ...marks].reduce<number>(
+    (best, value) =>
+      typeof value === "number" && Number.isFinite(value) ? Math.max(best, value) : best,
+    0
+  );
+  if (top < TRACK_BASE_MAX) return TRACK_BASE_MAX;
+  return Math.max(2, Math.floor(top / TRACK_STEP) + 1) * TRACK_STEP;
+}
+
+const pctOfTrack = (value: number, trackMax: number) =>
+  Math.min(100, Math.max(0, (value / (trackMax || TRACK_BASE_MAX)) * 100));
 
 /**
  * Наскільки близько до відмітки повзунок до неї прилипає, у відсотках накрутки.
@@ -481,6 +517,30 @@ export function QuoteRunMarkupPanel({
   // текст стану й підказка — і всі чотири мають сказати те саме число.
   const floorRate = minMarkupRateFor(dealType);
   const floorLabel = formatRatePercent(floorRate);
+  /**
+   * Край смуги рахується з числа — і ЗАМИРАЄ на час жесту.
+   *
+   * Без заморозки драг зі 150 вниз перетинав 120, край схлопувався з 200 на
+   * 120, і кружечок відлітав з-під курсора вдвічі далі, ніж його везли.
+   * Перераховуємо після відпускання: там зміна шкали читається як «місця
+   * більше, ніж здавалось», а не як зламаний повзунок.
+   */
+  const [dragTrackMax, setDragTrackMax] = useState<number | null>(null);
+  const liveTrackMax = markupTrackMax(markupRate, [floorRate, benchmark?.rate]);
+  const trackMax = dragTrackMax ?? liveTrackMax;
+  useEffect(() => {
+    if (dragTrackMax === null) return;
+    // Слухаємо ВІКНО, а не сам повзунок: мишку й палець регулярно відпускають за
+    // межами смуги, і подія на елементі тоді не приходить — край лишався б
+    // замороженим до наступного жесту.
+    const release = () => setDragTrackMax(null);
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    return () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+    };
+  }, [dragTrackMax]);
   const canMove = view.hasSlider && canEditMarkup && !off && !frozen;
   const note = markupNote({
     state,
@@ -504,7 +564,8 @@ export function QuoteRunMarkupPanel({
   // дно й так видно червоною зоною, і його число повторене в розкладі нижче.
   // Поріг у 9 пунктів шкали — це приблизно ширина «дно 20 %» на цій смузі.
   const showFloorLabel =
-    !benchmark || Math.abs(pctOfTrack(benchmark.rate) - pctOfTrack(floorRate)) > 9;
+    !benchmark ||
+    Math.abs(pctOfTrack(benchmark.rate, trackMax) - pctOfTrack(floorRate, trackMax)) > 9;
   /**
    * «Орієнтира немає» приколочене до середини смуги, і з дном 53,8 % воно
    * почало наїжджати на підпис дна — раніше дно стояло на 20 % біля лівого краю
@@ -514,7 +575,16 @@ export function QuoteRunMarkupPanel({
    * погодження, а відсутність орієнтира — довідка, і вона вже сказана тим, що
    * зеленої риски на смузі немає.
    */
-  const missingBenchmarkNoteFits = Math.abs(pctOfTrack(floorRate) - 50) > 9;
+  const missingBenchmarkNoteFits = Math.abs(pctOfTrack(floorRate, trackMax) - 50) > 9;
+  /**
+   * Нуль поступається дну, коли вони злиплись.
+   *
+   * На розсунутій шкалі дно 20 % падає на 5 % ширини (0–400) і підпис наїжджає
+   * на «0 %» — побачено в прев'ю 11.09.2026 на TS-0426-0061. Ховаємо саме нуль:
+   * ліва межа смуги очевидна й без підпису, а дно — правило, за яким ціна йде
+   * на погодження.
+   */
+  const showZeroLabel = !showFloorLabel || pctOfTrack(floorRate, trackMax) > 9;
 
   const track = (
     <>
@@ -546,7 +616,7 @@ export function QuoteRunMarkupPanel({
                   // накрутка теж нижче дна, але тривожити нею око нема за що.
                   doorsClosed ? "bg-warning-solid" : "bg-primary"
                 )}
-                style={{ width: `${pctOfTrack(markupRate)}%` }}
+                style={{ width: `${pctOfTrack(markupRate, trackMax)}%` }}
               />
             )}
           </div>
@@ -557,7 +627,7 @@ export function QuoteRunMarkupPanel({
                 canMove ? "shadow-sm" : "opacity-70",
                 doorsClosed ? "border-warning-solid" : "border-primary"
               )}
-              style={{ left: `${pctOfTrack(markupRate)}%` }}
+              style={{ left: `${pctOfTrack(markupRate, trackMax)}%` }}
               aria-hidden
             />
           )}
@@ -584,9 +654,10 @@ export function QuoteRunMarkupPanel({
             <input
               type="range"
               min={0}
-              max={TRACK_MAX}
+              max={trackMax}
               step={0.1}
-              value={Math.min(TRACK_MAX, Math.max(0, Number(markupRate) || 0))}
+              value={Math.min(trackMax, Math.max(0, Number(markupRate) || 0))}
+              onPointerDown={() => setDragTrackMax(liveTrackMax)}
               /*
                 БЕЗ disabled НА ЧАС ЗБЕРЕЖЕННЯ (REQ-175#p62).
 
@@ -622,13 +693,13 @@ export function QuoteRunMarkupPanel({
             кружечок виглядав би поламаним. */}
         <span
           className="pointer-events-none absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 rounded-full bg-destructive/70"
-          style={{ left: `${pctOfTrack(floorRate)}%` }}
+          style={{ left: `${pctOfTrack(floorRate, trackMax)}%` }}
           aria-hidden
         />
         {benchmark ? (
           <span
             className="pointer-events-none absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 rounded-full bg-success-solid"
-            style={{ left: `${pctOfTrack(benchmark.rate)}%` }}
+            style={{ left: `${pctOfTrack(benchmark.rate, trackMax)}%` }}
             aria-hidden
           />
         ) : null}
@@ -640,11 +711,11 @@ export function QuoteRunMarkupPanel({
           підпис показував не туди, куди показує риска. Успадковано з
           прототипу, де числа були такі, що це не впадало в око. */}
       <div className="relative h-4 text-2xs tabular-nums text-muted-foreground">
-        <span className="absolute left-0 whitespace-nowrap">0 %</span>
+        {showZeroLabel ? <span className="absolute left-0 whitespace-nowrap">0 %</span> : null}
         {showFloorLabel ? (
           <span
             className="absolute -translate-x-1/2 whitespace-nowrap text-destructive/80"
-            style={{ left: `${pctOfTrack(floorRate)}%` }}
+            style={{ left: `${pctOfTrack(floorRate, trackMax)}%` }}
           >
             дно {floorLabel} %
           </span>
@@ -652,7 +723,7 @@ export function QuoteRunMarkupPanel({
         {benchmark ? (
           <span
             className="absolute -translate-x-1/2 whitespace-nowrap text-success-foreground"
-            style={{ left: `${pctOfTrack(benchmark.rate)}%` }}
+            style={{ left: `${pctOfTrack(benchmark.rate, trackMax)}%` }}
           >
             орієнтир {formatRate(benchmark.rate)}
           </span>
@@ -661,7 +732,7 @@ export function QuoteRunMarkupPanel({
             {benchmarkLoading ? "рахуємо орієнтир…" : "орієнтира немає"}
           </span>
         ) : null}
-        <span className="absolute right-0 whitespace-nowrap">{TRACK_MAX} %</span>
+        <span className="absolute right-0 whitespace-nowrap">{trackMax} %</span>
       </div>
     </>
   );
