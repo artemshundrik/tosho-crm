@@ -279,7 +279,9 @@ const GIANT_THRESHOLD = 2000;
 
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12874,
-  "src/pages/QuoteDetailsPage.tsx": 6863,
+  // +1 (11.09.2026): рядок імпорту замість вкопаного переліку пресетів — той самий
+  // union був продубльований у пʼятьох файлах (REQ-36#f2).
+  "src/pages/QuoteDetailsPage.tsx": 6864,
   "src/pages/QuotesPage.tsx": 8329,
   "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
@@ -295,7 +297,8 @@ const CEILINGS = {
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2723,
   "src/components/design/DesignersDashboard.tsx": 2705,
   "src/features/orders/orderRecords.ts": 2614,
-  "src/lib/toshoApi.ts": 2642,
+  // +1 (11.09.2026): те саме, що в QuoteDetailsPage — імпорт типу замість копії union.
+  "src/lib/toshoApi.ts": 2643,
   "src/pages/TeamPage.tsx": 2182,
   "src/pages/ProfilePage.tsx": 2054,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,

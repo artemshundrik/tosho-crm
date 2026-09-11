@@ -49,6 +49,7 @@ import {
 } from "./config";
 import { normalizeUnitLabel } from "@/lib/units";
 import type { CatalogMethod, CatalogPriceTier, CatalogPrintPosition } from "./catalog-utils";
+import type { PrintConfiguratorPreset } from "@/lib/printPackage";
 
 /**
  * Читання даних картки прорахунку — окремо від компонента.
@@ -1138,7 +1139,7 @@ export type CatalogModelRowRaw = {
   image_url?: string | null;
   /** Артикул моделі — щоб поле позиції знаходило товар за ним (REQ-178#p7). */
   sku?: string | null;
-  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+  configuratorPreset?: PrintConfiguratorPreset | null;
   specPreset?: string | null;
   supplierUrl?: string | null;
   avantprintUrl?: string | null;

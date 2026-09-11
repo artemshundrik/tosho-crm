@@ -13,6 +13,7 @@ import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { findQuoteIdsByProductSku } from "@/lib/quoteSkuMatches";
 import type { AvatarAbsence } from "@/lib/absenceIndicator";
 import { getCurrentUserId } from "./currentUser";
+import type { PrintConfiguratorPreset } from "@/lib/printPackage";
 
 type ListQuotesParams = {
   teamId: string;
@@ -130,7 +131,7 @@ export type CatalogModelLookupRow = {
 
 export type CatalogModelMetadataLookup = {
   sku?: string | null;
-  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+  configuratorPreset?: PrintConfiguratorPreset | null;
 };
 
 const QUOTE_RUN_SELECT =

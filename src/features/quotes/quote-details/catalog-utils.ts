@@ -1,3 +1,4 @@
+import type { PrintConfiguratorPreset } from "@/lib/printPackage";
 export type CatalogMethod = { id: string; name: string; price?: number };
 export type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
 export type CatalogPriceTier = { id: string; min: number; max: number | null; price: number };
@@ -9,7 +10,7 @@ export type CatalogModel = {
   methodIds?: string[];
   imageUrl?: string;
   metadata?: {
-    configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+    configuratorPreset?: PrintConfiguratorPreset | null;
     /**
      * Пресет описового виду (`lib/printSpec.ts`). Свідомо ОКРЕМИЙ ключ, а не ще
      * одне значення в `configuratorPreset`: та union звужується десятком

@@ -60,6 +60,7 @@ import {
   formatPrintProductSummary,
   getPrintProductConfig,
   getPrintProductDetailSections,
+  type PrintConfiguratorPreset,
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
@@ -2450,7 +2451,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             name: string;
             price?: number | null;
             image_url?: string | null;
-            configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+            configuratorPreset?: PrintConfiguratorPreset | null;
             specPreset?: string | null;
             supplierUrl?: string | null;
             avantprintUrl?: string | null;
