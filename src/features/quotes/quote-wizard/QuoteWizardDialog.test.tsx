@@ -613,6 +613,21 @@ describe("тип угоди при створенні", () => {
 
     await user.click(screen.getByRole("radio", { name: /Поліграфія/ }));
     expect(screen.getByText("Тип угоди")).toBeInTheDocument();
+
+    /*
+      Перша версія поля взяла `Chip`, а той загортає всіх дітей в один
+      `<span class="font-medium">` без flex — шеврон перенісся під текст, а
+      підпис відірвався від лівого краю. Очима це видно одразу, а tsc і лінт
+      мовчать, тож тримаємо структуру тестом: підпис і шеврон — ПРЯМІ діти
+      кнопки, і вона не кругла.
+    */
+    const trigger = screen.getByRole("button", { name: /Оберіть тип угоди/ });
+    expect(trigger.className).toContain("rounded-lg");
+    expect(trigger.className).not.toContain("rounded-full");
+    const kids = Array.from(trigger.children);
+    expect(kids).toHaveLength(3);
+    expect(kids[1].textContent).toBe("Оберіть тип угоди");
+    expect(kids[2].tagName.toLowerCase()).toBe("svg");
   });
 
   it("поліграфію без типу угоди не створює, а з обраним — передає його далі", async () => {

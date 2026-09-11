@@ -165,8 +165,6 @@ export function QuoteWizardDialog({
   const [linkBusy, setLinkBusy] = React.useState(false);
   /** Скільки разів людина натиснула «Створити», а шапка була неповна. */
   const [headerNudge, setHeaderNudge] = React.useState(0);
-  /** Скільки разів людина натиснула «Створити», не обравши тип угоди. */
-  const [dealTypeNudge, setDealTypeNudge] = React.useState(0);
 
   /** Фото й назви для позицій «за посиланням»: черга імпорту сюди не заходить. */
   const [linkPreviews, setLinkPreviews] = React.useState<Record<string, QuoteImportLinkPreview>>({});
@@ -568,7 +566,6 @@ export function QuoteWizardDialog({
     // Те саме правило, що в старому білдері: поліграфію без типу угоди не
     // створюємо, бо від нього залежить дно, нижче якого ціну погоджує СЕО.
     if (!appendTo && kind === "print" && !dealType) {
-      setDealTypeNudge((count) => count + 1);
       setError("Тип угоди не обрано — від нього залежить накрутка й дно ціни.");
       return;
     }
@@ -781,7 +778,6 @@ export function QuoteWizardDialog({
                     setError(null);
                   }}
                   disabled={busy}
-                  invalid={dealTypeNudge > 0}
                 />
               </div>
             ) : null}

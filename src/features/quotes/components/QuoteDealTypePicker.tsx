@@ -1,6 +1,5 @@
 import { Check, ChevronDown, Handshake } from "lucide-react";
 
-import { Chip } from "@/components/ui/chip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,12 +18,17 @@ import { cn } from "@/lib/utils";
 /**
  * Вибір типу угоди — чотири рівні шкали Олени (REQ-182).
  *
- * ЧОМУ ЧИП ІЗ МЕНЮ, А НЕ РЯД ПІГУЛОК (Артем, 11.09.2026). Спершу це були чотири
+ * ЧОМУ ПОЛЕ З МЕНЮ, А НЕ РЯД ПІГУЛОК (Артем, 11.09.2026). Спершу це були чотири
  * кнопки в один ряд, і в лівій панелі вікна створення — 240 px — вони поламались:
  * «Стандартний виробничий» переносився у два рядки, відсоток відривався від
  * назви й ставав під нею окремо, а блок виріс на чотири поверхи. Тепер це ОДИН
- * контрол тієї самої породи, що замовник і менеджер поруч: чип із піктограмою,
- * а варіанти — у меню.
+ * контрол: піктограма, назва обраного, відсоток, шеврон — а варіанти в меню.
+ *
+ * ЧОМУ НЕ `Chip`. Перша спроба взяла його — і він загортає ВСІХ дітей в один
+ * `<span class="font-medium">` без `display:flex`, тож шеврон перенісся під
+ * текст, а підпис відірвався від лівого краю. Плюс сам чип круглий, а решта
+ * контролів на h-9 у цій базі має `rounded-lg`. Тому тут звичайна кнопка в тій
+ * самій мові, що поля вводу поруч.
  *
  * ЧОМУ ВІДСОТОК ВИДНО НА САМОМУ ЧИПІ. Без числа вибір читається як довідкове
  * поле «для звітності», яке ні на що не впливає, — і тоді всі лишають перше
@@ -39,37 +43,39 @@ export function QuoteDealTypePicker({
   value,
   onChange,
   disabled,
-  invalid,
 }: {
   /** `null` — ще не обрано: у вікні створення це відрізняється від «стандартного». */
   value: QuoteDealType | null;
   onChange: (next: QuoteDealType) => void;
   disabled?: boolean;
-  /** Натиснули «Створити», не обравши. До спроби порожньо — це не помилка. */
-  invalid?: boolean;
 }) {
   const rule = value ? QUOTE_DEAL_TYPES[value] : null;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Chip
-          size="md"
+        <button
+          type="button"
           disabled={disabled}
-          active={Boolean(rule)}
-          icon={<Handshake />}
-          className={cn("w-full justify-start", invalid && !rule && "border-destructive/50 text-destructive")}
+          className={cn(
+            "inline-flex h-9 w-full items-center gap-2 rounded-lg border px-3 text-sm font-medium",
+            "transition-colors duration-base ease-out motion-reduce:transition-none",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
+            "disabled:cursor-not-allowed disabled:opacity-60",
+            rule
+              ? "border-foreground/30 bg-muted text-foreground hover:bg-muted/80"
+              : "border-border/50 bg-background/55 text-muted-foreground hover:border-border hover:bg-background/70"
+          )}
         >
-          <span className="flex min-w-0 flex-1 items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate text-left">{rule?.label ?? "Оберіть тип угоди"}</span>
-            {rule ? (
-              <span className="shrink-0 tabular-nums text-2xs opacity-60">
-                {formatRatePercent(defaultMarkupRateFor(rule.key))} %
-              </span>
-            ) : null}
-          </span>
-          <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-60" />
-        </Chip>
+          <Handshake className="h-4 w-4 shrink-0 opacity-70" />
+          <span className="min-w-0 flex-1 truncate text-left">{rule?.label ?? "Оберіть тип угоди"}</span>
+          {rule ? (
+            <span className="shrink-0 tabular-nums text-2xs opacity-60">
+              {formatRatePercent(defaultMarkupRateFor(rule.key))} %
+            </span>
+          ) : null}
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+        </button>
       </DropdownMenuTrigger>
 
       {/* Меню ширше за сам чип: підказка «коли обирати саме цей тип» — це те,
