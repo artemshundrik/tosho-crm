@@ -18,6 +18,7 @@ import {
   addRange,
   formatMoneyRange,
   QUOTE_RUN_PRICING_COLUMNS,
+  loadDeclinedQuoteItemIds,
   quoteSaleTotalRanges,
   ZERO_RANGE,
   type MoneyRange,
@@ -264,7 +265,9 @@ async function sumByQuote(admin: SupabaseClient, quoteIds: string[]): Promise<Ma
     .in("quote_id", quoteIds)
     .limit(20000);
   if (error) throw new Error(`quote_item_runs: ${error.message}`);
-  return quoteSaleTotalRanges((data ?? []) as QuoteRunPricingRow[]);
+  // Позиції, від яких клієнт відмовився, у суму не входять (REQ-267#p1).
+  const declinedItemIds = await loadDeclinedQuoteItemIds(admin, quoteIds);
+  return quoteSaleTotalRanges((data ?? []) as QuoteRunPricingRow[], declinedItemIds);
 }
 
 /**

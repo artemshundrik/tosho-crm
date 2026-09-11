@@ -20,6 +20,7 @@ import {
   type QuoteRun,
 } from "@/lib/toshoApi";
 import { needsApprovedRunChoice, pickApprovedRun } from "@/lib/quoteRuns";
+import { isQuoteItemIncluded } from "@/lib/quoteItemApproval";
 import { collectRunsForItem, getRunLineTotal, getRunUnitPrice } from "@/features/orders/orderItemPricing";
 import { formatQuoteItemMethodsSummary } from "@/features/orders/quoteItemMethodsSummary";
 import { normalizeUnitLabel } from "@/lib/units";
@@ -890,6 +891,19 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     const quoteId = item.quote_id;
     if (!quoteId) return;
     quoteItemById.set(item.id, item);
+    /*
+      Позиція, від якої клієнт відмовився, у замовлення НЕ їде (REQ-267#p1).
+
+      Відсів стоїть саме тут, на вході, а не в мапері нижче: із цієї мапи
+      ростуть і підсумок картки замовлення, і список у вікні «Створити
+      замовлення», і сума `orderTotal` при самому створенні. Відсіяти в одному
+      з трьох означало б розвести їх між собою — рівно та помилка, через яку
+      TS-0826-0036 показував 43 823 ₴ замість 13 199 ₴.
+
+      `isQuoteItemIncluded` пропускає і `null`: прорахунки, про які питання не
+      ставили, лишаються з усіма позиціями, як були.
+    */
+    if (!isQuoteItemIncluded(item)) return;
     if (typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()) {
       catalogModelIds.add(item.catalog_model_id.trim());
     }

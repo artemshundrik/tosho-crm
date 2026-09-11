@@ -590,6 +590,10 @@ export type QuoteItemRecord = {
   print_position_id?: string | null;
   print_width_mm?: number | null;
   print_height_mm?: number | null;
+  /** Вибір клієнта по позиції: null = не питали, true = взяв, false = не взяв. */
+  is_approved?: boolean | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
 };
 
 type BasicSelectableQuery = {
@@ -619,10 +623,13 @@ export type QuoteItemsWithCatalog = {
   typeById: Map<string, CatalogTypeRow>;
 };
 
+// `is_approved, approved_at, approved_by` — вибір клієнта по позиції (REQ-267#p1).
+// Запасного проходу «без цих колонок» немає навмисно: міграція вже на проді, а
+// третій відкіт коштував би ще круга до бази на кожному відкритті картки.
 const QUOTE_ITEM_COLUMNS_WITH_METADATA =
-  "id, position, name, description, metadata, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
+  "id, position, name, description, metadata, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm, is_approved, approved_at, approved_by";
 const QUOTE_ITEM_COLUMNS_WITHOUT_METADATA =
-  "id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
+  "id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm, is_approved, approved_at, approved_by";
 
 function collectIds(rows: QuoteItemRecord[], key: "catalog_kind_id" | "catalog_model_id") {
   return Array.from(

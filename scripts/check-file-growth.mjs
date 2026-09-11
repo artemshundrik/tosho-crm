@@ -238,6 +238,28 @@ const GIANT_THRESHOLD = 2000;
  * і сам гейт у `saveRuns` — п'ять рядків рівно там, де відбувається запис, бо
  * питати треба на санітизованих рядках і скасовувати саме це збереження.
  *
+ * ПІДНЯТО 11.09.2026 для toshoApi (+2) — те саме ОДНЕ поле `is_approved` у типі
+ * рядка позиції та в переліку колонок, що й нижче. Мапер рядка не існує окремо
+ * від запиту, який його читає, тож виносити нема чого.
+ *
+ * ПІДНЯТО 11.09.2026 для QuoteDetailsPage (+97) — погодження окремих позицій
+ * прорахунку (REQ-267#p1).
+ *
+ * Спершу винесено все, що виноситься, і вийшло більше, ніж лишилось: правило
+ * трьох станів живе чистою функцією в `lib/quoteItemApproval.ts` (з тестами),
+ * стан вікна разом із записом у базу й рядком у стрічку — у
+ * `quote-details/useQuoteItemChoice.ts`, саме вікно — у
+ * `QuoteItemChoiceDialog.tsx`, смужка «Клієнт не взяв» — у
+ * `QuoteItemDeclinedBanner.tsx`. Чотири модулі, ~460 рядків, жоден із яких у
+ * сторінку не потрапив.
+ *
+ * У сторінці лишилось протягування, яке за визначенням лежить там, де стоїть
+ * виклик: три поля в типі позиції та три рядки в її мапері, відсів відхиленого
+ * у двох підсумках, виклик хука з двома рефами (запис статусу оголошений НИЖЧЕ
+ * за вікно, яке його кличе — те саме кільце, що й у `saveRunsRef`), шість
+ * рядків перехоплення всередині `handleQuickStatusChange` і два монтування в
+ * дереві позиції.
+ *
  * ПІДНЯТО 07.09.2026 для трьох файлів на +3, +2 і +2 рядки — заміна системних
  * підказок `title=` на власні (REQ-175#p6). Виносити тут нічого: приріст — це
  * рівно обгортка `<HoverTip asChild>` навколо іконкової кнопки, по два рядки на
@@ -257,7 +279,7 @@ const GIANT_THRESHOLD = 2000;
 
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12874,
-  "src/pages/QuoteDetailsPage.tsx": 6766,
+  "src/pages/QuoteDetailsPage.tsx": 6863,
   "src/pages/QuotesPage.tsx": 8329,
   "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
@@ -273,7 +295,7 @@ const CEILINGS = {
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2723,
   "src/components/design/DesignersDashboard.tsx": 2705,
   "src/features/orders/orderRecords.ts": 2614,
-  "src/lib/toshoApi.ts": 2640,
+  "src/lib/toshoApi.ts": 2642,
   "src/pages/TeamPage.tsx": 2182,
   "src/pages/ProfilePage.tsx": 2054,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,

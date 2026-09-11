@@ -123,6 +123,14 @@ import {
   normalizeQuoteRunModelPriceVat,
   type QuoteRunModelPriceVat,
 } from "@/lib/quoteRuns";
+import {
+  filterIncludedQuoteItems,
+  isQuoteItemDeclined,
+  needsQuoteItemChoice,
+} from "@/lib/quoteItemApproval";
+import { QuoteItemChoiceDialog } from "@/features/quotes/quote-details/QuoteItemChoiceDialog";
+import { QuoteItemDeclinedBanner } from "@/features/quotes/quote-details/QuoteItemDeclinedBanner";
+import { useQuoteItemChoice } from "@/features/quotes/quote-details/useQuoteItemChoice";
 import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatGateMessage, MODEL_PRICE_VAT_ROW_HINT } from "@/features/quotes/quote-details/quoteRunModelPriceVat";
 import { QuoteDealTypeBadge } from "@/features/quotes/quote-details/QuoteDealTypeBadge";
 import { isMarkupFrozen } from "@/lib/quoteMarkupApproval";
@@ -412,6 +420,13 @@ type QuoteItem = {
   qty: number;
   unit: string;
   price: number;
+  /**
+   * Вибір клієнта по позиції (REQ-267#p1). `null`/відсутнє — питання не
+   * ставили; правило читання одне на застосунок — `isQuoteItemIncluded`.
+   */
+  is_approved?: boolean | null;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
   description?: string;
   metadata?: QuoteItemMetadata | null;
   catalogTypeId?: string;
@@ -1344,9 +1359,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const updatedMinutes = minutesAgo(quote?.updated_at ?? null);
 
+  /** Що рахується в гроші: усе, крім відхиленого клієнтом (REQ-267#p1). */
+  const includedItems = useMemo(() => filterIncludedQuoteItems(items), [items]);
+
   const itemsSubtotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + item.qty * item.price, 0);
-  }, [items]);
+    return includedItems.reduce((sum, item) => sum + item.qty * item.price, 0);
+  }, [includedItems]);
 
   const selectedRun = useMemo(
     () => runs.find((run) => run.id === selectedRunId) ?? pickApprovedRun(runs) ?? runs[0] ?? null,
@@ -1398,7 +1416,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, []);
 
   const activeRunPricingSummaries = useMemo(() => {
-    const itemSummaries = items
+    // Рахуємо ЛИШЕ погоджене: саме звідси беруться підсумок картки, смуга
+    // розкладу й число, яке бачить розділ «Замовлення».
+    const itemSummaries = includedItems
       .map((item) => {
         const run = getSelectedRunForItem(item.id);
         if (!run) return null;
@@ -1431,7 +1451,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         pricing: getRunPricing(selectedRun),
       },
     ];
-  }, [getRunPricing, getSelectedRunForItem, items, selectedRun]);
+  }, [getRunPricing, getSelectedRunForItem, includedItems, selectedRun]);
 
   const activeRunPricingTotals = useMemo(
     () =>
@@ -1745,6 +1765,37 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     saveRuns: useCallback(async () => {
       await saveRunsRef.current(undefined, { silent: true });
     }, []),
+  });
+
+  /**
+   * «Що погодив клієнт» (REQ-267#p1) — через ref, бо запис статусу живе нижче, а
+   * вікно відкривається ізсередини нього. Той самий прийом, що й `saveRunsRef`.
+   */
+  const approveAfterItemChoiceRef = useRef<(note: string) => Promise<void>>(async () => {});
+  /** Перечитати позиції після запису вибору — `loadItems` теж оголошений нижче. */
+  const loadItemsRef = useRef<() => Promise<void>>(async () => {});
+
+  const itemChoicePricing = useCallback(
+    (item: { id: string }) => {
+      const run = getSelectedRunForItem(item.id);
+      if (!run) return { qty: 0, lineTotal: 0 };
+      return { qty: Number(run.quantity) || 0, lineTotal: getRunPricing(run).saleTotal };
+    },
+    [getRunPricing, getSelectedRunForItem]
+  );
+
+  const itemChoice = useQuoteItemChoice({
+    quoteId,
+    teamId,
+    userId,
+    items,
+    pricingFor: itemChoicePricing,
+    onSaved: () => loadItemsRef.current(),
+    onApprove: (note) => approveAfterItemChoiceRef.current(note),
+    onError: (message) => {
+      setStatusError(message);
+      toast.error("Не вдалося зберегти вибір", { description: message });
+    },
   });
 
   const { blockingRunIdSet, markupGateRuns, unsavedRuns, runChoiceItems, focusOnPage } = useQuoteHeaderFlags({
@@ -2855,6 +2906,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             qty: Number(row.qty ?? 0) || 0,
             unit: normalizeUnitLabel(row.unit),
             price: Number(row.unit_price ?? 0) || 0,
+            is_approved: row.is_approved ?? null,
+            approvedAt: row.approved_at ?? null,
+            approvedBy: row.approved_by ?? null,
             description: row.description ?? undefined,
             metadata: parseQuoteItemMetadata((row as Record<string, unknown>).metadata),
             catalogTypeId: row.catalog_type_id ?? undefined,
@@ -2884,6 +2938,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setItemsLoading(false);
     setItemsLoaded(true);
   }, [quoteId, teamId]);
+
+  // У ефекті, а не під час рендеру — та сама причина, що й у saveRunsRef вище.
+  useEffect(() => {
+    loadItemsRef.current = loadItems;
+  });
 
   useEffect(() => {
     if (!runsLoaded) return;
@@ -3469,13 +3528,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   // Quick status change
-  const handleQuickStatusChange = async (newStatus: string, noteOverride?: string) => {
+  const handleQuickStatusChange = async (
+    newStatus: string,
+    noteOverride?: string,
+    options?: { itemChoiceDone?: boolean }
+  ) => {
     const nextStatus = normalizeStatus(newStatus);
     // Двері назовні — усі гейти в одному вузлі: quote-details/quoteStatusGates.
     const gate = resolveQuoteStatusGate(nextStatus, markup.gate.blocked, dealType, runIdsNeedingModelPriceVat.size);
     if (gate) {
       setStatusError(gate.message);
       toast.error(gate.title, { description: gate.message });
+      return;
+    }
+    // «Що погодив клієнт» — ПІСЛЯ гейтів (не питати про позиції на прорахунку,
+    // який однаково не пустять) і ПЕРЕД записом (відповідь має доїхати разом зі
+    // статусом). Одна позиція питання не має — див. useQuoteItemChoice.
+    if (nextStatus === "approved" && !options?.itemChoiceDone && needsQuoteItemChoice(items)) {
+      itemChoice.request(noteOverride ?? statusNote);
       return;
     }
     setStatusBusy(true);
@@ -3565,6 +3635,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     setStatusBusy(false);
   };
+
+  // Довести затвердження до кінця після того, як вікно зберегло відповідь.
+  useEffect(() => {
+    approveAfterItemChoiceRef.current = async (note: string) => {
+      await handleQuickStatusChange("approved", note, { itemChoiceDone: true });
+    };
+  });
 
   const buildCancelNote = () => {
     const parts = [];
@@ -4616,9 +4693,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                              аркуша. Мова «Економіки» — крок поверхні bg-card плюс
                              волосінь border/50 — тримає її кольором. */
                           "overflow-hidden rounded-2xl border border-border/50 bg-card",
-                          itemIndex > 0 && "mt-3"
+                          itemIndex > 0 && "mt-3",
+                          /* Відхилена позиція ЛИШАЄТЬСЯ на сторінці, лише гасне
+                             цілком — разом із мініатюрою й цінами, щоб жодне
+                             число всередині не виглядало чинним (REQ-267#p1). */
+                          isQuoteItemDeclined(item) && "opacity-55 saturate-50"
                         )}
                       >
+                        {isQuoteItemDeclined(item) ? (
+                          <QuoteItemDeclinedBanner
+                            at={item.approvedAt}
+                            byLabel={item.approvedBy ? memberById.get(item.approvedBy) : null}
+                          />
+                        ) : null}
                         {/*
                           Поле картки — 16 px, а не 12.
 
@@ -6614,6 +6701,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         customerId={quote?.customer_id ?? null}
         customerName={quote?.customer_name ?? null}
         customerLogoUrl={quote?.customer_logo_url ?? null}
+      />
+
+      <QuoteItemChoiceDialog
+        open={itemChoice.open}
+        items={itemChoice.dialogItems}
+        selectedIds={itemChoice.selectedIds}
+        busy={itemChoice.busy}
+        currencyFormatter={(value) => formatCurrency(value, quote?.currency)}
+        onToggle={itemChoice.toggle}
+        onCancel={itemChoice.cancel}
+        onSubmit={() => void itemChoice.confirm()}
       />
 
       <Dialog

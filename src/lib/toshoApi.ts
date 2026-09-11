@@ -1872,6 +1872,8 @@ export type QuoteItemExportRow = {
   print_position_id?: string | null;
   print_width_mm?: number | null;
   print_height_mm?: number | null;
+  /** Вибір клієнта по позиції: null = не питали, true = взяв, false = не взяв (REQ-267#p1). */
+  is_approved?: boolean | null;
 };
 
 export async function listQuoteSets(teamId: string, limit = 30): Promise<QuoteSetListRow[]> {
@@ -2213,9 +2215,9 @@ export async function listQuoteItemsForQuotes(params: {
   const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
   if (uniqueQuoteIds.length === 0) return [];
   const columnsWithMetadata =
-    "id,quote_id,position,name,description,metadata,qty,unit,unit_price,line_total,methods,attachment,catalog_type_id,catalog_kind_id,catalog_model_id,print_position_id,print_width_mm,print_height_mm";
+    "id,quote_id,position,name,description,metadata,qty,unit,unit_price,line_total,methods,attachment,catalog_type_id,catalog_kind_id,catalog_model_id,print_position_id,print_width_mm,print_height_mm,is_approved";
   const columnsWithoutMetadata =
-    "id,quote_id,position,name,description,qty,unit,unit_price,line_total,methods,attachment,catalog_type_id,catalog_kind_id,catalog_model_id,print_position_id,print_width_mm,print_height_mm";
+    "id,quote_id,position,name,description,qty,unit,unit_price,line_total,methods,attachment,catalog_type_id,catalog_kind_id,catalog_model_id,print_position_id,print_width_mm,print_height_mm,is_approved";
 
   const readRows = async (withTeamFilter: boolean, withMetadata: boolean) => {
     type QuoteItemsQuery = {

@@ -4,8 +4,17 @@
 // getRunSalePricingFromRun). Тут та сама формула для Netlify-функцій, які не
 // імпортують клієнтський код. Міняється формула там — правити і тут.
 //
+// ВИНЯТОК — `quoteItemApproval` нижче, і він свідомий. Копія формули виправдана
+// тим, що поруч із нею живе весь клієнт Supabase; у правила погодження позиції
+// імпортів немає ВЗАГАЛІ, тож тягнути сюди нічого. А друга копія правила «що
+// означає порожній прапорець» коштувала б рівно тієї помилки, від якої
+// `check-rule-readers` і стереже: полагодили в одному читачі, забули в другому.
+// Так само роблять сусіди — `_teamAssistant` бере `formatJobRole` із src/lib.
+//
 // ВАЖЛИВО: quotes.total і quote_items.unit_price — застарілі снапшоти й НЕ є
 // реальною ціною. Рахувати завжди з quote_item_runs.
+
+import { isQuoteItemIncluded } from "../../../src/lib/quoteItemApproval";
 
 export type QuoteRunPricingRow = {
   quote_id?: string | null;
@@ -93,16 +102,30 @@ export const QUOTE_RUN_PRICING_COLUMNS =
  *
  * Це ДЗЕРКАЛО того, як рахує комерційна пропозиція (REQ-57,
  * `itemsTotalRange` у src/pages/QuotesPage.tsx). Свідомо не враховуємо
- * `is_approved`: КП його теж не враховує, а розійтися з документом, який
- * менеджер щойно надіслав клієнтові, дорожче за зайву точність. Міняти —
- * то в обох місцях разом.
+ * `quote_item_runs.is_approved`: КП його теж не враховує, а розійтися з
+ * документом, який менеджер щойно надіслав клієнтові, дорожче за зайву
+ * точність. Міняти — то в обох місцях разом.
+ *
+ * А от ПОЗИЦІЮ, від якої клієнт відмовився, викидаємо (REQ-267#p1) — і це не
+ * суперечить абзацу вище, бо питання інше. Тираж — варіант кількості всередині
+ * позиції, там межі чесні. Позиція з `quote_items.is_approved = false` — це
+ * товар, якого в замовленні НЕ БУДЕ взагалі, і тримати його в межах означало б
+ * і далі малювати в дайджесті 43 823 ₴ там, де угода на 13 199 ₴.
+ *
+ * `declinedItemIds` не передали — рахуємо як рахували. Виклик без нього має
+ * лишатись коректним: правило читання порожнього прапорця («не питали» =
+ * «входить») однакове на клієнті й на сервері.
  */
-export function quoteSaleTotalRanges(runs: QuoteRunPricingRow[]): Map<string, MoneyRange> {
+export function quoteSaleTotalRanges(
+  runs: QuoteRunPricingRow[],
+  declinedItemIds?: ReadonlySet<string>
+): Map<string, MoneyRange> {
   const byQuote = new Map<string, Map<string, MoneyRange>>();
 
   for (const run of runs) {
     const quoteId = run.quote_id;
     if (!quoteId) continue;
+    if (run.quote_item_id && declinedItemIds?.has(run.quote_item_id)) continue;
 
     // Рядок без позиції нікуди не згрупувати, тож він сам собі позиція:
     // так він потрапить у суму, а не зникне і не склеїться з чужим тиражем.
@@ -125,6 +148,55 @@ export function quoteSaleTotalRanges(runs: QuoteRunPricingRow[]): Map<string, Mo
     totals.set(quoteId, { min, max });
   }
   return totals;
+}
+
+/**
+ * Мінімум від клієнта Supabase, потрібний завантажувачу нижче. Структурний тип,
+ * а не `SupabaseClient`: цей модуль читають і функції з admin-клієнтом, і
+ * тести, і тягти сюди весь пакет заради одного `select` було б дорожче.
+ */
+type QuoteItemsReader = { schema: (name: string) => unknown };
+
+/**
+ * Вузький вигляд того, що повертає `schema()`. Звуження робиться ВСЕРЕДИНІ
+ * функції, а не в типі параметра: справжній клієнт Supabase має настільки
+ * глибокі типи білдера, що звірка з ними валить компілятор у
+ * «Type instantiation is excessively deep» (TS2589). Той самий прийом, що й у
+ * `toshoApi.ts` з `as unknown as QuoteItemsTable`.
+ */
+type QuoteItemsTable = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      in: (
+        column: string,
+        values: string[]
+      ) => PromiseLike<{ data: unknown; error: { message?: string | null } | null }>;
+    };
+  };
+};
+
+/**
+ * Позиції, від яких клієнт відмовився (REQ-267#p1) — на вхід у
+ * `quoteSaleTotalRanges`.
+ *
+ * ЛИШЕ ЯВНЕ `false`. `null` означає «питання не ставили», і всі 333 наявні
+ * позиції саме такі: читати порожнечу як відмову означало б обнулити суми всіх
+ * прорахунків у дайджесті першої ж ночі.
+ */
+export async function loadDeclinedQuoteItemIds(
+  admin: QuoteItemsReader,
+  quoteIds: string[]
+): Promise<Set<string>> {
+  if (quoteIds.length === 0) return new Set();
+  const { data, error } = await (admin.schema("tosho") as QuoteItemsTable)
+    .from("quote_items")
+    .select("id,is_approved")
+    .in("quote_id", quoteIds);
+  if (error) throw new Error(`quote_items: ${error.message}`);
+  const rows = (data ?? []) as Array<{ id?: string | null; is_approved?: boolean | null }>;
+  return new Set(
+    rows.filter((row) => row.id && !isQuoteItemIncluded(row)).map((row) => String(row.id))
+  );
 }
 
 /** Нуль для згортання: додавати межі можна лише до меж. */

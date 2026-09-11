@@ -69,8 +69,34 @@ const RULES = [
       "src/lib/quoteRuns.ts": "сам модуль правила",
       "src/features/quotes/quote-import/mapping.ts":
         "імпорт ексельки СТВОРЮЄ тиражі й ставить прапорець у false; позначку він не переносить — погодження це рішення клієнта, а не факт із файлу",
+      "src/lib/quoteItemApproval.ts":
+        "сусіднє правило: погодження ПОЗИЦІЇ (quote_items.is_approved), тиражів не чіпає",
+      "src/features/quotes/quote-details/useQuoteItemChoice.ts":
+        "пише погодження ПОЗИЦІЇ; слово «тираж» трапляється лише в поясненні, звідки береться сума рядка",
     },
     fix: "Погоджений тираж один на прорахунок, і перенесення позначки має йти через applyApprovedRunToggle із @/lib/quoteRuns — інакше на прорахунку опиняється два погоджених тиражі або жодного, а замовлення бере не ту ціну.",
+  },
+  {
+    name: "погоджена позиція прорахунку",
+    module: "quoteItemApproval",
+    /**
+     * Той самий прапорець на СУСІДНЬОМУ рівні (REQ-267#p1): `quote_items.is_approved`
+     * каже, чи взяв клієнт цю позицію, тоді як `quote_item_runs.is_approved` —
+     * який тираж у межах позиції. Правила різні: тиражі взаємовиключні (один
+     * погоджений), позиції ні (можна взяти всі).
+     */
+    raw: /\bis_approved\b/,
+    scope: /quote_items|quoteItem|позиці/i,
+    allow: {
+      "src/lib/quoteItemApproval.ts": "сам модуль правила",
+      "src/lib/toshoApi.ts": "перелік колонок і тип рядка — значення не тлумачить",
+      "src/features/quotes/quote-details/queries.ts": "перелік колонок і тип рядка — значення не тлумачить",
+      "src/features/quotes/quote-import/mapping.ts": "імпорт ексельки ставить прапорець ТИРАЖУ, позицій не чіпає",
+      "src/lib/quoteRuns.ts": "сусіднє правило: тиражі, не позиції",
+      "src/features/quotes/quote-details/QuoteRunRows.tsx":
+        "рядки ТИРАЖІВ; слово «позиція» трапляється лише в поясненнях, прапорця позиції файл не бачить",
+    },
+    fix: "Чи входить позиція в підсумок і в замовлення — питай isQuoteItemIncluded / filterIncludedQuoteItems із @/lib/quoteItemApproval. Порожній прапорець означає «не питали» і має рахуватись, а `is_approved === true` у читача мовчки викинув би всі 333 наявні позиції.",
   },
   {
     name: "тип угоди й дно накрутки",

@@ -104,6 +104,36 @@ describe("quoteSaleTotalRanges", () => {
   it("порожній вхід дає порожню мапу", () => {
     expect(quoteSaleTotalRanges([]).size).toBe(0);
   });
+
+  /**
+   * Живий випадок TS-0826-0036 (REQ-267#p1): три парасольки по одному тиражу,
+   * клієнт узяв одну. До цього дайджест малював 43 823 ₴ на угоді в 13 199 ₴.
+   */
+  it("викидає позиції, від яких клієнт відмовився", () => {
+    const totals = quoteSaleTotalRanges(
+      [
+        run({ quote_item_id: "lido", quantity: 100 }), // 1000
+        run({ quote_item_id: "reflect", quantity: 150 }), // 1500
+        run({ quote_item_id: "odessa", quantity: 200 }), // 2000
+      ],
+      new Set(["reflect", "odessa"])
+    );
+    expect(totals.get("q1")).toEqual({ min: 1000, max: 1000 });
+  });
+
+  /**
+   * Найважливіше: виклик БЕЗ переліку відхилених має рахувати так, як рахував
+   * до появи прапорця. Усі 333 наявні позиції мають `is_approved = null`, і
+   * зміна поведінки за замовчуванням обнулила б дайджест першої ж ночі.
+   */
+  it("без переліку відхилених рахує все, як рахував", () => {
+    const runs = [
+      run({ quote_item_id: "lido", quantity: 100 }),
+      run({ quote_item_id: "reflect", quantity: 150 }),
+    ];
+    expect(quoteSaleTotalRanges(runs)).toEqual(quoteSaleTotalRanges(runs, new Set()));
+    expect(quoteSaleTotalRanges(runs).get("q1")).toEqual({ min: 2500, max: 2500 });
+  });
 });
 
 describe("складання й показ меж", () => {
