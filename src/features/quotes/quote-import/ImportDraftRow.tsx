@@ -109,16 +109,21 @@ export function ImportItemPhoto({
   const base =
     "h-15 w-auto min-w-11 max-w-20 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60";
 
+  /*
+    Вид, який ми виробляємо самі, ЗАВЖДИ малюється, а не показує фото з
+    каталогу: у рейці вибору стоїть та сама річ, і позиція мусить бути тим
+    самим предметом, а не чужою картинкою, яка колись потрапила в модель.
+    Малюнок займає плитку майже цілком — у половинному розмірі він читався як значок.
+  */
+  if (specPreset) {
+    return (
+      <div className={cn(base, "aspect-square flex items-center justify-center bg-muted/30 text-foreground/75")}>
+        <PrintModelArt presetKey={specPreset} className="h-10 w-10" />
+      </div>
+    );
+  }
+
   if (!preview) {
-    // Вид, який ми виробляємо самі, фото не має й не матиме — замість сірої
-    // плитки «фото немає» малюємо саму річ (REQ-36).
-    if (specPreset) {
-      return (
-        <div className={cn(base, "aspect-square flex items-center justify-center bg-muted/40 text-foreground/70")}>
-          <PrintModelArt presetKey={specPreset} className="h-7 w-7" />
-        </div>
-      );
-    }
     return (
       <div className={cn(base, "aspect-square flex items-center justify-center bg-muted/40")} aria-hidden>
         <ImageOff className="h-3.5 w-3.5 text-muted-foreground/40" />
@@ -260,6 +265,14 @@ export function ImportDraftRow({
     draft.flags.length > 0 ||
     Boolean(preview && preview.status !== "pending" && preview.status !== "done");
 
+  /*
+    ПОЛІГРАФІЯ ЖИВЕ ОДНИМ РЯДКОМ (Артем, 11.09.2026). Нанесення тут не питають
+    взагалі, а вид — це факт із рейки, не вибір, тож нижня смуга лишалась із
+    самим підписом і тиражами й коштувала кожній позиції зайвої висоти. Вид іде
+    під назву, тиражі — ліворуч від кошика, смуга не малюється.
+  */
+  const isPrintModel = Boolean(draft.catalog?.specPreset);
+
   const kindChip =
     kindOptions && onChangeKind && !draft.catalog?.modelId ? (
       <KindChip value={draft.catalog ?? null} options={kindOptions} disabled={disabled} onChange={onChangeKind} />
@@ -272,6 +285,16 @@ export function ImportDraftRow({
     ) : null;
 
   const price = draft.poolPrice ?? null;
+
+  const runsField = (
+    <RunsField
+      runs={draft.runs}
+      disabled={disabled}
+      onPatchRun={onPatchRun}
+      onAddRun={onAddRun}
+      onRemoveRun={onRemoveRun}
+    />
+  );
 
   return (
     <div
@@ -316,6 +339,8 @@ export function ImportDraftRow({
               onChange={(event) => onPatch({ name: event.target.value })}
             />
           )}
+
+          {isPrintModel ? <div className="flex items-center gap-1.5">{kindChip}</div> : null}
 
           {hasMeta ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
@@ -418,6 +443,8 @@ export function ImportDraftRow({
           </div>
         ) : null}
 
+        {isPrintModel ? <div className="shrink-0">{runsField}</div> : null}
+
         {onRemove ? (
           <button
             type="button"
@@ -437,7 +464,8 @@ export function ImportDraftRow({
         250 · 500 · 1000 означає три ціни на вибір замовника, а не 1750 штук, —
         тому між ними немає ані знаків додавання, ані підсумку.
       */}
-      <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/20 px-3 py-2">
+      {isPrintModel ? null : (
+        <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/20 px-3 py-2">
         {/*
           Ліва частина стискається, права — ні. Поки нанесення не назвали,
           смуга пропонує методи, і їх завжди більше, ніж влазить: без цього
@@ -469,16 +497,9 @@ export function ImportDraftRow({
           де інших чисел немає. Два підписи на кожній позиції коштували більше
           за те, що пояснювали.
         */}
-        <div className="ml-auto shrink-0 pl-2">
-          <RunsField
-            runs={draft.runs}
-            disabled={disabled}
-            onPatchRun={onPatchRun}
-            onAddRun={onAddRun}
-            onRemoveRun={onRemoveRun}
-          />
+          <div className="ml-auto shrink-0 pl-2">{runsField}</div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
