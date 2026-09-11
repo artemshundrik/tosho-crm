@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 
 import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions";
 import { QuoteItemCommandField } from "./QuoteItemCommandField";
+import { PrintModelPicker, selectPrintModels } from "./PrintModelPicker";
 import { QUOTE_KINDS, type QuoteKindValue } from "./quoteWizardKinds";
 import { useCatalogSuggestions } from "./useCatalogSuggestions";
 import { useKindImprintOptions } from "@/features/quotes/quote-details/useKindImprintOptions";
@@ -291,6 +292,16 @@ export function QuoteWizardDialog({
    * це поліграфія, а людина ще ні на що не відповідала. Далі перемикач її —
    * змішаний прорахунок буває, і вгадувати за другим товаром було б свавіллям.
    */
+  /**
+   * Під «Поліграфією» показуємо картки того, що виробляємо самі, замість пошуку
+   * по всьому каталогу (REQ-36#p37). Порожній список — пошук лишається: краще
+   * старий шлях, ніж вікно без способу додати позицію.
+   */
+  const printModels = React.useMemo(
+    () => (kind === "print" ? selectPrintModels(catalog.suggestions) : []),
+    [kind, catalog.suggestions]
+  );
+
   const handlePickCatalog = (suggestion: CatalogSuggestion) => {
     setError(null);
     if (drafts.length === 0 && suggestion.quoteType) {
@@ -724,6 +735,9 @@ export function QuoteWizardDialog({
                 </div>
               ) : null}
 
+              {printModels.length > 0 ? (
+                <PrintModelPicker suggestions={catalog.suggestions} onPick={handlePickCatalog} disabled={busy} />
+              ) : (
               <QuoteItemCommandField
                 teamId={teamId}
                 kind={kind}
@@ -740,6 +754,7 @@ export function QuoteWizardDialog({
                 onPickSupplier={handleAddSupplierProduct}
                 onInvalid={setError}
               />
+              )}
 
 
               {drafts.length > 0 ? (

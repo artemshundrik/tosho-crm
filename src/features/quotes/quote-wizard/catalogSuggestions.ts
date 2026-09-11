@@ -51,6 +51,13 @@ export type CatalogSuggestion = QuoteImportDraftCatalog & {
   matched?: CatalogVariantMatch;
   /** `print` / `merch` / інше з `catalog_types.quote_type` — щоб перемикач «Рахуємо» міг піти за вибором. */
   quoteType: string | null;
+  /**
+   * Ключ опису полів виробу (`metadata.specPreset`) — є лише в того, що ми
+   * ВИРОБЛЯЄМО під замовника. Готовий товар постачальника його не має й мати не
+   * повинен: у нього своя специфікація, і в нього питають тільки нанесення
+   * (рішення Олени 11.09, REQ-36#p36).
+   */
+  specPreset: string | null;
 };
 
 export type CatalogSuggestionSource = {
@@ -80,6 +87,7 @@ export function buildCatalogSuggestions(source: CatalogSuggestionSource): Catalo
       typeName: type.name,
       imageUrl: model.image_url ?? null,
       quoteType: type.quote_type ?? null,
+      specPreset: model.specPreset ?? null,
     });
   }
   return result;
