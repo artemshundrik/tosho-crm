@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { scoreCompanyNameMatch } from "@/lib/companyNameSearch";
 
+import { catalogPlace } from "./catalogPlace";
 import { PrintModelArt } from "./printModelArt";
 import type { CatalogSuggestion } from "./catalogSuggestions";
 
@@ -99,17 +100,18 @@ export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled 
                 type="button"
                 disabled={disabled}
                 onClick={() => onPick(model)}
-                title={`${model.kindName} · ${model.typeName}`}
+                title={catalogPlace(model.kindName, model.typeName)}
                 className={cn(
                   "flex h-[104px] w-[104px] shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-xl border px-2 text-center transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                   "disabled:cursor-not-allowed disabled:opacity-60",
+                  // Монохром: вибране позначає контур і тон підкладки, не колір.
                   added
-                    ? "border-primary/40 bg-primary/5 text-primary"
+                    ? "border-foreground/60 bg-muted/60 text-foreground"
                     : "border-border/50 bg-background/60 text-muted-foreground hover:border-border hover:bg-muted/40"
                 )}
               >
-                <PrintModelArt presetKey={model.specPreset} className={added ? "text-primary" : "text-foreground/70"} />
+                <PrintModelArt presetKey={model.specPreset} className="text-foreground/70" />
                 <span className="line-clamp-2 text-2xs font-semibold leading-tight text-foreground">
                   {model.name}
                 </span>
@@ -119,10 +121,6 @@ export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled 
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Це те, що виробляємо під замовника. Готовий щоденник чи блокнот від постачальника шукайте в «Товарі» — там
-        питаємо тільки нанесення.
-      </p>
     </div>
   );
 }

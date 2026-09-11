@@ -327,6 +327,7 @@ export function QuoteWizardDialog({
           typeId: suggestion.typeId,
           kindName: suggestion.kindName,
           typeName: suggestion.typeName,
+          specPreset: suggestion.specPreset,
           imageUrl: suggestion.imageUrl,
         },
       }),
@@ -730,7 +731,9 @@ export function QuoteWizardDialog({
               <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Позиції
               </span>
-              <span className="truncate text-2xs text-muted-foreground/70">поле розуміє саме: посилання чи назва</span>
+              {printModels.length > 0 ? null : (
+                <span className="truncate text-2xs text-muted-foreground/70">поле розуміє саме: посилання чи назва</span>
+              )}
             </div>
 
             <div className="flex-1 space-y-3 px-5 pb-4 md:min-h-0 md:overflow-y-auto">

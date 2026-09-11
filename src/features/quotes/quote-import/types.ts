@@ -176,6 +176,8 @@ export type QuoteImportDraftCatalog = {
   /** Підписи для рядка прев'ю — «Худі · Одяг», — щоб не ходити в базу вдруге. */
   kindName: string;
   typeName: string;
+  /** `metadata.specPreset` моделі: вид, який виробляємо самі, малюється сам. */
+  specPreset?: string | null;
   imageUrl: string | null;
   /** Вид — припущення з назви, а не вибір людини: рядок каже це словами. */
   guessed?: boolean;

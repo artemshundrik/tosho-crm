@@ -9,6 +9,8 @@ import { NumberInput } from "@/components/ui/number-input";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { supplierNameFromUrl } from "@/lib/supplierPoolRows";
 import { cn } from "@/lib/utils";
+import { catalogPlace } from "@/features/quotes/quote-wizard/catalogPlace";
+import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
 
@@ -81,7 +83,16 @@ const currencyLabel = (code: string) => (code === "UAH" ? "грн" : code);
  * новини: у першому випадку менеджер відкриє посилання сам, у другому й
  * відкривати нема сенсу.
  */
-export function ImportItemPhoto({ preview, name }: { preview: QuoteImportLinkPreview | undefined; name: string }) {
+export function ImportItemPhoto({
+  preview,
+  name,
+  specPreset,
+}: {
+  preview: QuoteImportLinkPreview | undefined;
+  name: string;
+  /** `metadata.specPreset` моделі — вид, який ми виробляємо самі. */
+  specPreset?: string | null;
+}) {
   /*
     ВИСОТА — ЯК У ТЕКСТУ ПОРУЧ, ШИРИНА — ЯК У САМОГО ЗНІМКА (Артем,
     09.09.2026). Квадрат 52 px домальовував товару поля: реглан вертикальний,
@@ -99,6 +110,15 @@ export function ImportItemPhoto({ preview, name }: { preview: QuoteImportLinkPre
     "h-15 w-auto min-w-11 max-w-20 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60";
 
   if (!preview) {
+    // Вид, який ми виробляємо самі, фото не має й не матиме — замість сірої
+    // плитки «фото немає» малюємо саму річ (REQ-36).
+    if (specPreset) {
+      return (
+        <div className={cn(base, "aspect-square flex items-center justify-center bg-muted/40 text-foreground/70")}>
+          <PrintModelArt presetKey={specPreset} className="h-7 w-7" />
+        </div>
+      );
+    }
     return (
       <div className={cn(base, "aspect-square flex items-center justify-center bg-muted/40")} aria-hidden>
         <ImageOff className="h-3.5 w-3.5 text-muted-foreground/40" />
@@ -247,7 +267,7 @@ export function ImportDraftRow({
       // Позиція з каталогу: вид — факт, а не вибір, тож це підпис, а не кнопка.
       <span className={cn(STATIC_CHIP, "gap-1.5")}>
         <Tag className="h-3.5 w-3.5" />
-        {draft.catalog.kindName} · {draft.catalog.typeName}
+        {catalogPlace(draft.catalog.kindName, draft.catalog.typeName)}
       </span>
     ) : null;
 
@@ -278,7 +298,7 @@ export function ImportDraftRow({
             className="data-[state=checked]:border-foreground data-[state=checked]:bg-foreground data-[state=checked]:text-background"
           />
         )}
-        <ImportItemPhoto preview={preview} name={draft.name} />
+        <ImportItemPhoto preview={preview} name={draft.name} specPreset={draft.catalog?.specPreset} />
         <div className="min-w-0 flex-1 space-y-1">
           {nameIsGiven ? (
             <div className="truncate text-sm font-medium" title={draft.name}>
