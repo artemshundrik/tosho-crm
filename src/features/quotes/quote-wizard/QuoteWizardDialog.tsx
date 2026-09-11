@@ -36,6 +36,8 @@ import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions
 import { QuoteItemCommandField } from "./QuoteItemCommandField";
 import { PrintModelPicker, selectPrintModels } from "./PrintModelPicker";
 import { QUOTE_KINDS, type QuoteKindValue } from "./quoteWizardKinds";
+import { QuoteDealTypePicker } from "@/features/quotes/components/QuoteDealTypePicker";
+import type { QuoteDealType } from "@/lib/quoteDealType";
 import { useCatalogSuggestions } from "./useCatalogSuggestions";
 import { useKindImprintOptions } from "@/features/quotes/quote-details/useKindImprintOptions";
 
@@ -124,7 +126,7 @@ export function QuoteWizardDialog({
   headerIssue: string | null;
   runDefaultsFor: (kind: QuoteKindValue) => QuoteImportRunDefaults;
   /** Створити прорахунок і віддати його id. Кличеться ПІСЛЯ прев'ю. */
-  onPrepareQuote: (kind: QuoteKindValue) => Promise<string | null>;
+  onPrepareQuote: (kind: QuoteKindValue, dealType: QuoteDealType | null) => Promise<string | null>;
   onCreated: (quoteId: string) => void;
   /**
    * Дописати позиції в НАЯВНИЙ прорахунок (REQ-157#p7) — те саме вікно, тільки
@@ -142,6 +144,16 @@ export function QuoteWizardDialog({
     прорахунку, до відкриття вікна.
   */
   const [kind, setKind] = React.useState<QuoteKindValue>(appendTo?.kind ?? "merch");
+  /*
+    ТИП УГОДИ ПИТАЄМО ТУТ (Артем, 11.09.2026). Візард його не передавав узагалі,
+    тож поліграфічний прорахунок мовчки лягав на дефолт бази — «стандартний
+    виробничий», дно 35 % маржі. Менеджер уже на цьому екрані знає, тендер це чи
+    малий кастом, а от у картці він цієї плашки може й не помітити.
+
+    `null` — це «ще не обрано», а не «стандартний»: інакше пропуск був би
+    невідрізнимий від свідомого вибору. Змінити тип у картці можна й потім.
+  */
+  const [dealType, setDealType] = React.useState<QuoteDealType | null>(null);
   const [stage, setStage] = React.useState<Stage>("compose");
   const [drafts, setDrafts] = React.useState<QuoteImportDraftItem[]>([]);
   const [warnings, setWarnings] = React.useState<string[]>([]);
@@ -153,6 +165,8 @@ export function QuoteWizardDialog({
   const [linkBusy, setLinkBusy] = React.useState(false);
   /** Скільки разів людина натиснула «Створити», а шапка була неповна. */
   const [headerNudge, setHeaderNudge] = React.useState(0);
+  /** Скільки разів людина натиснула «Створити», не обравши тип угоди. */
+  const [dealTypeNudge, setDealTypeNudge] = React.useState(0);
 
   /** Фото й назви для позицій «за посиланням»: черга імпорту сюди не заходить. */
   const [linkPreviews, setLinkPreviews] = React.useState<Record<string, QuoteImportLinkPreview>>({});
@@ -551,6 +565,13 @@ export function QuoteWizardDialog({
       setHeaderNudge((count) => count + 1);
       return;
     }
+    // Те саме правило, що в старому білдері: поліграфію без типу угоди не
+    // створюємо, бо від нього залежить дно, нижче якого ціну погоджує СЕО.
+    if (!appendTo && kind === "print" && !dealType) {
+      setDealTypeNudge((count) => count + 1);
+      setError("Оберіть тип угоди — від нього залежить накрутка й дно ціни.");
+      return;
+    }
     // Дедлайна тут навмисно немає (Артем, 09.09.2026: «дедлайн не відкривайте,
     // можна створити прорахунок без дедлайну»). Порожній дедлайн — робочий
     // стан, а не пропуск, тож і питання про нього не ставиться.
@@ -567,7 +588,7 @@ export function QuoteWizardDialog({
 
     let quoteId: string | null = appendTo?.quoteId ?? null;
     try {
-      if (!appendTo) quoteId = await onPrepareQuote(kind);
+      if (!appendTo) quoteId = await onPrepareQuote(kind, dealType);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не вдалося створити прорахунок.");
     }
@@ -740,6 +761,38 @@ export function QuoteWizardDialog({
                 })}
               </div>
             </div>
+
+            {/*
+              ТІЛЬКИ НА ПОЛІГРАФІЇ — те саме правило, що у вікні редагування
+              (REQ-182): шкала Олени виросла з поліграфії, а на мерчі лишається
+              старе дно 20 %, і питати там означало б просити рішення, яке ні на
+              що не впливає.
+            */}
+            {kind === "print" ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Тип угоди</span>
+                <div
+                  className={cn(
+                    "rounded-xl transition-colors",
+                    // Підсвічуємо лише після спроби створити: до неї порожній
+                    // вибір — це «ще не дійшли», а не помилка.
+                    dealTypeNudge > 0 && !dealType && "ring-2 ring-destructive/40"
+                  )}
+                >
+                  <QuoteDealTypePicker
+                    value={dealType}
+                    onChange={(next) => {
+                      setDealType(next);
+                      setError(null);
+                    }}
+                    disabled={busy}
+                  />
+                </div>
+                <span className="text-2xs leading-snug text-muted-foreground/80">
+                  Задає накрутку в тиражах і дно, нижче якого ціну погоджує СЕО. Змінити можна в картці.
+                </span>
+              </div>
+            ) : null}
           </aside>
           )}
 

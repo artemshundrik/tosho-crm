@@ -225,7 +225,7 @@ describe("QuoteWizardDialog — один екран", () => {
 
     await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
 
-    await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("merch"));
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("merch", null));
     expect(insertQuoteItemRow).toHaveBeenCalledTimes(1);
     expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({ quote_id: "quote-1", name: "Футболка бавовна" });
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith("quote-1"));
@@ -281,10 +281,12 @@ describe("QuoteWizardDialog — один екран", () => {
 
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "250");
     await user.click(screen.getByRole("radio", { name: /Поліграфія/ }));
+    // Поліграфія вимагає типу угоди — від нього залежить дно ціни (REQ-182#p25).
+    await user.click(screen.getByRole("button", { name: /Стандартний виробничий/ }));
     expect(create).toBeEnabled();
     await user.click(create);
 
-    await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("print"));
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("print", "standard"));
     expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({
       name: "Кепка six-panel",
       qty: 250,
@@ -317,7 +319,7 @@ describe("QuoteWizardDialog — один екран", () => {
     await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "40");
     await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
 
-    await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("merch"));
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("merch", null));
     expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({
       name: "Реглан LENNY",
       catalog_model_id: "m-lenny",
@@ -592,5 +594,44 @@ describe("QuoteWizardDialog — один екран", () => {
     expect(screen.queryByDisplayValue("Футболка бавовна")).not.toBeInTheDocument();
     expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Обрати файл Excel" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Тип угоди задає накрутку в тиражах і дно, нижче якого ціну погоджує СЕО. До
+ * 11.09.2026 візард його не передавав узагалі, тож поліграфічний прорахунок
+ * мовчки лягав на дефолт бази — і помилку було видно лише в грошах.
+ */
+describe("тип угоди при створенні", () => {
+  it("питають лише на поліграфії", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+
+    // На товарі чинна стара шкала СЕО — питати там нема про що.
+    expect(screen.queryByText("Тип угоди")).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: /Поліграфія/ }));
+    expect(screen.getByText("Тип угоди")).toBeInTheDocument();
+  });
+
+  it("поліграфію без типу угоди не створює, а з обраним — передає його далі", async () => {
+    const user = userEvent.setup();
+    const { prepareQuote } = renderWizard();
+
+    const field = screen.getByRole("combobox", { name: "Товар: посилання або назва" });
+    await user.type(field, "Щоденник А5");
+    const list = await screen.findByRole("listbox", { name: "Підказки з каталогу" });
+    await user.click(await within(list).findByRole("option", { name: /як нову позицію/ }));
+    await user.type(screen.getByRole("textbox", { name: "Кількість тиражу" }), "100");
+    await user.click(screen.getByRole("radio", { name: /Поліграфія/ }));
+
+    const create = screen.getByRole("button", { name: /Створити прорахунок/ });
+    await user.click(create);
+    expect(prepareQuote).not.toHaveBeenCalled();
+    expect(screen.getByText(/Оберіть тип угоди/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Тендер/ }));
+    await user.click(create);
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("print", "tender"));
   });
 });

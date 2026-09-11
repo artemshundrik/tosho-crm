@@ -26,7 +26,8 @@ export function QuoteDealTypePicker({
   onChange,
   disabled,
 }: {
-  value: QuoteDealType;
+  /** `null` — ще не обрано: у вікні створення це відрізняється від «стандартного». */
+  value: QuoteDealType | null;
   onChange: (next: QuoteDealType) => void;
   disabled?: boolean;
 }) {

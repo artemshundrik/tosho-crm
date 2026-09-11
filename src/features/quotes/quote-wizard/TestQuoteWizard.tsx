@@ -9,6 +9,7 @@ import { getManagerRateForUser } from "@/lib/managerRate";
 import { defaultMarkupRateFor, resolveQuoteDealType } from "@/lib/quoteDealType";
 import { createQuote } from "@/lib/toshoApi";
 
+import type { QuoteDealType } from "@/lib/quoteDealType";
 import { QuoteWizardDialog } from "./QuoteWizardDialog";
 import {
   createEmptyQuoteWizardHeader,
@@ -87,7 +88,7 @@ export function TestQuoteWizardButton({
    * це `createQuote`, а не мутація білдера.
    */
   const prepareQuote = React.useCallback(
-    async (kind: QuoteKindValue) => {
+    async (kind: QuoteKindValue, dealType: QuoteDealType | null) => {
       if (createdQuoteRef.current) return createdQuoteRef.current;
       const issue = getQuoteWizardHeaderIssue(header);
       if (issue) throw new Error(issue);
@@ -102,6 +103,10 @@ export function TestQuoteWizardButton({
         customerName: header.partyLabel || null,
         customerLogoUrl: header.partyLogoUrl,
         quoteType: kind,
+        // Тип угоди задає накрутку й дно. Без нього прорахунок лягав на дефолт
+        // бази «standard» — тобто мовчки ставав стандартним виробничим, хоч
+        // менеджер міг створювати тендер (REQ-182#p25).
+        dealType,
         currency: header.currency,
         assignedTo: header.managerId || null,
         deadlineAt: header.deadlineAt || null,
