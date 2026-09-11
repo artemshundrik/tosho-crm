@@ -3,8 +3,13 @@ import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { describe, expect, it } from "vitest";
 
-import { PrintSpecFields } from "./PrintSpecFields";
-import { PRINT_SPEC_DIARY, createEmptyPrintSpecValues, type PrintSpecValues } from "@/lib/printSpec";
+import { PrintSpecFields, getPrintSpecSections } from "./PrintSpecFields";
+import {
+  PRINT_SPEC_DIARY,
+  PRINT_SPEC_FLYER,
+  createEmptyPrintSpecValues,
+  type PrintSpecValues,
+} from "@/lib/printSpec";
 
 /**
  * Розгалуження щоденника — те, заради чого паперовий чекліст узагалі переїхав у
@@ -65,5 +70,41 @@ describe("параметри щоденника", () => {
     expect(screen.getByText("Щільність паперу")).toBeTruthy();
     expect(screen.getByText("Папір блока")).toBeTruthy();
     expect(screen.getByText("Кольоровість друку")).toBeTruthy();
+  });
+});
+
+/**
+ * Лічильники рейки розділів (варіант А). Вони показують «3/5», і знаменник тут
+ * не сталий: умовні поля з'являються й зникають від вибору. Якщо рахувати ВСІ
+ * поля пресету, щоденник показував би «5 з 33» назавжди — тобто прогрес, який
+ * ніколи не дійде до кінця, хоч усе заповнено.
+ */
+describe("розділи для рейки", () => {
+  it("знаменник рахує лише видимі поля й росте разом із розгалуженням", () => {
+    const values = createEmptyPrintSpecValues(PRINT_SPEC_DIARY);
+
+    const before = getPrintSpecSections(PRINT_SPEC_DIARY, values);
+    const cover = before.find((section) => section.title === "Обкладинка");
+    expect(cover?.fields.length).toBe(3);
+    expect(cover?.filled).toBe(0);
+
+    // Шкірзамінник відкриває ще два питання — і знаменник мусить це врахувати.
+    const after = getPrintSpecSections(PRINT_SPEC_DIARY, { ...values, coverMaterial: "leatherette" });
+    const coverAfter = after.find((section) => section.title === "Обкладинка");
+    expect(coverAfter?.fields.length).toBe(5);
+    expect(coverAfter?.filled).toBe(1);
+  });
+
+  it("розділ без жодного видимого поля в рейку не потрапляє", () => {
+    const values = createEmptyPrintSpecValues(PRINT_SPEC_DIARY);
+    const titles = getPrintSpecSections(PRINT_SPEC_DIARY, values).map((section) => section.title);
+    // «Ляссе» має лише одне безумовне поле — вид ляссе, тож розділ є.
+    expect(titles).toContain("Ляссе");
+    expect(titles.length).toBe(PRINT_SPEC_DIARY.sections.length);
+  });
+
+  it("у листівки розділів менше трьох — рейка там не малюється", () => {
+    const sections = getPrintSpecSections(PRINT_SPEC_FLYER, createEmptyPrintSpecValues(PRINT_SPEC_FLYER));
+    expect(sections.length).toBe(2);
   });
 });

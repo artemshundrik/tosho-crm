@@ -12,7 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PrintSpecFields } from "@/components/quotes/PrintSpecFields";
+import { PrintSpecFields, getPrintSpecSections } from "@/components/quotes/PrintSpecFields";
+import { PrintSpecSectionRail } from "@/features/quotes/quote-details/PrintSpecSectionRail";
+import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 import {
   createEmptyPrintSpecValues,
   formatPrintSpecSummary,
@@ -66,10 +68,46 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
     [preset, savedValues]
   );
 
+  /*
+    Розділи рахуються з ЧЕРНЕТКИ, а не зі збереженого: умовні поля з'являються й
+    зникають від вибору («Кількість пантонів» — лише при пантонах), тож лічильники
+    рейки мусять міняти й знаменник теж, поки людина клікає.
+  */
+  const sections = React.useMemo(() => (preset ? getPrintSpecSections(preset, draft) : []), [preset, draft]);
+
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [activeSection, setActiveSection] = React.useState(0);
+
+  const scrollToSection = React.useCallback((index: number) => {
+    const container = scrollRef.current;
+    const target = container?.querySelector<HTMLElement>(`[data-spec-section="${index}"]`);
+    if (!container || !target) return;
+    // scrollIntoView тут не годиться: він крутить і зовнішню сторінку теж,
+    // а вікно стоїть поверх неї. Рахуємо зсув усередині самого контейнера.
+    container.scrollTo({ top: target.offsetTop - container.offsetTop - 8, behavior: "smooth" });
+  }, []);
+
+  /*
+    Активний розділ — останній, чий заголовок уже проїхав верх колонки. Поріг у
+    24 px, щоб розділ ставав активним, коли його заголовок ТІЛЬКИ підійшов, а не
+    коли вже зник: інакше рейка відстає на один рядок від того, що видно.
+  */
+  const handleScroll = React.useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const marks = container.querySelectorAll<HTMLElement>("[data-spec-section]");
+    let next = 0;
+    marks.forEach((mark, index) => {
+      if (mark.offsetTop - container.offsetTop - container.scrollTop <= 24) next = index;
+    });
+    setActiveSection(next);
+  }, []);
+
   if (!preset) return null;
 
   const openEditor = () => {
     setDraft(isPrintSpecFilled(preset, savedValues) ? savedValues : createEmptyPrintSpecValues(preset));
+    setActiveSection(0);
     setOpen(true);
   };
 
@@ -149,24 +187,54 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
       )}
 
       <Dialog open={open} onOpenChange={(next) => (saving ? null : setOpen(next))}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{preset.label}</DialogTitle>
-            <DialogDescription>
-              Параметри виробу для прорахунку. Обмежень немає — якщо потрібного варіанта немає в списку, вибирайте
-              «Інше» і пишіть текстом.
-            </DialogDescription>
+        {/*
+          ТРИ ЧАСТИНИ СТОЯТЬ, ЇДЕ ЛИШЕ СЕРЕДИНА (варіант А, Артем 11.09.2026).
+
+          Було одне вікно з `overflow-y-auto` на всьому: у щоденника — вісім
+          розділів і двадцять полів, і при прокрутці зникали і назва виду, і
+          «Зберегти». Людина дописувала останнє поле й мусила гортати назад,
+          щоб зберегти.
+
+          Тепер шапка, рейка й футер прибиті, а прокручується тільки колонка
+          полів. Ширина 960, а не 768: рейка з'їдає 240, і без цього поля в
+          двох колонках стали б вужчі за нинішні.
+        */}
+        <DialogContent className="flex h-[min(88vh,46rem)] max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0 sm:max-w-[960px]">
+          <DialogHeader className="flex-row items-center gap-4 border-b border-border/50 px-6 py-4">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-muted/70 text-foreground/75">
+              <PrintModelArt presetKey={preset.key} className="h-6 w-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <DialogTitle>Параметри виробу · {preset.label}</DialogTitle>
+              <DialogDescription>
+                Обмежень немає — якщо потрібного варіанта немає в списку, вибирайте «Інше» і пишіть текстом.
+              </DialogDescription>
+            </div>
           </DialogHeader>
 
-          <PrintSpecFields preset={preset} values={draft} onChange={setDraft} disabled={saving} />
+          <div className="flex min-h-0 flex-1">
+            {/* Рейка — від трьох розділів: на двох вона нічого не додає до форми. */}
+            {sections.length >= 3 ? (
+              <PrintSpecSectionRail sections={sections} activeIndex={activeSection} onPick={scrollToSection} />
+            ) : null}
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
-              Скасувати
-            </Button>
-            <Button onClick={() => void save()} loading={saving}>
-              Зберегти
-            </Button>
+            <div ref={scrollRef} onScroll={handleScroll} className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
+              <PrintSpecFields preset={preset} values={draft} onChange={setDraft} disabled={saving} />
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-border/50 bg-muted/25 px-6 py-3.5 sm:items-center sm:justify-between">
+            <span className="hidden text-xs text-muted-foreground sm:block">
+              Збережене видно в картці прорахунку, у списку та в дизайн-задачі.
+            </span>
+            <span className="flex gap-2">
+              <Button variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
+                Скасувати
+              </Button>
+              <Button onClick={() => void save()} loading={saving}>
+                Зберегти
+              </Button>
+            </span>
           </DialogFooter>
         </DialogContent>
       </Dialog>

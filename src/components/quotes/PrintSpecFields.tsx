@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   CUSTOM_OPTION_VALUE,
   customValueKey,
+  isPrintSpecFieldFilled,
   isPrintSpecFieldVisible,
   type PrintSpecField,
   type PrintSpecPreset,
@@ -48,11 +49,15 @@ const ChipPicker: React.FC<{
           type="button"
           disabled={disabled}
           className={cn(
-            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
+            // РАДІУС ЗА ВИСОТОЮ, а не піл (Артем, 11.09.2026). Повністю круглий
+            // контрол у цій базі не вживається ніде: Input і Button на h-9 мають
+            // rounded-lg, і форма з пілюль читалась як чужий віджет усередині
+            // рідного вікна. Радіус тепер той самий, що в поля поруч.
+            "inline-flex h-9 w-full items-center rounded-lg border px-3 text-sm transition-all duration-150",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             "disabled:cursor-not-allowed disabled:opacity-60",
             selected
-              ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
+              ? "border-foreground/30 bg-muted text-foreground hover:bg-muted/80"
               : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70"
           )}
         >
@@ -73,7 +78,7 @@ const ChipPicker: React.FC<{
                 size="sm"
                 className={cn(
                   "h-9 w-full justify-between text-sm",
-                  active && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                  active && "bg-muted text-foreground hover:bg-muted/80 hover:text-foreground"
                 )}
                 onClick={() => {
                   onChange(option.value);
@@ -273,20 +278,47 @@ export function PrintSpecFields({ preset, values, onChange, disabled }: PrintSpe
     );
   };
 
+  const sections = getPrintSpecSections(preset, values);
+
   return (
     <div className="space-y-5">
-      {preset.sections.map((section) => {
-        const sectionFields = preset.fields.filter(
-          (field) => field.section === section && isPrintSpecFieldVisible(field, values)
-        );
-        if (sectionFields.length === 0) return null;
-        return (
-          <div key={section} className="space-y-4 border-t border-border/40 pt-5 first:border-t-0 first:pt-0">
-            <div className="text-sm font-semibold text-foreground">{section}</div>
-            <div className="grid gap-4 sm:grid-cols-2">{sectionFields.map(renderField)}</div>
-          </div>
-        );
-      })}
+      {sections.map((section, index) => (
+        <div
+          key={section.title}
+          // Індексом, а не назвою: рейка шукає розділ усередині свого вікна
+          // (`querySelector`), і назва з пробілами й лапками там потребувала б
+          // екранування, якого ніхто не згадає при наступній правці.
+          data-spec-section={index}
+          className="space-y-4 border-t border-border/40 pt-5 first:border-t-0 first:pt-0"
+        >
+          <div className="text-sm font-semibold text-foreground">{section.title}</div>
+          <div className="grid gap-4 sm:grid-cols-2">{section.fields.map(renderField)}</div>
+        </div>
+      ))}
     </div>
   );
+}
+
+export type PrintSpecSectionInfo = {
+  title: string;
+  fields: PrintSpecField[];
+  /** На скільки полів розділу вже відповіли. */
+  filled: number;
+};
+
+/**
+ * Видимі розділи з лічильниками — одне джерело і для форми, і для рейки.
+ *
+ * Розділ без жодного видимого поля не існує: у щоденнику «Ляссе» без вибраного
+ * виду ляссе — це один порожній заголовок, а в рейці він був би рядком «0/0».
+ */
+export function getPrintSpecSections(preset: PrintSpecPreset, values: PrintSpecValues): PrintSpecSectionInfo[] {
+  return preset.sections
+    .map((title) => {
+      const fields = preset.fields.filter(
+        (field) => field.section === title && isPrintSpecFieldVisible(field, values)
+      );
+      return { title, fields, filled: fields.filter((field) => isPrintSpecFieldFilled(field, values)).length };
+    })
+    .filter((section) => section.fields.length > 0);
 }

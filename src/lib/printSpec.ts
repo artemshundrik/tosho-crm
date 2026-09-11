@@ -1480,19 +1480,31 @@ export function formatPrintSpecSummary(preset: PrintSpecPreset, values: PrintSpe
  * порожня конфігурація — нормальний стан, а не помилка.
  */
 export function isPrintSpecFilled(preset: PrintSpecPreset, values: PrintSpecValues): boolean {
-  return preset.fields.some((field) => {
-    if (!isPrintSpecFieldVisible(field, values)) return false;
-    const raw = values[field.id] ?? null;
-    if (field.type === "multi") return asListValue(raw).length > 0;
-    if (field.type === "sizeRows") {
-      return asSizeRows(raw).some((size) => size.width.trim() !== "" || size.height.trim() !== "");
-    }
-    const value = asStringValue(raw).trim();
-    if (value === CUSTOM_OPTION_VALUE) {
-      return asStringValue(values[customValueKey(field.id)] ?? null).trim() !== "";
-    }
-    return value !== "";
-  });
+  return preset.fields.some((field) => isPrintSpecFieldVisible(field, values) && isPrintSpecFieldFilled(field, values));
+}
+
+/**
+ * Чи відповіли на це поле.
+ *
+ * Окремо від `isPrintSpecFilled` заради лічильників розділів: рейка питає те
+ * саме поле за полем, і другий такий самий розбір «що вважати відповіддю»
+ * розійшовся б із цим при першій же правці — надто що для `allowCustom`
+ * відповідь лежить в іншому ключі, ніж сам вибір.
+ *
+ * Видимість тут НЕ перевіряється: у полі, схованого умовою, відповідь може
+ * лишатись від попереднього вибору, і питати про неї має той, хто знає контекст.
+ */
+export function isPrintSpecFieldFilled(field: PrintSpecField, values: PrintSpecValues): boolean {
+  const raw = values[field.id] ?? null;
+  if (field.type === "multi") return asListValue(raw).length > 0;
+  if (field.type === "sizeRows") {
+    return asSizeRows(raw).some((size) => size.width.trim() !== "" || size.height.trim() !== "");
+  }
+  const value = asStringValue(raw).trim();
+  if (value === CUSTOM_OPTION_VALUE) {
+    return asStringValue(values[customValueKey(field.id)] ?? null).trim() !== "";
+  }
+  return value !== "";
 }
 
 /**
