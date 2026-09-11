@@ -143,6 +143,19 @@ async function seedBrowserState(page: Page): Promise<void> {
       // Прорахунки за замовчуванням відкриваються списком, а сценарії описують
       // ДОШКУ. Перемикач запам'ятовується тут же, тож ставимо його наперед.
       localStorage.setItem("quotes_view_mode", "kanban");
+      // Разове оголошення про накрутку накриває картку прорахунку по центру
+      // екрана. Ключ іменний, тож дістаємо id користувача з живої сесії —
+      // інакше довелось би вкопати сюди конкретний акаунт.
+      for (const key of Object.keys(localStorage)) {
+        if (!key.includes("auth-token")) continue;
+        try {
+          const session = JSON.parse(localStorage.getItem(key) ?? "{}");
+          const userId = session?.user?.id ?? session?.currentSession?.user?.id;
+          if (userId) localStorage.setItem(`tosho_margin_notice_v2_${userId}`, new Date().toISOString());
+        } catch {
+          // Формат сесії змінився — не привід валити вхід.
+        }
+      }
     } catch {
       // Профіль без доступу до сховища — не привід валити вхід.
     }
