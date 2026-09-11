@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { chromium, type FullConfig, type Page } from "@playwright/test";
 
 import { AUTH_STATE_FILE, loadLocalEnv } from "./env";
+import { installWriteGuard } from "./writeGuard";
 
 /**
  * СЕСІЯ ДЛЯ ПРОГОНУ. Один вхід на весь набір, далі сценарії стартують уже
@@ -63,6 +64,21 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
       hasSavedState ? { storageState: AUTH_STATE_FILE, baseURL } : { baseURL }
     );
     const page = await context.newPage();
+
+    /**
+     * СТОРОЖ ПОТРІБЕН І ТУТ, хоч це «лише вхід».
+     *
+     * Знайдено 11.09.2026 після перших прогонів: цей файл ходив на /overview
+     * БЕЗ гальма, і застосунок устигав дописати в ПРОД свою побутівку —
+     * присутність і «бачив розділ». П'ять рядків у member_seen_modules і один
+     * у user_presence приїхали саме звідси, а не зі сценаріїв.
+     *
+     * Самі рядки нешкідливі. Небезпечне інше: правило «записів не буває»
+     * трималось на тому, що сторож скрізь, а тут у ньому була дірка — і про
+     * неї ніхто не знав. Вхід від цього не страждає: `/auth/v1/*` гальмо
+     * пропускає навмисно, інакше сесія не народилась би.
+     */
+    installWriteGuard(page);
 
     await page.goto("/overview", { waitUntil: "domcontentloaded" });
     // Сторінка входу може з'явитись не миттєво: AuthProvider спершу перевіряє
