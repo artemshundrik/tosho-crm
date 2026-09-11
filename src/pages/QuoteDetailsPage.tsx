@@ -93,6 +93,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { QuoteItemThumb } from "@/features/quotes/quote-details/QuoteItemThumb";
+import { QuoteItemTitle } from "@/features/quotes/quote-details/QuoteItemTitle";
 import { catalogPlaceSlash } from "@/features/quotes/quote-wizard/catalogPlace";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
@@ -4575,8 +4576,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     // Рід, колір і артикул — ОДИН рядок під назвою, а не пігулки
                     // поруч із нею: це паспорт товару, його читають разом, і
                     // жодна з трьох частин не є дією, щоб мати рамку кнопки.
+                    // Поліграфія — виняток: вид іде бейджем (див. QuoteItemTitle).
                     const itemMeta = [
-                      metaLine,
+                      modelSpecPreset ? null : metaLine,
                       catalogVariant?.name,
                       itemSku ? `Артикул: ${itemSku}` : null,
                     ].filter((part): part is string => Boolean(part));
@@ -4667,19 +4669,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 півряд паспортних даних — тобто тим нижче, чим більше
                                 про товар відомо. */}
                             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                              <div className="min-w-0">
-                                <div className="truncate text-xl font-semibold leading-tight tracking-tight text-foreground">
-                                  {item.title}
-                                </div>
-                                {itemMeta.length > 0 ? (
-                                  <div
-                                    className="mt-1 truncate text-sm text-muted-foreground"
-                                    title={itemMeta.join(" · ")}
-                                  >
-                                    {itemMeta.join(" · ")}
-                                  </div>
-                                ) : null}
-                              </div>
+                              <QuoteItemTitle
+                                title={item.title}
+                                place={modelSpecPreset ? metaLine : null}
+                                meta={itemMeta}
+                              />
 
                               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                                 <QuoteItemSupplierLinks

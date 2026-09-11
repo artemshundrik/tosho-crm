@@ -10,6 +10,7 @@ import { HoverTip } from "@/components/ui/hover-tip";
 import { supplierNameFromUrl } from "@/lib/supplierPoolRows";
 import { cn } from "@/lib/utils";
 import { catalogPlace } from "@/features/quotes/quote-wizard/catalogPlace";
+import { CatalogPlaceChip } from "@/features/quotes/quote-wizard/CatalogPlaceChip";
 import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
@@ -52,14 +53,6 @@ export type DraftKindOption = Pick<QuoteImportDraftCatalog, "kindId" | "kindName
  * ЦІНА — ЧИСЛО, А НЕ ПОЛЕ, і суми «тираж × ціна» немає навмисно: до націнки
  * вона виглядала б як відповідь, не будучи нею.
  */
-
-/**
- * Чип, який нічого не робить: вид, колір, код. Висота й радіус — ті самі, що в
- * `Chip size="sm"` із нанесення, бо вони стоять в одній смузі; але це <span>, а
- * не кнопка — пігулка, на яку не можна натиснути, не має вдавати кнопку.
- */
-const STATIC_CHIP =
-  "inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full bg-muted px-3 text-xs font-medium text-muted-foreground";
 
 /** Гола іконка-дія в рядку позиції: та сама вага, що в кошика. */
 const ICON_ACTION =
@@ -278,10 +271,7 @@ export function ImportDraftRow({
       <KindChip value={draft.catalog ?? null} options={kindOptions} disabled={disabled} onChange={onChangeKind} />
     ) : draft.catalog ? (
       // Позиція з каталогу: вид — факт, а не вибір, тож це підпис, а не кнопка.
-      <span className={cn(STATIC_CHIP, "gap-1.5")}>
-        <Tag className="h-3.5 w-3.5" />
-        {catalogPlace(draft.catalog.kindName, draft.catalog.typeName)}
-      </span>
+      <CatalogPlaceChip label={catalogPlace(draft.catalog.kindName, draft.catalog.typeName)} />
     ) : null;
 
   const price = draft.poolPrice ?? null;
