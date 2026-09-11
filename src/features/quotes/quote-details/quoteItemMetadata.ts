@@ -49,6 +49,11 @@ export function parseQuoteItemMetadata(value: unknown): QuoteItemMetadata | null
     }
   }
 
+  // Роль «варіант» — плаский прапорець, і білий список тут особливо важливий:
+  // без цього рядка позначка зникала б на перезавантаженні сторінки, як свого
+  // часу зникав `supplierUrl` (REQ-233).
+  if (record.isVariant === true) metadata.isVariant = true;
+
   // Параметри описових видів.
   const printSpec = parsePrintSpecMetadata(record.printSpec);
   if (printSpec) metadata.printSpec = printSpec;

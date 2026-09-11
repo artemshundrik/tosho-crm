@@ -105,6 +105,12 @@ export type QuoteItemMetadata = {
   configuratorPreset?: PrintConfiguratorPreset | null;
   printProduct?: PrintProductConfig | null;
   printPackage?: PrintProductConfig | null;
+  /**
+   * Роль «варіант» (REQ-267#p2): позиція — один зі взаємовиключних варіантів
+   * того самого виробу. Читач один на застосунок — `isVariantQuoteItem` із
+   * `@/lib/quoteItemVariants`; впливає ЛИШЕ на підсумок документа КП.
+   */
+  isVariant?: boolean | null;
   /** Carried over from the catalog model so quote cards can link out. */
   supplierUrl?: string | null;
   avantprintUrl?: string | null;

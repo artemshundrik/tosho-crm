@@ -73,6 +73,8 @@ const RULES = [
         "сусіднє правило: погодження ПОЗИЦІЇ (quote_items.is_approved), тиражів не чіпає",
       "src/features/quotes/quote-details/useQuoteItemChoice.ts":
         "пише погодження ПОЗИЦІЇ; слово «тираж» трапляється лише в поясненні, звідки береться сума рядка",
+      "src/lib/quoteItemVariants.ts":
+        "сусіднє правило: РОЛЬ позиції; `is_approved` трапляється лише в поясненні, чим роль від погодження відрізняється",
     },
     fix: "Погоджений тираж один на прорахунок, і перенесення позначки має йти через applyApprovedRunToggle із @/lib/quoteRuns — інакше на прорахунку опиняється два погоджених тиражі або жодного, а замовлення бере не ту ціну.",
   },
@@ -95,8 +97,29 @@ const RULES = [
       "src/lib/quoteRuns.ts": "сусіднє правило: тиражі, не позиції",
       "src/features/quotes/quote-details/QuoteRunRows.tsx":
         "рядки ТИРАЖІВ; слово «позиція» трапляється лише в поясненнях, прапорця позиції файл не бачить",
+      "src/lib/quoteItemVariants.ts":
+        "сусіднє правило: РОЛЬ позиції; `is_approved` трапляється лише в поясненні, чим роль від погодження відрізняється",
     },
     fix: "Чи входить позиція в підсумок і в замовлення — питай isQuoteItemIncluded / filterIncludedQuoteItems із @/lib/quoteItemApproval. Порожній прапорець означає «не питали» і має рахуватись, а `is_approved === true` у читача мовчки викинув би всі 333 наявні позиції.",
+  },
+  {
+    name: "роль позиції «варіант»",
+    module: "quoteItemVariants",
+    /**
+     * Прапорець `quote_items.metadata.isVariant` (REQ-267#p2): позиція — один зі
+     * взаємовиключних варіантів того самого виробу. Другий читач, який прочитає
+     * його інакше, покаже в КП суму там, де має бути діапазон, — тобто число,
+     * якого клієнт ніколи не заплатить.
+     */
+    raw: /\bisVariant\b/,
+    scope: /quote_items|quoteItem|варіант/i,
+    allow: {
+      "src/lib/quoteItemVariants.ts": "сам модуль правила",
+      "src/lib/printPackage.ts": "оголошення поля в типі metadata — значення не тлумачить",
+      "src/features/quotes/quote-details/quoteItemMetadata.ts":
+        "білий список ключів metadata: переносить прапорець далі, не тлумачить його",
+    },
+    fix: "Чи має позиція роль «варіант» — питай isVariantQuoteItem із @/lib/quoteItemVariants, а підсумок з варіантами рахуй через quoteItemsTotalRange. Своя перевірка прапорця означає документ, у якому взаємовиключні варіанти знову складаються.",
   },
   {
     name: "тип угоди й дно накрутки",
