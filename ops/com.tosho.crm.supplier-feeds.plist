@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Тижневий перезалив обходу Бергамо з ноутбука, бо з GitHub Actions він
+  неможливий: bergamo.ua віддає раннеру 403 (REQ-269). Форма скопійована з
+  com.tosho.crm.backup.plist — той самий годинний будильник і те саме
+  підвантаження .env.backup.
+
+  Рішення «чи пора» ухвалює scripts/supplier-feed-if-needed.sh, а не цей файл:
+  ноутбук не мусить бути ввімкненим у призначену годину, і агент дожене, коли
+  його відкриють.
+
+  Поставити:
+    cp ops/com.tosho.crm.supplier-feeds.plist ~/Library/LaunchAgents/
+    launchctl unload ~/Library/LaunchAgents/com.tosho.crm.supplier-feeds.plist 2>/dev/null
+    launchctl load ~/Library/LaunchAgents/com.tosho.crm.supplier-feeds.plist
+  Знати, що робить: tail -f logs/supplier-feeds.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tosho.crm.supplier-feeds</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>source /Users/artem/Projects/tosho-crm/.env.backup &amp;&amp; export PATH="/opt/homebrew/bin:/opt/homebrew/opt/libpq/bin:/usr/bin:/bin:/usr/sbin:/sbin" &amp;&amp; /bin/bash /Users/artem/Projects/tosho-crm/scripts/supplier-feed-if-needed.sh bergamo &gt;&gt; /Users/artem/Projects/tosho-crm/logs/supplier-feeds.log 2&gt;&amp;1</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/artem/Projects/tosho-crm/logs/launchd-supplier-feeds.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/artem/Projects/tosho-crm/logs/launchd-supplier-feeds.log</string>
+</dict>
+</plist>
