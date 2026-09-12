@@ -249,7 +249,9 @@ export function ImprintPickerDialog({
                     aria-pressed={one.id === view}
                     onClick={() => setView(one.id)}
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs font-medium transition-colors duration-base ease-out motion-reduce:transition-none",
+                      // Кнопка на 32 px, а не 24: у неї цілять мишею на ходу,
+                      // і на горнятку підписи довгі («Ручка праворуч»).
+                      "h-8 rounded-full px-4 text-sm font-medium transition-colors duration-base ease-out motion-reduce:transition-none",
                       one.id === view
                         ? "bg-foreground text-background"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"

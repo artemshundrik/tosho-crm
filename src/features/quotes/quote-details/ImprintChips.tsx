@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 import { ImprintPickerDialog, type ImprintProduct } from "./ImprintPickerDialog";
-import { viewOfLabel, type ImprintSheet } from "./imprintSheets";
+import type { ImprintSheet } from "./imprintSheets";
 import type { QuoteImportDraftImprint } from "@/features/quotes/quote-import/types";
 import { cn } from "@/lib/utils";
 
@@ -433,9 +433,10 @@ function ListRow({
  * Через них 204 нанесення з 332 і поїхали з чужим рядком «Індивідуальний».
  * Тепер двері одні й ведуть туди, де питають обидва питання одразу.
  *
- * МІНІАТЮРА ПОКАЗУЄ МІСЦЕ, А НЕ ТОВАР. Той самий ескіз, що у вікні, зменшений
- * до 18 px із підсвіченою рамкою: у рядку видно «де», не читаючи слова.
- * Товар у цій смузі вже названий чипом виду ліворуч, дублювати його нічим.
+ * БЕЗ МІНІАТЮРИ. Спершу чип носив ескіз товару з підсвіченою зоною, але на
+ * 18 px горнятко читалось сірою плямою й налазило на підпис (Артем,
+ * 12.09.2026). Пара «ДТФ · Груди» словами каже те саме й точніше — а товар у
+ * цій смузі вже названий чипом виду ліворуч.
  */
 function SheetChips({
   imprints,
@@ -483,7 +484,6 @@ function SheetChips({
               title={`${methodName(imprint.methodId)} · ${imprint.positionLabel ?? "місце не вказане"}`}
               className="max-w-[210px] pr-6"
             >
-              <ZoneThumb sheet={sheet} label={imprint.positionLabel} />
               <span className="min-w-0 truncate">
                 {methodName(imprint.methodId)}
                 <span className="text-muted-foreground"> · </span>
@@ -519,28 +519,3 @@ function SheetChips({
   );
 }
 
-/** Ескіз 18 px із підсвіченою зоною: «де» видно в рядку без слів. */
-function ZoneThumb({ sheet, label }: { sheet: ImprintSheet; label: string | null }) {
-  const view = viewOfLabel(sheet, label) ?? sheet.views[0]?.id;
-  const src = sheet.views.find((one) => one.id === view)?.src;
-  const zone = sheet.zones.find(
-    (one) => one.view === view && one.label.toLowerCase() === (label ?? "").trim().toLowerCase()
-  );
-  if (!src) return null;
-  return (
-    <span className="relative block h-5 w-[18px] shrink-0" aria-hidden>
-      <img src={src} alt="" className="h-full w-full object-contain opacity-80" />
-      {zone ? (
-        <span
-          className="absolute rounded-[1px] bg-primary"
-          style={{
-            left: `${zone.x * 100}%`,
-            top: `${zone.y * 100}%`,
-            width: `${zone.w * 100}%`,
-            height: `${zone.h * 100}%`,
-          }}
-        />
-      ) : null}
-    </span>
-  );
-}
