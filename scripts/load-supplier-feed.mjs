@@ -1040,6 +1040,71 @@ async function firstLiveUrl(urls) {
 }
 
 /**
+ * Товар із `application/ld+json` сторінки OpenCart. Один читач на два місця:
+ * і на розбір сторінки, і на другий прохід за фото нижче. Битий JSON-LD — не
+ * привід втрачати сторінку: блоків там кілька, пробуємо наступний.
+ */
+function opencartProduct(html) {
+  for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
+    try {
+      const data = JSON.parse(m[1].trim());
+      if (data && data["@type"] === "Product") return data;
+    } catch {
+      // наступний блок
+    }
+  }
+  return null;
+}
+
+/**
+ * ДРУГИЙ ПРОХІД: спитати сторінку самого кольору.
+ *
+ * Виведення адрес (`colorImageCandidates`) закриває близько чотирьох п'ятих
+ * кольорів-сусідів, але не всіх: ім'я файлу буває складене так, що з
+ * батьківського його не дістати — `0518_darkbordeaux_a` (слово, якого немає в
+ * словнику), `buffalo_88100_french_navy_a` (колір із двох слів і назва товару
+ * спереду), `v6111-03_aab1` (кадр названий інакше), `2261507-186-1821435580`
+ * (номер завантаження, не вивести ніяк).
+ *
+ * У всіх цих випадках адреса лежить точна — у JSON-LD сторінки того кольору.
+ * Тобто питання лише в ціні запиту.
+ *
+ * ЧОМУ ЦЕ СТАЛО МОЖНА, А СПОЧАТКУ БУЛО НІ. Спершу без фото були 5144 кольори,
+ * тобто 5144 сторінки по 737 кБ — 3,8 ГБ чужого трафіку, і від цього шляху я
+ * відмовився. Дешеві правила зняли 78%, лишилось 1136 — це ≈840 МБ і зайвих
+ * чверть години до тижневого обходу. Ціна стала прийнятною саме тому, що
+ * перший крок уже зроблено, і вона падає далі з кожним новим правилом.
+ *
+ * ІДЕМО ПО ОДНОМУ на сторінку-батька, а не гуртом: у товару буває вісім
+ * кольорів, і вісім паралельних запитів по 737 кБ, помножені на чотирьох
+ * робітників обходу, — це вже не ввічливо до чужого сайту.
+ *
+ * Замір на пробі 12.09.2026: 14 кольорів із 14 віддали фото зі своєї сторінки.
+ */
+async function opencartColorPageImages(siblings, images) {
+  let fetched = 0;
+  for (let i = 0; i < siblings.length; i++) {
+    if (images[i]) continue;
+    try {
+      const res = await fetch(siblings[i].href, {
+        headers: { "User-Agent": UA },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!res.ok) continue;
+      const product = opencartProduct(await res.text());
+      const image = typeof product?.image === "string" ? product.image : (product?.image || [])[0] || null;
+      if (image) {
+        images[i] = image;
+        fetched++;
+      }
+    } catch {
+      // Сторінка не відповіла — рядок лишається без фото, як і раніше.
+    }
+  }
+  return fetched;
+}
+
+/**
  * OpenCart (bergamo) — розбір ОДНІЄЇ сторінки товару. Викликається обходом, а
  * не по фіду: фіда в Бергамо немає (див. запис у реєстрі).
  *
@@ -1070,15 +1135,7 @@ async function firstLiveUrl(urls) {
  * стільки ж запитів, тож поки `category: null`.
  */
 async function parseOpencartPage(html, ctx) {
-  const ld = [];
-  for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
-    try {
-      ld.push(JSON.parse(m[1].trim()));
-    } catch {
-      // Битий JSON-LD — не привід втрачати сторінку: нижче є запасні шляхи.
-    }
-  }
-  const product = ld.find((d) => d && d["@type"] === "Product");
+  const product = opencartProduct(html);
   if (!product) return null;
 
   const name = typeof product.name === "string" ? product.name.trim() : "";
@@ -1248,7 +1305,14 @@ async function parseOpencartPage(html, ctx) {
       )
     )
   );
+  /*
+    Запобіжник проти спільного кадру стоїть ЛИШЕ на виведених адресах: він
+    ловить наші здогадки. Те, що прочитано зі сторінки самого кольору, — це
+    факт, а не здогад, і охороняти його нема від чого: якщо постачальник
+    справді показує один знімок на два кольори, то саме це в нього й на сайті.
+  */
   const images4color = dropSharedFrames(found, parentImage);
+  await opencartColorPageImages(siblings, images4color);
 
   const rows = [self];
   siblings.forEach((s, i) => {
