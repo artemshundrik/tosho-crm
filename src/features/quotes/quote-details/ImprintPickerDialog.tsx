@@ -1,8 +1,7 @@
 import * as React from "react";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Chip } from "@/components/ui/chip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
@@ -88,8 +87,10 @@ export function ImprintPickerDialog({
   const wasOpen = React.useRef(false);
   React.useEffect(() => {
     if (open && !wasOpen.current) {
-      // Порожній набір відкривається з уже початою парою на найчастішому методі:
-      // інакше перший клік по зоні не мав би куди лягти й мовчав би.
+      // Метод за замовчуванням СТОЇТЬ одразу (Артем, 12.09.2026): у 85 %
+      // позицій він і не міняється, а питання, на яке справді треба
+      // відповісти, — місце. Тому вікно відкривається з готовою парою на
+      // найчастішому методі й чекає лише кліку по товару.
       const start = imprints.length > 0 ? imprints : methods[0] ? [newPair(methods[0].id)] : [];
       setDraft(start);
       setActiveKey(start[0]?.key ?? null);
@@ -98,38 +99,89 @@ export function ImprintPickerDialog({
     wasOpen.current = open;
   }, [open, imprints, methods, sheet]);
 
-  const active = draft.find((pair) => pair.key === activeKey) ?? draft[0] ?? null;
+  const active = draft.find((pair) => pair.key === activeKey) ?? draft[draft.length - 1] ?? null;
   const patchActive = (next: Partial<QuoteImportDraftImprint>) => {
     if (!active) return;
     setDraft((rows) => rows.map((row) => (row.key === active.key ? { ...row, ...next } : row)));
   };
 
-  const pickZone = (zone: ImprintZone) => {
-    const known = places.find((place) => place.id && place.label.toLowerCase() === zone.label.toLowerCase());
-    patchActive({ positionId: known?.id ?? null, positionLabel: known?.label ?? zone.label });
-  };
-
-  const addPair = () => {
-    const pair = newPair(active?.methodId ?? methods[0]?.id ?? "");
-    setDraft((rows) => [...rows, pair]);
-    setActiveKey(pair.key);
-  };
-
   const removePair = (key: string) => {
     setDraft((rows) => {
       const next = rows.filter((row) => row.key !== key);
-      if (key === activeKey) setActiveKey(next[0]?.key ?? null);
+      if (key === activeKey) setActiveKey(next[next.length - 1]?.key ?? null);
       return next;
     });
   };
 
+  const same = (a: string | null | undefined, b: string) =>
+    (a ?? "").trim().toLowerCase() === b.trim().toLowerCase();
+  const isPicked = (label: string) => draft.some((pair) => same(pair.positionLabel, label));
+
+  /**
+   * МІСЦЕ ПЕРЕМИКАЄТЬСЯ (Артем, 12.09.2026): клік — обрав, ще раз — прибрав.
+   * Так поводяться комірки тиражу в рядку позиції, і так само читається рамка
+   * на товарі: натиснув повторно — значить, передумав. До цього повторний
+   * клік нічого не робив, і прибрати місце можна було лише хрестиком у
+   * підвалі — тобто зовсім в іншому кутку вікна.
+   *
+   * КЛІК ЗАПОВНЮЄ ПОРОЖНЮ ПАРУ, А НЕ ПЛОДИТЬ НОВУ. Вікно відкривається з
+   * парою на методі за замовчуванням і без місця; перший клік дає їй місце,
+   * наступні — додають ще пари тим самим методом.
+   *
+   * ПРИБИРАЄМО ОСТАННЮ — ЛИШАЄТЬСЯ ПОРОЖНЯ. Інакше метод зник би разом із
+   * місцем, і наступний клік починався б із «нічого не обрано», хоч метод
+   * людина не відкликала.
+   */
+  const toggleLabel = (label: string, positionId: string | null, nextView?: ImprintViewId) => {
+    const hit = draft.find((pair) => same(pair.positionLabel, label));
+    if (hit) {
+      setDraft((rows) => {
+        const rest = rows.filter((row) => row.key !== hit.key);
+        if (rest.length > 0) {
+          if (hit.key === activeKey) setActiveKey(rest[rest.length - 1].key);
+          return rest;
+        }
+        const fresh = newPair(hit.methodId);
+        setActiveKey(fresh.key);
+        return [fresh];
+      });
+      return;
+    }
+    const slot = draft.find((pair) => !pair.positionLabel);
+    if (slot) {
+      setDraft((rows) =>
+        rows.map((row) => (row.key === slot.key ? { ...row, positionId, positionLabel: label } : row))
+      );
+      setActiveKey(slot.key);
+    } else {
+      const methodId = active?.methodId ?? methods[0]?.id ?? "";
+      if (!methodId) return;
+      const pair = { ...newPair(methodId), positionId, positionLabel: label };
+      setDraft((rows) => [...rows, pair]);
+      setActiveKey(pair.key);
+    }
+    if (nextView) setView(nextView);
+  };
+
+  const toggleZone = (zone: ImprintZone) => {
+    const known = places.find((place) => place.id && place.label.toLowerCase() === zone.label.toLowerCase());
+    toggleLabel(known?.label ?? zone.label, known?.id ?? null);
+  };
+
   const methodName = (id: string) => methods.find((method) => method.id === id)?.name ?? "Метод";
-  const activeLabel = active?.positionLabel?.trim() ?? "";
   const currentView = sheet.views.find((one) => one.id === view) ?? sheet.views[0];
 
   const confirm = () => {
-    // Пари без місця лишаємо: «ДТФ · місце?» у смузі — видиме питання, а не сміття.
-    onChange(draft.filter((pair) => pair.methodId));
+    /*
+      Пара, якій так і не дали місця, у смугу НЕ їде — якщо її завело саме це
+      вікно. Метод за замовчуванням стоїть з першої секунди, тож «відкрив і
+      закрив» інакше лишало б у рядку «ДТФ · місце?», ніби людина відповіла.
+      Ті, що прийшли сюди вже без місця, зберігаються: вони чиясь відповідь.
+    */
+    const kept = draft.filter(
+      (pair) => pair.methodId && (pair.positionLabel || imprints.some((one) => one.key === pair.key))
+    );
+    onChange(kept);
     onOpenChange(false);
   };
 
@@ -210,14 +262,16 @@ export function ImprintPickerDialog({
                 <img src={currentView.src} alt={`${product.kindName ?? "Товар"}, ${currentView.label}`} className="block w-full" />
               ) : null}
               {zonesOfView(sheet, view).map((zone) => {
-                const on = activeLabel.toLowerCase() === zone.label.toLowerCase();
+                const on = isPicked(zone.label);
+                const isActive = on && same(active?.positionLabel, zone.label);
                 return (
                   <button
                     key={zone.id}
                     type="button"
                     aria-label={zone.label}
                     aria-pressed={on}
-                    onClick={() => pickZone(zone)}
+                    title={on ? `${zone.label} — натисніть, щоб прибрати` : zone.label}
+                    onClick={() => toggleZone(zone)}
                     style={{
                       left: `${zone.x * 100}%`,
                       top: `${zone.y * 100}%`,
@@ -229,7 +283,9 @@ export function ImprintPickerDialog({
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                       on
                         ? "border-primary bg-primary/25"
-                        : "border-dashed border-primary/55 bg-primary/[0.07] hover:border-primary hover:bg-primary/15"
+                        : "border-dashed border-primary/55 bg-primary/[0.07] hover:border-primary hover:bg-primary/15",
+                      // Активна пара — та, чий метод зараз міняють у рейці.
+                      isActive && "ring-2 ring-primary/35 ring-offset-1 ring-offset-background"
                     )}
                   />
                 );
@@ -264,10 +320,12 @@ export function ImprintPickerDialog({
                 <RailRow
                   key={zone.id}
                   label={zone.label}
-                  checked={activeLabel.toLowerCase() === zone.label.toLowerCase()}
+                  checked={isPicked(zone.label)}
                   onSelect={() => {
-                    setView(zone.view);
-                    pickZone(zone);
+                    const known = places.find(
+                      (place) => place.id && place.label.toLowerCase() === zone.label.toLowerCase()
+                    );
+                    toggleLabel(known?.label ?? zone.label, known?.id ?? null, zone.view);
                   }}
                 />
               ))}
@@ -283,8 +341,8 @@ export function ImprintPickerDialog({
                     key={place.id ?? place.label}
                     label={place.label}
                     muted
-                    checked={activeLabel.toLowerCase() === place.label.toLowerCase()}
-                    onSelect={() => patchActive({ positionId: place.id, positionLabel: place.label })}
+                    checked={isPicked(place.label)}
+                    onSelect={() => toggleLabel(place.label, place.id)}
                   />
                 ))}
             </div>
@@ -296,16 +354,6 @@ export function ImprintPickerDialog({
               </p>
             ) : null}
 
-            <div className="mt-auto px-4 py-3">
-              <Chip
-                size="sm"
-                icon={<Plus />}
-                onClick={addPair}
-                className="w-full justify-center border-dashed text-muted-foreground"
-              >
-                Ще одне нанесення
-              </Chip>
-            </div>
           </div>
         </div>
 
@@ -363,21 +411,25 @@ function RailRow({
   label,
   checked,
   muted,
+  disabled,
   onSelect,
 }: {
   label: string;
   checked: boolean;
   muted?: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onSelect}
       className={cn(
         "flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-left text-sm transition-colors duration-base ease-out motion-reduce:transition-none",
         checked ? "bg-control-active" : "hover:bg-muted/60",
-        muted && !checked && "text-muted-foreground"
+        muted && !checked && "text-muted-foreground",
+        disabled && "pointer-events-none text-control-disabled-fg hover:bg-transparent"
       )}
     >
       <svg
