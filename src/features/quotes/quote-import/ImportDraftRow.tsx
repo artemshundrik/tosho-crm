@@ -14,6 +14,7 @@ import { CatalogPlaceChip } from "@/features/quotes/quote-wizard/CatalogPlaceChi
 import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
+import { getImprintSheet } from "@/features/quotes/quote-details/imprintSheets";
 
 import type {
   QuoteImportDraftCatalog,
@@ -478,6 +479,15 @@ export function ImportDraftRow({
               places={imprintOptions.places}
               disabled={disabled}
               onChange={onChangeImprints}
+              // Ескіз є не в кожного виду: немає — смуга працює як раніше.
+              sheet={getImprintSheet(draft.catalog?.kindName)}
+              product={{
+                name: draft.name,
+                kindName: draft.catalog?.kindName ?? null,
+                sku: draft.supplierProductId ?? null,
+                color: color || null,
+                imageUrl: preview?.status === "done" ? preview.imageUrl : null,
+              }}
             />
           ) : null}
         </div>

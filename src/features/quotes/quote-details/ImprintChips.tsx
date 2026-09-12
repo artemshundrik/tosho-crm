@@ -4,6 +4,9 @@ import { Check, ChevronDown, Plus, X } from "lucide-react";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+import { ImprintPickerDialog, type ImprintProduct } from "./ImprintPickerDialog";
+import { viewOfLabel, type ImprintSheet } from "./imprintSheets";
 import type { QuoteImportDraftImprint } from "@/features/quotes/quote-import/types";
 import { cn } from "@/lib/utils";
 
@@ -78,12 +81,17 @@ export function ImprintChips({
   places,
   disabled,
   onChange,
+  sheet,
+  product,
 }: {
   imprints: QuoteImportDraftImprint[];
   methods: Array<{ id: string; name: string }>;
   places: PlaceOption[];
   disabled?: boolean;
   onChange: (next: QuoteImportDraftImprint[]) => void;
+  /** Ескіз виду. Є — смуга веде у вікно; немає — все як раніше, поповерами. */
+  sheet?: ImprintSheet | null;
+  product?: ImprintProduct;
 }) {
   const [listOpen, setListOpen] = React.useState(false);
   const closeList = React.useCallback(() => setListOpen(false), []);
@@ -95,6 +103,24 @@ export function ImprintChips({
     onChange(imprints.map((imprint) => (imprint.key === key ? { ...imprint, ...next } : imprint)));
   const remove = (key: string) => onChange(imprints.filter((imprint) => imprint.key !== key));
   const methodName = (methodId: string) => methods.find((method) => method.id === methodId)?.name ?? "Метод";
+
+  // Вид із ескізом веде у вікно (REQ-268): у смузі лишається ОДИН вхід, а не
+  // чотири, бо саме чотири й дозволяли проскочити повз питання «де».
+  if (sheet && product) {
+    return (
+      <SheetChips
+        imprints={imprints}
+        methods={methods}
+        places={places}
+        disabled={disabled}
+        onChange={onChange}
+        sheet={sheet}
+        product={product}
+        methodName={methodName}
+        onRemove={remove}
+      />
+    );
+  }
 
   if (imprints.length > 0) {
     return (
@@ -396,5 +422,125 @@ function ListRow({
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {checked ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
     </button>
+  );
+}
+
+/**
+ * Смуга нанесення для виду з ескізом — варіант Б з макета (Артем, 12.09.2026).
+ *
+ * ОДИН ВХІД ЗАМІСТЬ ЧОТИРЬОХ. До цього смуга пропонувала «Без нанесення», два
+ * методи й «ще N» — чотири різні двері, кожні з яких давали метод БЕЗ місця.
+ * Через них 204 нанесення з 332 і поїхали з чужим рядком «Індивідуальний».
+ * Тепер двері одні й ведуть туди, де питають обидва питання одразу.
+ *
+ * МІНІАТЮРА ПОКАЗУЄ МІСЦЕ, А НЕ ТОВАР. Той самий ескіз, що у вікні, зменшений
+ * до 18 px із підсвіченою рамкою: у рядку видно «де», не читаючи слова.
+ * Товар у цій смузі вже названий чипом виду ліворуч, дублювати його нічим.
+ */
+function SheetChips({
+  imprints,
+  methods,
+  places,
+  disabled,
+  onChange,
+  sheet,
+  product,
+  methodName,
+  onRemove,
+}: {
+  imprints: QuoteImportDraftImprint[];
+  methods: Array<{ id: string; name: string }>;
+  places: PlaceOption[];
+  disabled?: boolean;
+  onChange: (next: QuoteImportDraftImprint[]) => void;
+  sheet: ImprintSheet;
+  product: ImprintProduct;
+  methodName: (methodId: string) => string;
+  onRemove: (key: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label="Нанесення">
+      {imprints.length === 0 ? (
+        <Chip
+          size="sm"
+          disabled={disabled}
+          icon={<Plus />}
+          onClick={() => setOpen(true)}
+          className="shrink-0 border-dashed px-2.5 text-muted-foreground"
+        >
+          Нанесення
+        </Chip>
+      ) : (
+        imprints.map((imprint) => (
+          <span key={imprint.key} className="group/pair relative shrink-0">
+            <Chip
+              size="sm"
+              disabled={disabled}
+              active
+              onClick={() => setOpen(true)}
+              title={`${methodName(imprint.methodId)} · ${imprint.positionLabel ?? "місце не вказане"}`}
+              className="max-w-[210px] pr-6"
+            >
+              <ZoneThumb sheet={sheet} label={imprint.positionLabel} />
+              <span className="min-w-0 truncate">
+                {methodName(imprint.methodId)}
+                <span className="text-muted-foreground"> · </span>
+                <span className={cn(!imprint.positionLabel && "font-normal text-muted-foreground")}>
+                  {imprint.positionLabel || "місце?"}
+                </span>
+              </span>
+            </Chip>
+            <button
+              type="button"
+              disabled={disabled}
+              aria-label={`Прибрати нанесення ${methodName(imprint.methodId)}`}
+              onClick={() => onRemove(imprint.key)}
+              className="absolute right-1 top-1/2 grid h-4 w-4 -translate-y-1/2 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity duration-base ease-out hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/pair:opacity-100 motion-reduce:transition-none"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))
+      )}
+
+      <ImprintPickerDialog
+        open={open}
+        onOpenChange={setOpen}
+        sheet={sheet}
+        product={product}
+        imprints={imprints}
+        methods={methods}
+        places={places}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+/** Ескіз 18 px із підсвіченою зоною: «де» видно в рядку без слів. */
+function ZoneThumb({ sheet, label }: { sheet: ImprintSheet; label: string | null }) {
+  const view = viewOfLabel(sheet, label) ?? sheet.views[0]?.id;
+  const src = sheet.views.find((one) => one.id === view)?.src;
+  const zone = sheet.zones.find(
+    (one) => one.view === view && one.label.toLowerCase() === (label ?? "").trim().toLowerCase()
+  );
+  if (!src) return null;
+  return (
+    <span className="relative block h-5 w-[18px] shrink-0" aria-hidden>
+      <img src={src} alt="" className="h-full w-full object-contain opacity-80" />
+      {zone ? (
+        <span
+          className="absolute rounded-[1px] bg-primary"
+          style={{
+            left: `${zone.x * 100}%`,
+            top: `${zone.y * 100}%`,
+            width: `${zone.w * 100}%`,
+            height: `${zone.h * 100}%`,
+          }}
+        />
+      ) : null}
+    </span>
   );
 }
