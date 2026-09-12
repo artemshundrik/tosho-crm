@@ -90,8 +90,14 @@ export function QuoteKanbanProducts({ preview, isLoading, imageLoadStrategy }: Q
     collapsedProducts.length > THUMB_LIMIT ? collapsedProducts.slice(0, THUMB_LIMIT - 1) : collapsedProducts;
   const overflowProducts = collapsedProducts.slice(thumbProducts.length);
 
+  /*
+    ТІНТ ВІДДІЛЯЄ, РАМКА НІ. Блок мав власну межу `border-border/60` — того ж
+    кольору й тієї ж ваги, що й межа самої картки, — тож на дошці читалось три
+    рамки одна в одній: картка, блок, плитка товару. Заливка `bg-secondary` каже
+    «це окремий блок» сама, і після зняття межі рамка на картці лишається одна.
+  */
   return (
-    <div className="mt-3 rounded-inner border border-border/60 bg-secondary px-3 py-2.5">
+    <div className="mt-3 rounded-inner bg-secondary px-3 py-2.5">
       {/*
         ЗАГОЛОВКА «ТОВАРИ» БІЛЬШЕ НЕМАЄ. Слово стояло над рядками з фотографіями,
         назвами й тиражами — підпис до очевидного, який щоразу з'їдав рядок
