@@ -73,7 +73,75 @@ const TEE: ImprintSheet = {
   typicalMm: [139, 144],
 };
 
-const SHEETS: readonly ImprintSheet[] = [TEE];
+/**
+ * Горнятко. Два боки — це той самий циліндр, повернутий ручкою в інший бік,
+ * тому «під праву руку» й «під ліву руку» це РІЗНІ місця, а не один вигляд
+ * двічі: наносять на те, що бачить співрозмовник.
+ *
+ * «По колу» тут поки немає: на боковому вигляді напис обривається за формою,
+ * і чесно показати його можна лише розгорткою, якої в цьому наборі ще нема.
+ */
+const MUG: ImprintSheet = {
+  kind: "горнятко",
+  views: [
+    { id: "front", label: "Ручка праворуч", src: "/imprint/mug-front.webp" },
+    { id: "back", label: "Ручка ліворуч", src: "/imprint/mug-back.webp" },
+  ],
+  zones: [
+    { id: "mug-right", view: "front", label: "Під праву руку", x: 0.14, y: 0.36, w: 0.44, h: 0.26 },
+    { id: "mug-left", view: "back", label: "Під ліву руку", x: 0.41, y: 0.36, w: 0.44, h: 0.26 },
+  ],
+  typicalMm: [77, 54],
+};
+
+const CAP: ImprintSheet = {
+  kind: "кепка",
+  views: [
+    { id: "front", label: "Спереду", src: "/imprint/cap-front.webp" },
+    { id: "back", label: "Ззаду", src: "/imprint/cap-back.webp" },
+  ],
+  zones: [
+    { id: "cap-brow", view: "front", label: "Лоб", x: 0.34, y: 0.34, w: 0.32, h: 0.17 },
+    { id: "cap-side", view: "front", label: "Збоку", x: 0.72, y: 0.4, w: 0.12, h: 0.12 },
+    { id: "cap-back", view: "back", label: "Ззаду над застібкою", x: 0.36, y: 0.3, w: 0.28, h: 0.14 },
+  ],
+  typicalMm: [71, 46],
+};
+
+const POLO: ImprintSheet = {
+  kind: "поло",
+  views: [
+    { id: "front", label: "Спереду", src: "/imprint/polo-front.webp" },
+    { id: "back", label: "Ззаду", src: "/imprint/polo-back.webp" },
+  ],
+  zones: [
+    { id: "polo-chest", view: "front", label: "Груди", x: 0.34, y: 0.36, w: 0.32, h: 0.24 },
+    { id: "polo-sleeve-r", view: "front", label: "Правий рукав", x: 0.11, y: 0.3, w: 0.12, h: 0.11 },
+    { id: "polo-sleeve-l", view: "front", label: "Лівий рукав", x: 0.77, y: 0.3, w: 0.12, h: 0.11 },
+    { id: "polo-back", view: "back", label: "Спина", x: 0.33, y: 0.27, w: 0.34, h: 0.34 },
+    { id: "polo-nape", view: "back", label: "Під коміром", x: 0.44, y: 0.15, w: 0.12, h: 0.05 },
+  ],
+  typicalMm: [117, 80],
+};
+
+/** Світшот: рукави довгі, тож зона рукава стоїть на передпліччі, а не біля плеча. */
+const SWEATSHIRT: ImprintSheet = {
+  kind: "світшот",
+  views: [
+    { id: "front", label: "Спереду", src: "/imprint/sweatshirt-front.webp" },
+    { id: "back", label: "Ззаду", src: "/imprint/sweatshirt-back.webp" },
+  ],
+  zones: [
+    { id: "sw-chest", view: "front", label: "Груди", x: 0.34, y: 0.33, w: 0.32, h: 0.24 },
+    { id: "sw-sleeve-r", view: "front", label: "Правий рукав", x: 0.09, y: 0.53, w: 0.11, h: 0.1 },
+    { id: "sw-sleeve-l", view: "front", label: "Лівий рукав", x: 0.8, y: 0.53, w: 0.11, h: 0.1 },
+    { id: "sw-back", view: "back", label: "Спина", x: 0.33, y: 0.25, w: 0.34, h: 0.34 },
+    { id: "sw-nape", view: "back", label: "Під коміром", x: 0.44, y: 0.13, w: 0.12, h: 0.05 },
+  ],
+  typicalMm: [80, 66],
+};
+
+const SHEETS: readonly ImprintSheet[] = [TEE, MUG, CAP, POLO, SWEATSHIRT];
 
 /**
  * Ескіз виду за його назвою з каталогу.
