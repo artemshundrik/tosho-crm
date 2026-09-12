@@ -266,23 +266,31 @@ export async function resolveAvatarDisplayUrl(
       return normalizedRawUrl;
     }
 
-    const candidatePaths = extractObjectPathCandidates(normalizedRawUrl, bucket);
-    for (const candidatePath of candidatePaths) {
+    /* ОДИН ШЛЯХ — ОДНА СПРОБА. Порядок лишається той самий (варіант, потім
+       оригінал; із `preferOriginal` — навпаки), але повтори з нього випадають.
+       Без цього файл, чиє ім'я не схоже на варіант (`bot.svg`), давав
+       `variantPath === candidatePath`, і той самий підпис просили двічі —
+       обидва рази марно, бо як він не знайшовся першого разу, так не
+       знайдеться й другого. */
+    const attempts: string[] = [];
+    for (const candidatePath of extractObjectPathCandidates(normalizedRawUrl, bucket)) {
       const variantPath = getAvatarVariantPath(candidatePath, variant);
-      const preferredPath = options?.preferOriginal ? candidatePath : variantPath;
-      const fallbackPath = options?.preferOriginal ? variantPath : candidatePath;
-
-      for (const path of [preferredPath, fallbackPath]) {
-        const { data, error } = await supabase.storage
-          .from(bucket)
-          .createSignedUrl(path, AVATAR_SIGN_TTL_SECONDS);
-
-        if (error || !data?.signedUrl) continue;
-
-        const expiresAt = Date.now() + AVATAR_SIGN_TTL_SECONDS * 1000 - AVATAR_CACHE_SKEW_MS;
-        setResolvedAvatar(normalizedRawUrl, variant, data.signedUrl, expiresAt);
-        return data.signedUrl;
+      const ordered = options?.preferOriginal ? [candidatePath, variantPath] : [variantPath, candidatePath];
+      for (const path of ordered) {
+        if (path && !attempts.includes(path)) attempts.push(path);
       }
+    }
+
+    for (const path of attempts) {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(path, AVATAR_SIGN_TTL_SECONDS);
+
+      if (error || !data?.signedUrl) continue;
+
+      const expiresAt = Date.now() + AVATAR_SIGN_TTL_SECONDS * 1000 - AVATAR_CACHE_SKEW_MS;
+      setResolvedAvatar(normalizedRawUrl, variant, data.signedUrl, expiresAt);
+      return data.signedUrl;
     }
 
     setResolvedAvatar(normalizedRawUrl, variant, null, Date.now() + AVATAR_FAILURE_TTL_MS);
