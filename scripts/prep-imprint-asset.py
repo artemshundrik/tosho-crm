@@ -43,8 +43,15 @@ CANVAS = (660, 730)   # полотно одного боку, px (показ ~33
 MARGIN = 20
 QUALITY = 80
 
-img = Image.open(SRC).convert("RGB")
+RAW = Image.open(SRC)
+# ГОТОВА АЛЬФА ПОБИВАЄ БУДЬ-ЯКУ ЕВРИСТИКУ. Коли рендер прийшов прозорим PNG,
+# маска вже намальована руками художника — і тоді ані порогів, ані заливок,
+# ані ножів проти тіні не треба: беремо альфу як є. Уся машинерія нижче
+# лишається для непрозорих JPEG, де маску доводиться вгадувати.
+HAS_ALPHA = RAW.mode in ("RGBA", "LA") or "transparency" in RAW.info
+img = RAW.convert("RGBA") if HAS_ALPHA else RAW.convert("RGB")
 W, H = img.size
+alpha_full = img.split()[3] if HAS_ALPHA else None
 gray = img.convert("L")
 px = gray.load()
 
@@ -52,9 +59,13 @@ bg = px[2, 2]
 CUT = bg - 3           # м'який поріг: ловимо навіть майже білу тканину
 CORE = bg - CUT_OFFSET # суворий: ним шукаємо ТІЛО, без м'якої тіні довкола
 CUT_SPLIT = bg - 20    # пошук проміжку: суворіше, інакше JPEG-шум = «вміст»
-print(f"джерело {W}x{H}; фон {bg}; поріг маски {CUT}, поріг розрізу {CUT_SPLIT}")
+print(f"джерело {W}x{H}; альфа={'готова' if HAS_ALPHA else 'вгадуємо'}")
 
-cols = [x for x in range(W) if any(px[x, y] < CUT_SPLIT for y in range(0, H, 3))]
+if HAS_ALPHA:
+    ap = alpha_full.load()
+    cols = [x for x in range(W) if any(ap[x, y] > 8 for y in range(0, H, 3))]
+else:
+    cols = [x for x in range(W) if any(px[x, y] < CUT_SPLIT for y in range(0, H, 3))]
 gaps, run = [], None
 colset = set(cols)
 for x in range(cols[0], cols[-1] + 1):
@@ -71,7 +82,12 @@ print(f"розріз на x={split}")
 
 
 def garment_mask(half):
-    """Маска товару: зв'язний шматок від центру, з поверненими дірками."""
+    """Маска товару: альфа як є, а для непрозорого джерела — зв'язний шматок."""
+    if HAS_ALPHA:
+        # Відсікаємо серпанок: у світшота тло не нульове, а альфа=1, і рамка
+        # вмісту тоді дорівнює всьому кадру. Справжній край тут рампа 0→255 на
+        # пару пікселів, тож поріг у 8 його не чіпає.
+        return half.split()[3].point(lambda v: 0 if v < 8 else v)
     w, h = half.size
     g = half.convert("L")
     p = g.load()
@@ -172,7 +188,9 @@ scale = min((CANVAS[0] - 2 * MARGIN) / wide, (CANVAS[1] - 2 * MARGIN) / tall)
 print(f"спільний масштаб {scale:.4f}")
 
 for name, half in halves.items():
-    mask = masks[name].filter(ImageFilter.GaussianBlur(0.7))   # згладити контур
+    # Згладжуємо лише те, що самі й вирізали: у готової альфи край уже
+    # згладжений художником, і зайве розмиття робить його ватяним.
+    mask = masks[name] if HAS_ALPHA else masks[name].filter(ImageFilter.GaussianBlur(0.7))
     rgba = half.convert("RGBA")
     rgba.putalpha(mask)
 
