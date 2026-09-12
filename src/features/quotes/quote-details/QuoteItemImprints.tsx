@@ -3,6 +3,7 @@ import * as React from "react";
 import type { QuoteImportDraftImprint } from "@/features/quotes/quote-import/types";
 
 import { ImprintChips, type PlaceOption } from "./ImprintChips";
+import { getImprintSheet } from "./imprintSheets";
 import { resolveImprintPlaces, type PlaceCache } from "./imprintPlaces";
 import { updateQuoteItemRow } from "./queries";
 import { useKindImprintOptions } from "./useKindImprintOptions";
@@ -49,6 +50,8 @@ export function QuoteItemImprints({
   teamId,
   itemId,
   kindId,
+  kindName,
+  product,
   methods,
   disabled,
   onSaved,
@@ -58,6 +61,10 @@ export function QuoteItemImprints({
   /** Вид товару: методи й місця належать саме йому. Без виду чипів немає. */
   kindId: string | null;
   methods: QuoteItemMethodInput[];
+  /** Назва виду — за нею береться ескіз товару для вікна вибору місця. */
+  kindName?: string | null;
+  /** Паспорт позиції для шапки вікна: назва, колір, артикул, фото. */
+  product?: { name: string; sku: string | null; color: string | null; imageUrl: string | null };
   disabled?: boolean;
   /** Позиція збережена — сторінці час перечитати товари. */
   onSaved?: () => void;
@@ -145,6 +152,9 @@ export function QuoteItemImprints({
         places={places}
         disabled={disabled || saving}
         onChange={(next) => void apply(next)}
+        // Ескіз є не в кожного виду: немає — смуга лишається поповерами.
+        sheet={getImprintSheet(kindName)}
+        product={product ? { ...product, kindName: kindName ?? null } : undefined}
       />
     </div>
   );

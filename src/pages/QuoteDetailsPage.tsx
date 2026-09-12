@@ -66,7 +66,7 @@ import {
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
 import { QuoteWizardDialog } from "@/features/quotes/quote-wizard/QuoteWizardDialog";
 import type { QuoteKindValue } from "@/features/quotes/quote-wizard/quoteWizardKinds";
-import { QuoteItemImprints } from "@/features/quotes/quote-details/QuoteItemImprints";
+import { QuoteItemImprintsSection } from "@/features/quotes/quote-details/QuoteItemImprintsSection";
 import { QuoteItemModelSwap } from "@/features/quotes/quote-details/QuoteItemModelSwap";
 import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
 import { parseQuoteItemMetadata } from "@/features/quotes/quote-details/quoteItemMetadata";
@@ -4829,28 +4829,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               </div>
                             </div>
 
-                            {/* Нанесення тепер РЕДАГУЄТЬСЯ тут, а не показується
-                                рядком специфікації (REQ-157#p4): вікно редагування
-                                прорахунку віддало продукцію цій вкладці. */}
-                            {/* Товар і нанесення правлять ТУТ (REQ-157#p2/p4/p5):
-                                вікно редагування прорахунку віддало продукцію цій
-                                вкладці, а вікно позиції лишилось для рідкісного —
-                                одиниці, артикула, коментаря, вкладення. */}
-                            {/* Смуга тепер існує ЛИШЕ заради нанесення. У поліграфії
-                                його не питають — оздоблення живе в параметрах виробу
-                                (тиснення, лак, УФ), — тож там її просто немає. */}
-                            {teamId && resolvedKindId && !modelSpecPreset ? (
-                              <div className="mt-4 border-t border-border/50 pt-3">
-                                <QuoteItemImprints
-                                  teamId={teamId}
-                                  itemId={item.id}
-                                  kindId={resolvedKindId}
-                                  methods={item.methods ?? []}
-                                  disabled={!canManageItems}
-                                  onSaved={() => void loadItems()}
-                                />
-                              </div>
-                            ) : null}
+                            <QuoteItemImprintsSection
+                              teamId={teamId}
+                              itemId={item.id}
+                              itemTitle={item.title}
+                              methods={item.methods ?? []}
+                              kindId={resolvedKindId}
+                              kindName={kindLabel}
+                              modelLabel={modelLabel}
+                              sku={itemSku}
+                              color={catalogVariant?.name ?? null}
+                              imageUrl={
+                                productPreview?.type === "image"
+                                  ? productPreview.url
+                                  : catalogVariant?.imageUrl ?? null
+                              }
+                              specPreset={modelSpecPreset}
+                              disabled={!canManageItems}
+                              onSaved={() => void loadItems()}
+                            />
 
                             {teamId ? (
                               <QuoteItemModelSwap
