@@ -105,11 +105,25 @@ export function ImprintPickerDialog({
     setDraft((rows) => rows.map((row) => (row.key === active.key ? { ...row, ...next } : row)));
   };
 
+  /**
+   * ОСТАННЯ ЗНЯТА ПАРА ЛИШАЄ ПОРОЖНЮ — і це стосується ВСІХ шляхів зняття:
+   * і повторного кліку по області, і хрестика на чипі в підвалі. Спершу
+   * хрестик просто викидав пару, список порожнів, `active` ставав `null` — і
+   * метод переставав вибиратись узагалі, хоч місце ще вибиралось (Артем,
+   * 12.09.2026). Метод людина не відкликала, тож він мусить лишитись при
+   * порожній парі й чекати на місце.
+   */
   const removePair = (key: string) => {
     setDraft((rows) => {
-      const next = rows.filter((row) => row.key !== key);
-      if (key === activeKey) setActiveKey(next[next.length - 1]?.key ?? null);
-      return next;
+      const hit = rows.find((row) => row.key === key);
+      const rest = rows.filter((row) => row.key !== key);
+      if (rest.length > 0) {
+        if (key === activeKey) setActiveKey(rest[rest.length - 1].key);
+        return rest;
+      }
+      const fresh = newPair(hit?.methodId ?? methods[0]?.id ?? "");
+      setActiveKey(fresh.key);
+      return [fresh];
     });
   };
 
@@ -128,23 +142,13 @@ export function ImprintPickerDialog({
    * парою на методі за замовчуванням і без місця; перший клік дає їй місце,
    * наступні — додають ще пари тим самим методом.
    *
-   * ПРИБИРАЄМО ОСТАННЮ — ЛИШАЄТЬСЯ ПОРОЖНЯ. Інакше метод зник би разом із
-   * місцем, і наступний клік починався б із «нічого не обрано», хоч метод
-   * людина не відкликала.
+   * ЗНЯТТЯ ЖИВЕ В `removePair` — спільне для кліку по області й хрестика
+   * на чипі: два шляхи до однієї дії не мають поводитись по-різному.
    */
   const toggleLabel = (label: string, positionId: string | null, nextView?: ImprintViewId) => {
     const hit = draft.find((pair) => same(pair.positionLabel, label));
     if (hit) {
-      setDraft((rows) => {
-        const rest = rows.filter((row) => row.key !== hit.key);
-        if (rest.length > 0) {
-          if (hit.key === activeKey) setActiveKey(rest[rest.length - 1].key);
-          return rest;
-        }
-        const fresh = newPair(hit.methodId);
-        setActiveKey(fresh.key);
-        return [fresh];
-      });
+      removePair(hit.key);
       return;
     }
     const slot = draft.find((pair) => !pair.positionLabel);
