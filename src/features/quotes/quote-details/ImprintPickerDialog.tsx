@@ -263,7 +263,16 @@ export function ImprintPickerDialog({
               </div>
             ) : null}
 
-            <div className="relative z-base w-full max-w-[312px]">
+            {/*
+              БЕЗ `z-base` НАВМИСНО. Коробка картинки прямокутна й ширша за
+              сам товар, тож вона накривала перемикач боків: «Ручка ліворуч»
+              не натискалась узагалі, «Ручка праворуч» — лише лівим краєм
+              (заміряно `elementFromPoint`, Артем 12.09.2026). Обидва шари
+              мали z-index 1, а за рівних виграє той, що нижче в розмітці.
+              Тепер картинка лишається в природному потоці, а перемикач із
+              `z-base` чесно стоїть над нею.
+            */}
+            <div className="relative w-full max-w-[312px]">
               {currentView ? (
                 <img src={currentView.src} alt={`${product.kindName ?? "Товар"}, ${currentView.label}`} className="block w-full" />
               ) : null}
