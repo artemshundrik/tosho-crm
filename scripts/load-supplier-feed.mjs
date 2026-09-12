@@ -51,6 +51,13 @@ import { join } from "node:path";
 // Папірус віддає прайс книжкою Excel, а не XML. Пакет уже в залежностях
 // (SheetJS 0.20.3) — його ж читає розбір ексельок у прорахунках.
 import * as XLSX from "xlsx";
+
+import {
+  colorImageCandidates,
+  commonPrefix,
+  dropSharedFrames,
+  familyTag,
+} from "./lib/opencartColorImage.mjs";
 /**
  * ТАБЛИЦЯ КОДУВАНЬ — НЕ ФАКУЛЬТАТИВНА, І САМЕ ТУТ. Прайс Папіруса — старий
  * формат BIFF, де кирилиця лежить у CP1251. Під `require()` SheetJS підвантажує
@@ -1006,6 +1013,33 @@ function parseHoroshop(xml, cfg) {
 }
 
 /**
+ * Перша адреса з переліку, за якою САЙТ справді віддає картинку.
+ *
+ * HEAD, а не GET: нам потрібен лише факт існування, і тіло знімка (200–400 кБ)
+ * качати ні до чого. Порожній перелік і всі невдачі дають `null` — рядок тоді
+ * лишається без фото, як і до появи цієї перевірки.
+ *
+ * ЧОМУ ПЕРЕВІРЯЄМО ТИП, А НЕ ЛИШЕ КОД. Магазини на OpenCart відповідають на
+ * невідому картинку не лише 404: трапляється 200 зі сторінкою помилки. Знімок
+ * від такої відповіді відрізняє саме `Content-Type`.
+ */
+async function firstLiveUrl(urls) {
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: "HEAD",
+        headers: { "User-Agent": UA },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.ok && /^image\//i.test(res.headers.get("content-type") || "")) return url;
+    } catch {
+      // Немає — пробуємо наступного кандидата.
+    }
+  }
+  return null;
+}
+
+/**
  * OpenCart (bergamo) — розбір ОДНІЄЇ сторінки товару. Викликається обходом, а
  * не по фіду: фіда в Бергамо немає (див. запис у реєстрі).
  *
@@ -1035,7 +1069,7 @@ function parseHoroshop(xml, cfg) {
  * дістати обходом 279 сторінок категорій із мапи, але це окрема робота на
  * стільки ж запитів, тож поки `category: null`.
  */
-function parseOpencartPage(html, ctx) {
+async function parseOpencartPage(html, ctx) {
   const ld = [];
   for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
     try {
@@ -1138,7 +1172,7 @@ function parseOpencartPage(html, ctx) {
   };
 
   /**
-   * ФОТО КОЛЬОРУ ВИВОДИМО З БАТЬКІВСЬКОГО, і цього разу перевірено як слід.
+   * ФОТО КОЛЬОРУ ВИВОДИМО З БАТЬКІВСЬКОГО — І ПЕРЕВІРЯЄМО ЗАПИТОМ.
    *
    * Спершу я спробував підставити чужий код у КЕШОВАНУ адресу
    * (`/image/cache/.../22640316053_a-674x800.jpg`), отримав 404 на трьох
@@ -1148,30 +1182,35 @@ function parseOpencartPage(html, ctx) {
    * саме тому проби й падали.
    *
    * Оригінал же лежить поруч і БЕЗ кешу — `/image/catalog_images/<бренд>/…` —
-   * і віддається завжди, хоч сторінку кольору ніхто не відкривав. Перевірено
-   * на двох брендах (james_harvest, voyager) і на кодах, куди ми не ходили.
+   * і віддається завжди, хоч сторінку кольору ніхто не відкривав.
    *
-   * Ім'я файлу — це артикул у нижньому регістрі з дефісами через підкреслення
-   * («V3447-03» → «v3447_03»), далі кадр («_a») і розширення. Кадр і
-   * розширення беремо з РЕАЛЬНОЇ батьківської адреси, а не вгадуємо: так
-   * правило не розсиплеться на товарі, у якого головний кадр названий інакше.
+   * ОДНОГО ПРАВИЛА ЗАМАЛО, І ЦЕ ЗАМІРЯНО (REQ-264#p6). Правило було одне:
+   * ім'я файлу мусить починатись артикулом батька («V3447-03» → `v3447_03_a`),
+   * інакше не виводимо. У voyager і james_harvest так і є, а в решти брендів
+   * ім'я складене інакше — `40634_navy_a` при артикулі `40634790`, `0036-900_a`
+   * при `0036900TUN`, `vc00548318_a` при `00548318`. Охоронець їх не впізнавав
+   * і чесно відмовлявся: половина пулу Бергамо (5144 рядки з 10085, замір
+   * 12.09.2026) лежала без фото, і на картці позиції стояла порожня плитка.
+   *
+   * ТЕПЕР КАНДИДАТІВ КІЛЬКА, А ВИРІШУЄ САЙТ. Замість «вгадав або відмовився»
+   * складаємо перелік адрес-кандидатів і питаємо HEAD-запитом, яка з них
+   * справді віддає картинку. Тобто здогадка більше нічим не загрожує: не
+   * підтвердилась — рядок лишається без фото, точно як раніше. Саме тому
+   * правил чотири, а не одне найнадійніше; перелік і межі — у
+   * `scripts/lib/opencartColorImage.mjs`.
+   *
+   * ЧОМУ НЕ ОБІЙТИ СТОРІНКУ КОЛЬОРУ. У її JSON-LD лежить точна адреса — але
+   * сторінка важить 737 кБ, і на 5144 кольори це 3,8 ГБ чужого трафіку проти
+   * кількох тисяч HEAD-запитів із нульовим тілом. Range-запити Бергамо не
+   * підтримує (перевірено: віддає всю сторінку кодом 200).
    */
-  const stemOf = (art) => art.toLowerCase().replace(/-/g, "_");
   const parentImage = images[0] || mainImage || "";
-  const parentStem = selfArticle ? stemOf(selfArticle) : null;
-  const parts = parentImage.match(
-    /^(.*)\/image\/cache\/(.+)\/([^/]+?)(?:-\d+x\d+[a-z]*)?(\.(?:jpg|jpeg|png|webp))$/i
-  );
-  const colorImage = (article) => {
-    if (!parts || !parentStem || !article) return null;
-    const [, origin, folder, file, ext] = parts;
-    // Основа імені має справді містити артикул батька — інакше підстановка
-    // була б здогадкою, а здогадка тут означає чуже фото на картці.
-    if (!file.toLowerCase().startsWith(parentStem)) return null;
-    return `${origin}/image/${folder}/${stemOf(article)}${file.slice(parentStem.length)}${ext}`;
-  };
 
-  const rows = [self];
+  // ── кольори-сусіди ──────────────────────────────────────────────────────────
+  // Спершу ЗБИРАЄМО перелік, і лише потім виводимо адреси: код кольору — це
+  // хвіст артикула після спільного початку, а спільний початок видно лише тоді,
+  // коли всі артикули родини вже на руках.
+  const siblings = [];
   const seen = new Set([ctx.url]);
   for (const m of html.matchAll(/<a\s[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)) {
     const body = m[2];
@@ -1187,19 +1226,43 @@ function parseOpencartPage(html, ctx) {
     // можна: `[/?#].*$` зрізає від першого слеша, тобто від «https://», і
     // артикул виходив «https:» (спіймано на сухій пробіжці).
     const slug = href.split(/[?#]/)[0].replace(/\/+$/, "").split("/").pop() || "";
-    const siblingArticle = /\d/.test(slug) ? slug : null;
-    const siblingImage = colorImage(siblingArticle);
     seen.add(href);
+    siblings.push({ href, label, article: /\d/.test(slug) ? slug : null });
+  }
+
+  const family = [selfArticle, ...siblings.map((s) => s.article)].filter(Boolean);
+  const model = commonPrefix(family);
+  const tag = familyTag(siblings.map((s) => s.article));
+  const found = await Promise.all(
+    siblings.map((s) =>
+      firstLiveUrl(
+        colorImageCandidates({
+          parentImage,
+          parentArticle: selfArticle,
+          parentColor: attrs.color,
+          article: s.article,
+          color: s.label,
+          model,
+          tag,
+        })
+      )
+    )
+  );
+  const images4color = dropSharedFrames(found, parentImage);
+
+  const rows = [self];
+  siblings.forEach((s, i) => {
+    const siblingImage = images4color[i];
     rows.push({
       ...self,
-      external_key: href,
-      article: siblingArticle,
-      url: href,
+      external_key: s.href,
+      article: s.article,
+      url: s.href,
       image_url: siblingImage,
       images: siblingImage ? JSON.stringify([siblingImage]) : "[]",
-      attrs: JSON.stringify({ ...attrs, color: label }),
+      attrs: JSON.stringify({ ...attrs, color: s.label }),
     });
-  }
+  });
   return rows;
 }
 
@@ -3177,7 +3240,7 @@ async function crawlPages(indexXml, cfg, cookie) {
         }
       }
       if (html) {
-        const parsed = parsePage(html, { url, cfg });
+        const parsed = await parsePage(html, { url, cfg });
         // Сторінка може дати БІЛЬШЕ як один рядок: у Бергамо на картці товару
         // висить перелік усіх його кольорів, і кожен колір — окремий товар зі
         // своїм кодом. Тому розбирач повертає масив.
