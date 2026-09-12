@@ -167,14 +167,14 @@ export function ThemeSwitcher({
             <Sun
               aria-hidden
               className={cn(
-                "absolute h-4.5 w-4.5 transition-all duration-300 ease-out motion-reduce:transition-none",
+                "absolute h-4.5 w-4.5 transition-all duration-slow ease-out motion-reduce:transition-none",
                 isDark ? "rotate-90 scale-0 opacity-0" : "rotate-0 scale-100 opacity-100"
               )}
             />
             <Moon
               aria-hidden
               className={cn(
-                "absolute h-4.5 w-4.5 transition-all duration-300 ease-out motion-reduce:transition-none",
+                "absolute h-4.5 w-4.5 transition-all duration-slow ease-out motion-reduce:transition-none",
                 isDark ? "rotate-0 scale-100 opacity-100" : "-rotate-90 scale-0 opacity-0"
               )}
             />

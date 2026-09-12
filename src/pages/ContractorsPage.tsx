@@ -1389,7 +1389,7 @@ export default function ContractorsPage() {
                       disabled={!form.reminderDate}
                       onClick={() => setForm((current) => ({ ...current, reminderRepeat: option }))}
                       className={cn(
-                        "flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-all duration-200",
+                        "flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-all duration-base",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                         "disabled:cursor-not-allowed disabled:opacity-50",
                         active

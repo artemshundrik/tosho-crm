@@ -164,9 +164,9 @@ export function PageHeaderToolbarSlot({
          * `pointer-events-none` у схованому стані: інакше невидима смуга
          * ловила б кліки по верхніх рядках списку.
          */
-        "transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none",
+        "transition-[transform,opacity] duration-base ease-out motion-reduce:transition-none",
         chrome === "hidden"
-          ? "pointer-events-none -translate-y-full opacity-0 duration-150"
+          ? "pointer-events-none -translate-y-full opacity-0 duration-base"
           : "translate-y-0 opacity-100"
       )}
     >
@@ -186,7 +186,7 @@ export function PageHeaderToolbarSlot({
         ) : (
           <div
             className={cn(
-              "transition-opacity duration-200",
+              "transition-opacity duration-base",
               showSkeleton ? "opacity-100" : "opacity-0"
             )}
             // Заміряна висота цієї ж поверхні, якщо ми її вже бачили;

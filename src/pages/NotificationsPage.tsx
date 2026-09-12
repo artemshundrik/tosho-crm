@@ -1211,7 +1211,7 @@ export default function NotificationsPage() {
             >
               <div
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-4xl border border-border/60 p-3 transition-colors duration-200 ease-out hover:bg-muted/28 sm:gap-4 sm:p-4",
+                  "flex w-full items-start gap-3 rounded-4xl border border-border/60 p-3 transition-colors duration-base ease-out hover:bg-muted/28 sm:gap-4 sm:p-4",
                   notificationCardToneClass(n),
                   !n.read && ""
                 )}

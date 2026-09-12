@@ -460,7 +460,7 @@ function Rows({
                     // -ml-2 знімає проміжок ряду, поки кнопка схлопнута: інакше
                     // рядки з кнопкою і без неї мають різний правий край.
                     "-ml-2 max-w-0 opacity-0",
-                    "transition-[max-width,opacity,margin] duration-200 ease-out",
+                    "transition-[max-width,opacity,margin] duration-base ease-out",
                     "group-hover:ml-0 group-hover:max-w-32 group-hover:opacity-100",
                     // has-[:focus-visible] НА САМІЙ ОБГОРТЦІ, а не focus-within
                     // на рядку. Тут стояло group-focus-within, і воно ловило
@@ -684,7 +684,7 @@ function PapercutCard({
               // на 12 px вужче за сусідів — і смуга «мови інтерфейсу» не
               // збігалася з рештою навіть у спокої (помічено Артемом).
               "-mr-3 max-w-0 opacity-0",
-              "transition-[max-width,opacity,margin] duration-200 ease-out",
+              "transition-[max-width,opacity,margin] duration-base ease-out",
               "group-hover/papercut:mr-0 group-hover/papercut:max-w-32 group-hover/papercut:opacity-100",
               // Той самий лік, що й у рядках «Можна брати», і тут він помітніший
               // за все: назва накопичувача — КНОПКА, яка розгортає список. Тобто

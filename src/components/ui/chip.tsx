@@ -32,7 +32,7 @@ const Chip = React.forwardRef<HTMLButtonElement, ChipProps>(
           // Base styles
           "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full",
           "border border-border/30 bg-muted/10 text-foreground",
-          "transition-all duration-150",
+          "transition-all duration-base",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
           "disabled:pointer-events-none disabled:opacity-50",
           // Hover state

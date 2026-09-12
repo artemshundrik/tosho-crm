@@ -92,7 +92,7 @@ export function MobileStatusChips({
             // 300ms затримку тапу.
             className={cn(
               "flex h-11 shrink-0 touch-manipulation items-center gap-2 rounded-full border px-3.5 text-sm font-medium",
-              "transition-colors duration-150 ease-out",
+              "transition-colors duration-base ease-out",
               isActive
                 ? "border-foreground/10 bg-foreground text-background"
                 : "border-border bg-card text-muted-foreground"

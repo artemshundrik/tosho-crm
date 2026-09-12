@@ -6122,7 +6122,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <div
               data-deferred-body-skeleton
               className={cn(
-                "transition-opacity duration-200",
+                "transition-opacity duration-base",
                 !skeletonOpaque && "opacity-0"
               )}
             >
@@ -6808,7 +6808,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               ref={desktopKanbanViewportRef}
               data-deferred-body-skeleton
               className={cn(
-                "min-h-0 overflow-hidden transition-opacity duration-200",
+                "min-h-0 overflow-hidden transition-opacity duration-base",
                 !skeletonOpaque && "opacity-0"
               )}
               style={

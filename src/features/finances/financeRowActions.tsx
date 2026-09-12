@@ -27,7 +27,7 @@ export function ActionButton({ onClick, title, disabled, loading, icon, label, d
       onClick={onClick}
       className={cn(
         "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium",
-        "transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50",
+        "transition-colors duration-base disabled:pointer-events-none disabled:opacity-50",
         "[&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0 [&_svg]:pointer-events-none [&_img]:pointer-events-none",
         iconOnly ? "w-9" : "px-3",
         destructive

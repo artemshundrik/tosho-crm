@@ -318,7 +318,7 @@ export function DesignerEarningsWidget({
        скрінрідер оголошував це як одну кнопку, а Enter міг спрацювати двічі. */
     // Без плашки: сума за місяць — довідка, а не стан, що вимагає уваги.
     // Постійний фон у шапці лишений тільки таймеру, і лише коли він іде.
-    <div className="inline-flex h-10 items-center gap-1 rounded-xl pl-2 pr-1 transition-colors duration-200 hover:bg-muted/40">
+    <div className="inline-flex h-10 items-center gap-1 rounded-xl pl-2 pr-1 transition-colors duration-base hover:bg-muted/40">
       <AppDropdown
         align="end"
         sideOffset={14}
@@ -328,7 +328,7 @@ export function DesignerEarningsWidget({
         trigger={
           <button
             type="button"
-            className="inline-flex h-10 items-center gap-2 whitespace-nowrap text-xs transition-colors duration-200 hover:text-foreground cursor-pointer"
+            className="inline-flex h-10 items-center gap-2 whitespace-nowrap text-xs transition-colors duration-base hover:text-foreground cursor-pointer"
             aria-label={`Мій заробіток за ${monthLabel}`}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">

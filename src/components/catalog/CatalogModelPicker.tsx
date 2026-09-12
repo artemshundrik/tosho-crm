@@ -187,7 +187,7 @@ export const CatalogModelPicker: React.FC<CatalogModelPickerProps> = ({
           type="button"
           disabled={disabled}
           className={cn(
-            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
+            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-base",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             active
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"

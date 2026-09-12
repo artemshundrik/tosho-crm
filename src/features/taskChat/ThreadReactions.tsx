@@ -109,7 +109,7 @@ export function ThreadReactionBar({
         // місток через зазор: без нього курсор дорогою до панелі перетинав
         // порожнечу, наведення губилось і панель зникала, не даючи себе натиснути.
         "absolute bottom-full z-10 pb-2",
-        "transition-opacity duration-150",
+        "transition-opacity duration-base",
         pinned
           ? "opacity-100"
           : "opacity-0 delay-200 group-hover:opacity-100 group-hover:delay-[400ms]",

@@ -189,7 +189,7 @@ export function StorageObjectImage({
           src={src}
           alt={alt}
           className={cn(
-            "h-full w-full object-contain transition-opacity duration-200",
+            "h-full w-full object-contain transition-opacity duration-base",
             isLoaded ? "opacity-100" : "opacity-0",
             imageClassName
           )}

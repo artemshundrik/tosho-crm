@@ -25,7 +25,7 @@ const SheetOverlay = React.forwardRef<
       // Тривалості — рівно ті самі, що в самої панелі (див. sheetVariants).
       // Доти підкладка згасала за 200 мс, а панель їхала 300: сотню мілісекунд
       // вона повзла по вже яскравій сторінці, і це читалось як спалах.
-      "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:pointer-events-none notranslate data-[state=closed]:duration-200 data-[state=open]:duration-300",
+      "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:pointer-events-none notranslate data-[state=closed]:duration-base data-[state=open]:duration-slow",
       className
     )}
     translate="no"
@@ -54,7 +54,7 @@ const sheetVariants = cva(
    * спалахнути під панеллю, яка ще їхала. Заразом закриття стало відчутно
    * жвавішим — півсекунди на зникнення вікна це задовго.
    */
-  "fixed z-50 flex flex-col gap-4 overflow-hidden bg-background p-6 shadow-elevated-panel transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  "fixed z-50 flex flex-col gap-4 overflow-hidden bg-background p-6 shadow-elevated-panel transition ease-in-out data-[state=closed]:duration-base data-[state=open]:duration-slow data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {

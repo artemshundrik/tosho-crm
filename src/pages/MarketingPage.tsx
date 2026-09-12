@@ -987,7 +987,7 @@ export default function MarketingPage() {
           key={group.key}
           className={cn(
             "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
-            "transition-[border-color,box-shadow] duration-200 ease-out",
+            "transition-[border-color,box-shadow] duration-base ease-out",
             "hover:border-border",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
             record.isHidden && "opacity-70",
@@ -1025,7 +1025,7 @@ export default function MarketingPage() {
                   alt={`${visual.customerName} — ${visual.fileName}`}
                   variant="preview"
                   className="h-full w-full"
-                  imageClassName="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.03] motion-reduce:transition-none"
+                  imageClassName="h-full w-full object-cover transition-transform duration-slow ease-out group-hover/card:scale-[1.03] motion-reduce:transition-none"
                 />
               )}
               {displayStatus ? (
@@ -1036,7 +1036,7 @@ export default function MarketingPage() {
                 aria-label={record.isFavorite ? "Прибрати з обраного" : "Додати в обране"}
                 aria-pressed={record.isFavorite}
                 className={cn(
-                  "absolute right-2.5 top-2.5 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full backdrop-blur-sm transition-colors duration-150",
+                  "absolute right-2.5 top-2.5 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full backdrop-blur-sm transition-colors duration-base",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
                   record.isFavorite
                     ? "bg-black/45 opacity-100"
@@ -1439,7 +1439,7 @@ export default function MarketingPage() {
                           aria-label={`Візуал ${index + 1}`}
                           onClick={() => selectSibling(item)}
                           className={cn(
-                            "relative h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-all duration-150",
+                            "relative h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-all duration-base",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                             isActive
                               ? "border-primary"

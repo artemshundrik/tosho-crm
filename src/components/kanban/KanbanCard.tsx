@@ -87,7 +87,7 @@ export function KanbanCard({
         // відступи, через що картка «розгортається» після появи (та сама
         // причина, що в CONTROL_BASE). Opacity тут тому, що ним показують
         // недоступність.
-        "transition-[background-color,border-color,opacity] duration-220 ease-out motion-reduce:transition-none",
+        "transition-[background-color,border-color,opacity] duration-slow ease-out motion-reduce:transition-none",
         DENSITY[density],
         SURFACE[surface],
         disabled

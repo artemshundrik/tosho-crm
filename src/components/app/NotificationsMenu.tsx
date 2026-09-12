@@ -199,7 +199,7 @@ export function NotificationsMenu({
           // Прозорий, як решта кнопок у шапці. Плашка тут нічого не кодувала:
           // «є непрочитані» показує лічильник, а не фон, і сірий прямокутник
           // навколо дзвіночка лише виділяв його серед сусідів без причини.
-          className="relative h-10 w-10 rounded-xl transition-colors duration-200"
+          className="relative h-10 w-10 rounded-xl transition-colors duration-base"
           aria-label={unreadCount > 0 ? `Сповіщення, непрочитаних: ${unreadCount}` : "Сповіщення"}
         >
           <Bell className="h-4.5 w-4.5" />

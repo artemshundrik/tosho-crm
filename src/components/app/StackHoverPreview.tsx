@@ -148,7 +148,7 @@ export function StackHoverPreview({
         <div
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute inset-x-2 top-2 flex gap-1 drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)] transition-opacity duration-200 ease-out",
+            "pointer-events-none absolute inset-x-2 top-2 flex gap-1 drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)] transition-opacity duration-base ease-out",
             hovering ? "opacity-100" : "opacity-0"
           )}
         >
@@ -156,7 +156,7 @@ export function StackHoverPreview({
             <span
               key={frame.key}
               className={cn(
-                "h-[3px] flex-1 rounded-full transition-colors duration-300 ease-out",
+                "h-[3px] flex-1 rounded-full transition-colors duration-slow ease-out",
                 index === activeIndex ? "bg-white" : "bg-white/45"
               )}
             />

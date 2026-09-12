@@ -389,7 +389,7 @@ function FilterChip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-200",
+        "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-base",
         active
           ? "border-primary bg-primary/10 text-primary"
           : tone === "warning"
@@ -1675,7 +1675,7 @@ export function TeamMembersPage() {
               <button
                 type="button"
                 onClick={() => handleTabChange("invites")}
-                className="tone-success-subtle tone-text-success ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-transparent px-3 py-1 text-xs font-medium transition-colors duration-200 hover:brightness-[0.97]"
+                className="tone-success-subtle tone-text-success ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-transparent px-3 py-1 text-xs font-medium transition-colors duration-base hover:brightness-[0.97]"
               >
                 <LinkIcon className="h-3.5 w-3.5" />
                 <span>Активні інвайти</span>

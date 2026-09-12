@@ -187,7 +187,7 @@ const FROZEN_PERSON =
   // усередині hsl(var(--border)/0.35) як модифікатор прозорості, і правило
   // тихо зникає — перевірено, у computed style лишався прозорий box-shadow.
   "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border " +
-  "after:opacity-0 after:transition-opacity after:duration-150 " +
+  "after:opacity-0 after:transition-opacity after:duration-base " +
   "group-data-[scrolled-x]/box:after:opacity-100 " +
   "before:pointer-events-none before:absolute before:inset-0 group-hover/row:before:bg-muted/20";
 /**

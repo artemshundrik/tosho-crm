@@ -172,7 +172,7 @@ export default function InvitePage() {
   if (!session) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-section border border-border bg-card p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300">
+        <div className="w-full max-w-md rounded-section border border-border bg-card p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-slow">
           <div className="mx-auto bg-primary/10 w-20 h-20 rounded-full flex items-center justify-center mb-6 text-primary border border-primary/20">
             <User className="w-10 h-10" />
           </div>
@@ -205,7 +205,7 @@ export default function InvitePage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-section border border-border bg-card p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300 relative">
+      <div className="w-full max-w-md rounded-section border border-border bg-card p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-slow relative">
         <Button
           variant="ghost"
           size="sm"

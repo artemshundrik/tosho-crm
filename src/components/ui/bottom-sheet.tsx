@@ -72,7 +72,7 @@ export function BottomSheet({
            * довгому світлому списку це читається як спалах. Саме це й було
            * «мигає в прорахунках».
            */
-          "data-[state=closed]:duration-200 data-[state=open]:duration-300",
+          "data-[state=closed]:duration-base data-[state=open]:duration-slow",
           className
         )}
       >

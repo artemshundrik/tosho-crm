@@ -91,7 +91,7 @@ export function TabBar({
     <div
       className={cn(
         "fixed inset-x-0 bottom-0 z-floating flex justify-center md:hidden pointer-events-none transform-gpu",
-        "transition-[opacity,transform] duration-150 ease-out",
+        "transition-[opacity,transform] duration-base ease-out",
         isHidden ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
       )}
       aria-hidden={isHidden}

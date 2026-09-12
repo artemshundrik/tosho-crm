@@ -53,7 +53,7 @@ const ChipPicker: React.FC<{
             // контрол у цій базі не вживається ніде: Input і Button на h-9 мають
             // rounded-lg, і форма з пілюль читалась як чужий віджет усередині
             // рідного вікна. Радіус тепер той самий, що в поля поруч.
-            "inline-flex h-9 w-full items-center rounded-lg border px-3 text-sm transition-all duration-150",
+            "inline-flex h-9 w-full items-center rounded-lg border px-3 text-sm transition-all duration-base",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             "disabled:cursor-not-allowed disabled:opacity-60",
             selected

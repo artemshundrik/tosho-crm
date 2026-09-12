@@ -5092,7 +5092,7 @@ export default function DesignPage() {
             <div
               data-deferred-body-skeleton
               className={cn(
-                "transition-opacity duration-200",
+                "transition-opacity duration-base",
                 !skeletonOpaque && "opacity-0"
               )}
             >

@@ -1866,7 +1866,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               onFocus={() => preloadRoute(ROUTES.overview)}
               onTouchStart={() => preloadRoute(ROUTES.overview)}
               className={cn(
-                "inline-flex items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+                "inline-flex items-center justify-center overflow-hidden rounded-lg transition-all duration-slow ease-[cubic-bezier(0.2,0.8,0.2,1)]",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                 sidebarCollapsed
                   ? "h-0 w-0 opacity-0 -translate-x-2 pointer-events-none"
@@ -1884,16 +1884,16 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "h-8 w-8 rounded-[var(--radius-lg)] text-muted-foreground hover:text-foreground transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] translate-y-[2px]",
+                  "h-8 w-8 rounded-[var(--radius-lg)] text-muted-foreground hover:text-foreground transition-all duration-slow ease-[cubic-bezier(0.2,0.8,0.2,1)] translate-y-[2px]",
                   sidebarCollapsed ? "rounded-xl bg-background/35" : ""
                 )}
                 onClick={() => setSidebarCollapsed((prev) => !prev)}
                 aria-label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
               >
                 {sidebarCollapsed ? (
-                  <PanelLeftOpen className="h-4 w-4 transition-transform duration-300" />
+                  <PanelLeftOpen className="h-4 w-4 transition-transform duration-slow" />
                 ) : (
-                  <PanelLeftClose className="h-4 w-4 transition-transform duration-300 rotate-0" />
+                  <PanelLeftClose className="h-4 w-4 transition-transform duration-slow rotate-0" />
                 )}
               </Button>
             </HoverTip>
@@ -1918,7 +1918,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                  розгорнутому стані — інакше вони вискакували б стрибком на
                  першому ж кадрі згортання, поки ширина ще їде. */
               "[&>div+div]:relative [&>div+div]:before:absolute [&>div+div]:before:left-1/2 [&>div+div]:before:top-0 [&>div+div]:before:h-px [&>div+div]:before:w-6 [&>div+div]:before:-translate-x-1/2 [&>div+div]:before:bg-border/70",
-              "[&>div+div]:before:transition-opacity [&>div+div]:before:duration-300",
+              "[&>div+div]:before:transition-opacity [&>div+div]:before:duration-slow",
               sidebarCollapsed ? "[&>div+div]:before:opacity-100" : "space-y-3 [&>div+div]:before:opacity-0"
             )}
           >
@@ -2124,7 +2124,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     className={cn(
                       "min-h-[100dvh] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 backdrop-blur-xl",
                       "pb-[env(safe-area-inset-bottom)] will-change-transform",
-                      "data-[state=open]:duration-300 data-[state=closed]:duration-200 data-[state=open]:ease-out data-[state=closed]:ease-in"
+                      "data-[state=open]:duration-slow data-[state=closed]:duration-base data-[state=open]:ease-out data-[state=closed]:ease-in"
                     )}
                   >
                     <div className="flex h-full min-w-0 flex-col overflow-hidden">
@@ -2290,7 +2290,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 // Наведення нейтральне, як у решти полів: світлішає фон, рамка
                 // лишається своя. Рожевий обідок робив із поля рекламу модуля —
                 // сам колір бренду живе в пігулці праворуч, і цього досить.
-                className="group/search inline-flex h-10 w-[320px] cursor-pointer items-center gap-2 rounded-xl border border-border/50 bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
+                className="group/search inline-flex h-10 w-[320px] cursor-pointer items-center gap-2 rounded-xl border border-border/50 bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-base hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 {/* Не «Пошук»: те саме поле тепер і шукає, і питає ToSho AI.
@@ -2310,7 +2310,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     капсула всередині прямокутника — тим паче. */}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none relative inline-flex h-8 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg border border-ai-accent/25 bg-ai-accent/[0.08] px-2.5 text-2xs font-medium text-ai-accent transition-colors duration-200 group-hover:border-ai-accent/45 group-hover:bg-ai-accent/15"
+                  className="pointer-events-none relative inline-flex h-8 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg border border-ai-accent/25 bg-ai-accent/[0.08] px-2.5 text-2xs font-medium text-ai-accent transition-colors duration-base group-hover:border-ai-accent/45 group-hover:bg-ai-accent/15"
                 >
                   {/* Блиск сам пробігає раз на сім із половиною секунд — щоб про
                       можливість спитати згадували й ті, хто сюди не наводить.
@@ -2337,7 +2337,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   клік по самому полю. Приклад береться з того самого реєстру, що
                   й підказки в палітрі, — тобто залежить від посади й сторінки. */}
               {searchHintExample ? (
-                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 max-w-[420px] -translate-x-1/2 truncate rounded-lg border border-border/60 bg-popover shadow-menu px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 max-w-[420px] -translate-x-1/2 truncate rounded-lg border border-border/60 bg-popover shadow-menu px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-opacity duration-base group-hover:opacity-100 group-focus-within:opacity-100">
                   наприклад: {searchHintExample}
                 </span>
               ) : null}
@@ -2385,7 +2385,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   trigger={
                     <button
                       type="button"
-                      className="hidden lg:inline-flex h-10 items-center gap-3 whitespace-nowrap rounded-xl px-2.5 transition-colors duration-200 hover:bg-muted/50 cursor-pointer"
+                      className="hidden lg:inline-flex h-10 items-center gap-3 whitespace-nowrap rounded-xl px-2.5 transition-colors duration-base hover:bg-muted/50 cursor-pointer"
                       aria-label={
                         usdUahRate || eurUahRate
                           ? `Курси валют: долар ${usdUahRate ? usdUahRate.toFixed(2) : "не вказано"}, євро ${eurUahRate ? eurUahRate.toFixed(2) : "не вказано"}`
@@ -2813,7 +2813,7 @@ function SidebarGroup({
             <ChevronDown
               aria-hidden="true"
               className={cn(
-                "ml-1.5 h-3 w-3 shrink-0 transition-all duration-200",
+                "ml-1.5 h-3 w-3 shrink-0 transition-all duration-base",
                 isCollapsed ? "-rotate-90 opacity-100" : "rotate-0 opacity-0 group-hover/grp:opacity-100"
               )}
             />
@@ -2926,7 +2926,7 @@ function SidebarGroup({
                 }
                 className={cn(
                   "min-w-0 flex-1 truncate text-left",
-                  "transition-[opacity,transform] duration-200 ease-out [transition-delay:var(--sb-in,0ms)] motion-reduce:transition-none",
+                  "transition-[opacity,transform] duration-base ease-out [transition-delay:var(--sb-in,0ms)] motion-reduce:transition-none",
                   "group-data-[collapsed=true]/sb:pointer-events-none group-data-[collapsed=true]/sb:opacity-0",
                   "group-data-[collapsed=true]/sb:-translate-x-2 group-data-[collapsed=true]/sb:[transition-delay:var(--sb-out,0ms)]",
                   isMobileDrawer ? "text-[14px] font-medium" : undefined
@@ -2965,7 +2965,7 @@ function SidebarGroup({
                     title={pinned ? "Відкріпити" : "Закріпити вгорі"}
                     className={cn(
                       "absolute right-1 top-1/2 z-[1] grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md",
-                      "text-muted-foreground/70 transition-[opacity,color,background-color] duration-150",
+                      "text-muted-foreground/70 transition-[opacity,color,background-color] duration-base",
                       "hover:bg-foreground/[0.07] hover:text-foreground",
                       "focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-foreground/20",
                       // Мовчить, поки на рядок не навели: те, що пункт

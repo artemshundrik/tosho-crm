@@ -30,7 +30,7 @@ export const CONTROL_BASE = cx(
   // Доказ знято через document.getAnimations(): там висів CSSTransition саме на
   // margin-bottom тривалістю 200 мс.
   // Той самий рецепт уже застосований нижче для фільтрів — тримаємо однаково.
-  "transition-[background-color,border-color,color,box-shadow] duration-200 ease-out",
+  "transition-[background-color,border-color,color,box-shadow] duration-base ease-out",
   "motion-reduce:transition-none",
   "hover:bg-muted/60",
   // Фокус: тільки темніша рамка, без рінга (рінг давав «блюр»-глоу на темній) і

@@ -491,7 +491,7 @@ const ChipDropdown: React.FC<{
           type="button"
           disabled={disabled}
           className={cn(
-            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
+            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-base",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             active
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
@@ -586,7 +586,7 @@ const DesignTaskTypeChip: React.FC<{
         <button
           type="button"
           className={cn(
-            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
+            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-base",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             value
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
@@ -647,7 +647,7 @@ const TeamMemberChipDropdown: React.FC<{
         <button
           type="button"
           className={cn(
-            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
+            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-base",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selected
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
@@ -746,7 +746,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
         <button
           type="button"
           className={cn(
-            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
+            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-base",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selected.length > 0
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
@@ -2037,7 +2037,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             <img
                               src={imageUrl}
                               alt={productLabel}
-                              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                              className="h-full w-full object-cover transition-transform duration-base group-hover:scale-105"
                               loading="lazy"
                             />
                           ) : (

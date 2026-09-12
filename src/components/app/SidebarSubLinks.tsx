@@ -72,7 +72,7 @@ export function SidebarSubLinks({
           onFocus={() => onPreload?.(item.to)}
           className={cn(
             "-ml-2.5 flex items-center rounded-r-md border-l-2 pl-[9px] pr-2 text-[13px]",
-            "transition-colors duration-150 motion-reduce:transition-none",
+            "transition-colors duration-base motion-reduce:transition-none",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
             isMobileDrawer ? "min-h-9" : "h-7",
             item.to === activeTo

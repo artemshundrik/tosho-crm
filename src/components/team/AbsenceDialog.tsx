@@ -331,7 +331,7 @@ export function AbsenceDialog({
                     aria-checked={active}
                     onClick={() => setValue((prev) => ({ ...prev, kind: option.value }))}
                     className={cn(
-                      "flex h-9 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-xs font-medium transition-all duration-200",
+                      "flex h-9 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-xs font-medium transition-all duration-base",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                       active
                         ? cn("", toneBadgeClass[TEAM_ABSENCE_KIND_TONE[option.value]])

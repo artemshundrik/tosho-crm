@@ -163,8 +163,8 @@ export function useSegmentedSlider<T extends HTMLElement>(variant: SliderVariant
           : "z-0 rounded-lg border border-border bg-background",
         animated &&
           (underline
-            ? "transition-[transform,width] duration-200 ease-out motion-reduce:transition-none"
-            : "transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none")
+            ? "transition-[transform,width] duration-base ease-out motion-reduce:transition-none"
+            : "transition-[transform,width,height] duration-base ease-out motion-reduce:transition-none")
       )}
       style={
         underline

@@ -495,7 +495,7 @@ export function DesignerHeaderTimerWidget({
       trigger={
         <div
           className={cn(
-            "hidden lg:inline-flex h-10 w-[190px] items-center justify-between gap-1.5 whitespace-nowrap rounded-xl border px-2 transition-all duration-200 cursor-pointer",
+            "hidden lg:inline-flex h-10 w-[190px] items-center justify-between gap-1.5 whitespace-nowrap rounded-xl border px-2 transition-all duration-base cursor-pointer",
             // Тон = «зараз іде». Спокійний таймер плашки не отримує: сірий
             // прямокутник ні про що не повідомляв, зате з'їдав різницю з
             // зеленим — а саме її й треба помітити краєм ока.
