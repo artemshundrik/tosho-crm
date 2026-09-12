@@ -1504,10 +1504,14 @@ export function formatPrintSpecEntries(preset: PrintSpecPreset, values: PrintSpe
  * Формат свідомо той самий «Підпис: значення», що віддає `formatPrintProductSummary`
  * для старих пресетів: картка прорахунку, список і дизайн-задача розбирають рядки
  * по «: », і другий формат означав би другий розбирач у кожному з трьох місць.
+ *
+ * Назва виду йде як є, з великої (REQ-178#p18). Решта значень приходить із
+ * підписів довідника — «Тверда», «Крейда 350 г», — тож «Виріб: щоденник» першим
+ * рядком читався як одрук, а не як інший регістр.
  */
 export function formatPrintSpecSummary(preset: PrintSpecPreset, values: PrintSpecValues): string[] {
   return [
-    `Виріб: ${preset.label.toLowerCase()}`,
+    `Виріб: ${preset.label}`,
     ...formatPrintSpecEntries(preset, values).map((entry) => `${entry.label}: ${entry.value}`),
   ];
 }

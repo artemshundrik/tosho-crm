@@ -144,7 +144,7 @@ describe("стрічка «головне» на картці", () => {
   it("рядкове зведення — ті самі записи з «Виріб» попереду", () => {
     const entries = formatPrintSpecEntries(PRINT_SPEC_DIARY, values);
     expect(formatPrintSpecSummary(PRINT_SPEC_DIARY, values)).toEqual([
-      "Виріб: щоденник",
+      "Виріб: Щоденник",
       ...entries.map((entry) => `${entry.label}: ${entry.value}`),
     ]);
   });
