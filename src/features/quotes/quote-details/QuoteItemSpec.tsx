@@ -29,12 +29,24 @@ export function QuoteItemSpec({ sections }: { sections: QuoteItemSpecSection[] }
 
   const grid = (
     <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-      {sections.map((section) => (
-        <div key={section.title}>
+      {sections.map((section, sectionIndex) => (
+        <div key={sectionIndex}>
           <div className="mb-2 text-xs text-muted-foreground">{section.title}</div>
-          {section.fields.map((field) => (
+          {/*
+            КЛЮЧ — ПОРЯДКОВИЙ, А НЕ ПІДПИС. Раніше ключем стояв
+            `section.title + field.label`, і це припускало, що підписи в секції
+            не повторюються. Нанесення це припущення ламали: секція «Нанесення»
+            мала підписом МЕТОД, а значенням місце, тож «Вишивка · Груди» і
+            «Вишивка · Спина» давали два поля з ключем `Нанесення:Вишивка` —
+            React скаржився в консоль, а друге поле могло зникнути при
+            перемальовуванні (REQ-178#p1). Нанесення звідси пішли (REQ-157#p4),
+            але саме припущення лишалось, тобто безпечним воно було випадково.
+            Порядок тут — єдина справжня тотожність поля: список не сортують і
+            не фільтрують після побудови.
+          */}
+          {section.fields.map((field, fieldIndex) => (
             <div
-              key={`${section.title}:${field.label}`}
+              key={fieldIndex}
               className="flex items-baseline justify-between gap-4 py-1 text-sm"
             >
               <span className="min-w-0 text-muted-foreground">{field.label}</span>
