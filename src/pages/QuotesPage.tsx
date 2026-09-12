@@ -5092,18 +5092,35 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
+  /*
+    ВІКНО ВІДКРИВАЄТЬСЯ ОДРАЗУ, А НЕ ПІСЛЯ ЗБИРАННЯ. `buildCommercialDocument`
+    іде 6–10 секунд (заміряно на дошці: клік і поява вікна розходились на 6,2 с),
+    і весь цей час єдиною відповіддю на клік було сіре тіло кнопки. Читається це
+    як «не спрацювало», тож люди тиснуть удруге — а коли вікно нарешті
+    з'являється, заслуга дістається другому кліку.
+
+    Стан «Генерація прев'ю...» у самому вікні був тут від початку, просто його
+    ніхто не бачив: вікно відкривали вже з готовим документом. Тепер спершу
+    відкриваємо, потім наповнюємо; не вийшло — закриваємо й кажемо чому.
+
+    Старий документ скидаємо, інакше шапка встигне показати суму ПОПЕРЕДНЬОГО
+    КП, поки збирається поточний.
+  */
   const handlePreviewQuoteSet = async () => {
     if (!quoteSetDetailsTarget) return;
+    setQuoteSetCommercialDoc(null);
     setQuoteSetCommercialLoading(true);
+    setQuoteSetPreviewOpen(true);
     try {
       const doc = await buildCommercialDocument();
       if (!doc) {
+        setQuoteSetPreviewOpen(false);
         toast.error("Немає даних для прев'ю");
         return;
       }
       setQuoteSetCommercialDoc(doc);
-      setQuoteSetPreviewOpen(true);
     } catch (e: unknown) {
+      setQuoteSetPreviewOpen(false);
       toast.error("Не вдалося підготувати прев'ю", { description: getErrorMessage(e, "") });
     } finally {
       setQuoteSetCommercialLoading(false);
