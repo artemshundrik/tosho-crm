@@ -1351,6 +1351,33 @@ function parseWebasystPage(html, ctx) {
   const photos = new Map();
   for (const m of html.matchAll(/id="product-image-(\d+)"[^>]*href="([^"]+)"/g)) photos.set(m[1], abs(m[2]));
 
+  /**
+   * КАДР КОЛЬОРУ, ЯКИМ ДІЛЯТЬСЯ ЙОГО РОЗМІРИ.
+   *
+   * Рядок тут — пара «колір + розмір», і `image_id` постачальник ставить не
+   * кожній парі: буває, що знімок призначений розміру S, а в L і XL того самого
+   * кольору поле порожнє. Раніше такі рядки лишались без фото — на картці
+   * товару один розмір був зі знімком, а сусідній із сірою плиткою.
+   *
+   * ЦЕ НЕ ТЕ САМЕ, ЩО БАТЬКІВСЬКЕ ФОТО. Правило «беремо лише своє» захищає від
+   * чужого КОЛЬОРУ — синій знімок у чорного антрациту. Інший РОЗМІР того самого
+   * кольору це та сама річ на тому самому знімку, тож ділитись ним нічим не
+   * загрожує. Ключ — id ознаки кольору, а не підпис: підписи в Трелє записані
+   * і українською, і російською («Чорний» ‖ «Черный»), і за ними кольори
+   * склеїлись би не так.
+   *
+   * Замір 12.09.2026 на всіх 152 сторінках, де були порожні рядки: так
+   * закриваються 91 із 708. Решта 616 належать кольорам, яким знімка не
+   * призначили НІДЕ в товарі (а 27 сторінок узагалі без фото — сайт малює на
+   * їхньому місці свою заглушку `no-photo`), і вигадувати їм кадр ми не будемо.
+   */
+  const frameByColor = new Map();
+  for (const sku of Object.values(skus)) {
+    const id = sku?.features?.cvet?.id;
+    if (id == null || !photos.has(String(sku.image_id))) continue;
+    if (!frameByColor.has(String(id))) frameByColor.set(String(id), String(sku.image_id));
+  }
+
   // Підписи кольорів беремо з форми товару: у самому рядку варіанта лежить лише
   // id значення ознаки.
   const colors = new Map();
@@ -1378,18 +1405,22 @@ function parseWebasystPage(html, ctx) {
     if (!sku?.sku) continue;
     const features = sku.features || {};
     const size = webasystFeatureText(features.razmer);
+    const colorId = features.cvet ? String(features.cvet.id) : null;
     // Підпис кольору: спершу зразок із форми, далі — початок назви варіанта
     // («Червоний 3XL» без розміру), і лише потім загальна «розцвітка». Другий
     // шлях потрібен для кольорів, яких у формі немає: їх не показують, а рядки
     // з ними в `skus_data` лишаються.
-    let color = features.cvet ? (colors.get(String(features.cvet.id)) ?? null) : null;
+    let color = colorId ? (colors.get(colorId) ?? null) : null;
     const variant = String(sku.name || "").trim();
     if (!color && size && variant.endsWith(size)) color = variant.slice(0, -size.length).trim() || null;
     if (!color) color = webasystFeatureText(features.rascvetka);
 
     const price = Number.parseFloat(sku.price);
     const sitePrice = Number.parseFloat(sku.compare_price) || Number.parseFloat(sku.primary_price) || null;
-    const image = photos.get(String(sku.image_id)) || null;
+    const image =
+      photos.get(String(sku.image_id)) ||
+      (colorId ? photos.get(frameByColor.get(colorId)) : null) ||
+      null;
     const count = Number.parseInt(sku.count, 10);
 
     /**
