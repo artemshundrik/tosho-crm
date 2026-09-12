@@ -17,6 +17,9 @@ import {
   type CatalogSuggestion,
 } from "@/features/quotes/quote-wizard/catalogSuggestions";
 import { useCatalogSuggestions } from "@/features/quotes/quote-wizard/useCatalogSuggestions";
+import type { QuoteItemMetadata } from "@/lib/printPackage";
+
+import { buildModelSwapPatch } from "./modelSwapPatch";
 
 import { updateQuoteItemRow } from "./queries";
 
@@ -42,6 +45,14 @@ import { updateQuoteItemRow } from "./queries";
  * його й почім. А от нанесення при зміні ВИДУ стирається — методи належать
  * виду (`catalog_methods.kind_id`), і чужі id у позиції були б брехнею, яку
  * не побачить ні картка, ні дизайн-задача, ні замовлення.
+ *
+ * ПАРАМЕТРИ ВИРОБУ ЗЛІТАЮТЬ ІЗ ТІЄЇ Ж ПРИЧИНИ (REQ-36#p41). Пресет належить
+ * МОДЕЛІ (`catalog_models.metadata.specPreset`), тож після заміни щоденника на
+ * брошуру збережені 33 поля щоденника описують товар, якого в позиції вже
+ * немає. Раніше вони лишались, і панель показувала їх далі — мовчки, бо брала
+ * пресет із збереженого значення, а не з моделі. Питати підтвердження не
+ * стали: нанесення поруч злітають без питання з тієї самої причини, і два
+ * різні правила на одну дію плутали б більше, ніж рятували.
  */
 export function QuoteItemModelSwap({
   teamId,
@@ -49,6 +60,7 @@ export function QuoteItemModelSwap({
   currentModelId,
   currentKindId,
   disabled,
+  metadata,
   onSaved,
   open: openProp,
   onOpenChange,
@@ -58,6 +70,8 @@ export function QuoteItemModelSwap({
   currentModelId: string | null;
   currentKindId: string | null;
   disabled?: boolean;
+  /** Метадані позиції: із них при зміні виду знімаються параметри виробу. */
+  metadata?: QuoteItemMetadata | null;
   onSaved?: () => void;
   /** Керований стан — коли вікно відкриває меню «⋮». Без нього малюється власний чип. */
   open?: boolean;
@@ -88,17 +102,10 @@ export function QuoteItemModelSwap({
   const pick = async (suggestion: CatalogSuggestion) => {
     setSaving(true);
     setOpen(false);
-    const kindChanged = suggestion.kindId !== currentKindId;
-    await updateQuoteItemRow(itemId, {
-      name: suggestion.name,
-      catalog_type_id: suggestion.typeId,
-      catalog_kind_id: suggestion.kindId,
-      catalog_model_id: suggestion.modelId,
-      // Знайшли за артикулом кольору — колір і записуємо; знайшли за назвою —
-      // стираємо старий, бо він належав ІНШІЙ моделі (REQ-250#p1).
-      catalog_variant_id: suggestion.matched?.variantId ?? null,
-      ...(kindChanged ? { methods: null, print_position_id: null } : {}),
-    });
+    await updateQuoteItemRow(
+      itemId,
+      buildModelSwapPatch(suggestion, { currentKindId, metadata: metadata ?? null })
+    );
     setSaving(false);
     setQuery("");
     onSaved?.();

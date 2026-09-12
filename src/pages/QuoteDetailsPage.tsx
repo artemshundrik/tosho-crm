@@ -4859,6 +4859,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 currentModelId={resolvedModelId ?? null}
                                 currentKindId={resolvedKindId ?? null}
                                 disabled={!canManageItems}
+                                metadata={item.metadata ?? null}
                                 open={swapItemId === item.id}
                                 onOpenChange={(next) => setSwapItemId(next ? item.id : null)}
                                 onSaved={() => void loadItems()}

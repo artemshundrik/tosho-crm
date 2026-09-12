@@ -58,7 +58,23 @@ export type PrintSpecPanelProps = {
 };
 
 export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved, className }: PrintSpecPanelProps) {
-  const preset = React.useMemo(() => getPrintSpecPreset(saved?.presetKey ?? presetKey), [presetKey, saved?.presetKey]);
+  /*
+    ПРЕСЕТ БЕРЕМО З МОДЕЛІ, А ЗБЕРЕЖЕНИЙ — ЛИШЕ ЯК ЗАПАСНИЙ. Було навпаки, і
+    після заміни щоденника на брошуру панель далі малювала щоденник із його
+    33 полями: збережений `presetKey` перемагав пресет моделі, тобто картка
+    впевнено показувала параметри товару, якого в позиції вже немає
+    (REQ-36#p41). Заміна виду тепер знімає `printSpec` сама
+    (`buildModelSwapPatch`), але порядок тут лишається другим запобіжником —
+    на позиції, де вид міняли до цієї правки.
+
+    Запасний шлях потрібен: у моделі пресета може не бути взагалі (позиція за
+    посиланням, назва руками), а збережені параметри — є, і ховати їх означало б
+    втратити відповіді, які вже дали.
+  */
+  const preset = React.useMemo(
+    () => getPrintSpecPreset(presetKey ?? saved?.presetKey),
+    [presetKey, saved?.presetKey]
+  );
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<PrintSpecValues>({});
   const [saving, setSaving] = React.useState(false);
