@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { formatJobRole } from "@/lib/jobRoles";
 import { PRO_STORAGE_LIMIT_BYTES } from "@/lib/systemHealthThresholds";
 import { loadNovaPoshtaSettings, missingNovaPoshtaFields } from "@/lib/novaPoshtaSettings";
+import { releaseTitle } from "@/lib/releaseAttribution";
 import { resolveWorkspaceId } from "@/lib/workspace";
 
 import { readLocalCheckStamp } from "./integrationsCache";
@@ -961,10 +962,10 @@ async function loadNetlify(): Promise<IntegrationStatus> {
     supabase
       .schema("tosho")
       .from("releases")
-      .select("released_at,title")
+      .select("released_at,title,changes")
       .order("released_at", { ascending: false })
       .limit(1)
-      .maybeSingle<{ released_at: string | null; title: string | null }>(),
+      .maybeSingle<{ released_at: string | null; title: string | null; changes: unknown }>(),
     fetchNetlifyUsage(),
   ]);
 
@@ -973,7 +974,15 @@ async function loadNetlify(): Promise<IntegrationStatus> {
     at: latest.data?.released_at ?? null,
     emptyText: "деплоїв ще не було",
   };
-  const lastRelease = { label: "Останній реліз", value: latest.data?.title || "—" };
+  /* Назва релізу живе у `changes`, а не в `title`: колонку не пише ніхто —
+     ні плагін Netlify, ні гак. Прочерк тут означав би «деплоїв не було», хоч
+     поруч у цій самій картці стоїть їхня кількість. Той самий розбір, що й у
+     сторінки «Релізи», тож у шторці стоїть рівно те, що керівництво бачить
+     там: переказ, якщо він є, інакше тема коміта. */
+  const lastRelease = {
+    label: "Останній реліз",
+    value: latest.data?.title?.trim() || releaseTitle(latest.data?.changes) || "—",
+  };
   const noAutoTopUp = {
     label: "Коли скінчаться",
     value: "авто-поповнення вимкнене — Netlify зупиняє сайти, а не лише деплої",
