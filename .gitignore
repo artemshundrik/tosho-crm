@@ -13,6 +13,11 @@ dist-ssr
 *.local
 *.tsbuildinfo
 .env.backup
+# Копії з секретами плодяться самі (.env.backup.bak-…, .env.backupecho після
+# зірваної команди). Репозиторій публічний, тож ловимо ВСІ похідні, а приклад
+# без значень лишаємо в історії.
+.env.backup*
+!.env.backup.example
 backups/
 tmp/
 
