@@ -32,8 +32,18 @@ const Table = React.forwardRef<
      * контейнером скролу стає він, і пункт 1 нічого не рятує (див. AppLayout).
      */
     stickyHeader?: boolean;
+    /**
+     * Голий <table>: без обгортки з `overflow-auto` і без липкого <thead>.
+     *
+     * Для екранів, які самі розкладають таблицю по контейнерах — коли шапка
+     * живе в одному боксі, а тіло прокручується вбік в іншому (див.
+     * `PayrollTableFrame`). `stickyHeader` тут не годиться: його відступ
+     * `--page-chrome-offset` рахується від СТОРІНКИ, а всередині чужого
+     * скрол-контейнера зсуває шапку вниз, поверх рядків.
+     */
+    bare?: boolean;
   }
->(({ className, variant = "list", size = "md", stickyHeader = false, ...props }, ref) => {
+>(({ className, variant = "list", size = "md", stickyHeader = false, bare = false, ...props }, ref) => {
   const sizeClasses = {
     sm: "[&_tbody_tr]:h-12 [&_th]:h-10 [&_th]:px-4 [&_td]:px-4 [&_td]:py-2.5",
     md: "[&_tbody_tr]:h-14 [&_th]:h-11 [&_th]:px-6 [&_td]:px-6 [&_td]:py-3.5",
@@ -99,7 +109,7 @@ const Table = React.forwardRef<
     />
   );
 
-  if (stickyHeader) return table;
+  if (stickyHeader || bare) return table;
 
   return <div className="relative w-full overflow-auto">{table}</div>;
 })

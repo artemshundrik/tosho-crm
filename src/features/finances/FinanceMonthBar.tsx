@@ -7,9 +7,12 @@ import { Button } from "@/components/ui/button";
 // Негативні відступи компенсують падінги контент-панелі (px-4 pt-4 / lg:p-6);
 // негативний top на lg — бо Chrome липить top-0 ПІД паддінгом скрол-контейнера,
 // лишаючи зверху смужку, крізь яку просвічує контент.
+// Нижче lg скрол-панелі немає — прокручується документ, а верх вікна перекритий
+// фіксованою шапкою застосунку. Тому там top = її висота: з top-0 бар ховався
+// за шапкою цілком саме тоді, коли по нього тягнешся (REQ-272).
 export function FinanceStickyBar({ children }: { children: React.ReactNode }) {
   return (
-    <div className="sticky top-0 z-20 -mx-4 -mt-4 flex items-center gap-1.5 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur-md lg:-top-6 lg:-mx-6 lg:-mt-6 lg:px-6">
+    <div className="sticky top-[var(--app-header-height)] z-20 -mx-4 -mt-4 flex items-center gap-1.5 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur-md lg:-top-6 lg:-mx-6 lg:-mt-6 lg:px-6">
       {children}
     </div>
   );

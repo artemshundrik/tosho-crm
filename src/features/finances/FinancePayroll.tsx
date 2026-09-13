@@ -4,6 +4,7 @@ import { FilePlus2, Loader2, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";
+import { FROZEN_PERSON, PayrollTableFrame, type PayrollFrameColumn } from "./PayrollTableFrame";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/picker-input";
@@ -11,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { formatJobRole } from "@/lib/jobRoles";
 import { cn } from "@/lib/utils";
@@ -137,104 +138,17 @@ type Draft = {
 const EMPTY_DRAFT: Draft = { base: "", bonus: "", deduction: "", penalty: "", advance: "", advanceDate: "" };
 
 /**
- * Рядок заголовків тримається верху СТОРІНКИ.
- *
- * Таблиця їде разом зі сторінкою, доки заголовки не впруться в липку смугу
- * місяця, — і далі рядки прокручуються вже під ними. Зсув зверху саме під цю
- * смугу (FinanceMonthBar: висота ~49px, на lg зміщений на -24px).
- *
- * Липкість вішаємо на самі <th>, а не на <thead>: у таблиць sticky на секції
- * стабільно працює не в усіх рушіях. Непрозорий фон обов'язковий, інакше рядки
- * просвічують крізь заголовок.
- *
- * Шари всередині таблиці мусять лишатись НИЖЧЕ за смугу місяця (вона на z-20),
- * інакше рядки починають малюватись поверх неї. Тому весь порядок тісний:
- * заморожена колонка 5 → заголовки 10 → кут шапки 15 → смуга місяця 20.
- *
- * ВЛАСНОГО скрол-боксу в таблиці бути НЕ МОЖЕ: щойно на обгортці з'явиться
- * `overflow`, вона стане точкою відліку для sticky, і заголовки відірвуться від
- * сторінки. Це не наш винахід — про це прямо написано в `Table` біля пропа
- * `stickyHeader`. Пробували 2026-08-10, повернули назад.
- */
-const STICKY_HEAD = "sticky top-0 z-10 border-b border-border/40 bg-background";
-
-/**
- * Заморожена колонка «Співробітник».
- *
- * Коли таблиця не влазить, убік їде вся панель фінансів — вона й є тут
- * скрол-контейнером (власного таблиця мати не може, див. STICKY_HEAD). Тому й
- * точка відліку для `left` — панель, а не таблиця.
- *
- * Зсув НЕГАТИВНИЙ і дорівнює падінгу панелі (px-4, на lg p-6). Без нього
- * колонка спинялась на межі падінга, а панель обрізає вміст на межі рамки — і
- * ліворуч від замороженої колонки лишалась смужка в 16–24px, крізь яку
- * проїжджали числа. З від'ємним зсувом колонка спиняється рівно там, де
- * панель обрізає, і смужки немає. Стрибка при цьому не буде: sticky спиняє
- * елемент саме на порозі, а не переставляє його.
- *
- * Фон суцільний — під колонку заїжджають рядки. Через це підсвітку рядка
- * малюємо псевдоелементом ПОВЕРХ фону, інакше край не підсвічувався б разом
- * з рештою рядка.
- */
-const FROZEN_PERSON =
-  "sticky left-0 z-[5] bg-background " +
-  // Дівайдер по правому краю: щоб обрізана колонка читалась як «вміст заїхав
-  // під межу», а не як поламаний підпис. З'являється ЛИШЕ коли під колонку
-  // справді щось заїхало — доти ділити нема чого, і зайва лінія посеред
-  // таблиці тільки шумить. Стан вмикає data-scrolled-x на самому боксі.
-  //
-  // Малюємо псевдоелементом, а НЕ через ``: Tailwind v4 читає слеш
-  // усередині hsl(var(--border)/0.35) як модифікатор прозорості, і правило
-  // тихо зникає — перевірено, у computed style лишався прозорий box-shadow.
-  "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border " +
-  "after:opacity-0 after:transition-opacity after:duration-base " +
-  "group-data-[scrolled-x]/box:after:opacity-100 " +
-  "before:pointer-events-none before:absolute before:inset-0 group-hover/row:before:bg-muted/20";
-/**
- * Кут шапки заморожений по обох осях, тож мусить лежати над заголовками — але
- * все ще під смугою місяця (z-20), інакше перекриє її при прокрутці.
- */
-const FROZEN_PERSON_HEAD = "z-[15] bg-background";
-
-/**
  * Опис колонок — один на таблицю і на її скелетон.
  *
- * Скелетон малюється тією ж <Table> з тими ж відсотками, тож повторити розкладку
+ * Скелетон малюється тим самим PayrollTableFrame з тими ж відсотками, тож повторити розкладку
  * «на око» неможливо в принципі: колонка може змінитись лише тут, і змінюється
  * одразу в обох. Заголовки в скелетоні справжні, не сірі смужки — вони не
  * залежать від даних, тож коли дані приходять, нічого не стрибає.
  *
  * `cell` каже, чим заповнити клітинку в скелетоні: поле вводу, число, тощо.
  */
-const TABLE_MIN_WIDTH = "min-w-[1000px]";
-
-/**
- * Бокс таблиці: липкий сам, і прокручується всередині.
- *
- * Поки скролиш сторінку, бокс їде разом із нею — зведення над ним іде вгору,
- * як і має. Щойно верх боксу впирається в смугу місяця, він спиняється, і далі
- * прокручуються вже рядки всередині, під заморожену шапку.
- *
- * `overflow` тут ОБОВ'ЯЗКОВИЙ: без нього неможливі ні горизонтальна прокрутка,
- * ні заморожена колонка — обидві живуть від скрол-контейнера. Плата за це в
- * тому, що заголовки липнуть до боксу, а не до сторінки; інакше ніяк, і про це
- * прямо написано в `Table` біля пропа `stickyHeader`.
- *
- * Висота обмежена вікном мінус шапка застосунку й смуга місяця — щоб у боксі
- * завжди лишалось місце під рядки.
- */
-const TABLE_BOX =
-  "group/box sticky top-12 max-h-[calc(100dvh-10rem)] overflow-auto rounded-xl " +
-  "border border-border/60 lg:top-6";
-
-type PayrollColumn = {
-  key: string;
-  label: string;
-  width: string;
-  align: string;
+type PayrollColumn = PayrollFrameColumn & {
   cell: "person" | "input" | "amount" | "note" | "status";
-  /** Підпис лишається для читача з екрана, але в шапці не малюється. */
-  srOnly?: boolean;
 };
 
 const PAYROLL_COLUMNS: readonly PayrollColumn[] = [
@@ -385,26 +299,6 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     }));
     return [...real, ...manual];
   }, [members, entries]);
-
-  /**
-   * Позначка «бокс прокручено вбік» — щоб дівайдер замороженої колонки
-   * з'являвся лише тоді, коли під неї справді щось заїхало.
-   *
-   * Пишемо атрибут прямо в DOM, а не в стан: прокрутка стріляє десятками
-   * подій на жест, і кожна перемальовувала б таблицю з вісімнадцятьма рядками
-   * полів вводу. Атрибут міняє лише CSS.
-   */
-  const detachScrollSync = React.useRef<(() => void) | null>(null);
-  const scrollBoxRef = React.useCallback((node: HTMLDivElement | null) => {
-    detachScrollSync.current?.();
-    detachScrollSync.current = null;
-    if (!node) return;
-    const sync = () => node.toggleAttribute("data-scrolled-x", node.scrollLeft > 0);
-    sync();
-    node.addEventListener("scroll", sync, { passive: true });
-    detachScrollSync.current = () => node.removeEventListener("scroll", sync);
-  }, []);
-  React.useEffect(() => () => detachScrollSync.current?.(), []);
 
   const draftFor = (uid: string): Draft => drafts[uid] ?? EMPTY_DRAFT;
 
@@ -662,139 +556,111 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       {loading ? (
         <PayrollTableSkeleton />
       ) : (
-        <div ref={scrollBoxRef} className={TABLE_BOX}>
-          {/* table-fixed + % ширини: колонки тягнуться на всю ширину, а нижче
-              TABLE_MIN_WIDTH перестають тиснутись і їдуть під прокрутку. */}
-          <Table size="sm" stickyHeader className={cn("table-fixed", TABLE_MIN_WIDTH)}>
-            <TableHeader>
-              <TableRow>
-                {/* Колонки з полями вводу вирівняні ліворуч: поле займає всю
-                    ширину клітинки, тож заголовок мусить стояти над його лівим
-                    краєм. Праворуч лишається тільки «До виплати» — там у
-                    клітинці звичайне число, притиснуте вправо, і заголовок
-                    тримається з ним в одній лінії. */}
-                {PAYROLL_COLUMNS.map((column, index) => (
-                  <TableHead
-                    key={column.key}
-                    className={cn(
-                      STICKY_HEAD,
-                      column.width,
-                      column.align,
-                      index === 0 && cn(FROZEN_PERSON, FROZEN_PERSON_HEAD)
-                    )}
-                  >
-                    {column.srOnly ? <span className="sr-only">{column.label}</span> : column.label}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {people.map((person) => {
-                const d = draftFor(person.userId);
-                const m = meta.get(person.userId);
-                const isPaid = m?.status === "paid";
-                return (
-                  // `group/row` — щоб бліда позначка «додати нотатку» прокидалась
-                  // при наведенні на весь рядок, а не лише на саму іконку: інакше
-                  // її треба спершу знайти, а вона майже невидима.
-                  <TableRow key={person.userId} className="group/row">
-                    <TableCell className={FROZEN_PERSON}>
-                      <div className="relative flex min-w-0 items-center gap-2">
-                        <AvatarBase
-                          src={person.avatarUrl}
-                          name={person.name}
-                          fallback={person.initials ?? person.name.slice(0, 2)}
-                          size={28}
-                          className={cn("shrink-0 border-border/60", person.departed && "grayscale opacity-80")}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div
-                            className={cn(
-                              "truncate text-sm font-medium",
-                              person.departed && "text-muted-foreground line-through"
-                            )}
-                            title={person.name}
-                          >
-                            {shortenName(person.name)}
-                          </div>
-                          {person.jobRole ? (
-                            // Довгі посади («Начальник відділу логістики») інакше
-                            // розпирали колонку і лізли в сусідні.
-                            <div
-                              className="truncate text-2xs text-muted-foreground"
-                              title={formatJobRole(person.jobRole)}
-                            >
-                              {formatJobRole(person.jobRole)}
-                            </div>
-                          ) : null}
-                        </div>
+        <PayrollTableFrame columns={PAYROLL_COLUMNS}>
+          {people.map((person) => {
+            const d = draftFor(person.userId);
+            const m = meta.get(person.userId);
+            const isPaid = m?.status === "paid";
+            return (
+              // `group/row` — щоб бліда позначка «додати нотатку» прокидалась
+              // при наведенні на весь рядок, а не лише на саму іконку: інакше
+              // її треба спершу знайти, а вона майже невидима.
+              <TableRow key={person.userId} className="group/row">
+                <TableCell className={FROZEN_PERSON}>
+                  <div className="relative flex min-w-0 items-center gap-2">
+                    <AvatarBase
+                      src={person.avatarUrl}
+                      name={person.name}
+                      fallback={person.initials ?? person.name.slice(0, 2)}
+                      size={28}
+                      className={cn("shrink-0 border-border/60", person.departed && "grayscale opacity-80")}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className={cn(
+                          "truncate text-sm font-medium",
+                          person.departed && "text-muted-foreground line-through"
+                        )}
+                        title={person.name}
+                      >
+                        {shortenName(person.name)}
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <AmountInput
-                        value={d.base}
-                        onChange={(next) => queueSaveAmount(person.userId, { base: next })}
-                        label="Ставка"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <AmountInput
-                        value={d.bonus}
-                        onChange={(next) => queueSaveAmount(person.userId, { bonus: next })}
-                        label="Бонус"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <AmountInput
-                        value={d.penalty}
-                        onChange={(next) => queueSaveAmount(person.userId, { penalty: next })}
-                        label="Штраф"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <AmountInput
-                        value={d.deduction}
-                        onChange={(next) => queueSaveAmount(person.userId, { deduction: next })}
-                        label="Офіційна ЗП"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <AdvanceCell
-                        amount={d.advance}
-                        date={d.advanceDate}
-                        onAmountChange={(next) => queueSaveAmount(person.userId, { advance: next })}
-                        onDateChange={(next) => queueSaveAmount(person.userId, { advanceDate: next })}
-                      />
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
-                      {formatUAH(totalFor(person.userId))}
-                    </TableCell>
-                    <TableCell>
-                      <PayrollNoteCell
-                        note={entries.get(person.userId)?.note ?? null}
-                        onSave={(text) => saveNote(person.userId, text)}
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <PayoutStatusButton
-                        paid={isPaid}
-                        paidAt={m?.paidAt ?? null}
-                        onToggle={() =>
-                          void saveMeta(person.userId, {
-                            status: isPaid ? "pending" : "paid",
-                            // Дата фіксується разом зі статусом — саме вона потім
-                            // пояснює в підказці, коли гроші пішли.
-                            paidAt: isPaid ? null : new Date().toISOString(),
-                          })
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                      {person.jobRole ? (
+                        // Довгі посади («Начальник відділу логістики») інакше
+                        // розпирали колонку і лізли в сусідні.
+                        <div
+                          className="truncate text-2xs text-muted-foreground"
+                          title={formatJobRole(person.jobRole)}
+                        >
+                          {formatJobRole(person.jobRole)}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <AmountInput
+                    value={d.base}
+                    onChange={(next) => queueSaveAmount(person.userId, { base: next })}
+                    label="Ставка"
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <AmountInput
+                    value={d.bonus}
+                    onChange={(next) => queueSaveAmount(person.userId, { bonus: next })}
+                    label="Бонус"
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <AmountInput
+                    value={d.penalty}
+                    onChange={(next) => queueSaveAmount(person.userId, { penalty: next })}
+                    label="Штраф"
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <AmountInput
+                    value={d.deduction}
+                    onChange={(next) => queueSaveAmount(person.userId, { deduction: next })}
+                    label="Офіційна ЗП"
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <AdvanceCell
+                    amount={d.advance}
+                    date={d.advanceDate}
+                    onAmountChange={(next) => queueSaveAmount(person.userId, { advance: next })}
+                    onDateChange={(next) => queueSaveAmount(person.userId, { advanceDate: next })}
+                  />
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
+                  {formatUAH(totalFor(person.userId))}
+                </TableCell>
+                <TableCell>
+                  <PayrollNoteCell
+                    note={entries.get(person.userId)?.note ?? null}
+                    onSave={(text) => saveNote(person.userId, text)}
+                  />
+                </TableCell>
+                <TableCell className="text-center">
+                  <PayoutStatusButton
+                    paid={isPaid}
+                    paidAt={m?.paidAt ?? null}
+                    onToggle={() =>
+                      void saveMeta(person.userId, {
+                        status: isPaid ? "pending" : "paid",
+                        // Дата фіксується разом зі статусом — саме вона потім
+                        // пояснює в підказці, коли гроші пішли.
+                        paidAt: isPaid ? null : new Date().toISOString(),
+                      })
+                    }
+                  />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </PayrollTableFrame>
       )}
     </div>
   );
@@ -803,69 +669,43 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
 /**
  * Заглушка таблиці виплат.
  *
- * Малюється тією ж <Table> і тими ж PAYROLL_COLUMNS, що й справжня, тож
+ * Малюється тим самим PayrollTableFrame і тими ж PAYROLL_COLUMNS, що й справжня, тож
  * ширини колонок, висота рядків і форма клітинок збігаються точно. Попередня
  * версія була узагальненою сіткою однакових пігулок і з таблицею не мала
  * нічого спільного.
  */
 function PayrollTableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div
-      className={TABLE_BOX}
-      role="status"
-      aria-busy="true"
-      aria-label="Завантаження виплат"
-    >
-      <Table size="sm" stickyHeader className={cn("table-fixed", TABLE_MIN_WIDTH)}>
-        <TableHeader>
-          <TableRow>
-            {PAYROLL_COLUMNS.map((column, index) => (
-              <TableHead
-                key={column.key}
-                className={cn(
-                  STICKY_HEAD,
-                  column.width,
-                  column.align,
-                  index === 0 && cn(FROZEN_PERSON, FROZEN_PERSON_HEAD)
-                )}
-              >
-                {column.srOnly ? <span className="sr-only">{column.label}</span> : column.label}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {Array.from({ length: rows }).map((_, index) => (
-            <TableRow key={index}>
-              {PAYROLL_COLUMNS.map((column) => (
-<TableCell key={column.key} className={column.align}>
-                  {column.cell === "person" ? (
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <Skeleton className={cn("h-3 rounded-full", index % 3 === 0 ? "w-[64%]" : "w-[52%]")} />
-                        <Skeleton
-                          className={cn("h-2.5 rounded-full opacity-70", index % 2 === 0 ? "w-[42%]" : "w-[56%]")}
-                        />
-                      </div>
-                    </div>
-                  ) : column.cell === "input" ? (
-                    // Та сама висота й радіус, що в поля вводу — рядок не стрибне.
-                    <Skeleton className="h-8 w-full rounded-md" />
-                  ) : column.cell === "amount" ? (
-                    <Skeleton className="ml-auto h-3.5 w-16 rounded-full" />
-                  ) : column.cell === "note" ? (
-                    <Skeleton className="mx-auto h-5 w-5 rounded-md" />
-                  ) : (
-                    <Skeleton className="mx-auto h-5 w-9 rounded-full" />
-                  )}
-                </TableCell>
-              ))}
-            </TableRow>
+    <PayrollTableFrame columns={PAYROLL_COLUMNS} role="status" aria-busy="true" aria-label="Завантаження виплат">
+      {Array.from({ length: rows }).map((_, index) => (
+        <TableRow key={index}>
+          {PAYROLL_COLUMNS.map((column) => (
+            <TableCell key={column.key} className={column.align}>
+              {column.cell === "person" ? (
+                <div className="flex min-w-0 items-center gap-2">
+                  <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Skeleton className={cn("h-3 rounded-full", index % 3 === 0 ? "w-[64%]" : "w-[52%]")} />
+                    <Skeleton
+                      className={cn("h-2.5 rounded-full opacity-70", index % 2 === 0 ? "w-[42%]" : "w-[56%]")}
+                    />
+                  </div>
+                </div>
+              ) : column.cell === "input" ? (
+                // Та сама висота й радіус, що в поля вводу — рядок не стрибне.
+                <Skeleton className="h-8 w-full rounded-md" />
+              ) : column.cell === "amount" ? (
+                <Skeleton className="ml-auto h-3.5 w-16 rounded-full" />
+              ) : column.cell === "note" ? (
+                <Skeleton className="mx-auto h-5 w-5 rounded-md" />
+              ) : (
+                <Skeleton className="mx-auto h-5 w-9 rounded-full" />
+              )}
+            </TableCell>
           ))}
-        </TableBody>
-      </Table>
-    </div>
+        </TableRow>
+      ))}
+    </PayrollTableFrame>
   );
 }
 
