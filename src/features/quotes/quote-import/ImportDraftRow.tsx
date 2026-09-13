@@ -678,7 +678,7 @@ function RunsField({
             // Комірка 64 px тримає п'ятизначне число (найбільший тираж у базі —
             // 25 000). Число праворуч: так вони читаються стовпчиком, а не
             // стрибають за довжиною.
-            className="w-16 bg-background text-right tabular-nums placeholder:text-2xs focus:placeholder:text-transparent"
+            className="w-16 text-right tabular-nums placeholder:text-2xs focus:placeholder:text-transparent"
             onValueChange={(next) => onPatchRun(run.key, { quantity: Math.max(0, next ?? 0) })}
             /*
               ENTER ЗАСТОСОВУЄ ЧИСЛО (REQ-178#p21). До цього набране в комірці

@@ -58,7 +58,7 @@ export function SearchBar({
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
             placeholder="Пошук моделі або SKU..."
-            className="h-9 border-border/60 bg-background/80 pl-9 pr-9 focus:border-primary/40"
+            className="h-9 border-border/60 pl-9 pr-9 focus:border-primary/40"
           />
           {globalSearch && (
             <button

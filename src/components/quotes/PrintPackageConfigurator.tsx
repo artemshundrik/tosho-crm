@@ -617,7 +617,7 @@ export function PrintProductConfigurator({
                       value={config.notebookFormatCustom}
                       onChange={(e) => onConfigChange((prev) => ({ ...prev, notebookFormatCustom: e.target.value }))}
                       placeholder="Напр. 210×210 мм"
-                      className="h-11 bg-background/70"
+                      className="h-11"
                     />
                   </ConfigField>
                 ) : null}
@@ -627,7 +627,7 @@ export function PrintProductConfigurator({
                       value={config.notebookCoverStockCustom}
                       onChange={(e) => onConfigChange((prev) => ({ ...prev, notebookCoverStockCustom: e.target.value }))}
                       placeholder="Напр. 320 г/м2"
-                      className="h-11 bg-background/70"
+                      className="h-11"
                     />
                   </ConfigField>
                 ) : null}
@@ -638,7 +638,7 @@ export function PrintProductConfigurator({
                       value={config.notebookCoverPantoneCount}
                       onChange={(e) => onConfigChange((prev) => ({ ...prev, notebookCoverPantoneCount: e.target.value }))}
                       placeholder="0"
-                      className="h-11 bg-background/70"
+                      className="h-11"
                     />
                   </ConfigField>
                 ) : null}
@@ -698,7 +698,7 @@ export function PrintProductConfigurator({
                   value={config.notebookCoverOtherFinishing}
                   onChange={(e) => onConfigChange((prev) => ({ ...prev, notebookCoverOtherFinishing: e.target.value }))}
                   placeholder="Напр. тиснення, висічка"
-                  className="h-11 bg-background/70"
+                  className="h-11"
                 />
               </ConfigField>
             </div>
@@ -760,7 +760,7 @@ export function PrintProductConfigurator({
                       value={config.notebookBlockDensityCustom}
                       onChange={(e) => onConfigChange((prev) => ({ ...prev, notebookBlockDensityCustom: e.target.value }))}
                       placeholder="Напр. 100 г/м2"
-                      className="h-11 bg-background/70"
+                      className="h-11"
                     />
                   </ConfigField>
                 ) : null}
@@ -770,7 +770,7 @@ export function PrintProductConfigurator({
                       value={config.notebookSheetCountCustom}
                       onChange={(e) => onConfigChange((prev) => ({ ...prev, notebookSheetCountCustom: e.target.value }))}
                       placeholder="Напр. 80"
-                      className="h-11 bg-background/70"
+                      className="h-11"
                     />
                   </ConfigField>
                 ) : null}
@@ -781,7 +781,7 @@ export function PrintProductConfigurator({
                       value={config.notebookBlockPantoneCount}
                       onChange={(e) => onConfigChange((prev) => ({ ...prev, notebookBlockPantoneCount: e.target.value }))}
                       placeholder="0"
-                      className="h-11 bg-background/70"
+                      className="h-11"
                     />
                   </ConfigField>
                 ) : null}
@@ -919,7 +919,7 @@ export function PrintProductConfigurator({
                     value={config.noteBlockFormatCustom}
                     onChange={(e) => onConfigChange((prev) => ({ ...prev, noteBlockFormatCustom: e.target.value }))}
                     placeholder="Напр. 90×90 мм"
-                    className="h-11 bg-background/70"
+                    className="h-11"
                   />
                 </ConfigField>
               ) : null}
@@ -929,7 +929,7 @@ export function PrintProductConfigurator({
                     value={config.noteBlockPaperCustom}
                     onChange={(e) => onConfigChange((prev) => ({ ...prev, noteBlockPaperCustom: e.target.value }))}
                     placeholder="Напр. дизайнерський"
-                    className="h-11 bg-background/70"
+                    className="h-11"
                   />
                 </ConfigField>
               ) : null}
@@ -939,7 +939,7 @@ export function PrintProductConfigurator({
                     value={config.noteBlockDensityCustom}
                     onChange={(e) => onConfigChange((prev) => ({ ...prev, noteBlockDensityCustom: e.target.value }))}
                     placeholder="Напр. 100 г/м2"
-                    className="h-11 bg-background/70"
+                    className="h-11"
                   />
                 </ConfigField>
               ) : null}
@@ -949,7 +949,7 @@ export function PrintProductConfigurator({
                     value={config.noteBlockSheetCountCustom}
                     onChange={(e) => onConfigChange((prev) => ({ ...prev, noteBlockSheetCountCustom: e.target.value }))}
                     placeholder="Напр. 150"
-                    className="h-11 bg-background/70"
+                    className="h-11"
                   />
                 </ConfigField>
               ) : null}
@@ -960,7 +960,7 @@ export function PrintProductConfigurator({
                     value={config.noteBlockPantoneCount}
                     onChange={(e) => onConfigChange((prev) => ({ ...prev, noteBlockPantoneCount: e.target.value }))}
                     placeholder="0"
-                    className="h-11 bg-background/70"
+                    className="h-11"
                   />
                 </ConfigField>
               ) : null}
@@ -1009,7 +1009,7 @@ export function PrintProductConfigurator({
                       value={config.certificateWidthMm}
                       onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateWidthMm: e.target.value }))}
                       placeholder="0"
-                      className="h-9 rounded-full bg-background/70 px-3.5"
+                      className="h-9 rounded-full px-3.5"
                     />
                   </ConfigField>
                   <ConfigField label="Висота, мм">
@@ -1018,7 +1018,7 @@ export function PrintProductConfigurator({
                       value={config.certificateHeightMm}
                       onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateHeightMm: e.target.value }))}
                       placeholder="0"
-                      className="h-9 rounded-full bg-background/70 px-3.5"
+                      className="h-9 rounded-full px-3.5"
                     />
                   </ConfigField>
                 </>
@@ -1063,7 +1063,7 @@ export function PrintProductConfigurator({
                     value={config.certificateCardboardDensity}
                     onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateCardboardDensity: e.target.value }))}
                     placeholder="270–360"
-                    className="h-9 rounded-full bg-background/70 px-3.5"
+                    className="h-9 rounded-full px-3.5"
                   />
                 </ConfigField>
               ) : null}
@@ -1074,7 +1074,7 @@ export function PrintProductConfigurator({
                       value={config.certificateDesignerName}
                       onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateDesignerName: e.target.value }))}
                       placeholder="Необов'язково"
-                      className="h-9 rounded-full bg-background/70 px-3.5"
+                      className="h-9 rounded-full px-3.5"
                     />
                   </ConfigField>
                   <ConfigField label="Щільність, г/м2">
@@ -1085,7 +1085,7 @@ export function PrintProductConfigurator({
                         onConfigChange((prev) => ({ ...prev, certificateDesignerDensity: e.target.value }))
                       }
                       placeholder="270–400"
-                      className="h-9 rounded-full bg-background/70 px-3.5"
+                      className="h-9 rounded-full px-3.5"
                     />
                   </ConfigField>
                 </>
@@ -1153,7 +1153,7 @@ export function PrintProductConfigurator({
                       onConfigChange((prev) => ({ ...prev, certificateEmbossingFoilColor: e.target.value }))
                     }
                     placeholder="Напр. золото"
-                    className="h-9 rounded-full bg-background/70 px-3.5"
+                    className="h-9 rounded-full px-3.5"
                   />
                 </ConfigField>
               ) : null}
@@ -1203,7 +1203,7 @@ export function PrintProductConfigurator({
                     value={config.certificateFoilingColor}
                     onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateFoilingColor: e.target.value }))}
                     placeholder="Напр. срібло"
-                    className="h-9 rounded-full bg-background/70 px-3.5"
+                    className="h-9 rounded-full px-3.5"
                   />
                 </ConfigField>
               ) : null}
@@ -1242,7 +1242,7 @@ export function PrintProductConfigurator({
                       onConfigChange((prev) => ({ ...prev, certificateEmbossingWidthMm: e.target.value }))
                     }
                     placeholder="0"
-                    className="h-9 rounded-full bg-background/70 px-3.5"
+                    className="h-9 rounded-full px-3.5"
                   />
                 </ConfigField>
                 <ConfigField label="Висота тиснення, мм">
@@ -1253,7 +1253,7 @@ export function PrintProductConfigurator({
                       onConfigChange((prev) => ({ ...prev, certificateEmbossingHeightMm: e.target.value }))
                     }
                     placeholder="0"
-                    className="h-9 rounded-full bg-background/70 px-3.5"
+                    className="h-9 rounded-full px-3.5"
                   />
                 </ConfigField>
               </div>
@@ -1336,7 +1336,7 @@ export function PrintProductConfigurator({
                   value={config.supplierLink}
                   onChange={(e) => onConfigChange((prev) => ({ ...prev, supplierLink: e.target.value }))}
                   placeholder="https://..."
-                  className="h-11 bg-background/70"
+                  className="h-11"
                 />
               </ConfigField>
             </div>
@@ -1345,13 +1345,13 @@ export function PrintProductConfigurator({
           {config.packageType === "custom" ? (
             <div className="grid gap-4 border-t border-border/40 pt-5 md:grid-cols-3">
               <ConfigField label="Ширина, мм">
-                <Input type="number" value={config.widthMm} onChange={(e) => onConfigChange((prev) => ({ ...prev, widthMm: e.target.value }))} placeholder="0" className="h-11 bg-background/70" />
+                <Input type="number" value={config.widthMm} onChange={(e) => onConfigChange((prev) => ({ ...prev, widthMm: e.target.value }))} placeholder="0" className="h-11" />
               </ConfigField>
               <ConfigField label="Висота, мм">
-                <Input type="number" value={config.heightMm} onChange={(e) => onConfigChange((prev) => ({ ...prev, heightMm: e.target.value }))} placeholder="0" className="h-11 bg-background/70" />
+                <Input type="number" value={config.heightMm} onChange={(e) => onConfigChange((prev) => ({ ...prev, heightMm: e.target.value }))} placeholder="0" className="h-11" />
               </ConfigField>
               <ConfigField label="Довжина, мм">
-                <Input type="number" value={config.lengthMm} onChange={(e) => onConfigChange((prev) => ({ ...prev, lengthMm: e.target.value }))} placeholder="0" className="h-11 bg-background/70" />
+                <Input type="number" value={config.lengthMm} onChange={(e) => onConfigChange((prev) => ({ ...prev, lengthMm: e.target.value }))} placeholder="0" className="h-11" />
               </ConfigField>
             </div>
           ) : null}
@@ -1428,7 +1428,7 @@ export function PrintProductConfigurator({
 
               {config.printType === "pantone" || config.printType === "cmyk_pantone" ? (
                 <ConfigField label="Кількість пантонів">
-                  <Input type="number" value={config.pantoneCount} onChange={(e) => onConfigChange((prev) => ({ ...prev, pantoneCount: e.target.value }))} placeholder="0" className="h-11 bg-background/70" />
+                  <Input type="number" value={config.pantoneCount} onChange={(e) => onConfigChange((prev) => ({ ...prev, pantoneCount: e.target.value }))} placeholder="0" className="h-11" />
                 </ConfigField>
               ) : null}
 
@@ -1438,7 +1438,7 @@ export function PrintProductConfigurator({
                     value={config.stickerSize}
                     onChange={(e) => onConfigChange((prev) => ({ ...prev, stickerSize: e.target.value }))}
                     placeholder="80 × 120 мм"
-                    className="h-9 rounded-full bg-background/70 px-3.5"
+                    className="h-9 rounded-full px-3.5"
                   />
                 </ConfigField>
               ) : null}

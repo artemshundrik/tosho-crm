@@ -4975,7 +4975,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             onValueChange={(next) => updateRunValue(activeItemRunIndex, "quantity", next)}
                                             min={1}
                                             emptyValue={1}
-                                            className="h-8 w-full rounded-lg bg-background pl-3 pr-12 text-left text-sm font-semibold tabular-nums"
+                                            className="h-8 w-full rounded-lg pl-3 pr-12 text-left text-sm font-semibold tabular-nums"
                                             aria-label="Кількість активного тиражу"
                                           />
                                           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -5273,7 +5273,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">Кількість</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-card"
                                   value={run.quantity}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -5285,7 +5285,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Модель · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className={cn("h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background", modelPriceVatRing)}
+                                  className={cn("h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-card", modelPriceVatRing)}
                                   value={run.unit_price_model}
                                   disabled={disabled}
                                   title={modelPriceVatHint}
@@ -5297,7 +5297,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Нанесення · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-card"
                                   value={run.unit_price_print}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -5308,7 +5308,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Логістика · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-card placeholder:text-muted-foreground/40"
                                   value={run.logistics_cost}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -5363,7 +5363,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-card"
                                     value={run.quantity}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5376,7 +5376,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className={cn("cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background", modelPriceVatRing)}
+                                    className={cn("cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-card", modelPriceVatRing)}
                                     value={run.unit_price_model}
                                     disabled={disabled}
                                     title={modelPriceVatHint}
@@ -5389,7 +5389,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-card"
                                     value={run.unit_price_print}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5400,7 +5400,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                                 <div className="space-y-1">
                                   <NumberInput
-                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
+                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-card placeholder:text-muted-foreground/40"
                                     value={run.logistics_cost}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}

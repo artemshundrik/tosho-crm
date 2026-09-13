@@ -2484,7 +2484,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                       onChange={(event) => updatePrintApplication(app.id, "width", event.target.value)}
                                       inputMode="decimal"
                                       placeholder="Ширина"
-                                      className="h-9 bg-background/70"
+                                      className="h-9"
                                     />
                                     <span className="text-sm text-muted-foreground">x</span>
                                     <Input
@@ -2492,7 +2492,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                       onChange={(event) => updatePrintApplication(app.id, "height", event.target.value)}
                                       inputMode="decimal"
                                       placeholder="Висота"
-                                      className="h-9 bg-background/70"
+                                      className="h-9"
                                     />
                                   </div>
                                 </div>

@@ -90,12 +90,12 @@ const EXPECTED: Record<Selector, Record<string, string>> = {
     "--ring": "210 8% 95%",
     "--card": "220 6% 9.6%",
     "--popover": "225 7% 11.4%",
-    "--secondary": "225 7% 11.4%",
-    "--muted": "225 7% 11.4%",
-    "--accent": "225 7% 11.4%",
+    "--secondary": "220 7% 14%",
+    "--muted": "220 7% 14%",
+    "--accent": "220 7% 14%",
     "--muted-foreground": "220 3% 62.5%",
-    "--border": "220 4% 13.5%",
-    "--input": "220 4% 13.5%",
+    "--border": "220 4% 16%",
+    "--input": "220 4% 16%",
     "--app-main-bg": "220 8% 6.7%",
     "--app-shell-bg": "220 8% 6.3%",
     "--sidebar-surface-bg": "220 8% 6.5%",
@@ -187,5 +187,27 @@ describe("типографіка (розділ 4)", () => {
     const body = CSS.match(/\n\s*body \{([^}]*)\}/);
     expect(body?.[1]).toMatch(/font-weight:\s*500;/);
     expect(body?.[1]).toMatch(/letter-spacing:\s*-0\.01em;/);
+  });
+});
+
+describe("драбина поверхонь темної теми (REQ-271#p5)", () => {
+  const dark = readTokens(".dark");
+  const lightness = (name: string) => parseHsl(dark.get(name) ?? "")?.l ?? Number.NaN;
+
+  // Перша хвиля зрівняла --muted/--accent із --popover (усі 11.4%), і підсвітка
+  // пункту меню (select.tsx і dropdown-menu.tsx фарбують її в bg-muted) стала
+  // невидимою. Крок менший за 2 пункти світлості око на темному вже не розрізняє.
+  it("підсвітка пункту меню помітна на спливному вікні", () => {
+    expect(lightness("--muted") - lightness("--popover")).toBeGreaterThanOrEqual(2);
+    expect(lightness("--accent") - lightness("--popover")).toBeGreaterThanOrEqual(2);
+  });
+
+  it("виділення (muted) помітне на картці", () => {
+    expect(lightness("--muted") - lightness("--card")).toBeGreaterThanOrEqual(3);
+  });
+
+  it("рамка помітна на картці навіть напівпрозора (/60 — найчастіша в коді)", () => {
+    const edgeAt60 = lightness("--card") + (lightness("--border") - lightness("--card")) * 0.6;
+    expect(edgeAt60 - lightness("--card")).toBeGreaterThanOrEqual(3);
   });
 });

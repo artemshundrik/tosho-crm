@@ -16,8 +16,14 @@ export const CONTROL_DISABLED_STATE = cx(
  * Всі кольори — тільки через design tokens.
  */
 export const CONTROL_BASE = cx(
-  "h-10 rounded-xl bg-muted/40",
-  "border border-border/50",
+  // Фон у спокої — ПРОЗОРИЙ, поле бере колір свого контейнера (REQ-271#p4–p5).
+  // Було `bg-muted/40`: на картці це ще один сірий, на півтона світліший за неї,
+  // поруч із виділеним рядком і роздільником — чотири майже однакові сірі, які в
+  // темній темі читались як бруд, а не як шари. Межу поля тримає рамка.
+  "h-10 rounded-xl bg-transparent",
+  // Рамка ПОВНА, а не /50: у темній темі напівпрозора рамка на картці зливалась
+  // із нею, і поле без краю читалось як дірка.
+  "border border-border",
   "text-foreground placeholder:text-muted-foreground",
   // Перелік властивостей ПОІМЕННО, а не `transition-all`. Слово `all` означає
   // буквально все, зокрема ВІДСТУПИ — і саме через це модалки помітно
@@ -32,11 +38,14 @@ export const CONTROL_BASE = cx(
   // Той самий рецепт уже застосований нижче для фільтрів — тримаємо однаково.
   "transition-[background-color,border-color,color,box-shadow] duration-base ease-out",
   "motion-reduce:transition-none",
-  "hover:bg-muted/60",
+  "hover:bg-muted/60 hover:border-foreground/15",
   // Фокус: тільки темніша рамка, без рінга (рінг давав «блюр»-глоу на темній) і
   // тільки focus-visible (клавіатура) — інакше обводка липла на селект-тригері
   // після вибору мишею. Текстові поля браузер і так підсвічує focus-visible при вводі.
-  "focus-visible:outline-none focus-visible:bg-background focus-visible:border-foreground/50",
+  // Фон при фокусі НЕ міняється: було `focus-visible:bg-background`, а в темній
+  // темі `background` темніший за картку, і поле при фокусі провалювалось у темну
+  // яму — третій вигляд одного поля за три стани (REQ-271#p4). Фокус — рамка.
+  "focus-visible:outline-none focus-visible:border-foreground/50",
   "disabled:cursor-not-allowed",
   CONTROL_DISABLED_STATE,
   // Стан помилки — через aria-invalid, а не клас: атрибут одночасно повідомляє

@@ -372,7 +372,6 @@ export function BasicInfoTab({
                 }
               }}
               placeholder="https://avanprint.ua/..."
-              className="bg-background/60"
               disabled={avanprintImporting}
             />
           </div>
@@ -411,7 +410,7 @@ export function BasicInfoTab({
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground">Тип товару</Label>
             <Select value={draftTypeId} onValueChange={onTypeChange}>
-              <SelectTrigger className="bg-background/60">
+              <SelectTrigger>
                 <SelectValue placeholder="Оберіть тип" />
               </SelectTrigger>
               <SelectContent>
@@ -426,7 +425,7 @@ export function BasicInfoTab({
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground">Вид товару</Label>
             <Select value={draftKindId} onValueChange={onKindChange} disabled={!draftTypeId}>
-              <SelectTrigger className="bg-background/60">
+              <SelectTrigger>
                 <SelectValue placeholder={draftTypeId ? "Оберіть вид" : "Спочатку тип"} />
               </SelectTrigger>
               <SelectContent>
@@ -446,7 +445,6 @@ export function BasicInfoTab({
               value={draftName}
               onChange={(e) => onNameChange(e.target.value)}
               placeholder="Напр. Malfini Basic 160"
-              className="bg-background/60"
             />
           </div>
           {showConfiguratorPreset ? (
@@ -471,7 +469,7 @@ export function BasicInfoTab({
                   });
                 }}
               >
-                <SelectTrigger className="bg-background/60">
+                <SelectTrigger>
                   <SelectValue placeholder="Без набору полів" />
                 </SelectTrigger>
                 <SelectContent>
@@ -520,7 +518,7 @@ export function BasicInfoTab({
                 onChange={(event) => updateDescription(event.target.value)}
                 placeholder="Опис з Avanprint або власний опис товару"
                 rows={4}
-                className="min-h-[112px] resize-y bg-background/70"
+                className="min-h-[112px] resize-y"
               />
             </div>
           ) : null}
@@ -550,7 +548,7 @@ export function BasicInfoTab({
                 value={supplierUrl}
                 onChange={(event) => updateSupplierUrl(event.target.value)}
                 placeholder="https://сайт-постачальника/товар"
-                className="bg-background/70 pl-9 pr-10"
+                className="pl-9 pr-10"
               />
               {supplierUrl.trim() ? (
                 <a
@@ -576,7 +574,7 @@ export function BasicInfoTab({
                 value={avantprintUrl}
                 onChange={(event) => updateAvantprintUrl(event.target.value)}
                 placeholder="https://avantprint.ua/..."
-                className="bg-background/70 pl-9 pr-10"
+                className="pl-9 pr-10"
               />
               {avantprintUrl.trim() ? (
                 <a
@@ -733,7 +731,7 @@ export function BasicInfoTab({
                     value={activeImageUrl}
                     onChange={(e) => updateActiveVariantImageUrl(e.target.value)}
                     placeholder="https://..."
-                    className="h-9 bg-background/60"
+                    className="h-9"
                   />
                 ) : (
                   <label className="flex h-9 cursor-pointer items-center justify-center rounded-md border border-dashed border-border/70 bg-background/60 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">

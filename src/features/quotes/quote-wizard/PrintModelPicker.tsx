@@ -81,7 +81,7 @@ export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled 
             onChange={(event) => setQuery(event.target.value)}
             disabled={disabled}
             placeholder="Знайти вид"
-            className="h-9 bg-background/60 pl-9"
+            className="h-9 pl-9"
           />
         </div>
       ) : null}

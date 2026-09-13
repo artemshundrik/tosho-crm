@@ -119,7 +119,7 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium outline-none transition-colors focus:bg-muted/70 focus:text-foreground data-[highlighted]:bg-muted/70 data-[highlighted]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
+      "relative flex cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium outline-none transition-colors focus:bg-muted focus:text-foreground data-[highlighted]:bg-muted data-[highlighted]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
       inset && "pl-8",
       className
     )}
@@ -137,7 +137,7 @@ const DropdownMenuItemDestructive = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium outline-none transition-colors focus:bg-muted/70 focus:text-foreground data-[highlighted]:bg-danger-soft/40 data-[highlighted]:text-destructive data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
+      "relative flex cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium outline-none transition-colors focus:bg-muted focus:text-foreground data-[highlighted]:bg-danger-soft/40 data-[highlighted]:text-destructive data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
       "text-destructive",
       inset && "pl-8",
       className

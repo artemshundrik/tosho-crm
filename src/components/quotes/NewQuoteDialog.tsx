@@ -1719,7 +1719,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       value={selectedItemId ?? items[0]?.id ?? ""}
                       onValueChange={(value) => onSelectItem?.(value)}
                     >
-                      <SelectTrigger className="h-8 w-[min(20rem,60vw)] bg-background text-xs">
+                      <SelectTrigger className="h-8 w-[min(20rem,60vw)] text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -2387,7 +2387,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                         emptyValue={null}
                         value={app.width === "" ? null : Number(app.width)}
                         onValueChange={(next) => handleUpdatePrintApplication(app.id, "width", next === null ? "" : String(next))}
-                        className="h-9 bg-background/70"
+                        className="h-9"
                       />
                       <span className="text-sm text-muted-foreground">×</span>
                       <NumberInput
@@ -2396,7 +2396,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                         emptyValue={null}
                         value={app.height === "" ? null : Number(app.height)}
                         onValueChange={(next) => handleUpdatePrintApplication(app.id, "height", next === null ? "" : String(next))}
-                        className="h-9 bg-background/70"
+                        className="h-9"
                       />
                     </div>
                   </div>

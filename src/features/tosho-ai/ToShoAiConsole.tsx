@@ -2170,7 +2170,7 @@ export function ToShoAiConsole({
                 onChange={(event) => setQueueSearch(event.target.value)}
                 placeholder="Пошук по чатах"
                 disabled={historyPanelLoading && !historyLoaded}
-                className="mt-3 rounded-2xl border-border/60 bg-background/70"
+                className="mt-3 rounded-2xl border-border/60"
               />
               <div className="mt-3 space-y-3">
                 {historyPanelLoading && !historyLoaded ? (

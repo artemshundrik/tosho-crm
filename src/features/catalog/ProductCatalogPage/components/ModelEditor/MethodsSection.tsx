@@ -117,7 +117,7 @@ export function MethodsSection({
                   value={newMethodName}
                   onChange={(e) => onMethodNameChange(e.target.value)}
                   placeholder="Напр. DTF"
-                  className="border-border/60 bg-background/60 pl-9"
+                  className="border-border/60 pl-9"
                 />
               </div>
             </div>

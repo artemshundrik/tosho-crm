@@ -83,7 +83,7 @@ export function PricingSection({
 
                 <Input
                   type="number"
-                  className="h-10 text-center font-medium bg-background/80 border-border/50"
+                  className="h-10 text-center font-medium"
                   value={tier.min}
                   onChange={(e) =>
                     onTierUpdate(tier.id, { min: Math.max(1, Number(e.target.value) || 1) })
@@ -92,7 +92,7 @@ export function PricingSection({
                 <Input
                   type="number"
                   className={cn(
-                    "h-10 text-center font-medium bg-background/80 border-border/50",
+                    "h-10 text-center font-medium",
                     !tier.max && "text-muted-foreground/60 italic"
                   )}
                   placeholder="∞"
