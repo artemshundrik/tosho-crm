@@ -4,28 +4,28 @@
 @layer base {
   :root {
     /* --- ОСНОВНІ КОЛЬОРИ (СВІТЛА ТЕМА) --- */
-    --background: 0 0% 98.8%;
-    --foreground: 0 0% 14%;
+    --background: 220 10% 98.8%;
+    --foreground: 210 6% 7%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 14%;
+    --card-foreground: 210 6% 7%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 14%;
+    --popover-foreground: 210 6% 7%;
 
-    --secondary: 0 0% 95.9%;
-    --secondary-foreground: 0 0% 16%;
+    --secondary: 220 8% 96.5%;
+    --secondary-foreground: 210 6% 7%;
 
-    --muted: 0 0% 95.5%;
-    --muted-foreground: 0 0% 40%;
+    --muted: 220 8% 96.5%;
+    --muted-foreground: 225 4% 37%;
 
-    --accent: 0 0% 95.9%;
-    --accent-foreground: 0 0% 16%;
+    --accent: 220 8% 96.5%;
+    --accent-foreground: 210 6% 7%;
 
     --destructive: 357 75.8% 48.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 0 0% 86%;
-    --input: 0 0% 86%;
+    --border: 225 9% 91%;
+    --input: 225 9% 91%;
     
     /* --- BRAND TOKENS (single knob) --- */
     /* Change only --brand-h to switch brand color (blue -> magenta, etc.) */
@@ -45,7 +45,7 @@
        при виділенні спалахувало синім — єдиною кольоровою плямою на чорно-білому
        екрані. Тепер це той самий `foreground`, що й у головних кнопок: помітно,
        але не кричить, і в темній темі виходить саме собою. */
-    --ring: 0 0% 14%;
+    --ring: 210 6% 7%;
     
     /* --- SHAPE RULES --- */
     /* 8px base (REQ-48): rounded-md 6, lg 8, xl 12, 2xl 16 — весь застосунок
@@ -66,7 +66,7 @@
     --skeleton-min-duration: 80ms;
     --skeleton-transition: 80ms;
     /* Змінено на HSL 240 (нейтральний до фону) і трохи темніше (88%) для контрасту на білому */
-    --skeleton-bg: 0 0% 89%;
+    --skeleton-bg: 220 8% 89%;
 
     /* --- КНОПКИ (Gradient) --- */
     /* У СВІТЛІЙ ТЕМІ ЗАЛИВКА ТЕМНІША ЗА ТЕКСТОВИЙ СИНІЙ (REQ-175#p43).
@@ -82,17 +82,17 @@
     /* --- СТАНИ КОНТРОЛІВ (REQ-48) --- */
     /* Спільні для кнопки й полів: заблоковані поле і кнопка поруч у панелі
        мають виглядати однаково. Тому --control-*, а не --btn-*. */
-    --control-disabled-bg: 0 0% 93.5%;
-    --control-disabled-fg: 0 0% 63%;
-    --control-disabled-border: 0 0% 89%;
+    --control-disabled-bg: 220 8% 93.5%;
+    --control-disabled-fg: 220 4% 63%;
+    --control-disabled-border: 220 8% 89%;
 
     /* «Контрол увімкнено» (фільтр/групування щось роблять). Окремі значення на
        тему, а не непрозорість: bg-muted/80 у темній відрізнявся від спокою на
        1.6% світлості — тобто стан був невидимий саме там, де його найважче
        помітити. Світла темнішає, темна світлішає — обидві на однакову відстань
        від свого спокою. */
-    --control-active-bg: 0 0% 95.2%;
-    --control-active-border: 0 0% 84%;
+    --control-active-bg: 220 8% 95.2%;
+    --control-active-border: 220 4% 84%;
 
     /* Hover/active заливних кнопок. Тримають ПОВНИЙ колір, не трійку HSL —
        свідомий виняток із конвенції файлу: color-mix віддає готовий колір.
@@ -122,15 +122,15 @@
     /* Двошарова тінь для плаваючих меню (дропдаун/селект/поповер): контактний
        шар + м'який розсіяний — дає глибину без «жорсткої межі». */
     --shadow-menu: 0 4px 12px -2px hsl(var(--foreground) / 0.1), 0 12px 32px -8px hsl(var(--foreground) / 0.13);
-    --soft-ring: 0 0% 12% / 0.08;
+    --soft-ring: 220 8% 12% / 0.08;
     --overlay-scrim: 0 0% 6% / 0.58;
     --surface-sheen: 0 0% 100% / 0.36;
 
     /* --- BADGE TONES (яскравіші: тінт ~88–92% замість ~95%, вища насиченість,
        щоб колір «звучав», а не танув у білому) --- */
-    --neutral-soft: 0 0% 94%;
-    --neutral-soft-border: 0 0% 84%;
-    --neutral-foreground: 0 0% 34%;
+    --neutral-soft: 220 8% 94%;
+    --neutral-soft-border: 220 8% 89.8%;
+    --neutral-foreground: 220 4% 34%;
 
     --info-soft: 213 100% 92%;
     --info-soft-border: 213 96% 80%;
@@ -379,53 +379,53 @@
     --canvas-gutter-y: 18px;
 
     /* --- APP SHELL TOKENS (LIGHT) --- */
-    --app-shell-bg: 0 0% 96.9%;
+    --app-shell-bg: 220 8% 96.9%;
     --app-shell-radius: 16px;
-    --app-main-bg: 0 0% 99.2%;
+    --app-main-bg: 220 8% 99.2%;
     --page-underlay-bg: var(--app-main-bg);
     /* Бокова колонка того самого кольору, що й середина (REQ-175#p49): вона
        темніша за сторінку читалась як окрема панель, хоч тримає не вміст, а
        навігацію. Межу лишає волосінь border-r, а не зміна тону. */
-    --sidebar-surface-bg: 0 0% 98.8%;
-    --app-structure-divider: 0 0% 86.5%;
-    --design-task-details-bg: 0 0% 98.3%;
+    --sidebar-surface-bg: 220 8% 98.8%;
+    --app-structure-divider: 220 8% 91.3%;
+    --design-task-details-bg: 220 8% 98.3%;
     --design-task-panel-card-bg: 0 0% 100%;
-    --design-task-panel-card-border: 0 0% 87%;
-    --design-task-panel-card-hover: 0 0% 96.2%;
+    --design-task-panel-card-border: 220 8% 91.6%;
+    --design-task-panel-card-hover: 220 8% 96.2%;
     --design-task-panel-card-strong-bg: 216 100% 98%;
     --design-task-panel-card-strong-border: 216 70% 88%;
 
     /* --- KANBAN COLUMN TOKENS (LIGHT) ---
        Один нейтральний набір на всі колонки всіх дошок: стан колонки показує
        кольорова іконка в шапці, а не заливка стовпчика (див. .kanban-column-surface). */
-    --kanban-col-bg: 0 0% 98.1%;
-    --kanban-col-border: 0 0% 87%;
+    --kanban-col-bg: 220 8% 98.1%;
+    --kanban-col-border: 220 8% 91.6%;
   }
 
   .dark {
     /* --- ОСНОВНІ КОЛЬОРИ (ТЕМНА ТЕМА) --- */
-    --background: 0 0% 7.8%;
-    --foreground: 210 40% 98%; /* Білий текст */
+    --background: 210 6% 6.7%;
+    --foreground: 210 8% 95%; /* Білий текст */
 
-    --card: 0 0% 9.8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 0 0% 10.2%;
-    --popover-foreground: 210 40% 98%;
+    --card: 220 6% 9.6%;
+    --card-foreground: 210 8% 95%;
+    --popover: 225 7% 11.4%;
+    --popover-foreground: 210 8% 95%;
 
-    --secondary: 0 0% 11.8%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 225 7% 11.4%;
+    --secondary-foreground: 210 8% 95%;
 
-    --muted: 0 0% 11.8%;
-    --muted-foreground: 0 0% 68%;
+    --muted: 225 7% 11.4%;
+    --muted-foreground: 220 3% 62.5%;
 
-    --accent: 0 0% 11.8%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 225 7% 11.4%;
+    --accent-foreground: 210 8% 95%;
 
     --destructive: 357 94.5% 64.1%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 0 0% 18.2%;
-    --input: 0 0% 18.2%;
+    --border: 220 4% 13.5%;
+    --input: 220 4% 13.5%;
 
     /* --- BRAND TOKENS (inherit from :root) --- */
 
@@ -436,12 +436,12 @@
     --btn-radius: 10px;
 
     /* --- СТАНИ КОНТРОЛІВ (REQ-48, темна) --- */
-    --control-disabled-bg: 0 0% 13.5%;
-    --control-disabled-fg: 0 0% 39%;
-    --control-disabled-border: 0 0% 16%;
+    --control-disabled-bg: 220 8% 13.5%;
+    --control-disabled-fg: 220 4% 39%;
+    --control-disabled-border: 220 8% 16%;
 
-    --control-active-bg: 0 0% 14.5%;
-    --control-active-border: 0 0% 25%;
+    --control-active-bg: 220 8% 14.5%;
+    --control-active-border: 220 4% 25%;
 
     --shadow-overlay: 0 10px 24px rgba(2, 6, 23, 0.38);
     --shadow-success-glow: 0 10px 24px hsl(var(--success-foreground) / 0.22);
@@ -459,18 +459,18 @@
     /* Lightness 20% проти 14% у Card - достатній контраст, не надто різкий */
     --skeleton-min-duration: 80ms;
     --skeleton-transition: 80ms;
-    --skeleton-bg: 0 0% 14.2%;
+    --skeleton-bg: 220 8% 12.9%;
 
     /* Той самий тон 213°, що й --chart-1 у темній темі (REQ-175#p43). */
     --primary: 213 76.8% 56.1%;
-    --ring: 210 40% 98%;
+    --ring: 210 8% 95%;
     /* Темна тема лишається як була: заливка світліша за середину бренду. */
     --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) + 5%);
     --btn-primary-grad-bot: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 4%);
 
-    --neutral-soft: 0 0% 13%;
-    --neutral-soft-border: 0 0% 22%;
-    --neutral-foreground: 0 0% 76%;
+    --neutral-soft: 220 8% 11.7%;
+    --neutral-soft-border: 220 8% 16%;
+    --neutral-foreground: 220 4% 76%;
 
     --info-soft: 213 30% 16%;
     --info-soft-border: 213 34% 30%;
@@ -634,22 +634,22 @@
     --canvas-gutter-y: 18px;
 
     /* --- APP SHELL TOKENS (DARK) --- */
-    --app-shell-bg: 0 0% 7.6%;
+    --app-shell-bg: 220 8% 6.3%;
     --app-shell-radius: 14px;
-    --app-main-bg: 0 0% 8%;
+    --app-main-bg: 220 8% 6.7%;
     --page-underlay-bg: var(--app-main-bg);
-    --sidebar-surface-bg: 0 0% 7.8%;
-    --app-structure-divider: 0 0% 12.6%;
-    --design-task-details-bg: 0 0% 9.4%;
-    --design-task-panel-card-bg: 0 0% 10.4%;
-    --design-task-panel-card-border: 0 0% 18.8%;
-    --design-task-panel-card-hover: 0 0% 13.2%;
+    --sidebar-surface-bg: 220 8% 6.5%;
+    --app-structure-divider: 220 8% 11.4%;
+    --design-task-details-bg: 220 8% 8.1%;
+    --design-task-panel-card-bg: 220 8% 9.1%;
+    --design-task-panel-card-border: 220 8% 13.9%;
+    --design-task-panel-card-hover: 220 8% 11.9%;
     --design-task-panel-card-strong-bg: 216 28% 12.8%;
     --design-task-panel-card-strong-border: 216 30% 24%;
 
     /* --- KANBAN COLUMN TOKENS (DARK) --- */
-    --kanban-col-bg: 0 0% 9.2%;
-    --kanban-col-border: 0 0% 16.8%;
+    --kanban-col-bg: 220 8% 7.9%;
+    --kanban-col-border: 220 8% 12.6%;
   }
 
   * {
