@@ -6,6 +6,7 @@ import {
   STORAGE_ARCHIVE_MAX_AGE_DAYS,
   assessBackups,
   formatBytes,
+  looksLikeTelegramToken,
   watchdogMessage,
 } from "./backupWatchdog.mjs";
 
@@ -232,5 +233,28 @@ describe("розміри", () => {
     expect(formatBytes(8.5 * 1024 ** 3)).toBe("8.5 ГБ");
     expect(formatBytes(280)).toBe("280 Б");
     expect(formatBytes(1024 ** 2)).toBe("1.0 МБ");
+  });
+});
+
+describe("токен бота", () => {
+  it("справжній токен приймається", () => {
+    expect(looksLikeTelegramToken("7123456789:AAH-fakE_tokEn_for_tests_0123456789x")).toBe(true);
+  });
+
+  it("маска секретної змінної netlify — не токен", () => {
+    expect(looksLikeTelegramToken("****************_Acw")).toBe(false);
+  });
+
+  // Саме так це й приходить: задача проганяє вивід через `tr -d '\r\n '`, тож
+  // фраза про відсутнє значення склеюється в один довгий непорожній рядок.
+  it("текст помилки netlify замість значення — не токен", () => {
+    expect(
+      looksLikeTelegramToken("NovaluesetinthedevcontextforenvironmentvariableTELEGRAM_BOT_TOKEN")
+    ).toBe(false);
+  });
+
+  it("порожнє й відсутнє — теж не токен", () => {
+    expect(looksLikeTelegramToken("")).toBe(false);
+    expect(looksLikeTelegramToken(undefined)).toBe(false);
   });
 });

@@ -27,7 +27,12 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 
-import { assessBackups, formatBytes, watchdogMessage } from "./lib/backupWatchdog.mjs";
+import {
+  assessBackups,
+  formatBytes,
+  looksLikeTelegramToken,
+  watchdogMessage,
+} from "./lib/backupWatchdog.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -198,8 +203,15 @@ async function ownerChatId() {
 
 async function sendTelegram(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!token) {
-    console.error("[сторож] TELEGRAM_BOT_TOKEN не заданий — повідомлення не пішло");
+  if (!looksLikeTelegramToken(token)) {
+    // Розрізняємо «немає» і «є сміття»: перше лікується змінною оточення,
+    // друге — тим, що `netlify env:get` для секретної змінної віддає маску, а
+    // в dev-контексті взагалі текст помилки. Саме значення НЕ друкуємо.
+    console.error(
+      token
+        ? "[сторож] TELEGRAM_BOT_TOKEN не схожий на токен бота (маска netlify чи текст помилки?) — повідомлення не пішло"
+        : "[сторож] TELEGRAM_BOT_TOKEN не заданий — повідомлення не пішло"
+    );
     return false;
   }
   const chatId = await ownerChatId();
