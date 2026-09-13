@@ -472,7 +472,7 @@ function PriceSplit({
   return (
     <div className="mt-3">
       {off ? (
-        <div className="flex h-2.5 overflow-hidden rounded-full bg-muted opacity-50" aria-hidden />
+        <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden />
       ) : (
         <SplitBar parts={parts} />
       )}
@@ -602,7 +602,7 @@ export function QuoteRunMarkupPanel({
         БЕЗ бордера (нічому вилазити за кружечок), а пороги — окремим ярусом під
         рейкою, кожен рівно над своїм підписом. Кольори більше ніде не стикаються.
       */}
-      <div className={cn("relative", off && "opacity-50")}>
+      <div className="relative">
         {/* Трохи повітря зверху: лінія порогу починається НАД рейкою, інакше
             вона впирається в неї й перестає читатись як наскрізна. */}
         <div className="h-1.5" aria-hidden />

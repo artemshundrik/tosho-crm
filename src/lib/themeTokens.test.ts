@@ -69,9 +69,9 @@ const EXPECTED: Record<Selector, Record<string, string>> = {
     "--ring": "210 6% 7%",
     "--card": "0 0% 100%",
     "--popover": "0 0% 100%",
-    "--secondary": "220 8% 96.5%",
-    "--accent": "220 8% 96.5%",
-    "--muted": "220 8% 96.5%",
+    "--secondary": "220 8% 94.5%",
+    "--accent": "220 8% 94.5%",
+    "--muted": "220 8% 94.5%",
     "--muted-foreground": "225 4% 37%",
     "--border": "225 9% 87%",
     "--input": "225 9% 87%",
@@ -79,6 +79,10 @@ const EXPECTED: Record<Selector, Record<string, string>> = {
     "--kanban-col-border": "220 8% 87%",
     "--design-task-panel-card-border": "220 8% 87%",
     "--neutral-soft-border": "220 4% 84%",
+    // Запасний план розділу 3.3: на 99.2% білі картки лежали на майже білому
+    // полотні й тримались лише рамкою — сторінка виглядала пласкою.
+    "--app-main-bg": "220 8% 98%",
+    "--sidebar-surface-bg": "220 8% 98%",
   },
   ".dark": {
     "--background": "210 6% 6.7%",
@@ -223,6 +227,12 @@ describe("лінії світлої теми (REQ-271#p6)", () => {
   it("рамка помітна на картці навіть напівпрозора (/60)", () => {
     const edgeAt60 = lightness("--card") - (lightness("--card") - lightness("--border")) * 0.6;
     expect(lightness("--card") - edgeAt60).toBeGreaterThanOrEqual(7);
+  });
+
+  // Заливки bg-muted/NN (632 місця) на білому розчинялись так само, як рамки:
+  // при 96.5% порожня шкала накрутки й смуга складу ціни були майже білими.
+  it("заливка muted помітна на білій картці", () => {
+    expect(lightness("--card") - lightness("--muted")).toBeGreaterThanOrEqual(5);
   });
 
   it("повна рамка поля помітна на білому (≥ 1.3:1)", () => {

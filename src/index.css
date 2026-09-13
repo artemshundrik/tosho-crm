@@ -34,13 +34,13 @@
     --popover: 0 0% 100%;
     --popover-foreground: 210 6% 7%;
 
-    --secondary: 220 8% 96.5%;
+    --secondary: 220 8% 94.5%;
     --secondary-foreground: 210 6% 7%;
 
-    --muted: 220 8% 96.5%;
+    --muted: 220 8% 94.5%;
     --muted-foreground: 225 4% 37%;
 
-    --accent: 220 8% 96.5%;
+    --accent: 220 8% 94.5%;
     --accent-foreground: 210 6% 7%;
 
     --destructive: 357 75.8% 48.6%;
@@ -403,12 +403,12 @@
     /* --- APP SHELL TOKENS (LIGHT) --- */
     --app-shell-bg: 220 8% 96.9%;
     --app-shell-radius: 16px;
-    --app-main-bg: 220 8% 99.2%;
+    --app-main-bg: 220 8% 98%;
     --page-underlay-bg: var(--app-main-bg);
     /* Бокова колонка того самого кольору, що й середина (REQ-175#p49): вона
        темніша за сторінку читалась як окрема панель, хоч тримає не вміст, а
        навігацію. Межу лишає волосінь border-r, а не зміна тону. */
-    --sidebar-surface-bg: 220 8% 98.8%;
+    --sidebar-surface-bg: 220 8% 98%;
     --app-structure-divider: 220 8% 86.5%;
     --design-task-details-bg: 220 8% 98.3%;
     --design-task-panel-card-bg: 0 0% 100%;
