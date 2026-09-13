@@ -46,8 +46,8 @@
     --destructive: 357 75.8% 48.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 225 9% 91%;
-    --input: 225 9% 91%;
+    --border: 225 9% 87%;
+    --input: 225 9% 87%;
     
     /* --- BRAND TOKENS (single knob) --- */
     /* Change only --brand-h to switch brand color (blue -> magenta, etc.) */
@@ -151,7 +151,7 @@
     /* --- BADGE TONES (яскравіші: тінт ~88–92% замість ~95%, вища насиченість,
        щоб колір «звучав», а не танув у білому) --- */
     --neutral-soft: 220 8% 94%;
-    --neutral-soft-border: 220 8% 89.8%;
+    --neutral-soft-border: 220 4% 84%;
     --neutral-foreground: 220 4% 34%;
 
     --info-soft: 213 100% 92%;
@@ -409,10 +409,10 @@
        темніша за сторінку читалась як окрема панель, хоч тримає не вміст, а
        навігацію. Межу лишає волосінь border-r, а не зміна тону. */
     --sidebar-surface-bg: 220 8% 98.8%;
-    --app-structure-divider: 220 8% 91.3%;
+    --app-structure-divider: 220 8% 86.5%;
     --design-task-details-bg: 220 8% 98.3%;
     --design-task-panel-card-bg: 0 0% 100%;
-    --design-task-panel-card-border: 220 8% 91.6%;
+    --design-task-panel-card-border: 220 8% 87%;
     --design-task-panel-card-hover: 220 8% 96.2%;
     --design-task-panel-card-strong-bg: 216 100% 98%;
     --design-task-panel-card-strong-border: 216 70% 88%;
@@ -421,7 +421,7 @@
        Один нейтральний набір на всі колонки всіх дошок: стан колонки показує
        кольорова іконка в шапці, а не заливка стовпчика (див. .kanban-column-surface). */
     --kanban-col-bg: 220 8% 98.1%;
-    --kanban-col-border: 220 8% 91.6%;
+    --kanban-col-border: 220 8% 87%;
   }
 
   .dark {

@@ -73,12 +73,12 @@ const EXPECTED: Record<Selector, Record<string, string>> = {
     "--accent": "220 8% 96.5%",
     "--muted": "220 8% 96.5%",
     "--muted-foreground": "225 4% 37%",
-    "--border": "225 9% 91%",
-    "--input": "225 9% 91%",
-    "--app-structure-divider": "220 8% 91.3%",
-    "--kanban-col-border": "220 8% 91.6%",
-    "--design-task-panel-card-border": "220 8% 91.6%",
-    "--neutral-soft-border": "220 8% 89.8%",
+    "--border": "225 9% 87%",
+    "--input": "225 9% 87%",
+    "--app-structure-divider": "220 8% 86.5%",
+    "--kanban-col-border": "220 8% 87%",
+    "--design-task-panel-card-border": "220 8% 87%",
+    "--neutral-soft-border": "220 4% 84%",
   },
   ".dark": {
     "--background": "210 6% 6.7%",
@@ -209,5 +209,23 @@ describe("драбина поверхонь темної теми (REQ-271#p5)",
   it("рамка помітна на картці навіть напівпрозора (/60 — найчастіша в коді)", () => {
     const edgeAt60 = lightness("--card") + (lightness("--border") - lightness("--card")) * 0.6;
     expect(edgeAt60 - lightness("--card")).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("лінії світлої теми (REQ-271#p6)", () => {
+  const light = readTokens(":root");
+  const lightness = (name: string) => parseHsl(light.get(name) ?? "")?.l ?? Number.NaN;
+
+  // Перша хвиля поставила світлу рамку 91% (#e6e7ea, як в Attio). На білій картці
+  // напівпрозора /60 давала ≈94.6% — крок 5.4 пункта, і поля та лінії злились із
+  // карткою. У нас 1216 напівпрозорих рамок, тож рамка мусить бути сильнішою за
+  // Attio, як і в темній темі.
+  it("рамка помітна на картці навіть напівпрозора (/60)", () => {
+    const edgeAt60 = lightness("--card") - (lightness("--card") - lightness("--border")) * 0.6;
+    expect(lightness("--card") - edgeAt60).toBeGreaterThanOrEqual(7);
+  });
+
+  it("повна рамка поля помітна на білому (≥ 1.3:1)", () => {
+    expect(contrast(parseHsl(light.get("--border")!)!, parseHsl(light.get("--card")!)!)).toBeGreaterThanOrEqual(1.3);
   });
 });
