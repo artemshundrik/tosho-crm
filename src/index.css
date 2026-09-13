@@ -1,6 +1,28 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+/* ТИПОГРАФІКА ЗА МОВОЮ ATTIO (docs/VISUAL_REFRESH_DESIGN.md, розділ 4).
+   Трекінг живе в токенах розміру: утиліта text-* віддає
+   letter-spacing: var(--tw-tracking, var(--text-*--letter-spacing)), тож явний
+   tracking-* його перебиває. Розмір БЕЗ такої змінної трекінгу не ставить зовсім
+   і успадковує трекінг body — тому дрібним нуль заданий явно, а не пропуском.
+   font-medium — 550, а не 500: основний текст тепер сам 500, і «середній»
+   мусить лишатись на пів кроку вище, інакше акцент зливається з текстом. */
+@theme {
+  --font-weight-medium: 550;
+
+  --text-3xs--letter-spacing: 0em;
+  --text-2xs--letter-spacing: 0em;
+  --text-xs--letter-spacing: -0.005em;
+  --text-sm--letter-spacing: -0.01em;
+  --text-base--letter-spacing: -0.01em;
+  --text-lg--letter-spacing: -0.02em;
+  --text-xl--letter-spacing: -0.02em;
+  --text-2xl--letter-spacing: -0.02em;
+  --text-3xl--letter-spacing: -0.02em;
+  --text-4xl--letter-spacing: -0.02em;
+}
+
 @layer base {
   :root {
     /* --- ОСНОВНІ КОЛЬОРИ (СВІТЛА ТЕМА) --- */
@@ -682,6 +704,8 @@
   }
   body {
     color: hsl(var(--foreground));
+    font-weight: 500;
+    letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;

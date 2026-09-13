@@ -157,3 +157,35 @@ describe.each(THEMES)("нейтральна палітра %s", (selector) => {
     }
   });
 });
+
+describe("типографіка (розділ 4)", () => {
+  const theme = readTokens("@theme");
+
+  it("задає вагу font-medium 550", () => {
+    expect(theme.get("--font-weight-medium")).toBe("550");
+  });
+
+  it("задає трекінг кожному розміру, дрібним — явний нуль", () => {
+    const tracking = Object.fromEntries(
+      [...theme].filter(([name]) => name.endsWith("--letter-spacing")),
+    );
+    expect(tracking).toEqual({
+      "--text-3xs--letter-spacing": "0em",
+      "--text-2xs--letter-spacing": "0em",
+      "--text-xs--letter-spacing": "-0.005em",
+      "--text-sm--letter-spacing": "-0.01em",
+      "--text-base--letter-spacing": "-0.01em",
+      "--text-lg--letter-spacing": "-0.02em",
+      "--text-xl--letter-spacing": "-0.02em",
+      "--text-2xl--letter-spacing": "-0.02em",
+      "--text-3xl--letter-spacing": "-0.02em",
+      "--text-4xl--letter-spacing": "-0.02em",
+    });
+  });
+
+  it("основний текст — вага 500 і трекінг −0.01em", () => {
+    const body = CSS.match(/\n\s*body \{([^}]*)\}/);
+    expect(body?.[1]).toMatch(/font-weight:\s*500;/);
+    expect(body?.[1]).toMatch(/letter-spacing:\s*-0\.01em;/);
+  });
+});
