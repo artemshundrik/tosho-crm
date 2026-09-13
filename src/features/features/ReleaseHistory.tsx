@@ -507,7 +507,12 @@ export function ReleaseHistory() {
         onPick={go}
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
+      {/*
+        Колонки тільки minmax(0, 1fr), і в цій сітці, і у вкладених. Голий `grid`
+        дає колонку `auto`, а її мінімум — повна довжина рядка з `truncate`:
+        список місяця розтягувався під найдовший опис дня й налазив на праву колонку.
+      */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
         {active.t === "day" ? (
           <DayView
             day={active.k}
@@ -739,7 +744,7 @@ function MonthView({
   };
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       <header className="sticky top-0 z-10 border-b border-border/70 bg-background pb-2.5 pt-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="text-lg font-semibold tracking-tight">{monthTitle(month)}</h2>
@@ -790,7 +795,7 @@ function MonthView({
         </div>
       </header>
 
-      <div className="grid gap-1.5">
+      <div className="grid grid-cols-1 gap-1.5">
         {monthDays.map((k) => {
           const info = dayInfo.get(k) as DayInfo;
           const date = new Date(`${k}T12:00:00Z`);
@@ -861,7 +866,7 @@ function DayView({
   if (!info) return null;
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       <header className="sticky top-0 z-10 border-b border-border/70 bg-background pb-2.5 pt-1">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <button
@@ -1020,7 +1025,7 @@ function DayView({
               {KIND_META[kind].label}
               <em className="not-italic">{list.length}</em>
             </h3>
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               {list.map((thread) => (
                 <ThreadCard key={thread.id} thread={thread} />
               ))}
