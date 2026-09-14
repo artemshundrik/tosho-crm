@@ -81,13 +81,22 @@ function commitNativeValue(node: HTMLInputElement, value: string) {
   node.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+/**
+ * Записати вузол у передане посилання. Окремою функцією поза хуком, як
+ * `mergeRefs` у tabs.tsx: той самий запис усередині хука компілятор React
+ * рахує мутацією аргументу (react-hooks/immutability, REQ-90).
+ */
+function assignRef(ref: React.ForwardedRef<HTMLInputElement>, node: HTMLInputElement | null) {
+  if (typeof ref === "function") ref(node);
+  else if (ref) ref.current = node;
+}
+
 function useForwardedInputRef(forwardedRef: React.ForwardedRef<HTMLInputElement>) {
   const innerRef = React.useRef<HTMLInputElement | null>(null);
   const setRefs = React.useCallback(
     (node: HTMLInputElement | null) => {
       innerRef.current = node;
-      if (typeof forwardedRef === "function") forwardedRef(node);
-      else if (forwardedRef) forwardedRef.current = node;
+      assignRef(forwardedRef, node);
     },
     [forwardedRef]
   );

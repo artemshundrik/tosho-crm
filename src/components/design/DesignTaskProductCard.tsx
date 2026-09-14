@@ -26,15 +26,15 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
   // а не в знімку задачі, тож картка дочитує його сама — сторінка задачі й так
   // під ратчетом розміру.
   const printModelId = product.productKind === "print" ? product.catalogModelId : null;
-  const [specPreset, setSpecPreset] = useState<string | null>(null);
+  // Вид виводиться з того, для ЯКОЇ моделі його дочитано, а не скидається в
+  // ефекті: синхронний setState в ефекті — борг компілятора (REQ-90).
+  const [loaded, setLoaded] = useState<{ modelId: string; preset: string | null } | null>(null);
+  const specPreset = loaded && loaded.modelId === printModelId ? loaded.preset : null;
   useEffect(() => {
-    if (!printModelId) {
-      setSpecPreset(null);
-      return;
-    }
+    if (!printModelId) return;
     let cancelled = false;
     void fetchSpecPresetsByModelId([printModelId]).then((presets) => {
-      if (!cancelled) setSpecPreset(presets.get(printModelId) ?? null);
+      if (!cancelled) setLoaded({ modelId: printModelId, preset: presets.get(printModelId) ?? null });
     });
     return () => {
       cancelled = true;

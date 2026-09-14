@@ -205,12 +205,16 @@ import { execFileSync } from "node:child_process";
  *   локальні змінні над мемо — значення ті самі, а виведене й записане нарешті
  *   збігається. Шість знахідок у вікні збірника стали однією, тож межа впала
  *   нижче за стару: 34 → 33.
+ * - 14.09.2026: immutability 4 → 3. CI на main падав з 5: запис у передане
+ *   посилання всередині хука picker-input (переїзд календаря) рахувався двічі.
+ *   Запис винесено в звичайну функцію assignRef поза хуком, як mergeRefs у
+ *   tabs.tsx, — і разом зі старою знахідкою пішла ще одна.
  */
 const ALLOWED_PER_RULE = {
   "react-hooks/set-state-in-effect": 187,
   "react-hooks/preserve-manual-memoization": 33,
   "react-hooks/refs": 17,
-  "react-hooks/immutability": 4,
+  "react-hooks/immutability": 3,
   "react-hooks/purity": 4,
 };
 
