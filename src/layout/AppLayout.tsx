@@ -2285,12 +2285,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 onClick={() => setCmdkOpen(true)}
                 aria-label="Знайти або спитати ToSho AI"
                 // pr-1 (4px), а не pr-1.5: пігулка всередині має відступ 4px
-                // зверху й знизу (h-8 у полі h-10), тож праворуч мусить бути
+                // зверху й знизу (h-6 у полі --control-h = 32px), тож праворуч мусить бути
                 // рівно стільки ж — інакше вона висить не по центру рамки.
                 // Наведення нейтральне, як у решти полів: світлішає фон, рамка
                 // лишається своя. Рожевий обідок робив із поля рекламу модуля —
                 // сам колір бренду живе в пігулці праворуч, і цього досить.
-                className="group/search inline-flex h-10 w-[320px] cursor-pointer items-center gap-2 rounded-xl border border-border/50 bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-base hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
+                className="group/search inline-flex h-(--control-h) w-[320px] cursor-pointer items-center gap-2 rounded-lg border border-border/50 bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-base hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 {/* Не «Пошук»: те саме поле тепер і шукає, і питає ToSho AI.
@@ -2304,13 +2304,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     не робить. Кнопку в кнопку вкласти й не можна: браузер такого
                     не приймає, а з клавіатури до внутрішньої не дійти.
 
-                    Радіус ВКЛАДЕНИЙ, а не такий самий: зовні rounded-xl (12px),
-                    усередині rounded-lg (8px) — 12 мінус відступ 4px. Однаковий
+                    Радіус ВКЛАДЕНИЙ, а не такий самий: зовні rounded-lg (8px),
+                    усередині rounded-md (6px). Точно концентричний був би 4px
+                    (8 мінус відступ 4), але на пігулці 24px це вже гострий кут,
+                    тож на крок м'якше (REQ-271#p8). Однаковий
                     радіус на вкладених прямокутниках читається як помилка, а
                     капсула всередині прямокутника — тим паче. */}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none relative inline-flex h-8 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg border border-ai-accent/25 bg-ai-accent/[0.08] px-2.5 text-2xs font-medium text-ai-accent transition-colors duration-base group-hover:border-ai-accent/45 group-hover:bg-ai-accent/15"
+                  className="pointer-events-none relative inline-flex h-6 shrink-0 items-center gap-1.5 overflow-hidden rounded-md border border-ai-accent/25 bg-ai-accent/[0.08] px-2.5 text-2xs font-medium text-ai-accent transition-colors duration-base group-hover:border-ai-accent/45 group-hover:bg-ai-accent/15"
                 >
                   {/* Блиск сам пробігає раз на сім із половиною секунд — щоб про
                       можливість спитати згадували й ті, хто сюди не наводить.
@@ -2385,7 +2387,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   trigger={
                     <button
                       type="button"
-                      className="hidden lg:inline-flex h-10 items-center gap-3 whitespace-nowrap rounded-xl px-2.5 transition-colors duration-base hover:bg-muted/50 cursor-pointer"
+                      className="hidden lg:inline-flex h-(--control-h) items-center gap-3 whitespace-nowrap rounded-lg px-2.5 transition-colors duration-base hover:bg-muted/50 cursor-pointer"
                       aria-label={
                         usdUahRate || eurUahRate
                           ? `Курси валют: долар ${usdUahRate ? usdUahRate.toFixed(2) : "не вказано"}, євро ${eurUahRate ? eurUahRate.toFixed(2) : "не вказано"}`

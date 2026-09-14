@@ -156,12 +156,12 @@ function RecordShape({ grid, topBar }: { grid: string; topBar: boolean }) {
         <div className="border-b border-border/70">
           <div className="flex items-center justify-between gap-3 px-4 py-2 md:px-5 lg:px-6">
             <div className="flex min-w-0 items-center gap-3">
-              <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+              <Skeleton className="h-(--control-h) w-(--control-h) shrink-0 rounded-lg" />
               <Line w="w-40" h="h-4" />
             </div>
             <div className="flex shrink-0 gap-2">
-              <Skeleton className="h-9 w-24 rounded-xl opacity-80" />
-              <Skeleton className="h-9 w-9 rounded-xl opacity-70" />
+              <Skeleton className="h-(--control-h) w-24 rounded-lg opacity-80" />
+              <Skeleton className="h-(--control-h) w-(--control-h) rounded-lg opacity-70" />
             </div>
           </div>
         </div>
@@ -295,7 +295,7 @@ function QuoteRecordShape() {
           <div className="mt-auto space-y-2">
             <Skeleton className="h-8 w-[70%] rounded-xl opacity-70" />
             <Skeleton className="ml-auto h-8 w-[55%] rounded-xl opacity-60" />
-            <Skeleton className="h-9 w-full rounded-xl opacity-70" />
+            <Skeleton className="h-(--control-h) w-full rounded-lg opacity-70" />
           </div>
         </div>
       </div>
@@ -327,8 +327,8 @@ function DetailShape({ canvas }: ShapeProps) {
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
-          <Skeleton className="h-9 w-28 rounded-xl" />
-          <Skeleton className="h-9 w-9 rounded-xl opacity-80" />
+          <Skeleton className="h-(--control-h) w-28 rounded-lg" />
+          <Skeleton className="h-(--control-h) w-(--control-h) rounded-lg opacity-80" />
         </div>
       </div>
 
@@ -424,7 +424,7 @@ function CardsShape({ cards }: ShapeProps) {
     <div className="pb-10">
       {cards?.search ? (
         <div className="rounded-section border border-border/60 bg-card/70 p-3">
-          <Skeleton className="h-9 w-full rounded-xl opacity-80" />
+          <Skeleton className="h-(--control-h) w-full rounded-lg opacity-80" />
         </div>
       ) : null}
       <div className={cn(cards?.search && "mt-6")}>
@@ -496,7 +496,7 @@ function SplitShape({ canvas }: ShapeProps) {
       )}
     >
       <div className="hidden w-[300px] shrink-0 flex-col gap-2 border-r border-border/50 p-3 md:flex">
-        <Skeleton className="h-9 w-full rounded-xl opacity-80" />
+        <Skeleton className="h-(--control-h) w-full rounded-lg opacity-80" />
         {Array.from({ length: 9 }).map((_, index) => (
           <div key={index} className="flex items-center gap-2.5 rounded-xl px-2 py-2">
             <Skeleton className="h-7 w-7 shrink-0 rounded-lg" />
@@ -506,8 +506,8 @@ function SplitShape({ canvas }: ShapeProps) {
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
-          <Skeleton className="h-9 w-full max-w-[360px] rounded-xl" />
-          <Skeleton className="ml-auto h-9 w-28 shrink-0 rounded-xl opacity-80" />
+          <Skeleton className="h-(--control-h) w-full max-w-[360px] rounded-lg" />
+          <Skeleton className="ml-auto h-(--control-h) w-28 shrink-0 rounded-lg opacity-80" />
         </div>
         <div className="grid min-h-0 flex-1 gap-3 overflow-hidden p-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
@@ -611,18 +611,18 @@ export function PageToolbarSkeleton({ kind }: { kind: Exclude<PageToolbarKind, "
           <Skeleton className="h-4 w-64 rounded-full opacity-60" />
         </div>
         <div className="flex shrink-0 gap-2">
-          <Skeleton className="h-9 w-24 rounded-xl opacity-70" />
-          <Skeleton className="h-9 w-32 rounded-xl opacity-80" />
+          <Skeleton className="h-(--control-h) w-24 rounded-lg opacity-70" />
+          <Skeleton className="h-(--control-h) w-32 rounded-lg opacity-80" />
         </div>
       </div>
 
       {kind === "full" ? (
         <div className="flex min-h-10 flex-col gap-3 xl:flex-row xl:items-center">
-          <Skeleton className="h-10 w-full rounded-xl opacity-70 xl:max-w-[370px]" />
+          <Skeleton className="h-(--control-h) w-full rounded-lg opacity-70 xl:max-w-[370px]" />
           <div className="flex flex-wrap items-center gap-2">
-            <Skeleton className="h-10 w-32 rounded-xl opacity-60" />
-            <Skeleton className="h-10 w-28 rounded-xl opacity-60" />
-            <Skeleton className="h-10 w-24 rounded-xl opacity-50" />
+            <Skeleton className="h-(--control-h) w-32 rounded-lg opacity-60" />
+            <Skeleton className="h-(--control-h) w-28 rounded-lg opacity-60" />
+            <Skeleton className="h-(--control-h) w-24 rounded-lg opacity-50" />
           </div>
           <Skeleton className="h-6 w-24 rounded-full opacity-50 xl:ml-auto" />
         </div>

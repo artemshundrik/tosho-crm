@@ -1124,7 +1124,7 @@ export function DesignersDashboard({
                 onClick={() => setRefreshNonce((value) => value + 1)}
                 disabled={refreshing}
                 className={cn(
-                  "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-border bg-background/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors",
+                  "inline-flex h-(--control-h) cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-background/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors",
                   "hover:text-foreground disabled:cursor-default disabled:opacity-60"
                 )}
                 aria-label="Перерахувати з бази"
