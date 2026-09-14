@@ -1,7 +1,7 @@
 import { Package } from "lucide-react";
 
 import { KanbanImageZoomPreview } from "@/components/kanban";
-import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
+import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 
 /**
  * Мініатюра позиції на картці прорахунку.
@@ -25,11 +25,7 @@ export type QuoteItemThumbProps = {
 
 export function QuoteItemThumb({ specPreset, preview, alt }: QuoteItemThumbProps) {
   if (specPreset) {
-    return (
-      <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-border/50 bg-muted/40 text-foreground/75">
-        <PrintModelArt presetKey={specPreset} className="h-12 w-12" />
-      </div>
-    );
+    return <PrintModelTile presetKey={specPreset} className="h-20 w-20 rounded-xl" iconClassName="h-12 w-12" />;
   }
 
   if (preview) {

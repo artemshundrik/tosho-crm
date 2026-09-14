@@ -1,6 +1,6 @@
 import { Package } from "lucide-react";
 
-import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
+import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -128,9 +128,7 @@ export function QuoteKanbanProducts({ preview, isLoading, imageLoadStrategy }: Q
               )}
             >
               {product.specPreset ? (
-                <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-border/60 bg-secondary text-foreground/70">
-                  <PrintModelArt presetKey={product.specPreset} className="h-8 w-8" />
-                </div>
+                <PrintModelTile presetKey={product.specPreset} className="h-14 w-14 rounded-lg" iconClassName="h-8 w-8" />
               ) : product.imageUrl ? (
                 <KanbanImageZoomPreview
                   imageUrl={product.imageUrl}

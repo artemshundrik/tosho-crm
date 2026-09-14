@@ -125,6 +125,8 @@ import {
 } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import { listCatalogModelsByIds, listCustomersBySearch, listLeadsBySearch, type LeadSearchRow } from "@/lib/toshoApi";
+import { fetchSpecPresetsByModelId } from "@/features/quotes/quote-details/catalogSpecPresets";
+import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 import {
   listCustomerLeadLogoDirectory,
   normalizeCustomerLogoUrl as normalizeLogoUrl,
@@ -170,6 +172,8 @@ type DesignTask = {
   productImageUrl?: string | null;
   productZoomImageUrl?: string | null;
   productQtyLabel?: string | null;
+  /** `metadata.specPreset` моделі — поліграфія малюється значком виду, не фото. */
+  productSpecPreset?: string | null;
   assigneeLabel?: string | null;
   assigneeAvatarUrl?: string | null;
   createdAt?: string | null;
@@ -744,6 +748,7 @@ function sanitizeDesignTaskForCache(task: DesignTask): DesignTask {
     productName: task.productName ?? null,
     productImageUrl: task.productImageUrl ?? null,
     productQtyLabel: task.productQtyLabel ?? null,
+    productSpecPreset: task.productSpecPreset ?? null,
     assigneeLabel: task.assigneeLabel ?? null,
     assigneeAvatarUrl: task.assigneeAvatarUrl ?? null,
     createdAt: task.createdAt ?? null,
@@ -1995,6 +2000,8 @@ export default function DesignPage() {
       const productImageByTaskId = new Map<string, string | null>();
       const productQtyByTaskId = new Map<string, string | null>();
       const productZoomImageByTaskId = new Map<string, string | null>();
+      const productSpecPresetByTaskId = new Map<string, string | null>();
+      const modelSpecPresetById = new Map<string, string | null>();
       if (quoteIds.length > 0) {
         const { data: quoteRows, error: quoteError } = await supabase
           .schema("tosho")
@@ -2148,7 +2155,11 @@ export default function DesignPage() {
         );
         const modelImageById = new Map<string, { imageUrl: string; zoomImageUrl?: string | null }>();
         if (modelIds.length > 0) {
-          const modelRows = await listCatalogModelsByIds(modelIds);
+          const [modelRows, specPresetById] = await Promise.all([
+            listCatalogModelsByIds(modelIds),
+            fetchSpecPresetsByModelId(modelIds),
+          ]);
+          specPresetById.forEach((preset, id) => modelSpecPresetById.set(id, preset));
           modelRows.forEach((row, id) => {
             const zoomImageUrl = row.image_url?.trim() || null;
             const imageUrl = row.thumb_url?.trim() || zoomImageUrl;
@@ -2169,11 +2180,25 @@ export default function DesignPage() {
               ? modelImageById.get(item.catalog_model_id.trim()) ?? null
               : null;
           productImageByTaskId.set(taskId, attachmentImage || catalogImage?.imageUrl || null);
+          productSpecPresetByTaskId.set(taskId, modelSpecPresetById.get(String(item.catalog_model_id ?? "").trim()) ?? null);
           productZoomImageByTaskId.set(
             taskId,
             attachmentImage || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null
           );
         });
+      }
+
+      // Поліграфія без прорахунку: модель лежить у знімку metadata.product.
+      const standalonePrintModelByTaskId = new Map<string, string>();
+      parsedRaw.forEach((task) => {
+        const product = isUuid(task.quoteId) ? null : parseDesignTaskProduct(task.metadata?.product);
+        if (product?.productKind === "print" && product.catalogModelId) {
+          standalonePrintModelByTaskId.set(task.id, product.catalogModelId);
+        }
+      });
+      if (standalonePrintModelByTaskId.size > 0) {
+        const presets = await fetchSpecPresetsByModelId(Array.from(standalonePrintModelByTaskId.values()));
+        standalonePrintModelByTaskId.forEach((modelId, taskId) => productSpecPresetByTaskId.set(taskId, presets.get(modelId) ?? null));
       }
 
       const derivedNumbers = buildDerivedDesignTaskNumberMap(
@@ -2221,6 +2246,7 @@ export default function DesignPage() {
           productZoomImageByTaskId.get(t.id) ?? t.productZoomImageUrl ?? null
         ),
         productQtyLabel: productQtyByTaskId.get(t.id) ?? null,
+        productSpecPreset: productSpecPresetByTaskId.get(t.id) ?? t.productSpecPreset ?? null,
         assigneeLabel:
           t.assigneeLabel ??
           (t.assigneeUserId
@@ -4726,7 +4752,9 @@ export default function DesignPage() {
         {task.productName ? (
           <div className="mt-3 rounded-inner border border-border/60 bg-background/35 px-3 py-2.5">
             <div className="flex items-center gap-2.5">
-              {task.productImageUrl ? (
+              {task.productSpecPreset ? (
+                <PrintModelTile presetKey={task.productSpecPreset} className="h-14 w-14 rounded-lg" iconClassName="h-8 w-8" />
+              ) : task.productImageUrl ? (
                 <KanbanImageZoomPreview
                   imageUrl={task.productImageUrl}
                   zoomImageUrl={task.productZoomImageUrl ?? task.productImageUrl}

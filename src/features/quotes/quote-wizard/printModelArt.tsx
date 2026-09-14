@@ -1,5 +1,7 @@
 import { Award, BookMarked, BookOpenText, CalendarDays, CalendarFold, FileText, Files, Tent } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 /**
  * Значок виду поліграфії.
  *
@@ -42,4 +44,37 @@ export function PrintModelArt({ presetKey, className }: { presetKey: string | nu
   // `size` — це лише width/height на самому svg, тож клас `h-12 w-12` із місця
   // виклику його перебиває. Саме так тут працював і мальований варіант.
   return <Icon size={42} strokeWidth={1.6} className={className} aria-hidden="true" />;
+}
+
+/**
+ * Значок виду в плитці мініатюри позиції — на білому з обводкою.
+ *
+ * ЧОМУ БІЛА, А НЕ СІРА (Артем, 14.09.2026). Поруч у тих самих списках лежать
+ * фото товарів, а вони майже всі на білому тлі в тонкій рамці. Сіра плитка під
+ * значком поліграфії читалась як «зображення не завантажилось», хоча виріб
+ * визначений так само, як товар із фото. Тепер обидва випадки — одна й та сама
+ * плитка, і відрізняє їх лише вміст.
+ *
+ * Розмір і радіус задає місце виклику: на дошці плитка 56 px, на картці
+ * прорахунку 80, у рядку дизайн-задачі 32.
+ */
+export function PrintModelTile({
+  presetKey,
+  className,
+  iconClassName,
+}: {
+  presetKey: string | null;
+  className?: string;
+  iconClassName?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid shrink-0 place-items-center overflow-hidden border border-border/60 bg-card text-foreground/70",
+        className
+      )}
+    >
+      <PrintModelArt presetKey={presetKey} className={iconClassName} />
+    </div>
+  );
 }

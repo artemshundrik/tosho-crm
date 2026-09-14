@@ -95,6 +95,8 @@ import { StorageObjectVideo } from "@/components/app/StorageObjectVideo";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import { listCatalogModelsByIds } from "@/lib/toshoApi";
+import { fetchSpecPresetsByModelId } from "@/features/quotes/quote-details/catalogSpecPresets";
+import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 import {
   listCustomerLeadLogoDirectory,
   normalizeCustomerLogoUrl as normalizeLogoUrl,
@@ -2329,7 +2331,11 @@ export default function DesignTaskPage() {
         let itemPreviewUrl: string | null = null;
         let itemZoomPreviewUrl: string | null = null;
         if (item?.catalog_model_id) {
-          const modelRows = await listCatalogModelsByIds([item.catalog_model_id as string]);
+          const [modelRows, specPresets] = await Promise.all([
+            listCatalogModelsByIds([item.catalog_model_id as string]),
+            fetchSpecPresetsByModelId([item.catalog_model_id as string]),
+          ]);
+          item.spec_preset = specPresets.get(item.catalog_model_id as string) ?? null;
           const modelRow = modelRows.get(item.catalog_model_id as string);
           itemPreviewUrl = modelRow?.thumb_url ?? modelRow?.image_url ?? null;
           itemZoomPreviewUrl = modelRow?.image_url ?? modelRow?.thumb_url ?? null;
@@ -11903,7 +11909,9 @@ export default function DesignTaskPage() {
                     Робота
                   </span>
                   <div className="design-task-detail-value">
-                    {productPreviewUrl ? (
+                    {quoteItem?.spec_preset ? (
+                      <PrintModelTile presetKey={quoteItem.spec_preset} className="h-8 w-8 rounded-md" iconClassName="h-5 w-5" />
+                    ) : productPreviewUrl ? (
                       <KanbanImageZoomPreview imageUrl={productPreviewUrl} zoomImageUrl={productZoomPreviewUrl ?? productPreviewUrl} alt={quoteItem?.name ?? "Товар"} loadStrategy="eager" className="h-8 w-8 shrink-0 rounded-md border border-border/60 bg-muted/30" />
                     ) : (
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30">

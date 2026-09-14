@@ -72,6 +72,8 @@ export type DesignTaskQuoteItem = {
   attachment?: unknown;
   catalog_model_id?: string | null;
   catalog_kind_id?: string | null;
+  /** Не колонка `quote_items`: `metadata.specPreset` моделі, доливає сторінка задачі. */
+  spec_preset?: string | null;
 };
 
 /**

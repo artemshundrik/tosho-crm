@@ -9,9 +9,12 @@
  * a divider, then a dedicated surfaces zone — so nothing floats disconnected.
  */
 
+import { useEffect, useState } from "react";
 import { ExternalLink, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { KanbanImageZoomPreview } from "@/components/kanban";
+import { fetchSpecPresetsByModelId } from "@/features/quotes/quote-details/catalogSpecPresets";
+import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 import { DESIGN_TASK_PRINT_SIDE_LABELS, type DesignTaskProduct } from "@/lib/designTaskProduct";
 
 type DesignTaskProductCardProps = {
@@ -19,6 +22,25 @@ type DesignTaskProductCardProps = {
 };
 
 export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
+  // Поліграфію малюємо значком виду, як у прорахунку. Вид живе в моделі каталогу,
+  // а не в знімку задачі, тож картка дочитує його сама — сторінка задачі й так
+  // під ратчетом розміру.
+  const printModelId = product.productKind === "print" ? product.catalogModelId : null;
+  const [specPreset, setSpecPreset] = useState<string | null>(null);
+  useEffect(() => {
+    if (!printModelId) {
+      setSpecPreset(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchSpecPresetsByModelId([printModelId]).then((presets) => {
+      if (!cancelled) setSpecPreset(presets.get(printModelId) ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [printModelId]);
+
   const renderLinkButton = (url: string | null, label: string, hint: string) =>
     url ? (
       <Button asChild variant="outline" size="sm" className="gap-1.5 transition-colors">
@@ -45,7 +67,9 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
       {/* Header: media + identity + supplier actions on one balanced line */}
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
         <div className="shrink-0">
-          {product.imageUrl ? (
+          {specPreset ? (
+            <PrintModelTile presetKey={specPreset} className="h-24 w-24 rounded-xl" iconClassName="h-14 w-14" />
+          ) : product.imageUrl ? (
             <KanbanImageZoomPreview
               imageUrl={product.imageUrl}
               zoomImageUrl={product.imageUrl}

@@ -11,7 +11,7 @@ import { supplierNameFromUrl } from "@/lib/supplierPoolRows";
 import { cn } from "@/lib/utils";
 import { catalogPlace } from "@/features/quotes/quote-wizard/catalogPlace";
 import { CatalogPlaceChip } from "@/features/quotes/quote-wizard/CatalogPlaceChip";
-import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
+import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
 import { getImprintSheet } from "@/features/quotes/quote-details/imprintSheets";
@@ -111,9 +111,7 @@ export function ImportItemPhoto({
   */
   if (specPreset) {
     return (
-      <div className={cn(base, "aspect-square flex items-center justify-center bg-muted/30 text-foreground/75")}>
-        <PrintModelArt presetKey={specPreset} className="h-10 w-10" />
-      </div>
+      <PrintModelTile presetKey={specPreset} className={cn(base, "aspect-square")} iconClassName="h-10 w-10" />
     );
   }
 
