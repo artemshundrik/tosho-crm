@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import { createCustomerLogoResolver, type CustomerLogoDirectoryLike } from "@/lib/customerLogoIndex";
 import type { Json } from "@/lib/database.types";
 import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
@@ -762,77 +763,12 @@ function buildDesignPageCachePayload(tasks: DesignTask[]): DesignPageCachePayloa
   };
 }
 
-type CustomerLogoEntry = {
-  label: string;
-  entityType: "customer" | "lead";
-  logoUrl?: string | null;
-};
-
-type CustomerLogoIndex = {
-  byPartyAndLabel: Map<string, string>;
-  byPartyAndCompactLabel: Map<string, string>;
-  byLabel: Map<string, string>;
-  byCompactLabel: Map<string, string>;
-};
-
-/**
- * Індекс логотипів за нормалізованою назвою замовника — ОДИН на список, а не
- * на кожну задачу (REQ-274).
- *
- * Раніше `resolveTaskCustomerLogo` перебудовував усі чотири мапи заново для
- * кожної задачі: 120 задач × сотні замовників × дві нормалізації з юнікодними
- * регулярками давали ~50 мс на кожному монтуванні дошки — і всі вони сиділи в
- * задачі кліку по сайдбару, поки людина дивилась на попередню сторінку.
- * Результат той самий, робота — одна замість ста двадцяти.
- */
-function buildCustomerLogoIndex(entries: CustomerLogoEntry[]): CustomerLogoIndex | null {
-  if (entries.length === 0) return null;
-  const byPartyAndLabel = new Map<string, string>();
-  const byPartyAndCompactLabel = new Map<string, string>();
-  const byLabel = new Map<string, string>();
-  const byCompactLabel = new Map<string, string>();
-  entries.forEach((row) => {
-    const normalizedLabel = normalizePartyLabel(row.label);
-    const normalizedCompactLabel = normalizedLabel.replace(/\s+/g, "");
-    const key = `${row.entityType}:${normalizedLabel}`;
-    const compactKey = `${row.entityType}:${normalizedCompactLabel}`;
-    const logoUrl = normalizeLogoUrl(row.logoUrl ?? null);
-    if (!logoUrl) return;
-    byPartyAndLabel.set(key, logoUrl);
-    byPartyAndCompactLabel.set(compactKey, logoUrl);
-    if (!byLabel.has(normalizedLabel)) {
-      byLabel.set(normalizedLabel, logoUrl);
-    }
-    if (!byCompactLabel.has(normalizedCompactLabel)) {
-      byCompactLabel.set(normalizedCompactLabel, logoUrl);
-    }
-  });
-  return { byPartyAndLabel, byPartyAndCompactLabel, byLabel, byCompactLabel };
-}
-
-function resolveTaskCustomerLogo(
-  task: Pick<DesignTask, "customerName" | "customerLogoUrl" | "partyType">,
-  index: CustomerLogoIndex | null
-) {
-  if (!index) return normalizeLogoUrl(task.customerLogoUrl ?? null);
-  const label = normalizePartyLabel(task.customerName ?? "");
-  const compactLabel = label.replace(/\s+/g, "");
-  const partyType = task.partyType ?? "customer";
-  return (
-    (label
-      ? index.byPartyAndLabel.get(`${partyType}:${label}`) ??
-        index.byPartyAndCompactLabel.get(`${partyType}:${compactLabel}`) ??
-        index.byLabel.get(label) ??
-        index.byCompactLabel.get(compactLabel)
-      : null) ?? normalizeLogoUrl(task.customerLogoUrl ?? null)
-  );
-}
-
-function applyCustomerLogosToTasks(tasks: DesignTask[], entries: CustomerLogoEntry[]) {
-  const index = buildCustomerLogoIndex(entries);
+function applyCustomerLogosToTasks(tasks: DesignTask[], entries: readonly CustomerLogoDirectoryLike[]) {
+  // Індекс по довіднику — один на виклик, а не на кожну задачу (REQ-274).
+  const resolveLogo = createCustomerLogoResolver(entries);
   let changed = false;
   const next = tasks.map((task) => {
-    const resolvedLogo = resolveTaskCustomerLogo(task, index);
+    const resolvedLogo = resolveLogo(task);
     const currentLogo = normalizeLogoUrl(task.customerLogoUrl ?? null);
     if (resolvedLogo === currentLogo) return task;
     changed = true;
@@ -919,12 +855,6 @@ const formatQtyLabel = (qty: number | null | undefined, unit: string | null | un
   if (rawUnit === "pcs" || rawUnit === "pc") return `${qtyLabel} шт.`;
   if (rawUnit === "шт" || rawUnit === "шт." || rawUnit === "штук") return `${qtyLabel} шт.`;
   return `${qtyLabel} ${unit?.trim() || "шт."}`;
-};
-
-const normalizePartyLabel = (value?: string | null) => {
-  const raw = (value ?? "").trim().toLowerCase();
-  if (!raw) return "";
-  return raw.replace(/[`"'’«»]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 };
 
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
