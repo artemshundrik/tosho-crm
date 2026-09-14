@@ -44,6 +44,7 @@ FAST_CHECKS='
 лінт|npm run lint --silent
 типи функцій|npm run typecheck:functions --silent
 заглушки правил хуків|node scripts/check-hook-disables.mjs
+перевизначення контролів|node scripts/check-control-overrides.mjs
 розростання файлів|node scripts/check-file-growth.mjs
 розмір інструкцій|node scripts/check-instruction-size.mjs
 реєстр функцій|npm run check:functions --silent
@@ -60,6 +61,7 @@ FULL_CHECKS='
 копії спільних модулів|npm run check:duplicate-singletons --silent
 читачі правил|npm run check:rule-readers --silent
 заглушки правил хуків|node scripts/check-hook-disables.mjs
+перевизначення контролів|node scripts/check-control-overrides.mjs
 розростання файлів|node scripts/check-file-growth.mjs
 розмір інструкцій|node scripts/check-instruction-size.mjs
 знімок стеку|node scripts/check-stack-snapshot.mjs

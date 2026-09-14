@@ -18,6 +18,7 @@
     "check:feature-keys": "node scripts/check-feature-keys.mjs",
     "check:file-growth": "node scripts/check-file-growth.mjs",
     "check:hook-disables": "node scripts/check-hook-disables.mjs",
+    "check:control-overrides": "node scripts/check-control-overrides.mjs",
     "check:functions": "node scripts/check-netlify-functions.mjs",
     "check:db-guards": "node scripts/check-db-guards.mjs",
     "check:rpc-contracts": "node scripts/check-rpc-contracts.mjs",
