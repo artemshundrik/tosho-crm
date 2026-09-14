@@ -1,4 +1,3 @@
-import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
 /**
@@ -42,7 +41,7 @@ export function EmailInput({
         if (normalized !== value) onChange(normalized);
       }}
       placeholder={placeholder}
-      className={cn("h-9", className)}
+      className={className}
     />
   );
 }

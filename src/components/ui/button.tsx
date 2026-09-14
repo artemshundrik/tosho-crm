@@ -30,8 +30,8 @@ const buttonVariants = cva(
     // Прозорі варіанти (ghost/link/text*) глушать плашку в себе нижче.
     "disabled:pointer-events-none disabled:ring-0",
     CONTROL_DISABLED_STATE,
-    // Shape / spacing
-    "rounded-xl",
+    // Радіус тут НЕ ставимо: він живе в size (роль «дрібне» чи «контрол»),
+    // інакше на іконці-кнопці без радіуса в розмірі проступав би rounded-xl.
     // will-change тут НЕ ставимо: він тримає окремий композиторський шар на
     // кожній кнопці, а на дошці й у таблицях їх сотні. Натиск і так анімується
     // властивістю scale, яку браузер піднімає на шар лише на час переходу.
@@ -145,7 +145,6 @@ const buttonVariants = cva(
         // ✅ Icon control (toolbar/search clear)
         control: [
           "!font-medium",
-          "rounded-xl",
           "bg-transparent",
           "text-muted-foreground hover:text-foreground",
           "hover:bg-muted/40",
@@ -156,7 +155,6 @@ const buttonVariants = cva(
         // ✅ Icon control (destructive)
         controlDestructive: [
           "!font-medium",
-          "rounded-xl",
           "bg-transparent",
           "text-destructive hover:text-destructive",
           "hover:bg-danger-soft/40",
@@ -180,24 +178,32 @@ const buttonVariants = cva(
         ].join(" "),
       },
 
-      // ✅ Height (як ти хотів “як була”)
-      // Радіус масштабується з висотою (інакше 14px на h-8 читається як піл):
-      // ≤h-8 → rounded-md, h-9 → rounded-lg, h-10 → базовий rounded-xl,
-      // у парі з інпутами тієї ж висоти.
+      // Радіус задає РОЛЬ, не висота (REQ-271#p8, як в Attio): дрібні ≤24px —
+      // rounded-md (6), решта — rounded-lg (8). Колишня драбина «радіус за
+      // висотою» давала поле 36px із кутом 12 поруч із таким самим полем з кутом 8.
+      // sm/md/icon* беруть висоту зі змінної: 28/32 на десктопі, 36/40 на
+      // телефоні (REQ-271#p3) — тач-розмір без max-md: на сторінках.
       // Іконка і gap — частина розміру: 16px іконка поруч із 12px текстом (sm)
-      // була більша за підпис у 1.33 раза. Відступ тримає ≈0.375 висоти.
+      // була більша за підпис у 1.33 раза.
       size: {
-        xxs: "h-6 rounded-md px-2 text-3xs leading-none gap-1 [&_svg]:size-3",
-        xs: "h-7 rounded-md px-2.5 text-xs gap-1 [&_svg]:size-3.5",
-        sm: "h-8 rounded-md px-3 text-xs gap-1.5 [&_svg]:size-3.5",
-        md: "h-9 rounded-lg px-3.5 text-sm gap-1.5 [&_svg]:size-4",
-        lg: "h-10 px-4 text-base gap-2 [&_svg]:size-4",
-        iconXs: "h-7 w-7 rounded-md px-0 [&_svg]:size-3.5",
-        iconSm: "h-8 w-8 rounded-md px-0 [&_svg]:size-3.5",
-        iconMd: "h-9 w-9 rounded-lg px-0 [&_svg]:size-4",
-        icon: "h-10 w-10 px-0 [&_svg]:size-4",
+        xxs: "h-5 rounded-md px-1.5 text-3xs leading-none gap-1 [&_svg]:size-3",
+        xs: "h-6 rounded-md px-2 text-xs gap-1 [&_svg]:size-3.5",
+        sm: "h-(--control-h-sm) rounded-lg px-2.5 text-xs gap-1.5 [&_svg]:size-3.5",
+        md: "h-(--control-h) rounded-lg px-3 text-sm gap-1.5 [&_svg]:size-4",
+        lg: "h-10 rounded-lg px-4 text-sm gap-2 [&_svg]:size-4",
+        iconXs: "h-6 w-6 rounded-md px-0 [&_svg]:size-3.5",
+        iconSm: "h-(--control-h-sm) w-(--control-h-sm) rounded-lg px-0 [&_svg]:size-3.5",
+        /** @deprecated той самий розмір, що `icon`; лишено, щоб не ламати виклики. */
+        iconMd: "h-(--control-h) w-(--control-h) rounded-lg px-0 [&_svg]:size-4",
+        icon: "h-(--control-h) w-(--control-h) rounded-lg px-0 [&_svg]:size-4",
       },
     },
+
+    // Пігулка лишається пігулкою за будь-якого розміру: compoundVariants іде в
+    // рядку ПІСЛЯ size, тож tailwind-merge лишає саме rounded-full.
+    compoundVariants: [
+      { variant: ["pill", "chip", "inverted"], class: "rounded-full" },
+    ],
 
     defaultVariants: {
       variant: "primary",

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 /**
  * Контейнер поля з зафіксованим префіксом-чипом ліворуч (напр. «UA», «+380»,
  * «@»): чип візуально відокремлений роздільником, його не можна редагувати.
- * Стилі узгоджені з CONTROL_BASE (rounded-xl, muted, soft-ring на фокусі).
+ * Стилі узгоджені з CONTROL_BASE (висота --control-h, rounded-lg, soft-ring на фокусі).
  */
 export function PrefixField({
   prefix,
@@ -25,7 +25,7 @@ export function PrefixField({
     <div
       data-invalid={invalid ? "true" : undefined}
       className={cn(
-        "flex h-9 w-full items-center overflow-hidden rounded-xl border border-border/50 bg-muted/40 text-sm transition-all duration-base ease-out",
+        "flex h-(--control-h) w-full items-center overflow-hidden rounded-lg border border-border/50 bg-muted/40 text-sm transition-all duration-base ease-out",
         "focus-within:bg-background focus-within:ring-1 focus-within:ring-[hsl(var(--soft-ring))]",
         "data-[invalid=true]:border-destructive/60 data-[invalid=true]:bg-danger-soft/30",
         className

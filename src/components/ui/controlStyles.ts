@@ -20,7 +20,9 @@ export const CONTROL_BASE = cx(
   // Було `bg-muted/40`: на картці це ще один сірий, на півтона світліший за неї,
   // поруч із виділеним рядком і роздільником — чотири майже однакові сірі, які в
   // темній темі читались як бруд, а не як шари. Межу поля тримає рамка.
-  "h-10 rounded-xl bg-transparent",
+  // Висота зі змінної (32 десктоп / 40 телефон), радіус — роль «контрол», а не
+  // похідна від висоти (REQ-271#p3, #p8): поле скрізь має однаковий кут.
+  "h-(--control-h) rounded-lg bg-transparent",
   // Рамка ПОВНА, а не /50: у темній темі напівпрозора рамка на картці зливалась
   // із нею, і поле без краю читалось як дірка.
   "border border-border",
@@ -146,10 +148,10 @@ export const TOOLBAR_FILTER = cx(
  * duration-200`, які перебивали базу — і кнопки дій натискались інакше за
  * фільтри поруч, хоча обидва — кнопки.
  */
-export const TOOLBAR_ACTION_BUTTON = cx("h-10 rounded-xl px-4");
+export const TOOLBAR_ACTION_BUTTON = cx("h-(--control-h) rounded-lg px-3");
 
 export const CONTROL_ICON_BTN = cx(
-  "inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)]",
+  "inline-flex h-6 w-6 items-center justify-center rounded-md",
   "text-muted-foreground hover:text-foreground",
   "hover:bg-muted",
   // Нейтральний фокус, як у решти контролів (без синього рінга).
@@ -164,11 +166,11 @@ export const SEARCH_INPUT = cx(TOOLBAR_CONTROL, "pl-9 pr-9");
 export const SEARCH_CLEAR_BTN_POS = cx("absolute right-2 top-1/2 -translate-y-1/2");
 
 export const SEGMENTED_GROUP = cx(
-  "inline-flex p-1 h-11 items-center rounded-xl border border-border/50 bg-muted/40"
+  "inline-flex p-0.5 h-(--control-h) items-center rounded-lg border border-border/50 bg-muted/40"
 );
 
 export const SEGMENTED_GROUP_SM = cx(
-  "inline-flex p-0.5 h-9 items-center rounded-lg border border-border/50 bg-muted/40"
+  "inline-flex p-0.5 h-(--control-h-sm) items-center rounded-lg border border-border/50 bg-muted/40"
 );
 
 /**
@@ -188,6 +190,6 @@ const SEGMENTED_TRIGGER_BASE = cx(
   "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-[hsl(var(--soft-ring))]"
 );
 
-export const SEGMENTED_TRIGGER = cx(SEGMENTED_TRIGGER_BASE, "gap-2 h-9 rounded-lg px-4 text-sm");
+export const SEGMENTED_TRIGGER = cx(SEGMENTED_TRIGGER_BASE, "gap-2 h-full rounded-md px-3 text-sm");
 
-export const SEGMENTED_TRIGGER_SM = cx(SEGMENTED_TRIGGER_BASE, "gap-1.5 h-7 rounded-md px-3 text-xs");
+export const SEGMENTED_TRIGGER_SM = cx(SEGMENTED_TRIGGER_BASE, "gap-1.5 h-full rounded-md px-2.5 text-xs");

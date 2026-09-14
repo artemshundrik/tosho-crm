@@ -4,17 +4,19 @@ import { cn } from "@/lib/utils"
 import { CONTROL_BASE } from "@/components/ui/controlStyles"
 
 /**
- * Радіус іде за висотою контролу — так само, як у Button (sm: h-8 rounded-md,
- * md: h-9 rounded-lg). CONTROL_BASE несе єдиний rounded-xl, розрахований на
- * висоту 40px; на полі 32px той самий радіус виглядає «таблеткою».
+ * Розмір задає ЛИШЕ висоту й відступи. Радіус — роль «контрол» (rounded-lg) у
+ * CONTROL_BASE, однаковий для всіх розмірів (REQ-271#p8): раніше радіус ішов за
+ * розміром, і сторінка, що стискала поле класом h-9, отримувала 36px із кутом 12
+ * поруч із таким самим полем з кутом 8. sm/md — висота зі змінної (28/32 на
+ * десктопі, 36/40 на телефоні).
  *
  * Прикладне ім'я `controlSize`, а не `size`: у <input> size — це нативний
  * числовий атрибут, і перевизначати його типом не можна.
  */
 const INPUT_SIZE = {
-  sm: "h-8 rounded-md px-2.5 py-1 text-xs",
-  md: "h-9 rounded-lg px-3 py-1.5 text-sm",
-  lg: "h-10 rounded-xl px-3 py-2 text-sm",
+  sm: "h-(--control-h-sm) px-2.5 py-1 text-xs",
+  md: "h-(--control-h) px-3 py-1.5 text-sm",
+  lg: "h-10 px-3 py-2 text-sm",
 } as const
 
 export type InputControlSize = keyof typeof INPUT_SIZE
@@ -22,7 +24,7 @@ export type InputControlSize = keyof typeof INPUT_SIZE
 const Input = React.forwardRef<
   HTMLInputElement,
   React.ComponentProps<"input"> & { controlSize?: InputControlSize }
->(({ className, type, controlSize = "lg", ...props }, ref) => {
+>(({ className, type, controlSize = "md", ...props }, ref) => {
   return (
     <input
       type={type}

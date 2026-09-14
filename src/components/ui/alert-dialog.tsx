@@ -39,7 +39,7 @@ const AlertDialogContent = React.forwardRef<
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         // Без slide-in-from-*-1/2 — див. коментар у dialog.tsx (Tailwind v4).
         "data-[state=open]:duration-base data-[state=closed]:duration-fast",
-        "rounded-3xl",
+        "rounded-2xl",
         className
       )}
       translate="no"

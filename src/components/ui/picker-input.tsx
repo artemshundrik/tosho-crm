@@ -149,9 +149,9 @@ function useEmptyPlaceholder(params: {
 const ICON_BUTTON_CLASS = cn(
   // inset-y-0 + flex замість -translate-y-1/2: проєкт на Tailwind v4, де
   // центрування живе у властивості translate і v3-рецепти з нею конфліктують.
-  // Без власного радіуса: поле буває і rounded-md (controlSize sm), і rounded-xl
-  // (lg), а кнопка прозора — фіксований радіус тут лише б розʼїхався.
-  "absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground",
+  // Без власного радіуса: кнопка прозора, кут дає саме поле (rounded-lg).
+  // Ширина w-8 — квадрат у полі 32px (REQ-271#p3).
+  "absolute inset-y-0 right-0 flex w-8 items-center justify-center text-muted-foreground",
   "transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
   "disabled:pointer-events-none disabled:opacity-50"
 );

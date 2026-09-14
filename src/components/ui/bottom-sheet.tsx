@@ -62,7 +62,7 @@ export function BottomSheet({
         className={cn(
           // 28px і рамка лише згори — рівно як у палітри ToSho AI, з якої цей
           // вигляд і взято. Тіні немає: див. `sheetVariants`, варіант bottom.
-          "gap-0 rounded-b-none rounded-t-[28px] p-0",
+          "gap-0 rounded-b-none rounded-t-2xl p-0",
           "max-h-[88dvh]",
           /*
            * Тривалість закриття — рівно як у підкладки (200ms).

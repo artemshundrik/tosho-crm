@@ -152,7 +152,7 @@
 | `DialogContent` | `rounded-4xl` 22 | **`rounded-2xl` 16** |
 | `AlertDialog` | `rounded-3xl` 20 | **16** |
 | `BottomSheet` верх | `rounded-t-[28px]` | `rounded-t-2xl` 16 |
-| `Command` | `rounded-inner` 12 | 16 (це вікно) |
+| `Command` | `rounded-inner` 12 | без змін — живе і всередині поповерів, 16 там дало б вкладений радіус більший за зовнішній |
 | `PopoverContent`, `Card` | 12 | без змін |
 
 ## 6. Зачистка сторінок

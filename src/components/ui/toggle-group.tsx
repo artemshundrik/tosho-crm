@@ -113,7 +113,7 @@ ToggleGroup.displayName = "ToggleGroup";
 
 const toggleGroupItemVariants = cva(
   [
-    "inline-flex items-center justify-center whitespace-nowrap rounded-[var(--radius-md)]",
+    "inline-flex items-center justify-center whitespace-nowrap rounded-lg",
     "text-sm font-medium transition-all",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
@@ -122,8 +122,8 @@ const toggleGroupItemVariants = cva(
   {
     variants: {
       size: {
-        default: "h-9 px-3",
-        sm: "h-8 px-2",
+        default: "h-(--control-h) px-3",
+        sm: "h-(--control-h-sm) px-2",
         lg: "h-10 px-4",
       },
     },

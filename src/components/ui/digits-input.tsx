@@ -53,7 +53,7 @@ export function DigitsInput({
         }}
         inputMode={inputMode}
         placeholder={placeholder}
-        className={cn("h-9 font-mono tracking-wide", valid && "pr-8", className)}
+        className={cn("font-mono tracking-wide", valid && "pr-8", className)}
       />
       {valid ? (
         <Check className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-success-foreground" />

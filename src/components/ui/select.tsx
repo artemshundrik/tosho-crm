@@ -14,14 +14,13 @@ const SelectGroup = SelectPrimitive.Group
 const SelectValue = SelectPrimitive.Value
 
 /**
- * Та сама шкала, що в Input: радіус іде за висотою контролу.
- * CONTROL_BASE несе один rounded-xl, розрахований на 40px, і на тригері 32–36px
- * він виглядає таблеткою. Типовий розмір (`lg`) лишає поведінку як була.
+ * Та сама шкала, що в Input: розмір задає лише висоту, радіус — роль «контрол»
+ * із CONTROL_BASE (REQ-271#p8). Типовий розмір — `md` (32 / 40 на телефоні).
  */
 const SELECT_TRIGGER_SIZE = {
-  sm: "h-8 rounded-md px-2.5 py-1 text-xs",
-  md: "h-9 rounded-lg px-3 py-1.5 text-sm",
-  lg: "h-10 rounded-xl px-3 py-1.5 text-sm",
+  sm: "h-(--control-h-sm) px-2.5 py-1 text-xs",
+  md: "h-(--control-h) px-3 py-1.5 text-sm",
+  lg: "h-10 px-3 py-1.5 text-sm",
 } as const
 
 export type SelectTriggerSize = keyof typeof SELECT_TRIGGER_SIZE
@@ -38,7 +37,7 @@ const SelectTrigger = React.forwardRef<
      */
     active?: boolean
   }
->(({ className, children, controlSize = "lg", active = false, ...props }, ref) => (
+>(({ className, children, controlSize = "md", active = false, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     data-active={active ? "true" : undefined}

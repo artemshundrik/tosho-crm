@@ -83,6 +83,13 @@
     --radius-section: calc(var(--radius) + 4px);
     --radius-inner: calc(var(--radius) + 4px);
     --btn-radius: 10px;
+    /* Радіус задає РОЛЬ, не висота (REQ-271#p8): дрібне ≤24px — rounded-md 6,
+       контрол — rounded-lg 8, поверхня — rounded-xl 12, вікно — rounded-2xl 16.
+       Висота контролу — змінна (REQ-271#p3): на телефоні тач-розмір, від md —
+       щільність за мовою Attio (перемикач — @media нижче, одразу після :root).
+       Примітиви беруть h-(--control-h), тож сторінкам не треба жодного max-md:. */
+    --control-h: 2.5rem;
+    --control-h-sm: 2.25rem;
 
     /* --- SKELETON LOADING (UPDATED - LIGHT) --- */
     --skeleton-min-duration: 80ms;
@@ -422,6 +429,14 @@
        кольорова іконка в шапці, а не заливка стовпчика (див. .kanban-column-surface). */
     --kanban-col-bg: 220 8% 98.1%;
     --kanban-col-border: 220 8% 87%;
+  }
+
+  /* 48rem = брейкпоінт md. Від нього — 32px поле/кнопка і 28px дрібна кнопка. */
+  @media (min-width: 48rem) {
+    :root {
+      --control-h: 2rem;
+      --control-h-sm: 1.75rem;
+    }
   }
 
   .dark {

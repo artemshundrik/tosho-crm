@@ -41,8 +41,8 @@ const Chip = React.forwardRef<HTMLButtonElement, ChipProps>(
           // фільтрах: увімкнене просто темнішає, а не синіє.
           active && TOOLBAR_CONTROL_ACTIVE,
           // Size variants
-          size === "sm" && "h-8 px-3 text-xs",
-          size === "md" && "h-9 px-3.5 text-sm",
+          size === "sm" && "h-(--control-h-sm) px-3 text-xs",
+          size === "md" && "h-(--control-h) px-3.5 text-sm",
           className
         )}
         {...props}

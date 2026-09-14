@@ -115,7 +115,7 @@ export function HoldButton({
         stop();
       }}
       className={cn(
-        "relative isolate inline-flex h-9 select-none items-center justify-center overflow-hidden rounded-[var(--radius-md)] px-4 text-sm font-medium",
+        "relative isolate inline-flex h-(--control-h) select-none items-center justify-center overflow-hidden rounded-lg px-4 text-sm font-medium",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
         "disabled:pointer-events-none disabled:opacity-50",
         danger

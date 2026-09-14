@@ -32,6 +32,7 @@
     "e2e": "playwright test --project=checks",
     "e2e:login": "E2E_LOGIN=1 playwright test --project=login --headed",
     "e2e:layout": "playwright test --project=checks e2e/layout-states.spec.ts",
+    "e2e:controls": "playwright test --project=checks e2e/control-roles.spec.ts",
     "e2e:report": "playwright show-report",
     "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
     "preview": "vite preview",
