@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { Suspense, lazy, useEffect, useLayoutEffect, useState, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
+import React, { Suspense, lazy, useEffect, useLayoutEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -877,31 +877,16 @@ function LoginPage() {
 /**
  * Скидання прокрутки на новій сторінці.
  *
- * ЧОМУ ЧИТАЄМО АДРЕСУ БРАУЗЕРА, А НЕ `useLocation()` (REQ-145).
- *
- * `<Routes>` нижче малюється за `browserLocation` — знімком із `window.history`,
- * який оновлюється СИНХРОННО на pushState. А `useLocation()` віддає адресу
- * РОУТЕРА, і React Router оновлює її всередині transition. Тобто нова сторінка
- * вже намальована, а цей ефект ще не спрацював.
- *
- * Заміряно на деві 24.08.2026 (зі «Стеку», прокрученого на 928 px, у «Беклог»):
- *
- *   275 мс  сторінка вже /dev/backlog, але прокрутка ще 915
- *   329 мс  аж тепер 0
- *
- * Ті 54 мс людина бачить як «сторінка відкрилась десь посередині й смикнулась
- * угору». Помітно саме на беклозі, бо це одна з небагатьох сторінок, чий вміст
- * вищий за екран одразу, ще до приходу даних.
- *
- * З того самого джерела, що й `<Routes>`, скидання потрапляє в ТОЙ САМИЙ коміт,
- * що й перемикання маршруту, — і проміжного кадру не існує за побудовою.
+ * ЧИТАЄМО ТУ САМУ АДРЕСУ, ЩО Й `<Routes>` (REQ-145, REQ-274). Скидання мусить
+ * потрапити в ТОЙ САМИЙ коміт, що й перемикання маршруту, — інакше нова сторінка
+ * на кадр показується прокрученою посередині й смикається вгору (заміряно на деві
+ * 24.08.2026: 54 мс на беклозі). Раніше обидва читали синхронний знімок
+ * `window.history`; тепер обидва читають адресу роутера, яку той оновлює
+ * всередині transition разом із самою сторінкою. Джерело одне — проміжного кадру
+ * не існує за побудовою.
  */
 function ScrollToTop() {
-  const location = useSyncExternalStore(
-    subscribeToBrowserLocation,
-    getBrowserLocationSnapshot,
-    () => ({ pathname: "/", search: "", hash: "" })
-  );
+  const location = useLocation();
   const navigationType = useNavigationType();
 
   useLayoutEffect(() => {
@@ -921,75 +906,23 @@ function ScrollToTop() {
   return null;
 }
 
-type BrowserLocationSnapshot = {
-  pathname: string;
-  search: string;
-  hash: string;
-};
-
-let cachedBrowserLocationSnapshot: BrowserLocationSnapshot | null = null;
-
-function getBrowserLocationSnapshot(): BrowserLocationSnapshot {
-  const nextSnapshot = {
-    pathname: window.location.pathname,
-    search: window.location.search,
-    hash: window.location.hash,
-  };
-  if (
-    cachedBrowserLocationSnapshot &&
-    cachedBrowserLocationSnapshot.pathname === nextSnapshot.pathname &&
-    cachedBrowserLocationSnapshot.search === nextSnapshot.search &&
-    cachedBrowserLocationSnapshot.hash === nextSnapshot.hash
-  ) {
-    return cachedBrowserLocationSnapshot;
-  }
-  cachedBrowserLocationSnapshot = nextSnapshot;
-  return nextSnapshot;
-}
-
-function subscribeToBrowserLocation(onStoreChange: () => void) {
-  const historyState = window.history as History & {
-    __toshoRoutesPatched?: boolean;
-    __toshoPushState?: History["pushState"];
-    __toshoReplaceState?: History["replaceState"];
-  };
-
-  if (!historyState.__toshoRoutesPatched) {
-    historyState.__toshoRoutesPatched = true;
-    historyState.__toshoPushState = window.history.pushState.bind(window.history);
-    historyState.__toshoReplaceState = window.history.replaceState.bind(window.history);
-
-    window.history.pushState = function (...args) {
-      const result = historyState.__toshoPushState!.apply(this, args);
-      window.dispatchEvent(new Event("tosho:browser-location-change"));
-      return result;
-    };
-
-    window.history.replaceState = function (...args) {
-      const result = historyState.__toshoReplaceState!.apply(this, args);
-      window.dispatchEvent(new Event("tosho:browser-location-change"));
-      return result;
-    };
-  }
-
-  const handleChange = () => onStoreChange();
-  window.addEventListener("popstate", handleChange);
-  window.addEventListener("tosho:browser-location-change", handleChange);
-  return () => {
-    window.removeEventListener("popstate", handleChange);
-    window.removeEventListener("tosho:browser-location-change", handleChange);
-  };
-}
-
 function AppRoutes() {
   const { session, loading, accessRole, jobRole, permissions } = useAuth();
-  const browserLocation = useSyncExternalStore(
-    subscribeToBrowserLocation,
-    getBrowserLocationSnapshot,
-    () => ({ pathname: "/", search: "", hash: "" })
-  );
+  /*
+   * МАРШРУТИ ЙДУТЬ ЗА АДРЕСОЮ РОУТЕРА, А НЕ ЗА ЗНІМКОМ БРАУЗЕРА (REQ-274).
+   *
+   * Тут стояло `location={browserLocation}` із useSyncExternalStore: перемикання
+   * маршруту йшло синхронно, і вся нова сторінка — дошка на сто карток —
+   * рендерилась однією блокуючою задачею, а разом із нею чекала й підсвітка
+   * пункту меню. React Router оновлює адресу всередині transition: рендер
+   * ріжеться на шматки, стара сторінка лишається на екрані, доки нова не
+   * готова, а підсвітка меню бере адресу з синхронного джерела окремо
+   * (див. layout/browserLocation.ts). Каркас на холодному вході не втрачено:
+   * межа Suspense кожного маршруту — нова (RouteRuntimeBoundary ключується
+   * адресою), а нову межу transition показує одразу, не чекаючи на чанк.
+   */
   return (
-    <Routes location={browserLocation}>
+    <Routes>
       {/* public */}
       <Route path="/login" element={<LoginPage />} />
       <Route

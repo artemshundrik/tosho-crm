@@ -54,6 +54,7 @@ import { usePageHeaderActionsPresence } from "@/components/app/pageHeaderActions
 import { resolvePageSurface, type PageToolbarKind } from "@/layout/pageSurfaces";
 import { RouteProgressBar, RouteProgressProvider } from "@/layout/routeProgress";
 import { preloadRoute } from "@/routes/routePreload";
+import { useBrowserLocation } from "@/layout/browserLocation";
 import { SidebarFeaturePlate } from "@/features/features/SidebarFeaturePlate";
 import { ProductUpdateModal } from "@/features/features/ProductUpdateModal";
 import { Input } from "@/components/ui/input";
@@ -674,6 +675,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
 function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
+  const browserPath = useBrowserLocation().pathname; // підсвітка меню — синхронно, решта разом зі сторінкою: див. layout/browserLocation.ts
   const navigate = useNavigate();
   const { userId, teamId, session, permissions, accessRole, jobRole, viewAs, viewUserId, moduleAccess } =
     useAuth();
@@ -1931,7 +1933,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 <SidebarGroup
                   label="Закріплене"
                   links={pinnedLinks}
-                  currentPath={location.pathname}
+                  currentPath={browserPath}
                   notificationsUnreadCount={unreadCount}
                   collapsed={sidebarCollapsed}
                   stagger={sidebarStagger.pinned}
@@ -1946,7 +1948,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <SidebarGroup
                 label="Головне"
                 links={unpinnedGroupLinks("overview")}
-                currentPath={location.pathname}
+                currentPath={browserPath}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.overview}
@@ -1961,7 +1963,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <SidebarGroup
                 label="Збут"
                 links={unpinnedGroupLinks("orders")}
-                currentPath={location.pathname}
+                currentPath={browserPath}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.orders}
@@ -1977,7 +1979,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <SidebarGroup
                 label="Операції"
                 links={unpinnedGroupLinks("operations")}
-                currentPath={location.pathname}
+                currentPath={browserPath}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.operations}
@@ -1993,7 +1995,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <SidebarGroup
                 label="Акаунт"
                 links={unpinnedGroupLinks("account")}
-                currentPath={location.pathname}
+                currentPath={browserPath}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.account}
@@ -2012,7 +2014,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <SidebarGroup
                 label="Dev"
                 links={unpinnedGroupLinks("dev")}
-                currentPath={location.pathname}
+                currentPath={browserPath}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.dev}
@@ -2184,7 +2186,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                           <SidebarGroup
                             label="Головне"
                             links={visibleSidebarLinks.filter((l) => l.group === "overview")}
-                            currentPath={location.pathname}
+                            currentPath={browserPath}
                             onNavigate={() => setMobileMenuOpen(false)}
                             notificationsUnreadCount={unreadCount}
                             hideLabel
@@ -2192,7 +2194,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                           <SidebarGroup
                             label="Замовлення"
                             links={visibleSidebarLinks.filter((l) => l.group === "orders")}
-                            currentPath={location.pathname}
+                            currentPath={browserPath}
                             onNavigate={() => setMobileMenuOpen(false)}
                             notificationsUnreadCount={unreadCount}
                             groupCollapsed={collapsedGroups.orders}
@@ -2201,7 +2203,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                           <SidebarGroup
                             label="Операції"
                             links={visibleSidebarLinks.filter((l) => l.group === "operations")}
-                            currentPath={location.pathname}
+                            currentPath={browserPath}
                             onNavigate={() => setMobileMenuOpen(false)}
                             notificationsUnreadCount={unreadCount}
                             groupCollapsed={collapsedGroups.operations}
@@ -2210,7 +2212,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                           <SidebarGroup
                             label="Акаунт"
                             links={visibleSidebarLinks.filter((l) => l.group === "account")}
-                            currentPath={location.pathname}
+                            currentPath={browserPath}
                             onNavigate={() => setMobileMenuOpen(false)}
                             notificationsUnreadCount={unreadCount}
                             groupCollapsed={collapsedGroups.account}
@@ -2220,7 +2222,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                           <SidebarGroup
                             label="Dev"
                             links={visibleSidebarLinks.filter((l) => l.group === "dev")}
-                            currentPath={location.pathname}
+                            currentPath={browserPath}
                             onNavigate={() => setMobileMenuOpen(false)}
                             notificationsUnreadCount={unreadCount}
                             groupCollapsed={collapsedGroups.dev}
