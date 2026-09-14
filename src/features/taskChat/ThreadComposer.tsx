@@ -200,7 +200,7 @@ export function ThreadComposer({
       {isRecording || isTranscribing ? (
         <DictationCapsule dictation={dictation} />
       ) : (
-      <div className="flex min-h-[38px] items-end gap-1 rounded-3xl border border-border bg-muted/70 p-1 pl-1.5 transition-colors focus-within:border-foreground/40 focus-within:bg-card">
+      <div className="flex min-h-[38px] items-end gap-1 rounded-xl border border-border bg-muted/70 p-1 pl-1.5 transition-colors focus-within:border-foreground/40 focus-within:bg-card">
         <input
           ref={fileInputRef}
           type="file"

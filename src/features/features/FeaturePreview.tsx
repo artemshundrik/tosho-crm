@@ -171,10 +171,10 @@ function DropboxShot() {
 function ChatShot() {
   return (
     <div className="grid gap-1.5">
-      <div className="max-w-[86%] rounded-2xl rounded-bl-sm bg-muted px-2 py-1.5 text-3xs leading-4">
+      <div className="max-w-[86%] rounded-xl rounded-bl-sm bg-muted px-2 py-1.5 text-3xs leading-4">
         Клієнт просить логотип більший і без тіні
       </div>
-      <div className="ml-auto max-w-[86%] rounded-2xl rounded-br-sm bg-primary px-2 py-1.5 text-3xs leading-4 text-primary-foreground">
+      <div className="ml-auto max-w-[86%] rounded-xl rounded-br-sm bg-primary px-2 py-1.5 text-3xs leading-4 text-primary-foreground">
         Прийняв, зроблю до 16:00
       </div>
       <div className="mt-0.5 flex items-center gap-1.5 rounded-full border border-border/60 py-1 pl-2.5 pr-1">

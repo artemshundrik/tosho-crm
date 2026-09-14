@@ -515,7 +515,7 @@ export function AccessMatrix({
 
           {pending ? (
             <div className="flex flex-col gap-3 text-sm">
-              <div className="rounded-[var(--radius-md)] border border-border/60 p-3">
+              <div className="rounded-md border border-border/60 p-3">
                 <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Зачепить зараз ({pending.follows.length})
                 </p>
@@ -526,7 +526,7 @@ export function AccessMatrix({
                 </p>
               </div>
               {pending.deviating.length ? (
-                <div className="rounded-[var(--radius-md)] border border-border/60 p-3">
+                <div className="rounded-md border border-border/60 p-3">
                   <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Не зачепить — інше значення ({pending.deviating.length})
                   </p>

@@ -99,7 +99,7 @@ function FilterRow({
       disabled={disabled}
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-[var(--radius)] px-2 py-1.5 text-left text-[13px] transition-colors",
+        "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors",
         // Вибране темнішає, а не синіє — тим самим правилом, що й тригери
         // тулбара: у ряду не має бути двох різних мов «увімкнено».
         selected ? "bg-muted/70 font-medium text-foreground" : "text-foreground hover:bg-muted/60",

@@ -49,7 +49,7 @@ function CardShell({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border/40 bg-card p-4">
+    <section className="rounded-xl border border-border/40 bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-2xs font-bold uppercase tracking-widest text-muted-foreground">{title}</h3>

@@ -36,7 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { MatrixPerson } from "@/components/team/AccessMatrix";
 
-const CARD = "rounded-2xl border border-border/60 bg-card";
+const CARD = "rounded-xl border border-border/60 bg-card";
 const CAP = "text-3xs font-semibold uppercase tracking-widest text-muted-foreground";
 
 /** Контури, помилка в яких коштує найдорожче. Порядок — за вагою наслідків. */

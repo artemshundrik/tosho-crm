@@ -248,7 +248,7 @@ function StatCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/40 bg-card p-4",
+        "rounded-xl border border-border/40 bg-card p-4",
         tone === "warning" && "flag-warning"
       )}
     >

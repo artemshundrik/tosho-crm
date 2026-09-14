@@ -1327,7 +1327,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
 
             {/* Підказка клавіш лише там, де є клавіатура: на телефоні вона
                 нічого не пояснює, а місце в полі забирає. */}
-            <kbd className="hidden sm:inline-flex h-7 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-3xs font-medium text-muted-foreground">
+            <kbd className="hidden sm:inline-flex h-7 select-none items-center gap-1 rounded-md border border-border bg-muted px-2 font-mono text-3xs font-medium text-muted-foreground">
               <span className="text-2xs">⌘</span>K
               <span className="opacity-60">/</span>
               <span>Shift+K</span>

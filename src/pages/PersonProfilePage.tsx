@@ -114,7 +114,7 @@ const JOB_ROLE_OPTIONS = [
 
 /** Підпис-мікрозаголовок у мові «Релізів» і «Стеку». */
 const CAP = "text-3xs font-semibold uppercase tracking-widest text-muted-foreground";
-const CARD = "rounded-2xl border border-border/60 bg-card";
+const CARD = "rounded-xl border border-border/60 bg-card";
 
 function SectionCard({
   title,
@@ -1055,7 +1055,7 @@ function PersonAccessSection({
                         але без жодного маркера рядок не читається як керований. */}
                     <span
                       className={cn(
-                        "grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[4px] border transition-colors duration-base",
+                        "grid h-3.5 w-3.5 shrink-0 place-items-center rounded-sm border transition-colors duration-base",
                         lock.checked ? "border-primary bg-primary text-primary-foreground" : "border-border",
                         lock.locked && "opacity-45"
                       )}

@@ -11,7 +11,7 @@ export function EconomicsComingSoon() {
   return (
     <div className="mx-auto flex max-w-[560px] flex-col items-center gap-4 py-10 text-center">
       <div
-        className="grid h-12 w-12 place-items-center rounded-2xl border border-border/60 bg-muted text-muted-foreground"
+        className="grid h-12 w-12 place-items-center rounded-xl border border-border/60 bg-muted text-muted-foreground"
         aria-hidden
       >
         <Banknote className="h-5 w-5" />

@@ -757,7 +757,7 @@ function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-6 text-card-foreground">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-card-foreground">
         <div className="mb-5">
           <div className="text-xl font-extrabold text-foreground">
             {isInviteFlow ? "Вхід за інвайтом" : "Вхід у ToSho CRM"}
@@ -798,7 +798,7 @@ function LoginPage() {
             </label>
             <input
               id="login-email"
-              className="mt-1.5 w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-foreground/20"
+              className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-foreground/20"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@gmail.com"
@@ -814,7 +814,7 @@ function LoginPage() {
               <PasswordInput
                 id="login-password"
                 wrapperClassName="mt-1.5"
-                inputClassName="w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-foreground/20"
+                inputClassName="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-foreground/20"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

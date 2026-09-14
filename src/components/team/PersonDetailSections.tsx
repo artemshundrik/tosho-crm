@@ -172,7 +172,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
     });
 
   return (
-    <section className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+    <section className="rounded-lg border border-border bg-muted/20 p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
         <Activity className="h-4 w-4 text-muted-foreground" />
         Активність
@@ -207,7 +207,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
             ))}
           </div>
 
-          <div className="overflow-hidden rounded-[var(--radius)] border border-border/60 bg-background/40">
+          <div className="overflow-hidden rounded-lg border border-border/60 bg-background/40">
             {groups.map((group) => {
               const isOpen = expanded.has(group.key);
               const heading = formatGroupHeading(group);
@@ -431,7 +431,7 @@ export function PersonAccessHistorySection({
   }, [workspaceId, userId]);
 
   return (
-    <section className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+    <section className="rounded-lg border border-border bg-muted/20 p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
         <History className="h-4 w-4 text-muted-foreground" />
         Історія доступів
@@ -577,7 +577,7 @@ export function PersonTimeInCrm({ userId }: { userId: string }) {
   const month = sumMinutes(rows, dayOffset(30));
 
   return (
-    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+    <div className="rounded-lg border border-border bg-muted/20 p-4">
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <Clock className="h-3.5 w-3.5" />
         Час у CRM

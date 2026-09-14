@@ -5673,7 +5673,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ) : null}
             {!canOpen ? (
               <div
-                className="inline-flex h-6 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-secondary px-2 text-3xs font-semibold text-muted-foreground"
+                className="inline-flex h-6 items-center justify-center rounded-md border border-border/60 bg-secondary px-2 text-3xs font-semibold text-muted-foreground"
                 title="Лише свої"
                 aria-label="Лише свої"
               >
@@ -6189,7 +6189,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             </span>
                             {!canOpen ? (
                               <div
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 text-muted-foreground"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground"
                                 title="Лише свої"
                                 aria-label="Лише свої"
                               >
@@ -6244,7 +6244,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             </span>
                             {!canOpen ? (
                               <div
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 text-muted-foreground"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground"
                                 title="Лише свої"
                                 aria-label="Лише свої"
                               >
@@ -6313,7 +6313,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           </Badge>
                           {!canOpen ? (
                             <div
-                              className="inline-flex h-5 w-5 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 text-muted-foreground"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground"
                               title="Лише свої"
                               aria-label="Лише свої"
                             >
@@ -6569,7 +6569,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               </HoverCopyText>
                               {!canOpen ? (
                                 <div
-                                  className="inline-flex h-5 w-5 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 text-muted-foreground"
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground"
                                   title="Лише свої"
                                   aria-label="Лише свої"
                                 >

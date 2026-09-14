@@ -113,7 +113,7 @@ export function QuoteDesignTaskComposer({
   });
 
   return (
-    <section className="space-y-4 rounded-2xl border border-border/60 p-4">
+    <section className="space-y-4 rounded-xl border border-border/60 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="text-sm font-semibold">Нова дизайн-задача</h3>
         <p className="text-xs text-muted-foreground">Напишіть ТЗ і прикріпіть файли замовника.</p>
@@ -187,7 +187,7 @@ export function QuoteDesignTaskComposer({
             {files.map((file) => (
               <li
                 key={file.id}
-                className="flex items-center gap-2 rounded-[var(--radius-md)] border border-border/50 px-2.5 py-1.5 text-xs"
+                className="flex items-center gap-2 rounded-md border border-border/50 px-2.5 py-1.5 text-xs"
               >
                 <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate">{file.name}</span>

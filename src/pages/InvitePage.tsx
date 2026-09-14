@@ -262,7 +262,7 @@ export default function InvitePage() {
             ) : null}
 
             <div className="mt-6 bg-muted/30 border border-border rounded-inner p-4 text-left flex items-start gap-3">
-              <div className="bg-background p-1.5 rounded-[var(--radius)] text-primary border border-border shrink-0">
+              <div className="bg-background p-1.5 rounded-lg text-primary border border-border shrink-0">
                 <User className="w-5 h-5" />
               </div>
               <div>

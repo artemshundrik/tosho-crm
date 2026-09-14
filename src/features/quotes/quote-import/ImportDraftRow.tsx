@@ -57,7 +57,7 @@ export type DraftKindOption = Pick<QuoteImportDraftCatalog, "kindId" | "kindName
 
 /** Гола іконка-дія в рядку позиції: та сама вага, що в кошика. */
 const ICON_ACTION =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50";
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50";
 
 const FLAG_LABELS: Record<QuoteImportFlag, string> = {
   quantity_range: "діапазон → два тиражі",
@@ -101,7 +101,7 @@ export function ImportItemPhoto({
     132. Стала висота тримає рядок незалежно від того, що прийшло з фіда.
   */
   const base =
-    "h-15 w-auto min-w-11 max-w-20 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60";
+    "h-15 w-auto min-w-11 max-w-20 shrink-0 overflow-hidden rounded-md border border-border/60";
 
   /*
     Вид, який ми виробляємо самі, ЗАВЖДИ малюється, а не показує фото з
@@ -602,7 +602,7 @@ function KindChip({
                   onChange(kind);
                   setOpen(false);
                 }}
-                className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60"
               >
                 <span className="min-w-0 flex-1 truncate">{kind.kindName}</span>
                 {value?.kindId === kind.kindId ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
@@ -618,7 +618,7 @@ function KindChip({
               onChange(null);
               setOpen(false);
             }}
-            className="mt-1 flex w-full items-center rounded-[var(--radius-md)] border-t border-border/60 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
+            className="mt-1 flex w-full items-center rounded-md border-t border-border/60 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
           >
             Без виду — в каталог не записувати
           </button>

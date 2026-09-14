@@ -88,7 +88,7 @@ export function TabBarSettingsSheet({
         <div className="space-y-4">
           {/* div, а не label: Switch — це кнопка з role="switch", і загорнута
               в <label> вона ловила б клік двічі. */}
-          <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border bg-card p-3">
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
             <Sparkles className="h-4 w-4 shrink-0 text-[hsl(var(--ai-accent))]" />
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium">Кружечок ToSho AI</span>
@@ -114,7 +114,7 @@ export function TabBarSettingsSheet({
               return (
                 <div
                   key={key}
-                  className="flex items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-card p-2 pl-3"
+                  className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 pl-3"
                 >
                   <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.label}</span>
@@ -166,7 +166,7 @@ export function TabBarSettingsSheet({
                 <div
                   key={key}
                   className={cn(
-                    "flex items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-card p-2 pl-3",
+                    "flex items-center gap-2 rounded-lg border border-border bg-card p-2 pl-3",
                     full && "opacity-50"
                   )}
                 >

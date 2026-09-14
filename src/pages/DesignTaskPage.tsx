@@ -12306,7 +12306,7 @@ export default function DesignTaskPage() {
               {(["visualization", "layout"] as DesignOutputKind[]).map((kind) => {
                 const plan = dropboxPlanByKind[kind];
                 return (
-                  <div key={`dropbox-dialog-${kind}`} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
+                  <div key={`dropbox-dialog-${kind}`} className="rounded-xl border border-border/60 bg-muted/10 p-4">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
                         {kind === "visualization" ? (
@@ -12380,7 +12380,7 @@ export default function DesignTaskPage() {
             </div>
 
             {dropboxFolderRenameRequested ? (
-              <div className="rounded-2xl border tone-warning-subtle px-4 py-3 text-sm text-foreground">
+              <div className="rounded-xl border tone-warning-subtle px-4 py-3 text-sm text-foreground">
                 {dropboxOnlyFolderRenameChange
                   ? "Змінена тільки назва папки. При оновленні буде створено нову папку замовлення з цією назвою, а стара папка в Dropbox залишиться без змін."
                   : "Назву папки змінено. Експорт піде в нову папку замовлення з цією назвою, а попередня папка в Dropbox автоматично не перейменовується."}
@@ -12388,13 +12388,13 @@ export default function DesignTaskPage() {
             ) : null}
 
             {dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0 ? (
-              <div className="rounded-2xl border tone-warning-subtle px-4 py-3 text-sm text-foreground">
+              <div className="rounded-xl border tone-warning-subtle px-4 py-3 text-sm text-foreground">
                 Буде змінено: {dropboxPlanDiffSummary.join(", ")}.
               </div>
             ) : null}
 
             {dropboxFolderError ? (
-              <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                 {dropboxFolderError}
               </div>
             ) : null}

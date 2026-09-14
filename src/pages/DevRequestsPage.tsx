@@ -656,7 +656,7 @@ export default function DevRequestsPage() {
           showBoardSkeleton ? (
             <div className={cn(MOBILE_PAGE_BODY, MOBILE_CARD_LIST, "pb-3")}>
               {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className="h-24 w-full rounded-2xl" />
+                <Skeleton key={index} className="h-24 w-full rounded-xl" />
               ))}
             </div>
           ) : (
@@ -718,7 +718,7 @@ export default function DevRequestsPage() {
             {Array.from({ length: 6 }).map((_, index) => (
               <div
                 key={index}
-                className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card/70 px-4 py-3.5"
+                className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/70 px-4 py-3.5"
               >
                 <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
                 <div className="min-w-0 flex-1 space-y-2">

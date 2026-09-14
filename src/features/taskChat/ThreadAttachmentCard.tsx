@@ -53,7 +53,7 @@ export function ThreadAttachmentCard({ attachment }: { attachment: ThreadAttachm
       <button
         type="button"
         onClick={() => setPreviewOpen(true)}
-        className="block w-full overflow-hidden rounded-2xl border border-border/60 bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+        className="block w-full overflow-hidden rounded-xl border border-border/60 bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
       >
         {url ? (
           <img
@@ -88,7 +88,7 @@ export function ThreadAttachmentCard({ attachment }: { attachment: ThreadAttachm
     <button
       type="button"
       onClick={() => setPreviewOpen(true)}
-      className="flex w-full items-center gap-2.5 rounded-2xl border border-border/60 bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted/50"
+      className="flex w-full items-center gap-2.5 rounded-xl border border-border/60 bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted/50"
     >
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
         {broken ? <ImageOff className="h-4 w-4" /> : <FileText className="h-4 w-4" />}

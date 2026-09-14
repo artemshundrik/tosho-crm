@@ -99,7 +99,7 @@ export function SurfaceSkeleton({
       aria-live="polite"
       aria-busy="true"
       className={cn(
-        "rounded-4xl border border-border/60 bg-card/82 p-4",
+        "rounded-xl border border-border/60 bg-card/82 p-4",
         compact ? "space-y-3" : "space-y-4",
         className
       )}
@@ -117,8 +117,8 @@ export function SurfaceSkeleton({
           <div
             key={index}
             className={cn(
-              "flex items-center gap-3 rounded-2xl border border-border/40 bg-background/60 px-3 py-3",
-              compact && "rounded-2xl py-2.5"
+              "flex items-center gap-3 rounded-xl border border-border/40 bg-background/60 px-3 py-3",
+              compact && "rounded-xl py-2.5"
             )}
           >
             <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />

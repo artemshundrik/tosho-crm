@@ -140,7 +140,7 @@ export function ChecklistPanel({
             const StateIcon = CHECK_STATE_ICONS[item.state];
             const days = waitingDays(item);
             return (
-              <div key={item.id} className="rounded-[var(--radius)] px-1 py-1 hover:bg-muted/20">
+              <div key={item.id} className="rounded-lg px-1 py-1 hover:bg-muted/20">
                 <div className="flex items-start gap-2.5">
                   <HoverTip asChild label={`${CHECK_STATE_LABELS[item.state]} — натисни, щоб змінити`}>
                     <button
@@ -218,7 +218,7 @@ export function ChecklistPanel({
                     ) : null}
 
                     {item.kind === "question" && item.answer ? (
-                      <p className="mt-1 rounded-[var(--radius)] bg-success-soft px-2 py-1 text-2xs leading-relaxed text-success-foreground">
+                      <p className="mt-1 rounded-lg bg-success-soft px-2 py-1 text-2xs leading-relaxed text-success-foreground">
                         {item.answer}
                       </p>
                     ) : null}

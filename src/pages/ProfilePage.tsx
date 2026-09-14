@@ -1771,7 +1771,7 @@ export function ProfilePage() {
               </div>
 
               <div className="mt-5 border-t border-border/60 pt-5">
-                <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="mt-0.5 rounded-full border border-border bg-muted/30 p-2 text-muted-foreground">
                       <MonitorSmartphone className="h-4 w-4" aria-hidden />
@@ -1819,7 +1819,7 @@ export function ProfilePage() {
                   лікарняний або заявка оформляться без відкриття CRM (команда /absence).
                 </div>
               </div>
-              <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
+              <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-background px-4 py-3">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -1862,7 +1862,7 @@ export function ProfilePage() {
                   )}
                 </div>
                 {tgChatId == null && tgLinkHint ? (
-                  <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-dashed border-border/70 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border/70 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                     <span>Натиснув Start у боті?</span>
                     <Button size="sm" type="button" variant="ghost" onClick={handleTelegramRefresh} disabled={tgBusy}>
                       Я підключив — оновити статус
@@ -1879,7 +1879,7 @@ export function ProfilePage() {
                   Коли команду не будять сповіщеннями про події.
                 </div>
               </div>
-              <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
+              <div className="rounded-lg border border-border/70 bg-background px-4 py-3">
                 <div className="flex items-center gap-2.5">
                   <Moon className="h-4 w-4 text-primary" aria-hidden />
                   <span className="text-base font-semibold tabular-nums text-foreground">

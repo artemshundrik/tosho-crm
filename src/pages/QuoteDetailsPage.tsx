@@ -4554,7 +4554,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 // непрочитані тиражі виглядали як «собівартість не внесена».
                 <div className="py-4 text-sm text-destructive">{itemsError || runsError}</div>
               ) : items.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-10 text-center">
+                <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/60 px-6 py-10 text-center">
                   <Package className="h-10 w-10 text-muted-foreground/30" />
                   <div>
                     <p className="font-medium">Модель не обрана</p>
@@ -4703,7 +4703,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                              тримала сама лише дуга 22 px: порожній балон замість
                              аркуша. Мова «Економіки» — крок поверхні bg-card плюс
                              волосінь border/50 — тримає її кольором. */
-                          "overflow-hidden rounded-2xl border border-border/50 bg-card",
+                          "overflow-hidden rounded-xl border border-border/50 bg-card",
                           itemIndex > 0 && "mt-3",
                           /* Відхилена позиція ЛИШАЄТЬСЯ на сторінці, лише гасне
                              цілком — разом із мініатюрою й цінами, щоб жодне
@@ -5159,7 +5159,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <>
                   <div className="space-y-4">
                     {runSections.map((section) => (
-                      <div key={section.key} className="rounded-2xl border border-border/50 bg-background/40 p-3">
+                      <div key={section.key} className="rounded-xl border border-border/50 bg-background/40 p-3">
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-3">
                             {section.imageUrl ? (

@@ -742,7 +742,7 @@ export function CustomerLeadQuickViewDialog({
           </div>
         ) : (
           <>
-            <div className="rounded-2xl border border-border/60 bg-card/90 p-4">
+            <div className="rounded-xl border border-border/60 bg-card/90 p-4">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-4">
                   <EntityAvatar src={avatarSrc} name={title ?? undefined} fallback={getInitials(title)} size={52} />

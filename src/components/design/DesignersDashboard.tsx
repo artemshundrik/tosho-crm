@@ -388,7 +388,7 @@ const analyticsCache = new Map<string, AnalyticsCacheEntry>();
 function DashboardSkeleton() {
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5" aria-busy="true" aria-label="Завантажуємо аналітику">
-      <section className="overflow-hidden rounded-2xl border border-border/60 bg-background/70">
+      <section className="overflow-hidden rounded-xl border border-border/60 bg-background/70">
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
           <Skeleton className="h-9 w-64 rounded-xl" />
           <Skeleton className="ml-auto h-9 w-[180px] rounded-lg" />
@@ -413,7 +413,7 @@ function DashboardSkeleton() {
       </section>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <section className="rounded-2xl border border-border/60 bg-background/70 p-5 lg:col-span-2">
+        <section className="rounded-xl border border-border/60 bg-background/70 p-5 lg:col-span-2">
           <Skeleton className="h-4 w-56 rounded-full" />
           <Skeleton className="mt-2 h-3 w-80 rounded-full opacity-70" />
           <div className="mt-4 space-y-3.5">
@@ -429,7 +429,7 @@ function DashboardSkeleton() {
             ))}
           </div>
         </section>
-        <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
+        <section className="rounded-xl border border-border/60 bg-background/70 p-5">
           <Skeleton className="h-4 w-36 rounded-full" />
           <div className="mt-4 space-y-3">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -446,7 +446,7 @@ function DashboardSkeleton() {
         </section>
       </div>
 
-      <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
+      <section className="rounded-xl border border-border/60 bg-background/70 p-5">
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-28 rounded-full" />
           <Skeleton className="ml-auto h-8 w-56 rounded-full" />
@@ -1010,7 +1010,7 @@ export function DesignersDashboard({
     /* Менеджер/інші без власного рядка: як і раніше, бачать лише баланс команди. */
     return (
       <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
-        <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
+        <section className="rounded-xl border border-border/60 bg-background/70 p-5">
           <div className="flex items-center justify-between gap-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <Users className="h-4 w-4 text-primary" />
@@ -1064,7 +1064,7 @@ export function DesignersDashboard({
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
       {/* ---------- єдина панель: скоуп-перемикач + місяць + контекст + KPI ---------- */}
-      <section className="overflow-hidden rounded-2xl border border-border/60 bg-background/70">
+      <section className="overflow-hidden rounded-xl border border-border/60 bg-background/70">
         {/* Ряд 1 — перемикач скоупу + місяць */}
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
           <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-border/50 bg-muted/40 p-1">
@@ -1287,7 +1287,7 @@ export function DesignersDashboard({
 
       {/* ---------- типи + баланс/динаміка ---------- */}
       <div className="grid gap-3 lg:grid-cols-3">
-        <section className="rounded-2xl border border-border/60 bg-background/70 p-5 lg:col-span-2">
+        <section className="rounded-xl border border-border/60 bg-background/70 p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               {typesMetric === "time" ? (
@@ -1822,7 +1822,7 @@ export function DesignersDashboard({
           )}
         </section>
 
-        <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
+        <section className="rounded-xl border border-border/60 bg-background/70 p-5">
           {scopedDesigner ? (
             <>
               <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
@@ -1952,7 +1952,7 @@ export function DesignersDashboard({
 
       {/* ---------- таблиця: Місяць | По місяцях ---------- */}
       {visibleDesigners.length > 0 ? (
-        <section className="rounded-2xl border border-border/60 bg-background/70">
+        <section className="rounded-xl border border-border/60 bg-background/70">
           <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <Users className="h-4 w-4 text-primary" />
@@ -2481,7 +2481,7 @@ export function DesignersDashboard({
 
       {/* ---------- роботи ---------- */}
       {scopedDesigner ? (
-        <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
+        <section className="rounded-xl border border-border/60 bg-background/70 p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <FileText className="h-4 w-4 text-primary" />

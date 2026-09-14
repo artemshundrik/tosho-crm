@@ -232,7 +232,7 @@ export function WorkScheduleCard({
       </div>
 
       {editing ? (
-        <div className="flex flex-col gap-2.5 rounded-[var(--radius-md)] border border-border/50 p-3">
+        <div className="flex flex-col gap-2.5 rounded-md border border-border/50 p-3">
           <p className="text-2xs leading-relaxed text-muted-foreground">
             Тисніть день, щоб перемкнути його між офісом і домом. Графік діє одразу й до скасування;
             свята й відпустки його перекривають.

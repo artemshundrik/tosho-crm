@@ -124,7 +124,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-4xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -166,7 +166,7 @@ function renderInAppToastContent({
 
 function statusIconButtonClass(tone: SettingsTone) {
   return cn(
-    "inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-colors",
+    "inline-flex h-11 w-11 items-center justify-center rounded-xl border transition-colors",
     tone === "active" && "border-primary/25 bg-primary/10 text-primary",
     tone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
     tone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
@@ -894,7 +894,7 @@ export default function NotificationsPage() {
   return (
     <PageCanvas>
       <PageCanvasBody className="space-y-5 px-3 py-3 pb-20 sm:px-5 md:space-y-6 md:pb-6">
-        <section className="rounded-[28px] border border-border/60 bg-card/95 p-4 md:p-5">
+        <section className="rounded-xl border border-border/60 bg-card/95 p-4 md:p-5">
           <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4">
             <div className="min-w-0">
               <div className="text-lg font-semibold tracking-tight text-foreground">Стрічка подій</div>
@@ -1152,7 +1152,7 @@ export default function NotificationsPage() {
       </Dialog>
 
       {filtered.length === 0 ? (
-        <div className="flex min-h-[320px] items-center justify-center rounded-4xl border border-dashed border-border/70 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+        <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
           Поки немає сповіщень.
         </div>
       ) : (
@@ -1211,7 +1211,7 @@ export default function NotificationsPage() {
             >
               <div
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-4xl border border-border/60 p-3 transition-colors duration-base ease-out hover:bg-muted/28 sm:gap-4 sm:p-4",
+                  "flex w-full items-start gap-3 rounded-xl border border-border/60 p-3 transition-colors duration-base ease-out hover:bg-muted/28 sm:gap-4 sm:p-4",
                   notificationCardToneClass(n),
                   !n.read && ""
                 )}
@@ -1245,7 +1245,7 @@ export default function NotificationsPage() {
                   </div>
                 ) : (
                   <div className={NOTIFICATION_AVATAR_SHELL_CLASS}>
-                    <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl border text-sm font-semibold", avatar.avatarClass, n.read && "opacity-80")}>
+                    <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl border text-sm font-semibold", avatar.avatarClass, n.read && "opacity-80")}>
                       <span>{avatar.initials}</span>
                     </div>
                     <span className={cn(NOTIFICATION_BADGE_CLASS, avatar.badgeClass)}>

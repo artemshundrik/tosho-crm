@@ -350,7 +350,7 @@ export function QuoteDesignTasksPanel({
         читається як прикраса, а підвал відсуває стан задачі за екран, коли
         візуалів багато.
       */}
-      <div className="overflow-hidden rounded-4xl border border-border/60 bg-background">
+      <div className="overflow-hidden rounded-xl border border-border/60 bg-background">
         <div className="flex items-start gap-3 p-4">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted/30">
             {active.imageUrl ? (

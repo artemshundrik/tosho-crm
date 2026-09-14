@@ -53,7 +53,7 @@ function toneOf(health: DropboxHealth): HealthTone {
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-background/60 p-4">
+    <div className="rounded-xl border border-border/60 bg-background/60 p-4">
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</div>
       {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
@@ -103,7 +103,7 @@ export function DropboxHealthCard() {
   const markedPercent = health && health.approvedTotal > 0 ? Math.round((marked / health.approvedTotal) * 100) : 0;
 
   return (
-    <section className="mt-6 rounded-4xl border border-border/60 bg-card/95 p-6">
+    <section className="mt-6 rounded-xl border border-border/60 bg-card/95 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <FolderTree className="h-5 w-5 text-muted-foreground" />
@@ -126,7 +126,7 @@ export function DropboxHealthCard() {
       {loading && !health ? (
         <AppSectionLoader label="Читаємо стан Dropbox..." className="border-none bg-transparent py-10" />
       ) : error ? (
-        <div className="mt-4 rounded-2xl border border-danger-soft-border bg-danger-soft p-4 text-sm text-danger-foreground">
+        <div className="mt-4 rounded-xl border border-danger-soft-border bg-danger-soft p-4 text-sm text-danger-foreground">
           {error}
         </div>
       ) : health ? (
@@ -183,7 +183,7 @@ export function DropboxHealthCard() {
           ) : null}
 
           {health.brokenLinks.length > 0 ? (
-            <div className="mt-4 rounded-2xl border border-danger-soft-border bg-danger-soft p-4">
+            <div className="mt-4 rounded-xl border border-danger-soft-border bg-danger-soft p-4">
               <div className="text-sm font-semibold text-danger-foreground">Прив'язка веде в нікуди</div>
               <ul className="mt-2 space-y-1 text-sm text-foreground">
                 {health.brokenLinks.map((item) => (
@@ -197,7 +197,7 @@ export function DropboxHealthCard() {
           ) : null}
 
           {(health.deadLinks ?? []).length > 0 ? (
-            <div className="mt-3 rounded-2xl border border-danger-soft-border bg-danger-soft p-4">
+            <div className="mt-3 rounded-xl border border-danger-soft-border bg-danger-soft p-4">
               <div className="text-sm font-semibold text-danger-foreground">
                 Тека на місці, а посилання мертве — кнопка в картці не працює
               </div>
@@ -213,7 +213,7 @@ export function DropboxHealthCard() {
           ) : null}
 
           {health.duplicateFolders.length > 0 ? (
-            <div className="mt-3 rounded-2xl border border-danger-soft-border bg-danger-soft p-4">
+            <div className="mt-3 rounded-xl border border-danger-soft-border bg-danger-soft p-4">
               <div className="text-sm font-semibold text-danger-foreground">Дві теки на одного клієнта</div>
               <ul className="mt-2 space-y-1 text-sm text-foreground">
                 {health.duplicateFolders.map((group) => (
@@ -224,14 +224,14 @@ export function DropboxHealthCard() {
           ) : null}
 
           {health.orphanFolders.length > 0 ? (
-            <div className="mt-3 rounded-2xl border border-border/60 bg-muted/30 p-4">
+            <div className="mt-3 rounded-xl border border-border/60 bg-muted/30 p-4">
               <div className="text-sm font-semibold text-foreground">Теки без картки в CRM</div>
               <p className="mt-1 text-sm text-muted-foreground">{health.orphanFolders.join(", ")}</p>
             </div>
           ) : null}
 
           {health.drifted.length > 0 ? (
-            <div className="mt-3 rounded-2xl border border-border/60 bg-muted/30 p-4">
+            <div className="mt-3 rounded-xl border border-border/60 bg-muted/30 p-4">
               <div className="text-sm font-semibold text-foreground">Назва в CRM не збігається з назвою теки</div>
               <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                 {health.drifted.map((item) => (

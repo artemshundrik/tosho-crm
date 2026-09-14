@@ -506,7 +506,7 @@ export function PrintProductConfigurator({
   const hasSelectedProduct = Boolean(selectedConfiguratorProduct && productKind);
 
   return (
-    <div className="space-y-6 rounded-4xl border border-border/40 bg-background/30 p-4 md:p-5">
+    <div className="space-y-6 rounded-xl border border-border/40 bg-background/30 p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-2 text-base font-semibold text-foreground">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-border/50 bg-background/55 text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">

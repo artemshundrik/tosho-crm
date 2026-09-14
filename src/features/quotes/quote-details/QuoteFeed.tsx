@@ -172,7 +172,7 @@ function FilesRegister({
   const designCount = files.filter((file) => file.audience === "design").length;
 
   return (
-    <div className="rounded-2xl border border-border/50">
+    <div className="rounded-xl border border-border/50">
       <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5">
         <button
           type="button"
@@ -354,7 +354,7 @@ export function QuoteFeed({
   });
 
   return (
-    <div className="relative space-y-4 rounded-2xl" {...dropHandlers}>
+    <div className="relative space-y-4 rounded-xl" {...dropHandlers}>
       <FileDropOverlay
         active={dropOver}
         hint="Ляжуть у «Файли справи» — реєстр угорі стрічки"

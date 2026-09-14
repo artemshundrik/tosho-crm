@@ -477,7 +477,7 @@ export function QuoteItemCommandField({
             <li aria-live="polite" className="space-y-0.5" aria-label="Шукаю">
               {[0, 1, 2, 3].map((row) => (
                 <span key={row} className="flex items-center gap-3 px-2 py-1.5">
-                  <span className="h-9 w-9 shrink-0 animate-pulse rounded-[var(--radius-md)] bg-muted" />
+                  <span className="h-9 w-9 shrink-0 animate-pulse rounded-md bg-muted" />
                   <span className="min-w-0 flex-1 space-y-1.5">
                     <span className="block h-3 animate-pulse rounded bg-muted" style={{ width: `${58 - row * 6}%` }} />
                     <span className="block h-2 w-1/3 animate-pulse rounded bg-muted" />
@@ -511,7 +511,7 @@ export function QuoteItemCommandField({
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => changeFilter(POOL_FILTER_ALL)}
-                className="mt-1.5 rounded-[var(--radius-md)] border border-border/60 px-2.5 py-1 text-2xs text-muted-foreground transition-colors hover:text-foreground"
+                className="mt-1.5 rounded-md border border-border/60 px-2.5 py-1 text-2xs text-muted-foreground transition-colors hover:text-foreground"
               >
                 Показати всі джерела
               </button>
@@ -552,7 +552,7 @@ export function QuoteItemCommandField({
                 role="option"
                 aria-selected={active === index}
                 className={cn(
-                  "group cursor-pointer rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
+                  "group cursor-pointer rounded-lg px-2 py-1.5 text-sm",
                   active === index ? "bg-muted" : "hover:bg-muted/50"
                 )}
                 onMouseEnter={() => setActive(index)}
@@ -703,7 +703,7 @@ export function QuoteItemCommandField({
                           onValueChange("");
                           setExpandedPoolKey(null);
                         }}
-                        className="flex items-center gap-2 rounded-[var(--radius-md)] border border-border/60 py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground hover:bg-muted/60"
+                        className="flex items-center gap-2 rounded-md border border-border/60 py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground hover:bg-muted/60"
                       >
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
                           <VariantPhoto url={variant.imageUrl} label={variant.label} />
@@ -730,7 +730,7 @@ export function QuoteItemCommandField({
                         }}
                         // Та сама висота, що в плитки кольору: інакше «ще N»
                         // з'їжджало під ряд і ставало окремим рядком.
-                        className="self-stretch rounded-[var(--radius-md)] border border-dashed border-border px-2.5 text-2xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                        className="self-stretch rounded-md border border-dashed border-border px-2.5 text-2xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
                       >
                         ще {product.variants.length - COLOR_CAP}
                       </button>
@@ -761,7 +761,7 @@ export function QuoteItemCommandField({
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => setCatalogOpen((value) => !value)}
-                className="flex w-full items-center gap-1 rounded-[var(--radius-md)] px-2 py-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70 transition-colors hover:text-foreground"
+                className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70 transition-colors hover:text-foreground"
               >
                 <ChevronDown className={cn("h-3 w-3 transition-transform", !catalogOpen && "-rotate-90")} />
                 Уже в каталозі
@@ -778,7 +778,7 @@ export function QuoteItemCommandField({
                 role="option"
                 aria-selected={active === index}
                 className={cn(
-                  "flex cursor-pointer items-center gap-3 rounded-[var(--radius-lg)] px-2 py-1.5 text-sm",
+                  "flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm",
                   active === index ? "bg-muted" : "hover:bg-muted/50"
                 )}
                 onMouseEnter={() => setActive(index)}
@@ -829,7 +829,7 @@ export function QuoteItemCommandField({
             onClick={() => commitRow(addRowIndex)}
             style={{ boxShadow: "0 -8px 12px -8px hsl(var(--foreground) / 0.10)" }}
           >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-md)] border border-dashed border-border text-muted-foreground">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-dashed border-border text-muted-foreground">
               <Plus className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
@@ -882,7 +882,7 @@ function useDebouncedValue(value: string, delay: number) {
  * малює зламану картинку, і виглядає це як поломка CRM, а не як дірка у фіді.
  */
 function SuggestionPhoto({ url, name }: { url: string | null; name: string }) {
-  const base = "h-9 w-9 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-background";
+  const base = "h-9 w-9 shrink-0 overflow-hidden rounded-md border border-border/60 bg-background";
   // Ловимо саме АДРЕСУ, а не прапорець: рядок списку React переживає зміну
   // товару, і голий `failed` лишився б піднятим для наступного, живого фото.
   const [failedUrl, setFailedUrl] = React.useState<string | null>(null);

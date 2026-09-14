@@ -1903,7 +1903,7 @@ export function TeamMembersPage() {
                       {employmentSummary.secondary ? <div>Стаж: {employmentSummary.secondary}</div> : null}
                       {employmentDays !== null && employmentDays >= 0 ? <div>У компанії: {employmentDays} днів</div> : null}
                       {probation ? (
-                        <div className="rounded-[var(--radius)] border border-border/70 bg-muted/30 px-2.5 py-2 text-foreground">
+                        <div className="rounded-lg border border-border/70 bg-muted/30 px-2.5 py-2 text-foreground">
                           <div className="flex items-center justify-between gap-2">
                             <span
                               className={cn(
@@ -2082,7 +2082,7 @@ export function TeamMembersPage() {
                 return (
                   <Card key={inv.id} className="border-border/60 p-4">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border bg-muted">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
                         <LinkIcon className="h-4 w-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -2182,7 +2182,7 @@ export function TeamMembersPage() {
                       <TableRow key={inv.id} className="hover:bg-muted/40 transition-colors">
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-muted border border-border">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted border border-border">
                               <LinkIcon className="w-4 h-4 text-muted-foreground" />
                             </div>
                             <div className="flex flex-col max-w-[240px]">

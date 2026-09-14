@@ -211,7 +211,7 @@ function RangeSegmented({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <div className="inline-flex flex-wrap items-center gap-1 rounded-2xl border border-border/70 bg-muted/35 p-1">
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-border/70 bg-muted/35 p-1">
       {options.map((option) => (
         <Button
           key={option.value}
@@ -241,7 +241,7 @@ function SummaryBucket({
   emptyLabel: string;
 }) {
   return (
-    <div className={cn("rounded-2xl border px-4 py-4", toneClasses(tone))}>
+    <div className={cn("rounded-xl border px-4 py-4", toneClasses(tone))}>
       <div className="text-sm font-semibold">{title}</div>
       <div className="mt-3 space-y-2">
         {items.length ? (
@@ -260,9 +260,9 @@ function SummaryBucket({
 
 function MetricCard({ icon: Icon, title, value, hint, badge }: MetricCardConfig) {
   return (
-    <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+    <section className="rounded-xl border border-border/60 bg-card/95 p-5">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-muted/50">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-muted/50">
           <Icon className="h-5 w-5 text-foreground" />
         </div>
         {badge ? (
@@ -284,12 +284,12 @@ function StatusOverviewCard({
   rows: Array<{ title: string; description: string; tone: ObservabilityTone }>;
 }) {
   return (
-    <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+    <section className="rounded-xl border border-border/60 bg-card/95 p-5">
       <div className="text-sm font-semibold text-foreground">Стан системи зараз</div>
       <div className="mt-1 text-sm text-muted-foreground">Швидкий світлофор по тому, куди дивитися в першу чергу.</div>
       <div className="mt-5 space-y-3">
         {rows.map((row) => (
-          <div key={row.title} className={cn("rounded-2xl border px-4 py-3", toneClasses(row.tone))}>
+          <div key={row.title} className={cn("rounded-xl border px-4 py-3", toneClasses(row.tone))}>
             <div className="flex items-start gap-3">
               <div className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", statusDotClasses(row.tone))} />
               <div className="min-w-0">
@@ -306,7 +306,7 @@ function StatusOverviewCard({
 
 function ExecutiveSummaryCard({ good, watch, bad }: { good: string[]; watch: string[]; bad: string[] }) {
   return (
-    <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+    <section className="rounded-xl border border-border/60 bg-card/95 p-5">
       <div className="text-sm font-semibold text-foreground">Коротко по стану системи</div>
       <div className="mt-1 text-sm text-muted-foreground">Тут без графіків і цифр: що зараз добре, що варто перевірити, і що вже погано.</div>
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
@@ -345,7 +345,7 @@ function TrendCard({
   const latestValue = latestPoint && typeof latestPoint[dataKey] === "number" ? (latestPoint[dataKey] as number) : undefined;
 
   return (
-    <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+    <section className="rounded-xl border border-border/60 bg-card/95 p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-foreground">{title}</div>
@@ -360,7 +360,7 @@ function TrendCard({
           {trailing}
         </div>
       </div>
-      <div className="mt-5 h-64 rounded-3xl border border-border/50 bg-[linear-gradient(180deg,hsl(var(--background)/0.4),transparent)] p-3">
+      <div className="mt-5 h-64 rounded-xl border border-border/50 bg-[linear-gradient(180deg,hsl(var(--background)/0.4),transparent)] p-3">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 12, right: 12, left: 8, bottom: 6 }}>
             <defs>
@@ -406,7 +406,7 @@ function TrendCard({
         </ResponsiveContainer>
       </div>
       {latestValue !== undefined ? (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
           <div className="text-sm text-muted-foreground">Остання точка</div>
           <div className="text-sm font-semibold text-foreground">{formatter(latestValue)}</div>
         </div>
@@ -443,14 +443,14 @@ export function OverviewTabPanel({
       </section>
 
       {latestVsPreviousCards.length ? (
-        <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+        <section className="rounded-xl border border-border/60 bg-card/95 p-5">
           <div className="text-sm font-semibold text-foreground">Сьогодні проти попереднього snapshot</div>
           <div className="mt-1 text-sm text-muted-foreground">
             Коротка динаміка без технічного шуму: що саме сьогодні стало інтенсивнішим або слабшим.
           </div>
           <div className="mt-5 grid gap-3 xl:grid-cols-4">
             {latestVsPreviousCards.map((item) => (
-              <div key={item.key} className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+              <div key={item.key} className="rounded-xl border border-border/60 bg-muted/20 px-4 py-4">
                 <div className="text-sm font-medium text-muted-foreground">{item.title}</div>
                 <div className="mt-2 text-2xl font-semibold text-foreground">{item.value}</div>
                 <div className="mt-1 text-sm text-muted-foreground">{item.hint}</div>
@@ -460,7 +460,7 @@ export function OverviewTabPanel({
         </section>
       ) : null}
 
-      <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+      <section className="rounded-xl border border-border/60 bg-card/95 p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <div className="text-sm font-semibold text-foreground">Операційна динаміка</div>
@@ -558,12 +558,12 @@ export function OverviewTabPanel({
         <StatusOverviewCard rows={systemStatusRows} />
       </section>
 
-      <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+      <section className="rounded-xl border border-border/60 bg-card/95 p-5">
         <div className="text-sm font-semibold text-foreground">Що справді важливо щодня</div>
         <div className="mt-1 text-sm text-muted-foreground">Це скорочений список без зайвого шуму. Не все на цій сторінці варте однакової уваги.</div>
         <div className="mt-5 space-y-3">
           {operationalPriorityRows.map((item) => (
-            <div key={item.title} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
+            <div key={item.title} className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
               <div className="mt-0.5 h-2.5 w-2.5 rounded-full bg-primary" />
               <div>
                 <div className="text-sm font-semibold text-foreground">{item.title}</div>
@@ -599,7 +599,7 @@ export function AttachmentsTabPanel({
 }: AttachmentsTabPanelProps) {
   return (
     <TabsContent value="attachments" className="mt-6 space-y-6">
-      <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+      <section className="rounded-xl border border-border/60 bg-card/95 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="text-sm font-semibold text-foreground">Orphan files review</div>
@@ -608,7 +608,7 @@ export function AttachmentsTabPanel({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
               {formatCompactCount(attachmentAuditRows.length)} файлів · {formatBytes(attachmentAuditBytes)}
             </div>
             <Button type="button" variant="outline" onClick={onRefreshAttachmentAudit} disabled={attachmentAuditLoading || !workspaceId}>
@@ -619,11 +619,11 @@ export function AttachmentsTabPanel({
       </section>
 
       {attachmentAuditLoading && !attachmentAuditLoaded ? (
-        <section className="rounded-4xl border border-border/60 bg-card/95">
+        <section className="rounded-xl border border-border/60 bg-card/95">
           <AppSectionLoader label="Завантаження orphan files audit..." className="border-none bg-transparent py-12" />
         </section>
       ) : attachmentAuditError ? (
-        <section className="rounded-4xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-muted-foreground">
+        <section className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-muted-foreground">
           {attachmentAuditError}
         </section>
       ) : (
@@ -652,18 +652,18 @@ export function AttachmentsTabPanel({
             />
           </section>
 
-          <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+          <section className="rounded-xl border border-border/60 bg-card/95 p-5">
             <div className="text-sm font-semibold text-foreground">Як цим користуватись</div>
             <div className="mt-4 grid gap-3 xl:grid-cols-3">
-              <div className="rounded-2xl border border-success-soft-border bg-success-soft px-4 py-3 text-sm leading-6 text-success-foreground">
+              <div className="rounded-xl border border-success-soft-border bg-success-soft px-4 py-3 text-sm leading-6 text-success-foreground">
                 <div className="font-semibold">Можна видаляти</div>
                 <div className="mt-1">Сутності вже нема. Відкриваєш або скачуєш файл, швидко перевіряєш вміст, і можна чистити.</div>
               </div>
-              <div className="rounded-2xl tone-warning-subtle border px-4 py-3 text-sm leading-6">
+              <div className="rounded-xl tone-warning-subtle border px-4 py-3 text-sm leading-6">
                 <div className="font-semibold">Треба перевірити</div>
                 <div className="mt-1">Сутність жива. Відкрий файл, потім перейди в задачу або прорахунок і звір, чи файл ще потрібен.</div>
               </div>
-              <div className="rounded-2xl border border-danger-soft-border bg-danger-soft px-4 py-3 text-sm leading-6 text-danger-foreground">
+              <div className="rounded-xl border border-danger-soft-border bg-danger-soft px-4 py-3 text-sm leading-6 text-danger-foreground">
                 <div className="font-semibold">Невідоме джерело</div>
                 <div className="mt-1">Не видаляти з цього екрана автоматично. Це окремий ручний розбір.</div>
               </div>
@@ -690,7 +690,7 @@ export function AttachmentsTabPanel({
               toneClass: "border-danger-soft-border bg-danger-soft text-danger-foreground",
             },
           ].map((section) => (
-            <section key={section.title} className="rounded-4xl border border-border/60 bg-card/95">
+            <section key={section.title} className="rounded-xl border border-border/60 bg-card/95">
               <div className="border-b border-border/60 px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -841,7 +841,7 @@ export function BackupsTabPanel({
 }: BackupsTabPanelProps) {
   return (
     <TabsContent value="backups" className="mt-6 space-y-6">
-      <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+      <section className="rounded-xl border border-border/60 bg-card/95 p-5">
         <div className="text-sm font-semibold text-foreground">Backups monitor</div>
         <div className="mt-1 text-sm text-muted-foreground">
           Storage і database backup-и в одному місці: останній стан, Dropbox-шлях і недавні запуски без читання сирих логів.
@@ -850,7 +850,7 @@ export function BackupsTabPanel({
 
       <section className="grid gap-4 xl:grid-cols-2">
         {sections.map((section) => (
-          <section key={section.key} className="rounded-4xl border border-border/60 bg-card/95 p-5">
+          <section key={section.key} className="rounded-xl border border-border/60 bg-card/95 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-foreground">{section.title}</div>
@@ -862,21 +862,21 @@ export function BackupsTabPanel({
             </div>
 
             <div className="mt-5 grid gap-3 lg:grid-cols-3">
-              <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+              <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-4">
                 <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Останній успіх</div>
                 <div className="mt-2 text-sm font-semibold text-foreground">{section.latestSuccessLabel}</div>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+              <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-4">
                 <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Розмір архіву</div>
                 <div className="mt-2 text-sm font-semibold text-foreground">{section.latestSuccessSize}</div>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+              <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-4">
                 <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Retention</div>
                 <div className="mt-2 text-sm font-semibold text-foreground">{section.retentionHint}</div>
               </div>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+            <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 px-4 py-4">
               <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Dropbox</div>
               <div className="mt-2 break-all text-sm text-foreground">{section.latestDropboxPath}</div>
             </div>
@@ -1016,10 +1016,10 @@ export function TelegramTabPanel() {
       {loading ? (
         <AppSectionLoader
           label="Завантаження статистики Telegram..."
-          className="rounded-4xl border border-border/60 bg-card/95 py-12"
+          className="rounded-xl border border-border/60 bg-card/95 py-12"
         />
       ) : error ? (
-        <section className="rounded-4xl border border-border/60 bg-card/95 p-6 text-sm text-danger-foreground">
+        <section className="rounded-xl border border-border/60 bg-card/95 p-6 text-sm text-danger-foreground">
           Не вдалося завантажити: {error}
         </section>
       ) : stats ? (
@@ -1051,7 +1051,7 @@ export function TelegramTabPanel() {
             />
           </div>
 
-          <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+          <section className="rounded-xl border border-border/60 bg-card/95 p-5">
             <div className="text-sm font-semibold text-foreground">Воронка підключення</div>
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
               {[
@@ -1061,7 +1061,7 @@ export function TelegramTabPanel() {
                 { label: "Увімкнули", value: stats.funnel.enabled },
               ].map((step, i, arr) => (
                 <div key={step.label} className="flex items-center gap-3">
-                  <div className="rounded-2xl border border-border/70 bg-muted/40 px-4 py-2 text-center">
+                  <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-2 text-center">
                     <div className="text-2xl font-semibold tracking-tight text-foreground">{step.value}</div>
                     <div className="mt-0.5 text-xs text-muted-foreground">{step.label}</div>
                   </div>
@@ -1072,7 +1072,7 @@ export function TelegramTabPanel() {
           </section>
 
           {optOuts.length ? (
-            <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+            <section className="rounded-xl border border-border/60 bg-card/95 p-5">
               <div className="text-sm font-semibold text-foreground">Вимкнули по категоріях</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {optOuts.map(([key, n]) => (
@@ -1084,7 +1084,7 @@ export function TelegramTabPanel() {
             </section>
           ) : null}
 
-          <section className="rounded-4xl border border-border/60 bg-card/95">
+          <section className="rounded-xl border border-border/60 bg-card/95">
             <div className="flex items-center justify-between gap-3 p-5 pb-3">
               <div className="text-sm font-semibold text-foreground">Співробітники</div>
               <div className="text-xs text-muted-foreground">{stats.members.length} осіб</div>
@@ -1298,10 +1298,10 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
       {loading ? (
         <AppSectionLoader
           label="Завантаження витрат на AI..."
-          className="rounded-4xl border border-border/60 bg-card/95 py-12"
+          className="rounded-xl border border-border/60 bg-card/95 py-12"
         />
       ) : error ? (
-        <section className="rounded-4xl border border-border/60 bg-card/95 p-6 text-sm text-danger-foreground">
+        <section className="rounded-xl border border-border/60 bg-card/95 p-6 text-sm text-danger-foreground">
           Не вдалося завантажити: {error}
         </section>
       ) : (
@@ -1329,12 +1329,12 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
           </div>
 
           {!hasData ? (
-            <section className="rounded-4xl border border-dashed border-border/60 bg-card/60 py-12 text-center text-sm text-muted-foreground">
+            <section className="rounded-xl border border-dashed border-border/60 bg-card/60 py-12 text-center text-sm text-muted-foreground">
               Ще немає даних за цей період.
             </section>
           ) : (
             <>
-              <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+              <section className="rounded-xl border border-border/60 bg-card/95 p-5">
                 <div className="text-sm font-semibold text-foreground">Динаміка витрат по днях</div>
                 <div className="mt-4 h-[240px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1375,7 +1375,7 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
                 </div>
               </section>
 
-              <section className="rounded-4xl border border-border/60 bg-card/95 p-5">
+              <section className="rounded-xl border border-border/60 bg-card/95 p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">Хто скільки використовує</div>
                   <div className="text-xs text-muted-foreground">{summary?.byPerson.length ?? 0} осіб</div>
@@ -1569,7 +1569,7 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
             Падіння клієнтської частини — те, про що раніше дізнавались із робочого чату.
           </div>
         </div>
-        <div className="inline-flex items-center gap-1 rounded-2xl border border-border/60 bg-muted/30 p-1">
+        <div className="inline-flex items-center gap-1 rounded-xl border border-border/60 bg-muted/30 p-1">
           {RUNTIME_ERROR_RANGES.map((range) => (
             <Button
               key={range.key}
@@ -1591,29 +1591,29 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
       {loading ? (
         <AppSectionLoader label="Читаємо журнал помилок..." className="border-none bg-transparent py-12" />
       ) : loadError ? (
-        <div className="rounded-3xl border border-border/60 bg-card/95 p-4 text-sm text-destructive">{loadError}</div>
+        <div className="rounded-xl border border-border/60 bg-card/95 p-4 text-sm text-destructive">{loadError}</div>
       ) : groups.length === 0 ? (
-        <div className="rounded-3xl border border-border/60 bg-card/95 p-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-xl border border-border/60 bg-card/95 p-6 text-center text-sm text-muted-foreground">
           За цей період падінь не було.
         </div>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-3xl border border-border/60 bg-card/95 p-4">
+            <div className="rounded-xl border border-border/60 bg-card/95 p-4">
               <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Падінь усього</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{rows.length}</div>
             </div>
-            <div className="rounded-3xl border border-border/60 bg-card/95 p-4">
+            <div className="rounded-xl border border-border/60 bg-card/95 p-4">
               <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Різних помилок</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{groups.length}</div>
             </div>
-            <div className="rounded-3xl border border-border/60 bg-card/95 p-4">
+            <div className="rounded-xl border border-border/60 bg-card/95 p-4">
               <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Кого зачепило</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{peopleAffected}</div>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-3xl border border-border/60 bg-card/95">
+          <div className="overflow-hidden rounded-xl border border-border/60 bg-card/95">
             <div className="divide-y divide-border/40">
               {groups.map((group) => {
                 const expanded = openKey === group.key;

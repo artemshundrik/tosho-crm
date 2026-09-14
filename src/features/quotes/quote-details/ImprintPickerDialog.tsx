@@ -199,7 +199,7 @@ export function ImprintPickerDialog({
           позицію впізнають у рядку.
         */}
         <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b border-border/60 px-4 py-3 pr-12 text-left shrink-0">
-          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-muted/40">
+          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/40">
             <img
               src={product.imageUrl ?? currentView?.src ?? ""}
               alt=""
@@ -231,7 +231,7 @@ export function ImprintPickerDialog({
               товаром — не прикраса: футболка майже біла, і на рівному сірому
               вона губила край, а на світлій плямі під собою тримає силует.
             */}
-            <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-[var(--radius-inner)] border border-border/50 bg-muted/50">
+            <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-inner border border-border/50 bg-muted/50">
               <div
                 aria-hidden
                 className="pointer-events-none absolute inset-0"
@@ -363,7 +363,7 @@ export function ImprintPickerDialog({
             </div>
 
             {sheet.typicalMm ? (
-              <p className="mx-4 mt-3 rounded-[var(--radius-md)] border border-border/60 bg-muted/30 px-2.5 py-2 text-2xs leading-relaxed text-muted-foreground">
+              <p className="mx-4 mt-3 rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-2xs leading-relaxed text-muted-foreground">
                 Типово {sheet.typicalMm[0]} × {sheet.typicalMm[1]} мм за нашими прорахунками. Точний розмір
                 ставить дизайнер у ТЗ.
               </p>
@@ -441,7 +441,7 @@ function RailRow({
       disabled={disabled}
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 text-left text-sm transition-colors duration-base ease-out motion-reduce:transition-none",
+        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-base ease-out motion-reduce:transition-none",
         checked ? "bg-control-active" : "hover:bg-muted/60",
         muted && !checked && "text-muted-foreground",
         disabled && "pointer-events-none text-control-disabled-fg hover:bg-transparent"

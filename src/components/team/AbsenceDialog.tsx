@@ -380,7 +380,7 @@ export function AbsenceDialog({
           ) : (
             <div
               className={cn(
-                "flex items-start gap-2 rounded-[var(--radius-inner)] border px-3 py-2.5 text-xs",
+                "flex items-start gap-2 rounded-inner border px-3 py-2.5 text-xs",
                 remainingAfter !== null && remainingAfter < 0
                   ? "tone-warning"
                   : "tone-info"
@@ -426,7 +426,7 @@ export function AbsenceDialog({
           )}
 
           {overlaps.length > 0 ? (
-            <div className="rounded-[var(--radius-inner)] border border-warning-soft-border bg-warning-soft/60 px-3 py-2.5">
+            <div className="rounded-inner border border-warning-soft-border bg-warning-soft/60 px-3 py-2.5">
               <div className="flex items-center gap-2 text-xs font-semibold text-warning-foreground">
                 <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 У ці ж дні відсутні ще {overlaps.length}

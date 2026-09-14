@@ -221,7 +221,7 @@ export function MemberPaySection({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 rounded-[var(--radius)] border border-border bg-background/70 p-4 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-background/70 p-4 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
         Завантажуємо ставки…
       </div>
@@ -230,7 +230,7 @@ export function MemberPaySection({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+      <div className="rounded-lg border border-border bg-background/70 p-4">
         <div className="mb-3 flex items-center gap-2">
           <Wallet className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">Чинна ставка</span>
@@ -259,7 +259,7 @@ export function MemberPaySection({
         )}
 
         {scheduled.length > 0 ? (
-          <div className="mt-3 flex flex-col gap-1 rounded-[var(--radius)] border border-info-soft-border bg-info-soft/40 px-3 py-2">
+          <div className="mt-3 flex flex-col gap-1 rounded-lg border border-info-soft-border bg-info-soft/40 px-3 py-2">
             {scheduled.map((rate) => (
               <div key={rate.effectiveFrom} className="flex items-center gap-2 text-xs text-info-foreground">
                 <CalendarClock className="h-3.5 w-3.5 shrink-0" />
@@ -282,7 +282,7 @@ export function MemberPaySection({
       </div>
 
       {canEdit ? (
-        <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+        <div className="rounded-lg border border-border bg-background/70 p-4">
           <div className="mb-1 text-sm font-semibold text-foreground">Призначити нову ставку</div>
           <p className="mb-4 text-xs text-muted-foreground">
             Ставка не змінюється заднім числом: нова діє з обраної дати, стара лишається в історії.
@@ -379,7 +379,7 @@ export function MemberPaySection({
       ) : null}
 
       {rates.length > 0 ? (
-        <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+        <div className="rounded-lg border border-border bg-background/70 p-4">
           <div className="mb-3 text-sm font-semibold text-foreground">Історія ставок</div>
           <div className="flex flex-col divide-y divide-border/50">
             {rates.map((rate) => (

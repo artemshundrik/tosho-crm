@@ -289,7 +289,7 @@ export function AvatarBase({
         ref={avatarRef}
         className={cn(
           "border border-border/60 bg-muted/60 text-muted-foreground/80 dark:bg-muted/40",
-          shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
+          shape === "rounded" ? "rounded-lg" : "rounded-full",
           inactive
             ? "opacity-60 grayscale"
             : showAbsence
@@ -315,7 +315,7 @@ export function AvatarBase({
         <AvatarFallback
           className={cn(
             "text-3xs font-semibold uppercase text-muted-foreground",
-            shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
+            shape === "rounded" ? "rounded-lg" : "rounded-full",
             fallbackClassName
           )}
         >

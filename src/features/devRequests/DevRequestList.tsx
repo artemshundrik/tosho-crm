@@ -50,14 +50,14 @@ export function DevRequestList({
 }: DevRequestListProps) {
   if (requests.length === 0) {
     return (
-      <p className="rounded-2xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
         {emptyText}
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card">
+    <ul className="divide-y divide-border/50 overflow-hidden rounded-xl border border-border/60 bg-card">
       {requests.map((request) => {
         const KindIcon = KIND_ICONS[request.kind];
         const moduleLabel = moduleKeyLabel(request.moduleKey);

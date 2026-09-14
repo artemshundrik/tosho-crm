@@ -3371,7 +3371,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     <div className="w-full pb-20 md:pb-0 space-y-6">
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "customers" | "leads")}>
         {isManagerUser && search.trim() ? (
-          <div className="mb-4 rounded-[var(--radius-xl)] border tone-warning-subtle p-3">
+          <div className="mb-4 rounded-xl border tone-warning-subtle p-3">
             <div className="flex flex-col gap-2">
               <div>
                 <p className="text-sm font-medium tone-text-warning">Схожі компанії в інших менеджерів</p>
@@ -3391,7 +3391,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   {crossManagerMatches.map((match) => (
                     <div
                       key={`${match.entityType}-${match.id}`}
-                      className="min-w-[220px] rounded-[var(--radius-lg)] border border-warning-soft-border bg-background/85 px-3 py-2"
+                      className="min-w-[220px] rounded-lg border border-warning-soft-border bg-background/85 px-3 py-2"
                     >
                       <div className="flex items-center gap-2">
                         <Badge

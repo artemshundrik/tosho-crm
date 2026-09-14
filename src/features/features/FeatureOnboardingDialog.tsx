@@ -498,7 +498,7 @@ function BotChatDemo() {
         {BOT_CHAT_SEED.map((item) => (
           <div key={item.title} className="flex items-end gap-1.5">
             <BotAvatar />
-            <p className="max-w-[82%] rounded-2xl rounded-bl-sm bg-muted px-2.5 py-1.5 text-xs leading-5">
+            <p className="max-w-[82%] rounded-xl rounded-bl-sm bg-muted px-2.5 py-1.5 text-xs leading-5">
               <b className="font-semibold">{item.title}</b>
               <span className="mt-0.5 block text-3xs leading-4 text-muted-foreground">
                 {item.detail}
@@ -515,7 +515,7 @@ function BotChatDemo() {
             {message.own ? null : <BotAvatar />}
             <p
               className={cn(
-                "max-w-[82%] rounded-2xl px-2.5 py-1.5 text-xs leading-5",
+                "max-w-[82%] rounded-xl px-2.5 py-1.5 text-xs leading-5",
                 message.own
                   ? "thread-bubble-own rounded-br-sm bg-primary text-primary-foreground"
                   : "rounded-bl-sm bg-muted"
@@ -529,7 +529,7 @@ function BotChatDemo() {
         {typing ? (
           <div className="flex items-end gap-1.5">
             <BotAvatar />
-            <p className="rounded-2xl rounded-bl-sm bg-muted px-2.5 py-1.5 text-xs italic text-muted-foreground">
+            <p className="rounded-xl rounded-bl-sm bg-muted px-2.5 py-1.5 text-xs italic text-muted-foreground">
               друкує…
             </p>
           </div>
@@ -612,7 +612,7 @@ function DictationDemo() {
 
       {/* Смуга запису — той самий вигляд, що в композері чату. */}
       {recording || transcribing ? (
-        <div className="flex min-h-[38px] items-center gap-1.5 rounded-3xl border border-destructive/40 bg-card p-1 pl-2.5">
+        <div className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-destructive/40 bg-card p-1 pl-2.5">
           {recording ? (
             <>
               <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
@@ -645,7 +645,7 @@ function DictationDemo() {
           )}
         </div>
       ) : (
-        <div className="flex min-h-[38px] items-center gap-1 rounded-3xl border border-border/60 bg-card p-1 pl-1.5">
+        <div className="flex min-h-[38px] items-center gap-1 rounded-xl border border-border/60 bg-card p-1 pl-1.5">
           <button
             type="button"
             aria-label="Продиктувати голосом"
@@ -761,7 +761,7 @@ function TaskChatDemo() {
             >
               <div
                 className={cn(
-                  "relative cursor-default rounded-2xl py-1.5 pl-2.5 pr-12 text-xs leading-snug",
+                  "relative cursor-default rounded-xl py-1.5 pl-2.5 pr-12 text-xs leading-snug",
                   message.own
                     ? "thread-bubble-own rounded-br-sm bg-primary text-primary-foreground"
                     : "rounded-bl-sm bg-muted text-foreground"
@@ -789,7 +789,7 @@ function TaskChatDemo() {
         {typing ? (
           <div className="flex items-end gap-1.5">
             <AvatarBase size={24} name="Марина Сидоренко" className="shrink-0" />
-            <div className="rounded-2xl rounded-bl-sm bg-muted px-2.5 py-1.5 text-xs italic text-muted-foreground">
+            <div className="rounded-xl rounded-bl-sm bg-muted px-2.5 py-1.5 text-xs italic text-muted-foreground">
               друкує…
             </div>
           </div>
@@ -797,7 +797,7 @@ function TaskChatDemo() {
       </div>
 
       <div className="border-t border-border/40 bg-card p-2.5">
-        <div className="flex min-h-[38px] items-end gap-1 rounded-3xl border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
+        <div className="flex min-h-[38px] items-end gap-1 rounded-xl border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
           <textarea
             value={draft}
             rows={1}

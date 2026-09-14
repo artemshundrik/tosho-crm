@@ -122,7 +122,7 @@ export function StackOverview() {
       )}
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
-        <div className="overflow-hidden rounded-2xl border border-border/40 bg-card">
+        <div className="overflow-hidden rounded-xl border border-border/40 bg-card">
           {mode === "layers"
             ? groupByLayer(items).map((group, index) => (
                 <StackGroup
@@ -561,7 +561,7 @@ function StackRow({ item }: { item: StackItem }) {
           дають монограму, а не порожню діру. Плитка квадратна зі скругленням,
           як у Витратах: це пакет, а не людина. */}
       <Avatar
-        className={cn("h-8 w-8 rounded-[9px] border", item.iconUrl ? "border-border/60 bg-card" : "border-transparent")}
+        className={cn("h-8 w-8 rounded-lg border", item.iconUrl ? "border-border/60 bg-card" : "border-transparent")}
       >
         {item.iconUrl ? (
           // object-contain — лого не обрізається; padding, щоб воно не впиралось у краї.
@@ -569,7 +569,7 @@ function StackRow({ item }: { item: StackItem }) {
         ) : null}
         <AvatarFallback
           className={cn(
-            "figure rounded-[9px] text-[13px] font-semibold",
+            "figure rounded-lg text-[13px] font-semibold",
             item.worstSeverity ? "bg-destructive/10 text-destructive" : LAYER_META[item.layer].tile
           )}
         >

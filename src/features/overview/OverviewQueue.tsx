@@ -106,7 +106,7 @@ export function OverviewQueue({
 }) {
   if (items.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border/50 bg-card px-5 py-10 text-center">
+      <div className="rounded-xl border border-dashed border-border/50 bg-card px-5 py-10 text-center">
         <div className="text-sm font-medium text-foreground">Порожньо — і це добра новина</div>
         <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">{emptyText}</p>
       </div>
@@ -114,7 +114,7 @@ export function OverviewQueue({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/40 bg-card">
+    <div className="overflow-hidden rounded-xl border border-border/40 bg-card">
       {OVERVIEW_LANES.map((lane) => {
         const laneItems = items.filter((item) => item.lane === lane);
         if (laneItems.length === 0) return null;

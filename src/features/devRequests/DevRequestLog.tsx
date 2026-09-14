@@ -160,7 +160,7 @@ export function DevRequestLog({
 
   if (days.length === 0) {
     return (
-      <p className="rounded-2xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
         Тут з'являтиметься все, що поїхало в прод. Статус «Викочено» ставить деплой, руками його не проставляють.
       </p>
     );
@@ -198,7 +198,7 @@ export function DevRequestLog({
 
           <ul
             hidden={closedDays.has(day.key)}
-            className="divide-y divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card"
+            className="divide-y divide-border/50 overflow-hidden rounded-xl border border-border/60 bg-card"
           >
             {day.requests.map((request) => {
               const moduleLabel = moduleKeyLabel(request.moduleKey);

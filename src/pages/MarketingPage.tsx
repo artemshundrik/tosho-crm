@@ -986,7 +986,7 @@ export default function MarketingPage() {
         <article
           key={group.key}
           className={cn(
-            "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
+            "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-border/60 bg-card",
             "transition-[border-color,box-shadow] duration-base ease-out",
             "hover:border-border",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
@@ -1307,7 +1307,7 @@ export default function MarketingPage() {
       ) : loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 10 }).map((_, index) => (
-            <div key={index} className="overflow-hidden rounded-2xl border border-border/60 bg-card">
+            <div key={index} className="overflow-hidden rounded-xl border border-border/60 bg-card">
               <Skeleton className={cn("w-full rounded-none", VISUAL_ASPECT_CLASS)} />
               <div className="space-y-2 p-3.5">
                 <Skeleton className="h-3.5 w-2/3" />

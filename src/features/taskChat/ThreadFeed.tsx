@@ -225,13 +225,13 @@ export function ThreadFeed({
                     ) : null}
 
                     {entry.deletedAt ? (
-                      <div className="rounded-2xl border border-dashed border-border/60 px-2.5 py-1.5 text-xs italic text-muted-foreground">
+                      <div className="rounded-xl border border-dashed border-border/60 px-2.5 py-1.5 text-xs italic text-muted-foreground">
                         Повідомлення видалено
                       </div>
                     ) : entry.body ? (
                       <div
                         className={cn(
-                          "cursor-default rounded-2xl px-2.5 py-1.5 text-xs leading-snug",
+                          "cursor-default rounded-xl px-2.5 py-1.5 text-xs leading-snug",
                           // Час НЕ накладкою в куті, а окремим рядком під текстом.
                           // Накладка вимагала тримати 48 px порожнього поля справа
                           // в кожному повідомленні — і довгі посилання ламались на
@@ -368,7 +368,7 @@ export function ThreadSkeleton() {
         <div key={row} className={cn("flex items-end gap-1.5", row === 1 && "flex-row-reverse")}>
           {row === 1 ? null : <span className="h-6 w-6 shrink-0 animate-pulse rounded-full bg-muted" />}
           <span
-            className="h-9 animate-pulse rounded-2xl bg-muted"
+            className="h-9 animate-pulse rounded-xl bg-muted"
             style={{ width: row === 1 ? "45%" : "62%" }}
           />
         </div>

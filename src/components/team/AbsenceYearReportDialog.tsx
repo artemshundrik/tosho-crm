@@ -219,7 +219,7 @@ export function AbsenceYearReportDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[56vh] overflow-auto rounded-[var(--radius-inner)] border border-border/50">
+        <div className="max-h-[56vh] overflow-auto rounded-inner border border-border/50">
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b border-border/60 text-3xs uppercase tracking-wide text-muted-foreground">

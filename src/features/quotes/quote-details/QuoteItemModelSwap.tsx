@@ -148,7 +148,7 @@ export function QuoteItemModelSwap({
               role="option"
               aria-selected={suggestion.modelId === currentModelId}
               onClick={() => void pick(suggestion)}
-              className="flex w-full items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-1.5 text-left hover:bg-muted/60"
+              className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-muted/60"
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{suggestion.name}</span>

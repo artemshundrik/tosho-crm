@@ -32,7 +32,7 @@ export function GroupHeading({
       aria-expanded={!collapsed}
       title={collapsed ? "Розгорнути" : "Згорнути"}
       className={cn(
-        "flex w-full items-center gap-1.5 rounded-[var(--radius)] px-1 pb-1 pt-2 text-left transition-colors",
+        "flex w-full items-center gap-1.5 rounded-lg px-1 pb-1 pt-2 text-left transition-colors",
         "text-3xs font-semibold uppercase tracking-caps text-muted-foreground",
         "hover:text-foreground"
       )}

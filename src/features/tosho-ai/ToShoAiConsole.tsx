@@ -754,7 +754,7 @@ function ThreadCard({
       type="button"
       onClick={onSelect}
       className={cn(
-        "group w-full rounded-4xl border px-4 py-4 text-left transition-colors",
+        "group w-full rounded-xl border px-4 py-4 text-left transition-colors",
         active
           ? "border-foreground/20 bg-foreground/5 text-foreground"
           : "border-border/60 bg-card/60 text-foreground hover:bg-muted/35"
@@ -837,7 +837,7 @@ function analyticsDetailMatchesBadge(detail: AnalyticsDetail, badgeLabel: string
 function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
   const isQuoteDraft = analytics.variant === "quote_draft";
   return (
-    <div className="mt-4 overflow-hidden rounded-4xl border border-border/65 bg-background/55">
+    <div className="mt-4 overflow-hidden rounded-xl border border-border/65 bg-background/55">
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border/55 px-3.5 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
           {analytics.kind === "entity" ? (
@@ -1126,7 +1126,7 @@ function EmptyChatSuggestions({
   }
 
   return (
-    <div className="rounded-[26px] border border-border/60 bg-card/72 p-4">
+    <div className="rounded-xl border border-border/60 bg-card/72 p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-full border border-ai-accent/18 bg-ai-accent/10 text-ai-accent">
           <Sparkles className="h-4 w-4" />
@@ -1144,7 +1144,7 @@ function EmptyChatSuggestions({
               key={`${activeGroup.id}:${suggestion.label}:${suggestion.text}`}
               type="button"
               onClick={() => onSelect(suggestion.text)}
-              className="group flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-ai-accent/16 bg-ai-accent/5 px-3.5 py-2.5 text-left transition-colors hover:border-ai-accent/28 hover:bg-ai-accent/10"
+              className="group flex min-h-11 items-center justify-between gap-3 rounded-xl border border-ai-accent/16 bg-ai-accent/5 px-3.5 py-2.5 text-left transition-colors hover:border-ai-accent/28 hover:bg-ai-accent/10"
             >
               <span className="min-w-0 text-sm font-semibold text-foreground">{suggestion.label}</span>
               <ChevronRight className="h-4 w-4 shrink-0 text-ai-accent transition-transform group-hover:translate-x-0.5" />
@@ -1221,7 +1221,7 @@ function MessageCard({
         </div>
         <div
           className={cn(
-            "rounded-4xl border px-3.5 py-3 text-[15px] sm:rounded-[28px] sm:px-4 sm:py-3.5",
+            "rounded-xl border px-3.5 py-3 text-[15px] sm:rounded-xl sm:px-4 sm:py-3.5",
             isUser
               ? "border-ai-accent/18 bg-ai-accent/12"
               : "border-border/60 bg-card/88"
@@ -1241,7 +1241,7 @@ function MessageCard({
                     href={attachment.url ?? undefined}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3 transition-colors hover:bg-muted/25"
+                    className="rounded-xl border border-border/60 bg-background/70 px-3 py-3 transition-colors hover:bg-muted/25"
                   >
                     <div className="flex items-start gap-3">
                       {isPreviewableAttachment(attachment) ? (
@@ -1281,7 +1281,7 @@ function MessageCard({
                 {message.sources.map((source) => (
                   <div
                     key={`${message.id}:${source.id}`}
-                    className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3"
+                    className="rounded-xl border border-border/60 bg-background/70 px-3 py-3"
                   >
                     <div className="text-sm font-medium text-foreground">{source.title}</div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -1324,7 +1324,7 @@ function MessageCard({
           ) : null}
 
           {diagnostics ? (
-            <details className="mt-4 rounded-2xl border border-border/60 bg-background/65 px-3 py-2 text-xs text-muted-foreground">
+            <details className="mt-4 rounded-xl border border-border/60 bg-background/65 px-3 py-2 text-xs text-muted-foreground">
               <summary className="cursor-pointer select-none font-semibold text-foreground/75">AI debug</summary>
               <div className="mt-2 grid gap-2">
                 {diagnostics.openAi ? (
@@ -2155,7 +2155,7 @@ export function ToShoAiConsole({
             </div>
 
             {/* Обидві панелі лишаються в дереві, а ховає їх `hidden`: вузол мусить дожити до кінця згасання (REQ-203). */}
-            <div hidden={!showRequestList} className="panel-reveal rounded-[26px] border border-border/60 bg-card/88 p-4">
+            <div hidden={!showRequestList} className="panel-reveal rounded-xl border border-border/60 bg-card/88 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-foreground">Попередні чати</div>
@@ -2198,7 +2198,7 @@ export function ToShoAiConsole({
               </div>
             </div>
 
-            <div hidden={!knowledgeExpanded} className="panel-reveal rounded-[26px] border border-border/60 bg-card/88 p-4">
+            <div hidden={!knowledgeExpanded} className="panel-reveal rounded-xl border border-border/60 bg-card/88 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-foreground">База знань</div>
@@ -2215,7 +2215,7 @@ export function ToShoAiConsole({
                   <KnowledgeListSkeleton />
                 ) : (snapshot?.knowledgeItems ?? []).length > 0 ? (
                   (snapshot?.knowledgeItems ?? []).map((item) => (
-                    <div key={item.id} className="rounded-4xl border border-border/60 bg-background/65 px-4 py-4">
+                    <div key={item.id} className="rounded-xl border border-border/60 bg-background/65 px-4 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -2299,7 +2299,7 @@ export function ToShoAiConsole({
             </div>
 
             {!snapshot && !loading && loadError ? (
-              <div className="rounded-[26px] border border-border/60 bg-card/70 p-4">
+              <div className="rounded-xl border border-border/60 bg-card/70 p-4">
                 <EmptyPanel
                   icon={<Bot className="h-5 w-5" />}
                   title="ToSho AI тимчасово недоступний"
@@ -2446,7 +2446,7 @@ export function ToShoAiConsole({
                 enterKeyHint="send"
                 rows={1}
                 placeholder={composerPlaceholder}
-                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-4xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
+                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
               />
               <Button
                 type="button"
@@ -2582,7 +2582,7 @@ function EmptyPanel({
   description: string;
 }) {
   return (
-    <div className="rounded-4xl border border-dashed border-border/70 bg-background/45 px-4 py-5 text-center">
+    <div className="rounded-xl border border-dashed border-border/70 bg-background/45 px-4 py-5 text-center">
       <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground">
         {icon}
       </div>
@@ -2605,14 +2605,14 @@ function MentionSuggestionPanel({
 }) {
   const title = `Підставити ${getMentionKindLabel(activeMention.kind)}`;
   return (
-    <div className="rounded-3xl border border-border/60 bg-card/95 p-2">
+    <div className="rounded-xl border border-border/60 bg-card/95 p-2">
       <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
         {title}
       </div>
       <div className="max-h-[220px] space-y-1 overflow-y-auto">
         {loading ? (
           Array.from({ length: 3 }).map((_, index) => (
-            <div key={`mention-loading:${index}`} className="flex items-center gap-2 rounded-2xl px-2 py-2">
+            <div key={`mention-loading:${index}`} className="flex items-center gap-2 rounded-xl px-2 py-2">
               <Skeleton className="h-8 w-8 rounded-full" />
               <div className="min-w-0 flex-1 space-y-1.5">
                 <Skeleton className="h-3.5 w-2/3 rounded-full" />
@@ -2628,7 +2628,7 @@ function MentionSuggestionPanel({
                 key={`${suggestion.kind}:${suggestion.id}`}
                 type="button"
                 onClick={() => onSelect(suggestion)}
-                className="flex w-full min-w-0 items-center gap-2 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-muted/35"
+                className="flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted/35"
               >
                 {isPerson ? (
                   <PlayerAvatar
@@ -2670,7 +2670,7 @@ function HistoryListSkeleton() {
       {Array.from({ length: 3 }).map((_, index) => (
         <div
           key={`history-skeleton:${index}`}
-          className="rounded-4xl border border-border/60 bg-background/55 px-4 py-4"
+          className="rounded-xl border border-border/60 bg-background/55 px-4 py-4"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-3">
@@ -2699,7 +2699,7 @@ function KnowledgeListSkeleton() {
       {Array.from({ length: 2 }).map((_, index) => (
         <div
           key={`knowledge-skeleton:${index}`}
-          className="rounded-4xl border border-border/60 bg-background/55 px-4 py-4"
+          className="rounded-xl border border-border/60 bg-background/55 px-4 py-4"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-3">

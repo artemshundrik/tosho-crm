@@ -664,7 +664,7 @@ export function DesignerFloatingTimerWidget({
   return (
     <div
       className={cn(
-        "fixed z-floating w-[508px] max-w-[calc(100vw-16px)] select-none rounded-[26px] border bg-foreground text-background shadow-menu backdrop-blur cursor-grab active:cursor-grabbing",
+        "fixed z-floating w-[508px] max-w-[calc(100vw-16px)] select-none rounded-xl border bg-foreground text-background shadow-menu backdrop-blur cursor-grab active:cursor-grabbing",
         currentRunning
           ? "border-success-soft-border/55 ring-1 ring-success-soft-border/25"
           : currentPaused
@@ -712,7 +712,7 @@ export function DesignerFloatingTimerWidget({
         </HoverTip>
       </div>
       <div className="px-3.5 pb-3.5 pt-2.5">
-        <div className="rounded-3xl border border-background/15 bg-background/[0.055] px-5 py-4">
+        <div className="rounded-xl border border-background/15 bg-background/[0.055] px-5 py-4">
           <div className="grid grid-cols-[minmax(0,1fr)_136px] items-center gap-5">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-normal text-background/60">

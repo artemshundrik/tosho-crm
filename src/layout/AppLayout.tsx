@@ -443,7 +443,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-4xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -2237,7 +2237,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               setMobileMenuOpen(false);
                               setTabBarSettingsOpen(true);
                             }}
-                            className="flex w-full items-center gap-3 rounded-[var(--radius-lg)] px-4 py-2.5 text-left text-[14px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                            className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-[14px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                           >
                             <SlidersHorizontal className="h-4 w-4 shrink-0" />
                             <span className="min-w-0 flex-1 truncate">Налаштувати смугу вкладок</span>
@@ -2871,7 +2871,7 @@ function SidebarGroup({
               onFocus={() => preloadRoute(link.to)}
               onTouchStart={() => preloadRoute(link.to)}
               className={cn(
-                "relative group flex w-full items-center gap-[9px] rounded-[var(--radius-lg)] px-[9px] py-2 text-sm font-medium",
+                "relative group flex w-full items-center gap-[9px] rounded-lg px-[9px] py-2 text-sm font-medium",
                 // Ховер підсвічує САМУ область, а не лише текст з іконкою.
                 // Було hover:bg-muted/40 — у світлій темі muted (95.5%) майже
                 // збігається з тлом сайдбару (96.4%), різниця 0.4% і плашки не
@@ -2886,7 +2886,7 @@ function SidebarGroup({
                 collapsed
                   ? "h-8 rounded-lg pl-[19px]"
                   : isMobileDrawer
-                    ? "min-h-11 rounded-2xl px-4 py-2.5 gap-2.5 text-sm"
+                    ? "min-h-11 rounded-xl px-4 py-2.5 gap-2.5 text-sm"
                     : // Праве поле тримає місце під шпильку постійно — інакше
                       // підпис смикався б, обрізаючись на кожному ховері.
                       // Рівно на кнопку (24px) плюс подих, не більше: кожен

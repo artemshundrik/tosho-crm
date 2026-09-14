@@ -293,9 +293,9 @@ function QuoteRecordShape() {
         <div className="flex min-h-[220px] flex-1 flex-col rounded-inner border border-border/40 bg-card/70 p-2.5">
           <Line w="w-28" h="h-3" dim />
           <div className="mt-auto space-y-2">
-            <Skeleton className="h-8 w-[70%] rounded-2xl opacity-70" />
-            <Skeleton className="ml-auto h-8 w-[55%] rounded-2xl opacity-60" />
-            <Skeleton className="h-9 w-full rounded-3xl opacity-70" />
+            <Skeleton className="h-8 w-[70%] rounded-xl opacity-70" />
+            <Skeleton className="ml-auto h-8 w-[55%] rounded-xl opacity-60" />
+            <Skeleton className="h-9 w-full rounded-xl opacity-70" />
           </div>
         </div>
       </div>
@@ -372,7 +372,7 @@ function DashboardShape({ canvas }: ShapeProps) {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="space-y-4 rounded-section border border-border/60 bg-card/70 p-5">
           <Line w="w-40" h="h-4" />
-          <Skeleton className="h-[200px] w-full rounded-2xl opacity-70" />
+          <Skeleton className="h-[200px] w-full rounded-xl opacity-70" />
         </div>
         <div className="space-y-3 rounded-section border border-border/60 bg-card/70 p-5">
           <Line w="w-28" h="h-4" />
@@ -396,7 +396,7 @@ function GridShape() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
       {Array.from({ length: 10 }).map((_, index) => (
-        <div key={index} className="overflow-hidden rounded-2xl border border-border/60 bg-card">
+        <div key={index} className="overflow-hidden rounded-xl border border-border/60 bg-card">
           <Skeleton className="aspect-[4/3] w-full rounded-none opacity-80" />
           <div className="space-y-2 p-3">
             <Line w={index % 2 === 0 ? "w-[64%]" : "w-[48%]"} />
@@ -446,9 +446,9 @@ function ListShape({ canvas }: ShapeProps) {
         {Array.from({ length: 7 }).map((_, index) => (
           <div
             key={index}
-            className="flex items-center gap-3 rounded-3xl border border-border/50 bg-card/70 px-4 py-3.5"
+            className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/70 px-4 py-3.5"
           >
-            <Skeleton className="h-11 w-11 shrink-0 rounded-2xl" />
+            <Skeleton className="h-11 w-11 shrink-0 rounded-xl" />
             <div className="min-w-0 flex-1 space-y-2">
               <Line w={index % 3 === 0 ? "w-[38%]" : "w-[52%]"} />
               <Line w={index % 2 === 0 ? "w-[68%]" : "w-[58%]"} h="h-3" dim />
@@ -511,7 +511,7 @@ function SplitShape({ canvas }: ShapeProps) {
         </div>
         <div className="grid min-h-0 flex-1 gap-3 overflow-hidden p-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="space-y-3 rounded-2xl border border-border/50 bg-background/50 p-3">
+            <div key={index} className="space-y-3 rounded-xl border border-border/50 bg-background/50 p-3">
               <Skeleton className="h-24 w-full rounded-xl opacity-75" />
               <Line w={index % 2 === 0 ? "w-[58%]" : "w-[44%]"} />
               <Line w="w-[34%]" h="h-3" dim />

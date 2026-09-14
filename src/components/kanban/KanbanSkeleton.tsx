@@ -98,7 +98,7 @@ export function KanbanSkeleton({
             {Array.from({ length: cardsPerColumn }).map((_, cardIndex) => (
               <div
                 key={`${column.id}:skeleton:${cardIndex}`}
-                className="rounded-2xl border border-border/50 bg-card/82 p-3"
+                className="rounded-xl border border-border/50 bg-card/82 p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-2.5">

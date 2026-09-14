@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
  */
 
 /** Канонічна поверхня бенто-картки. Тіні немає навмисно — вона лише у спливному. */
-export const BENTO_CARD = "rounded-2xl border border-border/40 bg-card";
+export const BENTO_CARD = "rounded-xl border border-border/40 bg-card";
 
 /** Дрібний капслок над великим числом. */
 export const BENTO_LABEL = "text-2xs font-medium uppercase tracking-wide text-muted-foreground";

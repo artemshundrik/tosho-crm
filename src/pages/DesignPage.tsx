@@ -5113,7 +5113,7 @@ export default function DesignPage() {
                       </div>
                       <div className="space-y-2 p-2.5">
                         {Array.from({ length: 2 }).map((_, index) => (
-                          <div key={`${col.id}:mobile-skeleton:${index}`} className="rounded-[var(--radius-md)] border border-border/50 bg-card/82 p-3">
+                          <div key={`${col.id}:mobile-skeleton:${index}`} className="rounded-md border border-border/50 bg-card/82 p-3">
                             <div className="flex items-center gap-3">
                               <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
                               <div className="min-w-0 flex-1 space-y-2">
