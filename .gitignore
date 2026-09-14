@@ -54,17 +54,6 @@ inbox-plan.csv
 # Репозиторій публічний, а користі від них у ньому нуль — живуть локально.
 .design/
 
-# design-sync: staged converter + generated bundle + machine state.
-# Довговічне (config.json, NOTES.md, conventions.md, previews/, overrides/) — комітиться.
-.ds-sync/
-ds-bundle/
-.design-sync/.cache/
-.design-sync/learnings/
-.design-sync/node_modules
-
-# Дерево типів для design-sync (генерується tsconfig.types.json)
-types/
-
 # Замок Deno. Його переписує netlify dev: CLI тягне bootstrap edge-функцій і
 # заразом дзеркалить сюди залежності з package.json. Edge-функцій у нас немає
 # жодної, збірка цей файл не читає — лишався тільки шум у git status і фальшиві

@@ -125,7 +125,7 @@ const typescriptEslintNameStub = {
 };
 
 export default defineConfig([
-  globalIgnores(["dist", "ds-bundle", "types", ".ds-sync", ".design-sync"]),
+  globalIgnores(["dist"]),
   {
     files: ["**/*.{ts,tsx}"],
     // 30 заглушок у коді стоять на `react-hooks/exhaustive-deps` — правило, яке

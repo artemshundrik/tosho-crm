@@ -2,10 +2,6 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "ignorePatterns": [
     "dist",
-    "ds-bundle",
-    "types",
-    ".ds-sync",
-    ".design-sync",
     "**/*.js",
     "**/*.mjs",
     "**/*.cjs"

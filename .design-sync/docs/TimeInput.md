@@ -1,5 +1,0 @@
----
-category: Choice
----
-
-Час.
