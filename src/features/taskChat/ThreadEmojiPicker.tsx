@@ -50,7 +50,7 @@ export function ThreadEmojiPicker({ onPick, className, trigger, align = "start",
               className
             )}
           >
-            <Smile className="h-3.5 w-3.5" />
+            <Smile className="h-[18px] w-[18px]" />
           </button>
         )}
       </PopoverTrigger>

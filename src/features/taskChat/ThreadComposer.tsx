@@ -220,7 +220,7 @@ export function ThreadComposer({
             onClick={() => fileInputRef.current?.click()}
             className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
           >
-            {attaching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+            {attaching ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Paperclip className="h-[18px] w-[18px]" />}
           </button>
         </HoverTip>
         <ThreadEmojiPicker
@@ -280,7 +280,7 @@ export function ThreadComposer({
               sending ? "bg-muted text-muted-foreground" : "bg-foreground text-background hover:opacity-90"
             )}
           >
-            <Send className="h-3.5 w-3.5" />
+            <Send className="h-[18px] w-[18px]" />
           </button>
         ) : (
           /* Той самий круглий чорний кружечок, що й «Надіслати»: вони ділять
