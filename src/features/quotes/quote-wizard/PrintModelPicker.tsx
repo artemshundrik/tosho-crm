@@ -118,8 +118,14 @@ export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled 
                 )}
               >
                 <PrintModelArt presetKey={model.specPreset} className="text-foreground/70" />
-                <span className="line-clamp-2 text-2xs font-semibold leading-tight text-foreground">
-                  {model.name}
+                {/*
+                  Під підпис завжди два рядки: інакше плитка центрувала значок
+                  разом із текстом, і в «Квартальному календарі» він стояв
+                  вище, ніж у «Брошурі», — ряд значків стрибав. Однорядковий
+                  підпис стає посередині свого місця.
+                */}
+                <span className="flex h-[2lh] items-center text-2xs font-semibold leading-tight text-foreground">
+                  <span className="line-clamp-2">{model.name}</span>
                 </span>
               </button>
             );
