@@ -41,7 +41,7 @@ export function QuoteAddItemsActions({
           event.stopPropagation();
           onAdd("merch");
         }}
-        className="h-10 gap-2 rounded-xl"
+        className="gap-2"
       >
         <Package className="h-4 w-4" />
         Додати товар
@@ -56,7 +56,7 @@ export function QuoteAddItemsActions({
           event.stopPropagation();
           onAdd("print");
         }}
-        className="h-10 gap-2 rounded-xl"
+        className="gap-2"
       >
         <Printer className="h-4 w-4" />
         Додати поліграфію
@@ -67,7 +67,7 @@ export function QuoteAddItemsActions({
         disabled={disabled}
         title={lockedHint ?? "Excel від клієнта → позиції з тиражами. Ціни вписуються тут, у прорахунку"}
         onClick={onImport}
-        className="h-10 gap-2 rounded-xl"
+        className="gap-2"
       >
         <FileSpreadsheet className="h-4 w-4" />
         Імпорт з файлу

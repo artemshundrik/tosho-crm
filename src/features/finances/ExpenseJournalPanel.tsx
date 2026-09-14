@@ -90,14 +90,14 @@ export function VendorPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
+        <Button size="sm"
           type="button"
           variant="outline"
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "h-8 w-[150px] justify-between gap-1 px-2 font-normal",
+            "w-[150px] justify-between gap-1 px-2 font-normal",
             !value && "text-muted-foreground",
             className
           )}
@@ -248,7 +248,7 @@ function EntryEditor({
           placeholder="0.00"
           autoFocus={autoFocusAmount}
           aria-label="Сума"
-          className="h-8 w-24 rounded-md text-right text-sm tabular-nums"
+          className="w-24 text-right text-sm tabular-nums"
         />
         <span className="w-3 text-xs text-muted-foreground">{CURRENCY_SYMBOL[currency]}</span>
       </div>
@@ -258,14 +258,14 @@ function EntryEditor({
         onKeyDown={onKeyDown}
         placeholder="коментар (необовʼязково)"
         aria-label="Коментар"
-        className="h-8 min-w-[120px] flex-1 rounded-md"
+        className="min-w-[120px] flex-1"
       />
       <div className="flex items-center gap-1">
-        <Button size="sm" className="h-8 gap-1" onClick={trySubmit} disabled={saving}>
+        <Button size="sm" className="gap-1" onClick={trySubmit} disabled={saving}>
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
           {submitLabel}
         </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onCancel} aria-label="Скасувати">
+        <Button variant="ghost" size="iconSm" onClick={onCancel} aria-label="Скасувати">
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -345,8 +345,8 @@ function JournalEntryRow({
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         <Button
           variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground"
+          size="iconSm"
+          className="text-muted-foreground"
           onClick={() => setEditing(true)}
           aria-label="Редагувати запис"
         >
@@ -354,8 +354,8 @@ function JournalEntryRow({
         </Button>
         <Button
           variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+          size="iconSm"
+          className="text-muted-foreground hover:text-destructive"
           onClick={onDelete}
           disabled={busy}
           aria-label="Видалити запис"
@@ -536,7 +536,7 @@ export function ExpenseJournalPanel({
             onCancel={() => setAdding(false)}
           />
         ) : (
-          <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setAdding(true)}>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
             <Plus className="h-3.5 w-3.5" />
             {isEvent ? "Додати позицію" : "Додати запис"}
           </Button>

@@ -362,9 +362,9 @@ const ChipDropdown: React.FC<{
               <Button
                 key={option.value}
                 variant="ghost"
-                size="sm"
+                size="md"
                 className={cn(
-                  "h-9 w-full justify-between text-sm",
+                  "w-full justify-between text-sm",
                   active && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
                 )}
                 onClick={() => {
@@ -433,9 +433,9 @@ const MultiChipDropdown: React.FC<{
               <Button
                 key={option.value}
                 variant="ghost"
-                size="sm"
+                size="md"
                 className={cn(
-                  "h-9 w-full justify-between text-sm",
+                  "w-full justify-between text-sm",
                   active && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
                 )}
                 onClick={() => {
@@ -1719,7 +1719,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       value={selectedItemId ?? items[0]?.id ?? ""}
                       onValueChange={(value) => onSelectItem?.(value)}
                     >
-                      <SelectTrigger className="h-8 w-[min(20rem,60vw)] text-xs">
+                      <SelectTrigger controlSize="sm" className="w-[min(20rem,60vw)] text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1757,8 +1757,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   <Button
                     key={statusOption.value}
                     variant="ghost"
-                    size="sm"
-                    className="w-full justify-start gap-2 h-9 text-sm"
+                    size="md"
+                    className="w-full justify-start gap-2 text-sm"
                     onClick={() => {
                       setStatus(statusOption.value);
                       setStatusPopoverOpen(false);
@@ -1837,8 +1837,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     <HoverTip key={member.id} asChild label={member.label}>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="w-full justify-start gap-2 h-9 text-sm truncate"
+                        size="md"
+                        className="w-full justify-start gap-2 text-sm truncate"
                         onClick={() => {
                           setManagerId(member.id);
                           setManagerPopoverOpen(false);
@@ -1891,8 +1891,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   <Button
                     key={curr.value}
                     variant="ghost"
-                    size="sm"
-                    className="w-full justify-start gap-2 h-9 text-sm"
+                    size="md"
+                    className="w-full justify-start gap-2 text-sm"
                     onClick={() => {
                       setCurrency(curr.value);
                       setCurrencyPopoverOpen(false);
@@ -1924,8 +1924,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   <Button
                     key={option.value}
                     variant="ghost"
-                    size="sm"
-                    className="w-full justify-start gap-2 h-9 text-sm"
+                    size="md"
+                    className="w-full justify-start gap-2 text-sm"
                     onClick={() => {
                       setDeliveryType(option.value);
                       setDeliveryDetails(createEmptyQuoteDeliveryDetails());
@@ -1977,13 +1977,12 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 value={deadlineNote}
                 onChange={(e) => setDeadlineNote(e.target.value)}
                 placeholder="Напр. До 12:00 погодити макет"
-                className="h-9"
               />
             </div>
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground">Сповіщення про дедлайн</div>
               <Select value={deadlineReminderOffset} onValueChange={setDeadlineReminderOffset}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue placeholder="Оберіть момент сповіщення" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2001,7 +2000,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 value={deadlineReminderComment}
                 onChange={(e) => setDeadlineReminderComment(e.target.value)}
                 placeholder="Напр. Перевірити готовність і зв'язатись з замовником"
-                className="h-9"
               />
             </div>
           </div>
@@ -2202,7 +2200,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                                     if (quickModelError) setQuickModelError(null);
                                   }}
                                   placeholder="Назва нового товару"
-                                  className="h-9"
                                   disabled={quickModelSaving}
                                 />
                                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px]">
@@ -2213,7 +2210,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                                       if (quickModelError) setQuickModelError(null);
                                     }}
                                     placeholder="Артикул"
-                                    className="h-9"
                                     disabled={quickModelSaving}
                                   />
                                   <Input
@@ -2224,14 +2220,12 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                                     }}
                                     inputMode="decimal"
                                     placeholder="Ціна"
-                                    className="h-9"
                                     disabled={quickModelSaving}
                                   />
                                   <Input
                                     value={quickModelImageUrl}
                                     onChange={(event) => setQuickModelImageUrl(event.target.value)}
                                     placeholder="Фото URL, необов'язково"
-                                    className="h-9"
                                     disabled={quickModelSaving}
                                   />
                                 </div>
@@ -2306,9 +2300,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant={printApplications.length > 0 ? "outline" : "primary"}
-                  size="sm"
+                  size="md"
                   onClick={handleAddPrintApplication}
-                  className="h-10 gap-1.5 rounded-xl px-4 text-sm"
+                  className="gap-1.5 px-4 text-sm"
                 >
                   <Plus className="h-4 w-4" />
                   {printApplications.length > 0 ? "Додати ще нанесення" : "Додати нанесення"}
@@ -2679,9 +2673,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <div className="flex items-center gap-3">
                 <Button
                   onClick={() => void handleSubmit()}
-                  size="sm"
+                  size="md"
                   disabled={submitting}
-                  className="gap-1.5 px-4 h-9 rounded-[var(--radius-md)] "
+                  className="gap-1.5 px-4 "
                 >
                   {submitting ? "Збереження..." : isEditMode ? "Зберегти" : "Створити"}
                 </Button>

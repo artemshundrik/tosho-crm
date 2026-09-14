@@ -91,9 +91,9 @@ export function BulkActionsBar({
       <HoverTip asChild label="Скасувати виділення">
         <Button
           variant="ghost"
-          size="icon"
+          size="iconSm"
           onClick={onClearSelection}
-          className="h-8 w-8 hover:bg-muted"
+          className="hover:bg-muted"
           aria-label="Скасувати виділення"
         >
           <X className="h-4 w-4" />

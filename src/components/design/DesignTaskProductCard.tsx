@@ -21,7 +21,7 @@ type DesignTaskProductCardProps = {
 export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
   const renderLinkButton = (url: string | null, label: string, hint: string) =>
     url ? (
-      <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 transition-colors">
+      <Button asChild variant="outline" size="sm" className="gap-1.5 transition-colors">
         <a href={url} target="_blank" rel="noopener noreferrer">
           {label}
           <ExternalLink className="h-3.5 w-3.5" />
@@ -31,7 +31,7 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
       <Button
         variant="outline"
         size="sm"
-        className="h-8 gap-1.5 border-dashed text-muted-foreground/70"
+        className="gap-1.5 border-dashed text-muted-foreground/70"
         disabled
         title={hint}
       >

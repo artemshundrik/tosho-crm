@@ -284,7 +284,7 @@ export function QuoteWizardHeader({
 
   const currencyPicker = (
     <Select value={value.currency} onValueChange={(next) => patch({ currency: next })} disabled={disabled}>
-      <SelectTrigger className={cn("h-9 rounded-full", layout === "column" ? "w-full rounded-lg" : "w-24")}>
+      <SelectTrigger className={cn("rounded-full", layout === "column" ? "w-full" : "w-24")}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

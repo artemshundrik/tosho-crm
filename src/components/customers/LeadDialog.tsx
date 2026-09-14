@@ -436,7 +436,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       type="button"
                       size="sm"
                       variant={form.logoUploadMode === "url" ? "secondary" : "ghost"}
-                      className="h-7 px-2 text-xs"
+                      className="px-2 text-xs"
                       onClick={() => setForm((prev) => ({ ...prev, logoUploadMode: "url", logoFile: null }))}
                     >
                       URL
@@ -445,7 +445,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       type="button"
                       size="sm"
                       variant={form.logoUploadMode === "file" ? "secondary" : "ghost"}
-                      className="h-7 px-2 text-xs"
+                      className="px-2 text-xs"
                       onClick={() => setForm((prev) => ({ ...prev, logoUploadMode: "file", logoUrl: "" }))}
                     >
                       Файл
@@ -456,7 +456,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       value={form.logoUrl}
                       onChange={(e) => setForm((prev) => ({ ...prev, logoUrl: e.target.value, logoFile: null }))}
                       placeholder="Посилання на логотип"
-                      className="h-9"
                     />
                   ) : (
                     <div className="relative">
@@ -496,7 +495,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="mt-2 h-8 px-2 text-xs"
+                  className="mt-2 px-2 text-xs"
                   onClick={() => setForm((prev) => ({ ...prev, logoUrl: "", logoFile: null }))}
                 >
                   Очистити
@@ -572,8 +571,8 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 {form.manager && !hasManagerInList ? (
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="w-full justify-start gap-2 h-9 text-sm truncate"
+                    size="md"
+                    className="w-full justify-start gap-2 text-sm truncate"
                     onClick={() => setManagerOpen(false)}
                   >
                     <AvatarBase
@@ -592,8 +591,8 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     <HoverTip key={member.id} asChild label={member.label}>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="w-full justify-start gap-2 h-9 text-sm truncate"
+                        size="md"
+                        className="w-full justify-start gap-2 text-sm truncate"
                         onClick={() => {
                           setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
                           setManagerOpen(false);
@@ -679,8 +678,8 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     {form.ownershipType ? (
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="w-full justify-start h-9 text-sm text-muted-foreground"
+                        size="md"
+                        className="w-full justify-start text-sm text-muted-foreground"
                         onClick={() => {
                           setForm((prev) => ({ ...prev, ownershipType: "" }));
                           setOwnershipOpen(false);
@@ -699,7 +698,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               type="button"
               size="sm"
               variant={quickMode ? "secondary" : "ghost"}
-              className="h-7 px-2.5 text-xs"
+              className="px-2.5 text-xs"
               onClick={() => {
                 setQuickMode(true);
                 setSection("basic");
@@ -711,7 +710,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               type="button"
               size="sm"
               variant={!quickMode ? "secondary" : "ghost"}
-              className="h-7 px-2.5 text-xs"
+              className="px-2.5 text-xs"
               onClick={() => setQuickMode(false)}
             >
               Повна
@@ -736,7 +735,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         value={form.companyName}
                         onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
                         placeholder={isFopOwnership ? "Напр. Берновська Ольга Василівна" : "Назва компанії"}
-                        className="h-9 pr-9"
+                        className="pr-9"
                       />
                     </CompanyDuplicateHintField>
                   </div>
@@ -755,7 +754,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       value={form.firstName}
                       onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
                       placeholder="Імʼя"
-                      className="h-9"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -764,7 +762,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       value={form.lastName}
                       onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
                       placeholder="Прізвище"
-                      className="h-9"
                     />
                   </div>
                 </div>
@@ -782,7 +779,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   <div className="grid gap-2">
                     <div className="flex h-8 items-center justify-between">
                       <Label>Телефон <span className="text-destructive">*</span></Label>
-                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addPhone}>
+                      <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addPhone}>
                         <PlusCircle className="mr-1 h-4 w-4" />
                         Додати номер
                       </Button>
@@ -800,7 +797,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-9 w-9 shrink-0"
+                              className="shrink-0"
                               onClick={() => removePhone(index)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -813,7 +810,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 </div>
               </div>
               </SectionCard>
-              <Button type="button" variant="outline" className="h-8 text-xs" onClick={() => setQuickMode(false)}>
+              <Button size="sm" type="button" variant="outline" className="text-xs" onClick={() => setQuickMode(false)}>
                 Відкрити повну картку
               </Button>
             </div>
@@ -853,7 +850,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         value={form.companyName}
                         onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
                         placeholder={isFopOwnership ? "Напр. Берновська Ольга Василівна" : "Назва компанії"}
-                        className="h-9"
                       />
                     </div>
                     <div className="grid gap-2">
@@ -862,7 +858,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         value={form.legalName}
                         onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}
                         placeholder={isFopOwnership ? "Напр. EDLIGHT" : "Повна юридична назва"}
-                        className="h-9"
                       />
                     </div>
                   </div>
@@ -874,7 +869,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
                         onBlur={() => setForm((prev) => ({ ...prev, website: normalizeSiteUrl(prev.website) }))}
                         placeholder={isFopOwnership ? "@brandname" : "https://"}
-                        className="h-9"
                       />
                     </div>
                     <div className="grid gap-2">
@@ -897,7 +891,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         value={form.firstName}
                         onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
                         placeholder="Імʼя"
-                        className="h-9"
                       />
                     </div>
                     <div className="grid gap-2">
@@ -906,7 +899,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         value={form.lastName}
                         onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
                         placeholder="Прізвище"
-                        className="h-9"
                       />
                     </div>
                   </div>
@@ -924,7 +916,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     <div className="grid gap-2">
                       <div className="flex h-8 items-center justify-between">
                         <Label>Телефон <span className="text-destructive">*</span></Label>
-                        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addPhone}>
+                        <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addPhone}>
                           <PlusCircle className="mr-1 h-4 w-4" />
                           Додати номер
                         </Button>
@@ -942,7 +934,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-9 w-9 shrink-0"
+                                className="shrink-0"
                                 onClick={() => removePhone(index)}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -992,7 +984,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         value={form.signatoryName}
                         onChange={(e) => setForm((prev) => ({ ...prev, signatoryName: e.target.value }))}
                         placeholder="ПІБ підписанта"
-                        className="h-9"
                       />
                     </div>
                   </div>
@@ -1002,7 +993,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       value={form.signatoryPosition}
                       onValueChange={(value) => setForm((prev) => ({ ...prev, signatoryPosition: value }))}
                     >
-                      <SelectTrigger className="h-9">
+                      <SelectTrigger>
                         <SelectValue placeholder="Оберіть посаду" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1060,7 +1051,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       value={form.eventName}
                       onChange={(e) => setForm((prev) => ({ ...prev, eventName: e.target.value }))}
                       placeholder="Річниця, конференція, захід..."
-                      className="h-9"
                     />
                   </div>
                   <div className="grid gap-2">

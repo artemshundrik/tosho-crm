@@ -284,7 +284,7 @@ export function DuplicateDesignTaskDialog({
               </div>
               <Popover open={typePopoverOpen} onOpenChange={setTypePopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5">
+                  <Button type="button" variant="outline" size="sm" className="gap-1.5">
                     <span>{taskType ? DESIGN_TASK_TYPE_LABELS[taskType] : "Обрати тип"}</span>
                     <ChevronDown className="h-3.5 w-3.5 opacity-60" />
                   </Button>
@@ -298,8 +298,8 @@ export function DuplicateDesignTaskDialog({
                           key={option.value}
                           type="button"
                           variant="ghost"
-                          size="sm"
-                          className="h-9 w-full justify-start gap-2 text-sm"
+                          size="md"
+                          className="w-full justify-start gap-2 text-sm"
                           onClick={() => {
                             setTaskType(option.value);
                             setTypePopoverOpen(false);

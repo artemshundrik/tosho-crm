@@ -1356,7 +1356,7 @@ export default function MarketingPage() {
           // перегорнути візуал стрілкою чи мініатюрою, і закриття питало
           // «Закрити без збереження?» про зміни, яких давно нема.
           dismissible
-          className="flex max-h-[92dvh] w-[calc(100vw-24px)] max-w-5xl flex-col gap-0 overflow-hidden rounded-2xl p-0 md:grid md:grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)]"
+          className="flex max-h-[92dvh] w-[calc(100vw-24px)] max-w-5xl flex-col gap-0 overflow-hidden p-0 md:grid md:grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)]"
           onKeyDown={(event) => {
             if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
             if (event.key === "ArrowRight") stepDetail(1);
@@ -1400,7 +1400,7 @@ export default function MarketingPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      className="h-8 gap-1.5 rounded-lg bg-black/35 text-white backdrop-blur-sm hover:bg-black/55"
+                      className="gap-1.5 bg-black/35 text-white backdrop-blur-sm hover:bg-black/55"
                       onClick={() => void handleOpenOriginal(selected)}
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
@@ -1409,7 +1409,7 @@ export default function MarketingPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      className="h-8 gap-1.5 rounded-lg bg-black/35 text-white backdrop-blur-sm hover:bg-black/55"
+                      className="gap-1.5 bg-black/35 text-white backdrop-blur-sm hover:bg-black/55"
                       onClick={() => void handleDownload(selected)}
                     >
                       <Download className="h-3.5 w-3.5" />
@@ -1638,7 +1638,7 @@ export default function MarketingPage() {
                         </span>
                       ))}
                       <div className="flex items-center gap-1">
-                        <Input
+                        <Input controlSize="sm"
                           value={newTag}
                           onChange={(event) => setNewTag(event.target.value)}
                           onKeyDown={(event) => {
@@ -1648,13 +1648,13 @@ export default function MarketingPage() {
                             }
                           }}
                           placeholder="Додати тег…"
-                          className="h-7 w-[130px] rounded-full border-dashed px-3 text-xs"
+                          className="w-[130px] rounded-full border-dashed px-3 text-xs"
                           aria-label="Новий тег"
                         />
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 w-7 rounded-full p-0"
+                          className="w-7 rounded-full p-0"
                           aria-label="Додати тег"
                           disabled={!newTag.trim()}
                           onClick={() => handleAddTag(selected, newTag)}
@@ -1725,7 +1725,7 @@ export default function MarketingPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 justify-start gap-1.5 rounded-lg border-dashed text-muted-foreground"
+                        className="justify-start gap-1.5 border-dashed text-muted-foreground"
                         onClick={() => handleApplyChecklistTemplate(selected)}
                       >
                         <Plus className="h-3.5 w-3.5" />
@@ -1733,7 +1733,7 @@ export default function MarketingPage() {
                       </Button>
                     )}
                     <div className="flex items-center gap-1.5">
-                      <Input
+                      <Input controlSize="sm"
                         value={newChecklistItem}
                         onChange={(event) => setNewChecklistItem(event.target.value)}
                         onKeyDown={(event) => {
@@ -1743,13 +1743,13 @@ export default function MarketingPage() {
                           }
                         }}
                         placeholder="Що ще зняти? Enter — додати"
-                        className="h-8 rounded-lg text-[13px]"
+                        className="text-[13px]"
                         aria-label="Новий пункт чек-листа"
                       />
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-8 w-8 shrink-0 rounded-lg p-0"
+                        className="w-8 shrink-0 p-0"
                         aria-label="Додати пункт"
                         disabled={!newChecklistItem.trim()}
                         onClick={() => handleAddChecklistItem(selected, newChecklistItem)}
@@ -1772,7 +1772,7 @@ export default function MarketingPage() {
                       }}
                       onBlur={commitNotesDraft}
                       placeholder="Локація, реквізит, ідеї для кадрів…"
-                      className="min-h-[72px] rounded-xl text-[13px]"
+                      className="min-h-[72px] text-[13px]"
                       aria-label="Нотатки для зйомки"
                     />
                   </div>
@@ -1783,7 +1783,7 @@ export default function MarketingPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 shrink-0 gap-1.5 rounded-lg text-muted-foreground"
+                      className="shrink-0 gap-1.5 text-muted-foreground"
                       onClick={() => {
                         updateRecord(selected, { isHidden: !selectedRecord.isHidden });
                         closeDetail();

@@ -865,7 +865,7 @@ export function QuoteRunMarkupPanel({
             ) : null}
 
             {showRequestButton ? (
-              <Button size="sm" className="h-7 shrink-0" disabled={busy} onClick={onRequestApproval}>
+              <Button size="sm" className="shrink-0" disabled={busy} onClick={onRequestApproval}>
                 {state.kind === "rejected" ? "Надіслати запит наново" : "Надіслати на погодження"}
               </Button>
             ) : null}
@@ -874,13 +874,13 @@ export function QuoteRunMarkupPanel({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 shrink-0"
+                  className="shrink-0"
                   disabled={busy}
                   onClick={() => onDecide("rejected")}
                 >
                   Відхилити
                 </Button>
-                <Button size="sm" className="h-7 shrink-0" disabled={busy} onClick={() => onDecide("approved")}>
+                <Button size="sm" className="shrink-0" disabled={busy} onClick={() => onDecide("approved")}>
                   Підтвердити {formatRate(state.approval.markupRate)}
                 </Button>
               </>

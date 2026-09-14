@@ -1794,7 +1794,7 @@ export function TeamMembersPage() {
                         align="end"
                         contentClassName="w-48"
                         trigger={
-                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                          <Button variant="ghost" size="iconSm" className="shrink-0">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         }
@@ -2050,7 +2050,7 @@ export function TeamMembersPage() {
                                 align="end"
                                 contentClassName="w-48"
                                 trigger={
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <Button variant="ghost" size="iconSm">
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 }
@@ -2369,7 +2369,7 @@ export function TeamMembersPage() {
                 <div className="shrink-0 border-t border-border bg-card px-6 py-4">
                   <Button
                     variant="outline"
-                    className="h-10 w-full"
+                    className="w-full"
                     onClick={() => openPersonCard(pulsePeekUserId)}
                   >
                     Відкрити картку учасника
@@ -2406,13 +2406,12 @@ export function TeamMembersPage() {
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="user@company.com"
-                    className="h-11"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-foreground">Рівень доступу</Label>
                   <Select value={inviteAccessRole} onValueChange={setInviteAccessRole}>
-                    <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{
+                    <SelectTrigger className={CONTROL_BASE}>{
                       inviteAccessRoleOptions.find((o) => o.value === inviteAccessRole)?.label
                     }</SelectTrigger>
                     <SelectContent>
@@ -2427,7 +2426,7 @@ export function TeamMembersPage() {
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-foreground">Роль у команді</Label>
                   <Select value={inviteJobRole} onValueChange={setInviteJobRole}>
-                    <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{
+                    <SelectTrigger className={CONTROL_BASE}>{
                       JOB_ROLE_OPTIONS.find((o) => o.value === inviteJobRole)?.label
                     }</SelectTrigger>
                     <SelectContent>
@@ -2443,7 +2442,7 @@ export function TeamMembersPage() {
                   <Button
                     onClick={() => createInvite("link")}
                     disabled={inviteBusy !== null}
-                    className="w-full h-11"
+                    className="w-full"
                   >
                     {inviteBusy === "link" ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -2457,7 +2456,7 @@ export function TeamMembersPage() {
                     variant="outline"
                     onClick={() => createInvite("email")}
                     disabled={inviteBusy !== null}
-                    className="w-full h-11"
+                    className="w-full"
                   >
                     {inviteBusy === "email" ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -2492,12 +2491,12 @@ export function TeamMembersPage() {
                     <Input
                       value={inviteResult.actionLink ?? ""}
                       readOnly
-                      className="font-mono text-sm bg-muted/50 h-11 border-dashed text-foreground"
+                      className="font-mono text-sm bg-muted/50 border-dashed text-foreground"
                     />
                     <Button
                       size="icon"
                       variant="outline"
-                      className="h-11 w-11 shrink-0"
+                      className="shrink-0"
                       onClick={() => {
                         if (!inviteResult.actionLink) return;
                         navigator.clipboard.writeText(inviteResult.actionLink);
@@ -2515,7 +2514,7 @@ export function TeamMembersPage() {
                     доби. Надсилай в особисті, не в спільний чат.
                   </p>
                 </div>
-                <Button variant="ghost" className="w-full h-11" onClick={() => setInviteOpen(false)}>
+                <Button variant="ghost" className="w-full" onClick={() => setInviteOpen(false)}>
                   Закрити
                 </Button>
               </div>
@@ -2533,7 +2532,7 @@ export function TeamMembersPage() {
                 </div>
                 <Button
                   variant="outline"
-                  className="w-full h-11"
+                  className="w-full"
                   disabled={inviteBusy !== null}
                   onClick={() => createInvite("link")}
                 >
@@ -2545,7 +2544,7 @@ export function TeamMembersPage() {
                     </>
                   )}
                 </Button>
-                <Button variant="ghost" className="w-full h-11" onClick={() => setInviteOpen(false)}>
+                <Button variant="ghost" className="w-full" onClick={() => setInviteOpen(false)}>
                   Закрити
                 </Button>
               </div>
@@ -2558,7 +2557,7 @@ export function TeamMembersPage() {
 
       <Dialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>
         {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
-        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-inner">
+        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />
@@ -2572,12 +2571,12 @@ export function TeamMembersPage() {
           </div>
 
           <div className="flex flex-col gap-3 p-6 pt-0 sm:flex-row">
-            <Button variant="outline" className="flex-1 h-11" onClick={() => setRevokeId(null)}>
+            <Button variant="outline" className="flex-1" onClick={() => setRevokeId(null)}>
               Скасувати
             </Button>
             <Button
               variant="destructiveSolid"
-              className="flex-1 h-11"
+              className="flex-1"
               onClick={handleRevoke}
               disabled={revokeBusy}
             >
@@ -2590,7 +2589,7 @@ export function TeamMembersPage() {
 
       <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && !memberDeleteBusy && setMemberToDelete(null)}>
         {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
-        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-inner">
+        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />
@@ -2606,12 +2605,12 @@ export function TeamMembersPage() {
           </div>
 
           <div className="flex flex-col gap-3 p-6 pt-0 sm:flex-row">
-            <Button variant="outline" className="flex-1 h-11" onClick={() => setMemberToDelete(null)} disabled={memberDeleteBusy}>
+            <Button variant="outline" className="flex-1" onClick={() => setMemberToDelete(null)} disabled={memberDeleteBusy}>
               Скасувати
             </Button>
             <Button
               variant="destructiveSolid"
-              className="flex-1 h-11"
+              className="flex-1"
               onClick={handleDeleteMember}
               disabled={memberDeleteBusy}
             >

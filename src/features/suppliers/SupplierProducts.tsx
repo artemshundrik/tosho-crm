@@ -74,7 +74,7 @@ export function SupplierProducts({
             onChange={(event) => setTerm(event.target.value)}
             placeholder={`Пошук у товарах ${definition.name}: назва або артикул`}
             aria-label={`Пошук у товарах ${definition.name}`}
-            className="h-10 rounded-full pl-9 text-sm"
+            className="rounded-full pl-9 text-sm"
           />
         </div>
         {categories.data && categories.data.length > 0 ? (
@@ -82,7 +82,7 @@ export function SupplierProducts({
             value={category ?? ALL_CATEGORIES}
             onValueChange={(value) => setCategory(value === ALL_CATEGORIES ? null : value)}
           >
-            <SelectTrigger className="h-10 sm:w-64" aria-label="Розділ">
+            <SelectTrigger className="sm:w-64" aria-label="Розділ">
               <SelectValue placeholder="Усі розділи" />
             </SelectTrigger>
             <SelectContent>

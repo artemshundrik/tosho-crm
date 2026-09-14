@@ -205,16 +205,15 @@ export function AbsenceRow({
         {canDecide && absence.status === "pending" ? (
           <div className="flex shrink-0 items-center gap-2">
             <Button
-              size="sm"
+              size="md"
               variant="successTonal"
               onClick={onApprove}
               disabled={deciding}
-              className="h-10 lg:h-8"
             >
               {deciding ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
               Погодити
             </Button>
-            <Button size="sm" variant="destructive" onClick={onDecline} disabled={deciding} className="h-10 lg:h-8">
+            <Button size="md" variant="destructive" onClick={onDecline} disabled={deciding}>
               Відхилити
             </Button>
           </div>
@@ -224,11 +223,11 @@ export function AbsenceRow({
         ) : null}
         {canCancel ? (
           <Button
-            size="sm"
+            size="md"
             variant="outline"
             onClick={onCancel}
             disabled={cancelling}
-            className="h-10 shrink-0 lg:h-8"
+            className="shrink-0"
           >
             {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
             Скасувати
@@ -239,13 +238,13 @@ export function AbsenceRow({
             більша за саму іконку. */}
         {canManage ? (
           <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100">
-            <Button variant="ghost" size="icon" className="h-11 w-11 lg:h-9 lg:w-9" onClick={onEdit} aria-label="Редагувати">
+            <Button variant="ghost" size="icon" onClick={onEdit} aria-label="Редагувати">
               <Pencil className="h-3.5 w-3.5" aria-hidden />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-11 w-11 text-destructive lg:h-9 lg:w-9"
+              className="text-destructive"
               onClick={onDelete}
               disabled={deleting}
               aria-label="Видалити"

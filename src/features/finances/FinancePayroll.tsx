@@ -949,7 +949,6 @@ function PayrollNoteCell({
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-7"
                 disabled={saving}
                 onClick={() => {
                   setEditing(false);
@@ -958,7 +957,7 @@ function PayrollNoteCell({
               >
                 Скасувати
               </Button>
-              <Button type="button" size="sm" className="h-7" disabled={saving} onClick={() => void save()}>
+              <Button type="button" size="sm" disabled={saving} onClick={() => void save()}>
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Зберегти"}
               </Button>
             </div>
@@ -969,7 +968,7 @@ function PayrollNoteCell({
               {hasNote ? note : <span className="text-muted-foreground">Нотатки ще немає</span>}
             </div>
             <div className="flex justify-end">
-              <Button type="button" size="sm" variant="ghost" className="h-7" onClick={startEdit}>
+              <Button type="button" size="sm" variant="ghost" onClick={startEdit}>
                 Редагувати
               </Button>
             </div>

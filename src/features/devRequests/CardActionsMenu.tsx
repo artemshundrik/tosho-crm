@@ -54,8 +54,8 @@ export function CardActionsMenu({ move, onEdit, onDelete, onCopyCard }: CardActi
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground"
+          size="iconSm"
+          className="text-muted-foreground"
           aria-label="Дії із запитом"
           // Обидва обробники стріляють РАНІШЕ за обробники Radix: Slot
           // складає їх так, що спершу йде обробник дитини. Тобто спосіб

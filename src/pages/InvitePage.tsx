@@ -210,7 +210,7 @@ export default function InvitePage() {
           variant="ghost"
           size="sm"
           onClick={() => signOut()}
-          className="absolute top-4 right-4 h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-danger-soft/40"
+          className="absolute top-4 right-4 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-danger-soft/40"
           title="Вийти з акаунту"
         >
           <LogOut className="w-3.5 h-3.5 mr-1" /> Це не я

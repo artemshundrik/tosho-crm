@@ -1103,7 +1103,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
             onReset={() => setSelectedMonth(currentKey)}
             showReset={selectedMonth !== currentKey}
           >
-            <Button type="button" size="sm" className="h-8 gap-1.5" onClick={openCreate}>
+            <Button type="button" size="sm" className="gap-1.5" onClick={openCreate}>
               <Plus className="h-4 w-4" /> Додати витрату
             </Button>
           </FinanceMonthBar>
@@ -1361,7 +1361,7 @@ function CategoryPicker({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("h-10 w-full justify-between px-3 font-normal", !categoryName && "text-muted-foreground")}
+          className={cn("w-full justify-between px-3 font-normal", !categoryName && "text-muted-foreground")}
         >
           <span className="flex min-w-0 items-center gap-2">
             {TriggerIcon
@@ -1868,7 +1868,6 @@ function ExpenseDialog({
                             onChange={(e) => updateRow(row.id, { name: e.target.value })}
                             placeholder="Напр. Богданівська, Київстар…"
                             aria-label="Назва платежу"
-                            className="h-10"
                           />
                         </div>
                       </div>
@@ -1884,13 +1883,13 @@ function ExpenseDialog({
                               inputMode="decimal"
                               placeholder={row.amountVaries ? "необов'язково" : "0.00"}
                               aria-label="Сума"
-                              className="h-10 min-w-0 flex-1 tabular-nums"
+                              className="min-w-0 flex-1 tabular-nums"
                             />
                             <Select
                               value={row.currency}
                               onValueChange={(v) => updateRow(row.id, { currency: v as FxCurrency })}
                             >
-                              <SelectTrigger className="h-10 w-[64px] shrink-0 px-2.5" aria-label="Валюта">
+                              <SelectTrigger className="w-[64px] shrink-0 px-2.5" aria-label="Валюта">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1909,7 +1908,7 @@ function ExpenseDialog({
                             value={row.period}
                             onValueChange={(v) => updateRow(row.id, { period: v as BillingPeriod })}
                           >
-                            <SelectTrigger className="h-10" aria-label="Періодичність">
+                            <SelectTrigger aria-label="Періодичність">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1933,7 +1932,7 @@ function ExpenseDialog({
                   ))}
                 </div>
 
-                <Button type="button" variant="outline" size="sm" className="mt-2 h-9 gap-1.5" onClick={addRow}>
+                <Button type="button" variant="outline" size="md" className="mt-2 gap-1.5" onClick={addRow}>
                   <Plus className="h-4 w-4" /> Додати платіж
                 </Button>
               </div>
@@ -1950,14 +1949,13 @@ function ExpenseDialog({
                     onChange={(e) => setObjectGroup(e.target.value)}
                     list="expense-object-options"
                     placeholder="Напр. Богданівська 7 — згрупує оренду, комуналку, інтернет цього офісу"
-                    className="h-10"
                   />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="grid gap-2">
                     <Label>Спосіб оплати</Label>
                     <Select value={accountId || "none"} onValueChange={(v) => setAccountId(v === "none" ? "" : v)}>
-                      <SelectTrigger className="h-10">
+                      <SelectTrigger>
                         <SelectValue placeholder="Не вказано" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1973,7 +1971,7 @@ function ExpenseDialog({
                   <div className="grid gap-2">
                     <Label>Юрособа</Label>
                     <Select value={legalEntityId || "none"} onValueChange={(v) => setLegalEntityId(v === "none" ? "" : v)}>
-                      <SelectTrigger className="h-10">
+                      <SelectTrigger>
                         <SelectValue placeholder="Не вказано" />
                       </SelectTrigger>
                       <SelectContent>
@@ -2027,10 +2025,10 @@ function ExpenseDialog({
                     inputMode="decimal"
                     placeholder="0.00"
                     autoFocus={!editing}
-                    className="h-10 text-base font-semibold tabular-nums"
+                    className="text-base font-semibold tabular-nums"
                   />
                   <Select value={currency} onValueChange={(v) => setCurrency(v as FxCurrency)}>
-                    <SelectTrigger className="h-10 w-[92px] shrink-0">
+                    <SelectTrigger className="w-[92px] shrink-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2091,7 +2089,6 @@ function ExpenseDialog({
                     onChange={(e) => setObjectGroup(e.target.value)}
                     list="expense-object-options"
                     placeholder="Напр. Богданівська 7 (щоб згрупувати з комуналкою)"
-                    className="h-10"
                   />
                 </div>
               ) : null}
@@ -2105,7 +2102,7 @@ function ExpenseDialog({
                         від них запису за кожен місяць — брехня (REQ-190). Сталій сумі
                         «по потребі» не буває: там платіж має графік. */}
                     <Select value={billingPeriod} onValueChange={(v) => setBillingPeriod(v as BillingPeriod)}>
-                      <SelectTrigger className="h-10">
+                      <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -2154,7 +2151,7 @@ function ExpenseDialog({
                               value={String(reminderLeadDays)}
                               onValueChange={(v) => setReminderLeadDays(Number(v))}
                             >
-                              <SelectTrigger className="h-9 w-[136px]">
+                              <SelectTrigger className="w-[136px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -2206,7 +2203,6 @@ function ExpenseDialog({
                           ? "Паливо, прибирання офісу, вода…"
                           : "Назва постачальника"
                   }
-                  className="h-10"
                 />
                 {varyingRecurring && !isEvent ? (
                   <p className="text-2xs leading-4 text-muted-foreground">
@@ -2218,7 +2214,7 @@ function ExpenseDialog({
               <div className="grid gap-2">
                 <Label>Стаття витрат</Label>
                 <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : v)}>
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger>
                     <SelectValue placeholder="Без статті" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2242,7 +2238,7 @@ function ExpenseDialog({
                 <div className="grid gap-2 sm:col-span-2">
                   <Label>Сервіс зі списку</Label>
                   <Select value={vendorKey || "none"} onValueChange={(v) => applyBrand(v === "none" ? "" : v)}>
-                    <SelectTrigger className="h-10">
+                    <SelectTrigger>
                       <SelectValue placeholder="Не вказано" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2263,7 +2259,7 @@ function ExpenseDialog({
               <div className="grid gap-2">
                 <Label>Спосіб оплати</Label>
                 <Select value={accountId || "none"} onValueChange={(v) => setAccountId(v === "none" ? "" : v)}>
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger>
                     <SelectValue placeholder="Не вказано" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2279,7 +2275,7 @@ function ExpenseDialog({
               <div className="grid gap-2">
                 <Label>Юрособа</Label>
                 <Select value={legalEntityId || "none"} onValueChange={(v) => setLegalEntityId(v === "none" ? "" : v)}>
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger>
                     <SelectValue placeholder="Не вказано" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2325,7 +2321,7 @@ function ExpenseDialog({
                     <Label className="text-xs uppercase tracking-wide text-muted-foreground">
                       Розподіл на замовлення
                     </Label>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={addAllocation}>
+                    <Button type="button" variant="ghost" size="sm" className="gap-1 px-2 text-xs" onClick={addAllocation}>
                       <Plus className="h-3.5 w-3.5" /> Замовлення
                     </Button>
                   </div>
@@ -2352,13 +2348,13 @@ function ExpenseDialog({
                             onChange={(e) => updateAllocation(index, { amount: e.target.value })}
                             inputMode="decimal"
                             placeholder="сума"
-                            className="h-9 w-24"
+                            className="w-24"
                           />
                           <Button
                             type="button"
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0 text-muted-foreground"
+                            size="iconSm"
+                            className="shrink-0 text-muted-foreground"
                             onClick={() => removeAllocation(index)}
                           >
                             <X className="h-4 w-4" />

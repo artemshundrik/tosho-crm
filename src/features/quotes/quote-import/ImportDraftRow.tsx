@@ -575,11 +575,11 @@ function KindChip({
       <PopoverContent align="start" className="w-72 p-1.5">
         <div className="relative mb-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
+          <Input controlSize="sm"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Пошук виду"
-            className="h-8 rounded-full pl-8 text-sm"
+            className="rounded-full pl-8 text-sm"
             autoFocus
           />
         </div>

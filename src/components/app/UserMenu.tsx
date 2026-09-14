@@ -326,7 +326,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
               type="button"
               variant="menu"
               size="icon"
-              className="h-10 w-10 rounded-xl p-0 hover:bg-background"
+              className="p-0 hover:bg-background"
               aria-label="Меню профілю"
             >
               <AvatarBase
@@ -367,7 +367,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           variant="menu"
           size="md"
           className={cn(
-            "group/acct w-full h-auto rounded-xl px-2 py-2 text-left hover:bg-background transition-colors"
+            "group/acct w-full h-auto px-2 py-2 text-left hover:bg-background transition-colors"
           )}
         >
           {/* w-full тут обовʼязковий: без нього внутрішній flex був завширшки

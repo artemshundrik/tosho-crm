@@ -83,7 +83,7 @@ export function PricingSection({
 
                 <Input
                   type="number"
-                  className="h-10 text-center font-medium"
+                  className="text-center font-medium"
                   value={tier.min}
                   onChange={(e) =>
                     onTierUpdate(tier.id, { min: Math.max(1, Number(e.target.value) || 1) })
@@ -92,7 +92,7 @@ export function PricingSection({
                 <Input
                   type="number"
                   className={cn(
-                    "h-10 text-center font-medium",
+                    "text-center font-medium",
                     !tier.max && "text-muted-foreground/60 italic"
                   )}
                   placeholder="∞"
@@ -108,7 +108,7 @@ export function PricingSection({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-10 w-10 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
                   onClick={() => onRemoveTier(tier.id)}
                   disabled={draftTiers.length === 1}
                 >

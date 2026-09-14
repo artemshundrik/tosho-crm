@@ -302,7 +302,6 @@ export function ContentHeader({
               value={positionModalValue}
               onChange={(e) => setPositionModalValue(e.target.value)}
               placeholder="Напр. Лівий рукав"
-              className="h-11"
               autoFocus
             />
             {printPositionError && (
@@ -385,7 +384,6 @@ export function ContentHeader({
               value={methodModalValue}
               onChange={(e) => setMethodModalValue(e.target.value)}
               placeholder="Напр. DTF"
-              className="h-11"
               autoFocus
             />
 

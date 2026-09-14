@@ -825,8 +825,8 @@ export default function NotificationsPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    size="iconMd"
-                    className="h-10 w-10 rounded-2xl border-border/60 bg-background/70"
+                    size="icon"
+                    className="border-border/60 bg-background/70"
                     onClick={openSettings}
                     aria-label="Налаштування сповіщень"
                   >
@@ -838,8 +838,8 @@ export default function NotificationsPage() {
             <Button
               type="button"
               variant="outline"
-              size="iconMd"
-              className="h-10 w-10 rounded-2xl border-border/60 bg-background/70 md:hidden"
+              size="icon"
+              className="border-border/60 bg-background/70 md:hidden"
               onClick={openSettings}
               aria-label="Налаштування сповіщень"
             >
@@ -953,7 +953,7 @@ export default function NotificationsPage() {
                       <div className="flex w-full flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-start md:justify-end">
                         <Button
                           variant="outline"
-                          className="h-9 w-full text-sm sm:h-10 sm:w-auto"
+                          className="w-full text-sm sm:w-auto"
                           onClick={push.sendTest}
                           disabled={push.busy || !push.enabled}
                         >
@@ -1062,7 +1062,7 @@ export default function NotificationsPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="h-9 w-full text-sm sm:h-10 sm:w-auto"
+                        className="w-full text-sm sm:w-auto"
                         disabled={!inAppNotificationsEnabled}
                         onClick={async () => {
                           const result = await playInAppNotificationSound(true);
@@ -1137,13 +1137,13 @@ export default function NotificationsPage() {
               <Badge variant="secondary" className="hidden w-fit bg-background/80 sm:inline-flex">Тільки для перевірки</Badge>
             </div>
             <div className="mt-3 grid grid-cols-1 gap-2 sm:mt-4 sm:flex sm:flex-wrap">
-              <Button type="button" variant="outline" className="h-9 w-full text-sm sm:h-10 sm:w-auto" onClick={() => showInAppPreview("info")}>
+              <Button type="button" variant="outline" className="w-full text-sm sm:w-auto" onClick={() => showInAppPreview("info")}>
                 Звичайне
               </Button>
-              <Button type="button" variant="outline" className="h-9 w-full text-sm sm:h-10 sm:w-auto" onClick={() => showInAppPreview("success")}>
+              <Button type="button" variant="outline" className="w-full text-sm sm:w-auto" onClick={() => showInAppPreview("success")}>
                 Успішне
               </Button>
-              <Button type="button" variant="outline" className="h-9 w-full text-sm sm:h-10 sm:w-auto" onClick={() => showInAppPreview("warning")}>
+              <Button type="button" variant="outline" className="w-full text-sm sm:w-auto" onClick={() => showInAppPreview("warning")}>
                 Важливе
               </Button>
             </div>
@@ -1205,7 +1205,7 @@ export default function NotificationsPage() {
               size="md"
               onClick={() => openNotification(n)}
               className={cn(
-                "group h-auto w-full justify-start rounded-4xl p-0 text-left hover:bg-transparent",
+                "group h-auto w-full justify-start p-0 text-left hover:bg-transparent",
                 !n.read && "data-[state=active]:ring-0"
               )}
             >

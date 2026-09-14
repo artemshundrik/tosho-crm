@@ -166,7 +166,7 @@ const ToolbarButton = ({
     disabled={disabled}
     aria-label={label}
     title={label}
-    className="h-7 px-2"
+    className="px-2"
   >
     {children}
   </Button>

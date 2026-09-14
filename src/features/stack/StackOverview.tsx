@@ -92,11 +92,11 @@ export function StackOverview() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Tabs value={mode} onValueChange={(value) => setMode(value as Mode)}>
-          <TabsList className="h-10">
-            <TabsTrigger value="layers" className="h-8 text-[13px]">
+          <TabsList>
+            <TabsTrigger value="layers" className="text-[13px]">
               За шарами
             </TabsTrigger>
-            <TabsTrigger value="urgency" className="h-8 text-[13px]">
+            <TabsTrigger value="urgency" className="text-[13px]">
               За терміновістю
             </TabsTrigger>
           </TabsList>
@@ -105,8 +105,8 @@ export function StackOverview() {
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          className="h-9 gap-1.5"
+          size="md"
+          className="gap-1.5"
           onClick={runRecheck}
           disabled={recheck.isPending}
         >

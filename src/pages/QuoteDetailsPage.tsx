@@ -4202,9 +4202,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <HoverTip asChild label="Назад">
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="iconSm"
                   onClick={() => navigate("/orders/estimates")}
-                  className="h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
                   aria-label="Назад"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -4262,7 +4262,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-2"
+                  className="gap-2"
                   onClick={() => void openCreateOrderDialog()}
                 >
                   <FileDown className="h-4 w-4" />
@@ -4284,7 +4284,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button variant="ghost" size="iconSm">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -4775,8 +4775,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     <DropdownMenuTrigger asChild>
                                       <Button
                                         variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
+                                        size="iconSm"
                                         aria-label={`Дії з позицією «${item.title}»`}
                                       >
                                         <MoreHorizontal className="h-4 w-4" />
@@ -5003,7 +5002,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
+                                            className="gap-1.5 text-muted-foreground hover:text-destructive"
                                             onClick={() => void removeRun(activeItemRunIndex)}
                                           >
                                             <Trash2 className="h-3.5 w-3.5" />
@@ -5119,7 +5118,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
                 <div className="flex items-center gap-3">
                   {canEditRuns && items.length <= 1 ? (
-                    <Button variant="ghost" size="sm" onClick={() => addRun()} className="h-8 gap-1.5 px-2.5 text-xs">
+                    <Button variant="ghost" size="sm" onClick={() => addRun()} className="gap-1.5 px-2.5 text-xs">
                       <Plus className="h-3.5 w-3.5" />
                       Додати тираж
                     </Button>
@@ -5150,7 +5149,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <p className="mt-0.5 text-xs text-muted-foreground">Додайте тираж для розрахунку вартості</p>
                   </div>
                   {canEditRuns ? (
-                    <Button size="sm" variant="outline" onClick={() => addRun()} className="mt-1 h-8 gap-1.5 text-xs">
+                    <Button size="sm" variant="outline" onClick={() => addRun()} className="mt-1 gap-1.5 text-xs">
                       <Plus className="h-3.5 w-3.5" />
                       Додати тираж
                     </Button>
@@ -5191,7 +5190,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               variant="ghost"
                               size="sm"
                               onClick={() => addRun(section.item?.id ?? null)}
-                              className="h-8 gap-1.5 px-2.5 text-xs"
+                              className="gap-1.5 px-2.5 text-xs"
                             >
                               <Plus className="h-3.5 w-3.5" />
                               Додати тираж
@@ -5324,7 +5323,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 gap-1.5 text-destructive hover:text-destructive"
+                                  className="gap-1.5 text-destructive hover:text-destructive"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     void removeRun(idx);
@@ -5425,12 +5424,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 {!disabled ? (
                                   <Button
                                     variant="ghost"
-                                    size="icon"
+                                    size="iconSm"
                                     // focus-visible на кнопці, не group-focus-within на
                                     // рядку: у рядку тиражу є поля вводу, і клік у будь-яке
                                     // з них лишав кошик стирчати. Гірше — наведеш на сусідній
                                     // рядок, і кошики світяться в ДВОХ рядках одночасно.
-                                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                                    className="shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       void removeRun(idx);
@@ -5471,7 +5470,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         variant="outline"
                         onClick={() => void saveRuns()}
                         disabled={runsSaving || quoteRequirements.length > 0}
-                        className="h-8 gap-1.5 text-xs"
+                        className="gap-1.5 text-xs"
                       >
                         {runsSaving ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -5523,7 +5522,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <TabsList className="grid h-auto w-full grid-cols-1 gap-2 border-0 bg-transparent p-0">
                     <TabsTrigger
                       value="customer"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Дедлайн замовника</div>
@@ -5567,7 +5566,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <TabsTrigger
                       value="internal"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Внутрішній дедлайн</div>
@@ -5597,7 +5596,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <TabsTrigger
                       value="design"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Дедлайн дизайну</div>
@@ -5650,7 +5649,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="outline"
-                                  className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                                  className="w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
                                   onClick={() => setCustomerDeadlinePopoverOpen(true)}
                                 >
                                   <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -5692,7 +5691,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <div className="flex justify-end">
                           <Button
                             variant="outline"
-                            className="h-9 gap-2 border-border/40 bg-muted/[0.03]"
+                            className="gap-2 border-border/40 bg-muted/[0.03]"
                             onClick={() =>
                               void handleSaveSecondaryDeadline("customer_deadline_at", {
                                 date: customerDeadlineDate,
@@ -5719,7 +5718,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="outline"
-                                  className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                                  className="w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
                                   onClick={() => setDeadlinePopoverOpen(true)}
                                 >
                                   <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -5808,7 +5807,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <div className="flex justify-end">
                           <Button
                             variant="outline"
-                            className="h-9 gap-2 border-border/40 bg-muted/[0.03]"
+                            className="gap-2 border-border/40 bg-muted/[0.03]"
                             onClick={() => void handleSaveDeadline()}
                             disabled={deadlineSaving}
                           >
@@ -5828,7 +5827,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="outline"
-                                  className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                                  className="w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
                                   onClick={() => setDesignDeadlinePopoverOpen(true)}
                                 >
                                   <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -5870,7 +5869,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <div className="flex justify-end">
                           <Button
                             variant="outline"
-                            className="h-9 gap-2 border-border/40 bg-muted/[0.03]"
+                            className="gap-2 border-border/40 bg-muted/[0.03]"
                             onClick={() =>
                               void handleSaveSecondaryDeadline("design_deadline_at", {
                                 date: designDeadlineDate,
@@ -6405,7 +6404,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <div className="space-y-2">
                 <Label className="text-sm">Причина (з переліку)</Label>
                 <Select value={cancelReason} onValueChange={setCancelReason}>
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger>
                     <SelectValue placeholder="Оберіть причину" />
                   </SelectTrigger>
                   <SelectContent>

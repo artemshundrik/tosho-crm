@@ -122,8 +122,8 @@ export function CompactSidebar({
         <HoverTip asChild label="Додати категорію">
           <Button
             variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+            size="iconSm"
+            className="text-primary hover:text-primary hover:bg-primary/10"
             onClick={() => onAddType("other")}
             aria-label="Додати категорію"
           >

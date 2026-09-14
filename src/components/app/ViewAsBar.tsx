@@ -94,7 +94,7 @@ export function ViewAsBar({ className }: { className?: string }) {
         type="button"
         variant="outline"
         size="xs"
-        className="ml-auto h-6 shrink-0 border-current/30 bg-transparent text-current hover:bg-current/10"
+        className="ml-auto shrink-0 border-current/30 bg-transparent text-current hover:bg-current/10"
         onClick={() => writeViewAs(null)}
       >
         <X className="h-3 w-3" />

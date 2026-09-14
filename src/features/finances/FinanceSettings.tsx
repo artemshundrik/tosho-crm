@@ -299,7 +299,7 @@ function LegalEntitiesPanel({
         <p className="text-sm text-muted-foreground">
           Наші юрособи: ТОВ, ФОПи та фізособа. Вони визначають контури обліку й канали оплат.
         </p>
-        <Button type="button" size="sm" className="h-8 gap-1.5" onClick={openCreate}>
+        <Button type="button" size="sm" className="gap-1.5" onClick={openCreate}>
           <Plus className="h-4 w-4" /> Додати юрособу
         </Button>
       </div>
@@ -363,14 +363,13 @@ function LegalEntitiesPanel({
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 placeholder="Напр. ТОВ «Тошо» або ФОП Іваненко І.І."
-                className="h-9"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label>Тип</Label>
                 <Select value={form.kind} onValueChange={(v) => setForm((p) => ({ ...p, kind: v as LegalEntityKind }))}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -388,7 +387,6 @@ function LegalEntitiesPanel({
                   value={form.taxGroup ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, taxGroup: e.target.value }))}
                   placeholder="Напр. 3"
-                  className="h-9"
                 />
               </div>
             </div>
@@ -405,7 +403,6 @@ function LegalEntitiesPanel({
                 <Input controlSize="md"
                   value={form.edrpou ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, edrpou: e.target.value }))}
-                  className="h-9"
                 />
               </div>
               <div className="grid gap-2">
@@ -413,7 +410,6 @@ function LegalEntitiesPanel({
                 <Input controlSize="md"
                   value={form.ipn ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, ipn: e.target.value }))}
-                  className="h-9"
                 />
               </div>
             </div>
@@ -423,7 +419,6 @@ function LegalEntitiesPanel({
                 value={form.iban ?? ""}
                 onChange={(e) => setForm((p) => ({ ...p, iban: e.target.value }))}
                 placeholder="UA…"
-                className="h-9"
               />
             </div>
           </div>
@@ -543,7 +538,7 @@ function AccountsPanel({
         <p className="text-sm text-muted-foreground">
           Каси та гаманці — банк, готівка, крипта. Кожен рахунок має власний баланс.
         </p>
-        <Button type="button" size="sm" className="h-8 gap-1.5" onClick={openCreate}>
+        <Button type="button" size="sm" className="gap-1.5" onClick={openCreate}>
           <Plus className="h-4 w-4" /> Додати рахунок
         </Button>
       </div>
@@ -599,14 +594,13 @@ function AccountsPanel({
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 placeholder="Напр. Райфайзен ТОВ, Каса готівка"
-                className="h-9"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label>Тип</Label>
                 <Select value={form.kind} onValueChange={(v) => setKind(v as FinanceAccountKind)}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -624,7 +618,6 @@ function AccountsPanel({
                   value={form.currency ?? "UAH"}
                   onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
                   placeholder="UAH"
-                  className="h-9"
                 />
               </div>
             </div>
@@ -634,7 +627,7 @@ function AccountsPanel({
                 value={form.legalEntityId ?? "none"}
                 onValueChange={(v) => setForm((p) => ({ ...p, legalEntityId: v === "none" ? null : v }))}
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue placeholder="Оберіть юрособу" />
                 </SelectTrigger>
                 <SelectContent>
@@ -654,7 +647,7 @@ function AccountsPanel({
                   value={form.bankProvider ?? "none"}
                   onValueChange={(v) => setForm((p) => ({ ...p, bankProvider: v === "none" ? null : (v as FinanceBankProvider) }))}
                 >
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue placeholder="Оберіть банк" />
                   </SelectTrigger>
                   <SelectContent>
@@ -761,7 +754,6 @@ function CategoriesPanel({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Напр. Оренда офісу"
-            className="h-9"
             onKeyDown={(e) => {
               if (e.key === "Enter") void add();
             }}
@@ -770,7 +762,7 @@ function CategoriesPanel({
         <div className="grid w-[200px] gap-1.5">
           <Label className="text-xs">Тип</Label>
           <Select value={kind} onValueChange={(v) => setKind(v as ExpenseCategoryKind)}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -782,7 +774,7 @@ function CategoriesPanel({
             </SelectContent>
           </Select>
         </div>
-        <Button type="button" size="sm" className="h-9 gap-1.5" onClick={() => void add()} disabled={saving}>
+        <Button type="button" size="md" className="gap-1.5" onClick={() => void add()} disabled={saving}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Додати
         </Button>
       </div>
@@ -895,7 +887,7 @@ function RequisitesPanel({ entities }: { entities: FinanceLegalEntity[] }) {
                   </Badge>
                   <span className="text-sm font-medium text-foreground">{entity.name}</span>
                 </div>
-                <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => void copy(entity)}>
+                <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => void copy(entity)}>
                   {copiedId === entity.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                   Копіювати все
                 </Button>

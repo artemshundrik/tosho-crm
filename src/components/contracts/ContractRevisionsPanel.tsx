@@ -334,7 +334,7 @@ export const ContractRevisionsPanel = ({
             size="sm"
             onClick={() => setExpandedRevisionId((current) => (current === revision.id ? null : revision.id))}
             aria-label={expanded ? "Згорнути" : "Розгорнути"}
-            className="h-7 px-2"
+            className="px-2"
           >
             {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </Button>

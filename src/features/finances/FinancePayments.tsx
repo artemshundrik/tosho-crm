@@ -136,7 +136,7 @@ export function FinancePayments({ teamId, userId, canSeeSensitive }: FinancePaym
         <p className="text-sm text-muted-foreground">
           Факт надходження грошей. Кожна оплата прив'язується до замовлення й каси.
         </p>
-        <Button type="button" size="sm" className="h-8 gap-1.5" onClick={openCreate} disabled={noAccounts}>
+        <Button type="button" size="sm" className="gap-1.5" onClick={openCreate} disabled={noAccounts}>
           <Plus className="h-4 w-4" /> Додати оплату
         </Button>
       </div>
@@ -323,7 +323,7 @@ function PaymentDialog({
             <div className="grid gap-2">
               <Label>Каса / рахунок <span className="text-destructive">*</span></Label>
               <Select value={accountId} onValueChange={setAccountId}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue placeholder="Оберіть" />
                 </SelectTrigger>
                 <SelectContent>
@@ -342,7 +342,6 @@ function PaymentDialog({
                 onChange={(e) => setAmount(e.target.value)}
                 inputMode="decimal"
                 placeholder="0.00"
-                className="h-9"
               />
             </div>
           </div>
@@ -354,7 +353,6 @@ function PaymentDialog({
                 onChange={(e) => setFxRate(e.target.value)}
                 inputMode="decimal"
                 placeholder="напр. 41.5"
-                className="h-9"
               />
             </div>
           ) : null}
@@ -366,7 +364,7 @@ function PaymentDialog({
             <div className="grid gap-2">
               <Label>Джерело</Label>
               <Select value={source} onValueChange={(v) => setSource(v as FinancePaymentSource)}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -431,7 +429,7 @@ function OrderPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" className="h-9 w-full justify-start font-normal">
+        <Button type="button" variant="outline" className="w-full justify-start font-normal">
           {selected ? (
             <span className="truncate">
               {selected.number} · {selected.customerName}
@@ -448,7 +446,7 @@ function OrderPicker({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Номер або замовник…"
-            className="h-9 pl-8"
+            className="pl-8"
           />
         </div>
         <div className="max-h-[280px] space-y-1 overflow-y-auto">

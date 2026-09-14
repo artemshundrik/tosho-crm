@@ -166,7 +166,7 @@ export const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ pr
             </span>
           ) : null}
           {href ? (
-            <Button asChild variant="outline" size="icon" className="h-8 w-8 shrink-0">
+            <Button asChild variant="outline" size="iconSm" className="shrink-0">
               <a
                 href={href}
                 target="_blank"

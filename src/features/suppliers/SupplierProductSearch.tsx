@@ -91,7 +91,7 @@ export function SupplierProductSearch({
           }}
           placeholder="Пошук у товарах постачальників: назва або артикул"
           aria-label="Пошук у товарах постачальників"
-          className="h-10 rounded-full pl-9 text-sm"
+          className="rounded-full pl-9 text-sm"
         />
       </div>
 

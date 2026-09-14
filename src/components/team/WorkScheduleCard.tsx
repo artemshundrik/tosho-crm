@@ -223,7 +223,7 @@ export function WorkScheduleCard({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-2xs"
+            className="px-2 text-2xs"
             onClick={() => setEditing((prev) => !prev)}
           >
             {editing ? "Згорнути" : schedule ? "Змінити" : "Задати"}

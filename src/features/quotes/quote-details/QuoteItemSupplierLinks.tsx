@@ -43,7 +43,7 @@ const snapshot = (metadata: unknown, key: "supplierUrl" | "avantprintUrl"): stri
 
 const LinkButton: React.FC<{ url: string; label: string; hint: string }> = ({ url, label, hint }) =>
   url ? (
-    <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 transition-colors">
+    <Button asChild variant="outline" size="sm" className="gap-1.5 transition-colors">
       <a href={url} target="_blank" rel="noopener noreferrer">
         {label}
         <ExternalLink className="h-3.5 w-3.5" />
@@ -54,7 +54,7 @@ const LinkButton: React.FC<{ url: string; label: string; hint: string }> = ({ ur
       <Button
         variant="outline"
         size="sm"
-        className="h-8 gap-1.5 border-dashed text-muted-foreground/70"
+        className="gap-1.5 border-dashed text-muted-foreground/70"
         disabled
         aria-label={hint}
       >

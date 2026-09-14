@@ -1224,7 +1224,7 @@ export function ProfilePage() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 shrink-0 text-xs text-muted-foreground"
+            className="shrink-0 text-xs text-muted-foreground"
             onClick={() => handleCancelRequest(absence)}
             disabled={cancelingId === absence.id}
           >
@@ -1482,10 +1482,10 @@ export function ProfilePage() {
                     />
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" className="h-10" onClick={handleCropCancel} disabled={avatarUploading}>
+                    <Button type="button" variant="outline" onClick={handleCropCancel} disabled={avatarUploading}>
                       Скасувати
                     </Button>
-                    <Button type="button" className="h-10" onClick={handleCropSave} disabled={avatarUploading || !croppedAreaPixels}>
+                    <Button type="button" onClick={handleCropSave} disabled={avatarUploading || !croppedAreaPixels}>
                       {avatarUploading ? "Завантажую..." : "Застосувати"}
                     </Button>
                   </div>
@@ -1743,7 +1743,7 @@ export function ProfilePage() {
               </div>
               <div className="-mx-5 -mb-5 mt-5 flex flex-col gap-3 rounded-b-inner border-t border-border/60 bg-muted/20 px-5 py-3 sm:flex-row sm:items-center">
                 <p className="text-xs text-muted-foreground sm:mr-auto">Ці дані бачить уся команда.</p>
-                <Button onClick={updateProfile} disabled={updating} className="h-9 sm:min-w-[180px]">
+                <Button onClick={updateProfile} disabled={updating} className="sm:min-w-[180px]">
                   {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                   Зберегти зміни
                 </Button>
@@ -1763,7 +1763,7 @@ export function ProfilePage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 min-w-[140px]"
+                  className="min-w-[140px]"
                   onClick={() => setPasswordDialogOpen(true)}
                 >
                   Змінити пароль
@@ -1864,7 +1864,7 @@ export function ProfilePage() {
                 {tgChatId == null && tgLinkHint ? (
                   <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-dashed border-border/70 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                     <span>Натиснув Start у боті?</span>
-                    <Button type="button" variant="ghost" className="h-8" onClick={handleTelegramRefresh} disabled={tgBusy}>
+                    <Button size="sm" type="button" variant="ghost" onClick={handleTelegramRefresh} disabled={tgBusy}>
                       Я підключив — оновити статус
                     </Button>
                   </div>

@@ -2122,7 +2122,7 @@ export function ToShoAiConsole({
                     variant="ghost"
                     size="sm"
                     onClick={handleStartNewThread}
-                    className="h-8 rounded-full px-2.5 sm:px-3"
+                    className="rounded-full px-2.5 sm:px-3"
                   >
                     <Plus className="h-4 w-4" />
                     <span className="hidden min-[420px]:inline">Новий чат</span>
@@ -2136,7 +2136,7 @@ export function ToShoAiConsole({
                   variant={showRequestList ? "secondary" : "ghost"}
                   size="sm"
                   onClick={handleToggleRequestList}
-                  className="h-8 rounded-full px-2.5 sm:px-3"
+                  className="rounded-full px-2.5 sm:px-3"
                 >
                   <MessageSquare className="h-4 w-4" />
                   <span className="hidden min-[380px]:inline">Історія</span>
@@ -2146,7 +2146,7 @@ export function ToShoAiConsole({
                   variant={knowledgeExpanded ? "secondary" : "ghost"}
                   size="sm"
                   onClick={handleToggleKnowledge}
-                  className="h-8 rounded-full px-2.5 sm:px-3"
+                  className="rounded-full px-2.5 sm:px-3"
                 >
                   <BookOpen className="h-4 w-4" />
                   <span className="hidden min-[380px]:inline">Знання</span>
@@ -2170,7 +2170,7 @@ export function ToShoAiConsole({
                 onChange={(event) => setQueueSearch(event.target.value)}
                 placeholder="Пошук по чатах"
                 disabled={historyPanelLoading && !historyLoaded}
-                className="mt-3 rounded-2xl border-border/60"
+                className="mt-3 border-border/60"
               />
               <div className="mt-3 space-y-3">
                 {historyPanelLoading && !historyLoaded ? (
@@ -2446,7 +2446,7 @@ export function ToShoAiConsole({
                 enterKeyHint="send"
                 rows={1}
                 placeholder={composerPlaceholder}
-                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto rounded-4xl border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-4xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
+                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-4xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
               />
               <Button
                 type="button"

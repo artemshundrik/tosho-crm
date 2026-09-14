@@ -416,13 +416,13 @@ function ContractorDetail({
       </div>
 
       <div className="mt-3.5 flex justify-end gap-2 border-t border-border/40 pt-3">
-        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onEdit}>
+        <Button variant="ghost" size="sm" className="text-xs" onClick={onEdit}>
           Редагувати
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 text-xs text-destructive hover:text-destructive"
+          className="text-xs text-destructive hover:text-destructive"
           onClick={onDelete}
         >
           <Trash2 className="mr-1.5 h-3.5 w-3.5" />
@@ -437,7 +437,7 @@ function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
+        <Button variant="ghost" size="iconSm">
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>

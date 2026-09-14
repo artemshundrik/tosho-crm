@@ -75,9 +75,9 @@ const ChipPicker: React.FC<{
               <Button
                 key={option.value}
                 variant="ghost"
-                size="sm"
+                size="md"
                 className={cn(
-                  "h-9 w-full justify-between text-sm",
+                  "w-full justify-between text-sm",
                   active && "bg-muted text-foreground hover:bg-muted/80 hover:text-foreground"
                 )}
                 onClick={() => {
@@ -200,7 +200,7 @@ export function PrintSpecFields({ preset, values, onChange, disabled }: PrintSpe
                     disabled={disabled}
                     inputMode="numeric"
                     placeholder="Ш"
-                    className="h-9 w-20"
+                    className="w-20"
                     onChange={(event) => update({ width: sanitizeNumeric(event.target.value) })}
                   />
                   <span className="text-sm text-muted-foreground">×</span>
@@ -209,7 +209,7 @@ export function PrintSpecFields({ preset, values, onChange, disabled }: PrintSpe
                     disabled={disabled}
                     inputMode="numeric"
                     placeholder="В"
-                    className="h-9 w-20"
+                    className="w-20"
                     onChange={(event) => update({ height: sanitizeNumeric(event.target.value) })}
                   />
                   {field.unit ? <span className="text-sm text-muted-foreground">{field.unit}</span> : null}
@@ -229,7 +229,6 @@ export function PrintSpecFields({ preset, values, onChange, disabled }: PrintSpe
               value={asString(raw)}
               disabled={disabled}
               inputMode="numeric"
-              className="h-9"
               onChange={(event) => setValue(field.id, sanitizeNumeric(event.target.value))}
             />
             {field.unit ? <span className="text-sm text-muted-foreground">{field.unit}</span> : null}
@@ -244,7 +243,6 @@ export function PrintSpecFields({ preset, values, onChange, disabled }: PrintSpe
           <Input
             value={asString(raw)}
             disabled={disabled}
-            className="h-9"
             onChange={(event) => setValue(field.id, event.target.value)}
           />
         </FieldShell>
@@ -270,7 +268,7 @@ export function PrintSpecFields({ preset, values, onChange, disabled }: PrintSpe
             value={asString(values[customValueKey(field.id)] ?? null)}
             disabled={disabled}
             placeholder="Вкажіть своє"
-            className="mt-2 h-9"
+            className="mt-2"
             onChange={(event) => setValue(customValueKey(field.id), event.target.value)}
           />
         ) : null}

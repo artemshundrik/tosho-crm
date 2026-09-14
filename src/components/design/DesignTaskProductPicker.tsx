@@ -268,7 +268,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+            className="gap-1 px-2 text-xs text-muted-foreground"
             onClick={clearProduct}
           >
             <X className="h-3.5 w-3.5" />
@@ -303,7 +303,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Категорія</Label>
           <Select value={value?.catalogTypeId ?? ""} onValueChange={handleTypeChange} disabled={catalogLoading}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger>
               <SelectValue placeholder={catalogLoading ? "Завантаження…" : "Оберіть категорію"} />
             </SelectTrigger>
             <SelectContent>
@@ -324,7 +324,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
             onValueChange={handleKindChange}
             disabled={!selectedType}
           >
-            <SelectTrigger className="h-9">
+            <SelectTrigger>
               <SelectValue placeholder={selectedType ? "Оберіть вид" : "Спершу категорія"} />
             </SelectTrigger>
             <SelectContent>
@@ -391,7 +391,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 px-2 text-xs"
+              className="gap-1 px-2 text-xs"
               onClick={addSurface}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -406,7 +406,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
                     value={surface.methodId ?? ""}
                     onValueChange={(methodId) => handleSurfaceMethodChange(index, methodId)}
                   >
-                    <SelectTrigger className="h-9 flex-1">
+                    <SelectTrigger className="flex-1">
                       <SelectValue placeholder="Метод" />
                     </SelectTrigger>
                     <SelectContent>
@@ -421,7 +421,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
                     value={surface.positionId ?? ""}
                     onValueChange={(positionId) => handleSurfacePositionChange(index, positionId)}
                   >
-                    <SelectTrigger className="h-9 flex-1">
+                    <SelectTrigger className="flex-1">
                       <SelectValue placeholder="Позиція" />
                     </SelectTrigger>
                     <SelectContent>
@@ -436,7 +436,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 shrink-0 text-muted-foreground"
+                    className="shrink-0 text-muted-foreground"
                     onClick={() => removeSurface(index)}
                   >
                     <X className="h-4 w-4" />
@@ -460,7 +460,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
             onValueChange={handlePrintTypeChange}
             disabled={catalogLoading}
           >
-            <SelectTrigger className="h-9">
+            <SelectTrigger>
               <SelectValue placeholder={catalogLoading ? "Завантаження…" : "Оберіть категорію"} />
             </SelectTrigger>
             <SelectContent>

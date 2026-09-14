@@ -170,7 +170,7 @@ export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationP
         <div className="grid gap-2">
           <Label>Замовник</Label>
           <Select value={customerKey} onValueChange={setCustomerKey}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger>
               <SelectValue placeholder="Оберіть замовника" />
             </SelectTrigger>
             <SelectContent>
@@ -185,7 +185,7 @@ export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationP
         <div className="grid gap-2">
           <Label>Наша юрособа</Label>
           <Select value={sellerId} onValueChange={setSellerId}>
-            <SelectTrigger className="h-9">
+            <SelectTrigger>
               <SelectValue placeholder="Оберіть" />
             </SelectTrigger>
             <SelectContent>
@@ -212,14 +212,14 @@ export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationP
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" className="h-8 gap-1.5" onClick={generatePdf} disabled={operations.length === 0}>
+            <Button type="button" size="sm" className="gap-1.5" onClick={generatePdf} disabled={operations.length === 0}>
               <FileDown className="h-4 w-4" /> Сформувати PDF
             </Button>
             <Button
               type="button"
               size="sm"
               variant="outline"
-              className="h-8 gap-1.5"
+              className="gap-1.5"
               onClick={generateExcel}
               disabled={operations.length === 0}
             >

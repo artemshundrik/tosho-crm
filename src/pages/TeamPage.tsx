@@ -1748,8 +1748,7 @@ export function TeamPage() {
             <div className="flex items-center gap-1.5">
               <Button
                 variant="outline"
-                size="icon"
-                className="h-8 w-8"
+                size="iconSm"
                 onClick={() => setMonthOffset((prev) => prev - 1)}
                 aria-label="Попередній місяць"
               >
@@ -1760,8 +1759,7 @@ export function TeamPage() {
               </span>
               <Button
                 variant="outline"
-                size="icon"
-                className="h-8 w-8"
+                size="iconSm"
                 onClick={() => setMonthOffset((prev) => prev + 1)}
                 aria-label="Наступний місяць"
               >
@@ -1887,8 +1885,8 @@ export function TeamPage() {
               </span>
               <Button
                 variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-2xs"
+                size="xs"
+                className="px-2 text-2xs"
                 onClick={() => setMonthOffset(0)}
               >
                 Повернутись до {currentYear}
@@ -2167,7 +2165,7 @@ function EmptyRow({
       <div className="text-xs font-medium text-muted-foreground">{title}</div>
       {hint ? <div className="max-w-[38ch] text-2xs text-muted-foreground/80">{hint}</div> : null}
       {actionLabel && onAction ? (
-        <Button variant="outline" size="sm" className="mt-1.5 h-8" onClick={onAction}>
+        <Button variant="outline" size="sm" className="mt-1.5" onClick={onAction}>
           {actionLabel}
         </Button>
       ) : null}

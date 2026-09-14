@@ -195,8 +195,7 @@ export function HolidayEditorDialog({
           <div className="flex items-center justify-center gap-1.5">
             <Button
               variant="outline"
-              size="icon"
-              className="h-8 w-8"
+              size="iconSm"
               onClick={() => setActiveYear((prev) => Math.max(minYear, prev - 1))}
               disabled={activeYear <= minYear}
               aria-label="Попередній рік"
@@ -208,8 +207,7 @@ export function HolidayEditorDialog({
             </span>
             <Button
               variant="outline"
-              size="icon"
-              className="h-8 w-8"
+              size="iconSm"
               onClick={() => setActiveYear((prev) => Math.min(maxYear, prev + 1))}
               disabled={activeYear >= maxYear}
               aria-label="Наступний рік"
@@ -299,7 +297,7 @@ export function HolidayEditorDialog({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-11 w-11 shrink-0 text-destructive sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                      className="shrink-0 text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                       onClick={() => void handleDelete(row.dateKey)}
                       disabled={removingKey === row.dateKey}
                       aria-label={`Прибрати ${formatHolidayDate(row.dateKey)}`}

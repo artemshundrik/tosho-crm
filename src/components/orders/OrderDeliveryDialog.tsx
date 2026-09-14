@@ -268,7 +268,7 @@ export function OrderDeliveryDialog({
                 setSaveToCard(true);
               }}
             >
-              <SelectTrigger className="h-9">
+              <SelectTrigger>
                 <SelectValue placeholder="Оберіть спосіб доставки" />
               </SelectTrigger>
               <SelectContent>

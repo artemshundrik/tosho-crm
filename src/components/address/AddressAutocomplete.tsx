@@ -158,7 +158,7 @@ export function AddressAutocomplete({
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         placeholder={placeholder}
-        className={cn("h-9", className)}
+        className={cn(className)}
         autoComplete="off"
       />
     );

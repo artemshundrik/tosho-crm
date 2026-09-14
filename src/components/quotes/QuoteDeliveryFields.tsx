@@ -224,7 +224,7 @@ export function QuoteDeliveryFields({
               if (point) onChange(patchFromDeliveryPoint(point));
             }}
           >
-            <SelectTrigger className="h-9">
+            <SelectTrigger>
               <SelectValue placeholder="Оберіть збережену адресу" />
             </SelectTrigger>
             <SelectContent>
@@ -254,7 +254,6 @@ export function QuoteDeliveryFields({
               value={details.region}
               onChange={(e) => onChange({ region: e.target.value })}
               placeholder="Київська"
-              className="h-9"
             />
           </div>
           <div className="space-y-1">
@@ -284,7 +283,7 @@ export function QuoteDeliveryFields({
                 onChange({ npDeliveryType: value, street: value === "address" ? details.street : "" })
               }
             >
-              <SelectTrigger className="h-9">
+              <SelectTrigger>
                 <SelectValue placeholder="Оберіть тип доставки" />
               </SelectTrigger>
               <SelectContent>
@@ -299,7 +298,7 @@ export function QuoteDeliveryFields({
           <div className="space-y-1">
             <div className="text-sm text-muted-foreground">Хто платить</div>
             <Select value={details.payer} onValueChange={(value) => onChange({ payer: value })}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger>
                 <SelectValue placeholder="Оберіть варіант" />
               </SelectTrigger>
               <SelectContent>
@@ -341,7 +340,6 @@ export function QuoteDeliveryFields({
               value={details.contactFirstName ?? ""}
               onChange={(e) => onChange({ contactFirstName: e.target.value })}
               placeholder="Іван"
-              className="h-9"
             />
           </div>
           <div className="space-y-1">
@@ -350,7 +348,6 @@ export function QuoteDeliveryFields({
               value={details.contactLastName ?? ""}
               onChange={(e) => onChange({ contactLastName: e.target.value })}
               placeholder="Петренко"
-              className="h-9"
             />
           </div>
           <div className="space-y-1">
@@ -394,7 +391,7 @@ export function QuoteDeliveryFields({
           <div className="space-y-1">
             <div className="text-sm text-muted-foreground">Хто платить</div>
             <Select value={details.payer} onValueChange={(value) => onChange({ payer: value })}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger>
                 <SelectValue placeholder="Оберіть варіант" />
               </SelectTrigger>
               <SelectContent>
@@ -426,7 +423,6 @@ export function QuoteDeliveryFields({
               value={details.region}
               onChange={(e) => onChange({ region: e.target.value })}
               placeholder="Київська"
-              className="h-9"
             />
           </div>
           <div className="space-y-1">
@@ -457,7 +453,7 @@ export function QuoteDeliveryFields({
           <div className="space-y-1">
             <div className="text-sm text-muted-foreground">Хто платить</div>
             <Select value={details.payer} onValueChange={(value) => onChange({ payer: value })}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger>
                 <SelectValue placeholder="Оберіть варіант" />
               </SelectTrigger>
               <SelectContent>

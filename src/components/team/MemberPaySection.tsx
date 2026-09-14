@@ -296,7 +296,7 @@ export function MemberPaySection({
                 onChange={(event) => setBaseRate(event.target.value)}
                 inputMode="numeric"
                 placeholder={current ? String(current.baseMonthRate) : "40000"}
-                className={cn(CONTROL_BASE, "h-11")}
+                className={CONTROL_BASE}
               />
             </div>
             <div className="space-y-2">
@@ -321,7 +321,7 @@ export function MemberPaySection({
                     onChange={(event) => setVisualNormPerDay(event.target.value)}
                     inputMode="numeric"
                     placeholder={defaults ? `${defaults.visualNormPerDay} (командна)` : "8"}
-                    className={cn(CONTROL_BASE, "h-11")}
+                    className={CONTROL_BASE}
                   />
                   <p className="text-2xs text-muted-foreground">
                     Порожньо — береться командна норма. Множиться на робочі дні місяця за вирахуванням
@@ -335,7 +335,7 @@ export function MemberPaySection({
                     onChange={(event) => setLayoutNormPerDay(event.target.value)}
                     inputMode="numeric"
                     placeholder={defaults ? `${defaults.layoutNormPerDay} (командна)` : "5"}
-                    className={cn(CONTROL_BASE, "h-11")}
+                    className={CONTROL_BASE}
                   />
                 </div>
                 <div className="space-y-2">
@@ -345,7 +345,7 @@ export function MemberPaySection({
                     onChange={(event) => setVisualOverRate(event.target.value)}
                     inputMode="numeric"
                     placeholder={defaults ? `${defaults.visualOverRate} (командна)` : "100"}
-                    className={cn(CONTROL_BASE, "h-11")}
+                    className={CONTROL_BASE}
                   />
                 </div>
                 <div className="space-y-2">
@@ -355,7 +355,7 @@ export function MemberPaySection({
                     onChange={(event) => setLayoutOverRate(event.target.value)}
                     inputMode="numeric"
                     placeholder={defaults ? `${defaults.layoutOverRate} (командна)` : "200"}
-                    className={cn(CONTROL_BASE, "h-11")}
+                    className={CONTROL_BASE}
                   />
                 </div>
               </>

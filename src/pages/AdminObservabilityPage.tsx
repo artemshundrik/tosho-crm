@@ -994,40 +994,40 @@ export default function AdminObservabilityPage() {
               </section>
             ) : null}
             <div className="rounded-4xl border border-border/60 bg-card/95 p-3">
-              <TabsList className="inline-flex h-auto w-fit flex-wrap items-center gap-1 rounded-2xl border border-border/60 bg-muted/30 p-1">
+              <TabsList className="inline-flex h-auto w-fit flex-wrap items-center gap-1 border border-border/60 bg-muted/30 p-1">
                 <TabsTrigger
                   value="overview"
-                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                  className="border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
                 >
                   Огляд
                 </TabsTrigger>
                 <TabsTrigger
                   value="backups"
-                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                  className="border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
                 >
                   Backups
                 </TabsTrigger>
                 <TabsTrigger
                   value="attachments"
-                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                  className="border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
                 >
                   Orphan files review
                 </TabsTrigger>
                 <TabsTrigger
                   value="telegram"
-                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                  className="border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
                 >
                   Telegram
                 </TabsTrigger>
                 <TabsTrigger
                   value="errors"
-                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                  className="border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
                 >
                   Помилки
                 </TabsTrigger>
                 <TabsTrigger
                   value="ai-usage"
-                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                  className="border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground"
                 >
                   AI-кости
                 </TabsTrigger>

@@ -44,7 +44,7 @@ export function OrderPickerInline({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" className={cn("h-9 w-full justify-start font-normal", className)}>
+        <Button type="button" variant="outline" className={cn("w-full justify-start font-normal", className)}>
           {selected ? (
             <span className="truncate">
               {selected.number} · {selected.customerName}
@@ -61,7 +61,7 @@ export function OrderPickerInline({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Номер або замовник…"
-            className="h-9 pl-8"
+            className="pl-8"
           />
         </div>
         <div className="max-h-[260px] space-y-1 overflow-y-auto">

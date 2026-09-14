@@ -67,7 +67,7 @@ export const SupplierPoolSearch: React.FC<SupplierPoolSearchProps> = ({ classNam
           value={term}
           onChange={(event) => setTerm(event.target.value)}
           placeholder="Пошук у постачальників: назва або артикул"
-          className="h-9 rounded-full pl-8 text-sm"
+          className="rounded-full pl-8 text-sm"
         />
       </div>
 

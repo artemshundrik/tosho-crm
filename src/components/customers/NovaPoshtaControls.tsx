@@ -108,7 +108,7 @@ export function NpCityCombobox({ city, onCityChange, onSelect, placeholder, clas
         value={city}
         onChange={(event) => onCityChange(event.target.value)}
         placeholder={placeholder ?? "Напр. Київ"}
-        className={cn("h-9", className)}
+        className={cn(className)}
       />
     );
   }
@@ -124,7 +124,7 @@ export function NpCityCombobox({ city, onCityChange, onSelect, placeholder, clas
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         placeholder={placeholder ?? "Почніть вводити місто…"}
-        className={cn("h-9", className)}
+        className={cn(className)}
         autoComplete="off"
       />
       {open ? (
@@ -212,7 +212,7 @@ export function NpWarehouseCombobox({
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
         placeholder={placeholder ?? (postomat ? "Напр. Поштомат №5432" : "Напр. Відділення №23")}
-        className={cn("h-9", className)}
+        className={cn(className)}
       />
     );
   }
@@ -228,7 +228,7 @@ export function NpWarehouseCombobox({
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         placeholder={placeholder ?? (postomat ? "Оберіть поштомат…" : "Оберіть відділення…")}
-        className={cn("h-9", className)}
+        className={cn(className)}
         autoComplete="off"
       />
       {open ? (
@@ -314,7 +314,7 @@ export function NpStreetCombobox({
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
         placeholder={placeholder ?? "Вул. Хрещатик, 1"}
-        className={cn("h-9", className)}
+        className={cn(className)}
       />
     );
   }
@@ -330,7 +330,7 @@ export function NpStreetCombobox({
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         placeholder={placeholder ?? "Почніть вводити вулицю…"}
-        className={cn("h-9", className)}
+        className={cn(className)}
         autoComplete="off"
       />
       {open ? (

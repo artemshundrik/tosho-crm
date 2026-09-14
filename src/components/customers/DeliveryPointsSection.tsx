@@ -54,7 +54,7 @@ export function DeliveryPointsSection({
         <h4 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           Адреси доставки
         </h4>
-        <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={onAdd}>
+        <Button type="button" variant="ghost" size="sm" className="shrink-0 px-2 text-xs" onClick={onAdd}>
           <PlusCircle className="mr-1 h-4 w-4" />
           Додати адресу
         </Button>
@@ -88,7 +88,7 @@ export function DeliveryPointsSection({
                       variant="ghost"
                       size="sm"
                       className={cn(
-                        "h-8 gap-1 px-2 text-xs",
+                        "gap-1 px-2 text-xs",
                         point.isDefault ? "text-foreground" : "text-muted-foreground"
                       )}
                       aria-pressed={point.isDefault}
@@ -100,8 +100,7 @@ export function DeliveryPointsSection({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
+                      size="iconSm"
                       aria-label={`Видалити адресу ${index + 1}`}
                       onClick={() => onRemove(index)}
                     >
@@ -117,7 +116,7 @@ export function DeliveryPointsSection({
                       value={point.type}
                       onValueChange={(value) => onUpdate(index, { type: value as CustomerDeliveryPointType })}
                     >
-                      <SelectTrigger className="h-9">
+                      <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -187,7 +186,7 @@ export function DeliveryPointsSection({
                         onUpdate(index, { recipientType: value as DeliveryRecipientType })
                       }
                     >
-                      <SelectTrigger className="h-9">
+                      <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -207,7 +206,6 @@ export function DeliveryPointsSection({
                         onChange={(e) => onUpdate(index, { recipientEdrpou: e.target.value })}
                         placeholder="8 цифр"
                         inputMode="numeric"
-                        className="h-9"
                       />
                     </div>
                   ) : null}
@@ -220,7 +218,6 @@ export function DeliveryPointsSection({
                       value={point.contactFirstName}
                       onChange={(e) => onUpdate(index, { contactFirstName: e.target.value })}
                       placeholder="Іван"
-                      className="h-9"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -229,7 +226,6 @@ export function DeliveryPointsSection({
                       value={point.contactLastName}
                       onChange={(e) => onUpdate(index, { contactLastName: e.target.value })}
                       placeholder="Петренко"
-                      className="h-9"
                     />
                   </div>
                   <div className="grid gap-2">

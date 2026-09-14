@@ -285,7 +285,7 @@ function VisualCard({
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 shrink-0 px-2 text-2xs text-muted-foreground"
+            className="shrink-0 px-2 text-2xs text-muted-foreground"
             onClick={() => onDownload(file)}
           >
             Завантажити
@@ -436,7 +436,7 @@ export function QuoteDesignTasksPanel({
               торкався ТЗ у задачі, правки з картки прорахунку переставали бути
               видимими — тихо, без жодного попередження.
             */}
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-2xs" onClick={() => onOpenTask(active.id)}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-2xs" onClick={() => onOpenTask(active.id)}>
               <Pencil className="h-3 w-3" />
               {active.brief ? "Редагувати" : "Написати ТЗ"}
             </Button>
@@ -580,7 +580,7 @@ export function QuoteDesignTasksPanel({
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 shrink-0 px-2 text-2xs text-muted-foreground"
+                          className="shrink-0 px-2 text-2xs text-muted-foreground"
                           onClick={() => onDownloadVisual(file)}
                         >
                           Завантажити

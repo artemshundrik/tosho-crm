@@ -5814,7 +5814,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 size="sm"
                 disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
                 onClick={handleBulkCreateKp}
-                className="h-8"
               >
                 Створити КП
               </Button>
@@ -5823,7 +5822,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 size="sm"
                 disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
                 onClick={openQuoteSetDialog}
-                className="h-8"
               >
                 Сформувати набір
               </Button>
@@ -5832,7 +5830,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 size="sm"
                 disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions || bulkAddAvailableSets.length === 0}
                 onClick={openBulkAddExistingDialog}
-                className="h-8"
                 title={
                   bulkAddAvailableSets.length === 0
                     ? "Немає існуючих КП/наборів, куди можна додати вибрані"
@@ -5847,7 +5844,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8"
                     disabled={bulkBusy || quoteSetSaving}
                   >
                     Інші дії
@@ -5889,7 +5885,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 text-muted-foreground"
+                className="text-muted-foreground"
                 onClick={() => setSelectedIds(new Set())}
                 disabled={bulkBusy || quoteSetSaving}
               >
@@ -5945,7 +5941,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <div onClick={(event) => event.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-70 hover:opacity-100">
+                        <Button variant="ghost" size="iconSm" className="opacity-70 hover:opacity-100">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -6083,8 +6079,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
+                            size="iconSm"
                             aria-label="Дії"
                           >
                             <MoreVertical className="h-4 w-4" />
@@ -6333,7 +6328,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       <div onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button variant="ghost" size="iconSm">
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -6735,8 +6730,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
+                                size="iconSm"
                               >
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
@@ -7116,7 +7110,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     />
                     <Button
                       variant="outline"
-                      className="h-10"
                       onClick={handleRenameQuoteSet}
                       disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
                     >
@@ -7160,7 +7153,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Select>
                     <Button
                       variant="outline"
-                      className="h-10"
                       onClick={handleAddQuoteToOpenSet}
                       disabled={quoteSetActionBusy || !quoteSetCandidateId}
                     >
@@ -7191,7 +7183,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 px-2 text-xs"
+                          className="px-2 text-xs"
                           onClick={() => navigate(`/orders/estimates/${selectedQuoteCandidate.id}`)}
                         >
                           <Eye className="mr-1.5 h-3.5 w-3.5" />

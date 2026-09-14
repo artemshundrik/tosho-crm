@@ -8490,7 +8490,7 @@ export default function DesignTaskPage() {
         {canManageLink && hasChangeRequests ? (
           <Popover open={pickerOpen} onOpenChange={(open) => setOutputLinkPickerId(open ? target.id : null)}>
             <PopoverTrigger asChild>
-              <Button type="button" size="sm" variant="ghost" className="h-6 gap-1 rounded-full px-2 text-2xs text-muted-foreground">
+              <Button type="button" size="xs" variant="ghost" className="gap-1 rounded-full px-2 text-2xs text-muted-foreground">
                 <Link2 className="h-3 w-3" />
                 {linkedRequest ? "Змінити" : "Привʼязати до правки"}
               </Button>
@@ -8653,7 +8653,7 @@ export default function DesignTaskPage() {
               onOpenChange={(open) => setChangeRequestAttachPickerId(open ? request.id : null)}
             >
               <PopoverTrigger asChild>
-                <Button type="button" size="sm" variant="ghost" className="h-6 gap-1 px-2 text-2xs text-muted-foreground">
+                <Button type="button" size="xs" variant="ghost" className="gap-1 px-2 text-2xs text-muted-foreground">
                   <Link2 className="h-3 w-3" />
                   Привʼязати результат
                 </Button>
@@ -9005,7 +9005,7 @@ export default function DesignTaskPage() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 rounded-full px-3 text-2xs"
+                  className="rounded-full px-3 text-2xs"
                   disabled={sendingToClientKind !== null}
                   onClick={() =>
                     setClientShareSelectionIds((prev) =>
@@ -9046,7 +9046,7 @@ export default function DesignTaskPage() {
             <Button
               type="button"
               variant="outline"
-              className="h-10 justify-center gap-2 rounded-lg"
+              className="justify-center gap-2"
               disabled={!canSendEmail || sendingToClientKind !== null}
               onClick={() => void openClientDraft("email", kind)}
             >
@@ -9059,7 +9059,7 @@ export default function DesignTaskPage() {
             <Button
               type="button"
               variant="outline"
-              className="h-10 justify-center gap-2 rounded-lg"
+              className="justify-center gap-2"
               disabled={!canSendSelectedOutputs || sendingToClientKind !== null}
               onClick={() => void openClientDraft("telegram", kind)}
             >
@@ -9069,7 +9069,7 @@ export default function DesignTaskPage() {
             <Button
               type="button"
               variant="outline"
-              className="h-10 justify-center gap-2 rounded-lg"
+              className="justify-center gap-2"
               disabled={!canSendViber || sendingToClientKind !== null}
               onClick={() => void openClientDraft("viber", kind)}
             >
@@ -9155,7 +9155,7 @@ export default function DesignTaskPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 px-2 text-2xs"
+                        className="px-2 text-2xs"
                         disabled={outputSaving}
                         onClick={() => void handleUngroupSelectedOutputsFromGroup(group.key, selectedRowKeysInKind)}
                       >
@@ -9166,7 +9166,7 @@ export default function DesignTaskPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 px-2 text-2xs"
+                        className="px-2 text-2xs"
                         disabled={outputSaving}
                         onClick={() =>
                           void handleMoveSelectedOutputsToSpecificGroup(
@@ -9326,9 +9326,8 @@ export default function DesignTaskPage() {
                                     <>
                                       <HoverTip asChild label={isPreviewPreparing ? "Готуємо превʼю" : "Переглянути файл"}>
                                         <Button
-                                          size="icon"
+                                          size="iconSm"
                                           variant="ghost"
-                                          className="h-8 w-8"
                                           aria-label={isPreviewPreparing ? "Готуємо превʼю файлу" : "Переглянути файл"}
                                           disabled={isPreviewPreparing}
                                           onClick={() => void openStorageFilePreview(file, {
@@ -9340,9 +9339,8 @@ export default function DesignTaskPage() {
                                       </HoverTip>
                                       <HoverTip asChild label={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}>
                                         <Button
-                                          size="icon"
+                                          size="iconSm"
                                           variant="ghost"
-                                          className="h-8 w-8"
                                           aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
                                           disabled={isDownloadPreparing}
                                           onClick={() => void downloadStorageBackedFile(file)}
@@ -9353,18 +9351,18 @@ export default function DesignTaskPage() {
                                     </>
                                   ) : (
                                     <>
-                                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled aria-label="Перегляд недоступний">
+                                      <Button size="iconSm" variant="ghost" disabled aria-label="Перегляд недоступний">
                                         <Eye className="h-4 w-4" />
                                       </Button>
-                                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled aria-label="Завантаження недоступне">
+                                      <Button size="iconSm" variant="ghost" disabled aria-label="Завантаження недоступне">
                                         <Download className="h-4 w-4" />
                                       </Button>
                                     </>
                                   )}
                                   <Button
-                                    size="icon"
+                                    size="iconSm"
                                     variant="ghost"
-                                    className="h-8 w-8 text-destructive hover:text-destructive"
+                                    className="text-destructive hover:text-destructive"
                                     aria-label="Видалити файл"
                                     disabled={outputSaving}
                                     onClick={() => void handleRemoveDesignFile(file.id)}
@@ -9464,24 +9462,23 @@ export default function DesignTaskPage() {
                                   Клієнту
                                 </button>
                                 <div className="flex items-center gap-0.5 border-l border-border/40 pl-1.5">
-                                <Button size="icon" variant="ghost" className="h-8 w-8" asChild>
+                                <Button size="iconSm" variant="ghost" asChild>
                                   <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Відкрити посилання">
                                     <ExternalLink className="h-4 w-4" />
                                   </a>
                                 </Button>
                                 <Button
-                                  size="icon"
+                                  size="iconSm"
                                   variant="ghost"
-                                  className="h-8 w-8"
                                   aria-label="Скопіювати посилання"
                                   onClick={() => void copyText(link.url).catch(() => toast.error("Не вдалося скопіювати посилання"))}
                                 >
                                   <Copy className="h-4 w-4" />
                                 </Button>
                                 <Button
-                                  size="icon"
+                                  size="iconSm"
                                   variant="ghost"
-                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  className="text-destructive hover:text-destructive"
                                   aria-label="Видалити посилання"
                                   disabled={outputSaving}
                                   onClick={() => void handleRemoveDesignLink(link.id)}
@@ -9518,7 +9515,7 @@ export default function DesignTaskPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 gap-1.5 text-xs"
+              className="gap-1.5 text-xs"
               disabled={outputSaving}
               onClick={() => applyClientShareToSelection(selectedRowKeysInKind, !everySelectedShared)}
             >
@@ -9530,7 +9527,7 @@ export default function DesignTaskPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-8 gap-1.5 text-xs"
+                  className="gap-1.5 text-xs"
                   disabled={outputSaving || !canManageAssignments}
                   aria-label={canManageAssignments ? undefined : "Погоджувати може тільки менеджер"}
                   onClick={() =>
@@ -9548,7 +9545,7 @@ export default function DesignTaskPage() {
             ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" disabled={outputSaving}>
+                <Button size="sm" variant="ghost" className="gap-1.5 text-xs" disabled={outputSaving}>
                   <FolderOpen className="h-3.5 w-3.5" />
                   У групу
                   <ChevronDown className="h-3 w-3" />
@@ -9584,7 +9581,7 @@ export default function DesignTaskPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
+              className="gap-1.5 text-xs text-destructive hover:text-destructive"
               disabled={outputSaving}
               onClick={() => setBulkDeleteDialog({ open: true, keys: selectedRowKeysInKind })}
             >
@@ -9594,7 +9591,7 @@ export default function DesignTaskPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="ml-auto h-8 text-xs text-muted-foreground"
+              className="ml-auto text-xs text-muted-foreground"
               onClick={() => setOutputSelectionIds((prev) => prev.filter((key) => !kindRowKeys.has(key)))}
             >
               Зняти вибір
@@ -9678,9 +9675,9 @@ export default function DesignTaskPage() {
             <HoverTip asChild label="Назад до дошки">
               <Button
                 variant="ghost"
-                size="icon"
+                size="iconSm"
                 onClick={() => navigate("/design")}
-                className="h-8 w-8 shrink-0 self-center text-muted-foreground"
+                className="shrink-0 self-center text-muted-foreground"
                 aria-label="Назад до дошки"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -9774,7 +9771,7 @@ export default function DesignTaskPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2.5 text-xs gap-1.5"
+                  className="px-2.5 text-xs gap-1.5"
                   disabled={typeSaving || designTaskLockedByOther}
                 >
                   {task.designTaskType ? (
@@ -9798,8 +9795,8 @@ export default function DesignTaskPage() {
                         key={option.value}
                         type="button"
                         variant="ghost"
-                        size="sm"
-                        className="h-9 w-full justify-start gap-2 text-sm"
+                        size="md"
+                        className="w-full justify-start gap-2 text-sm"
                         disabled={typeSaving || task.designTaskType === option.value}
                         onClick={() => void applyTaskType(option.value)}
                       >
@@ -9851,7 +9848,7 @@ export default function DesignTaskPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className={cn("h-7 px-2.5 text-xs gap-1", deadlineLabel.className)}
+                  className={cn("px-2.5 text-xs gap-1", deadlineLabel.className)}
                   disabled={deadlineSaving || designTaskLockedByOther}
                 >
                   <CalendarClock className="h-3.5 w-3.5" />
@@ -9872,7 +9869,7 @@ export default function DesignTaskPage() {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 gap-1 px-2.5 text-xs"
+              className="gap-1 px-2.5 text-xs"
               disabled={designTaskLockedByOther}
               onClick={() => void openManualEstimateDialog()}
             >
@@ -9887,7 +9884,7 @@ export default function DesignTaskPage() {
             {renderTaskActionBar({ className: "hidden xl:flex" })}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
+                <Button variant="ghost" size="icon" className="shrink-0">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -10022,7 +10019,7 @@ export default function DesignTaskPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 gap-1.5 text-xs text-muted-foreground"
+                    className="gap-1.5 text-xs text-muted-foreground"
                     aria-expanded={historyExpanded}
                     onClick={(event) => {
                       event.preventDefault();
@@ -10038,7 +10035,7 @@ export default function DesignTaskPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 gap-1.5 text-xs"
+                  className="gap-1.5 text-xs"
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -10050,7 +10047,7 @@ export default function DesignTaskPage() {
                 </Button>
                 <Button
                   size="sm"
-                  className="h-8 gap-1.5 text-xs"
+                  className="gap-1.5 text-xs"
                   disabled={changeRequestSaving || designTaskLockedByOther}
                   onClick={(event) => {
                     event.preventDefault();
@@ -10146,7 +10143,7 @@ export default function DesignTaskPage() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-7 gap-1.5 px-2 text-2xs text-muted-foreground hover:text-foreground"
+                          className="gap-1.5 px-2 text-2xs text-muted-foreground hover:text-foreground"
                           onClick={() => setChangeRequestContextExpanded((prev) => !prev)}
                         >
                           <ChevronDown
@@ -10211,7 +10208,7 @@ export default function DesignTaskPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 gap-1.5"
+                        className="gap-1.5"
                         disabled={changeRequestSaving || designTaskLockedByOther}
                         onClick={openChangeRequestComposer}
                       >
@@ -10403,7 +10400,7 @@ export default function DesignTaskPage() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-8 w-full justify-start gap-1.5 px-2 text-2xs text-muted-foreground hover:text-foreground"
+                      className="w-full justify-start gap-1.5 px-2 text-2xs text-muted-foreground hover:text-foreground"
                       onClick={() => setChangeRequestContextExpanded(true)}
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
@@ -10649,9 +10646,9 @@ export default function DesignTaskPage() {
                                     <PopoverTrigger asChild>
                                       <Button
                                         type="button"
-                                        size="icon"
+                                        size="iconSm"
                                         variant="ghost"
-                                        className="h-7 w-7 text-muted-foreground"
+                                        className="text-muted-foreground"
                                         disabled={designTaskLockedByOther || !userId}
                                         aria-label="Додати реакцію"
                                       >
@@ -10682,9 +10679,8 @@ export default function DesignTaskPage() {
                                     <HoverTip asChild label="Редагувати">
                                       <Button
                                         type="button"
-                                        size="icon"
+                                        size="iconSm"
                                         variant="ghost"
-                                        className="h-7 w-7"
                                         disabled={designTaskLockedByOther || !!changeRequestEditSavingId}
                                         onClick={() => startBriefChangeRequestEdit(request)}
                                         aria-label="Редагувати правку"
@@ -10729,7 +10725,7 @@ export default function DesignTaskPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 px-2 text-xs text-muted-foreground"
+                        className="px-2 text-xs text-muted-foreground"
                         onClick={() => setHistoryExpanded(false)}
                       >
                         Згорнути
@@ -10824,7 +10820,6 @@ export default function DesignTaskPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-8"
                         onClick={() => insertMentionIntoComment(member.id)}
                       >
                         @{mentionSuggestions.find((entry) => entry.id === member.id)?.alias ?? member.label}
@@ -11055,7 +11050,7 @@ export default function DesignTaskPage() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-8 gap-1.5"
+                  className="gap-1.5"
                   disabled={attachmentUploading}
                   onClick={() => attachmentInputRef.current?.click()}
                 >
@@ -11073,7 +11068,7 @@ export default function DesignTaskPage() {
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-8 gap-1.5"
+                      className="gap-1.5"
                       disabled={customerAttachmentsLoading}
                       onClick={() => void loadCustomerAttachments()}
                     >
@@ -11096,7 +11091,7 @@ export default function DesignTaskPage() {
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-7 px-2.5"
+                        className="px-2.5"
                         disabled={customerAttachmentsLoading}
                         onClick={() => void loadCustomerAttachments()}
                       >
@@ -11178,14 +11173,13 @@ export default function DesignTaskPage() {
                             <span className="flex-1" />
                             {file.storage_bucket && file.storage_path ? (
                               <>
-                                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
+                                <Button size="iconSm" variant="ghost" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
                                   <Eye className="h-4 w-4" />
                                 </Button>
                                 <HoverTip asChild label={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}>
                                   <Button
-                                    size="icon"
+                                    size="iconSm"
                                     variant="ghost"
-                                    className="h-8 w-8"
                                     aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
                                     disabled={isDownloadPreparing}
                                     onClick={() => void downloadStorageBackedFile(file)}
@@ -11196,19 +11190,19 @@ export default function DesignTaskPage() {
                               </>
                             ) : (
                               <>
-                                <Button size="icon" variant="ghost" className="h-8 w-8" disabled aria-label="Перегляд недоступний">
+                                <Button size="iconSm" variant="ghost" disabled aria-label="Перегляд недоступний">
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-8 w-8" disabled aria-label="Завантаження недоступне">
+                                <Button size="iconSm" variant="ghost" disabled aria-label="Завантаження недоступне">
                                   <Download className="h-4 w-4" />
                                 </Button>
                               </>
                             )}
                             {canDeleteTaskBriefAttachment(file) ? (
                               <Button
-                                size="icon"
+                                size="iconSm"
                                 variant="ghost"
-                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                className="text-destructive hover:text-destructive"
                                 aria-label="Видалити файл"
                                 disabled={attachmentDeletingId === file.id}
                                 onClick={() => void handleRemoveTaskAttachment(file.id)}
@@ -11331,7 +11325,7 @@ export default function DesignTaskPage() {
               className="w-full"
             >
               <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <TabsList className="h-auto justify-start gap-1 rounded-lg border border-border/40 bg-transparent p-1">
+                <TabsList className="h-auto justify-start gap-1 border border-border/40 bg-transparent p-1">
                   <TabsTrigger value="visualization" className="gap-2">
                     <ImageIcon className="h-4 w-4" />
                     <span>Візуал</span>
@@ -11361,7 +11355,7 @@ export default function DesignTaskPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Select value={uploadTargetGroup} onValueChange={setUploadTargetGroup}>
                     <SelectTrigger
-                      className="h-9 w-full text-xs sm:w-auto sm:min-w-[150px]"
+                      className="w-full text-xs sm:w-auto sm:min-w-[150px]"
                       aria-label="Група для нових матеріалів"
                       title="Куди потраплять нові завантаження й посилання"
                     >
@@ -11377,8 +11371,8 @@ export default function DesignTaskPage() {
                     </SelectContent>
                   </Select>
                   <Button
-                    size="sm"
-                    className="h-9 gap-1.5"
+                    size="md"
+                    className="gap-1.5"
                     disabled={outputUploading || outputSaving}
                     onClick={() => outputInputRef.current?.click()}
                   >
@@ -11386,9 +11380,9 @@ export default function DesignTaskPage() {
                     Завантажити {DESIGN_OUTPUT_KIND_LABELS[uploadTargetKind].toLowerCase()}
                   </Button>
                   <Button
-                    size="sm"
+                    size="md"
                     variant="outline"
-                    className="h-9 gap-1.5"
+                    className="gap-1.5"
                     disabled={outputSaving}
                     onClick={() => openAddDesignLinkModal(uploadTargetKind)}
                   >
@@ -11397,7 +11391,7 @@ export default function DesignTaskPage() {
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-9 w-9" disabled={outputSaving} aria-label="Більше дій">
+                      <Button size="icon" variant="ghost" disabled={outputSaving} aria-label="Більше дій">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -11756,7 +11750,7 @@ export default function DesignTaskPage() {
                 {!designTaskLockedByOther && managerMembers.length > 0 ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={managerSaving}>
+                      <Button size="iconSm" variant="ghost" className="absolute right-0 shrink-0 bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={managerSaving}>
                         {managerSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                       </Button>
                     </DropdownMenuTrigger>
@@ -11796,7 +11790,7 @@ export default function DesignTaskPage() {
                 {canManageAssignments ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningMemberId}>
+                      <Button size="iconSm" variant="ghost" className="absolute right-0 shrink-0 bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningMemberId}>
                         {assigningMemberId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                       </Button>
                     </DropdownMenuTrigger>
@@ -11805,7 +11799,7 @@ export default function DesignTaskPage() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : !task.assigneeUserId && canTakeOverForSelf ? (
-                  <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
+                  <Button size="iconSm" variant="ghost" className="absolute right-0 shrink-0 bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
                     {assigningSelf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                   </Button>
                 ) : null}
@@ -11846,9 +11840,9 @@ export default function DesignTaskPage() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
-                        size="icon"
+                        size="iconSm"
                         variant="ghost"
-                        className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100"
+                        className="absolute right-0 shrink-0 bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100"
                         disabled={collaboratorSaving}
                       >
                         {collaboratorSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
@@ -11972,7 +11966,7 @@ export default function DesignTaskPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="ml-auto h-8 gap-1.5 rounded-full border-success-soft-border bg-success-soft px-3 text-xs text-success-foreground"
+                    className="ml-auto gap-1.5 rounded-full border-success-soft-border bg-success-soft px-3 text-xs text-success-foreground"
                     disabled={!canPauseTimer || timerBusy === "pause"}
                     aria-label={pauseTimerBlockedReason ?? undefined}
                     onClick={() => void handlePauseTimer()}
@@ -11986,7 +11980,7 @@ export default function DesignTaskPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="ml-auto h-8 gap-1.5 rounded-full px-3 text-xs"
+                  className="ml-auto gap-1.5 rounded-full px-3 text-xs"
                   disabled={!canStartTimer || timerBusy === "start"}
                   onClick={() => void handleStartTimer()}
                 >
@@ -12041,12 +12035,12 @@ export default function DesignTaskPage() {
               value={briefEditorMode}
               onValueChange={(value) => setBriefEditorMode(value as "write" | "preview")}
             >
-              <TabsList className="h-8">
-                <TabsTrigger value="write" className="h-7 px-3 text-xs">
+              <TabsList>
+                <TabsTrigger value="write" className="px-3 text-xs">
                   <PencilLine className="mr-1.5 h-3.5 w-3.5" />
                   Писати
                 </TabsTrigger>
-                <TabsTrigger value="preview" className="h-7 px-3 text-xs">
+                <TabsTrigger value="preview" className="px-3 text-xs">
                   <Eye className="mr-1.5 h-3.5 w-3.5" />
                   Перегляд
                 </TabsTrigger>
@@ -12062,7 +12056,7 @@ export default function DesignTaskPage() {
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className={cn("h-8 w-8 p-0", headingActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    className={cn("w-8 p-0", headingActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
                     disabled={briefSaving || designTaskLockedByOther}
                     onClick={() =>
                       applyBriefFormatting(({ selectedText }) =>
@@ -12079,7 +12073,7 @@ export default function DesignTaskPage() {
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className={cn("h-8 w-8 p-0", boldActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    className={cn("w-8 p-0", boldActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
                     disabled={briefSaving || designTaskLockedByOther}
                     onClick={() =>
                       applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
@@ -12096,7 +12090,7 @@ export default function DesignTaskPage() {
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className={cn("h-8 w-8 p-0", italicActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    className={cn("w-8 p-0", italicActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
                     disabled={briefSaving || designTaskLockedByOther}
                     onClick={() =>
                       applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
@@ -12114,7 +12108,7 @@ export default function DesignTaskPage() {
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className={cn("h-8 w-8 p-0", bulletActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    className={cn("w-8 p-0", bulletActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
                     disabled={briefSaving || designTaskLockedByOther}
                     onClick={() =>
                       applyBriefFormatting(({ selectedText }) =>
@@ -12131,7 +12125,7 @@ export default function DesignTaskPage() {
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className={cn("h-8 w-8 p-0", orderedActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                    className={cn("w-8 p-0", orderedActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
                     disabled={briefSaving || designTaskLockedByOther}
                     onClick={() =>
                       applyBriefFormatting(({ selectedText }) =>

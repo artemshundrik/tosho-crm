@@ -695,7 +695,6 @@ export function BasicInfoTab({
                   value={activeVariantName}
                   onChange={(event) => updateActiveVariantName(event.target.value)}
                   placeholder="Напр. Чорний, Білий, Premium"
-                  className="h-9"
                 />
               </div>
               <div className="space-y-1.5">
@@ -704,7 +703,6 @@ export function BasicInfoTab({
                   value={activeVariantSku ?? ""}
                   onChange={(event) => updateActiveVariantSku(event.target.value)}
                   placeholder="Артикул"
-                  className="h-9"
                 />
               </div>
             </div>
@@ -731,7 +729,6 @@ export function BasicInfoTab({
                     value={activeImageUrl}
                     onChange={(e) => updateActiveVariantImageUrl(e.target.value)}
                     placeholder="https://..."
-                    className="h-9"
                   />
                 ) : (
                   <label className="flex h-9 cursor-pointer items-center justify-center rounded-md border border-dashed border-border/70 bg-background/60 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">

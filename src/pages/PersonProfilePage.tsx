@@ -946,7 +946,7 @@ function PersonAccessSection({
           <label className="flex flex-col gap-1.5">
             <span className={CAP}>Рівень доступу</span>
             <Select value={accessLevel} onValueChange={setAccessLevel} disabled={!canEditRoles}>
-              <SelectTrigger className="h-10">{accessLevelLabel(accessLevel)}</SelectTrigger>
+              <SelectTrigger>{accessLevelLabel(accessLevel)}</SelectTrigger>
               <SelectContent>
                 {ACCESS_LEVELS.map((level) => (
                   <SelectItem key={level.value} value={level.value}>
@@ -959,7 +959,7 @@ function PersonAccessSection({
           <label className="flex flex-col gap-1.5">
             <span className={CAP}>Посада</span>
             <Select value={job} onValueChange={setJob} disabled={!canEditRoles}>
-              <SelectTrigger className="h-10">
+              <SelectTrigger>
                 {JOB_ROLE_OPTIONS.find((option) => option.value === job)?.label ?? "Без посади"}
               </SelectTrigger>
               <SelectContent>

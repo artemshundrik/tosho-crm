@@ -1142,7 +1142,7 @@ export function DesignersDashboard({
               </button>
             </HoverTip>
             <Select value={String(mi)} onValueChange={(value) => setMonthIdx(Number(value))}>
-              <SelectTrigger className="h-9 w-[180px] text-sm font-medium">
+              <SelectTrigger className="w-[180px] text-sm font-medium">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1159,7 +1159,7 @@ export function DesignersDashboard({
                 align="end"
                 contentClassName="w-[260px] p-1.5"
                 trigger={
-                  <Button variant="outline" size="sm" className="h-9" aria-label={`Друк за ${monthTitle(months[mi].value)}`}>
+                  <Button variant="outline" size="md" aria-label={`Друк за ${monthTitle(months[mi].value)}`}>
                     <Printer className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Друк / PDF</span>
                   </Button>

@@ -183,7 +183,7 @@ export function PersonIdentityFields({
             value={firstName}
             onChange={(event) => setFirstName(event.target.value)}
             placeholder="Ім'я"
-            className="h-9 max-w-xs"
+            className="max-w-xs"
             aria-label="Ім'я"
           />
         }
@@ -195,7 +195,7 @@ export function PersonIdentityFields({
             value={lastName}
             onChange={(event) => setLastName(event.target.value)}
             placeholder="Прізвище"
-            className="h-9 max-w-xs"
+            className="max-w-xs"
             aria-label="Прізвище"
           />
         }

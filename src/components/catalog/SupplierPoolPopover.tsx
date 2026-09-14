@@ -36,7 +36,7 @@ export const SupplierPoolPopover: React.FC<SupplierPoolPopoverProps> = ({ initia
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="px-2 text-xs text-muted-foreground hover:text-foreground"
         >
           <Search className="mr-1 h-3.5 w-3.5" />
           Подивитись у постачальників

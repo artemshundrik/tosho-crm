@@ -639,7 +639,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       type="button"
                       size="sm"
                       variant={form.logoUploadMode === "url" ? "secondary" : "ghost"}
-                      className="h-7 px-2 text-xs"
+                      className="px-2 text-xs"
                       onClick={() => setForm((prev) => ({ ...prev, logoUploadMode: "url", logoFile: null }))}
                     >
                       URL
@@ -648,7 +648,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       type="button"
                       size="sm"
                       variant={form.logoUploadMode === "file" ? "secondary" : "ghost"}
-                      className="h-7 px-2 text-xs"
+                      className="px-2 text-xs"
                       onClick={() => setForm((prev) => ({ ...prev, logoUploadMode: "file", logoUrl: "" }))}
                     >
                       Файл
@@ -666,7 +666,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         value={form.logoUrl}
                         onChange={(e) => setForm((prev) => ({ ...prev, logoUrl: e.target.value, logoFile: null }))}
                         placeholder="Посилання на логотип"
-                        className="h-9"
                       />
                     </FormField>
                   ) : (
@@ -702,7 +701,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="mt-2 h-8 px-2 text-xs"
+                  className="mt-2 px-2 text-xs"
                   onClick={() => setForm((prev) => ({ ...prev, logoUrl: "", logoFile: null }))}
                 >
                   Очистити
@@ -779,8 +778,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       <HoverTip key={member.id} asChild label={member.label}>
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="w-full justify-start gap-2 h-9 text-sm truncate"
+                          size="md"
+                          className="w-full justify-start gap-2 text-sm truncate"
                           onClick={() => {
                             setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
                             setManagerOpen(false);
@@ -823,7 +822,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               type="button"
               size="sm"
               variant={quickMode ? "secondary" : "ghost"}
-              className="h-7 px-2.5 text-xs"
+              className="px-2.5 text-xs"
               onClick={() => {
                 setQuickMode(true);
                 setSection("basic");
@@ -835,7 +834,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               type="button"
               size="sm"
               variant={!quickMode ? "secondary" : "ghost"}
-              className="h-7 px-2.5 text-xs"
+              className="px-2.5 text-xs"
               onClick={() => setQuickMode(false)}
             >
               Повна
@@ -901,7 +900,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         value={form.name}
                         onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                         placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
-                        className="h-9 pr-9"
+                        className="pr-9"
                       />
                     </CompanyDuplicateHintField>
                   </FormField>
@@ -911,7 +910,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
                       onBlur={() => setForm((prev) => ({ ...prev, website: normalizeSiteUrl(prev.website) }))}
                       placeholder={isFopOwnership ? "@username або https://instagram.com/username" : "https://"}
-                      className="h-9"
                     />
                   </FormField>
                   <FormField label="Джерело" required error={fieldErrors?.source}>
@@ -935,7 +933,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       value={form.contacts[0]?.name ?? ""}
                       onChange={(e) => updateContact(0, { name: e.target.value })}
                       placeholder="Імʼя та прізвище"
-                      className="h-9"
                     />
                   </FormField>
                   <FormField label="Телефон" required error={fieldErrors?.contactPhone}>
@@ -965,7 +962,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           value={form.contacts[0]?.position ?? ""}
                           onValueChange={(value) => updateContact(0, { position: value })}
                         >
-                          <SelectTrigger id={fieldProps.id} className="h-9">
+                          <SelectTrigger id={fieldProps.id}>
                             <SelectValue placeholder="Оберіть посаду" />
                           </SelectTrigger>
                           <SelectContent>
@@ -987,7 +984,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   </FormField>
                 </div>
               </SectionCard>
-              <Button type="button" variant="outline" className="h-8 text-xs" onClick={() => setQuickMode(false)}>
+              <Button size="sm" type="button" variant="outline" className="text-xs" onClick={() => setQuickMode(false)}>
                 Відкрити повну картку
               </Button>
             </div>
@@ -1035,7 +1032,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         value={form.name}
                         onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                         placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
-                        className="h-9 pr-9"
+                        className="pr-9"
                       />
                     </CompanyDuplicateHintField>
                   </FormField>
@@ -1045,7 +1042,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
                       onBlur={() => setForm((prev) => ({ ...prev, website: normalizeSiteUrl(prev.website) }))}
                       placeholder={isFopOwnership ? "@username або https://instagram.com/username" : "https://"}
-                      className="h-9"
                     />
                   </FormField>
                   <FormField label="Джерело" required error={fieldErrors?.source}>
@@ -1065,7 +1061,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <SectionCard
                 title="Контакти"
                 action={
-                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addContact}>
+                  <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addContact}>
                     <PlusCircle className="mr-1 h-4 w-4" />
                     Додати контакт
                   </Button>
@@ -1088,8 +1084,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         <Button
                           type="button"
                           variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
+                          size="iconSm"
                           onClick={() => removeContact(index)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1103,7 +1098,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           value={contact.name}
                           onChange={(e) => updateContact(index, { name: e.target.value })}
                           placeholder="Імʼя та прізвище"
-                          className="h-9"
                         />
                       </div>
                       {!isFopOwnership ? (
@@ -1113,7 +1107,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             value={contact.position}
                             onValueChange={(value) => updateContact(index, { position: value })}
                           >
-                            <SelectTrigger className="h-9">
+                            <SelectTrigger>
                               <SelectValue placeholder="Оберіть посаду" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1160,7 +1154,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           inputMode="numeric"
                           maxLength={10}
                           placeholder="дд.мм або дд.мм.рррр"
-                          className="h-9"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -1182,7 +1175,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 <div className="text-xs text-muted-foreground">
                   Додайте реквізити для рахунків і договорів.
                 </div>
-                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addLegalEntity}>
+                <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addLegalEntity}>
                   <PlusCircle className="mr-1 h-4 w-4" />
                   Додати юр. особу
                 </Button>
@@ -1251,8 +1244,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             <Button
                               type="button"
                               variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 shrink-0"
+                              size="iconSm"
+                              className="shrink-0"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 removeLegalEntity(index);
@@ -1315,7 +1308,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             })
                           }
                         >
-                          <SelectTrigger className="h-9 min-w-0">
+                          <SelectTrigger className="min-w-0">
                             <SelectValue placeholder="Оберіть тип">
                               {activeOwnershipOption?.label}
                             </SelectValue>
@@ -1346,7 +1339,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             value={activeLegalEntity.vatRate}
                             onValueChange={(value) => updateLegalEntity(activeLegalEntityIndex, { vatRate: value })}
                           >
-                            <SelectTrigger className="h-9">
+                            <SelectTrigger>
                               <SelectValue placeholder="Оберіть ставку" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1367,7 +1360,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         value={activeLegalEntity.legalName}
                         onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { legalName: e.target.value })}
                         placeholder={activeLegalEntityIsPerson ? "Напр. EDLIGHT" : "Напр. ТОВ «Кока-Кола-Україна Лімітед»"}
-                        className="h-9"
                       />
                     </div>
 
@@ -1458,7 +1450,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             onChange={(e) => updateSignatoryName(activeLegalEntityIndex, { signatoryLastName: e.target.value })}
                             onPaste={handleSignatoryPaste(activeLegalEntityIndex)}
                             placeholder="Напр. Іваненко"
-                            className="h-9"
                           />
                         </div>
                         <div className="grid gap-2">
@@ -1468,7 +1459,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             onChange={(e) => updateSignatoryName(activeLegalEntityIndex, { signatoryFirstName: e.target.value })}
                             onPaste={handleSignatoryPaste(activeLegalEntityIndex)}
                             placeholder="Напр. Іван"
-                            className="h-9"
                           />
                         </div>
                         <div className="grid gap-2">
@@ -1478,7 +1468,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             onChange={(e) => updateSignatoryName(activeLegalEntityIndex, { signatoryMiddleName: e.target.value })}
                             onPaste={handleSignatoryPaste(activeLegalEntityIndex)}
                             placeholder="Напр. Іванович"
-                            className="h-9"
                           />
                         </div>
                       </div>
@@ -1490,7 +1479,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         value={activeLegalEntity.signatoryPosition}
                         onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryPosition: e.target.value })}
                         placeholder={activeLegalEntityIsPerson ? "Напр. ФОП" : "Напр. Директор"}
-                        className="h-9"
                       />
                     </div>
 
@@ -1501,14 +1489,13 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           value={activeLegalEntity.signatoryAuthority}
                           onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryAuthority: e.target.value })}
                           placeholder="Напр. Виписки з ЄДР"
-                          className="h-9"
                         />
                       ) : (
                         <Select
                           value={activeLegalEntity.signatoryAuthority}
                           onValueChange={(value) => updateLegalEntity(activeLegalEntityIndex, { signatoryAuthority: value })}
                         >
-                          <SelectTrigger className="h-9">
+                          <SelectTrigger>
                             <SelectValue placeholder="Оберіть підставу" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1565,7 +1552,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     value={form.eventName}
                     onChange={(e) => setForm((prev) => ({ ...prev, eventName: e.target.value }))}
                     placeholder="Річниця, конференція, захід..."
-                    className="h-9"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1643,7 +1629,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   value={form.accountantName}
                   onChange={(e) => setForm((prev) => ({ ...prev, accountantName: e.target.value }))}
                   placeholder="Імʼя бухгалтера або керівника"
-                  className="h-9"
                 />
               </div>
               </div>

@@ -393,7 +393,6 @@ function TimerTaskRow({
                 type="button"
                 size="iconSm"
                 variant="outline"
-                className="h-8 w-8"
                 disabled={busy}
                 onClick={() => void controller.pauseTask(task)}
                 aria-label="Поставити таймер на паузу"
@@ -406,7 +405,6 @@ function TimerTaskRow({
               type="button"
               size="iconSm"
               variant="outline"
-              className="h-8 w-8"
               disabled={busy || !canStart}
               onClick={() => void controller.startTask(task)}
               aria-label="Запустити таймер"
@@ -416,7 +414,7 @@ function TimerTaskRow({
             </Button>
           )}
           <HoverTip asChild label="Відкрити задачу">
-            <Button asChild type="button" size="iconSm" variant="ghost" className="h-8 w-8" aria-label="Відкрити задачу">
+            <Button asChild type="button" size="iconSm" variant="ghost" aria-label="Відкрити задачу">
               <Link to={`/design/${task.taskId}`} aria-label="Відкрити задачу">
                 <ExternalLink className="h-3.5 w-3.5" />
               </Link>
@@ -571,7 +569,7 @@ export function DesignerHeaderTimerWidget({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-8 px-2 text-xs"
+                className="px-2 text-xs"
                 onClick={onShowFloating}
                 title={floatingOpen ? "Floating-віджет вже відкритий" : "Показати floating-віджет"}
               >
@@ -582,7 +580,7 @@ export function DesignerHeaderTimerWidget({
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-8 px-2 text-xs"
+                className="px-2 text-xs"
                 onClick={() => void controller.refresh()}
                 disabled={controller.loading}
               >
@@ -705,7 +703,7 @@ export function DesignerFloatingTimerWidget({
             type="button"
             size="iconSm"
             variant="ghost"
-            className="h-8 w-8 shrink-0 text-background/70 hover:bg-background/10 hover:text-background"
+            className="shrink-0 text-background/70 hover:bg-background/10 hover:text-background"
             onClick={onClose}
             aria-label="Закрити віджет"
           >
@@ -742,7 +740,7 @@ export function DesignerFloatingTimerWidget({
                   // Інвертований (темний) віджет: базовий disabled-стан кнопки
                   // тут недоречний — світла плашка на темному склі. Кожна гілка
                   // тримає власні disabled-кольори, що повторюють її спокій.
-                  "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
+                  "h-11 w-full justify-center px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
                   startableTask && !currentRunning
                     ? "border-transparent bg-success-foreground text-white hover:border-transparent hover:bg-success-foreground/90 hover:text-white disabled:border-transparent disabled:bg-success-foreground disabled:text-white"
                     : "border-background/20 bg-background/[0.08] text-background/40 hover:bg-background/[0.08] hover:text-background/40 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/40"
@@ -767,7 +765,7 @@ export function DesignerFloatingTimerWidget({
                 size="sm"
                 variant="outline"
                 className={cn(
-                  "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
+                  "h-11 w-full justify-center px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
                   currentRunning
                     ? "border-transparent bg-warning-foreground text-background hover:border-transparent hover:bg-warning-foreground/80 hover:text-background disabled:border-transparent disabled:bg-warning-foreground disabled:text-background"
                     : "border-background/20 bg-background/[0.08] text-background/50 hover:bg-background/[0.08] hover:text-background/50 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/50"

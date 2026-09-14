@@ -191,7 +191,7 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
         <Button
           type="button"
           size="sm"
-          className="h-8 gap-1.5"
+          className="gap-1.5"
           onClick={() => {
             setEditing(null);
             setDialogOpen(true);
@@ -243,8 +243,8 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
                   <Button
                     type="button"
                     variant={isPaid ? "successTonal" : "outline"}
-                    size="sm"
-                    className="h-9 gap-1.5"
+                    size="md"
+                    className="gap-1.5"
                     onClick={() => void toggleStatus(tax)}
                   >
                     {isPaid ? <Check className="h-3.5 w-3.5" /> : null}
@@ -366,7 +366,7 @@ function TaxDialog({
             <div className="grid gap-2">
               <Label>Податок</Label>
               <Select value={taxType} onValueChange={(v) => handleTypeChange(v as TaxType)}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -380,13 +380,13 @@ function TaxDialog({
             </div>
             <div className="grid gap-2">
               <Label>Звітний місяць</Label>
-              <Input controlSize="md" type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-9" />
+              <Input controlSize="md" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
             </div>
           </div>
           <div className="grid gap-2">
             <Label>Юрособа</Label>
             <Select value={legalEntityId || "none"} onValueChange={(v) => setLegalEntityId(v === "none" ? "" : v)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger>
                 <SelectValue placeholder="Оберіть" />
               </SelectTrigger>
               <SelectContent>
@@ -408,7 +408,6 @@ function TaxDialog({
                 onBlur={suggestAmount}
                 inputMode="decimal"
                 placeholder="дохід"
-                className="h-9"
               />
             </div>
             <div className="grid gap-2">
@@ -418,7 +417,6 @@ function TaxDialog({
                 onChange={(e) => setRate(e.target.value)}
                 onBlur={suggestAmount}
                 inputMode="decimal"
-                className="h-9"
               />
             </div>
             <div className="grid gap-2">
@@ -428,7 +426,6 @@ function TaxDialog({
                 onChange={(e) => setAmount(e.target.value)}
                 inputMode="decimal"
                 placeholder="0.00"
-                className="h-9"
               />
             </div>
           </div>
@@ -440,7 +437,7 @@ function TaxDialog({
             <div className="grid gap-2">
               <Label>Статус</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as TaxStatus)}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

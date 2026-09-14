@@ -4529,8 +4529,8 @@ export default function DesignPage() {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground"
+                size="iconSm"
+                className="text-muted-foreground"
                 onClick={(event) => event.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />
@@ -4817,7 +4817,7 @@ export default function DesignPage() {
             <Button
               size="sm"
               variant="outline"
-              className="mt-2 h-7 w-full text-xs"
+              className="mt-2 w-full text-xs"
               onClick={(event) => {
                 event.stopPropagation();
                 void applyAssignee(task, userId);
@@ -5418,8 +5418,8 @@ export default function DesignPage() {
                         key={option.value}
                         type="button"
                         variant="ghost"
-                        size="sm"
-                        className="w-full justify-start gap-2 h-9 text-sm"
+                        size="md"
+                        className="w-full justify-start gap-2 text-sm"
                         onClick={() => {
                           setCreateDesignTaskType(option.value);
                           setCreateDesignTaskTypePopoverOpen(false);
@@ -5524,8 +5524,8 @@ export default function DesignPage() {
                           <Button
                             type="button"
                             variant="ghost"
-                            size="sm"
-                            className="w-full justify-start gap-2 h-9 text-sm"
+                            size="md"
+                            className="w-full justify-start gap-2 text-sm"
                             onClick={() => {
                               setCreateManagerUserId(member.id);
                               setCreateManagerPopoverOpen(false);
@@ -5616,8 +5616,8 @@ export default function DesignPage() {
                       <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
-                        className="w-full justify-start gap-2 h-9 text-sm"
+                        size="md"
+                        className="w-full justify-start gap-2 text-sm"
                         onClick={() => {
                           setCreateAssigneeUserId("none");
                           setCreateCollaboratorIds((prev) => prev.filter((entry) => entry !== "none"));

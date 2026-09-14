@@ -43,8 +43,8 @@ export function FinanceMonthBar({
       <Button
         type="button"
         variant="outline"
-        size="icon"
-        className="h-8 w-8 shrink-0"
+        size="iconSm"
+        className="shrink-0"
         aria-label="Попередній місяць"
         onClick={onPrev}
       >
@@ -54,8 +54,8 @@ export function FinanceMonthBar({
       <Button
         type="button"
         variant="outline"
-        size="icon"
-        className="h-8 w-8 shrink-0"
+        size="iconSm"
+        className="shrink-0"
         aria-label="Наступний місяць"
         onClick={onNext}
       >
@@ -66,7 +66,7 @@ export function FinanceMonthBar({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 shrink-0 text-muted-foreground"
+          className="shrink-0 text-muted-foreground"
           onClick={onReset}
         >
           Поточний

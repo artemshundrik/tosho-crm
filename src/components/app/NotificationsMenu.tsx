@@ -144,10 +144,10 @@ function PushStrip({ push }: { push: PushApi }) {
       <Button
         type="button"
         variant="ghost"
-        size="xs"
+        size="sm"
         onClick={push.enable}
         disabled={push.busy}
-        className="h-7 shrink-0 px-2 font-semibold text-warning-foreground hover:bg-warning-soft-border/40"
+        className="shrink-0 px-2 font-semibold text-warning-foreground hover:bg-warning-soft-border/40"
       >
         {push.busy ? "Вмикаємо…" : "Увімкнути"}
       </Button>
@@ -195,11 +195,11 @@ export function NotificationsMenu({
         <Button
           type="button"
           variant="control"
-          size="iconMd"
+          size="icon"
           // Прозорий, як решта кнопок у шапці. Плашка тут нічого не кодувала:
           // «є непрочитані» показує лічильник, а не фон, і сірий прямокутник
           // навколо дзвіночка лише виділяв його серед сусідів без причини.
-          className="relative h-10 w-10 rounded-xl transition-colors duration-base"
+          className="relative transition-colors duration-base"
           aria-label={unreadCount > 0 ? `Сповіщення, непрочитаних: ${unreadCount}` : "Сповіщення"}
         >
           <Bell className="h-4.5 w-4.5" />
@@ -239,7 +239,7 @@ export function NotificationsMenu({
               <Button
                 type="button"
                 variant="textMuted"
-                size="xs"
+                size="sm"
                 onClick={() => {
                   onMarkAllRead();
                   // Закриваємо: після «Прочитати всі» в списку не лишається
@@ -247,7 +247,7 @@ export function NotificationsMenu({
                   // панель над кнопкою читається як «не спрацювало».
                   onOpenChange(false);
                 }}
-                className="h-7 shrink-0 gap-1.5 px-2"
+                className="shrink-0 gap-1.5 px-2"
               >
                 <CheckCheck className="h-3.5 w-3.5" />
                 {unreadCount === 1 ? "Прочитати" : "Прочитати всі"}

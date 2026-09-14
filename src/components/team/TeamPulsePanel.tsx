@@ -496,8 +496,7 @@ export function TeamPulsePanel({
             <Button
               type="button"
               variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              size="iconSm"
               aria-label="Попередній період"
               onClick={() => setPeriodOffset((prev) => prev - 1)}
             >
@@ -509,8 +508,7 @@ export function TeamPulsePanel({
             <Button
               type="button"
               variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              size="iconSm"
               aria-label="Наступний період"
               disabled={periodOffset >= 0}
               onClick={() => setPeriodOffset((prev) => Math.min(0, prev + 1))}

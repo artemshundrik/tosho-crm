@@ -1807,7 +1807,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   <SheetTitle className="sr-only">Шо треба?</SheetTitle>
                 </div>
                 <SheetClose asChild>
-                  <Button type="button" variant="ghost" size="iconSm" className="h-9 w-9 rounded-full" aria-label="Закрити ToSho AI">
+                  <Button type="button" variant="ghost" size="icon" className="rounded-full" aria-label="Закрити ToSho AI">
                     <CloseIcon className="h-4 w-4" />
                   </Button>
                 </SheetClose>
@@ -1882,10 +1882,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <Button
                 type="button"
                 variant="ghost"
-                size="icon"
+                size="iconSm"
                 className={cn(
-                  "h-8 w-8 rounded-[var(--radius-lg)] text-muted-foreground hover:text-foreground transition-all duration-slow ease-[cubic-bezier(0.2,0.8,0.2,1)] translate-y-[2px]",
-                  sidebarCollapsed ? "rounded-xl bg-background/35" : ""
+                  "text-muted-foreground hover:text-foreground transition-all duration-slow ease-[cubic-bezier(0.2,0.8,0.2,1)] translate-y-[2px]",
+                  sidebarCollapsed ? "bg-background/35" : ""
                 )}
                 onClick={() => setSidebarCollapsed((prev) => !prev)}
                 aria-label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
@@ -2110,7 +2110,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <div className="md:hidden">
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                   <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-[var(--radius-lg)]">
+                    <Button variant="ghost" size="icon">
                       <Menu className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
@@ -2164,7 +2164,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               value=""
                               placeholder="Пошук…"
                               className={cn(
-                                "h-10 rounded-[var(--radius-lg)] border border-input bg-background/75 pl-10 pr-16",
+                                "border border-input bg-background/75 pl-10 pr-16",
                                 "cursor-pointer",
                                 "focus-visible:ring-2 focus-visible:ring-foreground/20"
                               )}

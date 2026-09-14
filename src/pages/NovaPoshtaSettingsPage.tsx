@@ -277,7 +277,7 @@ export default function NovaPoshtaSettingsPage() {
               <div className="grid gap-2">
                 <Label>Контрагент-відправник <span className="text-destructive">*</span></Label>
                 <Select value={settings.senderRef} onValueChange={handleSelectSender} disabled={notConfigured}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue placeholder={senders.length ? "Оберіть відправника" : "Немає відправників у кабінеті"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -297,7 +297,7 @@ export default function NovaPoshtaSettingsPage() {
                   onValueChange={handleSelectContact}
                   disabled={notConfigured || !settings.senderRef}
                 >
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue placeholder={settings.senderRef ? "Оберіть контакт" : "Спершу відправник"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -347,7 +347,7 @@ export default function NovaPoshtaSettingsPage() {
               <div className="grid gap-2">
                 <Label>Платник доставки</Label>
                 <Select value={settings.defaultPayer} onValueChange={(defaultPayer) => update({ defaultPayer })}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -365,7 +365,7 @@ export default function NovaPoshtaSettingsPage() {
                   value={settings.defaultPaymentMethod}
                   onValueChange={(defaultPaymentMethod) => update({ defaultPaymentMethod })}
                 >
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -380,7 +380,7 @@ export default function NovaPoshtaSettingsPage() {
               <div className="grid gap-2">
                 <Label>Тип вантажу</Label>
                 <Select value={settings.defaultCargoType} onValueChange={(defaultCargoType) => update({ defaultCargoType })}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -398,7 +398,7 @@ export default function NovaPoshtaSettingsPage() {
                   value={settings.defaultServiceType}
                   onValueChange={(defaultServiceType) => update({ defaultServiceType })}
                 >
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -420,7 +420,6 @@ export default function NovaPoshtaSettingsPage() {
                   }}
                   inputMode="decimal"
                   placeholder="напр. 0.5"
-                  className="h-9"
                 />
                 <p className="text-xs text-muted-foreground">Якщо порожньо — у ТТН підставиться 0.5 кг.</p>
               </div>
@@ -430,7 +429,6 @@ export default function NovaPoshtaSettingsPage() {
                   value={String(settings.defaultSeats)}
                   onChange={(event) => update({ defaultSeats: Math.max(1, Number(event.target.value.replace(/\D/g, "")) || 1) })}
                   inputMode="numeric"
-                  className="h-9"
                 />
               </div>
               <div className="grid gap-2 md:col-span-2">
@@ -439,7 +437,6 @@ export default function NovaPoshtaSettingsPage() {
                   value={settings.defaultDescription}
                   onChange={(event) => update({ defaultDescription: event.target.value })}
                   placeholder="напр. Друкована продукція"
-                  className="h-9"
                 />
                 <p className="text-xs text-muted-foreground">
                   Запасний варіант. Зазвичай опис береться з категорій товарів у замовленні — «Одяг»,
@@ -463,7 +460,6 @@ export default function NovaPoshtaSettingsPage() {
                         value={box.label}
                         onChange={(event) => updateBoxSize(index, { label: event.target.value })}
                         placeholder="Назва, напр. Мала"
-                        className="h-9"
                       />
                       {(["length", "width", "height"] as const).map((side) => (
                         <Input
@@ -475,14 +471,14 @@ export default function NovaPoshtaSettingsPage() {
                           inputMode="numeric"
                           aria-label={SIDE_LABELS[side]}
                           placeholder={SIDE_LABELS[side]}
-                          className="h-9 w-20"
+                          className="w-20"
                         />
                       ))}
                       <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
-                        className="h-9 w-9 p-0 text-muted-foreground"
+                        size="md"
+                        className="w-9 p-0 text-muted-foreground"
                         aria-label="Прибрати розмір"
                         onClick={() => update({ boxSizes: settings.boxSizes.filter((_, i) => i !== index) })}
                       >

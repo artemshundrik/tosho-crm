@@ -308,9 +308,9 @@ export function ToolbarMeta({
         <HoverTip asChild label="Скинути фільтри">
           <Button
             variant="ghost"
-            size="icon"
+            size="iconSm"
             onClick={onReset}
-            className="h-8 w-8 shrink-0 text-muted-foreground"
+            className="shrink-0 text-muted-foreground"
             aria-label="Скинути фільтри"
           >
             <FilterX className="h-4 w-4" />

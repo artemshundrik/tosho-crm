@@ -221,7 +221,7 @@ export const CatalogModelPicker: React.FC<CatalogModelPickerProps> = ({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Пошук моделі, модифікації або артикулу"
-              className="h-9 rounded-full pl-8 text-sm"
+              className="rounded-full pl-8 text-sm"
               autoFocus
             />
           </div>
@@ -283,7 +283,7 @@ export const CatalogModelPicker: React.FC<CatalogModelPickerProps> = ({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-9 w-9 shrink-0"
+                        className="shrink-0"
                         onClick={(event) => {
                           event.stopPropagation();
                           toggleExpanded(group.model.id);

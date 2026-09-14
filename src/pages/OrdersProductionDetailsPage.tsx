@@ -1934,7 +1934,7 @@ export default function OrdersProductionDetailsPage() {
                 onValueChange={(value) => void handleStatusChange("orderStatus", value)}
                 disabled={statusSaving}
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1959,7 +1959,7 @@ export default function OrdersProductionDetailsPage() {
                 onValueChange={(value) => void handleStatusChange("paymentStatus", value)}
                 disabled={statusSaving}
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1982,7 +1982,7 @@ export default function OrdersProductionDetailsPage() {
                 onValueChange={(value) => void handleStatusChange("deliveryStatus", value)}
                 disabled={statusSaving}
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -2089,7 +2089,7 @@ export default function OrdersProductionDetailsPage() {
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 px-2 text-xs"
+              className="gap-1 px-2 text-xs"
               onClick={() => setDeliveryDialogOpen(true)}
             >
               <Pencil className="h-3 w-3" />
@@ -2148,7 +2148,7 @@ export default function OrdersProductionDetailsPage() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-7 shrink-0 px-2 text-xs"
+                    className="shrink-0 px-2 text-xs"
                     onClick={() => setTtnDialogOpen(true)}
                   >
                     Деталі
@@ -2159,7 +2159,7 @@ export default function OrdersProductionDetailsPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-8 w-full gap-1.5 text-xs"
+                  className="w-full gap-1.5 text-xs"
                   onClick={() => setTtnDialogOpen(true)}
                   disabled={!orderDelivery?.deliveryType}
                 >
@@ -2186,7 +2186,7 @@ export default function OrdersProductionDetailsPage() {
             </div>
           </div>
           {record.source === "stored" ? (
-            <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={openSpecificationParamsDialog}>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs" onClick={openSpecificationParamsDialog}>
               <Pencil className="h-3.5 w-3.5" />
               Змінити умови
             </Button>
@@ -2443,7 +2443,7 @@ export default function OrdersProductionDetailsPage() {
                     {document.actionMode === "create" ? (
                       <Button
                         size="sm"
-                        className="h-7 gap-1 px-2.5 text-xs"
+                        className="gap-1 px-2.5 text-xs"
                         onClick={() => handleDocumentAction(document.kind)}
                       >
                         <FilePlus2 className="h-3.5 w-3.5" />
@@ -2454,7 +2454,7 @@ export default function OrdersProductionDetailsPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 gap-1 px-2 text-xs text-foreground hover:bg-muted/60"
+                          className="gap-1 px-2 text-xs text-foreground hover:bg-muted/60"
                           onClick={() => handleDocumentAction(document.kind)}
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
@@ -2466,7 +2466,7 @@ export default function OrdersProductionDetailsPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:bg-muted/60"
+                                className="w-7 shrink-0 p-0 text-muted-foreground hover:bg-muted/60"
                                 aria-label={`Більше дій: ${document.title}`}
                               >
                                 <MoreHorizontal className="h-4 w-4" />
@@ -2588,7 +2588,6 @@ export default function OrdersProductionDetailsPage() {
                     value={contractNumberInput}
                     onChange={(e) => setContractNumberInput(e.target.value)}
                     placeholder={record.quoteNumber}
-                    className="h-9"
                     disabled={!isCeo}
                   />
                 </div>
@@ -2618,7 +2617,6 @@ export default function OrdersProductionDetailsPage() {
                   value={contractProductionDaysInput}
                   onChange={(e) => setContractProductionDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
                   placeholder="Напр. 50"
-                  className="h-9"
                 />
                 <p className="text-xs text-muted-foreground">Підставляється у п. 2.2 договору. За замовчуванням — 50.</p>
               </div>
@@ -2652,7 +2650,6 @@ export default function OrdersProductionDetailsPage() {
                     value={contractPrepaymentPctInput}
                     onChange={(e) => setContractPrepaymentPctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
                     placeholder="Напр. 70"
-                    className="h-9"
                   />
                   <p className="text-xs text-muted-foreground">Перед запуском у виробництво.</p>
                 </div>
@@ -2664,7 +2661,6 @@ export default function OrdersProductionDetailsPage() {
                     value={contractBalancePctInput}
                     onChange={(e) => setContractBalancePctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
                     placeholder="Напр. 30"
-                    className="h-9"
                   />
                 </div>
               </div>
@@ -2674,7 +2670,7 @@ export default function OrdersProductionDetailsPage() {
                   value={contractBalanceTiming}
                   onValueChange={(value) => setContractBalanceTiming(value as "before_shipment" | "after_shipment")}
                 >
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2692,7 +2688,6 @@ export default function OrdersProductionDetailsPage() {
                     value={contractBalanceDaysInput}
                     onChange={(e) => setContractBalanceDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
                     placeholder="Напр. 5"
-                    className="h-9"
                   />
                   <p className="text-xs text-muted-foreground">
                     Доплата здійснюється протягом N робочих/банківських днів після відвантаження Продукції.
@@ -2820,7 +2815,7 @@ export default function OrdersProductionDetailsPage() {
               <div className="grid gap-2">
                 <Label>Тип оплати</Label>
                 <Select value={specPaymentMethodId} onValueChange={setSpecPaymentMethodId}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2842,7 +2837,6 @@ export default function OrdersProductionDetailsPage() {
                     value={specPrepaymentPctInput}
                     onChange={(e) => setSpecPrepaymentPctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
                     placeholder="Напр. 70"
-                    className="h-9"
                   />
                   <p className="text-xs text-muted-foreground">Перед запуском у виробництво.</p>
                 </div>
@@ -2854,7 +2848,6 @@ export default function OrdersProductionDetailsPage() {
                     value={specBalancePctInput}
                     onChange={(e) => setSpecBalancePctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
                     placeholder="Напр. 30"
-                    className="h-9"
                   />
                 </div>
               </div>
@@ -2864,7 +2857,7 @@ export default function OrdersProductionDetailsPage() {
                   value={specBalanceTiming}
                   onValueChange={(value) => setSpecBalanceTiming(value as "before_shipment" | "after_shipment")}
                 >
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2882,7 +2875,6 @@ export default function OrdersProductionDetailsPage() {
                     value={specBalanceDaysInput}
                     onChange={(e) => setSpecBalanceDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
                     placeholder="Напр. 5"
-                    className="h-9"
                   />
                 </div>
               ) : null}
@@ -2896,7 +2888,6 @@ export default function OrdersProductionDetailsPage() {
                 value={specProductionDaysInput}
                 onChange={(e) => setSpecProductionDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
                 placeholder={`Напр. ${DEFAULT_PRODUCTION_WORK_DAYS}`}
-                className="h-9"
               />
               <p className="text-xs text-muted-foreground">
                 Іде в колонку «Строки виконання робіт» і в п. 2.2 СП. Це ж число використовує договір.
@@ -2911,7 +2902,7 @@ export default function OrdersProductionDetailsPage() {
                   <IncotermsHint />
                 </div>
                 <Select value={specIncotermsCode} onValueChange={setSpecIncotermsCode}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2930,7 +2921,6 @@ export default function OrdersProductionDetailsPage() {
                   value={specIncotermsPlaceInput}
                   onChange={(e) => setSpecIncotermsPlaceInput(e.target.value)}
                   placeholder="Напр. склад НП, Київ"
-                  className="h-9"
                 />
                 <p className="text-xs text-muted-foreground">Іде в п. 3.2 СП разом із базисом Incoterms.</p>
               </div>

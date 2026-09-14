@@ -275,7 +275,7 @@ export function ChecklistPanel({
 
       {canManage ? (
         <div className="flex items-center gap-1.5 pt-1">
-          <Input
+          <Input controlSize="sm"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -288,7 +288,7 @@ export function ChecklistPanel({
               if (event.key === "Escape") setDraft("");
             }}
             placeholder="Новий пункт…"
-            className="h-8 text-[13px]"
+            className="text-[13px]"
           />
           {draft ? (
             <Button type="button" variant="ghost" size="iconSm" onClick={() => setDraft("")}>

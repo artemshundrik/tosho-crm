@@ -202,7 +202,7 @@ function FactRow({
             {subtitle}
           </div>
         </div>
-        <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={onToggle}>
+        <Button type="button" variant="ghost" size="sm" className="shrink-0 px-2 text-xs" onClick={onToggle}>
           {expanded ? "Згорнути" : incomplete ? "Заповнити" : "Змінити"}
         </Button>
       </div>
@@ -750,7 +750,7 @@ export function NovaPoshtaTtnDialog({
                     value={recipient.recipientType}
                     onValueChange={(value) => updateRecipient({ recipientType: value as DeliveryRecipientType })}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -779,7 +779,6 @@ export function NovaPoshtaTtnDialog({
                     value={recipient.firstName}
                     onChange={(event) => updateRecipient({ firstName: event.target.value })}
                     placeholder="Іван"
-                    className="h-9"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -788,7 +787,6 @@ export function NovaPoshtaTtnDialog({
                     value={recipient.lastName}
                     onChange={(event) => updateRecipient({ lastName: event.target.value })}
                     placeholder="Петренко"
-                    className="h-9"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -836,7 +834,7 @@ export function NovaPoshtaTtnDialog({
               <div className="grid gap-2 sm:max-w-[220px]">
                 <Label>Тип вантажу</Label>
                 <Select value={cargo.cargoType} onValueChange={(cargoType) => updateCargo({ cargoType })}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -856,19 +854,19 @@ export function NovaPoshtaTtnDialog({
                 {seatGroups.map((group, index) => (
                   <div key={group.id} className="rounded-lg border border-border/60 p-2.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Input
+                      <Input controlSize="sm"
                         value={group.count}
                         onChange={(event) => updateSeatGroup(group.id, { count: digitsOnly(event.target.value) })}
                         inputMode="numeric"
                         aria-label="Скільки коробок"
-                        className="h-8 w-12 text-center"
+                        className="w-12 text-center"
                       />
                       <span className="text-xs text-muted-foreground">×</span>
                       <div className="flex items-center gap-1">
                         {(["length", "width", "height"] as const).map((side, sideIndex) => (
                           <div key={side} className="flex items-center gap-1">
                             {sideIndex > 0 ? <span className="text-2xs text-muted-foreground">×</span> : null}
-                            <Input
+                            <Input controlSize="sm"
                               value={group[side]}
                               onChange={(event) =>
                                 updateSeatGroup(group.id, { [side]: digitsOnly(event.target.value), packRef: "" })
@@ -876,20 +874,20 @@ export function NovaPoshtaTtnDialog({
                               inputMode="numeric"
                               placeholder={SIDE_PLACEHOLDERS[side]}
                               aria-label={`${SIDE_PLACEHOLDERS[side]}, см`}
-                              className="h-8 w-14 text-center text-xs"
+                              className="w-14 text-center text-xs"
                             />
                           </div>
                         ))}
                         <span className="text-2xs text-muted-foreground">см</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Input
+                        <Input controlSize="sm"
                           value={group.weight}
                           onChange={(event) => updateSeatGroup(group.id, { weight: decimalOnly(event.target.value) })}
                           inputMode="decimal"
                           placeholder="0.5"
                           aria-label="Вага однієї коробки, кг"
-                          className="h-8 w-16 text-center text-xs"
+                          className="w-16 text-center text-xs"
                         />
                         <span className="text-2xs text-muted-foreground">кг / шт</span>
                       </div>
@@ -898,7 +896,7 @@ export function NovaPoshtaTtnDialog({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="ml-auto h-8 w-8 p-0 text-muted-foreground"
+                          className="ml-auto w-8 p-0 text-muted-foreground"
                           aria-label={`Прибрати місце ${index + 1}`}
                           onClick={() => removeSeatGroup(group.id)}
                         >
@@ -915,8 +913,8 @@ export function NovaPoshtaTtnDialog({
                               key={`${key}-${boxIndex}`}
                               type="button"
                               variant={group.packRef === key ? "secondary" : "outline"}
-                              size="sm"
-                              className="h-6 rounded-full px-2 text-2xs font-normal"
+                              size="xs"
+                              className="rounded-full px-2 text-2xs font-normal"
                               onClick={() =>
                                 updateSeatGroup(group.id, {
                                   packRef: key,
@@ -936,7 +934,7 @@ export function NovaPoshtaTtnDialog({
                 ))}
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addSeatGroup}>
+                  <Button type="button" variant="outline" size="sm" className="text-xs" onClick={addSeatGroup}>
                     <Plus className="mr-1.5 h-3.5 w-3.5" />
                     Ще коробка іншого розміру
                   </Button>
@@ -972,7 +970,6 @@ export function NovaPoshtaTtnDialog({
                   <Input
                     value={cargo.description}
                     onChange={(event) => updateCargo({ description: event.target.value })}
-                    className="h-9"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -982,7 +979,6 @@ export function NovaPoshtaTtnDialog({
                     onChange={(event) => updateCargo({ cost: digitsOnly(event.target.value) })}
                     inputMode="numeric"
                     placeholder="0"
-                    className="h-9"
                   />
                 </div>
               </div>
@@ -1006,7 +1002,7 @@ export function NovaPoshtaTtnDialog({
                 <div className="grid gap-2">
                   <Label>Платник</Label>
                   <Select value={cargo.payer} onValueChange={(payer) => updateCargo({ payer })}>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1021,7 +1017,7 @@ export function NovaPoshtaTtnDialog({
                 <div className="grid gap-2">
                   <Label>Оплата</Label>
                   <Select value={cargo.paymentMethod} onValueChange={(paymentMethod) => updateCargo({ paymentMethod })}>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1036,7 +1032,7 @@ export function NovaPoshtaTtnDialog({
                 <div className="grid gap-2 md:col-span-2">
                   <Label>Тип доставки</Label>
                   <Select value={cargo.serviceType} onValueChange={(serviceType) => updateCargo({ serviceType })}>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

@@ -55,7 +55,6 @@ export function DesignTaskRenameDialog({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Вкажіть назву задачі"
-            className="h-10"
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();

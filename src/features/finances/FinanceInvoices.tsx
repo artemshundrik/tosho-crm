@@ -266,7 +266,7 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
         <Button
           type="button"
           size="sm"
-          className="h-8 gap-1.5"
+          className="gap-1.5"
           disabled={noEntities}
           onClick={() => {
             setEditing(null);
@@ -543,7 +543,7 @@ function InvoiceDialog({
             <div className="grid gap-2">
               <Label>Виставник (юрособа) <span className="text-destructive">*</span></Label>
               <Select value={legalEntityId} onValueChange={setLegalEntityId}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue placeholder="Оберіть" />
                 </SelectTrigger>
                 <SelectContent>
@@ -557,7 +557,7 @@ function InvoiceDialog({
             </div>
             <div className="grid gap-2">
               <Label>Номер рахунку</Label>
-              <Input controlSize="md" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="Напр. 0001" className="h-9" />
+              <Input controlSize="md" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="Напр. 0001" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -568,7 +568,6 @@ function InvoiceDialog({
                 onChange={(e) => setAmount(e.target.value)}
                 inputMode="decimal"
                 placeholder="0.00"
-                className="h-9"
               />
             </div>
             <div className="grid gap-2">
@@ -578,7 +577,6 @@ function InvoiceDialog({
                 onChange={(e) => setVatRate(e.target.value)}
                 inputMode="decimal"
                 placeholder={selectedEntity?.vatPayer ? "20" : "без ПДВ"}
-                className="h-9"
               />
             </div>
           </div>
@@ -596,7 +594,7 @@ function InvoiceDialog({
             <div className="grid gap-2">
               <Label>Статус</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as FinanceInvoiceStatus)}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -611,7 +609,7 @@ function InvoiceDialog({
             <div className="grid gap-2">
               <Label>Тип замовлення</Label>
               <Select value={orderType || "none"} onValueChange={(v) => setOrderType(v === "none" ? "" : (v as OrderType))}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger>
                   <SelectValue placeholder="Не вказано" />
                 </SelectTrigger>
                 <SelectContent>
@@ -669,7 +667,7 @@ function InvoiceOrderPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" className="h-9 w-full justify-start font-normal">
+        <Button type="button" variant="outline" className="w-full justify-start font-normal">
           {selected ? (
             <span className="truncate">{selected.number} · {selected.customerName}</span>
           ) : (
@@ -684,7 +682,7 @@ function InvoiceOrderPicker({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Номер або замовник…"
-            className="h-9 pl-8"
+            className="pl-8"
           />
         </div>
         <div className="max-h-[280px] space-y-1 overflow-y-auto">

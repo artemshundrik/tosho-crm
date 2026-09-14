@@ -58,7 +58,7 @@ export function SearchBar({
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
             placeholder="Пошук моделі або SKU..."
-            className="h-9 border-border/60 pl-9 pr-9 focus:border-primary/40"
+            className="border-border/60 pl-9 pr-9 focus:border-primary/40"
           />
           {globalSearch && (
             <button
@@ -80,7 +80,7 @@ export function SearchBar({
         {/* Filters */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-2">
+            <Button variant="outline" size="md" className="gap-2">
               <Filter className="h-4 w-4" />
               Фільтри
               {showOnlyIncomplete && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
@@ -102,7 +102,7 @@ export function SearchBar({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-full justify-start text-muted-foreground"
+                  className="w-full justify-start text-muted-foreground"
                   onClick={() => setShowOnlyIncomplete(false)}
                 >
                   Скинути фільтри
@@ -115,7 +115,7 @@ export function SearchBar({
         {/* Overflow: secondary actions */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" className="h-9 w-9" aria-label="Більше дій">
+            <Button variant="outline" size="icon" aria-label="Більше дій">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -128,7 +128,7 @@ export function SearchBar({
         </DropdownMenu>
 
         {/* Primary */}
-        <Button onClick={onCreateModel} size="sm" className="h-9 gap-2 ">
+        <Button onClick={onCreateModel} size="md" className="gap-2 ">
           <Plus className="h-4 w-4" />
           Нова модель
         </Button>

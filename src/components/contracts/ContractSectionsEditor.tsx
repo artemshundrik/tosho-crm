@@ -67,11 +67,11 @@ export const ContractSectionsEditor = ({ sections, onChange, disabled }: Props) 
               {section.isCore ? (
                 <div className="text-sm font-semibold text-foreground">{section.title}</div>
               ) : (
-                <Input
+                <Input controlSize="sm"
                   value={section.title}
                   onChange={(event) => updateSection(index, { title: event.target.value })}
                   disabled={disabled}
-                  className="h-8 text-sm font-semibold"
+                  className="text-sm font-semibold"
                 />
               )}
               {!section.isCore ? (
@@ -89,7 +89,7 @@ export const ContractSectionsEditor = ({ sections, onChange, disabled }: Props) 
                   onClick={() => removeCustomSection(index)}
                   disabled={disabled}
                   aria-label="Видалити пункт"
-                  className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                  className="px-2 text-muted-foreground hover:text-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -116,7 +116,6 @@ export const ContractSectionsEditor = ({ sections, onChange, disabled }: Props) 
             onChange={(event) => setPendingNewTitle(event.target.value)}
             placeholder="Назва пункту, напр. «Гарантійні зобов’язання»"
             disabled={disabled}
-            className="h-9"
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();

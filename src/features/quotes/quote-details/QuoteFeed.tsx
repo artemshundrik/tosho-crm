@@ -136,7 +136,7 @@ function FeedRow({
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-2xs text-muted-foreground"
+              className="px-2 text-2xs text-muted-foreground"
               onClick={() => onDownload(event.attachment as QuoteAttachment)}
             >
               Завантажити
@@ -260,7 +260,7 @@ function FilesRegister({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 shrink-0 px-2 text-2xs text-muted-foreground"
+                      className="shrink-0 px-2 text-2xs text-muted-foreground"
                       onClick={() => onDownload(file)}
                     >
                       Завантажити

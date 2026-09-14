@@ -141,7 +141,6 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Пошук замовника або ліда..."
-            className="h-9"
           />
           <div className="relative">
             <div
@@ -163,7 +162,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                         size="sm"
                         disabled={option.disabled}
                         className={cn(
-                          "h-auto min-h-12 w-full items-center justify-start gap-3 rounded-[var(--radius-lg)] px-2 py-2 text-left text-sm",
+                          "h-auto min-h-12 w-full items-center justify-start gap-3 px-2 py-2 text-left text-sm",
                           option.disabled && "cursor-not-allowed opacity-55"
                         )}
                         // СИСТЕМНИЙ `title` ТУТ НАВМИСНО (REQ-175#p6): він
@@ -233,7 +232,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                 type="button"
                 size="sm"
                 variant="secondary"
-                className={cn("h-8 w-full", !onCreateLead && "col-span-2")}
+                className={cn("w-full", !onCreateLead && "col-span-2")}
                 disabled={!canCreate}
                 onClick={() => {
                   onCreateCustomer(searchValue.trim());
@@ -248,7 +247,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                 type="button"
                 size="sm"
                 variant="outline"
-                className={cn("h-8 w-full", !onCreateCustomer && "col-span-2")}
+                className={cn("w-full", !onCreateCustomer && "col-span-2")}
                 disabled={!canCreate}
                 onClick={() => {
                   onCreateLead(searchValue.trim());
@@ -263,7 +262,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="col-span-2 h-8 w-full text-muted-foreground"
+                className="col-span-2 w-full text-muted-foreground"
                 onClick={() => {
                   onClear();
                   onOpenChange(false);

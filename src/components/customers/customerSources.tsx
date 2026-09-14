@@ -52,7 +52,7 @@ export function SourceSelect({
         id={id}
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
-        className={className ?? "h-9"}
+        className={className ?? ""}
       >
         <SelectValue placeholder="Оберіть джерело" />
       </SelectTrigger>

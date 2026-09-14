@@ -610,9 +610,9 @@ const DesignTaskTypeChip: React.FC<{
                 key={option.value}
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="md"
                 className={cn(
-                  "h-9 w-full justify-start gap-2 text-sm",
+                  "w-full justify-start gap-2 text-sm",
                   active && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
                 )}
                 onClick={() => {
@@ -678,8 +678,8 @@ const TeamMemberChipDropdown: React.FC<{
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className={cn("h-9 w-full justify-between text-sm", !selected && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
+            size="md"
+            className={cn("w-full justify-between text-sm", !selected && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
             onClick={() => {
               onChange(null);
               setOpen(false);
@@ -698,9 +698,9 @@ const TeamMemberChipDropdown: React.FC<{
                 key={member.id}
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="md"
                 className={cn(
-                  "h-9 w-full justify-between text-sm",
+                  "w-full justify-between text-sm",
                   active && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
                 )}
                 onClick={() => {
@@ -782,9 +782,9 @@ const TeamMemberMultiChipDropdown: React.FC<{
                 key={member.id}
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="md"
                 className={cn(
-                  "h-9 w-full justify-between text-sm",
+                  "w-full justify-between text-sm",
                   active && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
                 )}
                 onClick={() => {
@@ -1889,7 +1889,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                   popoverClassName="w-72 p-2"
                 />
                 <Select value={managerId || "unassigned"} onValueChange={(value) => setManagerId(value === "unassigned" ? "" : value)}>
-                  <SelectTrigger className="h-9 w-full rounded-full sm:w-[220px]">
+                  <SelectTrigger className="w-full rounded-full sm:w-[220px]">
                     {selectedManager ? (
                       <div className="flex min-w-0 items-center gap-2">
                         <AvatarBase
@@ -1957,7 +1957,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                 >
                   <SelectTrigger
                     className={cn(
-                      "h-9 w-[248px] rounded-full",
+                      "w-[248px] rounded-full",
                       // Порожнє обов'язкове поле показуємо так само, як інші
                       // незаповнені обов'язкові, — інакше воно виглядає як
                       // необов'язкове й лишається порожнім до кінця.
@@ -1981,7 +1981,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                 </Select>
                 ) : null}
                 <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger className="h-9 w-[104px] rounded-full">
+                  <SelectTrigger className="w-[104px] rounded-full">
                     <SelectValue placeholder="Валюта" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2005,7 +2005,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                   <div className="text-sm font-semibold text-foreground">Товари</div>
                   <div className="text-xs text-muted-foreground">Склад майбутнього прорахунку</div>
                 </div>
-                <Button type="button" size="sm" variant="outline" onClick={addProduct} className="h-9 rounded-full gap-1.5">
+                <Button type="button" size="md" variant="outline" onClick={addProduct} className="rounded-full gap-1.5">
                   <Plus className="h-4 w-4" />
                   Додати
                 </Button>
@@ -2167,11 +2167,11 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => duplicateProduct(activeProduct)} className="h-9 gap-1.5 rounded-full px-3">
+                        <Button type="button" variant="outline" size="md" onClick={() => duplicateProduct(activeProduct)} className="gap-1.5 rounded-full px-3">
                           <Copy className="h-4 w-4" />
                           Дублювати
                         </Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeProduct(activeProduct.id)} className="h-9 gap-1.5 rounded-full px-3 text-destructive hover:text-destructive">
+                        <Button type="button" variant="ghost" size="md" onClick={() => removeProduct(activeProduct.id)} className="gap-1.5 rounded-full px-3 text-destructive hover:text-destructive">
                           <Trash2 className="h-4 w-4" />
                           Видалити
                         </Button>
@@ -2260,7 +2260,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                  className="px-2 text-xs text-muted-foreground hover:text-foreground"
                                 >
                                   <Plus className="mr-1 h-3.5 w-3.5" />
                                   Створити товар
@@ -2284,14 +2284,14 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                           if (quickModelError) setQuickModelError(null);
                                         }}
                                         placeholder="https://avanprint.ua/..."
-                                        className="h-9 min-w-0 flex-1"
+                                        className="min-w-0 flex-1"
                                         disabled={quickModelSaving || quickModelImporting}
                                       />
                                       <Button
                                         type="button"
                                         variant="outline"
-                                        size="sm"
-                                        className="h-9 shrink-0 gap-2"
+                                        size="md"
+                                        className="shrink-0 gap-2"
                                         onClick={handleQuickImportAvanprint}
                                         disabled={!quickModelImportUrl.trim() || quickModelSaving || quickModelImporting}
                                       >
@@ -2337,7 +2337,6 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                           if (quickModelError) setQuickModelError(null);
                                         }}
                                         placeholder="Назва товару"
-                                        className="h-9"
                                         disabled={quickModelSaving || quickModelImporting}
                                       />
                                       <Input
@@ -2347,7 +2346,6 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                           if (quickModelError) setQuickModelError(null);
                                         }}
                                         placeholder="Артикул"
-                                        className="h-9"
                                         disabled={quickModelSaving || quickModelImporting}
                                       />
                                       <Input
@@ -2358,7 +2356,6 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                           setQuickModelImportSummary(null);
                                         }}
                                         placeholder="Фото URL, необов'язково"
-                                        className="h-9"
                                         disabled={quickModelSaving || quickModelImporting}
                                       />
                                     </div>
@@ -2437,9 +2434,9 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  size="icon"
+                                  size="iconSm"
                                   onClick={() => removePrintApplication(app.id)}
-                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                  className="text-muted-foreground hover:text-destructive"
                                   aria-label={`Видалити нанесення ${index + 1}`}
                                 >
                                   <X className="h-4 w-4" />
@@ -2484,7 +2481,6 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                       onChange={(event) => updatePrintApplication(app.id, "width", event.target.value)}
                                       inputMode="decimal"
                                       placeholder="Ширина"
-                                      className="h-9"
                                     />
                                     <span className="text-sm text-muted-foreground">x</span>
                                     <Input
@@ -2492,7 +2488,6 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                       onChange={(event) => updatePrintApplication(app.id, "height", event.target.value)}
                                       inputMode="decimal"
                                       placeholder="Висота"
-                                      className="h-9"
                                     />
                                   </div>
                                 </div>
@@ -2716,7 +2711,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                           value={activeProduct.quantityUnit}
                           onValueChange={(quantityUnit) => updateActiveProduct({ quantityUnit })}
                         >
-                          <SelectTrigger className="h-9 w-[120px] rounded-full">
+                          <SelectTrigger className="w-[120px] rounded-full">
                             <SelectValue placeholder="Од." />
                           </SelectTrigger>
                           <SelectContent>

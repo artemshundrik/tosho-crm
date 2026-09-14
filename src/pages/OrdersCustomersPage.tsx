@@ -3493,7 +3493,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             <div onClick={(event) => event.stopPropagation()}>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <Button variant="ghost" size="iconSm">
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -3763,8 +3763,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                 <DropdownMenuTrigger asChild>
                                   <Button
                                     variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 opacity-60 transition-opacity hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+                                    size="iconSm"
+                                    className="opacity-60 transition-opacity hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
                                     aria-label="Дії замовника"
                                   >
                                     <MoreHorizontal className="h-4 w-4" />
@@ -3867,7 +3867,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         <div onClick={(event) => event.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Button variant="ghost" size="iconSm">
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -3990,8 +3990,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
                               <DropdownMenuTrigger asChild>
                                 <Button
                                   variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 opacity-60 transition-opacity hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+                                  size="iconSm"
+                                  className="opacity-60 transition-opacity hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
                                   aria-label="Дії ліда"
                                 >
                                   <MoreHorizontal className="h-4 w-4" />
@@ -4133,7 +4133,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
                 value={attachDropboxPath}
                 onChange={(event) => setAttachDropboxPath(event.target.value)}
                 placeholder="LG"
-                className="h-10"
               />
               <div className="text-xs text-muted-foreground">
                 Приклад: `LG`

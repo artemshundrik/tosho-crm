@@ -69,7 +69,7 @@ export function CreativePayControl({
           variant="outline"
           size="sm"
           className={cn(
-            "h-7 gap-1.5 px-2.5 text-xs",
+            "gap-1.5 px-2.5 text-xs",
             paid && "border-success-soft-border bg-success-soft text-success-foreground"
           )}
           disabled={disabled}
@@ -90,7 +90,7 @@ export function CreativePayControl({
             type="button"
             variant={draftPaid ? "outline" : "primary"}
             size="sm"
-            className="h-8 flex-1 text-xs"
+            className="flex-1 text-xs"
             onClick={() => setDraftPaid(false)}
           >
             {!draftPaid ? <Check className="h-3.5 w-3.5" /> : null}
@@ -100,7 +100,7 @@ export function CreativePayControl({
             type="button"
             variant={draftPaid ? "primary" : "outline"}
             size="sm"
-            className="h-8 flex-1 text-xs"
+            className="flex-1 text-xs"
             onClick={() => setDraftPaid(true)}
           >
             {draftPaid ? <Check className="h-3.5 w-3.5" /> : null}
@@ -116,7 +116,6 @@ export function CreativePayControl({
               onChange={(event) => setDraftCost(event.target.value)}
               inputMode="numeric"
               placeholder={minCreativeCost ? String(minCreativeCost) : "4500"}
-              className="h-9"
               autoFocus
             />
             {belowMin ? (
@@ -140,7 +139,7 @@ export function CreativePayControl({
         <Button
           type="button"
           size="sm"
-          className="mt-3 h-8 w-full text-xs"
+          className="mt-3 w-full text-xs"
           disabled={saving || (draftPaid && !costValid)}
           onClick={() => void submit()}
         >

@@ -217,10 +217,10 @@ function RangeSegmented({
           key={option.value}
           type="button"
           variant="segmented"
-          size="xs"
+          size="sm"
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
-          className="h-8 rounded-xl px-3 text-xs"
+          className="px-3 text-xs"
         >
           {option.label}
         </Button>
@@ -1285,7 +1285,7 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
               aria-pressed={range === r.key}
               onClick={() => setRange(r.key)}
               className={cn(
-                "h-7 rounded-full px-3 text-xs",
+                "rounded-full px-3 text-xs",
                 range === r.key ? "bg-background text-foreground" : "text-muted-foreground"
               )}
             >
@@ -1578,7 +1578,7 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
               variant="ghost"
               onClick={() => setDays(range.key)}
               className={cn(
-                "h-8 rounded-xl px-3 text-xs font-medium",
+                "px-3 text-xs font-medium",
                 days === range.key && "bg-background text-foreground"
               )}
             >
