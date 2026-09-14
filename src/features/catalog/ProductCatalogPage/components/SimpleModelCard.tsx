@@ -8,7 +8,7 @@ import { memo, useEffect, useState, type KeyboardEvent, type MouseEvent } from "
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Copy, Image as ImageIcon, Layers, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, Copy, Image as ImageIcon, Layers, MoreVertical, Pencil, Trash2 } from "@/components/icons/appIcons";
 import {
   DropdownMenu,
   DropdownMenuContent,

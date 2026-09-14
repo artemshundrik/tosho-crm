@@ -13,8 +13,8 @@ import {
   Box,
   Tag,
   Wallet,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import {
@@ -178,7 +178,7 @@ function FactRow({
   onToggle,
   children,
 }: {
-  icon: LucideIcon;
+  icon: AppIcon;
   title: string;
   subtitle: string;
   incomplete?: boolean;

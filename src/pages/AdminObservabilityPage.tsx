@@ -10,7 +10,7 @@ import {
   RefreshCw,
   ShieldAlert,
   Sparkles,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";

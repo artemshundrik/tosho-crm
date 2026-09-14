@@ -23,7 +23,7 @@
 
 import { useMemo, useState } from "react";
 import type React from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { Row } from "@/components/team/PersonFactRow";

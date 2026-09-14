@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Globe, Loader2, Mail, Phone, User } from "lucide-react";
+import { Globe, Loader2, Mail, Phone, User } from "@/components/icons/appIcons";
 
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { HoverTip } from "@/components/ui/hover-tip";

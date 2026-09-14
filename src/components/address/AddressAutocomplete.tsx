@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Loader2, MapPin, Signpost } from "lucide-react";
+import { Loader2, MapPin, Signpost } from "@/components/icons/appIcons";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { Input } from "@/components/ui/input";
 import { getActiveSegment, replaceActiveSegment, startsWithSettlement } from "@/lib/addressAutocomplete";

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Building2, Check, Lock } from "lucide-react";
+import { Building2, Check, Lock } from "@/components/icons/appIcons";
 import { EntityAvatar } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";

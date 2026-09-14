@@ -1,4 +1,4 @@
-import { ChevronLeft, ExternalLink, KeyRound } from "lucide-react";
+import { ChevronLeft, ExternalLink, KeyRound } from "@/components/icons/appIcons";
 import { Link, useParams } from "react-router-dom";
 
 import { EntityAvatar } from "@/components/app/avatar-kit";

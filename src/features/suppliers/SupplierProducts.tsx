@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search } from "@/components/icons/appIcons";
 
 import { SupplierPoolRow } from "@/components/catalog/SupplierPoolRow";
 import { Button } from "@/components/ui/button";

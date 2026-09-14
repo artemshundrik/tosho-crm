@@ -22,7 +22,7 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { resolveWorkspaceId } from "@/lib/workspace";

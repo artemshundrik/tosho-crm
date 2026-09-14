@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Loader2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";

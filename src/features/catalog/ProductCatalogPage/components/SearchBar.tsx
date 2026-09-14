@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, Filter, MoreHorizontal, Plus, Search, X } from "lucide-react";
+import { Download, Filter, MoreHorizontal, Plus, Search, X } from "@/components/icons/appIcons";
 import type { CatalogType } from "@/types/catalog";
 import { exportToCSV } from "@/utils/catalogUtils";
 

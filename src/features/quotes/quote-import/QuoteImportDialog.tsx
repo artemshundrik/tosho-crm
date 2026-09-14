@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";

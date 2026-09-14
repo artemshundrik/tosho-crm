@@ -1874,6 +1874,118 @@
   }
 }
 
+/*
+ * РУХ ЗНАЧКІВ (REQ-275). Клас ставить сам значок (components/icons/appIcons),
+ * а оживає він, коли курсор над кнопкою, посиланням чи пунктом меню, у якому
+ * значок стоїть. Вимкнена кнопка не ворушиться. Тривалість до 0,7 с і згасаюча
+ * амплітуда — довше читається як поломка.
+ *
+ * Лише за `no-preference`: людина, що попросила систему зменшити рух, не бачить
+ * жодного з них.
+ */
+@keyframes icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes icon-shake {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-12deg);
+  }
+  40% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  80% {
+    transform: rotate(3deg);
+  }
+}
+@keyframes icon-ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(18deg);
+  }
+  30% {
+    transform: rotate(-16deg);
+  }
+  45% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(2deg);
+  }
+}
+@keyframes icon-nudge {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  40% {
+    transform: translate(-2px, -2px) scale(1.08);
+  }
+}
+@keyframes icon-lift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  45% {
+    transform: translate(1px, -2px);
+  }
+}
+@keyframes icon-pop {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .icon-motion-turn {
+    transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  :is(button, a, [role="button"], [role="menuitem"]):not(:disabled):hover .icon-motion-spin {
+    animation: icon-spin 700ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  :is(button, a, [role="button"], [role="menuitem"]):not(:disabled):hover .icon-motion-shake {
+    animation: icon-shake 420ms ease-in-out;
+  }
+  :is(button, a, [role="button"], [role="menuitem"]):not(:disabled):hover .icon-motion-ring {
+    transform-origin: 50% 12%;
+    animation: icon-ring 700ms ease-in-out;
+  }
+  :is(button, a, [role="button"], [role="menuitem"]):not(:disabled):hover .icon-motion-nudge {
+    animation: icon-nudge 480ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  :is(button, a, [role="button"], [role="menuitem"]):not(:disabled):hover .icon-motion-lift {
+    animation: icon-lift 360ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  :is(button, a, [role="button"], [role="menuitem"]):not(:disabled):hover .icon-motion-turn {
+    transform: rotate(90deg);
+  }
+  /* Активний пункт сайдбару: короткий «поп», коли пункт стає вибраним. */
+  .icon-motion-pop {
+    animation: icon-pop 420ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+
 @keyframes shimmer {
   0% {
     background-position: -200% 0;

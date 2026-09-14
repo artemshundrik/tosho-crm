@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Send } from "lucide-react";
+import { ArrowRight, Check, Send } from "@/components/icons/appIcons";
 import type { FeatureKey } from "@/lib/featureCatalog";
 
 /**

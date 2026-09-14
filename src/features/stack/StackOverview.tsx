@@ -15,7 +15,7 @@ import {
   Table2,
   Timer,
   Webhook,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { BENTO_CARD, HeroShell, SplitBar } from "@/components/app/bento";
 import { cn } from "@/lib/utils";

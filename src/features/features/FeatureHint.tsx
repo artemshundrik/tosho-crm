@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { X } from "@/components/icons/appIcons";
 import { useAuth } from "@/auth/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { singleFlight } from "@/lib/singleFlight";

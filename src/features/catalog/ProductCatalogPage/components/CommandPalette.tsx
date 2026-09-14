@@ -27,7 +27,7 @@ import {
   AlertTriangle,
   Image as ImageIcon,
   Coins,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import type { ModelWithContext } from "@/types/catalog";
 import type { CommandAction } from "../hooks/useCommandPalette";
 import { getPriceRange } from "@/utils/catalogUtils";

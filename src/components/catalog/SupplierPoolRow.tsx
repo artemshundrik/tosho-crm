@@ -6,7 +6,7 @@
  */
 
 import * as React from "react";
-import { ChevronDown, ExternalLink, Package } from "lucide-react";
+import { ChevronDown, ExternalLink, Package } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

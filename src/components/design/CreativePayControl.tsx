@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BadgeDollarSign, Check, Loader2 } from "lucide-react";
+import { BadgeDollarSign, Check, Loader2 } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

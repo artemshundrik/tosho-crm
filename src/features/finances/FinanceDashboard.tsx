@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { AlertTriangle, TrendingUp } from "lucide-react";
+import { AlertTriangle, TrendingUp } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import {

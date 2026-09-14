@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { History, Loader2, ShieldAlert } from "lucide-react";
+import { History, Loader2, ShieldAlert } from "@/components/icons/appIcons";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";

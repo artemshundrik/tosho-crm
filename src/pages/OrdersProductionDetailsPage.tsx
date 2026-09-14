@@ -86,7 +86,7 @@ import {
   Loader2,
   Send,
   Truck,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import {
   OrderDeliveryDialog,
   parseQuoteDeliveryDetails,

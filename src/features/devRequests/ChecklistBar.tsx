@@ -1,4 +1,4 @@
-import { Clock, Rocket } from "lucide-react";
+import { Clock, Rocket } from "@/components/icons/appIcons";
 
 import { cn } from "@/lib/utils";
 import { checklistProgress, type ChecklistItem } from "./checklist";

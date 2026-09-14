@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderPlus, Package, Printer, Shirt, Tag, Trash2 } from "lucide-react";
+import { FolderPlus, Package, Printer, Shirt, Tag, Trash2 } from "@/components/icons/appIcons";
 import type { CatalogType, CategoryMode, QuoteType } from "@/types/catalog";
 
 interface CategoryDialogProps {

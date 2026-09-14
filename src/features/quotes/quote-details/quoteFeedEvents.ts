@@ -1,4 +1,4 @@
-import { Calculator, Calendar, Clock, MessageSquare, Package, Paperclip, type LucideIcon } from "lucide-react";
+import { Calculator, Calendar, Clock, MessageSquare, Package, Paperclip, type AppIcon } from "@/components/icons/appIcons";
 
 import type { ActivityRow } from "@/lib/activity";
 import { getAttachmentDisplayFileName } from "@/lib/attachmentPreview";
@@ -45,7 +45,7 @@ export type QuoteFeedEvent = {
   /** «Було → стало». Порожнє `from` означає, що значення задали вперше. */
   from?: string;
   to?: string;
-  icon: LucideIcon;
+  icon: AppIcon;
   accentClass?: string;
   /** Вкладення, з якого зроблена подія, — щоб рядок умів завантажити файл. */
   attachment?: QuoteAttachment;
@@ -208,7 +208,7 @@ export function buildQuoteFeed({
             : undefined;
 
       const kind: QuoteFeedKind = source === "quote_runs" ? "money" : "event";
-      const icon: LucideIcon =
+      const icon: AppIcon =
         source === "quote_runs"
           ? Calculator
           : source === "quote_items"

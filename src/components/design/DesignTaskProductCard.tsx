@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Package } from "lucide-react";
+import { ExternalLink, Package } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { fetchSpecPresetsByModelId } from "@/features/quotes/quote-details/catalogSpecPresets";

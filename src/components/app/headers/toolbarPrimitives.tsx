@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ChevronDown, FilterX, Loader2, Search, X } from "lucide-react";
+import { Check, ChevronDown, FilterX, Loader2, Search, X } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

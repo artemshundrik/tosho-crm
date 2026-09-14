@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CalendarClock, Landmark, RefreshCw, Users } from "lucide-react";
+import { AlertTriangle, CalendarClock, Landmark, RefreshCw, Users } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { formatCurrencyAmount, useFxRates } from "@/lib/fxRates";

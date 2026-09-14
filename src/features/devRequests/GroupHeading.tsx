@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/icons/appIcons";
 
 import { toneDotClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";

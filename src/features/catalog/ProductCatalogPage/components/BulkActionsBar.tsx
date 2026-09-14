@@ -8,7 +8,7 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { HoverTip } from "@/components/ui/hover-tip";
-import { Download, Trash2, X, Copy } from "lucide-react";
+import { Download, Trash2, X, Copy } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 
 interface BulkActionsBarProps {

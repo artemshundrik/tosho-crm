@@ -8,7 +8,7 @@
  */
 
 import * as React from "react";
-import { Check, ChevronDown, ChevronRight, Package, Search, Shirt } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Package, Search, Shirt } from "@/components/icons/appIcons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

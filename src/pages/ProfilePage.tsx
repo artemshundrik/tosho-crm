@@ -15,7 +15,7 @@ import {
   Save,
   Send,
   UserCheck,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { supabase, db } from "@/lib/supabaseClient";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";

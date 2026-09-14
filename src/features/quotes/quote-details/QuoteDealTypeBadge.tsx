@@ -1,4 +1,4 @@
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "@/components/icons/appIcons";
 
 import {
   DropdownMenu,

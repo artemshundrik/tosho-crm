@@ -1,4 +1,4 @@
-import { Banknote, Bot, MapPin, Palette, Users, Wallet } from "lucide-react";
+import { Banknote, Bot, MapPin, Palette, Users, Wallet } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import type { FeatureCategory, FeatureGroup } from "@/lib/featureCatalog";
 

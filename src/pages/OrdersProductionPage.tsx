@@ -50,7 +50,7 @@ import {
   Plus,
   ShieldCheck,
   Wallet,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 type HeaderFilter = "all" | "created" | "ready" | "counterparty" | "design";

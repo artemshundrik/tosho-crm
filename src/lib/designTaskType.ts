@@ -4,8 +4,8 @@ import {
   PanelsTopLeft,
   Presentation,
   Sparkles,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 
 export const DESIGN_TASK_TYPE_OPTIONS = [
   { value: "visualization", label: "Візуалізація/адаптація" },
@@ -42,7 +42,7 @@ export const DESIGN_TASK_TYPE_LABELS: Record<DesignTaskType, string> = DESIGN_TA
   {} as Record<DesignTaskType, string>
 );
 
-export const DESIGN_TASK_TYPE_ICONS: Record<DesignTaskType, LucideIcon> = {
+export const DESIGN_TASK_TYPE_ICONS: Record<DesignTaskType, AppIcon> = {
   visualization: Image,
   presentation: Presentation,
   layout_adaptation: Copy,

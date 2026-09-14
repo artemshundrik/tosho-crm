@@ -8,7 +8,7 @@
  */
 
 import * as React from "react";
-import { Search } from "lucide-react";
+import { Search } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

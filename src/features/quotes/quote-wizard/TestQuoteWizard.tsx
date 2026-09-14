@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical } from "@/components/icons/appIcons";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

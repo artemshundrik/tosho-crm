@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Sparkles,
   XCircle,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";

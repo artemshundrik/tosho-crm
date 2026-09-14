@@ -16,7 +16,7 @@
  */
 
 import * as React from "react";
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons/appIcons";
 
 import { supplierDisplayName, type SupplierPoolProduct } from "@/lib/supplierPoolRows";
 import { cn } from "@/lib/utils";

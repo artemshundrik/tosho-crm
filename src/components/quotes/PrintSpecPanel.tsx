@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Pencil, Settings2 } from "lucide-react";
+import { Pencil, Settings2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";

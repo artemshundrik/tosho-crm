@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-09-06T13:18:10.648Z",
+  "generatedAt": "2026-09-14T07:38:20.509Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -54,7 +54,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Читає наш власний код як дерево, а не як текст. Потрібен перевірці, що звіряє кожен виклик до бази з тим, що в базі справді є: регулярки на цьому спотикались об згадку виклику в коментарі.",
       "homepage": "https://babel.dev/docs/en/next/babel-parser",
-      "usedIn": 1,
+      "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=babel.dev&sz=128"
     },
     {
@@ -116,6 +116,18 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "homepage": "https://number-flow.barvian.me",
       "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=number-flow.barvian.me&sz=128"
+    },
+    {
+      "name": "@phosphor-icons/react",
+      "version": "2.1.10",
+      "layer": "screen",
+      "dev": false,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Набір іконок Phosphor. Майже кожна іконка в CRM — звідси (через components/icons/appIcons).",
+      "homepage": "https://phosphoricons.com",
+      "usedIn": 2,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=phosphoricons.com&sz=128"
     },
     {
       "name": "@playwright/test",
@@ -324,7 +336,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 94,
+      "usedIn": 96,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -354,7 +366,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Памʼятає, що вже завантажено, і не питає базу двічі. Через нього ходять майже всі запити.",
       "homepage": "https://tanstack.com/query",
-      "usedIn": 22,
+      "usedIn": 25,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
@@ -399,7 +411,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 27,
+      "usedIn": 40,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -414,7 +426,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Клікає й друкує в тестах так, як це робить людина, — з наведенням, фокусом і клавіатурою, а не одним синтетичним кліком.",
       "homepage": null,
-      "usedIn": 13,
+      "usedIn": 14,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -714,21 +726,6 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": "https://github.com/jsdom.png?size=64"
     },
     {
-      "name": "lucide-react",
-      "version": "1.33.0",
-      "layer": "screen",
-      "dev": false,
-      "bumpedAt": "2026-08-23T21:38:45+03:00",
-      "bumpCommit": {
-        "sha": "06cefd1c",
-        "subject": "Іконки соцмереж у списку «звідки прийшов клієнт» тепер свої, а не чужі"
-      },
-      "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
-      "homepage": "https://lucide.dev",
-      "usedIn": 228,
-      "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
-    },
-    {
       "name": "netlify-cli",
       "version": "27.5.0",
       "layer": "platform",
@@ -785,7 +782,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 306,
+      "usedIn": 328,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -816,7 +813,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Частина React, яка власне малює в браузері.",
       "homepage": "https://react.dev/",
-      "usedIn": 10,
+      "usedIn": 11,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -847,7 +844,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Адреси сторінок: що показати на /orders/estimates і як переходити між розділами без перезавантаження.",
       "homepage": null,
-      "usedIn": 55,
+      "usedIn": 62,
       "iconUrl": "https://github.com/remix-run.png?size=64"
     },
     {
@@ -907,7 +904,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Спливні повідомлення в кутку: «Збережено», «Не вийшло».",
       "homepage": "https://sonner.emilkowal.ski/",
-      "usedIn": 66,
+      "usedIn": 67,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
     },
     {
@@ -968,7 +965,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Перевіряє типи: ловить помилки до запуску, а не в проді. Версія 7 — перевірка за 2,6 с замість 16.",
       "homepage": "https://www.typescriptlang.org/",
-      "usedIn": 2,
+      "usedIn": 4,
       "iconUrl": "https://www.google.com/s2/favicons?domain=www.typescriptlang.org&sz=128"
     },
     {
@@ -999,7 +996,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 157,
+      "usedIn": 190,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1030,7 +1027,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Читає ексельки клієнтів прямо в браузері: з них імпортуються позиції прорахунку. Береться з офіційного CDN SheetJS, а не з npm, — у npm лишилась версія 2022 року з дірками розбору, а розбираємо ми саме чужі файли.",
       "homepage": "https://sheetjs.com/",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sheetjs.com&sz=128"
     },
     {
@@ -1060,12 +1057,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 2122,
-  "testFiles": 155,
+  "tests": 2419,
+  "testFiles": 188,
   "lintStubs": 29,
   "node": "24",
-  "netlifyFunctions": 45,
-  "sourceLines": 276819,
+  "netlifyFunctions": 46,
+  "sourceLines": 291385,
   "automation": {
     "workflows": [
       {
@@ -1079,6 +1076,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "name": "Наскрізні перевірки",
         "cron": "20 4 * * *",
         "trigger": "за розкладом 20 4 * * *"
+      },
+      {
+        "file": "supplier-feeds.yml",
+        "name": "supplier-feeds",
+        "cron": "0 7 * * *",
+        "trigger": "за розкладом 0 7 * * *"
       },
       {
         "file": "watchdog.yml",

@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { ExternalLink, Plus, X } from "lucide-react";
+import { ExternalLink, Plus, X } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";

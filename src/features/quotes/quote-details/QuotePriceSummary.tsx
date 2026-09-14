@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronDown } from "lucide-react";
+import { AlertTriangle, ChevronDown } from "@/components/icons/appIcons";
 
 import {
   AnimatedFigure,

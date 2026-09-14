@@ -9,7 +9,7 @@ import {
   LogOut,
   ArrowRight,
   ShieldAlert,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
 import { InlineLoading } from "@/components/app/loading-primitives";

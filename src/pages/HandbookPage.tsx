@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowUpRight, BookOpen } from "lucide-react";
+import { ArrowUpRight, BookOpen } from "@/components/icons/appIcons";
 
 import { WhatsNewTabs } from "@/components/app/WhatsNewTabs";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";

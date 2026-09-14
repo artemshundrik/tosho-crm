@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, RefreshCw, Search } from "lucide-react";
+import { Check, RefreshCw, Search } from "@/components/icons/appIcons";
 
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";

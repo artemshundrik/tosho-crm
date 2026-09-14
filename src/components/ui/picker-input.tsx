@@ -1,7 +1,7 @@
 import * as React from "react";
 import { format, parse, isValid } from "date-fns";
 import { uk } from "date-fns/locale";
-import { CalendarDays, Clock } from "lucide-react";
+import { CalendarDays, Clock } from "@/components/icons/appIcons";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";

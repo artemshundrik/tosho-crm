@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight } from "@/components/icons/appIcons"
 import { DayPicker, type DropdownProps } from "react-day-picker"
 import { uk } from "date-fns/locale"
 

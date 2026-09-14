@@ -7,7 +7,7 @@ import {
   Paperclip,
   Pencil,
   Upload,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";

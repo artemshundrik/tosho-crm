@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Lightbulb } from "lucide-react";
+import { Lightbulb } from "@/components/icons/appIcons";
 
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { KanbanCard } from "@/components/kanban/KanbanCard";

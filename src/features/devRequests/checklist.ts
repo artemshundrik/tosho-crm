@@ -1,4 +1,4 @@
-import { CircleDashed, CircleDot, CircleSlash, Clock, CheckCircle2, HelpCircle } from "lucide-react";
+import { CircleDashed, CircleDot, CircleSlash, Clock, CheckCircle2, HelpCircle } from "@/components/icons/appIcons";
 import type { ComponentType } from "react";
 
 import type { Tone } from "@/lib/statusTones";

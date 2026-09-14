@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ChevronDown, ChevronRight, Edit2, Package, Plus, Printer } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Edit2, Package, Plus, Printer } from "@/components/icons/appIcons";
 import type { CatalogType, QuoteType } from "@/types/catalog";
 
 /**

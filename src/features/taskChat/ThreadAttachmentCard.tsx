@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, FileText, ImageOff } from "lucide-react";
+import { Download, FileText, ImageOff } from "@/components/icons/appIcons";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { getSignedAttachmentUrl, isRasterPreviewableFile } from "@/lib/attachmentPreview";
 import type { ThreadAttachment } from "@/lib/taskThread";

@@ -1,5 +1,5 @@
-import { AlertTriangle, CheckCircle2, CircleDashed, CircleHelp, Clock, Lock, Minus, PlugZap } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, CircleHelp, Clock, Lock, Minus, PlugZap } from "@/components/icons/appIcons";
+import type { AppIcon } from "@/components/icons/appIcons";
 
 import type { Tone } from "@/lib/statusTones";
 
@@ -60,7 +60,7 @@ export const INTEGRATION_STATE_LABEL: Record<IntegrationState, string> = {
   unknown: "Не вдалося прочитати",
 };
 
-export const INTEGRATION_STATE_ICON: Record<IntegrationState, LucideIcon> = {
+export const INTEGRATION_STATE_ICON: Record<IntegrationState, AppIcon> = {
   ok: CheckCircle2,
   warn: AlertTriangle,
   broken: PlugZap,

@@ -35,7 +35,7 @@ import {
   PinOff,
   PanelLeftOpen,
   SlidersHorizontal,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -2906,10 +2906,13 @@ function SidebarGroup({
               )}
             >
 
+              {/* Активний пункт — заповнений значок і «поп», коли стає вибраним
+                  (REQ-275): вибране видно формою, а не лише кольором. */}
               <Icon
+                weight={active ? "fill" : "regular"}
                 className={cn(
                   "h-[18px] w-[18px] shrink-0 transition-colors pointer-events-none",
-                  active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
+                  active ? "icon-motion-pop text-foreground" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />
 

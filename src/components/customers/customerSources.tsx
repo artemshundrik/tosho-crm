@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Globe, Megaphone, Presentation, ThumbsUp, UserCheck } from "lucide-react";
+import { Globe, Megaphone, Presentation, ThumbsUp, UserCheck } from "@/components/icons/appIcons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TikTokIcon } from "@/components/icons/TikTokIcon";
 import { ThreadsIcon } from "@/components/icons/ThreadsIcon";

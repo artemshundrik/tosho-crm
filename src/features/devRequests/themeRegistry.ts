@@ -10,7 +10,7 @@ import {
   Receipt,
   ShieldCheck,
   Wrench,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import type { ComponentType } from "react";
 
 import type { Tone } from "@/lib/statusTones";

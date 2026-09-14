@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Play } from "lucide-react";
+import { Play } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 

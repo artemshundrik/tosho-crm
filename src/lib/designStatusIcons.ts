@@ -6,13 +6,13 @@ import {
   RefreshCw,
   ShieldCheck,
   XCircle,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 
 import type { DesignStatus } from "@/lib/designTaskStatus";
 
 /** Іконка статусу дизайн-задачі — та сама, що в колонках канбану. */
-export const DESIGN_STATUS_ICON_BY_STATUS: Record<DesignStatus, LucideIcon> = {
+export const DESIGN_STATUS_ICON_BY_STATUS: Record<DesignStatus, AppIcon> = {
   new: Plus,
   changes: RefreshCw,
   in_progress: PlayCircle,

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
+import { Check, Monitor, Moon, Sun, type AppIcon } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +20,7 @@ import {
 } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-const OPTION_ICONS: Record<ThemePreference, LucideIcon> = {
+const OPTION_ICONS: Record<ThemePreference, AppIcon> = {
   light: Sun,
   dark: Moon,
   system: Monitor,

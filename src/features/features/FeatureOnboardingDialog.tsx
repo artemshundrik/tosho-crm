@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Search,
   Send,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import {
   Dialog,

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 

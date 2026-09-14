@@ -1,4 +1,4 @@
-import { Lock, Users } from "lucide-react";
+import { Lock, Users } from "@/components/icons/appIcons";
 import type { ComponentType } from "react";
 
 import { Badge } from "@/components/ui/badge";

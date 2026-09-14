@@ -1,4 +1,4 @@
-import { Check, Loader2, Mic, X } from "lucide-react";
+import { Check, Loader2, Mic, X } from "@/components/icons/appIcons";
 
 import { cn } from "@/lib/utils";
 import type { useDictation } from "@/lib/useDictation";

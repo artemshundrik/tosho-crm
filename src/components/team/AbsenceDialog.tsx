@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, Info, Loader2, Trash2, Users } from "lucide-react";
+import { CalendarRange, Info, Loader2, Trash2, Users } from "@/components/icons/appIcons";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 

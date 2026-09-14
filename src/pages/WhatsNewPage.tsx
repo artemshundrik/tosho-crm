@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, SearchX } from "lucide-react";
+import { ArrowRight, SearchX } from "@/components/icons/appIcons";
 import { useAuth } from "@/auth/AuthProvider";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarMeta } from "@/components/app/headers/toolbarPrimitives";

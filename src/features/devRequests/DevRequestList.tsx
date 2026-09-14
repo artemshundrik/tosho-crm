@@ -1,4 +1,4 @@
-import { ListTodo } from "lucide-react";
+import { ListTodo } from "@/components/icons/appIcons";
 
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { moduleKeyLabel } from "@/lib/projectMap";

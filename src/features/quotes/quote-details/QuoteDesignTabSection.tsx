@@ -3,7 +3,7 @@ import * as React from "react";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import type { DesignTaskType } from "@/lib/designTaskType";
 
-import { Package } from "lucide-react";
+import { Package } from "@/components/icons/appIcons";
 
 import { cn } from "@/lib/utils";
 

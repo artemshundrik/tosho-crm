@@ -12,7 +12,7 @@ import {
   TrendingUp,
   Users,
   Wallet,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { normalizeJobRole } from "@/lib/permissions";

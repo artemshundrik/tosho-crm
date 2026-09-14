@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons/appIcons";
 import { DELIVERY_TYPE_OPTIONS } from "@/features/quotes/quotes-page/config";
 import {
   QuoteDeliveryFields,

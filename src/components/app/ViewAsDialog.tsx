@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Briefcase, Eye, Search } from "lucide-react";
+import { Briefcase, Eye, Search } from "@/components/icons/appIcons";
 import { useAuth } from "@/auth/AuthProvider";
 import { canTryOnAccessRole, writeViewAs, type ViewAsTarget } from "@/auth/viewAs";
 import { formatJobRole, JOB_ROLE_NAMES } from "@/lib/jobRoles";

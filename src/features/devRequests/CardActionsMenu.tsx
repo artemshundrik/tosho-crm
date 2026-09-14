@@ -1,5 +1,5 @@
 import { useRef, type ComponentType } from "react";
-import { ImageDown, MoreVertical, PencilLine, Trash2 } from "lucide-react";
+import { ImageDown, MoreVertical, PencilLine, Trash2 } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import {

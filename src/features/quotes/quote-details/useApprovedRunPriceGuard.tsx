@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "@/components/icons/appIcons";
 
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import type { QuoteRun } from "@/lib/toshoApi";

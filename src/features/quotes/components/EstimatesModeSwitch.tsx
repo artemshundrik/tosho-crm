@@ -1,4 +1,4 @@
-import { LayoutGrid, List } from "lucide-react";
+import { LayoutGrid, List } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";

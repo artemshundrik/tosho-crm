@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Trash2 } from "lucide-react";
+import { Trash2 } from "@/components/icons/appIcons";
 import { BasicInfoTab } from "./BasicInfoTab";
 import { PricingSection } from "./PricingSection";
 import { MethodsSection } from "./MethodsSection";

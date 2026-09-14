@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Loader2, Package, Palette, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Check, Loader2, Package, Palette, Plus, RotateCcw, Search, Trash2 } from "@/components/icons/appIcons";
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";

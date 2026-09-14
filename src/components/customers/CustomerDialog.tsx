@@ -74,7 +74,7 @@ import {
   PackageCheck,
   ReceiptText,
   Building2,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 
 export type OwnershipOption = {
   value: string;

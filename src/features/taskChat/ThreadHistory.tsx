@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, History } from "lucide-react";
+import { ChevronDown, History } from "@/components/icons/appIcons";
 import { buildDayDigests, type ThreadEntry } from "@/lib/taskThread";
 import { cn } from "@/lib/utils";
 

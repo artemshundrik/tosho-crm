@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Sparkle } from "lucide-react";
+import { ArrowRight, Sparkle } from "@/components/icons/appIcons";
 import {
   Dialog,
   DialogContent,

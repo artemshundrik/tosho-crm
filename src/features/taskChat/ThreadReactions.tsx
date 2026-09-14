@@ -1,5 +1,5 @@
 import React from "react";
-import { Copy, MoreHorizontal, Reply, SmilePlus, Trash2 } from "lucide-react";
+import { Copy, MoreHorizontal, Reply, SmilePlus, Trash2 } from "@/components/icons/appIcons";
 import {
   DropdownMenu,
   DropdownMenuContent,

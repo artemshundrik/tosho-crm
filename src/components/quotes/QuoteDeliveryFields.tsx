@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Star } from "lucide-react";
+import { Star } from "@/components/icons/appIcons";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";

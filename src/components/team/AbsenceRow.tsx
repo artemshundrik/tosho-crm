@@ -1,4 +1,4 @@
-import { CalendarRange, Loader2, Pencil, Trash2 } from "lucide-react";
+import { CalendarRange, Loader2, Pencil, Trash2 } from "@/components/icons/appIcons";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { AbsenceKindChip } from "@/components/team/AbsenceKindChip";

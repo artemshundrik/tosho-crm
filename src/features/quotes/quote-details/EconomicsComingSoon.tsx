@@ -1,4 +1,4 @@
-import { Banknote, Check, Clock } from "lucide-react";
+import { Banknote, Check, Clock } from "@/components/icons/appIcons";
 
 /**
  * Вкладка «Економіка» — заглушка, а не порожній екран.

@@ -1,4 +1,4 @@
-import { Cake, Mail, Phone, type LucideIcon } from "lucide-react";
+import { Cake, Mail, Phone, type AppIcon } from "@/components/icons/appIcons";
 import { Link } from "react-router-dom";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
@@ -55,7 +55,7 @@ export type TeamMemberCardPerson = {
   profileHref?: string | null;
 };
 
-function ContactRow({ icon: Icon, value, successMessage }: { icon: LucideIcon; value: string; successMessage: string }) {
+function ContactRow({ icon: Icon, value, successMessage }: { icon: AppIcon; value: string; successMessage: string }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />

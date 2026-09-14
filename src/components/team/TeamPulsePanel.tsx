@@ -4,7 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageCache } from "@/hooks/usePageCache";
 import { useAuth } from "@/auth/AuthProvider";

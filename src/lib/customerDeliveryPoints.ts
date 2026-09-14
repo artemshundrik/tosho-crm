@@ -1,4 +1,4 @@
-import { Building2, MapPin, Package, Truck, type LucideIcon } from "lucide-react";
+import { Building2, MapPin, Package, Truck, type AppIcon } from "@/components/icons/appIcons";
 import { supabase } from "@/lib/supabaseClient";
 
 /**
@@ -63,7 +63,7 @@ export const DELIVERY_POINT_TYPE_LABELS: Record<CustomerDeliveryPointType, strin
     {} as Record<CustomerDeliveryPointType, string>
   );
 
-export const DELIVERY_POINT_TYPE_ICONS: Record<CustomerDeliveryPointType, LucideIcon> = {
+export const DELIVERY_POINT_TYPE_ICONS: Record<CustomerDeliveryPointType, AppIcon> = {
   np_branch: Building2,
   np_postomat: Package,
   np_courier: Truck,

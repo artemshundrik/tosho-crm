@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { AlertCircle, Check, Coins, Plus, Search } from "lucide-react";
+import { AlertCircle, Check, Coins, Plus, Search } from "@/components/icons/appIcons";
 import { useMemo } from "react";
 import type { CatalogMethod, MethodDirectoryEntry } from "@/types/catalog";
 import { findSimilarMethods, normalizeMethodName } from "@/lib/catalogMethodName";

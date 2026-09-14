@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, ChevronDown, ExternalLink, FileText, Image as ImageIcon, Link2, Loader2, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ExternalLink, FileText, Image as ImageIcon, Link2, Loader2, Plus, Sparkles, Trash2, Upload, X } from "@/components/icons/appIcons";
 import type { CatalogModelMetadata, CatalogModelVariant, CatalogType, ImageUploadMode } from "@/types/catalog";
 import { PRINT_SPEC_PRESETS } from "@/lib/printSpec";
 

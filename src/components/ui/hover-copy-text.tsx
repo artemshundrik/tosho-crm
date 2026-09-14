@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEventHandler, type ReactNode } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { copyText } from "@/components/ui/rich-text-links";
 import { cn } from "@/lib/utils";

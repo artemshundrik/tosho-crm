@@ -13,7 +13,7 @@ import {
   Tags,
   Trash2,
   Wallet,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Input } from "@/components/ui/input";

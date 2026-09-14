@@ -11,8 +11,8 @@ import {
   Loader2,
   Package,
   Palette,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 import { supabase } from "@/lib/supabaseClient";
 import { callToshoRpc, selectToshoRows } from "@/lib/toshoRpc";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,7 @@ import {
 
 // An icon carries the kind at a glance and does not rely on colour alone.
 // Design tasks reuse the canonical per-type icons; other entities get their own.
-function groupIcon(entityType: string | null, taskType: string | null): LucideIcon {
+function groupIcon(entityType: string | null, taskType: string | null): AppIcon {
   const parsed = taskType ? (parseDesignTaskType(taskType) as DesignTaskType | null) : null;
   if (parsed) return DESIGN_TASK_TYPE_ICONS[parsed];
   const type = (entityType ?? "").trim().toLowerCase();

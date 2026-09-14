@@ -3,7 +3,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import { useEffect } from "react";
-import { Bold, Italic, Underline as UnderlineIcon, List, ListOrdered, Link2, Undo, Redo } from "lucide-react";
+import { Bold, Italic, Underline as UnderlineIcon, List, ListOrdered, Link2, Undo, Redo } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

@@ -55,7 +55,7 @@ import {
   PlusCircle,
   RefreshCw,
   Trash2,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
 import {

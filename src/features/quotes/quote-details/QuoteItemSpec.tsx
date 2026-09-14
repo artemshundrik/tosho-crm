@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/icons/appIcons";
 
 export type QuoteItemSpecSection = {
   title: string;

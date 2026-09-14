@@ -188,7 +188,7 @@ import {
 import {
   type OrderCreationDraft,
 } from "@/features/orders/orderRecords";
-import type { LucideIcon } from "lucide-react";
+import type { AppIcon } from "@/components/icons/appIcons";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -216,7 +216,7 @@ import {
   Lock,
   Calculator,
   Palette,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import {
   CANCEL_REASON_OPTIONS,
   ITEM_VISUAL_BUCKET,
@@ -4104,7 +4104,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const quotePageTabs: Array<{
     value: QuotePageTab;
     label: string;
-    icon: LucideIcon;
+    icon: AppIcon;
     badge?: string | number | null;
     /** Колір підпису, коли він означає СТАН (дедлайн). Інакше — приглушений. */
     badgeToneClass?: string | null;

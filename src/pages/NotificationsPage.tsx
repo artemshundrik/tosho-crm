@@ -9,7 +9,7 @@ import {
   ShieldAlert,
   Volume2,
   X as CloseIcon,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import {

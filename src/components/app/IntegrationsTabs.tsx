@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Plug, Store } from "lucide-react";
+import { Plug, Store } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { SegmentedGroup } from "@/components/ui/segmented-group";

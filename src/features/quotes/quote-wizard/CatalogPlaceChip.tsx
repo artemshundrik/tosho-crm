@@ -1,4 +1,4 @@
-import { Tag } from "lucide-react";
+import { Tag } from "@/components/icons/appIcons";
 
 import { cn } from "@/lib/utils";
 

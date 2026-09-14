@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ShieldAlert } from "lucide-react";
+import { ArrowRight, ShieldAlert } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 
 /**

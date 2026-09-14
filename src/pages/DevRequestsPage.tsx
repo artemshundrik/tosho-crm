@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Archive, CheckCheck, Inbox, KanbanSquare, Lightbulb, ListChecks, PlusCircle, Trash2, XCircle } from "lucide-react";
+import { Archive, CheckCheck, Inbox, KanbanSquare, Lightbulb, ListChecks, PlusCircle, Trash2, XCircle } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";

@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 

@@ -1,5 +1,5 @@
-import { AlertTriangle, CheckCircle2, CircleDashed, CircleHelp, Clock, EyeOff } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, CircleHelp, Clock, EyeOff } from "@/components/icons/appIcons";
+import type { AppIcon } from "@/components/icons/appIcons";
 
 import { formatAgo } from "@/lib/formatAgo";
 import type { Tone } from "@/lib/statusTones";
@@ -85,7 +85,7 @@ export const SUPPLIER_PLATE_TONE: Record<SupplierState, SupplierTone> = {
   unknown: "neutral",
 };
 
-export const SUPPLIER_STATE_ICON: Record<SupplierState, LucideIcon> = {
+export const SUPPLIER_STATE_ICON: Record<SupplierState, AppIcon> = {
   search: CheckCircle2,
   hidden: EyeOff,
   stale: AlertTriangle,

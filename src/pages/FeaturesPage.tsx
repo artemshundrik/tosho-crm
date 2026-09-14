@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowRight, SearchX } from "lucide-react";
+import { ArrowRight, SearchX } from "@/components/icons/appIcons";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { SegmentedGroup } from "@/components/ui/segmented-group";

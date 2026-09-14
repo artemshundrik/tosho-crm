@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare } from "@/components/icons/appIcons";
 import { useAuth } from "@/auth/AuthProvider";
 import { countUnread, type ThreadAttachment, type ThreadEntry } from "@/lib/taskThread";
 import { resolveWorkspaceId } from "@/lib/workspace";

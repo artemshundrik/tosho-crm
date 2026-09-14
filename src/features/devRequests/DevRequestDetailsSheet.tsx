@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ChevronDown, CircleDashed, ImageDown, Layers, ListChecks, PencilLine, Trash2 } from "lucide-react";
+import { ChevronDown, CircleDashed, ImageDown, Layers, ListChecks, PencilLine, Trash2 } from "@/components/icons/appIcons";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";

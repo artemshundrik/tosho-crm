@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/icons/appIcons";
 import { Link } from "react-router-dom";
 
 import { ENTITY_CARD_ROWS } from "@/components/app/CardsSkeleton";

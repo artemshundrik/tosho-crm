@@ -18,7 +18,7 @@ import {
   Printer,
   Settings,
   Sparkles,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import type { CatalogType, CatalogKind, MethodDirectoryEntry } from "@/types/catalog";
 import { findSimilarMethods, normalizeMethodName } from "@/lib/catalogMethodName";
 

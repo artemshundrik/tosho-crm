@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, Clock, Lock, MessageSquare, Send } from "lucide-react";
+import { ChevronDown, Clock, Lock, MessageSquare, Send } from "@/components/icons/appIcons";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { buildThreadBlocks, type ThreadEntry } from "@/lib/taskThread";
 import { renderInlineRichText } from "@/components/ui/rich-text-links";

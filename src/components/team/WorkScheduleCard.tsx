@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Loader2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";

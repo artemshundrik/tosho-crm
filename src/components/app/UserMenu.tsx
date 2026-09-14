@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, LogOut, MoreVertical, Newspaper, User } from "lucide-react";
+import { Eye, LogOut, MoreVertical, Newspaper, User } from "@/components/icons/appIcons";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { ViewAsDialog } from "@/components/app/ViewAsDialog";

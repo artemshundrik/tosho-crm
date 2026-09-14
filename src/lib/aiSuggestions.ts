@@ -10,8 +10,8 @@ import {
   Target,
   TrendingUp,
   Users,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+} from "@/components/icons/appIcons";
+import type { AppIcon } from "@/components/icons/appIcons";
 
 /**
  * Підказки «що можна спитати» для палітри команд.
@@ -31,7 +31,7 @@ export type AiSuggestion = {
   title: string;
   /** Повний текст, який піде в ToSho AI. */
   question: string;
-  icon: LucideIcon;
+  icon: AppIcon;
   /**
    * Сторінки, де підказка доречніша за решту. Збіг піднімає її наверх, але
    * НЕ ховає інші: людина може стояти в дизайні й питати про гроші.

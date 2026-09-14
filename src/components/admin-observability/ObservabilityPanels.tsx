@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import type { AppIcon } from "@/components/icons/appIcons";
 import {
   BellRing,
   Bug,
@@ -15,7 +15,7 @@ import {
   Sparkles,
   Trash2,
   UserX,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import {
   Area,
   AreaChart,
@@ -82,7 +82,7 @@ export type AttachmentAuditReviewRow = {
 };
 
 type MetricCardConfig = {
-  icon: LucideIcon;
+  icon: AppIcon;
   title: string;
   value: string;
   hint: string;
@@ -1166,7 +1166,7 @@ const AI_USAGE_RANGES: Array<{ key: AiUsageRange; label: string }> = [
   { key: "all", label: "Весь час" },
 ];
 
-const AI_KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
+const AI_KIND_META: Record<string, { label: string; icon: AppIcon }> = {
   chat: { label: "ToSho AI чат", icon: MessageSquare },
   transcription: { label: "Транскрипція", icon: Mic },
   embedding: { label: "Пошук", icon: Search },

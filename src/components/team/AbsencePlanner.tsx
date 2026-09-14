@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { Award, Cake, PartyPopper, type LucideIcon } from "lucide-react";
+import { Award, Cake, PartyPopper, type AppIcon } from "@/components/icons/appIcons";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
@@ -49,7 +49,7 @@ export type PlannerMark = {
   title: string;
 };
 
-const MARK_ICONS: Record<PlannerMark["kind"], LucideIcon> = {
+const MARK_ICONS: Record<PlannerMark["kind"], AppIcon> = {
   birthday: Cake,
   anniversary: Award,
 };

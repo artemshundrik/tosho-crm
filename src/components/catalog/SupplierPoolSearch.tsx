@@ -19,7 +19,7 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { Search } from "@/components/icons/appIcons";
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";

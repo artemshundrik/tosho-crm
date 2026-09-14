@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Loader2, Search } from "lucide-react";
+import { Check, Loader2, Search } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

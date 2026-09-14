@@ -20,8 +20,8 @@ import {
   RefreshCw,
   Trash2,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 import { ActionButton, EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1305,7 +1305,7 @@ const EXPENSE_KIND_OPTIONS: {
   value: ExpenseFormKind;
   label: string;
   hint: string;
-  icon: LucideIcon;
+  icon: AppIcon;
 }[] = [
   { value: "one_off", label: "Разова", hint: "Купівля, матеріали, під замовлення", icon: Receipt },
   { value: "service", label: "Сервіс", hint: "Dropbox, Adobe, Supabase…", icon: Cloud },

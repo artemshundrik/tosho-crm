@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Repeat, type LucideIcon } from "lucide-react";
+import { Repeat, type AppIcon } from "@/components/icons/appIcons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { getExpenseCategoryIcon } from "./expenseCategoryIcons";
@@ -21,11 +21,11 @@ const toneClass = (seed: string) => {
 
 // Явна іконка → іконка статті витрат → здогадка по назві сервісу («Домени та пошта» → Wi-Fi).
 function resolveIcon(
-  icon: LucideIcon | null | undefined,
+  icon: AppIcon | null | undefined,
   categoryName: string | null | undefined,
   categoryKind: ExpenseCategoryKind | null | undefined,
   name: string
-): LucideIcon {
+): AppIcon {
   if (icon) return icon;
   const kind = categoryKind ?? "fixed";
   if (categoryName?.trim()) return getExpenseCategoryIcon(categoryName, kind);
@@ -39,7 +39,7 @@ type SubscriptionLogoProps = {
   categoryName?: string | null;
   categoryKind?: ExpenseCategoryKind | null;
   /** Іконка, задана явно, — переважає над здогадкою по назві статті. */
-  icon?: LucideIcon | null;
+  icon?: AppIcon | null;
   size?: number;
   className?: string;
 };

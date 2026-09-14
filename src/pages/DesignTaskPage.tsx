@@ -81,8 +81,8 @@ import {
   Plus,
   UserPlus,
   SmilePlus,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
@@ -9625,7 +9625,7 @@ export default function DesignTaskPage() {
   const designTaskTabs: Array<{
     value: DesignTaskPageTab;
     label: string;
-    icon: LucideIcon;
+    icon: AppIcon;
     badge?: string | number | null;
     attention?: boolean;
   }> = [
@@ -9653,7 +9653,7 @@ export default function DesignTaskPage() {
         ] satisfies Array<{
           value: DesignTaskPageTab;
           label: string;
-          icon: LucideIcon;
+          icon: AppIcon;
           badge?: string | number | null;
           attention?: boolean;
         }>)

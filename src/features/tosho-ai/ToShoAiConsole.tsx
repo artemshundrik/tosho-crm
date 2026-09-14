@@ -39,7 +39,7 @@ import {
   ThumbsUp,
   Wrench,
   X,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";

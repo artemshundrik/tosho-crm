@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { PageLoading } from "@/components/app/page-loading";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle } from "@/components/icons/appIcons";
 import { exportToCSV } from "@/utils/catalogUtils";
 
 // Hooks

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, ShieldAlert, TimerReset } from "lucide-react";
+import { Loader2, ShieldAlert, TimerReset } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";

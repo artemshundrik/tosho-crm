@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { Layers, Plus, Trash2 } from "lucide-react";
+import { Layers, Plus, Trash2 } from "@/components/icons/appIcons";
 import type { CatalogPriceTier, PriceMode } from "@/types/catalog";
 
 interface PricingSectionProps {

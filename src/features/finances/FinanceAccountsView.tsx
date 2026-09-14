@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { ShieldAlert, Wallet } from "lucide-react";
+import { ShieldAlert, Wallet } from "@/components/icons/appIcons";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";

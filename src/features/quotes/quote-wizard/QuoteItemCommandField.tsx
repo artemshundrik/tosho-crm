@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ExternalLink, ImageOff, Link2, Loader2, Plus, Search } from "lucide-react";
+import { ChevronDown, ExternalLink, ImageOff, Link2, Loader2, Plus, Search } from "@/components/icons/appIcons";
 
 import { SEARCH_LEFT_ICON } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";

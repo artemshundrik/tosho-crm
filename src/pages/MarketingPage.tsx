@@ -25,7 +25,7 @@ import {
   Tags,
   Trash2,
   X,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";

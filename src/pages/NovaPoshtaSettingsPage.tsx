@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Truck, AlertTriangle, Loader2, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { Truck, AlertTriangle, Loader2, Plus, Trash2, CheckCircle2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/auth/AuthProvider";

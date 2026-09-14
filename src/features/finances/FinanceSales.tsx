@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileText, Wallet } from "lucide-react";
+import { FileText, Wallet } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";

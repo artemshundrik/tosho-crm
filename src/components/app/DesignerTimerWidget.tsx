@@ -10,7 +10,7 @@ import {
   Play,
   Timer,
   X,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { AppDropdown } from "@/components/app/AppDropdown";

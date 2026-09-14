@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Loader2, PencilLine } from "lucide-react";
+import { Loader2, PencilLine } from "@/components/icons/appIcons";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

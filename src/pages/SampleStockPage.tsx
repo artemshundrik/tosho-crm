@@ -59,7 +59,7 @@ import {
   PlusCircle,
   Trash2,
   Unlock,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 
 type SampleStockItemRow = {
   id: string;

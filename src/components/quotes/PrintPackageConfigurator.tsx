@@ -30,7 +30,7 @@ import {
   StickyNote,
   Printer,
   Award,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 
 export type ConfiguratorProductOption = {
   typeId: string;

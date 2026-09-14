@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { HoverTip } from "@/components/ui/hover-tip";

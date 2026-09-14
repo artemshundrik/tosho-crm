@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Loader2, RotateCcw } from "lucide-react";
+import { Loader2, RotateCcw } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";

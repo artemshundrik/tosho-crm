@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons/appIcons";
 import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 
 type TableHeaderCellProps = React.ThHTMLAttributes<HTMLTableCellElement> & {

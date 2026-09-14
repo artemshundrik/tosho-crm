@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff, Wallet } from "lucide-react";
+import { Eye, EyeOff, Wallet } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { resolveWorkspaceId } from "@/lib/workspace";

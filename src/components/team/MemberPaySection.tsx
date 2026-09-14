@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarClock, Loader2, Wallet } from "lucide-react";
+import { CalendarClock, Loader2, Wallet } from "@/components/icons/appIcons";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { loadPayDefaults, loadPayRates, type DesignerPayDefaults, type DesignerPayRate } from "@/lib/designerPayroll";

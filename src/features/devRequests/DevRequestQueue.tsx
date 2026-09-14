@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Clock, Plus, Rocket, Scissors, X } from "lucide-react";
+import { Check, ChevronRight, Clock, Plus, Rocket, Scissors, X } from "@/components/icons/appIcons";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";

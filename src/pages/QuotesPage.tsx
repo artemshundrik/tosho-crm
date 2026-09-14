@@ -152,7 +152,7 @@ import {
   Download,
   FileDown,
   Lock,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import {
   DropdownMenu,
   DropdownMenuContent,

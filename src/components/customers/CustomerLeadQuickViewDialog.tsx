@@ -38,7 +38,7 @@ import {
   ReceiptText,
   Send,
   ExternalLink,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { buildTelegramHref, formatTelegramHandle } from "@/lib/telegramContact";
 
 type CustomerRow = {

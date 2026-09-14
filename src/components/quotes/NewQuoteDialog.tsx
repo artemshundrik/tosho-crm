@@ -104,7 +104,7 @@ import {
   Ruler,
   Palette,
   Loader2,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { buildDraftKey, clearDraft, readDraft } from "@/lib/draftStorage";

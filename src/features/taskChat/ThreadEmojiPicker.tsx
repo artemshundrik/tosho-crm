@@ -1,5 +1,5 @@
 import React from "react";
-import { Smile } from "lucide-react";
+import { Smile } from "@/components/icons/appIcons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 

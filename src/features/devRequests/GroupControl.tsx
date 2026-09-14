@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Rows3 } from "lucide-react";
+import { Check, ChevronDown, Rows3 } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";

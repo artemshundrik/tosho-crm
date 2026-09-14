@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { Check, ChevronDown, CircleAlert, Clock, Eye, Info, Lock } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, Clock, Eye, Info, Lock } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

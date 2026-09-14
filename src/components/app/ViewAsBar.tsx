@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Briefcase, X } from "lucide-react";
+import { Briefcase, X } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { writeViewAs } from "@/auth/viewAs";

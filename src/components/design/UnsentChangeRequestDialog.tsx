@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";

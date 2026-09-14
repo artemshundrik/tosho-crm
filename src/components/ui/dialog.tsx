@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { X } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { UnsavedChangesPrompt, UnsavedGuardListener, useUnsavedGuard } from "@/components/ui/unsaved-guard";
 import { OverlayPresenceMarker } from "@/components/ui/overlayPresence";

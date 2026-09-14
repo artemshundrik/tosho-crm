@@ -29,7 +29,7 @@ import {
   User,
   Users,
   X,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";

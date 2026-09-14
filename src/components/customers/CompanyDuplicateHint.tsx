@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons/appIcons";
 
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";

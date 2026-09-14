@@ -22,7 +22,7 @@ import {
   type ActivityRow,
 } from "@/lib/activity";
 import { listTeamMembers } from "@/lib/toshoApi";
-import { Activity, FileText, Palette, Users } from "lucide-react";
+import { Activity, FileText, Palette, Users } from "@/components/icons/appIcons";
 
 type FilterMode = "all" | "quotes" | "design" | "team" | "other";
 

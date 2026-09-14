@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ChevronDown, Plus, X } from "lucide-react";
+import { Check, ChevronDown, Plus, X } from "@/components/icons/appIcons";
 
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";

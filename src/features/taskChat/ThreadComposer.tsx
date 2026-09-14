@@ -1,5 +1,5 @@
 import React from "react";
-import { FileText, Loader2, Paperclip, Send, X } from "lucide-react";
+import { FileText, Loader2, Paperclip, Send, X } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { useDictation } from "@/lib/useDictation";
 import { AvatarBase } from "@/components/app/avatar-kit";

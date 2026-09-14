@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { FilePlus2, Loader2, StickyNote } from "lucide-react";
+import { FilePlus2, Loader2, StickyNote } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";

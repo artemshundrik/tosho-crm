@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Lock, Plus } from "lucide-react";
+import { AlertTriangle, Check, Lock, Plus } from "@/components/icons/appIcons";
 
 import { HoverTip } from "@/components/ui/hover-tip";
 import { currencyLabel } from "@/features/quotes/currencyLabel";

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, Loader2, Plus, Search, Wallet } from "lucide-react";
+import { Check, Loader2, Plus, Search, Wallet } from "@/components/icons/appIcons";
 import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

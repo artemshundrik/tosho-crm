@@ -6,7 +6,7 @@
 
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
-import { PackageSearch, Search } from "lucide-react";
+import { PackageSearch, Search } from "@/components/icons/appIcons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SimpleModelCard } from "./SimpleModelCard";
 import type { ModelWithContext } from "@/types/catalog";

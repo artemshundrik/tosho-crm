@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, PartyPopper, Trash2 } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, PartyPopper, Trash2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";

@@ -19,7 +19,7 @@
 import { Fragment, useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Check, Loader2, Lock, Minus, Pencil, ShieldAlert } from "lucide-react";
+import { Check, Loader2, Lock, Minus, Pencil, ShieldAlert } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { AvatarBase } from "@/components/app/avatar-kit";

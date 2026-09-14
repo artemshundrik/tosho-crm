@@ -25,7 +25,7 @@ import { useDictationField } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
-import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, Package, Link2, Copy, UserPlus, UserMinus } from "lucide-react";
+import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, Package, Link2, Copy, UserPlus, UserMinus } from "@/components/icons/appIcons";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog";
@@ -137,7 +137,7 @@ import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { Clock3, ExternalLink, LayoutGrid, ListFilter, PencilLine, Users } from "lucide-react";
+import { Clock3, ExternalLink, LayoutGrid, ListFilter, PencilLine, Users } from "@/components/icons/appIcons";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { MAX_BRIEF_FILES, planBriefFiles } from "@/features/design/briefFiles";
@@ -762,60 +762,77 @@ function buildDesignPageCachePayload(tasks: DesignTask[]): DesignPageCachePayloa
   };
 }
 
-function resolveTaskCustomerLogo(
-  task: Pick<DesignTask, "customerName" | "customerLogoUrl" | "partyType">,
-  entries: Array<{
-    label: string;
-    entityType: "customer" | "lead";
-    logoUrl?: string | null;
-  }>
-) {
-  if (entries.length === 0) return normalizeLogoUrl(task.customerLogoUrl ?? null);
-  const logoByPartyAndLabel = new Map<string, string>();
-  const logoByPartyAndCompactLabel = new Map<string, string>();
-  const logoByLabel = new Map<string, string>();
-  const logoByCompactLabel = new Map<string, string>();
+type CustomerLogoEntry = {
+  label: string;
+  entityType: "customer" | "lead";
+  logoUrl?: string | null;
+};
+
+type CustomerLogoIndex = {
+  byPartyAndLabel: Map<string, string>;
+  byPartyAndCompactLabel: Map<string, string>;
+  byLabel: Map<string, string>;
+  byCompactLabel: Map<string, string>;
+};
+
+/**
+ * Індекс логотипів за нормалізованою назвою замовника — ОДИН на список, а не
+ * на кожну задачу (REQ-274).
+ *
+ * Раніше `resolveTaskCustomerLogo` перебудовував усі чотири мапи заново для
+ * кожної задачі: 120 задач × сотні замовників × дві нормалізації з юнікодними
+ * регулярками давали ~50 мс на кожному монтуванні дошки — і всі вони сиділи в
+ * задачі кліку по сайдбару, поки людина дивилась на попередню сторінку.
+ * Результат той самий, робота — одна замість ста двадцяти.
+ */
+function buildCustomerLogoIndex(entries: CustomerLogoEntry[]): CustomerLogoIndex | null {
+  if (entries.length === 0) return null;
+  const byPartyAndLabel = new Map<string, string>();
+  const byPartyAndCompactLabel = new Map<string, string>();
+  const byLabel = new Map<string, string>();
+  const byCompactLabel = new Map<string, string>();
   entries.forEach((row) => {
     const normalizedLabel = normalizePartyLabel(row.label);
-    const normalizedCompactLabel = compactPartyLabel(row.label);
+    const normalizedCompactLabel = normalizedLabel.replace(/\s+/g, "");
     const key = `${row.entityType}:${normalizedLabel}`;
     const compactKey = `${row.entityType}:${normalizedCompactLabel}`;
     const logoUrl = normalizeLogoUrl(row.logoUrl ?? null);
     if (!logoUrl) return;
-    logoByPartyAndLabel.set(key, logoUrl);
-    logoByPartyAndCompactLabel.set(compactKey, logoUrl);
-    if (!logoByLabel.has(normalizedLabel)) {
-      logoByLabel.set(normalizedLabel, logoUrl);
+    byPartyAndLabel.set(key, logoUrl);
+    byPartyAndCompactLabel.set(compactKey, logoUrl);
+    if (!byLabel.has(normalizedLabel)) {
+      byLabel.set(normalizedLabel, logoUrl);
     }
-    if (!logoByCompactLabel.has(normalizedCompactLabel)) {
-      logoByCompactLabel.set(normalizedCompactLabel, logoUrl);
+    if (!byCompactLabel.has(normalizedCompactLabel)) {
+      byCompactLabel.set(normalizedCompactLabel, logoUrl);
     }
   });
+  return { byPartyAndLabel, byPartyAndCompactLabel, byLabel, byCompactLabel };
+}
 
+function resolveTaskCustomerLogo(
+  task: Pick<DesignTask, "customerName" | "customerLogoUrl" | "partyType">,
+  index: CustomerLogoIndex | null
+) {
+  if (!index) return normalizeLogoUrl(task.customerLogoUrl ?? null);
   const label = normalizePartyLabel(task.customerName ?? "");
-  const compactLabel = compactPartyLabel(task.customerName ?? "");
+  const compactLabel = label.replace(/\s+/g, "");
   const partyType = task.partyType ?? "customer";
   return (
     (label
-      ? logoByPartyAndLabel.get(`${partyType}:${label}`) ??
-        logoByPartyAndCompactLabel.get(`${partyType}:${compactLabel}`) ??
-        logoByLabel.get(label) ??
-        logoByCompactLabel.get(compactLabel)
+      ? index.byPartyAndLabel.get(`${partyType}:${label}`) ??
+        index.byPartyAndCompactLabel.get(`${partyType}:${compactLabel}`) ??
+        index.byLabel.get(label) ??
+        index.byCompactLabel.get(compactLabel)
       : null) ?? normalizeLogoUrl(task.customerLogoUrl ?? null)
   );
 }
 
-function applyCustomerLogosToTasks(
-  tasks: DesignTask[],
-  entries: Array<{
-    label: string;
-    entityType: "customer" | "lead";
-    logoUrl?: string | null;
-  }>
-) {
+function applyCustomerLogosToTasks(tasks: DesignTask[], entries: CustomerLogoEntry[]) {
+  const index = buildCustomerLogoIndex(entries);
   let changed = false;
   const next = tasks.map((task) => {
-    const resolvedLogo = resolveTaskCustomerLogo(task, entries);
+    const resolvedLogo = resolveTaskCustomerLogo(task, index);
     const currentLogo = normalizeLogoUrl(task.customerLogoUrl ?? null);
     if (resolvedLogo === currentLogo) return task;
     changed = true;
@@ -910,7 +927,6 @@ const normalizePartyLabel = (value?: string | null) => {
   return raw.replace(/[`"'’«»]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 };
 
-const compactPartyLabel = (value?: string | null) => normalizePartyLabel(value).replace(/\s+/g, "");
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 const DEFAULT_CREATE_DEADLINE_TIME = "10:00";
 const createDefaultDesignDeadline = (time = DEFAULT_CREATE_DEADLINE_TIME) => {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, Check, ExternalLink, Minus, RefreshCw, Settings2 } from "lucide-react";
+import { Activity, Check, ExternalLink, Minus, RefreshCw, Settings2 } from "@/components/icons/appIcons";
 
 import { EntityAvatar } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";

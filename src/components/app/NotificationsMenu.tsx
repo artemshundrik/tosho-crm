@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Bell, BellOff, ChevronRight, CheckCheck, Info } from "lucide-react";
+import { Bell, BellOff, ChevronRight, CheckCheck, Info } from "@/components/icons/appIcons";
 
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";

@@ -36,12 +36,12 @@ import {
   Truck,
   Users,
   Wallet,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 
 import type { ModuleKey } from "@/lib/moduleAccess";
 
-export const MODULE_ICONS: Record<ModuleKey, LucideIcon> = {
+export const MODULE_ICONS: Record<ModuleKey, AppIcon> = {
   overview: LayoutGrid,
   customers: Building2,
   quotes: Calculator,

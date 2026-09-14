@@ -33,7 +33,7 @@ import {
   Phone,
   RotateCcw,
   ShieldAlert,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";

@@ -1,4 +1,4 @@
-import { CalendarOff, Coffee, House, Plane, Thermometer, type LucideIcon } from "lucide-react";
+import { CalendarOff, Coffee, House, Plane, Thermometer, type AppIcon } from "@/components/icons/appIcons";
 
 import type { Tone } from "@/lib/statusTones";
 
@@ -54,7 +54,7 @@ const TONE_VAR: Record<Tone, string> = {
 };
 
 /** Іконки типів — один словник на чип, планер і аватарку. */
-export const ABSENCE_KIND_ICONS: Record<AbsenceIndicatorKind, LucideIcon> = {
+export const ABSENCE_KIND_ICONS: Record<AbsenceIndicatorKind, AppIcon> = {
   vacation: Plane,
   sick_leave: Thermometer,
   day_off: Coffee,

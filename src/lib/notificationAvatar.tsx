@@ -1,7 +1,7 @@
 // Тон, іконка та ініціали сповіщення — спільне джерело для сторінки /notifications
 // і для панелі сповіщень у шапці. Обидві поверхні мають показувати той самий тип
 // події однаково, тож логіка живе тут, а не всередині сторінки.
-import { BadgeCheck, BellRing, PartyPopper, PlaneTakeoff, ShieldAlert } from "lucide-react";
+import { BadgeCheck, BellRing, PartyPopper, PlaneTakeoff, ShieldAlert } from "@/components/icons/appIcons";
 
 import type { NotificationItem } from "@/lib/notifications";
 

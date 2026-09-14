@@ -15,7 +15,7 @@ import {
   Package,
   Printer,
   XCircle,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 
 export const STATUS_OPTIONS = [
   "new",

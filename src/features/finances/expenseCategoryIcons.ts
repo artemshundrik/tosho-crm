@@ -21,14 +21,14 @@ import {
   Wifi,
   Wrench,
   Zap,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 import type { ExpenseCategoryKind } from "./types";
 
 // Expense categories are free-form per team, so icons are derived from the name
 // (keyword match, most specific first) with a per-kind fallback. Purely visual —
 // nothing is stored, and unknown names still get a sensible icon.
-const NAME_ICON_RULES: Array<{ test: RegExp; icon: LucideIcon }> = [
+const NAME_ICON_RULES: Array<{ test: RegExp; icon: AppIcon }> = [
   { test: /маркетинг|реклам|промо|smm|таргет|\bads?\b/, icon: Megaphone },
   { test: /подарунк|квіт|презент|букет|gift|flower/, icon: Gift },
   { test: /корпоратив|свят|поді[їя]|народженн|тімбілд/, icon: PartyPopper },
@@ -54,14 +54,14 @@ const NAME_ICON_RULES: Array<{ test: RegExp; icon: LucideIcon }> = [
   { test: /закуп|товар|магазин/, icon: ShoppingCart },
 ];
 
-const KIND_FALLBACK_ICON: Record<ExpenseCategoryKind, LucideIcon> = {
+const KIND_FALLBACK_ICON: Record<ExpenseCategoryKind, AppIcon> = {
   fixed: Repeat,
   variable: Package,
   tax: Landmark,
   payroll: Users,
 };
 
-export function getExpenseCategoryIcon(name: string, kind: ExpenseCategoryKind): LucideIcon {
+export function getExpenseCategoryIcon(name: string, kind: ExpenseCategoryKind): AppIcon {
   const normalized = name.trim().toLowerCase();
   for (const rule of NAME_ICON_RULES) {
     if (rule.test.test(normalized)) return rule.icon;

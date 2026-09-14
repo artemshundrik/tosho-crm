@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { Format } from "@number-flow/react";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp } from "@/components/icons/appIcons";
 import {
   AnimatedFigure,
   FIGURE_BAR_SEGMENT_TRANSITION,

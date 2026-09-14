@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ListFilter, X } from "lucide-react";
+import { Check, ListFilter, X } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

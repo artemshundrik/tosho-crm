@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CircleSlash, Plus, Trash2, X } from "lucide-react";
+import { CircleSlash, Plus, Trash2, X } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

@@ -5,7 +5,7 @@
  */
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Grid3x3, List } from "lucide-react";
+import { Grid3x3, List } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 
 export type ViewMode = "grid" | "table";

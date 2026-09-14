@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, Landmark, Loader2, Plus } from "lucide-react";
+import { Check, Landmark, Loader2, Plus } from "@/components/icons/appIcons";
 import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { BENTO_COLORS, FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { Button } from "@/components/ui/button";

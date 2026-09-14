@@ -40,6 +40,28 @@ import { cn } from "@/lib/utils";
  * переході людина не бачить ні порожнечі, ні зайвого сірого кадру, лише готовий
  * тулбар.
  */
+/**
+ * Остання опублікована висота смуги.
+ *
+ * Запис змінної на <html> інвалідує стилі всього документа: на дошці прорахунків
+ * це ~25 мс перерахунку стилів і ще стільки ж верстки — за КОЖЕН запис. Раніше
+ * смуга писала її на кожному своєму рендері (тобто на кожну літеру в пошуку)
+ * і на кожному тику спостерігача, навіть коли число не мінялось. Тепер запис
+ * іде лише на справжню зміну; між сторінками з однаковою смугою його немає.
+ */
+let publishedToolbarHeight: number | null = null;
+
+function publishToolbarHeight(height: number | null) {
+  const next = height === null ? null : Math.round(height);
+  if (next === publishedToolbarHeight) return;
+  publishedToolbarHeight = next;
+  if (next === null) {
+    document.documentElement.style.removeProperty("--page-toolbar-height");
+  } else {
+    document.documentElement.style.setProperty("--page-toolbar-height", `${next}px`);
+  }
+}
+
 export function PageHeaderToolbarSlot({
   surfaceId,
   kind,
@@ -86,44 +108,56 @@ export function PageHeaderToolbarSlot({
    */
   const bandRef = React.useRef<HTMLDivElement | null>(null);
 
+  /*
+   * ОБИДВА ЗАМІРИ — ЛИШЕ ЧЕРЕЗ ResizeObserver, БЕЗ СИНХРОННОГО ЧИТАННЯ (REQ-274).
+   *
+   * `node.offsetHeight` просто в layout-ефекті змушує браузер порахувати стилі
+   * й верстку ВСІЄЇ щойно змонтованої сторінки посеред коміту React. На дошці
+   * прорахунків це 40–80 мс на кожне читання, і саме ці читання тримали екран
+   * після кліку по сайдбару: людина натискала «Прорахунки» й ще чверть секунди
+   * (на повільнішій машині — секунду) дивилась на попередню сторінку.
+   *
+   * ResizeObserver віддає те саме число сам — одразу після верстки й ще до
+   * першого кадру, тож ні резерв каркаса, ні липкі шапки таблиць нічого не
+   * втрачають, а примусового перерахунку немає.
+   */
+  const hasActions = Boolean(actions);
   React.useLayoutEffect(() => {
     const node = nodeRef.current;
-    if (!node || !actions || !surfaceId) return;
-    rememberToolbarHeight(surfaceId, node.offsetHeight);
-    if (typeof ResizeObserver === "undefined") return;
+    if (!node || !hasActions || !surfaceId || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
       rememberToolbarHeight(surfaceId, node.offsetHeight);
     });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [actions, surfaceId]);
+  }, [hasActions, surfaceId]);
 
+  const rendersBand = kind !== "none" && !(abandoned && !actions);
   React.useLayoutEffect(() => {
     const band = bandRef.current;
-    if (!band) return;
+    if (!band || !rendersBand || typeof ResizeObserver === "undefined") return;
     /*
      * Висота смуги потрібна липким шапкам таблиць: без цієї цифри thead
      * прилипав би під шапкою застосунку й ховався за смугою на чотирьох
      * сторінках (Прорахунки, Замовлення, Склад, Підрядники). Тримаємо в
      * CSS-змінній на корені, бо читає її зовсім інший компонент.
+     *
+     * Смуга живе в макеті й між розділами не перемонтовується, тож спостерігач
+     * тут один на весь сеанс: він озивається лише тоді, коли смуга справді
+     * змінила висоту, а не на кожен рендер слота.
      */
-    const publish = () => {
-      document.documentElement.style.setProperty("--page-toolbar-height", `${band.offsetHeight}px`);
-    };
-    publish();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(publish);
+    const observer = new ResizeObserver(() => publishToolbarHeight(band.offsetHeight));
     observer.observe(band);
     return () => {
       observer.disconnect();
       // Прибираємо за собою: на сторінці без смуги стара цифра відсунула б
       // заголовок таблиці вниз на висоту тулбара, якого там немає.
-      document.documentElement.style.removeProperty("--page-toolbar-height");
+      publishToolbarHeight(null);
     };
-  });
+  }, [rendersBand]);
   const reservedHeight = recallToolbarHeight(surfaceId);
 
-  if (kind === "none" || (abandoned && !actions)) return null;
+  if (!rendersBand) return null;
 
   return (
     // На телефоні смуга тулбара — це один рядок «пошук + фільтри + дія», і

@@ -99,9 +99,18 @@ export function useSegmentedSlider<T extends HTMLElement>(variant: SliderVariant
         width: active.offsetWidth,
         height: active.offsetHeight,
       };
-
-
-      setRect(next);
+      // Спостерігачі озиваються по кілька разів на одне монтування (вузол і
+      // кожен тригер окремо), і кожен новий об'єкт означав би ще один рендер
+      // групи. Ті самі числа — той самий стан, React його не перемальовує.
+      setRect((current) =>
+        current &&
+        current.left === next.left &&
+        current.top === next.top &&
+        current.width === next.width &&
+        current.height === next.height
+          ? current
+          : next
+      );
     };
 
     measure();

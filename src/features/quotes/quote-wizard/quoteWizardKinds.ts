@@ -1,4 +1,4 @@
-import { Package, Printer } from "lucide-react";
+import { Package, Printer } from "@/components/icons/appIcons";
 
 /**
  * Словник вікна «Новий прорахунок» (REQ-237): що рахуємо.

@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight } from "@/components/icons/appIcons";
 import { Link } from "react-router-dom";
 
 import { AvatarBase } from "@/components/app/avatar-kit";

@@ -1,4 +1,4 @@
-import { ChevronRight, Send } from "lucide-react";
+import { ChevronRight, Send } from "@/components/icons/appIcons";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";

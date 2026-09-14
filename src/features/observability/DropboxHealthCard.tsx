@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { FolderTree, RefreshCw } from "lucide-react";
+import { FolderTree, RefreshCw } from "@/components/icons/appIcons";
 
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { Button } from "@/components/ui/button";

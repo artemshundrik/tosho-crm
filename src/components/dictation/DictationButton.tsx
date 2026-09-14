@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Loader2, Mic, Square } from "lucide-react";
+import { Loader2, Mic, Square } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";

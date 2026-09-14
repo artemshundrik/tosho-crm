@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2 } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 
 // Проста, надійна кнопка дії для рядків фінансів.

@@ -1,4 +1,4 @@
-import { Package } from "lucide-react";
+import { Package } from "@/components/icons/appIcons";
 
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";

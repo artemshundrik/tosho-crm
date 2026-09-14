@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { BottomSheet } from "@/components/ui/bottom-sheet";

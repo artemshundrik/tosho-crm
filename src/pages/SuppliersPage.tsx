@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw } from "@/components/icons/appIcons";
 
 import { CardsSkeleton } from "@/components/app/CardsSkeleton";
 import { IntegrationsTabs } from "@/components/app/IntegrationsTabs";

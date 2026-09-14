@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
-import { ArrowDown, ArrowUp, Plus, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Sparkles, X } from "@/components/icons/appIcons";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";

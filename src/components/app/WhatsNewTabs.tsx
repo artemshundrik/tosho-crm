@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, Compass, Newspaper } from "lucide-react";
+import { BookOpen, Compass, Newspaper } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { SegmentedGroup } from "@/components/ui/segmented-group";

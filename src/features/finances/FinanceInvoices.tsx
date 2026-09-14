@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, FileText, Loader2, Plus, Search } from "lucide-react";
+import { Check, FileText, Loader2, Plus, Search } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/picker-input";

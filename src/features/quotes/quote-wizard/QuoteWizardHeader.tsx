@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CalendarIcon, User } from "lucide-react";
+import { CalendarIcon, User } from "@/components/icons/appIcons";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 

@@ -16,8 +16,8 @@ import {
   AlertTriangle,
   Activity,
   Gift,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 
@@ -380,7 +380,7 @@ function FilterChip({
   count: number;
   active: boolean;
   tone?: "default" | "warning";
-  icon?: LucideIcon;
+  icon?: AppIcon;
   onClick: () => void;
 }) {
   return (

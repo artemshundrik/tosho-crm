@@ -1,4 +1,4 @@
-import { CalendarDays, CalendarClock, Timer, XCircle } from "lucide-react";
+import { CalendarDays, CalendarClock, Timer, XCircle } from "@/components/icons/appIcons";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 

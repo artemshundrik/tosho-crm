@@ -89,7 +89,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader2, MoreHorizontal, PlusCircle, Trash2, Unlink, Users } from "lucide-react";
+import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader2, MoreHorizontal, PlusCircle, Trash2, Unlink, Users } from "@/components/icons/appIcons";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import type { TableInsert } from "@/lib/dbTables";

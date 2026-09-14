@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 
 // Липкий компактний бар розділу Фінансів: тримається верху скрол-панелі канвасу,

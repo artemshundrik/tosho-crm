@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Users } from "lucide-react";
+import { Users } from "@/components/icons/appIcons";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { Button } from "@/components/ui/button";

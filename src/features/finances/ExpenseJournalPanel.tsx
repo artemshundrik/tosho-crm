@@ -10,8 +10,8 @@ import {
   Store,
   Trash2,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,7 +67,7 @@ export function VendorPicker({
   onChange: (next: string) => void;
   disabled?: boolean;
   placeholder?: string;
-  fallbackIcon?: LucideIcon;
+  fallbackIcon?: AppIcon;
   /** false — не тягнути бренд-лого (для нетоварних списків, як типи подій). */
   withLogo?: boolean;
   className?: string;

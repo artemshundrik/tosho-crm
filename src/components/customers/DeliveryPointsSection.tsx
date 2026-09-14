@@ -1,4 +1,4 @@
-import { MapPin, PlusCircle, Star, Trash2 } from "lucide-react";
+import { MapPin, PlusCircle, Star, Trash2 } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

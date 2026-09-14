@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy } from "lucide-react";
+import { Copy } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { AvatarBase } from "@/components/app/avatar-kit";

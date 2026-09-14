@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import type { AppIcon } from "@/components/icons/appIcons";
 import {
   CheckCircle2,
   Hourglass,
@@ -6,7 +6,7 @@ import {
   PlusCircle,
   Send,
   XCircle,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 import { renderInlineRichText } from "@/components/ui/rich-text-links";
 import { quoteStatusBadgeClass } from "@/lib/statusTones";
 import { currencyLabel } from "@/features/quotes/currencyLabel";
@@ -159,7 +159,7 @@ export const statusLabels: Record<string, string> = {
 // дивляться в один реєстр — @/lib/statusTones.
 export const statusClasses = quoteStatusBadgeClass;
 
-export const statusIcons: Record<string, LucideIcon> = {
+export const statusIcons: Record<string, AppIcon> = {
   new: PlusCircle,
   estimating: PlayCircle,
   estimated: Send,

@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/icons/appIcons";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 

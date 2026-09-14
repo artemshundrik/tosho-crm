@@ -19,7 +19,7 @@
  */
 
 import * as React from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";

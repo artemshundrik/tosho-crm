@@ -1,4 +1,4 @@
-import { FileSpreadsheet, Package, Printer } from "lucide-react";
+import { FileSpreadsheet, Package, Printer } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import type { QuoteKindValue } from "@/features/quotes/quote-wizard/quoteWizardKinds";

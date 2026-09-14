@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";

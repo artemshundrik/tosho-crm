@@ -99,18 +99,40 @@ export function useEdgeFade<T extends HTMLElement>(
       }
     };
 
-    sync();
+    /*
+     * ПЕРШИЙ ЗАМІР РОБИТЬ ResizeObserver, А НЕ ЕФЕКТ (REQ-274). Ефект
+     * монтування дошки React виконує в тій самій задачі, що й коміт маршруту,
+     * і читання `scrollHeight` у цю мить змушує браузер порахувати верстку
+     * сторінки, яку він ще не малював, — і так для кожної колонки окремо, бо
+     * між читаннями сусідка вже записала свої змінні. Спостерігач розміру
+     * озивається на вузол сам: одразу після верстки й ще до першого кадру, тож
+     * згасання в першому кадрі є, а примусового перерахунку немає.
+     *
+     * Зміни DOM (приїзд карток) з тієї ж причини міряємо не в мікрозадачі
+     * одразу після коміту, а на найближчому кадрі, один раз на всі мутації.
+     * Прокрутка лишається синхронною: під час неї верстка чиста, читання
+     * безкоштовне, а відгук потрібен негайно.
+     */
+    let frame = 0;
+    const syncOnNextFrame = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        sync();
+      });
+    };
 
     node.addEventListener("scroll", sync, { passive: true });
     const resize = new ResizeObserver(sync);
     resize.observe(node);
-    const mutation = new MutationObserver(sync);
+    const mutation = new MutationObserver(syncOnNextFrame);
     mutation.observe(node, { childList: true, subtree: true });
 
     return () => {
       node.removeEventListener("scroll", sync);
       resize.disconnect();
       mutation.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
     };
   }, [ref, axis, enabled]);
 }

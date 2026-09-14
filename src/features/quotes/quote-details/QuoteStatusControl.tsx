@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { AlertTriangle, Check, ChevronDown, Clock, Loader2, Pencil, XCircle } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Clock, Loader2, Pencil, XCircle } from "@/components/icons/appIcons";
 
 import {
   DropdownMenu,

@@ -16,7 +16,7 @@ import {
   Rocket,
   SwatchBook,
   Workflow,
-} from "lucide-react";
+} from "@/components/icons/appIcons";
 
 import { MODULE_DEFINITIONS } from "@/lib/moduleAccess";
 import { offBoardStatuses, onBoardColumns } from "@/lib/kanbanBoards";

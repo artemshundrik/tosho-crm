@@ -1,4 +1,4 @@
-import { FileText, Layers } from "lucide-react";
+import { FileText, Layers } from "@/components/icons/appIcons";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 

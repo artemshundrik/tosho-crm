@@ -21,8 +21,8 @@ import {
   Undo2,
   UserCheck,
   Users,
-  type LucideIcon,
-} from "lucide-react";
+  type AppIcon,
+} from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -156,7 +156,7 @@ type EnrichedMember = WorkspaceMemberDisplayRow & {
  *  Мапа спільна з планером — див. TEAM_EVENT_TONE у statusTones. */
 const EVENT_TONE = TEAM_EVENT_TONE;
 
-const EVENT_ICONS: Record<keyof typeof EVENT_TONE, LucideIcon> = {
+const EVENT_ICONS: Record<keyof typeof EVENT_TONE, AppIcon> = {
   birthday: Cake,
   anniversary: Award,
   return: Undo2,
@@ -2152,7 +2152,7 @@ function EmptyRow({
   onAction,
   compact,
 }: {
-  icon: LucideIcon;
+  icon: AppIcon;
   title: string;
   hint?: string;
   actionLabel?: string;

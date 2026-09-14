@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/icons/appIcons";
 
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import type { QuoteDeadlineTone } from "@/features/quotes/components/QuoteDeadlineBadge";

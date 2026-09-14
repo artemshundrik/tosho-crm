@@ -1,4 +1,4 @@
-import { RefreshCw, ServerCrash } from "lucide-react";
+import { RefreshCw, ServerCrash } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 

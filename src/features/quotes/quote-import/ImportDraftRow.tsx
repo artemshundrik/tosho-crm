@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ExternalLink, ImageOff, Plus, Search, Tag, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, ImageOff, Plus, Search, Tag, Trash2, X } from "@/components/icons/appIcons";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
