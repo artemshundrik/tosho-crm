@@ -730,7 +730,7 @@ export default function SampleStockPage() {
               size="xs"
               aria-pressed={activeKind === kind}
               onClick={() => setActiveKind(kind)}
-              className={cn(SEGMENTED_TRIGGER, "gap-2 px-5")}
+              className={SEGMENTED_TRIGGER}
             >
               {kind === "supply" ? <Boxes className="h-4 w-4" /> : <Package className="h-4 w-4" />}
               {STOCK_KIND_LABELS[kind]}

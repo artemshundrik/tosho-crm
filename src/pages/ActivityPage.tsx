@@ -181,7 +181,7 @@ export default function ActivityPage() {
                 size="xs"
                 aria-pressed={filter === tab.value}
                 onClick={() => setFilter(tab.value)}
-                className={cn(SEGMENTED_TRIGGER, "flex-none px-4")}
+                className={cn(SEGMENTED_TRIGGER, "flex-none")}
               >
                 {tab.label}
               </Button>

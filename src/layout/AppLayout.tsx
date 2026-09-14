@@ -5,7 +5,7 @@ import {
   Bell,
   Banknote,
   BriefcaseBusiness,
-  Building2,
+  AddressBook,
   Calculator,
   ChevronDown,
   Loader2,
@@ -527,7 +527,7 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Огляд", to: ROUTES.overview, group: "overview", icon: LayoutGrid, moduleKey: "overview" },
 
   // Замовлення
-  { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: Building2, moduleKey: "customers" },
+  { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: AddressBook, moduleKey: "customers" },
   { label: "Прорахунки", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "quotes" },
   { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory, moduleKey: "orders" },
   { label: "До відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "shipping" },

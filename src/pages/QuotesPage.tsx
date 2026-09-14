@@ -5392,7 +5392,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               size="xs"
               aria-pressed={contentView === "quotes"}
               onClick={() => setContentView("quotes")}
-              className={cn(SEGMENTED_TRIGGER, "px-5")}
+              className={SEGMENTED_TRIGGER}
             >
               Прорахунки
             </Button>
@@ -5401,7 +5401,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               size="xs"
               aria-pressed={contentView === "sets"}
               onClick={() => setContentView("sets")}
-              className={cn(SEGMENTED_TRIGGER, "px-5")}
+              className={SEGMENTED_TRIGGER}
             >
               КП та набори
             </Button>

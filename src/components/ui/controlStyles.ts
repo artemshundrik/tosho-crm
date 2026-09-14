@@ -190,6 +190,6 @@ const SEGMENTED_TRIGGER_BASE = cx(
   "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-[hsl(var(--soft-ring))]"
 );
 
-export const SEGMENTED_TRIGGER = cx(SEGMENTED_TRIGGER_BASE, "gap-2 h-full rounded-md px-3 text-sm");
+export const SEGMENTED_TRIGGER = cx(SEGMENTED_TRIGGER_BASE, "gap-2 h-full rounded-md px-3 text-[13px]");
 
 export const SEGMENTED_TRIGGER_SM = cx(SEGMENTED_TRIGGER_BASE, "gap-1.5 h-full rounded-md px-2.5 text-xs");

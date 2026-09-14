@@ -31,6 +31,7 @@ import type { Icon, IconProps } from "@phosphor-icons/react";
 import {
   AirplaneIcon as PhAirplaneIcon,
   AirplaneTakeoffIcon as PhAirplaneTakeoffIcon,
+  AddressBookIcon as PhAddressBookIcon,
   ArchiveIcon as PhArchiveIcon,
   ArrowBendUpLeftIcon as PhArrowBendUpLeftIcon,
   ArrowClockwiseIcon as PhArrowClockwiseIcon,
@@ -273,6 +274,7 @@ function withMotion(Base: Icon, motionClass: string): Icon {
 
 export {
   PhPulseIcon as Activity,
+  PhAddressBookIcon as AddressBook,
   PhWarningCircleIcon as AlertCircle,
   PhWarningIcon as AlertTriangle,
   PhArchiveIcon as Archive,

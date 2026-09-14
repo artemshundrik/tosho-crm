@@ -3223,7 +3223,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             size="xs"
             aria-pressed={activeTab === "customers"}
             onClick={() => setActiveTab("customers")}
-            className={cn(SEGMENTED_TRIGGER, "gap-2 px-5")}
+            className={SEGMENTED_TRIGGER}
           >
             <Building2 className="h-4 w-4" />
             Замовники
@@ -3235,7 +3235,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             size="xs"
             aria-pressed={activeTab === "leads"}
             onClick={() => setActiveTab("leads")}
-            className={cn(SEGMENTED_TRIGGER, "gap-2 px-5")}
+            className={SEGMENTED_TRIGGER}
           >
             <Users className="h-4 w-4" />
             Ліди

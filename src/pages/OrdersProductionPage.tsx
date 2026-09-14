@@ -785,7 +785,7 @@ export default function OrdersProductionPage() {
               size="xs"
               aria-pressed={viewTab === "register"}
               onClick={() => setViewTab("register")}
-              className={cn(SEGMENTED_TRIGGER, "px-5")}
+              className={SEGMENTED_TRIGGER}
             >
               <List className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Список</span>
@@ -795,7 +795,7 @@ export default function OrdersProductionPage() {
               size="xs"
               aria-pressed={viewTab === "queue"}
               onClick={() => setViewTab("queue")}
-              className={cn(SEGMENTED_TRIGGER, "px-5")}
+              className={SEGMENTED_TRIGGER}
             >
               <LayoutGrid className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Kanban</span>
