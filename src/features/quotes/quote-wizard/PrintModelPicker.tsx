@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { scoreCompanyNameMatch } from "@/lib/companyNameSearch";
 
 import { catalogPlace } from "./catalogPlace";
-import { PrintModelArt } from "./printModelArt";
+import { PrintModelArt, printModelMotion } from "./printModelArt";
 import type { CatalogSuggestion } from "./catalogSuggestions";
 
 /**
@@ -117,7 +117,10 @@ export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled 
                     : "border-border/50 bg-background/60 text-muted-foreground hover:border-border hover:bg-muted/40"
                 )}
               >
-                <PrintModelArt presetKey={model.specPreset} className="text-foreground/70" />
+                <PrintModelArt
+                  presetKey={model.specPreset}
+                  className={cn(printModelMotion(model.specPreset), "text-foreground/70")}
+                />
                 {/*
                   Під підпис завжди два рядки: інакше плитка центрувала значок
                   разом із текстом, і в «Квартальному календарі» він стояв

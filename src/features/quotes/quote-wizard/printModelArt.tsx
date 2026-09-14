@@ -56,6 +56,23 @@ const PATHS = {
 const FALLBACK_PATH =
   "M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,176H96a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm0-32H96a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm-8-56V44l44,44Z";
 
+/**
+ * Рух значка виду на наведенні (класи icon-motion-* з index.css; оживають,
+ * лише коли значок усередині кнопки й людина не просила зменшити рух).
+ * Кожному виду — свій: календарі гойдаються, ніби висять на стіні, сертифікат
+ * хитається, хатинка підстрибує, решта трохи піднімається.
+ */
+const MOTION: Record<string, string> = {
+  print_calendar_quarterly: "icon-motion-ring",
+  print_calendar_flip: "icon-motion-ring",
+  print_calendar_house: "icon-motion-nudge",
+  print_certificate: "icon-motion-shake",
+};
+
+export function printModelMotion(presetKey: string | null): string {
+  return (presetKey && MOTION[presetKey]) || "icon-motion-lift";
+}
+
 export function PrintModelArt({ presetKey, className }: { presetKey: string | null; className?: string }) {
   const d = (presetKey && PATHS[presetKey as keyof typeof PATHS]) || FALLBACK_PATH;
   return (
