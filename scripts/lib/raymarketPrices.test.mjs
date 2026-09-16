@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { RAYMARKET_ARTICLES, RAYMARKET_PRICES, raymarketArticle, raymarketPrice } from "./raymarketPrices.mjs";
+import {
+  RAYMARKET_ARTICLES,
+  RAYMARKET_PRICES,
+  raymarketArticle,
+  raymarketColorWord,
+  raymarketPrice,
+} from "./raymarketPrices.mjs";
 
 /**
  * Усі `sku` тут — СПРАВЖНІ рядки зі сторінок ray-market.com.ua (обхід
@@ -81,6 +87,24 @@ describe("ціна Raymarket за прайсом", () => {
     expect(raymarketPrice("U0105-Black")).toBeNull();
   });
 
+  it("назва моделі без кольору — щоб кольори збиралися в одну картку", () => {
+    // Усі кольори однієї моделі мусять дати ОДНАКОВУ назву: саме за нею
+    // `groupSupplierPoolRows` збирає картку.
+    expect(raymarketPrice("ST2000-WHI")?.name).toBe("Футболка чоловіча STEDMAN CLASSIC-T");
+    expect(raymarketPrice("ST2000-RGY")?.name).toBe("Футболка чоловіча STEDMAN CLASSIC-T");
+    expect(raymarketPrice("U0401M-Black")?.name).toBe(raymarketPrice("U0401W-Cream")?.name);
+    // І в назві не має бути кольору жодною формою — інакше згортання розсиплеться.
+    for (const row of RAYMARKET_PRICES) {
+      expect(row.name, `${row.article}: у назві колір`).not.toMatch(
+        /біл|чорн|сір|син|червон|зелен|жовт|рожев|бежев|коричнев/i
+      );
+    }
+    // Бренд латиницею: у прайсі й на сайті в «STEDMАN» кирилична «А».
+    for (const row of RAYMARKET_PRICES) {
+      expect(row.name, `${row.article}: кирилична А в бренді`).not.toMatch(/STEDM[\u0410]N/);
+    }
+  });
+
   it("таблиця покриває 25 артикулів двох прайсів і не має дублів", () => {
     expect(RAYMARKET_ARTICLES).toHaveLength(25);
     const keys = RAYMARKET_PRICES.map((r) => `${r.article}:${r.kind}`);
@@ -99,5 +123,45 @@ describe("ціна Raymarket за прайсом", () => {
       const prices = row.bands.map(([, p]) => p);
       expect(prices[0]).toBe(Math.min(...prices));
     }
+  });
+});
+
+/**
+ * Назви сторінок тут — справжні, з обходу 16.09.2026. Колір у них стоїть
+ * УСЕРЕДИНІ назви й будь-якої форми, тож ловиться різницею з назвою моделі, а
+ * не переліком відтінків.
+ */
+describe("колір словом із назви сторінки", () => {
+  const model = "Футболка чоловіча STEDMAN CLASSIC-T";
+
+  it("бере саме зайве слово, хай там яка його форма", () => {
+    // Увага: у «STEDMАN» зі сторінки кирилична «А» — слово все одно має зійтись.
+    expect(raymarketColorWord("Футболка чоловіча темно-сіра STEDMАN CLASSIC-T", model)).toBe("темно-сіра");
+    expect(raymarketColorWord("Футболка чоловіча біла STEDMАN CLASSIC-T", model)).toBe("біла");
+    expect(raymarketColorWord("Футболка чоловіча світлий сірий меланж STEDMАN CLASSIC-T", model)).toBe(
+      "світлий сірий меланж"
+    );
+  });
+
+  it("стать у колір не потрапляє, хоч у назві моделі її немає", () => {
+    const hoodie = "Худі утеплене RAY BASIC з начесом";
+    expect(raymarketColorWord("Худі чоловіче чорне утеплене RAY BASIC U0401", hoodie)).toBe("чорне");
+    expect(raymarketColorWord("Худі жіноче бежеве утеплене RAY BASIC U0401", hoodie)).toBe("бежеве");
+  });
+
+  it("латинські хвости назви моделі — теж не колір", () => {
+    // Сайт зве її LUX POLO, прайс — HARPER POLO; «LUX» не має їхати в колір.
+    expect(raymarketColorWord("Поло чоловіча біла STEDMAN STEDMAN LUX POLO", "Поло чоловіча STEDMAN HARPER POLO")).toBe(
+      "біла"
+    );
+    // Артикул у хвості теж не колір.
+    expect(raymarketColorWord("Футболка оверсайз чоловіча чорна RAY OVERSIZE U0104 UNISEX", "Футболка оверсайз RAY OVERSIZE")).toBe(
+      "чорна"
+    );
+  });
+
+  it("немає різниці — немає й кольору: підпис візьме код з артикула", () => {
+    expect(raymarketColorWord(model, model)).toBeNull();
+    expect(raymarketColorWord(null, model)).toBeNull();
   });
 });

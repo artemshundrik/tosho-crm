@@ -49,50 +49,64 @@
  * Приїде новий прайс — правиш таблицю й переганяєш обхід.
  */
 
+/**
+ * НАЗВА МОДЕЛІ ТУТ — НЕ ДОВІДКА, А КЛЮЧ ЗГОРТАННЯ В ПОШУКУ. Рядок пулу — це
+ * КОЛІР, а картку в пошуку збирає `groupSupplierPoolRows` за НАЗВОЮ. Назва на
+ * сайті колір усередині себе й містить («Футболка чоловіча темно-сіра STEDMАN
+ * CLASSIC-T»), тож якби вона поїхала в пул як є, 27 кольорів ST2000 стали б 27
+ * окремими картками: на запит «футболка» це 178 майже однакових рядків замість
+ * дев'яти з колірними чипами. Прайс же називає модель без кольору — саме тому
+ * назва береться звідси, а власна назва сторінки лишається в `attrs.siteName`.
+ *
+ * Бренд пишемо ЛАТИНСЬКИМ «STEDMAN». У прайсі й на сайті в ньому стоїть
+ * кирилична «А» («STEDMАN») — одрук постачальника, який ламає пошук за словом
+ * «stedman» з клавіатури.
+ */
+
 /** Ціни з ПДВ, гривні. `kind`: `any` — одна ціна на всі кольори (моделі RAY),
  *  `white`/`color` — поділ за кольором (Stedman). `bands` — розмірні діапазони,
  *  перший базовий: його ціна йде в пул. */
 export const RAYMARKET_PRICES = [
   // ── зимовий прайс ─────────────────────────────────────────────────────────
-  { article: "U0409", kind: "any", bands: [["XS-2XL", 984], ["3XL", 1230]] },
-  { article: "U0909", kind: "any", bands: [["XS-2XL", 879], ["3XL", 1056]] },
-  { article: "U0401", kind: "any", bands: [["XS-2XL", 657], ["3XL-5XL", 819]] },
-  { article: "U0404", kind: "any", bands: [["2XS/XS, S/M, L/XL", 807], ["2XL/3XL", 1008]] },
-  { article: "U0402", kind: "any", bands: [["XS-2XL", 657], ["3XL-5XL", 819]] },
-  { article: "U0405L", kind: "any", bands: [["XS-2XL", 714], ["3XL-5XL", 894]] },
-  { article: "K0403", kind: "any", bands: [["XS-XL", 513]] },
-  { article: "U0301", kind: "any", bands: [["XS-2XL", 531], ["3XL-5XL", 663]] },
-  { article: "U0302", kind: "any", bands: [["XS-2XL", 531], ["3XL-5XL", 663]] },
-  { article: "U0304", kind: "any", bands: [["S/M, L/XL", 639], ["2XL/3XL", 798]] },
-  { article: "K0303", kind: "any", bands: [["XS-XL", 387]] },
-  { article: "U0901", kind: "any", bands: [["XS-2XL", 567], ["3XL", 681]] },
-  { article: "U0501", kind: "any", bands: [["XS-2XL", 360], ["3XL", 450]] },
-  { article: "U0601", kind: "any", bands: [["XS-2XL", 720], ["3XL-5XL", 900]] },
+  { article: "U0409", name: "Худі на замку RAY PREMIUM LOOSE без начесу", kind: "any", bands: [["XS-2XL", 984], ["3XL", 1230]] },
+  { article: "U0909", name: "Штани RAY PREMIUM LOOSE без начесу", kind: "any", bands: [["XS-2XL", 879], ["3XL", 1056]] },
+  { article: "U0401", name: "Худі утеплене RAY BASIC з начесом", kind: "any", bands: [["XS-2XL", 657], ["3XL-5XL", 819]] },
+  { article: "U0404", name: "Худі оверсайз утеплене RAY OVERSIZE", kind: "any", bands: [["2XS/XS, S/M, L/XL", 807], ["2XL/3XL", 1008]] },
+  { article: "U0402", name: "Худі полегшене RAY BASIC без начесу", kind: "any", bands: [["XS-2XL", 657], ["3XL-5XL", 819]] },
+  { article: "U0405L", name: "Худі на блискавці утеплене RAY BASIC", kind: "any", bands: [["XS-2XL", 714], ["3XL-5XL", 894]] },
+  { article: "K0403", name: "Худі дитяче утеплене RAY BASIC", kind: "any", bands: [["XS-XL", 513]] },
+  { article: "U0301", name: "Світшот утеплений RAY BASIC з начесом", kind: "any", bands: [["XS-2XL", 531], ["3XL-5XL", 663]] },
+  { article: "U0302", name: "Світшот полегшений RAY BASIC без начесу", kind: "any", bands: [["XS-2XL", 531], ["3XL-5XL", 663]] },
+  { article: "U0304", name: "Світшот оверсайз утеплений RAY OVERSIZE", kind: "any", bands: [["S/M, L/XL", 639], ["2XL/3XL", 798]] },
+  { article: "K0303", name: "Світшот дитячий утеплений RAY BASIC", kind: "any", bands: [["XS-XL", 387]] },
+  { article: "U0901", name: "Штани утеплені RAY BASIC з начесом", kind: "any", bands: [["XS-2XL", 567], ["3XL", 681]] },
+  { article: "U0501", name: "Кофта флісова RAY BASIC", kind: "any", bands: [["XS-2XL", 360], ["3XL", 450]] },
+  { article: "U0601", name: "Жилет утеплений RAY BASIC", kind: "any", bands: [["XS-2XL", 720], ["3XL-5XL", 900]] },
 
   // ── літній прайс ──────────────────────────────────────────────────────────
-  { article: "U0701", kind: "any", bands: [["S-2XL", 405]] },
-  { article: "U0104", kind: "any", bands: [["S/M, L/XL", 312], ["2XL/3XL", 390]] },
-  { article: "U0102", kind: "any", bands: [["XS-2XL", 261], ["3XL", 324]] },
-  { article: "ST2000", kind: "white", bands: [["XS-2XL", 139.5], ["3XL-5XL", 180]] },
-  { article: "ST2000", kind: "color", bands: [["XS-2XL", 168], ["3XL-5XL", 213]] },
+  { article: "U0701", name: "Шорти RAY BASIC", kind: "any", bands: [["S-2XL", 405]] },
+  { article: "U0104", name: "Футболка оверсайз RAY OVERSIZE", kind: "any", bands: [["S/M, L/XL", 312], ["2XL/3XL", 390]] },
+  { article: "U0102", name: "Футболка RAY PREMIUM FIT", kind: "any", bands: [["XS-2XL", 261], ["3XL", 324]] },
+  { article: "ST2000", name: "Футболка чоловіча STEDMAN CLASSIC-T", kind: "white", bands: [["XS-2XL", 139.5], ["3XL-5XL", 180]] },
+  { article: "ST2000", name: "Футболка чоловіча STEDMAN CLASSIC-T", kind: "color", bands: [["XS-2XL", 168], ["3XL-5XL", 213]] },
   // Білий тут справді йде по вужчій сітці (S-XL), ніж кольоровий (S-2XL) —
   // так надруковано в прайсі, це не обрив розбору.
-  { article: "ST2100", kind: "white", bands: [["S-XL", 177], ["3XL", 225]] },
-  { article: "ST2100", kind: "color", bands: [["S-2XL", 201], ["3XL-5XL", 255]] },
-  { article: "ST2600", kind: "white", bands: [["XS-2XL", 139.5]] },
-  { article: "ST2600", kind: "color", bands: [["XS-2XL", 168]] },
-  { article: "ST2160", kind: "white", bands: [["S-2XL", 177]] },
-  { article: "ST2160", kind: "color", bands: [["S-2XL", 201]] },
-  { article: "ST2200", kind: "white", bands: [["3XS-XL", 117]] },
-  { article: "ST2200", kind: "color", bands: [["3XS-XL", 138]] },
+  { article: "ST2100", name: "Футболка чоловіча STEDMAN COMFORT-T 185", kind: "white", bands: [["S-XL", 177], ["3XL", 225]] },
+  { article: "ST2100", name: "Футболка чоловіча STEDMAN COMFORT-T 185", kind: "color", bands: [["S-2XL", 201], ["3XL-5XL", 255]] },
+  { article: "ST2600", name: "Футболка жіноча STEDMAN CLASSIC-T FITTED", kind: "white", bands: [["XS-2XL", 139.5]] },
+  { article: "ST2600", name: "Футболка жіноча STEDMAN CLASSIC-T FITTED", kind: "color", bands: [["XS-2XL", 168]] },
+  { article: "ST2160", name: "Футболка жіноча STEDMAN COMFORT-T 185", kind: "white", bands: [["S-2XL", 177]] },
+  { article: "ST2160", name: "Футболка жіноча STEDMAN COMFORT-T 185", kind: "color", bands: [["S-2XL", 201]] },
+  { article: "ST2200", name: "Футболка дитяча STEDMAN CLASSIC-T KIDS", kind: "white", bands: [["3XS-XL", 117]] },
+  { article: "ST2200", name: "Футболка дитяча STEDMAN CLASSIC-T KIDS", kind: "color", bands: [["3XS-XL", 138]] },
   // ST9060 у прайсі підписана «STEDMAN LUX POLO», а на сайті це HARPER POLO —
   // посилання з прайса веде саме туди. Артикул важливіший за назву.
-  { article: "ST9060", kind: "white", bands: [["S-2XL", 357], ["3XL", 390]] },
-  { article: "ST9060", kind: "color", bands: [["S-2XL", 393], ["3XL", 438]] },
-  { article: "ST3000", kind: "white", bands: [["S-2XL", 357], ["3XL", 390]] },
-  { article: "ST3000", kind: "color", bands: [["S-2XL", 393], ["3XL", 438]] },
-  { article: "ST3100", kind: "white", bands: [["S-2XL", 357]] },
-  { article: "ST3100", kind: "color", bands: [["S-2XL", 393]] },
+  { article: "ST9060", name: "Поло чоловіча STEDMAN HARPER POLO", kind: "white", bands: [["S-2XL", 357], ["3XL", 390]] },
+  { article: "ST9060", name: "Поло чоловіча STEDMAN HARPER POLO", kind: "color", bands: [["S-2XL", 393], ["3XL", 438]] },
+  { article: "ST3000", name: "Поло чоловіча STEDMAN POLO", kind: "white", bands: [["S-2XL", 357], ["3XL", 390]] },
+  { article: "ST3000", name: "Поло чоловіча STEDMAN POLO", kind: "color", bands: [["S-2XL", 393], ["3XL", 438]] },
+  { article: "ST3100", name: "Поло жіноча STEDMAN POLO", kind: "white", bands: [["S-2XL", 357]] },
+  { article: "ST3100", name: "Поло жіноча STEDMAN POLO", kind: "color", bands: [["S-2XL", 393]] },
 ];
 
 /** Артикул → {any} або {white, color}. Будується раз: таблиця стала. */
@@ -156,6 +170,8 @@ export function raymarketPrice(sku) {
   return {
     article: parsed.article,
     color: parsed.color || null,
+    /** Назва моделі без кольору — ключ, за яким кольори збираються в картку. */
+    name: row.name,
     kind: row.kind,
     price: basePrice,
     band: baseBand,
@@ -165,3 +181,77 @@ export function raymarketPrice(sku) {
 
 /** Скільки артикулів знає прайс — для сторожі в завантажувачі й у тестах. */
 export const RAYMARKET_ARTICLES = [...BY_ARTICLE.keys()];
+
+/**
+ * КОЛІР СЛОВОМ — РІЗНИЦЕЮ ДВОХ НАЗВ. Сайт зве товар «Футболка чоловіча
+ * темно-сіра STEDMАN CLASSIC-T», прайс — «Футболка чоловіча STEDMAN CLASSIC-T».
+ * Зайве слово і є колір.
+ *
+ * НАВІЩО ВЗАГАЛІ, КОЛИ КОД КОЛЬОРУ Є В АРТИКУЛІ. Бо код нечитний: у чипі
+ * варіанта менеджер бачив би «RGY», «BOG», «CSR» і тицяв би навмання. У моделей
+ * RAY хвіст хоч англійський («Dark Grey»), а в Stedman — три літери.
+ *
+ * ЧОМУ РІЗНИЦЯ СЛІВ, А НЕ РЕГУЛЯРКА НА КОЛІР. Колір стоїть усередині назви, а
+ * не в кінці, і форма в нього будь-яка («темно-сіра», «сірий меланж», «світло-
+ * зелена»). Перелік кольорів тут був би словником, який доведеться доповнювати
+ * щоразу, коли постачальник завезе новий відтінок; різниця не доповнюється
+ * ніколи.
+ *
+ * ⚠️ КИРИЛИЧНА «А» В «STEDMАN». Постачальник пише бренд із кириличною А і на
+ * сайті, і в прайсі. Ми в таблиці виправили це на латиницю (щоб пошук за
+ * «stedman» працював), тож при звірянні слова нормалізуємо: інакше «STEDMАN»
+ * зі сторінки не зійшлося б із «STEDMAN» прайса й поїхало б у колір.
+ */
+const CYRILLIC_LOOKALIKES = { а: "a", А: "A", е: "e", Е: "E", о: "o", О: "O", с: "c", С: "C", р: "p", Р: "P", у: "y", х: "x", Х: "X", і: "i", І: "I", М: "M", Т: "T", В: "B", Н: "H", К: "K" };
+
+/**
+ * Стать у назві сторінки — не колір. Перелік закритий, на відміну від кольорів.
+ * Зводиться тим самим `foldWord`, що й слова назви: інакше «чоловіче» зі списку
+ * не збіглося б із «чоловіче» зі сторінки, бо в нього дорогою підміняються
+ * кириличні двійники латинських літер.
+ */
+const GENDER_WORDS_RAW = [
+  "чоловіча", "чоловіче", "чоловічий", "чоловічі",
+  "жіноча", "жіноче", "жіночий", "жіночі",
+  "дитяча", "дитяче", "дитячий", "дитячі",
+  "унісекс", "unisex",
+];
+
+const foldWordRaw = (word) =>
+  word
+    .replace(/[аАеЕоОсСрРуxхХіІМТВНК]/g, (ch) => CYRILLIC_LOOKALIKES[ch] ?? ch)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+
+const foldWord = foldWordRaw;
+const GENDER_WORDS = new Set(GENDER_WORDS_RAW.map(foldWordRaw));
+
+/**
+ * Колір словом із назви сторінки. `null`, якщо різниці немає (назви збіглися)
+ * — тоді підпис варіанта візьме код з артикула, як і до цього.
+ */
+export function raymarketColorWord(siteName, modelName) {
+  if (typeof siteName !== "string" || typeof modelName !== "string") return null;
+  const known = new Set(modelName.split(/\s+/).map(foldWord).filter(Boolean));
+  const extra = siteName
+    .split(/\s+/)
+    .filter((word) => {
+      const folded = foldWord(word);
+      if (!folded || known.has(folded)) return false;
+      // Артикул у хвості («U0401») — не колір.
+      if (/^[a-z]?\d/.test(folded)) return false;
+      // СТАТЬ — ЗАКРИТИЙ ПЕРЕЛІК, і саме тому її можна перелічити, на відміну
+      // від кольорів. Назви моделей RAY статі не називають («Худі утеплене RAY
+      // BASIC»), а сторінки називають («Худі чоловіче чорне…») — без цього
+      // фільтра в колір їхало б «чоловіче чорне».
+      if (GENDER_WORDS.has(folded)) return false;
+      // КОЛІР ТУТ ЗАВЖДИ КИРИЛИЦЕЮ. Латинські слова в різниці — це хвости назви
+      // моделі («STEDMAN LUX POLO» на сайті проти «HARPER POLO» у прайсі), а не
+      // відтінок. Так «біла LUX» лишається просто «біла».
+      if (!/[\u0400-\u04FF]/.test(word)) return false;
+      return true;
+    })
+    .join(" ")
+    .trim();
+  return extra || null;
+}

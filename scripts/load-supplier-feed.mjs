@@ -63,7 +63,7 @@ import {
   dropSharedFrames,
   familyTag,
 } from "./lib/opencartColorImage.mjs";
-import { raymarketPrice } from "./lib/raymarketPrices.mjs";
+import { raymarketColorWord, raymarketPrice } from "./lib/raymarketPrices.mjs";
 /**
  * ТАБЛИЦЯ КОДУВАНЬ — НЕ ФАКУЛЬТАТИВНА, І САМЕ ТУТ. Прайс Папіруса — старий
  * формат BIFF, де кирилиця лежить у CP1251. Під `require()` SheetJS підвантажує
@@ -1560,6 +1560,10 @@ function parseRaymarketPage(html, ctx) {
   }
 
   const attrs = {
+    // Власна назва сторінки — вона несе колір словом, і саме через це не може
+    // бути назвою рядка (див. нижче). Але в картці вона корисна: це те, як
+    // товар зветься в постачальника.
+    siteName: name,
     priceSource: "прайс «ВЕЛИКИЙ ОПТ», 11.05.2026",
     priceBand: priced.band,
     // Уся розмірна драбина, а не лише базовий діапазон: великий розмір коштує
@@ -1569,13 +1573,29 @@ function parseRaymarketPage(html, ctx) {
   if (priced.bands.length > 1) attrs.priceNote = `ціна за ${priced.band}; більші розміри дорожчі`;
   if (sitePrice != null) attrs.sitePrice = sitePrice;
   if (product.description) attrs.description = String(product.description).trim();
-  if (priced.color) attrs.color = priced.color;
+  /**
+   * У чипі варіанта має стояти СЛОВО, а не код. Артикул несе «RGY», «BOG»,
+   * «CSR» — з таким підписом вибір робиться навмання. Слово дістається
+   * різницею назв (див. `raymarketColorWord`); не вийшло — лишається код,
+   * він усе одно кращий за порожнечу.
+   */
+  const colorWord = raymarketColorWord(name, priced.name);
+  if (colorWord || priced.color) attrs.color = colorWord ?? priced.color;
   if (offers?.availability) attrs.available = /InStock/i.test(String(offers.availability));
 
   return {
     external_key: ctx.url,
     article: typeof product.sku === "string" ? product.sku.trim() : null,
-    name,
+    /**
+     * НАЗВА — З ПРАЙСА, А НЕ ЗІ СТОРІНКИ, і це не дрібниця показу. Рядок пулу
+     * тут — КОЛІР, а картку в пошуку збирає `groupSupplierPoolRows` за НАЗВОЮ.
+     * Назва сторінки містить колір усередині себе («Футболка чоловіча
+     * темно-сіра STEDMАN CLASSIC-T»), тож із нею 27 кольорів ST2000 дали б 27
+     * окремих карток — на запит «футболка» це 178 майже однакових рядків.
+     * Прайс називає модель без кольору, і всі її кольори сходяться в одну
+     * картку з колірними чипами. Назва сторінки лишається в `attrs.siteName`.
+     */
+    name: priced.name,
     // Бренд тут рядком («STEDMAN»), а не об'єктом, як у Бергамо. Приймаємо
     // обидві форми: інакше зміна розмітки поклала б у поле «[object Object]».
     vendor: typeof product.brand === "string" ? product.brand.trim() || null : (product.brand?.name?.trim() ?? null),
