@@ -3988,6 +3988,19 @@ select '${cfg.slug}' as supplier, count(*) as total,
        count(*) filter (where is_active) as active
 from tosho.supplier_products where supplier_slug = '${cfg.slug}';
 
+-- ЗВЕДЕННЯ ДЛЯ СТОРІНКИ «ПОСТАЧАЛЬНИКИ» — ТУТ, У ТІЙ САМІЙ ТРАНЗАКЦІЇ.
+--
+-- Числа карток (скільки товарів, скільки з нашою ціною, коли оновлено) лежать
+-- у tosho.supplier_pool_stats, а не рахуються на кожне відкриття сторінки:
+-- group by по всьому пулу читав 49 474 широких рядки за п'ять-сім секунд і не
+-- вкладався у восьмисекундну стелю ролі (див. scripts/supplier-pool-page.sql).
+--
+-- Виклик саме ТУТ, а не окремим запуском після заливу: інакше між новими
+-- товарами й старими числами була б щілина, у яку менеджер побачив би вчорашній
+-- стан під сьогоднішнім каталогом. Транзакція одна — або доїхало і те, і те,
+-- або не доїхало нічого.
+select tosho.refresh_supplier_pool_stats('${cfg.slug}') as onovleno_zvedennia;
+
 commit;
 notify pgrst, 'reload schema';
 `;

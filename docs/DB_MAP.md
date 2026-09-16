@@ -334,7 +334,7 @@ These tables together power the product catalog and quote item configuration.
     uncorrelated RLS policy described above:
     `tosho.search_supplier_pool(p_terms, p_per_supplier)` (quote wizard and the
     `/integrations/suppliers` search; the list of visible sources lives in the function body),
-    `tosho.supplier_pool_summary()`,
+    `tosho.supplier_pool_summary()` (reads the stored `supplier_pool_stats`, see below),
     `tosho.list_supplier_products(p_slug, p_terms, p_category, p_limit, p_offset)`
     (pages by distinct `name`, so one product's colours never split across pages;
     its CTE keeps only `id`+`name` on purpose — materialising `attrs` cost 1–3 s),
@@ -455,6 +455,20 @@ generator refuses the marker if the table has no `BEFORE INSERT` trigger at all.
 - `tosho.supplier_pool_summary()`, `tosho.list_supplier_products(...)`, `tosho.supplier_pool_categories(p_slug)`
   - read-only RPCs behind `/integrations/suppliers`; SECURITY INVOKER on purpose — the pool's
     RLS already answers "which team", so there is nothing to elevate
+  - `supplier_pool_summary()` no longer aggregates: it selects ten rows from
+    `tosho.supplier_pool_stats`, keyed `(team_id, supplier_slug)` and carrying the same
+    counters. Aggregating live read 49 474 wide rows (`width=207`, JSONB `attrs`/`images`)
+    in 5.3–6.9 s against the 8 s `authenticated` timeout, so the call returned 500 at random
+    (measured 16.09.2026). Rewriting the query could not help — the cost is reading the table,
+    not the plan. The stats table mirrors the pool's RLS and is refreshed by
+    `tosho.refresh_supplier_pool_stats(p_slug)`.
+
+- `tosho.refresh_supplier_pool_stats(p_slug default null)`
+  - recomputes `supplier_pool_stats` for one source (or all when null) and returns the row
+    count. SECURITY DEFINER so it covers every team, and deliberately **not** granted to
+    `authenticated`: it is a full pool scan, and a button that triggers it would be a DoS lever.
+    `scripts/load-supplier-feed.mjs` calls it inside the same transaction as the load, so the
+    numbers can never drift from the rows they describe
 
 - `public.assert_quote_lock_from_quote_id()`
   - quote lock helper
