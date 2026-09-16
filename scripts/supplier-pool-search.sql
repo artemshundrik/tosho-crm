@@ -34,10 +34,32 @@
 -- би його в кожну відповідь. Віддаємо рівно ті колонки, які малює вікно, а
 -- колір дістаємо як `attrs->>'color'` — точно як робив попередній .select().
 --
--- ЧОМУ security invoker (за замовчуванням, лишено явно). На таблиці стоїть RLS
--- `is_team_member(team_id)`. Definer зняв би її й віддав чужі команди — а тут
--- немає жодної причини піднімати права: пошук читає рівно те, що користувачеві
--- і так дозволено.
+-- ЧОМУ security definer, хоч раніше тут свідомо стояв invoker (16.09.2026).
+--
+-- RLS НА ЦІЙ ТАБЛИЦІ ВИМИКАЄ ТРИГРAМНИЙ ПОКАЖЧИК — не гальмує, а вимикає.
+-- Умови політики Postgres вважає бар'єром безпеки й рахує ПЕРШИМИ, а будь-яку
+-- умову запиту пускає в покажчик лише тоді, коли вона leakproof. `ILIKE` —
+-- функція `pg_catalog.texticlike` — leakproof НЕ Є (`proleakproof = false`).
+-- Тобто під RLS планувальник не має права звести `name ilike …` в `Index Cond`
+-- і чесно читає всю таблицю послідовно.
+--
+-- ЗАМІРЯНО НА ПРОДІ 16.09.2026. `pg_stat_statements` по справжніх викликах з
+-- застосунку (роль `authenticated`): **184 виклики, 5 508 мс у середньому,
+-- 7 967 мс найгірший, 10 036 сторінок на виклик** — рівно повний скан
+-- 49 774 рядків. Той самий запит, запущений роллю, яка RLS обходить, давав
+-- 360 мс і `Bitmap Index Scan on supplier_products_name_trgm`. Саме через цю
+-- різницю попередній захід (MATERIALIZED, того ж дня) міряв 73 мс і вважав
+-- справу закритою: міряли планом, якого менеджер ніколи не отримує.
+--
+-- ЩО РОБИМО. Функція стає definer, а умову політики виписуємо тут РУКАМИ —
+-- тими самими `get_my_team_ids()` і `is_user_blocked()`, що в
+-- `supplier_products_select`. Для планувальника це вже звичайна умова, не
+-- бар'єр, тож покажчик знову працює; для користувача не змінюється нічого:
+-- чужої команди він як не бачив, так і не бачить.
+--
+-- ⚠️ ЦІНА ЦЬОГО РІШЕННЯ: політика й функція тепер мусять мінятись разом.
+-- Змінюєш `supplier_products_select` — виправ і `viewer` нижче, інакше пошук
+-- покаже те, чого політика вже не дозволяє.
 --
 -- ilike any(масив) замість or-ланцюга — щоб і оригінал, і транслітерація
 -- («chashka» → «чашка») ішли одним проходом; терміни готує клієнт
@@ -74,7 +96,7 @@ returns table (
 )
 language sql
 stable
-security invoker
+security definer
 set search_path = ''
 as $fn$
   /**
@@ -114,22 +136,60 @@ as $fn$
     from unnest(p_terms) as t
     where length(btrim(t)) >= 3
   ),
-  hit as (
+  /**
+   * ХТО ПИТАЄ — ОДИН РАЗ НА ЗАПИТ, а не на рядок.
+   *
+   * Це дослівно умова політики `supplier_products_select`: свої команди й не
+   * заблокований. Різниця лише в тому, ЯК її бачить планувальник: з політики
+   * вона приходить бар'єром безпеки (рахується першою, а тому забороняє
+   * покажчик під `ILIKE`), а звідси — звичайною умовою на 128 знайдених
+   * рядків. Захист той самий, план інший.
+   *
+   * `materialized` тут з тієї ж причини, що й у `pat`: без нього обидва
+   * виклики можуть опинитись усередині умови й піти по рядку.
+   */
+  viewer as materialized (
+    select
+      array(select public.get_my_team_ids()) as team_ids,
+      (select tosho.is_user_blocked((select auth.uid()))) as blocked
+  ),
+  /**
+   * ЗБІГ — І ЛИШЕ ЗБІГ. Тут стоїть рівно те, що вміє тригрaмний покажчик:
+   * назва й артикул. Усе інше (джерело, активність, ціна) перевіряється
+   * НИЖЧЕ, по знайдених рядках.
+   *
+   * ЧОМУ НЕ ВСЕ РАЗОМ, ЯК БУЛО. Перелік дозволених джерел покриває всі
+   * одинадцять слугів, які лежать у таблиці, тобто не відсіює нічого — але
+   * планувальник цього не знає й будує по `supplier_products_supplier_idx`
+   * бітову мапу на 54 193 рядки, щоб перетнути її зі 128 знайденими.
+   * Заміряно 16.09.2026 на «beagle»: **283 мс із 360** ішли рівно в цей
+   * перетин. Винесли фільтри назовні — 80 мс на той самий запит.
+   */
+  matched as materialized (
     select
       sp.id, sp.supplier_slug, sp.article, sp.name, sp.vendor, sp.category,
-      sp.price, sp.currency, sp.price_kind, sp.url, sp.image_url,
+      sp.price, sp.currency, sp.price_kind, sp.url, sp.image_url, sp.is_active,
       sp.attrs->>'color' as color,
       -- РОЗМІР ПОТРІБЕН САМЕ ТУТ, а не «колись у attrs». У Trele рядок — це
       -- пара «колір + розмір», і без розміру шість рядків одного кольору
       -- виглядають шістьма однаковими чипами: менеджер тицяє навмання й тягне
       -- в замовлення артикул чужого розміру. Решта джерел розміру не кладе —
       -- у них тут порожньо, і підпис лишається таким, як був.
-      sp.attrs->>'size' as size,
-      row_number() over (partition by sp.supplier_slug order by sp.name, sp.id) as rn
+      sp.attrs->>'size' as size
     from tosho.supplier_products sp
     cross join pat
+    cross join viewer
     where pat.arr is not null
-      and sp.is_active
+      and not viewer.blocked
+      and sp.team_id = any (viewer.team_ids)
+      and (sp.name ilike any (pat.arr) or sp.article ilike any (pat.arr))
+  ),
+  hit as (
+    select
+      m.*,
+      row_number() over (partition by m.supplier_slug order by m.name, m.id) as rn
+    from matched m
+    where m.is_active
       -- ШУКАЄМО В ЧОТИРЬОХ ДЖЕРЕЛАХ: Аванпринт, Тотобі, Бергамо (Артем,
       -- 08.09.2026) і Е-Сувенір (Артем, 08.09.2026, після заміру перетину).
       -- Беррітекс не показуємо — у нього ціни чужі, роздрібні, а чуже число
@@ -192,7 +252,7 @@ as $fn$
       -- (SupplierPoolRow підписує будь-яку валюту, крім UAH, її ж кодом), а
       -- сортування за ціною в пошуку не робиться взагалі — тож змішані валюти
       -- у видачі нічого не ламають.
-      and sp.supplier_slug in (
+      and m.supplier_slug in (
         'avanprint.ua', 'totobi.com.ua', 'bergamo.ua', 'e-suvenir.com.ua',
         'berrytex.com.ua', 'papirus-opt.com', 'trele.com.ua', 'eney.com.ua',
         'toptime.com.ua', 'midocean.com', 'ray-market.com.ua'
@@ -200,8 +260,7 @@ as $fn$
       -- Друга сторожа лишається: навіть із дозволених джерел не показуємо
       -- рядок, у якому ціна є, але вона НЕ наша. Домовленість про знижку може
       -- відпасти, і тоді джерело замовкне саме, не чекаючи, поки хтось згадає.
-      and not (sp.price is not null and sp.price_kind = 'retail')
-      and (sp.name ilike any (pat.arr) or sp.article ilike any (pat.arr))
+      and not (m.price is not null and m.price_kind = 'retail')
   )
   select
     hit.id, hit.supplier_slug, hit.article, hit.name, hit.vendor, hit.category,
