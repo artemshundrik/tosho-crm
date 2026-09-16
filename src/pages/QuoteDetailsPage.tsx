@@ -70,9 +70,6 @@ import { QuoteItemImprintsSection } from "@/features/quotes/quote-details/QuoteI
 import { QuoteItemModelSwap } from "@/features/quotes/quote-details/QuoteItemModelSwap";
 import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
 import { parseQuoteItemMetadata } from "@/features/quotes/quote-details/quoteItemMetadata";
-import { QuoteItemVariantToggle } from "@/features/quotes/quote-details/QuoteItemVariantToggle";
-import { isVariantQuoteItem } from "@/lib/quoteItemVariants";
-import { useQuoteVariantRange } from "@/features/quotes/quote-details/useQuoteVariantRange";
 import { QuoteImportDialog } from "@/features/quotes/quote-import/QuoteImportDialog";
 import { useQuoteImportResearch } from "@/features/quotes/quote-import/useQuoteImportResearch";
 import { normalizeUnitLabel } from "@/lib/units";
@@ -1532,10 +1529,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return `${Math.round((markup / sale) * 100)}%`;
   }, [activeRunPricingTotals.markupTotal, activeRunPricingTotals.saleTotal]);
 
-  // Клієнт у КП бачить варіанти межами, а підсумок картки складає їх усі. Щоб
-  // числа не розходились мовчки, межі показуємо ОКРЕМИМ рядком поруч — самого
-  // підсумку не чіпаючи (@/features/quotes/quote-details/useQuoteVariantRange).
-  const activeVariantRange = useQuoteVariantRange(includedItems, activeRunPricingSummaries);
   const hasMultipleActiveProductSummaries = items.length > 1;
   const activeManagerRateLabel = useMemo(() => {
     const rates = Array.from(
@@ -4655,9 +4648,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     // Поліграфія — виняток: вид іде бейджем (див. QuoteItemTitle).
                     const itemMeta = [
                       modelSpecPreset ? null : metaLine,
-                      // Роль видно ПРЯМО в паспорті товару: інакше єдиним її
-                      // слідом лишалась би галочка, схована в меню «⋮».
-                      isVariantQuoteItem(item.metadata) ? "Варіант виробу" : null,
                       catalogVariant?.name,
                       itemSku ? `Артикул: ${itemSku}` : null,
                     ].filter((part): part is string => Boolean(part));
@@ -4794,15 +4784,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         <RefreshCw className="mr-2 h-4 w-4" />
                                         Замінити товар
                                       </DropdownMenuItem>
-                                      {/* Роль «варіант» (REQ-267#p2) — сусід
-                                          «Замінити товар», бо обидва про те, ЩО
-                                          саме ми пропонуємо, а не про ціну. */}
-                                      <QuoteItemVariantToggle
-                                        quoteItemId={item.id}
-                                        checked={isVariantQuoteItem(item.metadata)}
-                                        disabled={!canManageItems}
-                                        onSaved={() => void loadItems()}
-                                      />
                                       <DropdownMenuSeparator />
                                       {/* «Редагувати» тут більше немає (REQ-157#p6):
                                           товар, нанесення й тиражі правлять у самій
@@ -6073,7 +6054,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 markupTitle={`Надцінка ${formatCurrency(activeRunPricingTotals.markupTotal, quote.currency)}`}
                 markupShareLabel={markupShareLabel}
                 managerRateNeedsAttention={managerRateNeedsAttention}
-                variantRange={activeVariantRange}
                 managerRateLabel={activeManagerRateLabel}
                 parts={priceBreakdownParts}
                 formatFull={(value) => formatCurrency(value, quote.currency)}

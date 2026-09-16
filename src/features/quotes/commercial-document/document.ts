@@ -15,24 +15,11 @@
  */
 
 import type { QuoteItemExportRow } from "@/lib/toshoApi";
-import {
-  hasVariantGroup,
-  moneyRangeOf,
-  quoteItemsTotalRange,
-  type MoneyRange,
-  type QuoteItemRangeEntry,
-} from "@/lib/quoteItemVariants";
+import { moneyRangeOf, sumMoneyRanges, type MoneyRange } from "@/lib/moneyRange";
 
 export type { MoneyRange };
 
-/** Підпис ролі «варіант» у рядку документа — однаковий у всіх чотирьох виходах. */
-export const VARIANT_ROW_LABEL = "Варіант";
-
-/** Пояснення про варіанти — один текст на всі чотири виходи. */
-export const VARIANT_GROUP_NOTE =
-  "Позиції з позначкою «Варіант» взаємовиключні: замовник бере один із них, тому підсумок показано межами — від найдешевшого варіанта до найдорожчого.";
-
-/** Пояснення про тиражі — теж один текст на всі виходи. */
+/** Пояснення про тиражі — один текст на всі чотири виходи. */
 export const RUN_CHOICE_NOTE =
   "У документі є позиції з кількома тиражами. Тиражі взаємовиключні — замовник обирає один, тому підсумок показано межами: від найменшого тиражу до найбільшого.";
 
@@ -61,12 +48,6 @@ export type CommercialItemRow = {
   methodsSummary: string;
   placementSummary: string;
   unit: string;
-  /**
-   * Роль «варіант» (REQ-267#p2): позиція входить не в суму документа, а в
-   * групу взаємовиключних. Джерело — `quote_items.metadata.isVariant`, читач
-   * один на застосунок: `isVariantQuoteItem` із `@/lib/quoteItemVariants`.
-   */
-  isVariant: boolean;
   /**
    * Завжди щонайменше один запис, відсортовані за зростанням кількості.
    * Полів qty/unitPrice/lineTotal у позиції свідомо НЕМАЄ: поки тираж не
@@ -102,76 +83,16 @@ export type CommercialDocument = {
 };
 
 /**
- * Підсумок одного прорахунку в документі.
+ * Підсумок одного прорахунку в документі — сума позицій, де кожна позиція
+ * входить СВОЇМИ межами по взаємовиключних тиражах (`moneyRangeOf`).
  *
- * Два рівні взаємовиключності, і плутати їх не можна:
- *   ТИРАЖІ всередині позиції — межі самої позиції (`moneyRangeOf`);
- *   ВАРІАНТИ між позиціями — межі групи замість доданків (`quoteItemsTotalRange`).
- *
- * Коли ролі «варіант» ні на кому немає, друга дія вироджується в звичайну суму
- * — тобто підсумок збігається з тим, що документ показував до REQ-267#p2.
+ * Позиції складаються: це різні товари. Другого рівня взаємовиключності —
+ * між позиціями — у документі немає; роль «варіант», яка його давала,
+ * прибрана як невживана (див. `@/lib/moneyRange`).
  */
 export function commercialSectionTotalRange(items: readonly CommercialItemRow[]): MoneyRange {
-  return quoteItemsTotalRange(
-    items.map(
-      (item): QuoteItemRangeEntry => ({
-        isVariant: item.isVariant,
-        range: moneyRangeOf(item.runs.map((run) => run.lineTotal)),
-      })
-    )
-  );
+  return sumMoneyRanges(items.map((item) => moneyRangeOf(item.runs.map((run) => run.lineTotal))));
 }
-
-/** Чи є в документі група варіантів — від цього залежить пояснення під підсумком. */
-export const documentHasVariantGroup = (doc: CommercialDocument) =>
-  doc.sections.some((section) => hasVariantGroup(section.items));
-
-/** Позиція-варіант, у якій ціни немає: номер прорахунку, місце в ньому й назва. */
-export type PricelessVariantRow = {
-  quoteNumber: string;
-  position: number;
-  name: string;
-};
-
-/**
- * Варіанти без ціни — те, про що прев'ю попереджає менеджера ПЕРЕД відправкою.
- *
- * НАВІЩО. Позиція з роллю «варіант» і без внесеної ціни дає нульові межі, а
- * нижня межа групи береться по найдешевшому варіанту — тобто по цьому нулю.
- * Клієнт бачить «від 0 грн» там, де насправді порахували дірку в прорахунку.
- *
- * НУЛЬ НЕ ХОВАЄМО. Прибрати таку позицію з арифметики означало б показати
- * клієнту дно ВИЩЕ, ніж воно є в самому прорахунку, і менеджер про порожню ціну
- * так і не дізнався б — документ виглядав би здоровим. Тому документ рахує як
- * рахував, а попередження бачить той, хто може це виправити.
- *
- * ЛИШЕ ПРЕВ'Ю. Ні HTML, ні PDF, ні TSV цього не показують: то документ для
- * клієнта, а не наша службова записка.
- *
- * ЧОМУ `min`, А НЕ `max`. У нижню межу документа потрапляє найдешевший сценарій
- * позиції, тож саме порожній `min` тягне підсумок униз — навіть якщо на іншому
- * тиражі тієї ж позиції ціна є.
- *
- * ЧОМУ ЛИШЕ В ГРУПІ. Одна позначена позиція входить у підсумок тим самим
- * доданком, що й звичайна (див. `quoteItemsTotalRange`): її нуль нічого не
- * опускає, і попереджати про нього означало б попереджати про будь-яку
- * непораховану позицію документа — розмова іншого розміру.
- */
-export const pricelessVariantRows = (doc: CommercialDocument): PricelessVariantRow[] =>
-  doc.sections.flatMap((section) =>
-    hasVariantGroup(section.items)
-      ? section.items
-          .filter(
-            (item) =>
-              item.isVariant && moneyRangeOf(item.runs.map((run) => run.lineTotal)).min <= 0
-          )
-          .map((item) => ({
-            quoteNumber: section.quoteNumber,
-            position: item.position,
-            name: item.name,
-          }))
-      : []
-  );
 
 export const formatMoney = (value: number) =>
   `${new Intl.NumberFormat("uk-UA", {
@@ -280,7 +201,6 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   const docHasRunChoice = doc.sections.some((section) =>
     section.items.some((item) => item.runs.length > 1)
   );
-  const docHasVariants = documentHasVariantGroup(doc);
   const sectionsHtml = doc.sections
     .map((section, sectionIndex) => {
       const rowsHtml =
@@ -296,11 +216,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
                         ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" class="thumb" />`
                         : `<div class="thumb placeholder">—</div>`
                     }</td>
-                    <td>${
-                      item.isVariant
-                        ? `<div class="variant-tag">${escapeHtml(VARIANT_ROW_LABEL)}</div>`
-                        : ""
-                    }${escapeHtml(item.name)}${
+                    <td>${escapeHtml(item.name)}${
                       item.description ? `<div class="cell-muted">${escapeHtml(item.description)}</div>` : ""
                     }</td>
                     <td>${escapeHtml(item.catalogPath || "—")}</td>
@@ -323,7 +239,6 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
               )
               .join("");
       const sectionHasRunChoice = section.items.some((item) => item.runs.length > 1);
-      const sectionHasVariants = hasVariantGroup(section.items);
 
       return `
         <section class="quote-section">
@@ -366,13 +281,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
           <div class="section-total">Разом по ${escapeHtml(section.quoteNumber)}: <b>${formatMoneyRange(
             section.totalRange
           )}</b>${
-            sectionHasVariants
-              ? `<span class="run-hint">залежно від обраного варіанта${
-                  sectionHasRunChoice ? " і тиражу" : ""
-                }</span>`
-              : sectionHasRunChoice
-                ? `<span class="run-hint">залежно від обраного тиражу</span>`
-                : ""
+            sectionHasRunChoice ? `<span class="run-hint">залежно від обраного тиражу</span>` : ""
           }</div>
         </section>
       `;
@@ -416,7 +325,6 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .run-hint { color: #475569; font-size: 12px; }
   /* block + fit-content: назва товару має починатись із нового рядка, інакше
      довга назва обтікає пігулку й ламається навпіл. */
-  .variant-tag { display: block; width: fit-content; margin-bottom: 4px; padding: 1px 6px; border: 1px solid #cbd5e1; border-radius: 999px; font-size: 11px; color: #334155; background: #f8fafc; }
   .total { margin-top: 20px; padding-top: 10px; border-top: 2px solid #0f172a; display: flex; justify-content: flex-end; font-size: 20px; font-weight: 700; }
   @media print {
     body { background: #fff; }
@@ -439,9 +347,6 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
     <div><b>Прорахунків у документі:</b> ${doc.sections.length}</div>
     <div><b>Номери:</b> ${escapeHtml(doc.sections.map((s) => s.quoteNumber).join(", "))}</div>
     <div><b>Підсумок "Разом":</b> <strong>${formatMoneyRange(doc.totalRange)}</strong></div>
-    ${
-      docHasVariants ? `<div class="muted">${escapeHtml(VARIANT_GROUP_NOTE)}</div>` : ""
-    }
     ${
       docHasRunChoice ? `<div class="muted">${escapeHtml(RUN_CHOICE_NOTE)}</div>` : ""
     }
@@ -469,11 +374,8 @@ export const buildCommercialExcelTsv = (doc: CommercialDocument) => {
         section.visualizations.length > 0 ? section.visualizations.map((item) => item.url).join(" | ") : "—"
       )}`
     );
-    // Колонка «Роль» — ОСТАННЯ і додана, а не вставлена в середину: чужі
-    // шаблони й формули в Excel рахують колонки зліва, і зсув «Суми» на одну
-    // позицію мовчки зіпсував би їх усі.
     lines.push(
-      "№\tТовар\tОпис\tКатегорія/модель\tМісце/розмір\tНанесення\tК-сть\tОд.\tЦіна\tСума\tФото URL\tРоль"
+      "№\tТовар\tОпис\tКатегорія/модель\tМісце/розмір\tНанесення\tК-сть\tОд.\tЦіна\tСума\tФото URL"
     );
     if (section.items.length === 0) {
       lines.push("\tНемає товарних позицій");
@@ -496,7 +398,6 @@ export const buildCommercialExcelTsv = (doc: CommercialDocument) => {
               formatMoneyPlain(run.unitPrice),
               formatMoneyPlain(run.lineTotal),
               isFirst ? normalizeTextCell(item.imageUrl || "—") : "",
-              isFirst && item.isVariant ? VARIANT_ROW_LABEL : "",
             ].join("\t")
           );
         });
@@ -508,13 +409,11 @@ export const buildCommercialExcelTsv = (doc: CommercialDocument) => {
     lines.push("");
   });
   lines.push(`Загальна сума\t${formatMoneyRangePlain(doc.totalRange)}`);
-  if (documentHasVariantGroup(doc)) {
-    lines.push(normalizeTextCell(VARIANT_GROUP_NOTE));
-  }
   if (doc.sections.some((section) => section.items.some((item) => item.runs.length > 1))) {
-    lines.push(
-      "Тиражі взаємовиключні: замовник обирає один варіант, тому підсумок показано межами."
-    );
+    // Той самий текст, що в HTML і в прев'ю: пам'ятка була переписана тут
+    // своїми словами й через це казала «обирає один варіант» там, де йдеться
+    // про тираж.
+    lines.push(normalizeTextCell(RUN_CHOICE_NOTE));
   }
   return lines.join("\r\n");
 };

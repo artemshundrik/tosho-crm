@@ -232,21 +232,13 @@ import {
   parseMethodsSummary,
   parsePlacementSummary,
   renderCommercialDocumentHtml,
-  VARIANT_ROW_LABEL,
   type CommercialDocument,
   type CommercialItemRow,
   type CommercialQuoteSection,
   type CommercialRunRow,
 } from "@/features/quotes/commercial-document/document";
-import {
-  CommercialPreviewSummary,
-  CommercialPreviewVariantWarning,
-} from "@/features/quotes/commercial-document/CommercialPreviewSummary";
-import {
-  hasVariantGroup,
-  isVariantQuoteItem,
-  type MoneyRange,
-} from "@/lib/quoteItemVariants";
+import { CommercialPreviewSummary } from "@/features/quotes/commercial-document/CommercialPreviewSummary";
+import { sumMoneyRanges } from "@/lib/moneyRange";
 
 type QuotesPageProps = {
   teamId: string;
@@ -4065,18 +4057,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           methodsSummary: parseMethodsSummary(row.methods),
           placementSummary,
           unit: normalizeUnitLabel(row.unit),
-          // Роль «варіант» читаємо з СИРОГО metadata, а не з розібраного:
-          // розбірник позиції живе в картці прорахунку й тягне за собою
-          // каталог, а документу треба рівно один прапорець (REQ-267#p2).
-          isVariant: isVariantQuoteItem(row.metadata),
           runs,
         };
       });
 
-      // Підсумок прорахунку — не число, а межі, і взаємовиключності тут ДВІ:
-      // тиражі всередині позиції (найдешевший — найдорожчий) і позиції з роллю
-      // «варіант» між собою. Обидві зводить `commercialSectionTotalRange`;
-      // коли ні того, ні того немає, виходить звичайна сума, як і раніше.
+      // Підсумок прорахунку — не число, а межі: тиражі всередині позиції
+      // взаємовиключні, тож у позиції з кількома тиражами точної суми не існує.
+      // Один тираж у всіх позицій ⇒ межі збігаються ⇒ звичайна сума.
       const itemsTotalRange = commercialSectionTotalRange(mappedItems);
       const quoteTotalFromSummary =
         typeof quoteRef.quote_total === "number" && Number.isFinite(quoteRef.quote_total)
@@ -4098,15 +4085,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       };
     });
 
-    // Прорахунки в КП складаються: це РІЗНІ товари, а не варіанти одного. Роль
-    // «варіант» діє ВСЕРЕДИНІ прорахунку, і межі кожного вже враховані вище.
-    const totalRange = sections.reduce<MoneyRange>(
-      (range, section) => ({
-        min: range.min + section.totalRange.min,
-        max: range.max + section.totalRange.max,
-      }),
-      { min: 0, max: 0 }
-    );
+    // Прорахунки в КП складаються: це РІЗНІ товари, а межі кожного вже
+    // враховані вище.
+    const totalRange = sumMoneyRanges(sections.map((section) => section.totalRange));
     const now = new Date();
     const createdAt = quoteSetDetailsTarget.created_at
       ? new Date(quoteSetDetailsTarget.created_at).toLocaleDateString("uk-UA")
@@ -7471,7 +7452,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <span className="font-medium">{quoteSetCommercialDoc.sections.length}</span>
                   </div>
                 </div>
-                <CommercialPreviewVariantWarning doc={quoteSetCommercialDoc} />
                 {quoteSetCommercialDoc.sections.map((section, sectionIndex) => (
                   <div key={`preview-group-${section.quoteId}`} className="rounded-xl border border-border/60 overflow-hidden">
                     <div className="px-4 py-3 border-b border-border/60 bg-muted/20 flex flex-wrap items-center justify-between gap-2">
@@ -7542,14 +7522,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                 )}
                               </TableCell>
                               <TableCell>
-                                {/* Позначка ролі стоїть НАД назвою, а не поруч
-                                    із ціною: читач має зрозуміти, що це один із
-                                    варіантів, ще до того, як дійде до чисел. */}
-                                {item.isVariant ? (
-                                  <Badge variant="outline" className="mb-1 font-normal">
-                                    {VARIANT_ROW_LABEL}
-                                  </Badge>
-                                ) : null}
                                 <div className="font-medium">{item.name}</div>
                                 {item.description ? (
                                   <div className="text-xs text-muted-foreground mt-0.5">{item.description}</div>
@@ -7613,12 +7585,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Table>
                     <div className="px-4 py-3 border-t border-border/60 bg-muted/10 flex flex-wrap items-baseline justify-end gap-x-2 text-sm font-medium">
                       <span>Разом по прорахунку: {formatMoneyRange(section.totalRange)}</span>
-                      {hasVariantGroup(section.items) ? (
-                        <span className="text-xs font-normal text-muted-foreground">
-                          залежно від обраного варіанта
-                          {section.items.some((item) => item.runs.length > 1) ? " і тиражу" : ""}
-                        </span>
-                      ) : section.items.some((item) => item.runs.length > 1) ? (
+                      {section.items.some((item) => item.runs.length > 1) ? (
                         <span className="text-xs font-normal text-muted-foreground">
                           залежно від обраного тиражу
                         </span>
