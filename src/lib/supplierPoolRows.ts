@@ -187,6 +187,14 @@ export type SupplierPoolProduct = {
   name: string;
   vendor: string | null;
   category: string | null;
+  /**
+   * Дитяча модель — див. `isKidsSupplierRow`. Окреме поле, а не похідне від
+   * `category`: на злитій картці категорія береться з першого джерела, у якого
+   * вона є (тобто з нашого магазину), і «Дитячий одяг» оптовика там уже не
+   * стоїть. Виводити ознаку з показаної категорії означало б гасити її рівно
+   * в тих картках, заради яких вона й заведена.
+   */
+  isKids: boolean;
   url: string | null;
   imageUrl: string | null;
   currency: string;
@@ -265,6 +273,50 @@ export function baseProductName(name: string): string {
 }
 
 /**
+ * ДИТЯЧА МОДЕЛЬ. Живий випадок 16.09.2026: у пошуку «Beagle» поруч стоять
+ * «Футболка Beagle 155» і «Футболка Beagle JN 155» — доросла й дитяча того
+ * самого фасону, і єдина різниця для ока це дві літери `JN` посеред назви.
+ * Читати їх як «дитяча» не вміє ніхто, а вибір їде в замовлення артикулом
+ * конкретного крою: менеджер везе клієнту дитячі футболки замість дорослих.
+ *
+ * ЩО ЗАМІРЯНО НА ПРОДІ 16.09.2026. У пулі 17 451 картка, дитячих 669 (3,8%).
+ * З них 615 кажуть це словом у назві — їх менеджер прочитає й сам. Мовчать 54,
+ * і саме вони небезпечні: 47 — канцелярія Папіруса (портфелі, картон), де
+ * переплутати нічим, а 7 — одяг і кепки, рівно випадок зі скріншота. Окремо:
+ * 28 пар «доросла ⟷ дитяча» стоять поруч у видачі.
+ *
+ * ДИВИМОСЬ НА ТРИ ПОЛЯ, І ЖОДНЕ З НИХ НЕ ЗДОГАД.
+ *   • НАЗВА — коли постачальник написав словом («Кепка дитяча SOL'S Bubble»).
+ *     Для Бергамо й Мідоушена це ЄДИНЕ джерело: категорій вони не дають узагалі
+ *     (0 з 9827 і 0 з 5441 рядка), і всі їхні 56 дитячих карток мають слово в
+ *     назві.
+ *   • КАТЕГОРІЯ — власна класифікація постачальника («Дитячий одяг», «Футболки
+ *     дитячі Roly»). Це вона ловить усі сім мовчазних карток одягу.
+ *   • АДРЕСА — `/dityachiy-odyag/`, `/detskaya/`. Другий шар під категорію:
+ *     у Тотобі дитячі товари лежать у своїй гілці сайту.
+ *
+ * ЧОГО ТУТ СВІДОМО НЕМАЄ — ДВОХ РЕЧЕЙ.
+ *
+ * Коду `JN` у назві. Спокуса очевидна (він стоїть у всіх семи), але це здогад
+ * про чужу систему артикулів, а не факт від постачальника. Заміряно: усі сім
+ * карток із `JN` уже ловляться категорією або адресою, тобто правило по коду не
+ * додає жодної й лише чекає на день, коли `JN` означатиме щось інше.
+ *
+ * Розміру «11-12 лет». Заміряно: як ознака він дав рівно одну картку —
+ * «Футболка B&C Exact 150» з категорії «Футболки чоловічі B&C», куди Trele
+ * поклав один дитячий рядок. Тобто нуль правильних спрацювань і одне хибне.
+ */
+const KIDS_WORD = /дитяч|дитин|дітей|детск|\bkids?\b|\bchildren\b|\bjunior\b|для хлопч|для дівч/i;
+const KIDS_PATH = /dityach|detsk|\/kids|children|junior/i;
+
+export function isKidsSupplierRow(row: Pick<SupplierPoolRow, "name" | "category" | "url">): boolean {
+  if (KIDS_WORD.test(row.name)) return true;
+  if (row.category && KIDS_WORD.test(row.category)) return true;
+  if (row.url && KIDS_PATH.test(row.url)) return true;
+  return false;
+}
+
+/**
  * Підпис варіанта. Порядок джерел — від точного до запасного: колір і розмір із
  * фіда, потім дужковий хвіст назви (berrytex несе колір і розмір саме там),
  * потім артикул. Порожній підпис кращий за вигаданий, тому в кінці null.
@@ -290,6 +342,7 @@ type SupplierPoolDraft = {
   name: string;
   vendor: string | null;
   category: string | null;
+  isKids: boolean;
   url: string | null;
   imageUrl: string | null;
   currency: string;
@@ -328,6 +381,7 @@ function collectDraftsByName(rows: SupplierPoolRow[]): SupplierPoolDraft[] {
         name,
         vendor: row.vendor,
         category: row.category,
+        isKids: isKidsSupplierRow(row),
         url: row.url,
         imageUrl: row.image_url,
         currency: row.currency,
@@ -345,6 +399,10 @@ function collectDraftsByName(rows: SupplierPoolRow[]): SupplierPoolDraft[] {
     if (!existing.imageUrl && row.image_url) existing.imageUrl = row.image_url;
     if (!existing.vendor && row.vendor) existing.vendor = row.vendor;
     if (!existing.category && row.category) existing.category = row.category;
+    // Досить ОДНОГО рядка з ознакою. У Тотобі її несуть усі 19 рядків картки,
+    // але картка може зібратись і з різнорідних: «одна дитяча серед дорослих»
+    // тут читається як «є ризик», а не як «більшість доросла».
+    if (!existing.isKids && isKidsSupplierRow(row)) existing.isKids = true;
   }
 
   return [...byKey.values()];
@@ -517,6 +575,12 @@ function mergeCluster(cluster: SupplierPoolDraft[]): SupplierPoolProduct {
     name: primary.name,
     vendor: byContent.find((draft) => draft.vendor)?.vendor ?? null,
     category: byContent.find((draft) => draft.category)?.category ?? null,
+    // ОЗНАКА ЗБИРАЄТЬСЯ З УСІХ ДЖЕРЕЛ, а не з того, чия категорія перемогла.
+    // Ціна помилки несиметрична: зайвий бейдж — це секунда уваги, пропущений —
+    // дитячі футболки в замовленні. Тому навіть єдине хибне злиття з відомих
+    // (артикул «4028-10»: рюкзак в Аванпринта, кепка в Бергамо) хай краще
+    // підпише зайве, ніж змовчить.
+    isKids: byLink.some((draft) => draft.isKids),
     url: sources[0]?.url ?? null,
     imageUrl: byContent.find((draft) => draft.imageUrl)?.imageUrl ?? null,
     currency: priceOwner.currency,

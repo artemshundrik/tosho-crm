@@ -8,6 +8,7 @@
 import * as React from "react";
 import { ChevronDown, ExternalLink, Package } from "@/components/icons/appIcons";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -68,6 +69,30 @@ export const PoolPhoto: React.FC<{ url: string | null; className: string }> = ({
   );
 };
 
+/**
+ * «Дитяча» біля назви товару. Єдина річ, що стоїть між менеджером і дитячими
+ * футболками в дорослому замовленні: у видачі поруч лежать «Футболка Beagle
+ * 155» і «Футболка Beagle JN 155», і без цього чипа відрізнити їх можна лише
+ * за двома літерами посеред назви (Артем, 16.09.2026). Ознака — з даних
+ * постачальника, `isKidsSupplierRow`.
+ *
+ * ТОН `warning`, А НЕ `info`. Сенс чипа не «до відома», а «спинись і глянь ще
+ * раз»: він мусить чіплятися за око в списку на сорок рядків, бо ціна
+ * непоміченого — не зіпсована картка, а привезений клієнту не той товар.
+ *
+ * СТАВИМО НА ВСІ ДИТЯЧІ КАРТКИ, а не лише на ті, чия назва мовчить. Із 669
+ * дитячих карток пулу 615 кажуть це словом у назві, тож чип там буде
+ * надлишковим — і хай. Якби він з'являвся вибірково, відсутність чипа не
+ * означала б нічого, і спертись на «немає бейджа — значить доросла» було б
+ * не можна. Надмірність на 615 картках — ціна за те, щоб правило читалось
+ * одним рядком.
+ */
+export const KidsBadge: React.FC<{ className?: string }> = ({ className }) => (
+  <Badge tone="warning" size="sm" className={cn("shrink-0", className)}>
+    Дитяча
+  </Badge>
+);
+
 const money = (value: number) =>
   value.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -108,11 +133,17 @@ export const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ pr
               на кожен Radix-обгортку означало б сорок зайвих вузлів заради
               підказки, яку читають зрідка. Довгі назви тут ріжуться завжди —
               «Футболка «SOFTSTYLE» чоловіча» вже не влазить. */}
-          <span className="block truncate text-sm font-medium" title={product.name}>
-            {product.name}
-            {selected?.label ? (
-              <span className="font-normal text-muted-foreground"> · {selected.label}</span>
-            ) : null}
+          {/* Чип СЕСТРА назви, а не всередині неї: `truncate` ріже вміст, і
+              бейдж усередині зникав би разом із хвостом довгої назви — тобто
+              рівно там, де назва найменш читабельна й попередження найпотрібніше. */}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate text-sm font-medium" title={product.name}>
+              {product.name}
+              {selected?.label ? (
+                <span className="font-normal text-muted-foreground"> · {selected.label}</span>
+              ) : null}
+            </span>
+            {product.isKids ? <KidsBadge /> : null}
           </span>
           {/* Артикул попереду: саме за ним менеджер звіряє товар, і саме він
               обрізався першим, коли стояв після виробника (видно в прев'ю).

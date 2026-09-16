@@ -447,3 +447,71 @@ describe("порядок карток за доречністю", () => {
     expect(names[0]).toBe("Яскравий рюкзак");
   });
 });
+
+/**
+ * ДИТЯЧА МОДЕЛЬ. Живий випадок 16.09.2026: у пошуку «Beagle» поруч стоять
+ * «Футболка Beagle 155» і «Футболка Beagle JN 155» — доросла й дитяча того
+ * самого фасону. Відрізнити їх можна лише за двома літерами `JN` посеред
+ * назви, які ніхто не читає як «дитяча», а вибір їде в замовлення артикулом
+ * конкретного крою. Заміряно на проді: таких «мовчазних» карток одягу сім, а
+ * пар «доросла ⟷ дитяча поруч у видачі» — 28.
+ */
+describe("дитяча ознака картки", () => {
+  it("ловить дитячу за категорією постачальника, коли назва мовчить", () => {
+    const products = groupSupplierPoolRows(
+      [
+        row({ id: "kid", name: "Футболка Beagle JN 155", article: "6554JN-57", category: "Дитячий одяг" }),
+        row({ id: "adult", name: "Футболка Beagle 155", article: "6554-01", category: "Футболки" }),
+      ],
+      10
+    );
+    expect(products.find((p) => p.name === "Футболка Beagle JN 155")?.isKids).toBe(true);
+    expect(products.find((p) => p.name === "Футболка Beagle 155")?.isKids).toBe(false);
+  });
+
+  it("ловить слово в назві там, де категорій немає зовсім (bergamo, midocean)", () => {
+    const [product] = groupSupplierPoolRows(
+      [row({ supplier_slug: "bergamo.ua", name: "Кепка дитяча SOL'S Bubble", category: null })],
+      10
+    );
+    expect(product.isKids).toBe(true);
+  });
+
+  it("ловить дитячу за адресою товару, коли мовчать і назва, і категорія", () => {
+    const [product] = groupSupplierPoolRows(
+      [row({ name: "Кепка JN 6P, ТМ Malfini", category: null, url: "https://totobi.com.ua/odyag/dityachiy-odyag/kepka-jn-6p/" })],
+      10
+    );
+    expect(product.isKids).toBe(true);
+  });
+
+  it("дитячий РОЗМІР дитячою картку не робить", () => {
+    // Хибне спрацювання, спіймане на проді: Trele поклав рядок «11-12 лет» у
+    // картку «Футболка B&C Exact 150» з категорії «Футболки чоловічі B&C».
+    // Розмір як ознака дав рівно одну зайву картку й жодної правильної.
+    const [product] = groupSupplierPoolRows(
+      [
+        row({ supplier_slug: "trele.com.ua", name: "Футболка B&C Exact 150", category: "Футболки чоловічі B&C", color: "Білий", size: "11-12 лет" }),
+        row({ id: "id-2", supplier_slug: "trele.com.ua", name: "Футболка B&C Exact 150", category: "Футболки чоловічі B&C", color: "Білий", size: "XL" }),
+      ],
+      10
+    );
+    expect(product.isKids).toBe(false);
+  });
+
+  it("після злиття за артикулом ознака не губиться, хоч категорія на картці чужа", () => {
+    // Категорія злитої картки береться з ПЕРШОГО джерела, у якого вона є, —
+    // тобто з нашого магазину. Виводити ознаку з неї означало б загубити
+    // «Дитячий одяг» оптовика рівно там, де вона й потрібна.
+    const products = groupSupplierPoolRows(
+      [
+        row({ id: "shop", supplier_slug: "avanprint.ua", name: "Кепка «JN 6P»", article: "5007-01", category: "Кепки", price_kind: "retail" }),
+        row({ id: "whole", supplier_slug: "totobi.com.ua", name: "Кепка JN 6P, ТМ Malfini", article: "5007-01", category: "Дитяча кепка", price: 99, price_kind: "wholesale" }),
+      ],
+      10
+    );
+    expect(products).toHaveLength(1);
+    expect(products[0].name).toBe("Кепка «JN 6P»");
+    expect(products[0].isKids).toBe(true);
+  });
+});

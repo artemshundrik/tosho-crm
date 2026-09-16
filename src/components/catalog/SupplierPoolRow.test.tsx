@@ -87,6 +87,28 @@ describe("SupplierPoolRow", () => {
    * Заміряно 10.09.2026: кадр із вітрини важить у середньому 209 кБ (розкид
    * 30–737 кБ), а малюється в коробці 40×40, тож черга тут вирішує все.
    */
+  it("дитяча картка носить чип, доросла того самого фасону — ні", () => {
+    // Живий випадок 16.09.2026: на запит «Beagle» ці дві картки стоять поруч,
+    // і без чипа відрізнити їх можна лише за «JN» посеред назви. Чип мусить
+    // бути СЕСТРОЮ назви, а не її частиною: всередині `truncate` він зникав би
+    // на довгих назвах — рівно там, де попередження найпотрібніше.
+    const [kid] = groupSupplierPoolRows(
+      [row({ supplier_slug: "totobi.com.ua", name: "Футболка Beagle JN 155", article: "6554JN-57", category: "Дитячий одяг", price: 115.7 })],
+      10
+    );
+    const [adult] = groupSupplierPoolRows(
+      [row({ supplier_slug: "totobi.com.ua", name: "Футболка Beagle 155", article: "6554-01", category: "Футболки", price: 117.48 })],
+      10
+    );
+
+    const { unmount } = render(<SupplierPoolRow product={kid} />);
+    expect(screen.getByText("Дитяча")).toBeInTheDocument();
+    unmount();
+
+    render(<SupplierPoolRow product={adult} />);
+    expect(screen.queryByText("Дитяча")).toBeNull();
+  });
+
   it("фото товару вантажиться останнім і не блокує показ ціни", () => {
     const [product] = groupSupplierPoolRows(
       [

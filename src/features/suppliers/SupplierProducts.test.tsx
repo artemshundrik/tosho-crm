@@ -27,6 +27,7 @@ const product = (key: string, name: string): SupplierPoolProduct => ({
   name,
   vendor: "Gildan",
   category: "Футболки",
+  isKids: false,
   url: `https://totobi.com.ua/${key}`,
   imageUrl: null,
   currency: "UAH",

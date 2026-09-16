@@ -14,6 +14,7 @@ import {
   supplierVariantUnit,
   type SupplierPoolProduct,
 } from "@/lib/supplierPool";
+import { KidsBadge } from "@/components/catalog/SupplierPoolRow";
 import { cn } from "@/lib/utils";
 
 import { useCatalogSkuMatches } from "./catalogSkuSearch";
@@ -587,7 +588,14 @@ export function QuoteItemCommandField({
                   {/* Фото йде за обраним кольором; поки не обрано — фото моделі. */}
                   <SuggestionPhoto url={product.imageUrl} name={product.name} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium" title={product.name}>{product.name}</span>
+                    {/* Чип поруч із назвою, а не в ній: `truncate` з'їв би його
+                        разом із хвостом довгого рядка. Тут попередження важить
+                        навіть більше, ніж у пошуку постачальників, — звідси
+                        товар їде просто в позицію прорахунку. */}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="min-w-0 truncate font-medium" title={product.name}>{product.name}</span>
+                      {product.isKids ? <KidsBadge className="text-3xs" /> : null}
+                    </span>
                     {/* Доменів у злитої картки два — та сама річ у нашому
                         магазині й в оптовика, склеєна за артикулом. Першим
                         стоїть той, чия ціна показана праворуч; підказка

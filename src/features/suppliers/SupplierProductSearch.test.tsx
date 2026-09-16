@@ -24,6 +24,7 @@ const product = (key: string, slug: string, name: string): SupplierPoolProduct =
   name,
   vendor: "Gildan",
   category: null,
+  isKids: false,
   url: `https://${slug}/${key}`,
   imageUrl: null,
   currency: "UAH",
