@@ -4,6 +4,7 @@ import { Check, ExternalLink, ImageOff, Plus, Search, Tag, Trash2, X } from "@/c
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { KidsBadge } from "@/components/catalog/SupplierPoolRow";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -312,22 +313,31 @@ export function ImportDraftRow({
         )}
         <ImportItemPhoto preview={preview} name={draft.name} specPreset={draft.catalog?.specPreset} />
         <div className="min-w-0 flex-1 space-y-1">
-          {nameIsGiven ? (
-            <div className="truncate text-sm font-medium" title={draft.name}>
-              {draft.name}
-            </div>
-          ) : (
-            <Input
-              value={draft.name}
-              disabled={disabled}
-              controlSize="md"
-              aria-label="Назва позиції"
-              placeholder={namePlaceholder}
-              autoFocus={autoFocusName}
-              className="min-w-0"
-              onChange={(event) => onPatch({ name: event.target.value })}
-            />
-          )}
+          {/*
+            ЧИП «ДИТЯЧА» — СЕСТРА НАЗВИ, А НЕ ЇЇ ЧАСТИНА. Усередині `truncate`
+            він зникав би на довгих назвах, тобто рівно там, де назву й так не
+            дочитати. Ознака приходить із картки пулу; файл і посилання її не
+            мають, і для імпорту тут нічого не міняється.
+          */}
+          <div className="flex min-w-0 items-center gap-1.5">
+            {nameIsGiven ? (
+              <div className="min-w-0 truncate text-sm font-medium" title={draft.name}>
+                {draft.name}
+              </div>
+            ) : (
+              <Input
+                value={draft.name}
+                disabled={disabled}
+                controlSize="md"
+                aria-label="Назва позиції"
+                placeholder={namePlaceholder}
+                autoFocus={autoFocusName}
+                className="min-w-0 flex-1"
+                onChange={(event) => onPatch({ name: event.target.value })}
+              />
+            )}
+            {draft.isKids ? <KidsBadge className="text-3xs" /> : null}
+          </div>
 
           {isPrintModel ? <div className="flex items-center gap-1.5">{kindChip}</div> : null}
 

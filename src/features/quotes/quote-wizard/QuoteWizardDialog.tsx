@@ -456,6 +456,9 @@ export function QuoteWizardDialog({
         product.priceMin !== null ? { amount: product.priceMin, currency: product.currency } : null,
       supplierUrl: wholesale?.url ?? null,
       avantprintUrl: shop?.url ?? null,
+      // Чип «Дитяча» переїжджає з підказки в рядок позиції: попередження живе
+      // стільки ж, скільки сама позиція, а не вісім секунд тоста.
+      isKids: product.isKids,
       // ВАРТІСТЬ ТОВАРУ — не число, а РЯДОК ПУЛУ, з якого його прочитає база.
       // Що саме брати, вирішує вона ж: `retail` (вітрина постачальника) туди
       // не пройде, бо з неї нічого не порахуєш.
