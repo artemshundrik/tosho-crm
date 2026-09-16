@@ -1161,7 +1161,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   /** Відклик автозбереження — «Зберігаю… / Збережено / не збережено» (REQ-278). */
   const runsSaveState = useQuoteRunsSaveState({
     runs, savedRuns: runsOriginal, pristineDraft: pristineDraftRun, saving: runsSaving,
-    blocked: quoteRequirements.length > 0 || runIdsNeedingModelPriceVat.size > 0,
+    requirements: quoteRequirements, unsavedRunCount: runIdsNeedingModelPriceVat.size,
   });
 
   const saveRuns = async (nextRuns?: QuoteRun[] | unknown, options?: { silent?: boolean }) => {

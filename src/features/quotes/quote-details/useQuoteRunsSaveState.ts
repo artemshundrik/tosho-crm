@@ -26,7 +26,15 @@ import type { QuoteRun } from "@/lib/toshoApi";
  * чіпали, — неправда про те, на що людина дивиться.
  */
 
-export type QuoteRunSaveState = "idle" | "pending" | "saving" | "saved" | "blocked";
+export type QuoteRunSaveStatus = "idle" | "pending" | "saving" | "saved" | "blocked";
+
+/**
+ * Стан і ПРИЧИНА разом, одним значенням.
+ *
+ * Окремим пропом причина розходилась би зі станом: `blocked` без тексту — це
+ * знову червона мітка без дії, а текст без `blocked` — підказка нізвідки.
+ */
+export type QuoteRunSaveState = { status: QuoteRunSaveStatus; reason: string | null };
 
 /** Скільки живе «Збережено». Приблизно як тост: помітити встигаєш, набриднути — ні. */
 const RECEIPT_MS = 2600;
@@ -40,13 +48,15 @@ export function useQuoteRunsSaveState(params: {
   pristineDraft: PristineDraftRun | null;
   saving: boolean;
   /**
-   * Збереження зараз неможливе — незаповнені поля прорахунку або гейт ПДВ.
-   * Рахується ГЛОБАЛЬНО: запит один на всі тиражі, тож чужий незакритий рядок
-   * тримає й ці правки теж.
+   * Незаповнені поля прорахунку — той самий гейт, що й у `saveRuns`. Він
+   * ГЛОБАЛЬНИЙ: поки в ньому щось є, автозбереження не намагається писати
+   * взагалі, і жодна правка тиражів нікуди не їде.
    */
-  blocked: boolean;
+  requirements: readonly string[];
+  /** Тиражі, які тримає гейт ПДВ. Теж глобально: запит один на всі тиражі. */
+  unsavedRunCount: number;
 }) {
-  const { runs, savedRuns, pristineDraft, saving, blocked } = params;
+  const { runs, savedRuns, pristineDraft, saving, requirements, unsavedRunCount } = params;
 
   const [justSavedItemIds, setJustSavedItemIds] = useState<ReadonlySet<string>>(
     () => new Set<string>()
@@ -95,6 +105,22 @@ export function useQuoteRunsSaveState(params: {
     setFailedRuns(attemptedRuns);
   }, []);
 
+  /**
+   * ЧОМУ НЕ ПРОСТО «не збережено» (REQ-281). Червона мітка без причини — це
+   * тривога без дії: проєктний менеджер бачив її над тиражами, чіпав числа,
+   * перезавантажував сторінку й не розумів, за що зачепитись. Причина при
+   * цьому в застосунку БУЛА — банером угорі картки, — але людина працює внизу,
+   * у блоці тиражів, і до банера доскролює хіба випадково.
+   *
+   * Порядок той самий, що в `resolveStatusBlockReason`: спершу те, що взагалі
+   * не дає писати, потім те, що тримає конкретні рядки, потім відмова бази.
+   */
+  const blockedReason = useMemo(() => {
+    if (requirements.length > 0) return `заповніть: ${requirements.join(", ")}`;
+    if (unsavedRunCount > 0) return "вкажіть, з ПДВ вартість товару чи без";
+    return null;
+  }, [requirements, unsavedRunCount]);
+
   const markSaved = useCallback(
     (nextRuns: QuoteRun[], previousRuns: QuoteRun[]) => {
       setJustSavedItemIds(changedRunItemIds(nextRuns, previousRuns, pristineDraft));
@@ -114,12 +140,15 @@ export function useQuoteRunsSaveState(params: {
   const stateForItem = useCallback(
     (itemId: string): QuoteRunSaveState => {
       if (dirtyItemIds.has(itemId)) {
-        if (blocked || retryHalted) return "blocked";
-        return saving ? "saving" : "pending";
+        if (blockedReason !== null) return { status: "blocked", reason: blockedReason };
+        if (retryHalted) {
+          return { status: "blocked", reason: "база відмовила — правка лишилась у браузері" };
+        }
+        return { status: saving ? "saving" : "pending", reason: null };
       }
-      return justSavedItemIds.has(itemId) ? "saved" : "idle";
+      return { status: justSavedItemIds.has(itemId) ? "saved" : "idle", reason: null };
     },
-    [blocked, dirtyItemIds, justSavedItemIds, retryHalted, saving]
+    [blockedReason, dirtyItemIds, justSavedItemIds, retryHalted, saving]
   );
 
   return { stateForItem, markSaved, markFailed, retryHalted };

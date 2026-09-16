@@ -3,6 +3,7 @@ import { AlertTriangle, Check, Loader2, Lock, Plus } from "@/components/icons/ap
 import { HoverTip } from "@/components/ui/hover-tip";
 import { currencyLabel } from "@/features/quotes/currencyLabel";
 import { cn } from "@/lib/utils";
+import type { QuoteRunSaveState } from "@/features/quotes/quote-details/useQuoteRunsSaveState";
 import type { RunSalePricing } from "@/lib/quoteRuns";
 import type { QuoteRun } from "@/lib/toshoApi";
 
@@ -68,6 +69,9 @@ import type { QuoteRun } from "@/lib/toshoApi";
 const GRID_COLS =
   "@min-[746px]:grid-cols-[5.5rem_7.25rem_5.25rem_4.75rem_3.75rem_minmax(0,1fr)_10rem_6.75rem]";
 
+/** Нічого не змінювали — і мітки жодної. */
+const IDLE_SAVE_STATE: QuoteRunSaveState = { status: "idle", reason: null };
+
 const num = (value: number, digits = 0) =>
   (Math.round(value * 100) / 100).toLocaleString("uk-UA", {
     minimumFractionDigits: digits,
@@ -117,8 +121,13 @@ export type QuoteRunRowsProps = {
    * `pending` і `saving` навмисно виглядають однаково: пауза в 900 мс — це вже
    * «пішло», і розрізняти їх на екрані означало б показувати внутрішній устрій
    * замість відповіді на питання «моє число в базі?».
+   *
+   * ПРИЧИНА ЇДЕ РАЗОМ ЗІ СТАНОМ (REQ-281). Причина була в застосунку й до
+   * цього — банером угорі картки, — але людина працює внизу, у блоці тиражів,
+   * і бачила там саму лише червону мітку без дії. Текст поруч із нею робить її
+   * не тривогою, а вказівкою: «заповніть: Дедлайн прорахунку».
    */
-  saveState?: "idle" | "pending" | "saving" | "saved" | "blocked";
+  saveState?: QuoteRunSaveState;
   /**
    * Тиражі, чиї числа ЩЕ НЕ В БАЗІ: гейт ПДВ тримає їх у браузері.
    *
@@ -144,7 +153,7 @@ export function QuoteRunRows({
   onToggleApproved,
   needsApprovedChoice = false,
   blockingRunIds,
-  saveState = "idle",
+  saveState = IDLE_SAVE_STATE,
   unsavedRunIds,
 }: QuoteRunRowsProps) {
   const money = currencyLabel(currency);
@@ -163,6 +172,7 @@ export function QuoteRunRows({
    */
   const hasRunChoice = runs.length > 1;
   const anyUnsaved = runs.some((run) => !!run.id && !!unsavedRunIds?.has(run.id));
+  const { status: saveStatus, reason: saveReason } = saveState;
 
   return (
     // Розкладку перемикає ШИРИНА ЦЬОГО БЛОКУ, тож він і є контейнер (REQ-175#p73).
@@ -197,7 +207,7 @@ export function QuoteRunRows({
               </span>
             </HoverTip>
           ) : null}
-          {anyUnsaved || saveState === "blocked" ? (
+          {anyUnsaved || saveStatus === "blocked" ? (
             /* Один вигляд на обидві причини: гейт ПДВ (`unsavedRunIds`) і
                будь-який інший замок на збереженні — незаповнений дедлайн,
                чужий тираж без відповіді про ПДВ. Для того, хто дивиться на
@@ -206,8 +216,9 @@ export function QuoteRunRows({
             <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2 text-2xs font-medium text-destructive">
               <AlertTriangle className="h-3 w-3 shrink-0" />
               не збережено
+              {saveReason ? <span className="font-normal opacity-90">· {saveReason}</span> : null}
             </span>
-          ) : saveState === "pending" || saveState === "saving" ? (
+          ) : saveStatus === "pending" || saveStatus === "saving" ? (
             /* Без рамки й тла: це не подія, а те, що зараз відбувається само
                собою. Рамку тут носять лише стани, які чогось вимагають від
                людини, — «не збережено» вище й «позначте погоджений» ліворуч. */
@@ -218,7 +229,7 @@ export function QuoteRunRows({
               <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
               Зберігаю…
             </span>
-          ) : saveState === "saved" ? (
+          ) : saveStatus === "saved" ? (
             <span
               className="inline-flex h-6 items-center gap-1.5 px-0.5 text-2xs text-success-foreground"
               aria-live="polite"

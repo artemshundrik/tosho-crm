@@ -34,7 +34,8 @@ const setup = (overrides: Partial<Parameters<typeof useQuoteRunsSaveState>[0]> =
       savedRuns: [run()],
       pristineDraft: null,
       saving: false,
-      blocked: false,
+      requirements: [],
+      unsavedRunCount: 0,
       ...overrides,
     },
   });
@@ -45,26 +46,59 @@ describe("useQuoteRunsSaveState", () => {
 
   it("нічого не змінилось — нічого й не пишемо", () => {
     const { result } = setup();
-    expect(result.current.stateForItem("item-1")).toBe("idle");
+    expect(result.current.stateForItem("item-1").status).toBe("idle");
   });
 
   it("правка чекає на автозбереження — «Зберігаю…»", () => {
     const { result } = setup({ runs: [run({ quantity: 1000 })] });
-    expect(result.current.stateForItem("item-1")).toBe("pending");
+    expect(result.current.stateForItem("item-1").status).toBe("pending");
   });
 
   it("гейт тримає правку — «не збережено», а не вічне «Зберігаю…»", () => {
-    const { result } = setup({ runs: [run({ quantity: 1000 })], blocked: true });
-    expect(result.current.stateForItem("item-1")).toBe("blocked");
+    const { result } = setup({
+      runs: [run({ quantity: 1000 })],
+      requirements: ["Дедлайн прорахунку"],
+    });
+    expect(result.current.stateForItem("item-1").status).toBe("blocked");
+  });
+
+  /**
+   * РЕГРЕС REQ-281. Причина була в застосунку й до цього — банером УГОРІ
+   * картки, — але людина працює внизу, у блоці тиражів, і бачила саму лише
+   * червону мітку. Мітка має називати, що заповнити.
+   */
+  it("мітка каже, ЩО саме заповнити", () => {
+    const { result } = setup({
+      runs: [run({ quantity: 1000 })],
+      requirements: ["Дедлайн прорахунку"],
+    });
+    expect(result.current.stateForItem("item-1").reason).toBe("заповніть: Дедлайн прорахунку");
+  });
+
+  it("гейт ПДВ має власну причину, і поля прорахунку важливіші за нього", () => {
+    const { result } = setup({ runs: [run({ quantity: 1000 })], unsavedRunCount: 1 });
+    expect(result.current.stateForItem("item-1").reason).toBe("вкажіть, з ПДВ вартість товару чи без");
+
+    const { result: both } = setup({
+      runs: [run({ quantity: 1000 })],
+      requirements: ["Дедлайн прорахунку"],
+      unsavedRunCount: 1,
+    });
+    expect(both.current.stateForItem("item-1").reason).toBe("заповніть: Дедлайн прорахунку");
+  });
+
+  it("нічого не тримає — причини немає", () => {
+    const { result } = setup();
+    expect(result.current.stateForItem("item-1").reason).toBeNull();
   });
 
   it("квитанція «Збережено» гасне сама", () => {
     const { result } = setup();
     act(() => result.current.markSaved([run({ quantity: 1000 })], [run()]));
-    expect(result.current.stateForItem("item-1")).toBe("saved");
+    expect(result.current.stateForItem("item-1").status).toBe("saved");
 
     act(() => void vi.advanceTimersByTime(3_000));
-    expect(result.current.stateForItem("item-1")).toBe("idle");
+    expect(result.current.stateForItem("item-1").status).toBe("idle");
   });
 
   /**
@@ -78,17 +112,19 @@ describe("useQuoteRunsSaveState", () => {
 
     act(() => result.current.markFailed(attempted));
     expect(result.current.retryHalted).toBe(true);
-    expect(result.current.stateForItem("item-1")).toBe("blocked");
+    expect(result.current.stateForItem("item-1").status).toBe("blocked");
+    expect(result.current.stateForItem("item-1").reason).toBe("база відмовила — правка лишилась у браузері");
 
     rerender({
       runs: [run({ quantity: 1500 })],
       savedRuns: [run()],
       pristineDraft: null,
       saving: false,
-      blocked: false,
+      requirements: [],
+      unsavedRunCount: 0,
     });
     expect(result.current.retryHalted).toBe(false);
-    expect(result.current.stateForItem("item-1")).toBe("pending");
+    expect(result.current.stateForItem("item-1").status).toBe("pending");
   });
 
   it("успішне збереження знімає латку", () => {

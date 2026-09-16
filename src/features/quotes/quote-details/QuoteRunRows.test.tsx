@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { QuoteRunRows } from "./QuoteRunRows";
+import type { QuoteRunSaveState } from "./useQuoteRunsSaveState";
 import { computeRunSalePricingFromMarkup } from "@/lib/quoteRuns";
 import type { QuoteRun } from "@/lib/toshoApi";
 
@@ -51,7 +52,7 @@ function renderRows(options: {
   canApproveRun?: boolean;
   onSelect?: (next: QuoteRun) => void;
   onToggleApproved?: (next: QuoteRun) => void;
-  saveState?: "idle" | "pending" | "saving" | "saved" | "blocked";
+  saveState?: QuoteRunSaveState;
   unsavedRunIds?: ReadonlySet<string>;
 }) {
   render(
@@ -155,25 +156,34 @@ describe("QuoteRunRows — відклик автозбереження", () => {
   });
 
   it("правка в дорозі — «Зберігаю…»", () => {
-    renderRows({ runs: [run()], saveState: "pending" });
+    renderRows({ runs: [run()], saveState: { status: "pending", reason: null } });
     expect(screen.getByText(/Зберігаю/)).toBeInTheDocument();
   });
 
   it("доїхало — «Збережено»", () => {
-    renderRows({ runs: [run()], saveState: "saved" });
+    renderRows({ runs: [run()], saveState: { status: "saved", reason: null } });
     expect(screen.getByText("Збережено")).toBeInTheDocument();
   });
 
   it("замок на збереженні каже правду, а не «Зберігаю…»", () => {
-    renderRows({ runs: [run()], saveState: "blocked" });
+    renderRows({ runs: [run()], saveState: { status: "blocked", reason: null } });
     expect(screen.getByText("не збережено")).toBeInTheDocument();
     expect(screen.queryByText(/Зберігаю/)).not.toBeInTheDocument();
+  });
+
+  /** РЕГРЕС REQ-281: червона мітка без причини — тривога без дії. */
+  it("мітка називає причину, коли вона відома", () => {
+    renderRows({
+      runs: [run()],
+      saveState: { status: "blocked", reason: "заповніть: Дедлайн прорахунку" },
+    });
+    expect(screen.getByText(/заповніть: Дедлайн прорахунку/)).toBeInTheDocument();
   });
 
   it("гейт ПДВ і замок кажуть одне й те саме — і не двояться", () => {
     renderRows({
       runs: [run()],
-      saveState: "blocked",
+      saveState: { status: "blocked", reason: null },
       unsavedRunIds: new Set(["run-1"]),
     });
     expect(screen.getAllByText("не збережено")).toHaveLength(1);
