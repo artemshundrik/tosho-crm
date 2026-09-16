@@ -139,7 +139,8 @@ import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatG
 import { QuoteDealTypeBadge } from "@/features/quotes/quote-details/QuoteDealTypeBadge";
 import { isMarkupFrozen } from "@/lib/quoteMarkupApproval";
 import { resolveQuoteStatusGate, resolveStatusBlockReason } from "@/features/quotes/quote-details/quoteStatusGates";
-import { buildRunsAutosaveSignature } from "@/features/quotes/quote-details/quoteRunAutosave";
+import { blankRunRates, buildRunsAutosaveSignature, createBlankQuoteRun, type PristineDraftRun } from "@/features/quotes/quote-details/quoteRunAutosave";
+import { useQuoteRunsSaveState } from "@/features/quotes/quote-details/useQuoteRunsSaveState";
 import {
   defaultMarkupRateFor,
   formatRatePercent,
@@ -588,6 +589,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [runsError, setRunsError] = useState<string | null>(null);
   const [runsSaving, setRunsSaving] = useState(false);
   const [runsLoaded, setRunsLoaded] = useState(false);
+  /** Заготовка, яку сторінка створила САМА, — єдиний тираж, що має право мовчати (REQ-278). */
+  const [pristineDraftRun, setPristineDraftRun] = useState<PristineDraftRun | null>(null);
   const [selectedRunIdRaw, setSelectedRunId] = useState<string | null>(null);
   const [selectedRunIdByItem, setSelectedRunIdByItem] = useState<Record<string, string>>({});
 
@@ -1053,6 +1056,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (result.ok) {
       setRuns(result.data);
       setRunsOriginal(result.data);
+      setPristineDraftRun(null); // рядки з бази — заготовки більше немає
     } else {
       setRunsError(result.message);
       setRuns([]);
@@ -1077,26 +1081,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [quoteId, teamId]);
 
   // Runs (tirages)
+  const newRunRates = useMemo(
+    () => blankRunRates(defaultMarkupRateFor(dealType), currentManagerRate || DEFAULT_MANAGER_RATE, companyRates),
+    [companyRates, currentManagerRate, dealType]
+  );
+
   const addRun = (quoteItemId?: string | null) => {
     const newId = crypto.randomUUID();
     const resolvedQuoteItemId = quoteItemId ?? (items.length === 1 ? items[0]?.id ?? null : null);
     setRuns((prev) => [
       ...prev,
-      {
+      createBlankQuoteRun({
         id: newId,
-        quote_item_id: resolvedQuoteItemId,
+        quoteItemId: resolvedQuoteItemId,
         quantity: 1,
-        unit_price_model: 0,
-        unit_price_model_vat: inheritModelPriceVat(runs, resolvedQuoteItemId),
-        unit_price_print: 0,
-        logistics_cost: 0,
-        desired_manager_income: 0,
-        markup_rate: defaultMarkupRateFor(dealType),
-        manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
-        fixed_cost_rate: companyRates.fixedCostRate,
-        vat_rate: companyRates.vatRate,
-        is_approved: false,
-      },
+        modelPriceVat: inheritModelPriceVat(runs, resolvedQuoteItemId),
+        rates: newRunRates,
+      }),
     ]);
     setSelectedRunId(newId);
     if (resolvedQuoteItemId) {
@@ -1152,6 +1153,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   const approvedPriceGuard = useApprovedRunPriceGuard(quoteId, quote?.currency);
+
+  // Той самий гейт, що й у `saveRuns`, але для показу: підсвітка поля в трьох
+  // місцях вводу і зупинка автозбереження (REQ-232).
+  const runIdsNeedingModelPriceVat = useMemo(
+    () => collectRunIdsNeedingModelPriceVat(runs, runsOriginal),
+    [runs, runsOriginal]
+  );
+
+  /** Відклик автозбереження — «Зберігаю… / Збережено / не збережено» (REQ-278). */
+  const runsSaveState = useQuoteRunsSaveState({
+    runs, savedRuns: runsOriginal, pristineDraft: pristineDraftRun, saving: runsSaving,
+    blocked: quoteRequirements.length > 0 || runIdsNeedingModelPriceVat.size > 0,
+  });
 
   const saveRuns = async (nextRuns?: QuoteRun[] | unknown, options?: { silent?: boolean }) => {
     const silent = options?.silent === true;
@@ -1217,6 +1231,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           setRunsError(reason);
           toast.error("Помилка збереження");
         }
+        runsSaveState.markFailed(targetRuns); // інакше 7 спроб за 6 с і стільки ж тостів
         setRunsSaving(false);
       };
 
@@ -1237,6 +1252,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
       const saved = await persistQuoteRuns(quoteId, sanitized, idsToDelete);
       if (!saved.ok) return fail(saved.message);
+
+      runsSaveState.markSaved(sanitized, previousRuns);
 
       await loadRuns();
 
@@ -1291,19 +1308,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     [runsOriginal]
   );
   const runsAutosaveSignature = useMemo(
-    () => buildRunsAutosaveSignature(runs, autosaveRates, savedRunIdSet),
-    [autosaveRates, runs, savedRunIdSet]
+    () => buildRunsAutosaveSignature(runs, autosaveRates, savedRunIdSet, pristineDraftRun),
+    [autosaveRates, pristineDraftRun, runs, savedRunIdSet]
   );
   const runsOriginalAutosaveSignature = useMemo(
-    () => buildRunsAutosaveSignature(runsOriginal, autosaveRates, savedRunIdSet),
-    [autosaveRates, runsOriginal, savedRunIdSet]
-  );
-
-  // Той самий гейт, що й у `saveRuns`, але для показу: підсвітка поля в трьох
-  // місцях вводу і зупинка автозбереження (REQ-232).
-  const runIdsNeedingModelPriceVat = useMemo(
-    () => collectRunIdsNeedingModelPriceVat(runs, runsOriginal),
-    [runs, runsOriginal]
+    () => buildRunsAutosaveSignature(runsOriginal, autosaveRates, savedRunIdSet, pristineDraftRun),
+    [autosaveRates, pristineDraftRun, runsOriginal, savedRunIdSet]
   );
 
   const removeRun = async (index: number) => {
@@ -1880,6 +1890,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     // Гейт ПДВ зупиняє саме АВТОзбереження, а не сипле помилками на кожну
     // клавішу: поле вже підсвічене, причина стоїть під ним (REQ-232).
     if (runIdsNeedingModelPriceVat.size > 0) return;
+    if (runsSaveState.retryHalted) return;
 
     const timer = window.setTimeout(() => {
       void saveRunsRef.current(undefined, { silent: true });
@@ -1892,6 +1903,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     runsAutosaveSignature,
     runsLoaded,
     runsOriginalAutosaveSignature,
+    runsSaveState.retryHalted,
     runsSaving,
   ]);
 
@@ -2961,23 +2973,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (runs.length === 0 && items.length > 0) {
       const firstQty = Number(items[0].qty) || 1;
       const newId = crypto.randomUUID();
-      setRuns([
-        {
-          id: newId,
-          quantity: firstQty,
-          unit_price_model: 0,
-          unit_price_print: 0,
-          logistics_cost: 0,
-          desired_manager_income: 0,
-          markup_rate: defaultMarkupRateFor(dealType),
-          manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
-          fixed_cost_rate: companyRates.fixedCostRate,
-          vat_rate: companyRates.vatRate,
-        },
-      ]);
+      // Поки в рядку стоїть рівно це — він мовчить; змінили — їде в базу (REQ-278).
+      setPristineDraftRun({ id: newId, quantity: firstQty });
+      setRuns([createBlankQuoteRun({ id: newId, quantity: firstQty, rates: newRunRates })]);
       setSelectedRunId(newId);
     }
-  }, [companyRates.fixedCostRate, companyRates.vatRate, runsLoaded, runsError, runs.length, items, currentManagerRate, dealType]);
+  }, [newRunRates, runsLoaded, runsError, runs.length, items]);
 
   useEffect(() => {
     if (!runsLoaded || !effectiveManagerId || runs.length === 0) return;
@@ -3202,6 +3203,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setRunsOriginal([]);
     setRunsError(null);
     setRunsLoaded(false);
+    setPristineDraftRun(null);
     setSelectedRunId(null);
     setComments([]);
     setCommentsError(null);
@@ -4946,6 +4948,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   }
                                   needsApprovedChoice={needsApprovedRunChoice(itemRuns)}
                                   blockingRunIds={blockingRunIdSet}
+                                  saveState={runsSaveState.stateForItem(item.id)}
                                   unsavedRunIds={runIdsNeedingModelPriceVat}
                                 />
 

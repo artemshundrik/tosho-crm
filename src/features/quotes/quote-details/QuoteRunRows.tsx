@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Lock, Plus } from "@/components/icons/appIcons";
+import { AlertTriangle, Check, Loader2, Lock, Plus } from "@/components/icons/appIcons";
 
 import { HoverTip } from "@/components/ui/hover-tip";
 import { currencyLabel } from "@/features/quotes/currencyLabel";
@@ -104,6 +104,22 @@ export type QuoteRunRowsProps = {
   /** Тиражі, що тримають КП зачиненим: нижче дна без чинного погодження. */
   blockingRunIds?: ReadonlySet<string>;
   /**
+   * Чи доїхали правки цієї позиції до бази — і це ЄДИНИЙ відклик, який дає
+   * автозбереження (REQ-278).
+   *
+   * ЧОМУ НЕ ТОСТ. Тиражі зберігаються самі, через 900 мс після останнього
+   * натиску: тост на кожну правку числа означав би чергу спливних вікон уздовж
+   * набору суми. А мовчання означало віру на слово — проєктний менеджер
+   * набирав 1000 шт, тиснув Enter, перезавантажував сторінку й не знаходив ні
+   * числа, ні тиражу. Рядок у шапці переліку стоїть там, куди й так дивишся,
+   * і не вимагає ні кліку, ні уваги, поки все гаразд.
+   *
+   * `pending` і `saving` навмисно виглядають однаково: пауза в 900 мс — це вже
+   * «пішло», і розрізняти їх на екрані означало б показувати внутрішній устрій
+   * замість відповіді на питання «моє число в базі?».
+   */
+  saveState?: "idle" | "pending" | "saving" | "saved" | "blocked";
+  /**
    * Тиражі, чиї числа ЩЕ НЕ В БАЗІ: гейт ПДВ тримає їх у браузері.
    *
    * ЧОМУ ЦЕ ВЗАГАЛІ ТУТ (REQ-242). Перелік — підсумок, «як воно є», і саме він
@@ -128,6 +144,7 @@ export function QuoteRunRows({
   onToggleApproved,
   needsApprovedChoice = false,
   blockingRunIds,
+  saveState = "idle",
   unsavedRunIds,
 }: QuoteRunRowsProps) {
   const money = currencyLabel(currency);
@@ -180,10 +197,34 @@ export function QuoteRunRows({
               </span>
             </HoverTip>
           ) : null}
-          {anyUnsaved ? (
+          {anyUnsaved || saveState === "blocked" ? (
+            /* Один вигляд на обидві причини: гейт ПДВ (`unsavedRunIds`) і
+               будь-який інший замок на збереженні — незаповнений дедлайн,
+               чужий тираж без відповіді про ПДВ. Для того, хто дивиться на
+               числа, це один факт: у базі їх немає. ЧОМУ саме, каже банер
+               угорі картки — там для цього є місце під повний текст. */
             <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2 text-2xs font-medium text-destructive">
               <AlertTriangle className="h-3 w-3 shrink-0" />
               не збережено
+            </span>
+          ) : saveState === "pending" || saveState === "saving" ? (
+            /* Без рамки й тла: це не подія, а те, що зараз відбувається само
+               собою. Рамку тут носять лише стани, які чогось вимагають від
+               людини, — «не збережено» вище й «позначте погоджений» ліворуч. */
+            <span
+              className="inline-flex h-6 items-center gap-1.5 px-0.5 text-2xs text-muted-foreground"
+              aria-live="polite"
+            >
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+              Зберігаю…
+            </span>
+          ) : saveState === "saved" ? (
+            <span
+              className="inline-flex h-6 items-center gap-1.5 px-0.5 text-2xs text-success-foreground"
+              aria-live="polite"
+            >
+              <Check className="h-3 w-3 shrink-0" />
+              Збережено
             </span>
           ) : null}
         </div>

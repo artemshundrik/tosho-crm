@@ -97,6 +97,8 @@ const RULES = [
       "src/lib/quoteRuns.ts": "сусіднє правило: тиражі, не позиції",
       "src/features/quotes/quote-details/QuoteRunRows.tsx":
         "рядки ТИРАЖІВ; слово «позиція» трапляється лише в поясненнях, прапорця позиції файл не бачить",
+      "src/features/quotes/quote-details/quoteRunAutosave.ts":
+        "підпис і порівняння ТИРАЖІВ; `quote_item_id` тут лише ключ групування для відклику, прапорця позиції файл не читає",
       "src/lib/quoteItemVariants.ts":
         "сусіднє правило: РОЛЬ позиції; `is_approved` трапляється лише в поясненні, чим роль від погодження відрізняється",
     },

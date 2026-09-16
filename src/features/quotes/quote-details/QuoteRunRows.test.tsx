@@ -51,6 +51,8 @@ function renderRows(options: {
   canApproveRun?: boolean;
   onSelect?: (next: QuoteRun) => void;
   onToggleApproved?: (next: QuoteRun) => void;
+  saveState?: "idle" | "pending" | "saving" | "saved" | "blocked";
+  unsavedRunIds?: ReadonlySet<string>;
 }) {
   render(
     <QuoteRunRows
@@ -64,6 +66,8 @@ function renderRows(options: {
       onSelect={options.onSelect ?? vi.fn()}
       onAddRun={vi.fn()}
       onToggleApproved={options.onToggleApproved ?? vi.fn()}
+      saveState={options.saveState}
+      unsavedRunIds={options.unsavedRunIds}
     />
   );
 }
@@ -134,5 +138,44 @@ describe("QuoteRunRows — рішення клієнта в рядку", () => {
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect.mock.calls[0][0].id).toBe("run-2");
+  });
+});
+
+/**
+ * Відклик автозбереження (REQ-278). Та сама причина тестом, а не очима: клік у
+ * блоці тиражів на дев-сервері — це запис у продівський прорахунок, а гілку
+ * «збережено» живцем не побачити взагалі, бо наскрізний сторож глушить запис.
+ */
+describe("QuoteRunRows — відклик автозбереження", () => {
+  it("мовчить, поки нічого не змінювали", () => {
+    renderRows({ runs: [run()] });
+    expect(screen.queryByText(/Зберігаю/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Збережено")).not.toBeInTheDocument();
+    expect(screen.queryByText("не збережено")).not.toBeInTheDocument();
+  });
+
+  it("правка в дорозі — «Зберігаю…»", () => {
+    renderRows({ runs: [run()], saveState: "pending" });
+    expect(screen.getByText(/Зберігаю/)).toBeInTheDocument();
+  });
+
+  it("доїхало — «Збережено»", () => {
+    renderRows({ runs: [run()], saveState: "saved" });
+    expect(screen.getByText("Збережено")).toBeInTheDocument();
+  });
+
+  it("замок на збереженні каже правду, а не «Зберігаю…»", () => {
+    renderRows({ runs: [run()], saveState: "blocked" });
+    expect(screen.getByText("не збережено")).toBeInTheDocument();
+    expect(screen.queryByText(/Зберігаю/)).not.toBeInTheDocument();
+  });
+
+  it("гейт ПДВ і замок кажуть одне й те саме — і не двояться", () => {
+    renderRows({
+      runs: [run()],
+      saveState: "blocked",
+      unsavedRunIds: new Set(["run-1"]),
+    });
+    expect(screen.getAllByText("не збережено")).toHaveLength(1);
   });
 });

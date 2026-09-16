@@ -26,6 +26,14 @@ import { Input, type InputControlSize } from "@/components/ui/input"
  * нічого не треба. Пішов фокус і нічого не набрали — нуль повертається
  * (`emptyValue`). Тобто порожнє поле більше не перетворюється на нуль мовчки
  * десь на збереженні: людина бачить, що саме збережеться, ще до кнопки.
+ *
+ * ENTER ЗАВЕРШУЄ ВВІД (REQ-278). До цього Enter не робив нічого взагалі:
+ * форми навколо цих полів немає, тож натиск просто провалювався в порожнечу.
+ * Людина набирала 1000, тиснула Enter, бачила своє число в полі — і вважала
+ * ввід завершеним, хоча поле лишалось у фокусі з незакріпленою чернеткою.
+ * Тепер Enter знімає фокус, а далі спрацьовує звичайний `blur`: межі, порожнє
+ * значення й повідомлення нагору — рівно ті самі, що й при кліку повз поле.
+ * Одна дорога на обидва жести, тож розійтись їм нема як.
  */
 
 /** Лишає цифри й один роздільник; кому одразу нормалізує в крапку. */
@@ -62,7 +70,7 @@ export type NumberInputProps = Omit<
 
 const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
   (
-    { value, onValueChange, emptyValue = 0, min, max, onFocus, onBlur, ...props },
+    { value, onValueChange, emptyValue = 0, min, max, onFocus, onBlur, onKeyDown, ...props },
     ref
   ) => {
     // null = поле не редагують, показуємо значення з пропса.
@@ -115,6 +123,18 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       [clamp, draft, emptyValue, onBlur, onValueChange]
     )
 
+    const handleKeyDown = React.useCallback(
+      (event: React.KeyboardEvent<HTMLInputElement>) => {
+        onKeyDown?.(event)
+        if (event.defaultPrevented || event.key !== "Enter") return
+        // `preventDefault` — щоб натиск не поїхав далі (наприклад, у майбутню
+        // форму навколо); саме закріплення робить `blur`, а не ми тут.
+        event.preventDefault()
+        event.currentTarget.blur()
+      },
+      [onKeyDown]
+    )
+
     const displayed = draft !== null ? draft : value === null || value === undefined ? "" : String(value)
 
     return (
@@ -128,6 +148,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         onFocus={handleFocus}
         onChange={handleChange}
         onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
       />
     )
   }
