@@ -48,7 +48,19 @@ export async function searchSupplierPool(
   options: { limit?: number } = {}
 ): Promise<SupplierPoolProduct[]> {
   const term = sanitizeSearchTerm(rawTerm);
-  if (term.length < 2) return [];
+  /**
+   * ТРИ СИМВОЛИ, А НЕ ДВА, і поріг тут ТОЙ САМИЙ, що в SQL (`length(btrim(t))
+   * >= 3` у search_supplier_pool). Тригрaмний покажчик двосимвольний шаблон
+   * обслужити не може за побудовою: повної трійки літер у ньому немає, тож GIN
+   * віддає всю таблицю, і запит перетворюється на повний скан пулу — 5,2 с на
+   * «фу» проти 70 мс на «фут» (замір на проді 16.09.2026).
+   *
+   * Поріг стоїть у ДВОХ місцях навмисно: SQL боронить базу від будь-якого
+   * викликача, а ця перевірка не дає запиту вилетіти взагалі — інакше
+   * менеджер, набираючи слово, на другій літері щоразу платив би секундами за
+   * відповідь, яку однаково викине наступне натискання.
+   */
+  if (term.length < 3) return [];
 
   const variants = new Set<string>([term.toLowerCase()]);
   const translit = transliterateSearchTerm(term);

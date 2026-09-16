@@ -87,13 +87,17 @@ stable
 security invoker
 set search_path = ''
 as $fn$
-  with pat as (
-    -- Терміни коротші за два символи відкидаємо тут, як і в search_supplier_pool.
+  -- `MATERIALIZED` і поріг у три символи — з тієї самої причини, що в
+  -- search_supplier_pool, і рівно тими самими словами пояснено там. Коротко:
+  -- без `materialized` шаблони перераховуються на кожен рядок (замір дав
+  -- різницю в 38 разів), а двосимвольний шаблон тригрaмний покажчик обслужити
+  -- не може за побудовою й вироджується в повний скан.
+  with pat as materialized (
     -- Порожній масив дає arr = null, і тоді умови за словами немає — це
     -- «показати все», режим перегляду сторінки постачальника.
     select array_agg('%' || t || '%') as arr
     from unnest(coalesce(p_terms, '{}'::text[])) as t
-    where length(btrim(t)) >= 2
+    where length(btrim(t)) >= 3
   ),
   hit as (
     -- ЛИШЕ id І name, НАВМИСНО. Це CTE читається двічі, тож Postgres його
