@@ -9,6 +9,7 @@ import {
   applySupplierVariant,
   formatSupplierPoolPrice,
   searchSupplierPool,
+  SUPPLIER_SEARCH_MIN_TERM,
   supplierDisplayName,
   supplierVariantUnit,
   type SupplierPoolProduct,
@@ -163,11 +164,11 @@ export function QuoteItemCommandField({
     // роздуває. Квота рядків на джерело в RPC від цього не залежить — вона й
     // так не менша за двісті.
     queryFn: () => searchSupplierPool(poolTerm, { limit: 24 }),
-    enabled: poolTerm.length >= 2,
+    enabled: poolTerm.length >= SUPPLIER_SEARCH_MIN_TERM,
     staleTime: 60_000,
   });
   const pool = React.useMemo(
-    () => (poolTerm.length >= 2 ? poolData ?? [] : []),
+    () => (poolTerm.length >= SUPPLIER_SEARCH_MIN_TERM ? poolData ?? [] : []),
     [poolTerm, poolData]
   );
 
@@ -177,6 +178,15 @@ export function QuoteItemCommandField({
    */
   const [poolFilter, setPoolFilter] = React.useState<PoolFilter>(POOL_FILTER_ALL);
   const visiblePool = React.useMemo(() => filterSupplierPool(pool, poolFilter), [pool, poolFilter]);
+  /**
+   * ПОСТАЧАЛЬНИКІВ ЩЕ НЕ ПИТАЛИ, і сказати це треба вголос. Пул шукається від
+   * трьох літер (`SUPPLIER_SEARCH_MIN_TERM` — чому саме три, написано там), а
+   * каталог шукається одразу. Тобто на двох літерах список уже НЕ порожній, і
+   * без цього рядка людина читала б «ні в каталозі, ні в постачальників» як
+   * відповідь про товари, хоч про товари постачальників ніхто не питав
+   * (Артем, 16.09.2026).
+   */
+  const poolTooShort = trimmed.length > 0 && trimmed.length < SUPPLIER_SEARCH_MIN_TERM;
   const changeFilter = (next: PoolFilter) => {
     setPoolFilter(next);
     // Підсвітка вертається на початок: рядок під нею щойно міг зникнути.
@@ -195,7 +205,7 @@ export function QuoteItemCommandField({
   // короткі запити не з'являлась би взагалі.
   const searching =
     mode === "search" &&
-    trimmed.length >= 2 &&
+    trimmed.length >= SUPPLIER_SEARCH_MIN_TERM &&
     (poolTerm !== trimmed || poolSearching || suggestionsLoading || skuSearching);
 
   // Рядків у списку: каталог + постачальники + «Додати як нову позицію».
@@ -492,11 +502,25 @@ export function QuoteItemCommandField({
             запитом, і сказати «немає» до відповіді означало б збрехати на
             двісті мілісекунд рівно тим людям, які вставили артикул.
           */}
-          {!searching && ranked.length === 0 && pool.length === 0 ? (
+          {!searching && ranked.length === 0 && pool.length === 0 && !poolTooShort ? (
             <li className="px-2 pb-2 pt-2 text-center">
               <span className="block text-xs text-muted-foreground">Ні в каталозі, ні в постачальників</span>
               <span className="mt-1 block text-2xs text-muted-foreground/70">
                 Спробуйте коротше слово — «термокружка» замість «термокружка 350 мл»
+              </span>
+            </li>
+          ) : null}
+
+          {/* Слово ще коротке для пулу: каталог уже показано, постачальників
+              іще не питали — і саме це тут написано, щоб порожнеча не читалась
+              як «у постачальників такого немає». */}
+          {poolTooShort ? (
+            <li className="px-2 pb-2 pt-2 text-center">
+              <span className="block text-xs text-muted-foreground">
+                У постачальників шукаю від трьох літер
+              </span>
+              <span className="mt-1 block text-2xs text-muted-foreground/70">
+                {ranked.length > 0 ? "Поки що це збіги з каталогу" : "Допишіть ще літеру"}
               </span>
             </li>
           ) : null}

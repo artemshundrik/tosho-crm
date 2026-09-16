@@ -12,7 +12,12 @@ import { SupplierPoolRow } from "@/components/catalog/SupplierPoolRow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pluralUk } from "@/lib/lastSeen";
-import { searchSupplierPool, type SupplierPoolProduct } from "@/lib/supplierPool";
+import {
+  searchSupplierPool,
+  SUPPLIER_SEARCH_MIN_HINT,
+  SUPPLIER_SEARCH_MIN_TERM,
+  type SupplierPoolProduct,
+} from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
 
 /**
@@ -51,7 +56,16 @@ export function SupplierProductSearch({
   const [term, setTerm] = React.useState("");
   const [filter, setFilter] = React.useState<PoolFilter>(POOL_FILTER_ALL);
   const debounced = useDebounced(term, debounceMs);
-  const enabled = debounced.trim().length >= 2;
+  const enabled = debounced.trim().length >= SUPPLIER_SEARCH_MIN_TERM;
+  /**
+   * Підказку показуємо, лише коли слово ПОЧАЛИ набирати, але не добрали до
+   * порога. Порожнє поле нічого не винне: там питання ще не поставлене, і
+   * рядок «введіть три літери» був би докором ні за що.
+   *
+   * Дивимось на `term`, а не на `debounced`: підказка має з'явитись у мить
+   * натискання, а не через чверть секунди після нього.
+   */
+  const tooShort = term.trim().length > 0 && term.trim().length < SUPPLIER_SEARCH_MIN_TERM;
 
   const query = useQuery({
     queryKey: ["supplier-pool", "page", debounced],
@@ -62,7 +76,7 @@ export function SupplierProductSearch({
 
   const products = query.data ?? NO_PRODUCTS;
   const visible = React.useMemo(() => filterSupplierPool(products, filter), [products, filter]);
-  const pending = term.trim().length >= 2 && (term !== debounced || query.isFetching);
+  const pending = term.trim().length >= SUPPLIER_SEARCH_MIN_TERM && (term !== debounced || query.isFetching);
 
   return (
     <section
@@ -94,6 +108,10 @@ export function SupplierProductSearch({
           className="rounded-full pl-9 text-sm"
         />
       </div>
+
+      {tooShort ? (
+        <p className="px-3 pb-3 text-center text-sm text-muted-foreground">{SUPPLIER_SEARCH_MIN_HINT}</p>
+      ) : null}
 
       {enabled ? (
         <>

@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { pluralUk } from "@/lib/lastSeen";
 import { cn } from "@/lib/utils";
 
+import { SUPPLIER_SEARCH_MIN_HINT, SUPPLIER_SEARCH_MIN_TERM } from "@/lib/supplierPool";
+
 import { searchTermsFor, useSupplierCategories, useSupplierProducts } from "./queries";
 import type { SupplierDefinition } from "./suppliersCatalog";
 
@@ -44,6 +46,16 @@ export function SupplierProducts({
   const [category, setCategory] = React.useState<string | null>(null);
   const debounced = useDebounced(term, debounceMs);
   const terms = React.useMemo(() => searchTermsFor(debounced), [debounced]);
+  /**
+   * ⚠️ ТУТ ПОРОЖНІЙ ЗАПИТ ОЗНАЧАЄ «ПОКАЗАТИ ВСЕ», а не «нічого не знайшлось»,
+   * і саме тому підказка обов'язкова. Слово, коротше за поріг, `searchTermsFor`
+   * відкидає — список мовчки повертається до повного каталогу, і збоку це
+   * виглядає так, ніби пошук зігнорував набране (Артем, 16.09.2026).
+   *
+   * Дивимось на `term`, а не на `debounced`: підказка має з'явитись у мить
+   * натискання, а не через чверть секунди після нього.
+   */
+  const tooShort = term.trim().length > 0 && term.trim().length < SUPPLIER_SEARCH_MIN_TERM;
 
   const categories = useSupplierCategories(definition.slug);
   const products = useSupplierProducts(definition.slug, terms, category);
@@ -105,6 +117,9 @@ export function SupplierProducts({
               Спробувати ще
             </Button>
           </div>
+        ) : null}
+        {tooShort ? (
+          <p className="px-3 pt-3 text-center text-sm text-muted-foreground">{SUPPLIER_SEARCH_MIN_HINT}</p>
         ) : null}
         {!products.isError && products.isPending ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">Шукаю…</p>

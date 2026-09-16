@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import {
   groupSupplierPoolRows,
   sanitizeSearchTerm,
+  SUPPLIER_SEARCH_MIN_TERM,
   transliterateSearchTerm,
   type SupplierPoolProduct,
   type SupplierPoolRow,
@@ -116,11 +117,17 @@ export const SUPPLIER_PRODUCTS_PAGE_SIZE = 40;
 
 /**
  * Слова запиту для RPC — так само, як у searchSupplierPool: оригінал плюс
- * транслітерація, коротше двох символів — порожньо (перегляд усього).
+ * транслітерація.
+ *
+ * ⚠️ КОРОТШЕ ЗА ПОРІГ — ПОРОЖНЬО, А ПОРОЖНЬО ТУТ ОЗНАЧАЄ «ПОКАЗАТИ ВСЕ», а не
+ * «нічого не знайшлось». Тобто на закороткому слові картка постачальника
+ * показує ВЕСЬ його каталог, і збоку це виглядає так, ніби пошук зламався й
+ * зігнорував набране. Саме тому поруч із полем стоїть підказка
+ * `SUPPLIER_SEARCH_MIN_HINT` — мовчки цей стан не читається ніяк.
  */
 export function searchTermsFor(term: string): string[] {
   const clean = sanitizeSearchTerm(term);
-  if (clean.length < 2) return [];
+  if (clean.length < SUPPLIER_SEARCH_MIN_TERM) return [];
   const variants = new Set<string>([clean.toLowerCase()]);
   const translit = transliterateSearchTerm(clean);
   if (translit && translit !== clean.toLowerCase()) variants.add(translit);

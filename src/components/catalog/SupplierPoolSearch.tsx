@@ -23,7 +23,11 @@ import { Search } from "@/components/icons/appIcons";
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { searchSupplierPool } from "@/lib/supplierPool";
+import {
+  searchSupplierPool,
+  SUPPLIER_SEARCH_MIN_HINT,
+  SUPPLIER_SEARCH_MIN_TERM,
+} from "@/lib/supplierPool";
 
 import { SupplierPoolRow } from "./SupplierPoolRow";
 
@@ -48,7 +52,7 @@ type SupplierPoolSearchProps = {
 export const SupplierPoolSearch: React.FC<SupplierPoolSearchProps> = ({ className, initialTerm = "" }) => {
   const [term, setTerm] = React.useState(initialTerm);
   const debouncedTerm = useDebounced(term, DEBOUNCE_MS);
-  const enabled = debouncedTerm.trim().length >= 2;
+  const enabled = debouncedTerm.trim().length >= SUPPLIER_SEARCH_MIN_TERM;
 
   const { data, isFetching, error } = useQuery({
     queryKey: ["supplier-pool", debouncedTerm],
@@ -74,7 +78,7 @@ export const SupplierPoolSearch: React.FC<SupplierPoolSearchProps> = ({ classNam
       <div className="max-h-[320px] space-y-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]">
         {!enabled ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-            Введіть щонайменше дві літери — шукатиму в товарах постачальників.
+            {SUPPLIER_SEARCH_MIN_HINT}
           </p>
         ) : null}
 
