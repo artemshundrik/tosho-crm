@@ -44,7 +44,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { writeFileSync, mkdtempSync } from "node:fs";
+import { writeFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -52,6 +52,11 @@ import { join } from "node:path";
 // (SheetJS 0.20.3) — його ж читає розбір ексельок у прорахунках.
 import * as XLSX from "xlsx";
 
+import {
+  midoceanImageUrl,
+  midoceanModel,
+  midoceanSkuFromArticle,
+} from "./lib/midoceanSku.mjs";
 import {
   colorImageCandidates,
   commonPrefix,
@@ -574,6 +579,58 @@ const SUPPLIERS = {
      */
     minRows: 1500,
   },
+  midocean: {
+    slug: "midocean.com",
+    /**
+     * ЄДИНЕ ДЖЕРЕЛО, ДЕ НЕМА ЧОГО ОБХОДИТИ ВЗАГАЛІ. Прайс приходить книжкою
+     * Excel руками (midocean міняє ціни раз на квартал-півроку, тож щоденний
+     * прогін тут просто нема куди подіти), а фото будується з артикула
+     * формулою: `cdn1.midocean.com/image/700X700/{sku}.jpg`. Тобто ні файлу
+     * фіда, ні мапи сайту, ні логіна — прогін секундний.
+     *
+     * ЧОМУ НЕ ОБХІД САЙТУ (перевірено 16.09.2026). midocean.com — Angular PWA
+     * на Intershop. Сторінки розділів малюються вже в браузері: у HTML нуль
+     * товарів. Сторінка товару віддається готовою, але її адреса містить їхній
+     * внутрішній id (`mo3200-03-zid10248207`), якого в прайсі немає; мапи сайту
+     * теж немає — `sitemap.xml` віддає оболонку застосунку, а пошук за адресою
+     * губить параметр. Тому в пулі нема ні розділу, ні кольору назвою, ні
+     * методів нанесення, ні посилання на картку товару.
+     *
+     * ЧИМ ЦЕ ЗАКРИЄТЬСЯ. У midocean є офіційне Customer API
+     * (`api.midocean.com/gateway`: products, pricelist, stock, printdata,
+     * printpricelist) — усі точки відповідають 401 «поставте заголовок
+     * x-Gateway-APIKey». Ключ видає їхній менеджер. Коли дадуть — кольори,
+     * розділи, нанесення й розміри доїдуть сюди ж, окремим `api`-завантажувачем,
+     * а цей розбирач лишиться при цінах.
+     */
+    api: {
+      // Аркуш і шапка прайса. Приїде інша форма — падаємо вголос, а не мовчки
+      // розбираємо порожнечу: файл руками означає, що його можуть перезберегти.
+      sheet: "Д1",
+      header: ["Артикул", "Номенклатура", "Ціна Євро", "Ціна грн.", "Курс"],
+      // Фото не вгадуємо: кожну адресу перепитуємо HEAD-запитом. CDN відповідає
+      // на неіснуючий ключ кодом 403 (так відповідає S3), а порожня плитка на
+      // картці позиції гірша за відсутнє фото.
+      photos: { concurrency: 6, delayMs: 60, minCoverage: 0.95 },
+    },
+    format: "xls-local",
+    source: "manual:xls",
+    /**
+     * ЦІНА В ЄВРО, І ЦЕ НЕ ДРІБНИЦЯ. У прайсі дві колонки — євро й гривня, —
+     * але гривня порахована курсом на день вивантаження (53,65 у серпневому
+     * файлі, один на всі 5441 рядки). Через місяць таке число бреше, а євро —
+     * ні. Тому в `price` іде євро, а гривня з курсом лягають в `attrs`: буде з
+     * чим звіряти й видно, на якому курсі знімок.
+     *
+     * Ціна вже наша, дилерська (тариф Д1), і з ПДВ — Артем, 16.09.2026. Тому ні
+     * `priceRule`, ні `accountPricing` тут не потрібні, як у Папіруса.
+     */
+    priceKind: "wholesale",
+    currency: "EUR",
+    // У серпневому прайсі 5441 рядок (16.09.2026). Межа з запасом: перезбережена
+    // не тим інструментом книжка дасть не «мало рядків», а падіння на шапці.
+    minRows: 4500,
+  },
 };
 
 const args = process.argv.slice(2);
@@ -596,7 +653,17 @@ if (limit && !dry) {
   console.error("--limit можна лише разом із --dry: неповний обхід, залитий у базу, погасить решту каталогу.");
   process.exit(1);
 }
-const key = args.find((a) => !a.startsWith("--") && a !== String(limit));
+/**
+ * `--file=…` — прайс, який постачальник передав руками (midocean). Решта джерел
+ * ходить по мережі сама й цього аргумента не знає; передали зайвий — скажемо.
+ */
+const fileArg = args.find((a) => a.startsWith("--file"));
+const priceFile = fileArg ? (fileArg.split("=")[1] ?? args[args.indexOf(fileArg) + 1] ?? "") : "";
+if (fileArg && !priceFile) {
+  console.error("--file чекає шлях: --file=~/Downloads/прайс.xlsx");
+  process.exit(1);
+}
+const key = args.find((a) => !a.startsWith("--") && a !== String(limit) && a !== priceFile);
 const cfg = SUPPLIERS[key];
 if (!cfg) {
   console.error(`Немає постачальника «${key}». Доступні: ${Object.keys(SUPPLIERS).join(", ")}`);
@@ -3247,6 +3314,195 @@ function assertDiscounted(rows, cfg) {
   }
 }
 
+/**
+ * ПРАЙС MIDOCEAN: КНИЖКА EXCEL ІЗ ДИСКА, ФОТО З ФОРМУЛИ.
+ *
+ * Найпростіший завантажувач у цьому файлі, і це не випадковість: midocean
+ * називає свої товари так, що з коду виводиться і SKU, і адреса знімка. Тому
+ * тут немає ні мережі за даними, ні сесії, ні розбору розмітки — лише читання
+ * книжки й перевірка, що кадр за виведеною адресою справді існує.
+ *
+ * ЧОМУ ФАЙЛ ІЗ ДИСКА, А НЕ З КАБІНЕТУ, ЯК У ПАПІРУСА. Ціни midocean міняє раз
+ * на квартал-півроку, і присилає їх людина. Ставити під це логін і щоденний
+ * крон означало б доглядати сесію заради файлу, який змінюється чотири рази на
+ * рік. Тому розклад `manual`, а шлях приходить аргументом `--file=`.
+ */
+async function loadMidoceanXls(cfg) {
+  if (!priceFile) {
+    console.error(
+      "Прайс midocean приходить файлом. Вкажіть його:\n" +
+        "  node scripts/load-supplier-feed.mjs midocean --file=~/Downloads/'мов Д1_серпень 2026.xlsx'"
+    );
+    process.exit(1);
+  }
+  const path = priceFile.startsWith("~/") ? join(process.env.HOME || "", priceFile.slice(2)) : priceFile;
+  let book;
+  try {
+    book = XLSX.read(readFileSync(path), { type: "buffer" });
+  } catch (e) {
+    console.error(`Не вдалося прочитати прайс «${path}»: ${e.message}`);
+    process.exit(1);
+  }
+
+  const { sheet: sheetName, header: wantHeader, photos } = cfg.api;
+  const sheet = book.Sheets[sheetName];
+  if (!sheet) {
+    console.error(
+      `У книжці немає аркуша «${sheetName}». Є: ${book.SheetNames.join(", ") || "(жодного)"}. ` +
+        `Прайс приходить руками, тож інший аркуш — це інший файл, а не наш із новими цінами.`
+    );
+    process.exit(1);
+  }
+  const table = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+
+  /**
+   * ШАПКУ ШУКАЄМО, А НЕ ВІДЛІЧУЄМО. У серпневому файлі над нею стоїть рядок
+   * «Таблиця 1», але це артефакт вивантаження, а не домовленість: у наступному
+   * файлі його може не бути. Тому шукаємо рядок зі словом «Артикул» і звіряємо
+   * решту підписів — так зсув на рядок не перетворить шапку на товар.
+   */
+  const headAt = table.findIndex((r) => String(r?.[0] ?? "").trim() === wantHeader[0]);
+  if (headAt === -1) {
+    console.error(`В аркуші «${sheetName}» немає шапки з колонкою «${wantHeader[0]}». Це не той прайс.`);
+    process.exit(1);
+  }
+  const head = table[headAt].map((c) => String(c ?? "").trim());
+  const wrong = wantHeader.filter((want, i) => head[i] !== want);
+  if (wrong.length) {
+    console.error(
+      `Шапка прайса змінилась. Чекали ${wantHeader.join(" | ")}, ` +
+        `а в рядку ${headAt + 1} стоїть ${head.slice(0, wantHeader.length).join(" | ")}. ` +
+        `Розбирати далі наосліп не можна: колонки могли переставити місцями.`
+    );
+    process.exit(1);
+  }
+
+  const rows = [];
+  const priceFileName = path.split("/").pop();
+  let skippedNameless = 0;
+  let unparsedArticle = 0;
+  let modelClash = 0;
+  const rates = new Set();
+  for (const r of table.slice(headAt + 1)) {
+    const article = String(r?.[0] ?? "").trim();
+    const name = String(r?.[1] ?? "").trim();
+    if (!article) continue;
+    // Безіменний товар у пул не йде, як і в Папіруса: за назвою він однаково не
+    // знайдеться, а підставляти замість назви артикул — вигадувати дані.
+    if (!name) {
+      skippedNameless++;
+      continue;
+    }
+    const sku = midoceanSkuFromArticle(article);
+    if (!sku) unparsedArticle++;
+    // Код у назві звіряємо ЛИШЕ ПО МОДЕЛІ — чому саме так, докладно в
+    // lib/midoceanSku.mjs: у 34 рядках із 454 там код базового кольору.
+    const inName = name.toUpperCase().match(/\b([A-Z]{2}\d{4})-\d{2}\b/);
+    if (sku && inName && inName[1] !== midoceanModel(sku)) modelClash++;
+
+    const priceEur = typeof r[2] === "number" && r[2] > 0 ? r[2] : null;
+    const priceUah = typeof r[3] === "number" && r[3] > 0 ? r[3] : null;
+    const rate = typeof r[4] === "number" && r[4] > 0 ? r[4] : null;
+    if (rate) rates.add(rate);
+
+    rows.push({
+      external_key: sku || article,
+      article: sku || article,
+      name,
+      // Бренд тут і є постачальник: усе в цьому прайсі — каталог midocean.
+      vendor: "midocean",
+      // Розділу прайс не має, а з сайту його не взяти (див. реєстр).
+      category: null,
+      price: priceEur,
+      currency: cfg.currency,
+      url: null,
+      image_url: null,
+      images: JSON.stringify([]),
+      attrs: JSON.stringify({
+        // Код, яким замовляємо в постачальника: у прайсі він свій, не midocean.
+        supplierArticle: article,
+        ...(sku ? { model: midoceanModel(sku) } : {}),
+        // Гривня й курс — знімок дня вивантаження. Лежать поруч, щоб було з чим
+        // звіряти, але в `price` іде євро: воно не протухає.
+        ...(priceUah ? { priceUah } : {}),
+        ...(rate ? { rate } : {}),
+        priceFile: priceFileName,
+      }),
+    });
+  }
+
+  console.log(
+    `У прайсі товарів: ${rows.length}` +
+      (skippedNameless ? ` (плюс ${skippedNameless} без назви — пропущено)` : "")
+  );
+  if (rates.size === 1) console.log(`  курс у файлі: ${[...rates][0]} — один на весь прайс`);
+  if (rates.size > 1) console.log(`  ⚠ курсів у файлі кілька: ${[...rates].join(", ")} — гривня в attrs рахована по-різному`);
+  if (unparsedArticle) console.log(`  ⚠ артикулів, що не розклались у SKU: ${unparsedArticle} — лишились без фото`);
+  if (modelClash) console.log(`  ⚠ рядків, де модель у назві не збігається з артикулом: ${modelClash}`);
+
+  // `--limit` для проби: фото перевіряються запитом на кожен рядок, і на повному
+  // прайсі це кілька хвилин. Порогу `minRows` при `--limit` немає, тож урізаний
+  // прогін до запису не дійде.
+  const out = limit ? rows.slice(0, limit) : rows;
+  if (limit) console.log(`  беремо перші ${out.length} — --limit`);
+
+  await attachMidoceanPhotos(out, photos);
+  return out;
+}
+
+/**
+ * ФОТО: АДРЕСУ БУДУЄМО, АЛЕ НЕ ВІРИМО ЇЙ НА СЛОВО. CDN midocean віддає кадр за
+ * `image/700X700/{sku}.jpg`, і на 250 артикулах серпневого прайса це спрацювало
+ * 250 разів із 250 (замір 16.09.2026). Але «майже завжди» — не «завжди»: зняті
+ * з виробництва позиції лишаються в прайсі без знімка, і CDN відповідає на них
+ * кодом 403 (так S3 каже про неіснуючий ключ). Порожня плитка на картці позиції
+ * гірша за відсутнє фото, тому кожну адресу перепитуємо HEAD-запитом.
+ */
+async function attachMidoceanPhotos(rows, { concurrency, delayMs, minCoverage }) {
+  const targets = rows.filter((r) => midoceanSkuFromArticle(JSON.parse(r.attrs).supplierArticle));
+  if (!targets.length) return;
+  let done = 0;
+  let found = 0;
+  const queue = [...targets];
+  const worker = async () => {
+    while (queue.length) {
+      const row = queue.shift();
+      const url = midoceanImageUrl(row.article);
+      try {
+        const res = await fetch(url, { method: "HEAD", headers: { "User-Agent": UA }, signal: AbortSignal.timeout(15_000) });
+        if (res.ok && /^image\//i.test(res.headers.get("content-type") || "")) {
+          row.image_url = url;
+          row.images = JSON.stringify([url]);
+          found++;
+        }
+      } catch {
+        // Мережа моргнула — рядок лишається без фото, це не привід валити прогін.
+      }
+      done++;
+      if (done % 500 === 0) console.log(`  фото: ${done}/${targets.length}, знайдено ${found}`);
+      if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  };
+  await Promise.all(Array.from({ length: concurrency }, worker));
+
+  const coverage = found / targets.length;
+  console.log(`  фото знайдено: ${found}/${targets.length} (${(coverage * 100).toFixed(1)}%)`);
+  /**
+   * Межа покриття — сторожа не за товарами, а за CDN. Якщо midocean перейменує
+   * теку знімків або закриє її від чужих запитів, адреси почнуть віддавати 403
+   * усі разом: рядки лишаться на місці, ціни правильні, а каталог у пошуку
+   * менеджера стане списком без картинок. Помітити це на око неможливо — тому
+   * падаємо тут, до запису, і старі фото в базі лишаються цілими.
+   */
+  if (!limit && coverage < minCoverage) {
+    console.error(
+      `Фото знайдено лише для ${(coverage * 100).toFixed(1)}% товарів, а нижня межа — ${(minCoverage * 100).toFixed(0)}%. ` +
+        `Схоже, CDN midocean змінив адреси або закрився. Нічого не записано.`
+    );
+    process.exit(1);
+  }
+}
+
 const PARSERS = {
   prom: parseProm,
   cscart: parseCscart,
@@ -3264,7 +3520,13 @@ const PAGE_PARSERS = {
 };
 // Завантажувачі, які самі ходять по джерелу: їм не потрібен ані файл фіда, ані
 // перелік адрес — вони тягнуть каталог по своєму протоколу.
-const API_LOADERS = { "magento-graphql": loadMagentoGraphql, "xls-price": loadPapirusPrice };
+const API_LOADERS = {
+  "magento-graphql": loadMagentoGraphql,
+  "xls-price": loadPapirusPrice,
+  // Не «api» в буквальному сенсі — джерело теж не має файлу фіда й переліку
+  // адрес, тому живе тут: прайс приходить книжкою руками (`--file=`).
+  "xls-local": loadMidoceanXls,
+};
 
 // ── тягнемо фід ─────────────────────────────────────────────────────────────
 // Джерело з `api` не має файлу, який можна завантажити: воно саме ходить по
