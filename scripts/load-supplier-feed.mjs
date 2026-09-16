@@ -63,6 +63,7 @@ import {
   dropSharedFrames,
   familyTag,
 } from "./lib/opencartColorImage.mjs";
+import { raymarketPrice } from "./lib/raymarketPrices.mjs";
 /**
  * ТАБЛИЦЯ КОДУВАНЬ — НЕ ФАКУЛЬТАТИВНА, І САМЕ ТУТ. Прайс Папіруса — старий
  * формат BIFF, де кирилиця лежить у CP1251. Під `require()` SheetJS підвантажує
@@ -578,6 +579,59 @@ const SUPPLIERS = {
      * під логіном). Межа приблизно чотири п'ятих, як у решти обходів.
      */
     minRows: 1500,
+  },
+  raymarket: {
+    slug: "ray-market.com.ua",
+    /**
+     * Київська фабрика рекламного текстилю: власні моделі RAY плюс Stedman.
+     * Каталог маленький — 666 адрес у мапі: 585 відповідають, і 581 з них справді
+     * сторінка товару (у чотирьох розмітки немає взагалі).
+     *
+     * Але «маленький» тут не означає «швидкий»: сторінки по 440 кБ віддаються
+     * секунди по чотири, тож повний обхід — 5 хв 48 с і близько 290 МБ
+     * (замір 16.09.2026). Це ще одна причина, чому джерело не в денному крону.
+     *
+     * ФІДА НЕМАЄ, І ЦЕ ПЕРЕВІРЕНО (16.09.2026). `prom.xml`, `price.xml`,
+     * `feed.xml`, `yml.xml`, `route=feed/google_sitemap` — 404;
+     * `extension/feed/google_sitemap` і `extension/feed/google_base` віддають
+     * 200 і нуль байтів (розширення стоїть, але вимкнене). Зате `sitemap.xml`
+     * живий і розкладений на частини — товари лежать окремим файлом.
+     *
+     * ⚠️ У МАПІ 80 МЕРТВИХ АДРЕС ІЗ 666 (12%), і всі 80 — чесний 404,
+     * перевірені поштучно. Тому обхід рахує їх зниклими товарами, а не
+     * невдачами (див. `crawlPages`): інакше `maxFailRatio` зупиняв би прогін на
+     * цілком здоровому сайті — та сама історія, що вигнала Toptime з мапи на
+     * сторінку «Все».
+     *
+     * `robots.txt` тут дозволяє сторінки товарів, а закриває лише кабінет,
+     * кошик, пошук і посторінкову навігацію — обхід у межах дозволеного.
+     */
+    feed: "https://ray-market.com.ua/sitemap-products.xml",
+    format: "raymarket-page",
+    source: "crawl:opencart",
+    crawl: { index: "sitemap-url", concurrency: 4, retries: 1, delayMs: 250, maxFailRatio: 0.05 },
+    /**
+     * ЦІНА НЕ З САЙТУ, А З ДВОХ PDF. Сторінка віддає роздріб — і віддає його
+     * навіть під логіном: постачальник пише це в самому прайсі («Ціни на сайті
+     * роздрібні! Оптові будуть доступні тільки після реєстрації»). Наша ціна
+     * приходить двома прайсами «ВЕЛИКИЙ ОПТ» (зима й літо, 11.05.2026) і
+     * перекладена в таблицю `scripts/lib/raymarketPrices.mjs`.
+     *
+     * Множника між роздробом і прайсом НЕМАЄ: 0,45–0,64 на різних групах
+     * (заміри — в шапці тієї таблиці). Тому ні `priceRule`, ні `accountPricing`
+     * тут не працюють, як не працюють вони в Папіруса й Е-Сувеніра.
+     *
+     * Ціни з ПДВ — так підписана колонка прайса.
+     */
+    priceKind: "wholesale",
+    /**
+     * Прайси покривають 25 артикулів із 149, які возить сайт; рядок без ціни в
+     * пул не йде (Артем, 16.09.2026). Сьогодні це 285 рядків — межа з запасом
+     * на розпродані кольори, які зникають зі сторінок самі. Провалиться нижче
+     * — значить поламався розбір `sku`, а не асортимент: саме з цього поля
+     * береться артикул, і в 37 товарів у ньому стоїть «Під замовлення».
+     */
+    minRows: 220,
   },
   midocean: {
     slug: "midocean.com",
@@ -1437,6 +1491,103 @@ function webasystFeatureText(value) {
   if (value.feature_id) return null;
   const parts = Object.values(value).filter((v) => typeof v === "string" && v.trim());
   return parts.length ? parts.join(", ") : null;
+}
+
+/**
+ * Сторінка товару Raymarket. OpenCart, як і Бергамо, але розбір окремий — і
+ * причина в ціні.
+ *
+ * ⚠️ САЙТ НЕ ЗНАЄ НАШОЇ ЦІНИ ВЗАГАЛІ. У Бергамо дилерська ціна хоч і захована в
+ * DOM, але вона там є, і `priceRule` виводить її множником. Тут — ні: сторінка
+ * віддає роздріб, і під логіном теж (постачальник сам пише в прайсі «Ціни на
+ * сайті роздрібні! Оптові будуть доступні тільки після реєстрації»). Наша ціна
+ * живе у двох PDF, перекладених у `scripts/lib/raymarketPrices.mjs`, і множника
+ * між ними немає: заміряно 0,45–0,64 на різних групах.
+ *
+ * ТОМУ РЯДОК БЕЗ ЦІНИ З ПРАЙСА СЮДИ НЕ ЙДЕ. Артем, 16.09.2026: у пул беремо
+ * лише те, що в прайсі. Сайт возить 149 артикулів, прайси покривають 25 — решта
+ * (Stedman ST2300, ST4000, ST8000 і далі) лишається за бортом до нового PDF.
+ * Так із 581 живої сторінки в пул лягає 285 рядків, і в кожного чесна оптова
+ * ціна замість роздрібної, завищеної в півтора-два рази.
+ *
+ * РОЗДІЛ ТУТ Є, на відміну від Бергамо: хлібні крихти на сторінці товару несуть
+ * повний шлях («Головна / Чоловічий одяг / Чоловічі футболки»), і розділ
+ * дістається тим самим запитом, що й усе інше — 580 сторінок із 581.
+ *
+ * ГАЛЕРЕЮ БЕРЕМО ЯК Є. JSON-LD віддає всі кадри товару вже готовим списком
+ * (1719 адрес на 581 сторінку, всі 854×1278, жодної заглушки — перевірено
+ * 16.09.2026), тож ані виводити адреси з префікса, ані зрізати `-WxH`, як у
+ * Бергамо, не треба.
+ */
+function parseRaymarketPage(html, ctx) {
+  const product = opencartProduct(html);
+  if (!product) return null; // не сторінка товару
+
+  const name = typeof product.name === "string" ? product.name.trim() : "";
+  if (!name) return null;
+
+  /**
+   * Ціна вирішує, чи існує рядок, тому питаємо її ПЕРШОЮ — решту розбирати
+   * нема сенсу. `null` тут означає одне з двох: артикула немає в прайсі, або в
+   * полі `sku` взагалі не артикул («Під замовлення» — так підписані 37 товарів).
+   */
+  const priced = raymarketPrice(product.sku ?? product.mpn);
+  if (!priced) return null;
+
+  const offers = product.offers && !Array.isArray(product.offers) ? product.offers : (product.offers || [])[0];
+  const sitePriceRaw = offers ? Number.parseFloat(offers.price) : Number.NaN;
+  const sitePrice = Number.isFinite(sitePriceRaw) && sitePriceRaw > 0 ? sitePriceRaw : null;
+
+  const images = (Array.isArray(product.image) ? product.image : product.image ? [product.image] : [])
+    .map((u) => String(u).trim())
+    .filter(Boolean);
+
+  /**
+   * Розділ — передостання ланка крихт: остання це сам товар, перша «Головна».
+   * Беремо саме її, а не весь шлях: у пошуку фільтр за розділом порівнює рядки,
+   * і «Чоловічий одяг / Чоловічі футболки» розвело б футболки на власну гілку.
+   */
+  let category = null;
+  for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
+    try {
+      const data = JSON.parse(m[1].trim());
+      if (data?.["@type"] !== "BreadcrumbList") continue;
+      const crumbs = (data.itemListElement || []).map((i) => i?.item?.name).filter(Boolean);
+      category = crumbs.length > 2 ? crumbs[crumbs.length - 2] : null;
+    } catch {
+      // наступний блок
+    }
+  }
+
+  const attrs = {
+    priceSource: "прайс «ВЕЛИКИЙ ОПТ», 11.05.2026",
+    priceBand: priced.band,
+    // Уся розмірна драбина, а не лише базовий діапазон: великий розмір коштує
+    // дорожче, і менеджер має побачити це в картці, а не в PDF.
+    priceBands: priced.bands,
+  };
+  if (priced.bands.length > 1) attrs.priceNote = `ціна за ${priced.band}; більші розміри дорожчі`;
+  if (sitePrice != null) attrs.sitePrice = sitePrice;
+  if (product.description) attrs.description = String(product.description).trim();
+  if (priced.color) attrs.color = priced.color;
+  if (offers?.availability) attrs.available = /InStock/i.test(String(offers.availability));
+
+  return {
+    external_key: ctx.url,
+    article: typeof product.sku === "string" ? product.sku.trim() : null,
+    name,
+    // Бренд тут рядком («STEDMAN»), а не об'єктом, як у Бергамо. Приймаємо
+    // обидві форми: інакше зміна розмітки поклала б у поле «[object Object]».
+    vendor: typeof product.brand === "string" ? product.brand.trim() || null : (product.brand?.name?.trim() ?? null),
+    category,
+    price: priced.price,
+    // Валюту беремо з прайса, а не зі сторінки: ціна тут НЕ сайтова.
+    currency: "UAH",
+    url: ctx.url,
+    image_url: images[0] ?? null,
+    images: JSON.stringify(images),
+    attrs: JSON.stringify(attrs),
+  };
 }
 
 /**
@@ -3514,6 +3665,7 @@ const PARSERS = {
 };
 const PAGE_PARSERS = {
   "opencart-page": parseOpencartPage,
+  "raymarket-page": parseRaymarketPage,
   "webasyst-page": parseWebasystPage,
   "eney-page": parseEneyPage,
   "toptime-page": parseToptimePage,
@@ -3585,6 +3737,7 @@ async function crawlPages(indexXml, cfg, cookie) {
   const rows = [];
   const failures = [];
   let skipped = 0;
+  let missing = 0;
   let done = 0;
   let cursor = 0;
 
@@ -3594,9 +3747,26 @@ async function crawlPages(indexXml, cfg, cookie) {
       if (i >= urls.length) return;
       const url = urls[i];
       let html = null;
+      let gone = false;
       for (let attempt = 0; attempt <= retries; attempt++) {
         try {
           const res = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
+          /**
+           * 404 І 410 — ЦЕ НЕ ЗБІЙ ОБХОДУ, А ЗНИКЛИЙ ТОВАР. Мапи сайту протухають:
+           * у Raymarket 80 адрес із 666 віддають чесний 404 (12%, перевірено
+           * поштучно 16.09.2026), у Toptime свого часу було 58 зі 181 — і саме
+           * через це там довелось піти в обхід по сторінці «Все». Доки такі
+           * відповіді рахувались невдачами, `maxFailRatio` зупиняв обхід на
+           * цілком здоровому сайті, і лікували б ми не те.
+           *
+           * Тому вони йдуть тим самим шляхом, що й сторінка без товару:
+           * пропущено. Каталог від цього не гасне мовчки — нижню межу тримає
+           * `minRows`, і зникни сайт цілком, упали б саме на ній.
+           */
+          if (res.status === 404 || res.status === 410) {
+            gone = true;
+            break;
+          }
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           html = await res.text();
           break;
@@ -3605,6 +3775,7 @@ async function crawlPages(indexXml, cfg, cookie) {
           else await nap(600);
         }
       }
+      if (gone) missing++;
       if (html) {
         const parsed = await parsePage(html, { url, cfg });
         // Сторінка може дати БІЛЬШЕ як один рядок: у Бергамо на картці товару
@@ -3620,7 +3791,10 @@ async function crawlPages(indexXml, cfg, cookie) {
       }
       done++;
       if (done % 250 === 0 || done === urls.length) {
-        console.log(`  пройдено ${done}/${urls.length} — товарів ${rows.length}, без товару ${skipped}, невдач ${failures.length}`);
+        console.log(
+          `  пройдено ${done}/${urls.length} — товарів ${rows.length}, без товару ${skipped}, ` +
+            `зниклих ${missing}, невдач ${failures.length}`
+        );
       }
       await nap(delayMs);
     }
@@ -3628,6 +3802,9 @@ async function crawlPages(indexXml, cfg, cookie) {
 
   await Promise.all(Array.from({ length: concurrency }, worker));
 
+  if (missing) {
+    console.log(`Зникли з сайту (404/410): ${missing} адрес із ${urls.length} — мапа сайту застаріла.`);
+  }
   if (failures.length) {
     console.log(`Не відповіли ${failures.length} сторінок, перші три:`);
     for (const f of failures.slice(0, 3)) console.log(`  ${f}`);

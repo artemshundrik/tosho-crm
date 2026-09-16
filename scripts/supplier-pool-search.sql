@@ -165,7 +165,7 @@ as $fn$
       and sp.supplier_slug in (
         'avanprint.ua', 'totobi.com.ua', 'bergamo.ua', 'e-suvenir.com.ua',
         'berrytex.com.ua', 'papirus-opt.com', 'trele.com.ua', 'eney.com.ua',
-        'toptime.com.ua', 'midocean.com'
+        'toptime.com.ua', 'midocean.com', 'ray-market.com.ua'
       )
       -- Друга сторожа лишається: навіть із дозволених джерел не показуємо
       -- рядок, у якому ціна є, але вона НЕ наша. Домовленість про знижку може
