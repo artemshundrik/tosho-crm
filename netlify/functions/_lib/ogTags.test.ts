@@ -174,3 +174,95 @@ describe("картинка товару поза og-тегами", () => {
     expect(extractOgTags(html, "https://shop.ua/x").imageUrl).toBeNull();
   });
 });
+
+/**
+ * Живий ENEY, 16.09.2026: `og:image` там дорівнює логотипу магазину НА КОЖНІЙ
+ * сторінці товару, а справжнє фото лежить нижче у звичайному `<img>`. Чотири
+ * позиції прорахунку TS-0926-0029 приїхали з синім написом ENEY 253×50
+ * замість пляшки й горняток.
+ */
+describe("службова графіка в розмітці для соцмереж (REQ-285#p5)", () => {
+  it("логотип в og:image не стає фото товару", () => {
+    const html = `
+      <html><head>
+        <meta property="og:title" content="Пляшка FLORENCE">
+        <meta property="og:image" content="https://eney.com.ua/image/catalog/logo-1.png">
+      </head><body>
+        <img src="/image/cache/catalog/products/florence/mo256212_1-448x448.jpg" alt="Пляшка FLORENCE">
+      </body></html>`;
+
+    const tags = extractOgTags(html, "https://eney.com.ua/florence/");
+
+    expect(tags.imageUrl).toBe("https://eney.com.ua/image/cache/catalog/products/florence/mo256212_1-448x448.jpg");
+    expect(tags.imageSource).toBe("img");
+  });
+
+  it("лишається без фото, коли крім логотипа на сторінці нічого немає", () => {
+    const html = `
+      <html><head>
+        <meta property="og:image" content="https://shop.ua/img/logo-1.png">
+        <link rel="image_src" href="https://shop.ua/img/header-banner.png">
+      </head><body></body></html>`;
+
+    expect(extractOgTags(html, "https://shop.ua/x").imageUrl).toBeNull();
+  });
+
+  it("службову графіку відкидає і в JSON-LD", () => {
+    const html = `
+      <html><head><script type="application/ld+json">
+        {"@type":"Product","name":"Кухоль","image":"https://shop.ua/img/sprite.png"}
+      </script></head><body><img src="/img/mug-big.jpg" alt="Кухоль"></body></html>`;
+
+    const tags = extractOgTags(html, "https://shop.ua/mug");
+
+    expect(tags.imageUrl).toBe("https://shop.ua/img/mug-big.jpg");
+  });
+});
+
+/**
+ * Друга половина тієї самої історії. Відкинувши логотип, ми падаємо у
+ * сканування `<img>` — а там першою в розмітці ENEY стоїть позначка
+ * «Розпродаж» 80×80. Відрізнити її від товару можна підписом: сайт пише в
+ * `alt` фото товару рівно ту саму назву, що й у заголовку сторінки.
+ */
+describe("фото товару впізнається за підписом (REQ-285#p5)", () => {
+  it("бере картинку, підписану назвою товару, а не першу-ліпшу", () => {
+    const html = `
+      <html><head><title>Пляшка FLORENCE SING, 500 мл</title></head><body>
+        <img src="/image/cache/catalog/16-80x80.png" alt="Розпродаж">
+        <img src="/image/cache/catalog/products/florence/mo256212_1-448x448.jpg" alt="Пляшка FLORENCE SING, 500 мл">
+      </body></html>`;
+
+    const tags = extractOgTags(html, "https://eney.com.ua/florence/");
+
+    expect(tags.imageUrl).toBe("https://eney.com.ua/image/cache/catalog/products/florence/mo256212_1-448x448.jpg");
+  });
+
+  /**
+   * Живий toptime.com.ua, 16.09.2026: `og:image` — логотип, а першою в тілі
+   * стоїть рекламна смуга `/img/slogan-ka.png` із чужим підписом. Товарні фото
+   * лежать нижче, у теці `/photos/`. Три позиції двох прорахунків приїхали з
+   * цією смугою замість фліски.
+   */
+  it("рекламну смугу за фото не бере, а теку з фотографіями впізнає", () => {
+    const html = `
+      <html><head><title>ka911 FALCO</title></head><body>
+        <img src="/img/slogan-ka.png" alt="kardiban">
+        <img src="/photos/catalog/HD_K911-6_2026.jpg" alt="">
+      </body></html>`;
+
+    expect(extractOgTags(html, "https://toptime.com.ua/catalog/product/ka911/").imageUrl).toBe(
+      "https://toptime.com.ua/photos/catalog/HD_K911-6_2026.jpg"
+    );
+  });
+
+  it("без збігу підпису поводиться як раніше — перша придатна картинка", () => {
+    const html = `
+      <html><head><title>Кухоль</title></head><body>
+        <img src="/img/first.jpg" alt="Щось інше">
+        <img src="/img/second.jpg" alt="І це інше">
+      </body></html>`;
+
+    expect(extractOgTags(html, "https://shop.ua/x").imageUrl).toBe("https://shop.ua/img/first.jpg");
+  });
+});

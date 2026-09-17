@@ -69,6 +69,7 @@ import type { QuoteKindValue } from "@/features/quotes/quote-wizard/quoteWizardK
 import { QuoteItemImprintsSection } from "@/features/quotes/quote-details/QuoteItemImprintsSection";
 import { QuoteItemModelSwap } from "@/features/quotes/quote-details/QuoteItemModelSwap";
 import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
+import { pickProductPreview } from "@/features/quotes/quote-details/productPreviewImage";
 import { parseQuoteItemMetadata } from "@/features/quotes/quote-details/quoteItemMetadata";
 import { QuoteImportDialog } from "@/features/quotes/quote-import/QuoteImportDialog";
 import { useQuoteImportResearch } from "@/features/quotes/quote-import/useQuoteImportResearch";
@@ -4616,14 +4617,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       !resolvedModelId && item.attachment?.url && item.attachment.type.startsWith("image/")
                         ? item.attachment.url
                         : null;
-                    const variantImageUrl = item.metadata?.catalogVariant?.imageUrl?.trim() || null;
-                    const productPreview = variantImageUrl || catalogImage || attachmentImage
-                      ? {
-                          type: "image" as const,
-                          url: variantImageUrl ?? catalogImage ?? attachmentImage ?? "",
-                          zoomUrl: variantImageUrl ?? catalogZoomImage ?? attachmentImage ?? catalogImage ?? "",
-                        }
-                      : null;
+                    // Порядок джерел і чому саме такий — `productPreviewImage.ts`.
+                    const productPreview = pickProductPreview({
+                      catalogImage,
+                      catalogZoomImage,
+                      variantImageUrl: item.metadata?.catalogVariant?.imageUrl?.trim() || null,
+                      attachmentImage,
+                    });
                     const modelSpecPreset = getModelSpecPreset(
                       catalogTypes,
                       resolvedTypeId,

@@ -41,10 +41,21 @@ const JSON_LD_BLOCK = /<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*
  * шляхом `/media/watermarked/`, і відкинути його означало б знову лишити
  * позицію порожньою.
  */
-const NON_PRODUCT_IMAGE = /(logo|icon|sprite|favicon|banner|header|footer|pixel|blank|spacer|placeholder|loader|avatar|captcha)/i;
+const NON_PRODUCT_IMAGE =
+  /(logo|icon|sprite|favicon|banner|slogan|header|footer|pixel|blank|spacer|placeholder|loader|avatar|captcha)/i;
 
-/** Класи й ідентифікатори, якими магазини підписують головне фото товару. */
-const PRODUCT_IMAGE_HINT = /(bigimage|big-image|main-image|mainimage|product-image|productimage|product_photo|gallery|zoom|detail-image)/i;
+/**
+ * Класи й ідентифікатори, якими магазини підписують головне фото товару, — а
+ * також ТЕКИ, у яких воно лежить.
+ *
+ * Тека тут не здогад, а друга ознака поруч із підписом, і без неї toptime не
+ * розібрати: класів своїм фотографіям магазин не дає взагалі, `alt` у головного
+ * порожній, зате всі товарні знімки лежать у `/photos/`, а рекламна смуга — в
+ * `/img/`. Беремо лише два однозначних сегменти: `/catalog/` сюди НЕ йде, бо в
+ * ENEY за цим шляхом лежить і логотип, і позначка «Розпродаж».
+ */
+const PRODUCT_IMAGE_HINT =
+  /(bigimage|big-image|main-image|mainimage|product-image|productimage|product_photo|gallery|zoom|detail-image|\/photos\/|\/products\/)/i;
 
 /**
  * Ознаки картинки-заглушки в підписах самого тега.
@@ -240,15 +251,38 @@ function findItempropImage(html: string): string | null {
 }
 
 /**
- * Товарне фото зі звичайного `<img>` — останній шлях, коли розмітки для
- * соцмереж на сайті немає взагалі.
+ * Підпис картинки, звірений із назвою товару.
  *
- * Спершу шукаємо картинку, яку сайт сам підписав як головну (`id="BigImage"`,
- * `class="product-image"` тощо), і лише потім беремо першу-ліпшу, відкинувши
- * очевидну службову графіку. Ліниві `data-src` рахуються нарівні з `src`: на
- * сайтах із відкладеним завантаженням у `src` лежить прозорий однопіксельник.
+ * ЗВІДКИ ЦЕ ВЗЯЛОСЬ (REQ-285#p5). Відкинувши логотип ENEY, ми падаємо в
+ * сканування `<img>` — а першою в їхній розмітці стоїть позначка «Розпродаж»
+ * 80×80, і саме вона ставала «фото товару». Відрізнити її нічим: ні `id`, ні
+ * класу магазин фотографіям не дає. Зате в `alt` товарного фото лежить рівно
+ * той рядок, що й у заголовку сторінки, — це і є ознака.
+ *
+ * Шість символів — стеля проти випадкових збігів: «Фото», «Товар», «UA» під
+ * службовою графікою трапляються часто, а назва товару коротшою не буває.
  */
-function findProductImage(html: string): string | null {
+function labelMatchesTitle(alt: string, title: string | null): boolean {
+  if (!title) return false;
+  const a = alt.toLowerCase().replace(/\s+/g, " ").trim();
+  const b = title.toLowerCase().replace(/\s+/g, " ").trim();
+  if (a.length < 6 || b.length < 6) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+/**
+ * Товарне фото зі звичайного `<img>` — останній шлях, коли розмітки для
+ * соцмереж на сайті немає взагалі або вона віддала службову графіку.
+ *
+ * Три сходинки, від найнадійнішої: картинка, підписана назвою товару; далі
+ * та, яку сайт сам позначив головною (`id="BigImage"`, `class="product-image"`);
+ * і лише потім перша-ліпша, відкинувши очевидну службову графіку. Ліниві
+ * `data-src` рахуються нарівні з `src`: на сайтах із відкладеним завантаженням
+ * у `src` лежить прозорий однопіксельник.
+ */
+function findProductImage(html: string, title: string | null): string | null {
+  let byLabel: string | null = null;
+  let byHint: string | null = null;
   let fallback: string | null = null;
   for (const match of html.matchAll(IMG_TAG)) {
     const tag = match[0];
@@ -256,16 +290,14 @@ function findProductImage(html: string): string | null {
     if (!src || src.startsWith("data:")) continue;
     if (NON_PRODUCT_IMAGE.test(src)) continue;
 
-    const marker = [
-      readAttribute(tag, "id") ?? "",
-      readAttribute(tag, "class") ?? "",
-      readAttribute(tag, "alt") ?? "",
-    ].join(" ");
+    const alt = readAttribute(tag, "alt") ?? "";
+    const marker = [readAttribute(tag, "id") ?? "", readAttribute(tag, "class") ?? "", alt].join(" ");
     if (STUB_IMAGE_HINT.test(marker)) continue;
-    if (PRODUCT_IMAGE_HINT.test(marker) || PRODUCT_IMAGE_HINT.test(src)) return src;
+    if (!byLabel && labelMatchesTitle(alt, title)) byLabel = src;
+    if (!byHint && (PRODUCT_IMAGE_HINT.test(marker) || PRODUCT_IMAGE_HINT.test(src))) byHint = src;
     if (!fallback && /\.(jpe?g|png|webp|avif)(\?|$)/i.test(src)) fallback = src;
   }
-  return fallback;
+  return byLabel ?? byHint ?? fallback;
 }
 
 function absoluteUrl(raw: string | null, baseUrl: string): string | null {
@@ -317,12 +349,22 @@ export function extractOgTags(html: string, baseUrl: string): OgTags {
     ["link", collectLinkHref(head, "image_src")],
     ["json-ld", findJsonLdImage(body)],
     ["itemprop", findItempropImage(body)],
-    ["img", findProductImage(body)],
+    ["img", findProductImage(body, title)],
   ];
 
   for (const [source, raw] of candidates) {
     const imageUrl = absoluteUrl(raw, baseUrl);
-    if (imageUrl) return { title, imageUrl, imageSource: source };
+    if (!imageUrl) continue;
+    // СЛУЖБОВУ ГРАФІКУ ВІДКИДАЄМО НА ВСІХ ДЖЕРЕЛАХ, а не лише на скануванні
+    // `<img>`, як було до REQ-285#p5. ENEY ставить `og:image` рівним
+    // `/image/catalog/logo-1.png` НА КОЖНІЙ сторінці товару — тобто найперший
+    // і найдовіреніший кандидат у них завжди хибний. Чотири позиції
+    // прорахунку TS-0926-0029 приїхали з логотипом 253×50 замість фото.
+    //
+    // `findProductImage` свій фільтр лишає при собі: там він відсіває рядки
+    // ще до вибору між трьома сходинками, а не після.
+    if (source !== "img" && NON_PRODUCT_IMAGE.test(imageUrl)) continue;
+    return { title, imageUrl, imageSource: source };
   }
 
   return { title, imageUrl: null, imageSource: null };
