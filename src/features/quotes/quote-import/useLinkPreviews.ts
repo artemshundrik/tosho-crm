@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabaseClient";
 
+import { needsVariantChoice } from "@/components/catalog/SupplierVariantTiles";
 import { groupSupplierPoolRows, type SupplierPoolRow } from "@/lib/supplierPoolRows";
 
 import type { QuoteImportDraftItem, QuoteImportLinkPreview, QuoteImportPoolMatch } from "./types";
@@ -53,7 +54,19 @@ function toPoolMatch(payload: PreviewResponse | null): QuoteImportPoolMatch | nu
   if (payload?.source !== "pool" || !rows?.length) return null;
   const [product] = groupSupplierPoolRows(rows, 1);
   if (!product) return null;
-  return { product, needsColor: payload.ambiguousArticle === true };
+  /**
+   * ЧИ ПИТАТИ КОЛІР — ВИРІШУЄ ТА САМА ФУНКЦІЯ, ЩО В ПОШУКУ, а не ознака з
+   * відповіді сервера. Сервер каже лише, чи розійшлись АРТИКУЛИ, — і на цьому
+   * я помилився: у Топтайма артикул один на всі 14 кольорів (`ST7000`), а
+   * різняться фото й ціна (269,99–301,35). Тобто за посиланням картка
+   * мовчки брала перший колір, тоді як той самий товар, знайдений назвою,
+   * чесно питав.
+   *
+   * `needsVariantChoice` дивиться на те, що справді важить: картка без
+   * власного артикула, у якої варіанти свої артикули мають, — це вибір, який
+   * ще не зроблено.
+   */
+  return { product, needsColor: needsVariantChoice(product) };
 }
 
 function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
