@@ -281,6 +281,27 @@ Practical implication:
   - «використано» = унікальні робочі дні approved-записів за рік, з урахуванням
     `ua_workday_exceptions`
 
+- `payroll_entries`
+  - відомість «Виплати команді»: один рядок = людина × місяць (`period` =
+    1 число), ключ `(workspace_id, user_id, period)`
+  - tracked schema: [scripts/payroll-entries.sql](/Users/artem/Projects/tosho-crm/scripts/payroll-entries.sql)
+    → …-advance → …-advance-subtracts → …-penalty →
+    [scripts/payroll-official-split.sql](/Users/artem/Projects/tosho-crm/scripts/payroll-official-split.sql) (поточна формула)
+  - два контури грошей: **через банк** — `deduction_amount` (це «Офіційна ЗП»,
+    назва історична), `official_advance_amount` + `official_advance_date` (АЗП),
+    `official_tax_amount` (офіційні податки — ЛИШЕ облік); **на руки** —
+    `base_amount`, `bonus_amount`, `penalty_amount`, `personal_order_amount`,
+    `advance_amount` + `advance_date` (готівковий аванс)
+  - обчислювані (generated always, у коді не писати): `total_amount` («До
+    виплати» = ставка + бонус − штраф − особисте − офіц. ЗП − АЗП − аванс),
+    `earned_amount` («Загальна ЗП» = ставка + бонус − штраф). Клієнтська копія
+    формули — одна, `src/lib/payrollMath.ts`
+  - перевірки: дата авансу (обох) лише з сумою > 0; штраф і нові утримання не
+    від'ємні
+  - RLS: owner / SEO (політики інлайн, `tosho.has_payroll_access`); статус
+    виплати й каса живуть окремо в `finance_payout_meta` (той самий ключ
+    `user_id + period`)
+
 ## Catalog / Product Configuration Tables
 
 - `catalog_models`
