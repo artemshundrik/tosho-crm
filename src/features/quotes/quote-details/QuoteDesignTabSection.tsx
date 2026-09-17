@@ -84,7 +84,7 @@ export function QuoteDesignTabSection({
   /** Секції тиражів — з них беремо мініатюру товару для пігулки вибору. */
   itemImages: Array<{ item: { id: string } | null; imageUrl: string | null }>;
   attachmentsUploading?: boolean;
-  onAddComposerFiles: (files: FileList | null, itemId: string | null) => void;
+  onAddComposerFiles: (files: FileList | File[] | null, itemId: string | null) => void;
   onRemoveComposerFile: (file: QuoteAttachment) => void;
   designTaskType: DesignTaskType | null;
   onDesignTaskTypeChange: (value: DesignTaskType) => void;
@@ -99,7 +99,7 @@ export function QuoteDesignTabSection({
   onOpenTask: (taskId: string) => void;
   onPreviewVisual: (file: QuoteAttachment) => void;
   onDownloadVisual: (file: QuoteAttachment) => void;
-  onAddMaterials: (files: FileList | null) => void;
+  onAddMaterials: (files: FileList | File[] | null) => void;
 }) {
   /*
     Позиція, на яку націлений композер, і все, що з неї випливає, рахується

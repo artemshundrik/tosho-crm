@@ -6174,7 +6174,7 @@ export default function DesignTaskPage() {
     setChangeRequestEditDraft("");
   };
 
-  const uploadChangeRequestDraftAttachments = async (files: FileList | null) => {
+  const uploadChangeRequestDraftAttachments = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0 || !task || !effectiveTeamId || !userId) return;
     if (!ensureCanEdit()) return;
     setChangeRequestUploading(true);

@@ -31,8 +31,18 @@ import { cn } from "@/lib/utils";
  * пари не утворює.
  */
 export type FileDropZoneProps = {
-  /** Що робити з обраним. Приходить `FileList`, бо його дає і кидок, і діалог. */
-  onFiles: (files: FileList | null) => void;
+  /**
+   * Що робити з обраним. Приходить ЗВИЧАЙНИЙ масив, а не `FileList`.
+   *
+   * ЧОМУ НЕ `FileList`. Той, що віддає `<input type="file">`, належить САМОМУ
+   * інпуту й живе разом з ним: щойно інпуту скидають `value` — а це тут
+   * доводиться робити, див. `onChange` нижче, — уже відданий назовні список
+   * порожніє просто в руках у того, хто його тримає. Через це вибір файлу
+   * діалогом мовчки не спрацьовував у всіх шести місцях: лишався самий кидок,
+   * бо він бере файли з `dataTransfer`, а той нікому не скидають. Масив
+   * такого господаря не має й спорожніти не може.
+   */
+  onFiles: (files: File[]) => void;
   /**
    * Кидок цілим `DataTransfer`, коли самих файлів мало.
    *
@@ -203,7 +213,7 @@ export function FileDropZone({
           onDropTransfer(event.dataTransfer);
           return;
         }
-        onFiles(event.dataTransfer.files);
+        onFiles(Array.from(event.dataTransfer.files));
       }}
     >
       <span className={cn("grid shrink-0 place-items-center", over ? "text-foreground" : "text-muted-foreground")}>
@@ -232,11 +242,15 @@ export function FileDropZone({
         multiple={multiple}
         className="hidden"
         onChange={(event) => {
-          const list = event.target.files;
+          const input = event.currentTarget;
+          // Знімок РАНІШЕ за скидання, і це не стиль, а умова роботи:
+          // `input.files` — не копія, а живий список інпута, тож рядок нижче
+          // спорожнює рівно той об'єкт, який ми щойно взяли.
+          const picked = input.files ? Array.from(input.files) : [];
           // Скидаємо значення, інакше повторний вибір ТОГО САМОГО файлу не
           // дасть `change` — і другий кидок того ж прайсу нічого не зробить.
-          event.target.value = "";
-          onFiles(list);
+          input.value = "";
+          onFiles(picked);
         }}
       />
     </div>
@@ -323,7 +337,7 @@ export function useFileDropPanel({
   onFiles,
   disabled = false,
 }: {
-  onFiles: (files: FileList) => void;
+  onFiles: (files: File[]) => void;
   disabled?: boolean;
 }) {
   const [over, setOver] = React.useState(false);
@@ -361,7 +375,7 @@ export function useFileDropPanel({
         if (disabled || !carriesFiles(event)) return;
         event.preventDefault();
         setOver(false);
-        onFiles(event.dataTransfer.files);
+        onFiles(Array.from(event.dataTransfer.files));
       },
     },
   };

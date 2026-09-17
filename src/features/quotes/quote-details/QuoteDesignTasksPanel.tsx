@@ -325,7 +325,7 @@ export function QuoteDesignTasksPanel({
   onOpenTask: (taskId: string) => void;
   onPreviewVisual: (file: QuoteAttachment) => void;
   onDownloadVisual: (file: QuoteAttachment) => void;
-  onAddMaterials: (files: FileList | null) => void;
+  onAddMaterials: (files: FileList | File[] | null) => void;
 }) {
   const active = tasks.find((task) => task.id === activeTaskId) ?? tasks[0] ?? null;
   if (!active) return null;

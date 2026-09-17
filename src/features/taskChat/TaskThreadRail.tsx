@@ -231,7 +231,7 @@ export function TaskThreadRail({
 
   const { over: dropOver, dropHandlers } = useFileDropPanel({
     disabled: !onAttachFiles,
-    onFiles: (files) => addFiles(Array.from(files).map(withReadableName)),
+    onFiles: (files) => addFiles(files.map(withReadableName)),
   });
 
   /**

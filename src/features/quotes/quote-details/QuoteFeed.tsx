@@ -165,7 +165,7 @@ function FilesRegister({
   deletingId?: string | null;
   canDelete: (file: QuoteAttachment) => boolean;
   onToggle: () => void;
-  onAdd: (files: FileList | null) => void;
+  onAdd: (files: FileList | File[] | null) => void;
   onDownload: (file: QuoteAttachment) => void;
   onDelete: (file: QuoteAttachment) => void;
 }) {
@@ -318,7 +318,7 @@ export function QuoteFeed({
   filesDeletingId?: string | null;
   canDeleteFile: (file: QuoteAttachment) => boolean;
   onToggleFiles: () => void;
-  onAddFiles: (files: FileList | null) => void;
+  onAddFiles: (files: FileList | File[] | null) => void;
   onDownloadFile: (file: QuoteAttachment) => void;
   onDeleteFile: (file: QuoteAttachment) => void;
   /** Журнал вантажиться сторінками; поки не всі — показуємо кнопку. */

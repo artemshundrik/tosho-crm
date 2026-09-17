@@ -81,7 +81,7 @@ export function QuoteDesignTaskComposer({
   imprint: DesignComposerImprint[];
   files: QuoteAttachment[];
   uploading?: boolean;
-  onAddFiles: (files: FileList | null) => void;
+  onAddFiles: (files: FileList | File[] | null) => void;
   onRemoveFile?: (file: QuoteAttachment) => void;
   taskType: DesignTaskType | null;
   onTaskTypeChange: (value: DesignTaskType) => void;

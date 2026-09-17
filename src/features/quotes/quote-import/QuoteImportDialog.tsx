@@ -244,7 +244,7 @@ export function QuoteImportDialog({
             inputRef={inputRef}
             label="Обрати файл Excel"
             onFiles={(files) => {
-              const file = files?.[0];
+              const file = files[0];
               if (file) void handleFile(file);
             }}
             tags={[".xlsx", ".xls", ".xlsm", ".csv", "до 12 МБ"]}

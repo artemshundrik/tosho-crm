@@ -1334,9 +1334,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     ОДИН ОБРОБНИК НА ЗОНУ, А НЕ ДВА. Доти кидок і вибір із діалогу писались
     окремо — і розходились: гейт на друк стояв в обох, а скидання `value`
     (без якого той самий файл удруге не додається) — лише в одному.
-    `FileDropZone` віддає `FileList` в обох випадках, тож гілки злились.
+    `FileDropZone` віддає ті самі файли в обох випадках, тож гілки злились.
   */
-  const addDesignFiles = (list: FileList | null) => {
+  const addDesignFiles = (list: FileList | File[] | null) => {
     if (!list) return;
     if (printMode === "no_print" && !isPrintPackageMode) return;
     const next = appendWithinLimit(files, Array.from(list));
@@ -1344,7 +1344,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   };
 
   // Файли прорахунку: без гейта на друк — зона доступна завжди.
-  const addProjectFiles = (list: FileList | null) => {
+  const addProjectFiles = (list: FileList | File[] | null) => {
     if (!list) return;
     const next = appendWithinLimit(projectFiles, Array.from(list));
     if (next) setProjectFiles(next);

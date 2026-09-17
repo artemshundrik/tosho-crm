@@ -1449,7 +1449,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   // Ліміт міряється в межах ОДНІЄЇ зони, тому обидва набори користуються
   // спільним хелпером: інакше «додав 20 у прорахунок» мовчки з'їдало б місце
   // під матеріали дизайнера, хоча це різні списки й різні адресати.
-  const appendWithinLimit = (current: File[], fileList: FileList | null) => {
+  const appendWithinLimit = (current: File[], fileList: FileList | File[] | null) => {
     if (!fileList) return null;
     const room = Math.max(0, MAX_ATTACHMENTS - current.length);
     if (room === 0) {
@@ -1467,7 +1467,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     return [...current, ...incoming.slice(0, room)];
   };
 
-  const addFiles = (fileList: FileList | null) => {
+  const addFiles = (fileList: FileList | File[] | null) => {
     if (!activeProduct) return;
     const next = appendWithinLimit(activeProduct.files, fileList);
     if (next) updateActiveProduct({ files: next });
@@ -1480,7 +1480,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     });
   };
 
-  const addProjectFiles = (fileList: FileList | null) => {
+  const addProjectFiles = (fileList: FileList | File[] | null) => {
     if (!activeProduct) return;
     const next = appendWithinLimit(activeProduct.projectFiles, fileList);
     if (next) updateActiveProduct({ projectFiles: next });
