@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabaseClient";
 
-import type { QuoteImportDraftItem, QuoteImportLinkPreview } from "./types";
+import { groupSupplierPoolRows, type SupplierPoolRow } from "@/lib/supplierPoolRows";
+
+import type { QuoteImportDraftItem, QuoteImportLinkPreview, QuoteImportPoolMatch } from "./types";
 
 /**
  * Фото товарів у прев'ю імпорту (REQ-236).
@@ -33,10 +35,30 @@ type PreviewResponse = {
   title?: string | null;
   imageUrl?: string | null;
   sku?: string | null;
+  /** «pool» — товар знайшовся в нас, «page» — прочитали чужу сторінку (REQ-285). */
+  source?: string | null;
+  ambiguousArticle?: boolean | null;
+  variants?: SupplierPoolRow[] | null;
 };
+
+/**
+ * Рядки пулу → картка з кольорами.
+ *
+ * Групує ТОЙ САМИЙ `groupSupplierPoolRows`, що й пошук пулу, і це головне:
+ * вибір кольору в обох місцях мусить давати однакову картку, однакові підписи
+ * й однаковий артикул. Ліміт 1 — картка тут рівно одна, це не видача.
+ */
+function toPoolMatch(payload: PreviewResponse | null): QuoteImportPoolMatch | null {
+  const rows = payload?.variants;
+  if (payload?.source !== "pool" || !rows?.length) return null;
+  const [product] = groupSupplierPoolRows(rows, 1);
+  if (!product) return null;
+  return { product, needsColor: payload.ambiguousArticle === true };
+}
 
 function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
   const status = payload?.status;
+  const pool = toPoolMatch(payload);
   // Артикул несуть ОБИДВІ гілки (REQ-247): сторінка без фото — це `no_image`,
   // а артикул у її розмітці цілком може бути.
   const sku = payload?.sku?.trim() || null;
@@ -46,6 +68,7 @@ function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
       imageUrl: payload.imageUrl,
       title: payload.title ?? null,
       sku,
+      pool,
     };
   }
   if (status === "blocked" || status === "no_image" || status === "failed") {
@@ -54,6 +77,7 @@ function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
       reason: payload?.reason || "Фото дістати не вдалося",
       title: payload?.title ?? null,
       sku,
+      pool,
     };
   }
   return { status: "failed", reason: "Фото дістати не вдалося" };

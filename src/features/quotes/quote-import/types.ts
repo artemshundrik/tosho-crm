@@ -1,3 +1,5 @@
+import type { SupplierPoolProduct } from "@/lib/supplierPoolRows";
+
 /**
  * Спільна мова імпорту ексельки (REQ-233): те, що функція `quote-import-parse`
  * повертає, і те, чим далі живе прев'ю на фронті.
@@ -210,13 +212,34 @@ export type QuoteImportTrace = {
  * Артикул їде поруч зі статусом, а не всередині «done» (REQ-247): сторінка
  * буває живою й без фото — тоді статус `no_image`, а артикул у розмітці є.
  */
+/**
+ * Товар, знайдений у НАШОМУ пулі за посиланням (REQ-285#p7).
+ *
+ * Одне посилання часто веде не на товар, а на картку з кольорами: у Берітекса
+ * на адресу припадає 28,4 рядка, у Топтайма 11,0, у Е-Сувеніра 2,8. Поки колір
+ * не обрано, артикул мовчить — у Е-Сувеніра він у кожного кольору свій, і
+ * взяти перший-ліпший означало б замовлення не того кольору.
+ */
+export type QuoteImportPoolMatch = {
+  product: SupplierPoolProduct;
+  /** Артикули кольорів розійшлись — треба питати колір. */
+  needsColor: boolean;
+};
+
 export type QuoteImportLinkPreview =
   | { status: "pending" }
-  | { status: "done"; imageUrl: string; title: string | null; sku?: string | null }
+  | {
+      status: "done";
+      imageUrl: string;
+      title: string | null;
+      sku?: string | null;
+      pool?: QuoteImportPoolMatch | null;
+    }
   | {
       status: "no_image" | "blocked" | "failed";
       reason: string;
       /** Назва буває й без фото: сторінка жива, просто без картинки. */
       title?: string | null;
       sku?: string | null;
+      pool?: QuoteImportPoolMatch | null;
     };

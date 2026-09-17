@@ -5,6 +5,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { KidsBadge } from "@/components/catalog/SupplierPoolRow";
+import { SupplierVariantTiles } from "@/components/catalog/SupplierVariantTiles";
+import type { SupplierPoolVariant } from "@/lib/supplierPoolRows";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -160,6 +162,7 @@ export function ImportItemPhoto({
 export function ImportDraftRow({
   draft,
   preview,
+  onPickVariant,
   disabled,
   onPatch,
   onPatchRun,
@@ -176,6 +179,12 @@ export function ImportDraftRow({
   draft: QuoteImportDraftItem;
   preview: QuoteImportLinkPreview | undefined;
   disabled?: boolean;
+  /**
+   * Обрати колір товару, знайденого в пулі за посиланням (REQ-285#p7). Поки
+   * колір не обрано, артикул у позиції порожній — у Е-Сувеніра він у кожного
+   * кольору свій, і перший-ліпший означав би замовлення не того кольору.
+   */
+  onPickVariant?: (variant: SupplierPoolVariant) => void;
   onPatch: (patch: Partial<QuoteImportDraftItem>) => void;
   onPatchRun: (runKey: string, patch: Partial<QuoteImportDraftItem["runs"][number]>) => void;
   /**
@@ -213,6 +222,15 @@ export function ImportDraftRow({
     `preview`. Рядок не мусить знати, яке з вікон його малює.
   */
   const sku = draft.sku ?? (preview && preview.status !== "pending" ? preview.sku ?? null : null);
+  /**
+   * Картка з пулу, у якої артикули кольорів розійшлись. Щойно колір обрано,
+   * `draft.sku` заповнюється — і питання зникає саме, без окремого прапорця.
+   */
+  const poolChoice =
+    !draft.sku && preview && preview.status !== "pending" && preview.pool?.needsColor
+      ? preview.pool.product
+      : null;
+  const [allColors, setAllColors] = React.useState(false);
   const color = draft.color ?? null;
 
   /*
@@ -413,6 +431,26 @@ export function ImportDraftRow({
                   <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-60" />
                 </a>
               ))}
+            </div>
+          ) : null}
+
+          {/*
+            ВИБІР КОЛЬОРУ ПРЯМО В РЯДКУ (REQ-285#p7). Одне посилання часто веде
+            не на товар, а на картку з кольорами — у Берітекса на адресу
+            припадає 28,4 рядка, у Топтайма 11,0. Плитки ті самі, що в підказці
+            пулу: вибір там і там мусить давати однаковий артикул.
+          */}
+          {poolChoice && onPickVariant ? (
+            <div className="space-y-1">
+              <span className="block text-2xs text-muted-foreground/70">
+                Оберіть колір — його артикул поїде в замовлення
+              </span>
+              <SupplierVariantTiles
+                product={poolChoice}
+                allColors={allColors}
+                onShowAll={() => setAllColors(true)}
+                onPick={onPickVariant}
+              />
             </div>
           ) : null}
 

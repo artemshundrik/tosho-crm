@@ -29,7 +29,7 @@ import type {
 } from "@/features/quotes/quote-import/types";
 import { countSettledPreviews, fetchLinkPreview, useLinkPreviews } from "@/features/quotes/quote-import/useLinkPreviews";
 import { pluralWordUk } from "@/lib/lastSeen";
-import { SHOP_SUPPLIER_SLUG, type SupplierPoolProduct } from "@/lib/supplierPool";
+import { SHOP_SUPPLIER_SLUG, type SupplierPoolProduct, type SupplierPoolVariant } from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
 
 import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions";
@@ -242,6 +242,36 @@ export function QuoteWizardDialog({
   const patchDraft = (key: string, patch: Partial<QuoteImportDraftItem>) => {
     setDrafts((prev) => prev.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)));
   };
+  /**
+   * Колір товару, знайденого в пулі за посиланням (REQ-285#p7).
+   *
+   * ЧОМУ ЦЕ ПАТЧ, А НЕ НОВИЙ РЯДОК. Рядок уже стоїть у списку — його створили
+   * тієї ж миті, коли вставили посилання, ще до відповіді. Вибір кольору лише
+   * дописує те, чого бракувало: артикул, фото саме цього кольору й назву, якщо
+   * менеджер її ще не вписав. Створювати замість цього новий рядок означало б
+   * забрати в нього тираж і коментар, які він міг уже набрати, поки шукалось.
+   *
+   * Артикул тут головний: саме він їде в замовлення, і саме через нього цей
+   * вибір узагалі існує. Щойно він з'явився, питання про колір зникає саме —
+   * `ImportDraftRow` дивиться на `draft.sku`.
+   */
+  const pickLinkVariant = (key: string, variant: SupplierPoolVariant) => {
+    setDrafts((prev) =>
+      prev.map((draft) => (draft.key === key ? { ...draft, sku: variant.article ?? draft.sku } : draft))
+    );
+    // Фото теж стає кольоровим: у прев'ю досі лежить знімок картки, тобто
+    // першого-ліпшого кольору, і лишати його після вибору — показувати не те,
+    // що обрали. Кольору без власного фото це не стосується: у Бергамо таких
+    // половина, і підміняти наявний знімок порожнечею було б гірше.
+    if (!variant.imageUrl) return;
+    const imageUrl = variant.imageUrl;
+    setLinkPreviews((prev) => {
+      const current = prev[key];
+      if (!current || current.status === "pending") return prev;
+      return { ...prev, [key]: { status: "done", imageUrl, title: current.title ?? null, sku: variant.article, pool: current.pool } };
+    });
+  };
+
   const patchRun = (itemKey: string, runKey: string, patch: Partial<QuoteImportDraftItem["runs"][number]>) => {
     setDrafts((prev) =>
       prev.map((draft) =>
@@ -984,6 +1014,7 @@ export function QuoteWizardDialog({
                         onChangeKind={isFileDraft(draft) ? undefined : (kind) => changeKind(draft.key, kind)}
                         onAddRun={() => addRun(draft.key)}
                         onRemoveRun={(runKey) => removeRun(draft.key, runKey)}
+                        onPickVariant={(variant) => pickLinkVariant(draft.key, variant)}
                       />
                     ))}
                   </div>

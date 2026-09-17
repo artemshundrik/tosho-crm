@@ -27,6 +27,7 @@ import {
   SupplierPoolFilterBar,
   type PoolFilter,
 } from "@/components/catalog/SupplierPoolFilterBar";
+import { needsVariantChoice, SupplierVariantTiles } from "@/components/catalog/SupplierVariantTiles";
 
 /**
  * Одне поле замість трьох вкладок (REQ-182#p14).
@@ -698,76 +699,17 @@ export function QuoteItemCommandField({
                     плитки показували самі кольори; тепер під кожним кольором
                     стоїть його код, і речення повторювало те, що видно. */}
                 {expanded ? (
-                  /**
-                   * ПЛИТКИ КОЛЬОРУ ПЕРЕРОБЛЕНІ (Артем, 08.09.2026: «мені не
-                   * подобається, як вони розкриваються та виглядають»).
-                   *
-                   * Було три вади одразу. Фото 24 пікселі — за ним кольору не
-                   * видно. Назва різалась на восьми ремках, тож «Королівський
-                   * синій» ставав «Королівський син…». І головне: КОДУ НЕ БУЛО
-                   * ВЗАГАЛІ, хоч саме він їде в замовлення й саме через нього
-                   * цей вибір узагалі існує.
-                   *
-                   * Стало: фото 28, назва повністю, під нею код. Плитка стала
-                   * вищою, тож більше сімнадцяти в один ряд не влізе — але їх і
-                   * не буває стільки: заміряно на 5602 картках пулу, 88% мають
-                   * вісім кольорів або менше, а 37% узагалі один. Довгий хвіст
-                   * ріже `COLOR_CAP`, інакше картка з 246 кольорами (є така в
-                   * Аванпринті) розсипала б увесь список.
-                   */
-                  <span className="mt-2 flex flex-wrap gap-1.5 pl-11">
-                    {(allColors ? product.variants : product.variants.slice(0, COLOR_CAP)).map((variant) => (
-                      <button
-                        key={variant.id}
-                        type="button"
-                        title={[variant.label, variant.article].filter(Boolean).join(" · ")}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          // КЛІК ПО КОЛЬОРУ — ЦЕ Й Є ВИБІР (Артем, 09.09.2026).
-                          // Проміжний крок «спершу обери, потім натисни
-                          // Додати» був потрібен, поки плитка показувала самий
-                          // колір: тоді підтвердження давало побачити фото й
-                          // код. Тепер код стоїть на самій плитці, тож друга
-                          // кнопка лише повторювала вже зроблений вибір — і
-                          // накривала «ще N» (знімок Артема).
-                          onPickSupplier(applySupplierVariant(product, variant));
-                          onValueChange("");
-                          setExpandedPoolKey(null);
-                        }}
-                        className="flex items-center gap-2 rounded-md border border-border/60 py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground hover:bg-muted/60"
-                      >
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
-                          <VariantPhoto url={variant.imageUrl} label={variant.label} />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block whitespace-nowrap text-2xs text-foreground">
-                            {variant.label ?? "Без підпису"}
-                          </span>
-                          {variant.article ? (
-                            <span className="block whitespace-nowrap text-[0.625rem] tabular-nums text-muted-foreground/70">
-                              {variant.article}
-                            </span>
-                          ) : null}
-                        </span>
-                      </button>
-                    ))}
-                    {!allColors && product.variants.length > COLOR_CAP ? (
-                      <button
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setAllColorsKey(expandedPoolKey);
-                        }}
-                        // Та сама висота, що в плитки кольору: інакше «ще N»
-                        // з'їжджало під ряд і ставало окремим рядком.
-                        className="self-stretch rounded-md border border-dashed border-border px-2.5 text-2xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-                      >
-                        ще {product.variants.length - COLOR_CAP}
-                      </button>
-                    ) : null}
-                  </span>
+                  <SupplierVariantTiles
+                    className="mt-2 pl-11"
+                    product={product}
+                    allColors={allColors}
+                    onShowAll={() => setAllColorsKey(expandedPoolKey)}
+                    onPick={(variant) => {
+                      onPickSupplier(applySupplierVariant(product, variant));
+                      onValueChange("");
+                      setExpandedPoolKey(null);
+                    }}
+                  />
                 ) : null}
               </li>
             );
@@ -884,16 +826,6 @@ export function QuoteItemCommandField({
  * варіантів артикула, але артикули у варіантів є. Якщо їх немає ні в кого,
  * вибирати нема з чого, і розкриття було б глухим кутом.
  */
-/**
- * Скільки кольорів показуємо, поки не попросили решту. Дванадцять — це три ряди
- * плиток: далі картка перестає бути підказкою й стає сторінкою товару.
- */
-const COLOR_CAP = 12;
-
-function needsVariantChoice(product: SupplierPoolProduct): boolean {
-  return product.article === null && product.variants.some((variant) => variant.article);
-}
-
 function useDebouncedValue(value: string, delay: number) {
   const [debounced, setDebounced] = React.useState(value);
   React.useEffect(() => {
@@ -944,26 +876,3 @@ function SuggestionPhoto({ url, name }: { url: string | null; name: string }) {
   );
 }
 
-/** Плитка кольору — те саме правило, тільки дрібніше. У Бергамо ПОЛОВИНА
- *  колірних рядків без власного фото (5135 із 10076), тож порожніх плиток тут
- *  більше, ніж у списку, і значок потрібен ще дужче. */
-function VariantPhoto({ url, label }: { url: string | null; label: string | null }) {
-  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
-  if (!url || failedUrl === url) {
-    return <ImageOff className="h-3 w-3 text-muted-foreground/50" aria-hidden />;
-  }
-  return (
-    // Пріоритет той самий, що в SuggestionPhoto, і тут він важить найбільше:
-    // розгорнута картка Бергамо це десятки колірних плиток, тобто десятки
-    // повнорозмірних кадрів одним залпом.
-    <img
-      src={url}
-      alt={label ?? ""}
-      loading="lazy"
-      fetchPriority="low"
-      decoding="async"
-      onError={() => setFailedUrl(url)}
-      className="h-full w-full object-cover"
-    />
-  );
-}
