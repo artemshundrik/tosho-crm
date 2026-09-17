@@ -76,8 +76,38 @@ export const QuoteItemSupplierLinks: React.FC<QuoteItemSupplierLinksProps> = ({
     ?.kinds.find((kind) => kind.id === kindId)
     ?.models.find((candidate) => candidate.id === modelId);
 
-  const supplierUrl = (model?.metadata?.supplierUrl ?? snapshot(metadata, "supplierUrl")).trim();
-  const avantprintUrl = (model?.metadata?.avantprintUrl ?? snapshot(metadata, "avantprintUrl")).trim();
+  /**
+   * ЧИЙ АРТИКУЛ — ТОГО Й ПОСИЛАННЯ (REQ-285#p13).
+   *
+   * За замовчуванням веде МОДЕЛЬ, і це навмисно: її адресу правлять у каталозі,
+   * і правка має доїжджати до вже створених прорахунків, а знімок у позиції
+   * лишається запасним.
+   *
+   * АЛЕ МОДЕЛЬ ОДНА НА ВСІ КОЛЬОРИ. Живий випадок: у TS-0926-0029 стоїть
+   * блакитна «Записна книжка А5, Soft» (артикул 1291-12, адреса `…-uk-9`), а
+   * модель несе `…-uk-10` — артикул 1291-16, колір фіолетовий. Картка
+   * показувала блакитну книжку з блакитним артикулом, а кнопка «Totobi»
+   * відкривала фіолетову. Для менеджера це «CRM переплутала колір», хоч
+   * насправді в одному рядку зійшлись два різні товари.
+   *
+   * Тому: артикули розійшлись — позиція каже про себе сама; збіглись або їх
+   * немає — веде модель, як і вела.
+   */
+  const readSku = (source: unknown): string => {
+    const record = source as { sku?: unknown } | null | undefined;
+    return typeof record?.sku === "string" ? record.sku.trim() : "";
+  };
+  const itemSku = readSku(metadata);
+  const modelSku = readSku(model?.metadata);
+  const ownVariant = Boolean(itemSku && modelSku && itemSku !== modelSku);
+  const pick = (key: "supplierUrl" | "avantprintUrl") =>
+    (ownVariant
+      ? snapshot(metadata, key) || model?.metadata?.[key] || ""
+      : model?.metadata?.[key] ?? snapshot(metadata, key)
+    ).trim();
+
+  const supplierUrl = pick("supplierUrl");
+  const avantprintUrl = pick("avantprintUrl");
 
   return (
     <>

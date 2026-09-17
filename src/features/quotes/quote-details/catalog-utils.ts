@@ -20,6 +20,13 @@ export type CatalogModel = {
     specPreset?: string | null;
     supplierUrl?: string | null;
     avantprintUrl?: string | null;
+    /**
+     * Артикул моделі — його пише фонова розвідка лінка (REQ-247) і візард при
+     * створенні моделі з прорахунку. Потрібен, щоб відрізнити позицію ІНШОГО
+     * кольору від тієї самої: у моделі артикул один, а кольори мають свої
+     * (`QuoteItemSupplierLinks`, REQ-285#p13).
+     */
+    sku?: string | null;
   };
 };
 export type CatalogKind = {

@@ -93,3 +93,35 @@ describe("QuoteItemSupplierLinks", () => {
     expect(link).toHaveAttribute("href", "https://www.some-new-shop.com/item/1");
   });
 });
+
+/**
+ * Живий випадок 17.09.2026 (REQ-285#p13). Модель у каталозі одна на всі
+ * кольори: у TS-0926-0029 стоїть блакитна книжка (1291-12, `…-uk-9`), а модель
+ * несе `…-uk-10` — фіолетову, артикул 1291-16. Картка показувала блакитну, а
+ * кнопка «Totobi» відкривала фіолетову.
+ */
+describe("QuoteItemSupplierLinks — колір позиції проти парасольки моделі", () => {
+  it("артикули розійшлись — веде посилання позиції, а не моделі", () => {
+    renderLinks({
+      metadata: { sku: "1291-12", supplierUrl: "https://totobi.com.ua/…-uk-9/" },
+      catalogTypes: catalog({ sku: "1291-16", supplierUrl: "https://totobi.com.ua/…-uk-10/" }),
+    });
+
+    expect(screen.getByRole("link", { name: /Totobi/ })).toHaveAttribute(
+      "href",
+      "https://totobi.com.ua/…-uk-9/"
+    );
+  });
+
+  it("артикул той самий — і далі веде жива модель", () => {
+    renderLinks({
+      metadata: { sku: "1291-16", supplierUrl: "https://totobi.com.ua/old/" },
+      catalogTypes: catalog({ sku: "1291-16", supplierUrl: "https://totobi.com.ua/new/" }),
+    });
+
+    expect(screen.getByRole("link", { name: /Totobi/ })).toHaveAttribute(
+      "href",
+      "https://totobi.com.ua/new/"
+    );
+  });
+});
