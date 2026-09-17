@@ -60,7 +60,6 @@ import {
   formatPrintProductSummary,
   getPrintProductConfig,
   getPrintProductDetailSections,
-  type PrintConfiguratorPreset,
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
@@ -274,6 +273,7 @@ import {
   type DesignTaskRow,
   type QuoteAttachment,
   type QuoteComment,
+  type CatalogModelRowRaw,
 } from "@/features/quotes/quote-details/queries";
 import { QuoteTypeBadge } from "@/features/quotes/components/QuoteTypeBadge";
 import {
@@ -2458,17 +2458,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           tiersByModel: Map<string, CatalogPriceTier[]>;
         }) => {
           const modelsByKind = new Map<string, CatalogModel[]>();
-          ((modelRows ?? []) as Array<{
-            id: string;
-            kind_id: string;
-            name: string;
-            price?: number | null;
-            image_url?: string | null;
-            configuratorPreset?: PrintConfiguratorPreset | null;
-            specPreset?: string | null;
-            supplierUrl?: string | null;
-            avantprintUrl?: string | null;
-          }>).forEach((row) => {
+          ((modelRows ?? []) as CatalogModelRowRaw[]).forEach((row) => {
             const list = modelsByKind.get(row.kind_id) ?? [];
             list.push({
               id: row.id,
@@ -2476,12 +2466,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               price: row.price ?? undefined,
               imageUrl: row.image_url ?? undefined,
               metadata:
-                row.configuratorPreset || row.specPreset || row.supplierUrl || row.avantprintUrl
+                row.configuratorPreset || row.specPreset || row.supplierUrl || row.avantprintUrl || row.sku
                   ? {
                       configuratorPreset: row.configuratorPreset ?? undefined,
                       specPreset: row.specPreset ?? null,
                       supplierUrl: row.supplierUrl ?? null,
                       avantprintUrl: row.avantprintUrl ?? null,
+                      // Артикул віддає сам запит; без нього не працює правило
+                      // «чий артикул, того й посилання» (REQ-285#p13).
+                      sku: row.sku ?? null,
                     }
                   : undefined,
               methodIds: methodIdsByModel.get(row.id) ?? [],
