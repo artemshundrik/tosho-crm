@@ -85,3 +85,87 @@ describe("сповіщення про статус прорахунку", () => 
     expect(notifyUsers).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * ВІДКАТ СТАТУСУ — ТАКА САМА ПОДІЯ, ЯК І РУХ УПЕРЕД (REQ-287).
+ *
+ * 17.09.2026 менеджер отримав «Прорахунок готовий» по TS-0926-0027 і за
+ * 28 секунд відкрив порожню картку в статусі «На прорахунку»: проджект
+ * перевів прорахунок у «Пораховано» о 10:41:42 (ціни тоді справді стояли),
+ * а о 10:42:17 повернув назад і обнулив собівартість. Сповіщення не
+ * збрехало — воно описало справжній перехід; брехнею його зробило
+ * МОВЧАННЯ про скасування.
+ *
+ * Причина: `getQuoteStatusAlert` знала лише рух уперед. Тепер будь-який рух
+ * назад по порядку колонок дошки прорахунків — теж подія.
+ */
+describe("відкат статусу прорахунку", () => {
+  beforeEach(() => {
+    notifyUsers.mockClear();
+  });
+
+  it("сповіщає, коли «Пораховано» повернули на прорахунок", async () => {
+    await notifyQuoteInitiatorOnStatusChange({
+      quoteId,
+      fromStatus: "estimated",
+      toStatus: "estimating",
+      actorUserId: "someone-else",
+    });
+    expect(notifyUsers).toHaveBeenCalledTimes(1);
+    expect(notifyUsers.mock.calls[0][0]).toMatchObject({
+      title: "Прорахунок повернули назад",
+      body: "Прорахунок #TS-0826-0026 повернули у статус «На прорахунку».",
+    });
+  });
+
+  it("сповіщає і про відкат із «Затверджено»", async () => {
+    await notifyQuoteInitiatorOnStatusChange({
+      quoteId,
+      fromStatus: "approved",
+      toStatus: "awaiting_approval",
+      actorUserId: "someone-else",
+    });
+    expect(notifyUsers).toHaveBeenCalledTimes(1);
+    expect(notifyUsers.mock.calls[0][0]).toMatchObject({
+      title: "Прорахунок повернули назад",
+      body: "Прорахунок #TS-0826-0026 повернули у статус «На погодженні».",
+    });
+  });
+
+  // Скасування — не відкат: воно виведене з дошки (kanbanBoards.offBoard) і
+  // сповіщень не мало й не має. Інакше «Скасовано» читалось би як крок назад
+  // по конвеєру, яким воно не є.
+  it("мовчить про скасування", async () => {
+    await notifyQuoteInitiatorOnStatusChange({
+      quoteId,
+      fromStatus: "estimated",
+      toStatus: "cancelled",
+      actorUserId: "someone-else",
+    });
+    expect(notifyUsers).not.toHaveBeenCalled();
+  });
+
+  // Повернення зі «Скасованих» на дошку (restoreQuote) `fromStatus` не
+  // передає — і не мусить стати «відкатом» через це.
+  it("мовчить, коли попередній статус невідомий", async () => {
+    await notifyQuoteInitiatorOnStatusChange({
+      quoteId,
+      toStatus: "new",
+      actorUserId: "someone-else",
+    });
+    expect(notifyUsers).not.toHaveBeenCalled();
+  });
+
+  it("не плутає взяття в роботу з відкатом", async () => {
+    await notifyQuoteInitiatorOnStatusChange({
+      quoteId,
+      fromStatus: "new",
+      toStatus: "estimating",
+      actorUserId: "someone-else",
+    });
+    expect(notifyUsers).toHaveBeenCalledTimes(1);
+    expect(notifyUsers.mock.calls[0][0]).toMatchObject({
+      title: "Прорахунок взято в роботу",
+    });
+  });
+});

@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import { formatRatePercent, minMarkupRateFor, type QuoteDealType } from "@/lib/quoteDealType";
+import { boardColumnStatuses } from "@/lib/kanbanBoards";
 
 const isUuid = (value?: string | null) =>
   typeof value === "string" &&
@@ -201,12 +202,75 @@ async function resolveQuoteInitiator(quoteId: string): Promise<QuoteRecipient> {
   return { teamId, createdBy, assignedTo, userId: createdBy ?? assignedTo, quoteNumber };
 }
 
+/**
+ * Підписи статусів для тексту сповіщення.
+ *
+ * ЧОМУ НЕ ІМПОРТ, хоч така мапа вже є у features/quotes/quotes-page/config.ts:
+ * той модуль тягне за собою іконки з appIcons (реекспорт Phosphor), і барель
+ * іконок опинився б у шляху доставки сповіщень. Шість рядків дешевші за це, а
+ * розійтись їм майже нікуди: `quote_status` — enum у базі, новий стан без
+ * міграції не з'явиться.
+ */
+const QUOTE_STATUS_LABELS: Record<string, string> = {
+  new: "Новий",
+  estimating: "На прорахунку",
+  estimated: "Пораховано",
+  awaiting_approval: "На погодженні",
+  approved: "Затверджено",
+};
+
+/**
+ * Чи це рух НАЗАД по конвеєру прорахунків.
+ *
+ * Порядок беремо з реєстру дошок — того самого, що малює колонки зліва
+ * направо. Своя копія переліку тут розійшлася б із дошкою першою ж зміною
+ * потоку.
+ *
+ * Обидва статуси мусять бути НА дошці. «Скасовано» виведене з неї
+ * (kanbanBoards.offBoard), і відкатом воно не є: скасування — вихід із
+ * конвеєра, а не крок назад по ньому. Невідомий `fromStatus` (повернення зі
+ * «Скасованих» його не передає) дає −1 і теж не вважається відкатом.
+ */
+function isQuoteStatusRollback(fromStatus: string, toStatus: string): boolean {
+  const flow = boardColumnStatuses("quotes");
+  const fromIndex = flow.indexOf(fromStatus);
+  const toIndex = flow.indexOf(toStatus);
+  return fromIndex >= 0 && toIndex >= 0 && toIndex < fromIndex;
+}
+
 function getQuoteStatusAlert(fromStatus: string, toStatus: string) {
   if (fromStatus === "new" && toStatus === "estimating") {
     return {
       title: "Прорахунок взято в роботу",
       body: (quoteRef: string) => `${quoteRef} переведено у статус «На прорахунку».`,
       type: "info" as const,
+    };
+  }
+
+  /*
+   * ВІДКАТ — ПЕРЕД таблицею руху вперед, і саме в цьому суть виправлення
+   * (REQ-287).
+   *
+   * Таблиця нижче ключована лише цільовим статусом, тож на відкаті вона
+   * рапортувала ПРОГРЕС: перехід «Затверджено» → «На погодженні» надсилав
+   * «Прорахунок передано на погодження», ніби прорахунок щойно поїхав уперед.
+   * А відкат «Пораховано» → «На прорахунку» не мав у таблиці ключа взагалі —
+   * і система просто замовкала.
+   *
+   * 17.09.2026 менеджеру по TS-0926-0027 прилетіло «Прорахунок готовий»
+   * (10:41:46, push і telegram). О 10:42:17 проджект повернув статус назад і
+   * обнулив собівартість. Сповіщення описало справжній перехід — брехнею його
+   * зробило мовчання про скасування, і менеджер пішов питати в чат, чому
+   * картка порожня.
+   */
+  if (isQuoteStatusRollback(fromStatus, toStatus)) {
+    const label = QUOTE_STATUS_LABELS[toStatus] ?? toStatus;
+    return {
+      title: "Прорахунок повернули назад",
+      body: (quoteRef: string) => `${quoteRef} повернули у статус «${label}».`,
+      // Не "info": це сповіщення скасовує попереднє «готовий»/«затверджено»,
+      // і воно мусить читатись інакше, ніж звичайний крок конвеєра.
+      type: "warning" as const,
     };
   }
 
@@ -253,7 +317,11 @@ export async function notifyQuoteInitiatorOnStatusChange(params: {
   } else if (userId) {
     recipients.add(userId);
   }
-  if (params.toStatus === "approved") {
+  // СЕО чує і про затвердження, і про його скасування. Асиметрія тут була б
+  // гіршою за зайве повідомлення: той, кому сказали «затверджено», мусить
+  // дізнатись, що затвердження зняли, — інакше рішення лишається в голові
+  // хибним (REQ-287).
+  if (params.toStatus === "approved" || fromStatus === "approved") {
     const members = await resolveTeamMembers(teamId);
     for (const ceoUserId of pickCeoUserIds(members)) recipients.add(ceoUserId);
   }
