@@ -123,11 +123,26 @@ describe("вибір головного рядка з пулу (REQ-285#p2)", ()
     expect(pickPoolMatch([row()], "article")?.matchedBy).toBe("article");
   });
 
-  it("артикул один на всі варіанти — віддаємо його", () => {
-    const match = pickPoolMatch([row({ id: "a", article: "ka911" }), row({ id: "b", article: "ka911" })], "url");
+  it("один рядок за адресою — вибирати нема з чого, артикул віддаємо", () => {
+    const match = pickPoolMatch([row({ id: "a", article: "1291-12" })], "url");
 
-    expect(match?.article).toBe("ka911");
+    expect(match?.article).toBe("1291-12");
     expect(match?.ambiguousArticle).toBe(false);
+  });
+
+  /**
+   * Топтайм тримає всі кольори на ОДНІЙ сторінці, і артикул у них спільний
+   * (`ST7000`) — різняться фото й ціна. Правило «різні артикули» тут мовчало,
+   * і позиція мовчки ставала першим-ліпшим кольором.
+   */
+  it("кольорів кілька, а артикул спільний — усе одно мовчимо, поки колір не обрано", () => {
+    const match = pickPoolMatch(
+      [row({ id: "a", article: "ST7000", price: 269.99 }), row({ id: "b", article: "ST7000", price: 301.35 })],
+      "url"
+    );
+
+    expect(match?.article).toBeNull();
+    expect(match?.ambiguousArticle).toBe(true);
   });
 
   it("артикули варіантів різні — не віддаємо жодного, поки колір не обрано", () => {
