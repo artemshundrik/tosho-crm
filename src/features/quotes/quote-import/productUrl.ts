@@ -50,7 +50,12 @@ const TRACKING_PARAMS = new Set([
  */
 const TRACKING_PREFIXES = ["utm_"];
 
-function isTrackingParam(name: string): boolean {
+/**
+ * Експортується заради `_lib/supplierPoolLookup.ts` (REQ-285#p2): він теж
+ * складає написання адреси без рекламного хвоста, і другий перелік міток
+ * розійшовся б із цим на першій же новій мітці.
+ */
+export function isTrackingParam(name: string): boolean {
   const key = name.toLowerCase();
   return TRACKING_PARAMS.has(key) || TRACKING_PREFIXES.some((prefix) => key.startsWith(prefix));
 }

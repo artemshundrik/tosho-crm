@@ -6,9 +6,16 @@ import { parseBody } from "./_lib/parseBody";
 import { fetchProductPage } from "./_lib/externalFetch";
 import { extractOgTags } from "./_lib/ogTags";
 import { extractProductSku } from "./_lib/productSku";
+import { findPoolByArticle, findPoolByUrl, type SupplierPoolMatch } from "./_lib/supplierPoolLookup";
 
 /**
  * Фото товару для ПРЕВ'Ю імпорту (REQ-236).
+ *
+ * ДРАБИНКА З ТРЬОХ СХОДИНОК (REQ-285). Спершу шукаємо товар у власному пулі
+ * постачальників за адресою, потім — за артикулом у межах того ж постачальника,
+ * і лише потім ідемо читати чужу сторінку, як робили досі. Чому саме в такому
+ * порядку й чому ключем є адреса, а не артикул — у заголовку
+ * `_lib/supplierPoolLookup.ts`, там же й заміри.
  *
  * ЧОМУ НЕ ФОНОВА `quote-import-research-background`. Та працює з уже
  * створеними позиціями: читає `metadata.supplierUrl`, стискає картинку й
@@ -88,6 +95,35 @@ function describeHttpStatus(status: number): { status: PreviewStatus; reason: st
   return { status: "failed", reason: `Сайт відповів ${status}` };
 }
 
+/** Відповідь, зібрана з рядка пулу, — однакова для обох сходинок драбинки. */
+function poolResponse(url: string, match: SupplierPoolMatch) {
+  return jsonResponse(200, {
+    url,
+    status: (match.imageUrl ? "done" : "no_image") satisfies PreviewStatus,
+    reason: match.imageUrl ? null : "У пулі цей товар без фото",
+    title: match.name,
+    imageUrl: match.imageUrl,
+    imageSource: "pool",
+    sku: match.article,
+    skuSource: "pool",
+    source: "pool",
+    supplierSlug: match.supplierSlug,
+    matchedBy: match.matchedBy,
+    price: match.price,
+    currency: match.currency,
+    priceKind: match.priceKind,
+    poolRowId: match.rowId,
+    // Артикул мовчить, поки кольори не розведені: у Е-Сувеніра він у кожного
+    // кольору свій, і перший-ліпший означав би замовлення не того кольору.
+    ambiguousArticle: match.ambiguousArticle,
+    // Самі рядки їдуть до клієнта, а не лише їх кількість: з них збирається
+    // вибір кольору тим самим `groupSupplierPoolRows`, що й у пошуку пулу
+    // (REQ-285#p7). Поля вже обрізані — важкої `attrs` серед них немає.
+    variants: match.rows,
+    variantCount: match.rows.length,
+  });
+}
+
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") return jsonResponse(204, {});
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method Not Allowed" });
@@ -119,6 +155,14 @@ export const handler = async (event: HttpEvent) => {
 
   const url = parsed.data.url;
 
+  // ПЕРША СХОДИНКА — НАШ ПУЛ, і лише потім чужий сайт (REQ-285#p3). Товар,
+  // який у нас уже є, не треба ні качати, ні вгадувати: там і назва, і фото, і
+  // артикул, і наша ціна. На 22 посиланнях, вставлених на проді, пул закрив
+  // усі 17, що вели на наші сайти. Читаємо клієнтом користувача — RLS та сама,
+  // що у вікні пошуку пулу.
+  const pooled = await findPoolByUrl(userClient, url);
+  if (pooled) return poolResponse(url, pooled);
+
   try {
     // Сторожа від SSRF кличе сам `fetchProductPage` — і на кожному переході,
     // і на адресі, яку віддаємо проксі.
@@ -136,6 +180,7 @@ export const handler = async (event: HttpEvent) => {
         title: null,
         imageUrl: null,
         sku: null,
+        source: "page",
       });
     }
 
@@ -145,6 +190,12 @@ export const handler = async (event: HttpEvent) => {
     // сторінка без фото цілком може мати артикул у розмітці.
     const sku = extractProductSku(page.html);
 
+    // ДРУГА СХОДИНКА. Артикул є лише тепер, тож походу по сайту вона не
+    // економить — вона рятує його результат: рядок пулу точніший за розмітку
+    // магазину і в назві, і у фото, і в ціні.
+    const pooledByArticle = await findPoolByArticle(userClient, url, sku?.value);
+    if (pooledByArticle) return poolResponse(url, pooledByArticle);
+
     if (!tags.imageUrl) {
       return jsonResponse(200, {
         url,
@@ -153,6 +204,7 @@ export const handler = async (event: HttpEvent) => {
         title: tags.title,
         imageUrl: null,
         sku: sku?.value ?? null,
+        source: "page",
       });
     }
 
@@ -165,6 +217,7 @@ export const handler = async (event: HttpEvent) => {
       imageSource: tags.imageSource,
       sku: sku?.value ?? null,
       skuSource: sku?.source ?? null,
+      source: "page",
     });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "Не вдалося відкрити сторінку";
@@ -175,6 +228,7 @@ export const handler = async (event: HttpEvent) => {
       title: null,
       imageUrl: null,
       sku: null,
+      source: "page",
     });
   }
 };

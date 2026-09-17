@@ -12,14 +12,16 @@ import {
 } from "./_lib/externalFetch";
 import { extractOgTags } from "./_lib/ogTags";
 import { extractProductSku } from "./_lib/productSku";
+import { findPoolByArticle, findPoolByUrl, type SupplierPoolMatch } from "./_lib/supplierPoolLookup";
 
 /**
  * Дослідження лінків постачальників після імпорту (REQ-233, §3.4).
  *
- * ЩО РОБИТЬ. Для кожної щойно імпортованої позиції відкриває посилання з
- * `metadata.supplierUrl`, читає og:title / og:image ЗВИЧАЙНИМ КОДОМ (жодної
- * моделі — тут нема чого розуміти, є що прочитати), стискає картинку в webp і
- * кладе її в Storage. У позицію дописується лише `metadata`: назва товару
+ * ЩО РОБИТЬ. Для кожної щойно імпортованої позиції шукає товар СПЕРШУ В
+ * НАШОМУ ПУЛІ постачальників за адресою (REQ-285), а не знайшовши — відкриває
+ * посилання, читає og:title / og:image ЗВИЧАЙНИМ КОДОМ (жодної моделі — тут
+ * нема чого розуміти, є що прочитати) і ще раз питає пул, уже за артикулом зі
+ * сторінки. Далі стискає картинку в webp і кладе її в Storage. У позицію дописується лише `metadata`: назва товару
  * постачальника й адреса картинки. Цін ця функція не торкається взагалі.
  *
  * ЧОМУ ФОНОВА. Тридцять сайтів по 2–10 секунд не влазять у звичайний ліміт
@@ -102,7 +104,34 @@ function readSupplierUrl(metadata: Record<string, unknown> | null): string | nul
  * і `cdn1.midocean.com` віддають картинки звичайному запиту. Стіна стоїть на
  * сторінках, не на сховищі, тож `storeImage` лишається як був.
  */
-async function fetchProductFacts(url: string) {
+type ProductFacts = {
+  title: string | null;
+  imageUrl: string | null;
+  sku: string | null;
+  /** Якою сходинкою драбинки взялись дані — це лягає в `metadata.research`. */
+  source: "pool" | "page";
+  /** Рядок пулу, якщо знайшовся: з нього беруться варіанти й наша ціна. */
+  pool: SupplierPoolMatch | null;
+};
+
+function factsFromPool(match: SupplierPoolMatch): ProductFacts {
+  return { title: match.name, imageUrl: match.imageUrl, sku: match.article, source: "pool", pool: match };
+}
+
+/**
+ * Драбинка з трьох сходинок (REQ-285#p4) — та сама, що у прев'ю.
+ *
+ * ЧОМУ АРТИКУЛЬНА СХОДИНКА ПІСЛЯ СТОРІНКИ, А НЕ ЗАМІСТЬ НЕЇ. Артикул узятись
+ * більше нізвідки: на сторінці його читає `extractProductSku`. Тобто друга
+ * сходинка не економить похід по сайту — вона рятує його результат. Рівно цей
+ * випадок і стався на ENEY: сторінка прочиталась, але `og:image` у них на всіх
+ * товарах дорівнює логотипу магазину, тоді як у пулі той самий артикул лежить
+ * зі справжнім фото й нашою ціною.
+ */
+async function collectProductFacts(client: SupabaseClient, url: string): Promise<ProductFacts> {
+  const byUrl = await findPoolByUrl(client, url);
+  if (byUrl) return factsFromPool(byUrl);
+
   const page = await fetchProductPage(url, {
     timeoutMs: SITE_TIMEOUT_MS,
     proxyTimeoutMs: SITE_TIMEOUT_MS,
@@ -111,7 +140,13 @@ async function fetchProductFacts(url: string) {
   if (page.status === "blocked") throw new Error("Сайт не пускає роботів.");
   if (page.status !== "ok") throw new Error(`Сайт відповів ${page.httpStatus}.`);
   // Артикул читається з тієї самої сторінки (REQ-247) — окремого походу немає.
-  return { ...extractOgTags(page.html, page.baseUrl), sku: extractProductSku(page.html)?.value ?? null };
+  const tags = extractOgTags(page.html, page.baseUrl);
+  const sku = extractProductSku(page.html)?.value ?? null;
+
+  const byArticle = await findPoolByArticle(client, url, sku);
+  if (byArticle) return factsFromPool(byArticle);
+
+  return { title: tags.title, imageUrl: tags.imageUrl, sku, source: "page", pool: null };
 }
 
 async function storeImage(params: {
@@ -206,7 +241,7 @@ export const handler = async (event: HttpEvent) => {
       metadata.research = { status: "skipped", fetchedAt };
     } else {
       try {
-        const tags = await fetchProductFacts(supplierUrl);
+        const tags = await collectProductFacts(userClient, supplierUrl);
         let imageUrl: string | null = null;
         if (tags.imageUrl) {
           imageUrl = await storeImage({
@@ -229,12 +264,15 @@ export const handler = async (event: HttpEvent) => {
           // поле вже сьогодні, тож картинка й назва з'являються без жодної
           // зміни в UI. `id` штучний — товару каталогу за цим нічого не стоїть.
           metadata.catalogVariant = {
-            id: `import:${item.id}`,
+            // `pool:<id рядка>` замість штучного `import:<id позиції>`, коли
+            // товар знайшовся в нас: за цим id підставляється собівартість, і
+            // без нього зв'язок із пулом губиться назавжди (REQ-285#p4).
+            id: tags.pool ? `pool:${tags.pool.rowId}` : `import:${item.id}`,
             name: (tags.title ?? "").slice(0, 160) || "Товар постачальника",
             sku: existingSku || tags.sku,
             imageUrl,
           };
-          metadata.research = { status: "done", fetchedAt };
+          metadata.research = { status: "done", fetchedAt, source: tags.source };
           outcome = "done";
 
           // Товар за посиланням уже став рядком каталогу (REQ-182#p18), але
@@ -274,7 +312,12 @@ export const handler = async (event: HttpEvent) => {
             }
           }
         } else {
-          metadata.research = { status: "failed", fetchedAt, error: "Сторінка не віддала ні назви, ні картинки." };
+          metadata.research = {
+            status: "failed",
+            fetchedAt,
+            error: "Сторінка не віддала ні назви, ні картинки.",
+            source: tags.source,
+          };
         }
       } catch (error) {
         // Один упертий сайт не має валити решту черги.

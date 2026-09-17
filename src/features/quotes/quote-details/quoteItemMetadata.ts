@@ -94,10 +94,15 @@ export function parseQuoteItemMetadata(value: unknown): QuoteItemMetadata | null
     const researchRecord = research as Record<string, unknown>;
     const status = researchRecord.status;
     if (status === "done" || status === "failed" || status === "skipped") {
+      const source = researchRecord.source;
       metadata.research = {
         status,
         fetchedAt: typeof researchRecord.fetchedAt === "string" ? researchRecord.fetchedAt : "",
         error: typeof researchRecord.error === "string" ? researchRecord.error : null,
+        // Білий список стосується й вкладених полів: без цього рядка «звідки
+        // взялись дані» зникало б на читанні так само тихо, як свого часу
+        // `supplierUrl` (REQ-285#p4).
+        source: source === "pool" || source === "page" ? source : null,
       };
     }
   }

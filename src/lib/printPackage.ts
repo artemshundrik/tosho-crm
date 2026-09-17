@@ -112,8 +112,21 @@ export type QuoteItemMetadata = {
   importLinks?: string[] | null;
   /** Слід імпорту: звідки позиція взялася й з яких рядків файлу зібрана. */
   import?: { fileName: string; importedAt: string; sourceRows: number[] } | null;
-  /** Стан фонового дослідження лінка — з нього росте бедж «не вдалося підтягнути». */
-  research?: { status: "done" | "failed" | "skipped"; fetchedAt: string; error?: string | null } | null;
+  /**
+   * Стан фонового дослідження лінка — з нього росте бедж «не вдалося підтягнути».
+   *
+   * `source` каже, ЯКОЮ сходинкою драбинки взялись дані (REQ-285): `pool` —
+   * рядок нашого пулу постачальників, `page` — розмітка чужої сторінки. Без
+   * цього поля різницю не видно ніяк, а вона визначає, наскільки даним можна
+   * вірити: саме нерозрізненність ховала логотип ENEY і заголовок Е-Сувеніра
+   * у полях «назва товару» й «фото».
+   */
+  research?: {
+    status: "done" | "failed" | "skipped";
+    fetchedAt: string;
+    error?: string | null;
+    source?: "pool" | "page" | null;
+  } | null;
 };
 
 export type PrintPackageDetailField = {
