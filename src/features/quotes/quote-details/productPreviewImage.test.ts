@@ -15,16 +15,21 @@ describe("фото на картці позиції (REQ-285#p6)", () => {
     expect(pickProductPreview(sources())).toBeNull();
   });
 
-  it("фото моделі виграє в картинки з посилання", () => {
+  /**
+   * Живий випадок, з якого виріс порядок: у прорахунку TS-0926-0029 стоїть
+   * блакитна книжка (артикул 1291-12), а модель каталогу несе фіолетову з
+   * іншого прорахунку — модель одна на всі кольори.
+   */
+  it("картинка з посилання виграє у фото моделі — вона того самого кольору, що й позиція", () => {
     const preview = pickProductPreview(
-      sources({ catalogImage: "/model-thumb.webp", variantImageUrl: "https://eney.com.ua/logo-1.png" })
+      sources({ catalogImage: "/model-purple.webp", variantImageUrl: "/item-blue.webp" })
     );
 
-    expect(preview?.url).toBe("/model-thumb.webp");
+    expect(preview?.url).toBe("/item-blue.webp");
   });
 
-  it("без моделі показуємо картинку з посилання", () => {
-    expect(pickProductPreview(sources({ variantImageUrl: "/supplier.webp" }))?.url).toBe("/supplier.webp");
+  it("без картинки з посилання показуємо фото моделі", () => {
+    expect(pickProductPreview(sources({ catalogImage: "/model.webp" }))?.url).toBe("/model.webp");
   });
 
   it("вкладення — останнє джерело", () => {
@@ -38,6 +43,14 @@ describe("фото на картці позиції (REQ-285#p6)", () => {
 
     expect(preview?.url).toBe("/thumb.webp");
     expect(preview?.zoomUrl).toBe("/full.webp");
+  });
+
+  it("картинка з посилання лишається собою і в перегляді", () => {
+    const preview = pickProductPreview(
+      sources({ catalogImage: "/thumb.webp", catalogZoomImage: "/full.webp", variantImageUrl: "/item.webp" })
+    );
+
+    expect(preview?.zoomUrl).toBe("/item.webp");
   });
 
   it("немає повного — перегляд не лишається порожнім", () => {
