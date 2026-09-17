@@ -92,3 +92,17 @@ describe("дзеркало мутуючих RPC", () => {
     expect([...MUTATING_RPCS].sort()).toEqual(names.sort());
   });
 });
+
+describe("функції-читачі", () => {
+  it("прев'ю посилання пускаємо: POST, але записів немає", () => {
+    expect(
+      classifyRequest("POST", "https://app.local/.netlify/functions/quote-import-link-preview", "db.local")
+    ).toEqual({ blocked: false });
+  });
+
+  it("решта функцій і далі глушиться", () => {
+    expect(
+      classifyRequest("POST", "https://app.local/.netlify/functions/quote-comments", "db.local")
+    ).toMatchObject({ blocked: true });
+  });
+});

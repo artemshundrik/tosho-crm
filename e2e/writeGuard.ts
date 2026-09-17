@@ -46,6 +46,9 @@ export const MUTATING_RPCS = [
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/** Функції, які ходять POST-ом, але нічого не змінюють (див. нижче, де їх пускаємо). */
+const READ_ONLY_FUNCTIONS = new Set(["quote-import-link-preview"]);
+
 export type BlockedWrite = { method: string; url: string; why: string };
 
 /**
@@ -71,7 +74,20 @@ export function classifyRequest(
   // них пише (створює документи, шле сповіщення). Хост тут свій — той, на
   // якому підняте прев'ю, — тож звіряємось за шляхом.
   if (parsed.pathname.startsWith("/.netlify/functions/")) {
-    return { blocked: true, why: `Netlify-функція ${parsed.pathname.split("/").pop()}` };
+    const name = parsed.pathname.split("/").pop() ?? "";
+    /**
+     * ЧИТАЧІ СЕРЕД ФУНКЦІЙ — ТАКА САМА ВИНЯТКОВІСТЬ, ЯК ПІДПИС У STORAGE нижче:
+     * метод POST, а запису немає. `quote-import-link-preview` лише шукає товар
+     * у пулі й читає чужу сторінку, щоб віддати назву, фото й ціну; у базу він
+     * не пише жодного рядка (перевірено за кодом функції: жодного insert/update).
+     *
+     * Поки він глушився, перевірити вставку посилання сценарієм було НЕМОЖЛИВО:
+     * запит падав 423-м, рядок приїжджав із «Фото дістати не вдалося», і це
+     * виглядало точно як поломка застосунку. Три рази поспіль (17.09.2026) я
+     * через це віддавав перевірку Артемові замість перевірити сам.
+     */
+    if (READ_ONLY_FUNCTIONS.has(name)) return { blocked: false };
+    return { blocked: true, why: `Netlify-функція ${name}` };
   }
 
   if (!host || parsed.host !== host) return { blocked: false };

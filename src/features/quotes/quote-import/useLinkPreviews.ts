@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabaseClient";
 
-import { needsVariantChoice } from "@/components/catalog/SupplierVariantTiles";
 import { groupSupplierPoolRows, type SupplierPoolRow } from "@/lib/supplierPoolRows";
 
 import type { QuoteImportDraftItem, QuoteImportLinkPreview, QuoteImportPoolMatch } from "./types";
@@ -55,18 +54,20 @@ function toPoolMatch(payload: PreviewResponse | null): QuoteImportPoolMatch | nu
   const [product] = groupSupplierPoolRows(rows, 1);
   if (!product) return null;
   /**
-   * ЧИ ПИТАТИ КОЛІР — ВИРІШУЄ ТА САМА ФУНКЦІЯ, ЩО В ПОШУКУ, а не ознака з
-   * відповіді сервера. Сервер каже лише, чи розійшлись АРТИКУЛИ, — і на цьому
-   * я помилився: у Топтайма артикул один на всі 14 кольорів (`ST7000`), а
-   * різняться фото й ціна (269,99–301,35). Тобто за посиланням картка
-   * мовчки брала перший колір, тоді як той самий товар, знайдений назвою,
-   * чесно питав.
+   * ЧИ ПИТАТИ КОЛІР — ЦЕ «ВАРІАНТІВ БІЛЬШЕ ОДНОГО», і нічого хитрішого.
    *
-   * `needsVariantChoice` дивиться на те, що справді важить: картка без
-   * власного артикула, у якої варіанти свої артикули мають, — це вибір, який
-   * ще не зроблено.
+   * ЗАМІРЯНО 17.09.2026, бо двічі вгадав неправильно. Спершу взяв ознаку
+   * «артикули варіантів різні» — вона правдива для Е-Сувеніра, де кожен колір
+   * має свій код, і мовчить для Топтайма, де на всі 14 кольорів один `ST7000`.
+   * Потім підставив `needsVariantChoice` із пошуку — а вона означає інше:
+   * «картка без власного артикула». На рядках Топтайма вона теж повертає
+   * `false` (перевірено групуванням: `article: "ST7000"`, `needs: false`), бо
+   * артикул у картки якраз Є.
+   *
+   * У пошуку за назвою плитки відкриває сам чип «N кольор.», тобто умова там —
+   * просто кількість варіантів. Тут має бути та сама.
    */
-  return { product, needsColor: needsVariantChoice(product) };
+  return { product, needsColor: product.variants.length > 1 };
 }
 
 function toPreview(payload: PreviewResponse | null): QuoteImportLinkPreview {
