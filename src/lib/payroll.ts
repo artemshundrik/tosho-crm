@@ -5,6 +5,20 @@ import { pickRateForMonth } from "@/lib/designerPayrollMath";
 // One entry = one employee's pay for one month: ставка + премія − утримання.
 // Backed by tosho.payroll_entries (see scripts/payroll-entries.sql). Owner/CEO only via RLS.
 
+/**
+ * Гроші у відомості ходять двома контурами, і поля названі за ними:
+ *
+ * — офіційно, через банк: `deductionAmount` («Офіційна ЗП» — колонка названа
+ *   історично, коли була єдиним утриманням), `officialAdvanceAmount` (АЗП —
+ *   офіційний аванс, офіційна частина приходить двічі на місяць) і
+ *   `officialTaxAmount` (податки з офіційної частини — лише облік);
+ * — на руки: ставка + бонус − штраф − особисте замовлення − усе офіційне −
+ *   готівковий аванс = `totalAmount` («До виплати»).
+ *
+ * Обидва підсумки — `totalAmount` і `earnedAmount` — рахує база (generated
+ * columns, scripts/payroll-official-split.sql); клієнтська копія формули —
+ * `computePayrollTotals` у payrollMath.ts, і вони мусять збігатися.
+ */
 export type PayrollEntry = {
   userId: string;
   period: string; // YYYY-MM-01
@@ -13,10 +27,19 @@ export type PayrollEntry = {
   deductionAmount: number;
   /** Штраф за місяць. Віднімається від totalAmount окремо від «Офіційної ЗП». */
   penaltyAmount: number;
-  /** Уже виданий аванс. Віднімається від totalAmount — у ньому лишається залишок. */
+  /** Особисте замовлення з нашого сайту. Віднімається від totalAmount. */
+  personalOrderAmount: number;
+  /** Офіційний аванс (АЗП). Іде через банк, тож від totalAmount віднімається, як і офіційна ЗП. */
+  officialAdvanceAmount: number;
+  officialAdvanceDate: string | null; // YYYY-MM-DD
+  /** Офіційні податки з офіційної частини. Лише облік — у totalAmount не входять. */
+  officialTaxAmount: number;
+  /** Уже виданий аванс готівкою. Віднімається від totalAmount — у ньому лишається залишок. */
   advanceAmount: number;
   advanceDate: string | null; // YYYY-MM-DD
   totalAmount: number;
+  /** Загальна ЗП за місяць — скільки людина заробила: ставка + бонус − штраф. */
+  earnedAmount: number;
   note: string | null;
 };
 
@@ -25,6 +48,10 @@ export type PayrollValues = {
   bonusAmount: number;
   deductionAmount: number;
   penaltyAmount: number;
+  personalOrderAmount: number;
+  officialAdvanceAmount: number;
+  officialAdvanceDate: string | null;
+  officialTaxAmount: number;
   advanceAmount: number;
   advanceDate: string | null;
   note: string | null;
@@ -37,9 +64,14 @@ type PayrollRow = {
   bonus_amount: number | string | null;
   deduction_amount: number | string | null;
   penalty_amount: number | string | null;
+  personal_order_amount: number | string | null;
+  official_advance_amount: number | string | null;
+  official_advance_date: string | null;
+  official_tax_amount: number | string | null;
   advance_amount: number | string | null;
   advance_date: string | null;
   total_amount: number | string | null;
+  earned_amount: number | string | null;
   note: string | null;
 };
 
@@ -113,7 +145,7 @@ export async function loadPayrollEntries(
     .schema("tosho")
     .from("payroll_entries")
     .select(
-      "user_id, period, base_amount, bonus_amount, deduction_amount, penalty_amount, advance_amount, advance_date, total_amount, note"
+      "user_id, period, base_amount, bonus_amount, deduction_amount, penalty_amount, personal_order_amount, official_advance_amount, official_advance_date, official_tax_amount, advance_amount, advance_date, total_amount, earned_amount, note"
     )
     .eq("workspace_id", workspaceId)
     .eq("period", period);
@@ -129,9 +161,14 @@ export async function loadPayrollEntries(
       bonusAmount: toNumber(row.bonus_amount),
       deductionAmount: toNumber(row.deduction_amount),
       penaltyAmount: toNumber(row.penalty_amount),
+      personalOrderAmount: toNumber(row.personal_order_amount),
+      officialAdvanceAmount: toNumber(row.official_advance_amount),
+      officialAdvanceDate: row.official_advance_date,
+      officialTaxAmount: toNumber(row.official_tax_amount),
       advanceAmount: toNumber(row.advance_amount),
       advanceDate: row.advance_date,
       totalAmount: toNumber(row.total_amount),
+      earnedAmount: toNumber(row.earned_amount),
       note: row.note,
     });
   }
@@ -180,7 +217,7 @@ export async function loadEffectiveBaseRates(
   return rates;
 }
 
-/** Upsert one employee's pay for one month. total_amount is generated in the DB. */
+/** Upsert one employee's pay for one month. total_amount and earned_amount are generated in the DB. */
 export async function upsertPayrollEntry(params: {
   workspaceId: string;
   userId: string;
@@ -201,8 +238,13 @@ export async function upsertPayrollEntry(params: {
         bonus_amount: values.bonusAmount,
         deduction_amount: values.deductionAmount,
         penalty_amount: values.penaltyAmount,
+        personal_order_amount: values.personalOrderAmount,
+        official_advance_amount: values.officialAdvanceAmount,
+        // Дата без суми заборонена перевіркою в БД — тримаємо це й тут
+        // (для обох авансів: готівкового і офіційного).
+        official_advance_date: values.officialAdvanceAmount > 0 ? values.officialAdvanceDate : null,
+        official_tax_amount: values.officialTaxAmount,
         advance_amount: values.advanceAmount,
-        // Дата без суми заборонена перевіркою в БД — тримаємо це й тут.
         advance_date: values.advanceAmount > 0 ? values.advanceDate : null,
         note: values.note,
         updated_by: updatedBy,

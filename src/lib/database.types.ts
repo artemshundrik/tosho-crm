@@ -3379,9 +3379,14 @@ export type Database = {
           bonus_amount: number
           created_at: string
           deduction_amount: number
+          earned_amount: number | null
           note: string | null
+          official_advance_amount: number
+          official_advance_date: string | null
+          official_tax_amount: number
           penalty_amount: number
           period: string
+          personal_order_amount: number
           total_amount: number | null
           updated_at: string
           updated_by: string | null
@@ -3395,9 +3400,14 @@ export type Database = {
           bonus_amount?: number
           created_at?: string
           deduction_amount?: number
+          earned_amount?: number | null
           note?: string | null
+          official_advance_amount?: number
+          official_advance_date?: string | null
+          official_tax_amount?: number
           penalty_amount?: number
           period: string
+          personal_order_amount?: number
           total_amount?: number | null
           updated_at?: string
           updated_by?: string | null
@@ -3411,9 +3421,14 @@ export type Database = {
           bonus_amount?: number
           created_at?: string
           deduction_amount?: number
+          earned_amount?: number | null
           note?: string | null
+          official_advance_amount?: number
+          official_advance_date?: string | null
+          official_tax_amount?: number
           penalty_amount?: number
           period?: string
+          personal_order_amount?: number
           total_amount?: number | null
           updated_at?: string
           updated_by?: string | null

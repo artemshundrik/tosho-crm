@@ -4,7 +4,8 @@ import { FilePlus2, Loader2, StickyNote } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";
-import { FROZEN_PERSON, PayrollTableFrame, type PayrollFrameColumn } from "./PayrollTableFrame";
+import { frameCellClass, FROZEN_PERSON, PayrollTableFrame } from "./PayrollTableFrame";
+import { PAYROLL_COLUMNS, PAYROLL_GROUPS } from "./payrollColumns";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/picker-input";
@@ -26,6 +27,7 @@ import {
   MANUAL_PAYROLL_PEOPLE,
   type PayrollEntry,
 } from "@/lib/payroll";
+import { computePayrollTotals } from "@/lib/payrollMath";
 import { upsertPayoutMeta } from "./api";
 import { usePayrollPeriodData, usePayrollPrevTotal, usePayrollWorkspace } from "./queries";
 import { type FinancePayoutMeta } from "./types";
@@ -43,11 +45,14 @@ const getErrorMessage = (error: unknown, fallback: string) =>
 const fmtUAH0 = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const fmtUAH2 = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Hide kopecks for whole amounts («38 000 грн»), keep them when present («38 000,50 грн»).
-const formatUAH = (value: number) => {
+const formatAmount = (value: number) => {
   const rounded = Math.round(value * 100) / 100;
   const hasKopecks = Math.round(rounded * 100) % 100 !== 0;
-  return `${(hasKopecks ? fmtUAH2 : fmtUAH0).format(rounded)} грн`;
+  return (hasKopecks ? fmtUAH2 : fmtUAH0).format(rounded);
 };
+// Число без «грн» — для клітинок підсумку у відомості: поруч стоять поля без
+// суфікса, а «грн» у кожному з сімнадцяти рядків лише з'їдало б ширину колонки.
+const formatUAH = (value: number) => `${formatAmount(value)} грн`;
 const amountToInput = (value: number) => (value ? String(value) : "");
 
 // Розряди в полях сум: «22500» читається гірше, ніж «22 500». Intl для uk-UA
@@ -128,57 +133,44 @@ type Person = {
 type Draft = {
   base: string;
   bonus: string;
+  /** «Офіційна ЗП» — поле так зветься історично, коли було єдиним утриманням. */
   deduction: string;
   /** Штраф. Окремо від `deduction` — там «Офіційна ЗП», і вона про інше. */
   penalty: string;
+  /** Особисте замовлення з нашого сайту — віднімається з «До виплати». */
+  personalOrder: string;
+  /** Офіційний аванс (АЗП) із датою — друга половина офіційної частини. */
+  officialAdvance: string;
+  officialAdvanceDate: string;
+  /** Офіційні податки — лише облік. */
+  officialTax: string;
+  /** Аванс готівкою з датою. */
   advance: string;
   advanceDate: string;
 };
 
-const EMPTY_DRAFT: Draft = { base: "", bonus: "", deduction: "", penalty: "", advance: "", advanceDate: "" };
-
-/**
- * Опис колонок — один на таблицю і на її скелетон.
- *
- * Скелетон малюється тим самим PayrollTableFrame з тими ж відсотками, тож повторити розкладку
- * «на око» неможливо в принципі: колонка може змінитись лише тут, і змінюється
- * одразу в обох. Заголовки в скелетоні справжні, не сірі смужки — вони не
- * залежать від даних, тож коли дані приходять, нічого не стрибає.
- *
- * `cell` каже, чим заповнити клітинку в скелетоні: поле вводу, число, тощо.
- */
-type PayrollColumn = PayrollFrameColumn & {
-  cell: "person" | "input" | "amount" | "note" | "status";
+const EMPTY_DRAFT: Draft = {
+  base: "",
+  bonus: "",
+  deduction: "",
+  penalty: "",
+  personalOrder: "",
+  officialAdvance: "",
+  officialAdvanceDate: "",
+  officialTax: "",
+  advance: "",
+  advanceDate: "",
 };
 
-const PAYROLL_COLUMNS: readonly PayrollColumn[] = [
-  // Відсотки мусять давати РІВНО 100: колонок дев'ять, і зайвий відсоток
-  // розповзається по всіх — заголовки починають обрізатись.
-  //
-  // «Співробітник» тримаємо на 15%: замір показав, що під текст треба ~160px
-  // (найдовше — «Начальник відділу логістики», 153px), а все понад те стояло
-  // порожнім стовпом повітря перед «Ставкою».
-  //
-  // «Нотатка» звузилась з 14,5% до 4% (не менше 42px) — це колонка-позначка.
-  // Причина в тому, ЩО там лежить: нотатка буває в однієї-двох людей із
-  // сімнадцяти, тобто 88% колонки — порожнеча. Текст усередині рядка все одно
-  // не читався (реальні нотатки тут — абзаци на 200–1400px), тож показуємо
-  // позначку, а текст даємо в попапі. Звільнені 10,5% пішли числам.
-  { key: "person", label: "Співробітник", width: "w-[15%]", align: "", cell: "person" },
-  { key: "base", label: "Ставка", width: "w-[13%]", align: "", cell: "input" },
-  { key: "bonus", label: "Бонус", width: "w-[11.5%]", align: "", cell: "input" },
-  // Штраф стоїть одразу за бонусом: це його дзеркало, і поруч їх видно парою.
-  { key: "penalty", label: "Штраф", width: "w-[11.5%]", align: "", cell: "input" },
-  { key: "official", label: "Офіційна ЗП", width: "w-[13.5%]", align: "", cell: "input" },
-  { key: "advance", label: "Аванс", width: "w-[13.5%]", align: "", cell: "input" },
-  { key: "total", label: "До виплати", width: "w-[11%]", align: "text-right", cell: "amount" },
-  { key: "note", label: "Нотатка", width: "w-[4%] min-w-[42px]", align: "text-center", cell: "note", srOnly: true },
-  // «Статус» — це перемикач на 26px. При 8,5% навколо нього стояло по 40px
-  // повітря з кожного боку, і колонка читалась як порожня. Нижче 7% не можна:
-  // на мінімальній ширині таблиці підпис «Статус» починає обрізатись, а це
-  // остання колонка — обрізаний заголовок у ній видно найкраще.
-  { key: "status", label: "Статус", width: "w-[7%]", align: "text-center", cell: "status" },
-];
+// Опис колонок і груп над ними — у payrollColumns.ts, спільний із тестом на
+// зсуви притиснутого підсумку.
+const COLUMN_BY_KEY = new Map(PAYROLL_COLUMNS.map((column) => [column.key, column]));
+const cellClass = (key: string) => {
+  const column = COLUMN_BY_KEY.get(key);
+  return column ? frameCellClass(column) : undefined;
+};
+/** Роздільник між групами колонок — на першій клітинці групи, як і в шапці. */
+const GROUP_START = "border-l border-border/40";
 
 export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const now = React.useMemo(() => new Date(), []);
@@ -255,6 +247,10 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         bonus: amountToInput(entry.bonusAmount),
         deduction: amountToInput(entry.deductionAmount),
         penalty: amountToInput(entry.penaltyAmount),
+        personalOrder: amountToInput(entry.personalOrderAmount),
+        officialAdvance: amountToInput(entry.officialAdvanceAmount),
+        officialAdvanceDate: entry.officialAdvanceDate ?? "",
+        officialTax: amountToInput(entry.officialTaxAmount),
         advance: amountToInput(entry.advanceAmount),
         advanceDate: entry.advanceDate ?? "",
       };
@@ -335,6 +331,10 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
             bonusAmount: stored?.bonusAmount ?? 0,
             deductionAmount: stored?.deductionAmount ?? 0,
             penaltyAmount: stored?.penaltyAmount ?? 0,
+            personalOrderAmount: stored?.personalOrderAmount ?? 0,
+            officialAdvanceAmount: stored?.officialAdvanceAmount ?? 0,
+            officialAdvanceDate: stored?.officialAdvanceDate ?? null,
+            officialTaxAmount: stored?.officialTaxAmount ?? 0,
             advanceAmount: stored?.advanceAmount ?? 0,
             advanceDate: stored?.advanceDate ?? null,
             note: stored?.note ?? null,
@@ -346,42 +346,51 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     );
   }, [periodQuery.data, periodDataKey, people, workspaceId, period, userId]);
 
-  // Аванс віднімається: це вже видані гроші, тож у колонці лишається залишок.
-  // Той самий вираз зашитий у generated-колонку total_amount (див.
-  // scripts/payroll-advance-subtracts.sql) — тримаємо їх однаковими.
-  const totalFor = (uid: string): number => {
-    const d = draftFor(uid);
-    return (
-      parsePayrollAmount(d.base) +
-      parsePayrollAmount(d.bonus) -
-      parsePayrollAmount(d.deduction) -
-      parsePayrollAmount(d.penalty) -
-      parsePayrollAmount(d.advance)
-    );
-  };
+  // Гроші з чернетки — числами. Формула підсумків одна на клієнт і базу:
+  // computePayrollTotals ↔ generated-колонки total_amount / earned_amount
+  // (scripts/payroll-official-split.sql) — тримаємо їх однаковими.
+  const draftMoney = (d: Draft) => ({
+    baseAmount: parsePayrollAmount(d.base),
+    bonusAmount: parsePayrollAmount(d.bonus),
+    deductionAmount: parsePayrollAmount(d.deduction),
+    penaltyAmount: parsePayrollAmount(d.penalty),
+    personalOrderAmount: parsePayrollAmount(d.personalOrder),
+    officialAdvanceAmount: parsePayrollAmount(d.officialAdvance),
+    officialTaxAmount: parsePayrollAmount(d.officialTax),
+    advanceAmount: parsePayrollAmount(d.advance),
+  });
+  const totalsFor = (uid: string) => computePayrollTotals(draftMoney(draftFor(uid)));
 
   const totals = React.useMemo(() => {
-    let base = 0;
-    let bonus = 0;
-    let penalty = 0;
-    let advance = 0;
-    let total = 0;
-    let paid = 0;
+    const sum = {
+      base: 0,
+      bonus: 0,
+      penalty: 0,
+      personalOrder: 0,
+      official: 0,
+      officialAdvance: 0,
+      officialTax: 0,
+      advance: 0,
+      total: 0,
+      earned: 0,
+      paid: 0,
+    };
     for (const person of people) {
-      const d = draftFor(person.userId);
-      const b = parsePayrollAmount(d.base);
-      const bo = parsePayrollAmount(d.bonus);
-      const pen = parsePayrollAmount(d.penalty);
-      const adv = parsePayrollAmount(d.advance);
-      const t = b + bo - parsePayrollAmount(d.deduction) - pen - adv;
-      base += b;
-      bonus += bo;
-      penalty += pen;
-      advance += adv;
-      total += t;
-      if (meta.get(person.userId)?.status === "paid") paid += t;
+      const money = draftMoney(draftFor(person.userId));
+      const { total, earned } = computePayrollTotals(money);
+      sum.base += money.baseAmount;
+      sum.bonus += money.bonusAmount;
+      sum.penalty += money.penaltyAmount;
+      sum.personalOrder += money.personalOrderAmount;
+      sum.official += money.deductionAmount;
+      sum.officialAdvance += money.officialAdvanceAmount;
+      sum.officialTax += money.officialTaxAmount;
+      sum.advance += money.advanceAmount;
+      sum.total += total;
+      sum.earned += earned;
+      if (meta.get(person.userId)?.status === "paid") sum.paid += total;
     }
-    return { base, bonus, penalty, advance, total, paid };
+    return sum;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [people, drafts, entries, meta]);
 
@@ -399,11 +408,8 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         period,
         updatedBy: userId,
         values: {
-          baseAmount: parsePayrollAmount(d.base),
-          bonusAmount: parsePayrollAmount(d.bonus),
-          deductionAmount: parsePayrollAmount(d.deduction),
-          penaltyAmount: parsePayrollAmount(d.penalty),
-          advanceAmount: parsePayrollAmount(d.advance),
+          ...draftMoney(d),
+          officialAdvanceDate: d.officialAdvanceDate || null,
           advanceDate: d.advanceDate || null,
           note: entry?.note ?? null,
         },
@@ -417,38 +423,22 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     const d = draftFor(uid);
     const trimmed = note.trim();
     const nextNote = trimmed ? trimmed : null;
-    const baseAmount = parsePayrollAmount(d.base);
-    const bonusAmount = parsePayrollAmount(d.bonus);
-    const deductionAmount = parsePayrollAmount(d.deduction);
-    const penaltyAmount = parsePayrollAmount(d.penalty);
-    const advanceAmount = parsePayrollAmount(d.advance);
-    const advanceDate = d.advanceDate || null;
+    const values = {
+      ...draftMoney(d),
+      officialAdvanceDate: d.officialAdvanceDate || null,
+      advanceDate: d.advanceDate || null,
+      note: nextNote,
+    };
+    const { total, earned } = computePayrollTotals(values);
     // Optimistic — keep the shared payroll_entries snapshot in sync so the cell
     // reflects the saved note immediately.
     setEntries((prev) => {
       const next = new Map(prev);
-      next.set(uid, {
-        userId: uid,
-        period,
-        baseAmount,
-        bonusAmount,
-        deductionAmount,
-        penaltyAmount,
-        advanceAmount,
-        advanceDate,
-        totalAmount: baseAmount + bonusAmount - deductionAmount - penaltyAmount - advanceAmount,
-        note: nextNote,
-      });
+      next.set(uid, { userId: uid, period, ...values, totalAmount: total, earnedAmount: earned });
       return next;
     });
     try {
-      await upsertPayrollEntry({
-        workspaceId,
-        userId: uid,
-        period,
-        updatedBy: userId,
-        values: { baseAmount, bonusAmount, deductionAmount, penaltyAmount, advanceAmount, advanceDate, note: nextNote },
-      });
+      await upsertPayrollEntry({ workspaceId, userId: uid, period, updatedBy: userId, values });
     } catch (error) {
       toast.error("Не вдалося зберегти нотатку", { description: getErrorMessage(error, "") });
     }
@@ -526,6 +516,13 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         }
         footnote={
           <>
+            {/* Загальна ЗП — те число, заради якого відомість і читають у кінці
+                місяця: скільки коштує зарплатний проєкт по всіх. Стоїть першим
+                і темнішим за решту складників. */}
+            <span>
+              Загальна ЗП за місяць:{" "}
+              <span className="font-semibold tabular-nums text-foreground">{formatUAH(totals.earned)}</span>
+            </span>
             <span>
               Ставки: <span className="font-medium tabular-nums text-foreground/80">{formatUAH(totals.base)}</span>
             </span>
@@ -543,9 +540,33 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                 </span>
               </span>
             ) : null}
+            {totals.personalOrder > 0 ? (
+              <span>
+                Особисті замовлення:{" "}
+                <span className="font-medium tabular-nums text-foreground/80">
+                  −{formatUAH(totals.personalOrder)}
+                </span>
+              </span>
+            ) : null}
+            {/* Офіційна частина — однією сумою (ЗП + АЗП): для зведення важливо,
+                скільки пішло через банк, а не в якій половині місяця. */}
+            {totals.official + totals.officialAdvance > 0 ? (
+              <span>
+                Офіційно через банк:{" "}
+                <span className="font-medium tabular-nums text-foreground/80">
+                  {formatUAH(totals.official + totals.officialAdvance)}
+                </span>
+              </span>
+            ) : null}
+            {totals.officialTax > 0 ? (
+              <span>
+                Офіційні податки:{" "}
+                <span className="font-medium tabular-nums text-foreground/80">{formatUAH(totals.officialTax)}</span>
+              </span>
+            ) : null}
             {totals.advance > 0 ? (
               <span>
-                Видано авансом:{" "}
+                Видано готівкою наперед:{" "}
                 <span className="font-medium tabular-nums text-foreground/80">{formatUAH(totals.advance)}</span>
               </span>
             ) : null}
@@ -556,11 +577,12 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       {loading ? (
         <PayrollTableSkeleton />
       ) : (
-        <PayrollTableFrame columns={PAYROLL_COLUMNS}>
+        <PayrollTableFrame columns={PAYROLL_COLUMNS} groups={PAYROLL_GROUPS}>
           {people.map((person) => {
             const d = draftFor(person.userId);
             const m = meta.get(person.userId);
             const isPaid = m?.status === "paid";
+            const sums = totalsFor(person.userId);
             return (
               // `group/row` — щоб бліда позначка «додати нотатку» прокидалась
               // при наведенні на весь рядок, а не лише на саму іконку: інакше
@@ -598,52 +620,98 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="text-right">
+                {/* Нараховано */}
+                <TableCell>
                   <AmountInput
                     value={d.base}
                     onChange={(next) => queueSaveAmount(person.userId, { base: next })}
                     label="Ставка"
                   />
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell>
                   <AmountInput
                     value={d.bonus}
                     onChange={(next) => queueSaveAmount(person.userId, { bonus: next })}
                     label="Бонус"
                   />
                 </TableCell>
-                <TableCell className="text-right">
+                {/* Утримано */}
+                <TableCell className={GROUP_START}>
                   <AmountInput
                     value={d.penalty}
                     onChange={(next) => queueSaveAmount(person.userId, { penalty: next })}
                     label="Штраф"
                   />
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell>
+                  <AmountInput
+                    value={d.personalOrder}
+                    onChange={(next) => queueSaveAmount(person.userId, { personalOrder: next })}
+                    label="Особисте замовлення"
+                  />
+                </TableCell>
+                {/* Офіційно, через банк: ЗП і АЗП — дві окремі комірки, бо
+                    офіційна частина приходить двічі на місяць. */}
+                <TableCell className={GROUP_START}>
                   <AmountInput
                     value={d.deduction}
                     onChange={(next) => queueSaveAmount(person.userId, { deduction: next })}
                     label="Офіційна ЗП"
                   />
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell>
                   <AdvanceCell
+                    kind="official"
+                    amount={d.officialAdvance}
+                    date={d.officialAdvanceDate}
+                    onAmountChange={(next) => queueSaveAmount(person.userId, { officialAdvance: next })}
+                    onDateChange={(next) => queueSaveAmount(person.userId, { officialAdvanceDate: next })}
+                  />
+                </TableCell>
+                <TableCell>
+                  <AmountInput
+                    value={d.officialTax}
+                    onChange={(next) => queueSaveAmount(person.userId, { officialTax: next })}
+                    label="Офіційні податки"
+                  />
+                </TableCell>
+                {/* Готівка */}
+                <TableCell className={GROUP_START}>
+                  <AdvanceCell
+                    kind="cash"
                     amount={d.advance}
                     date={d.advanceDate}
                     onAmountChange={(next) => queueSaveAmount(person.userId, { advance: next })}
                     onDateChange={(next) => queueSaveAmount(person.userId, { advanceDate: next })}
                   />
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
-                  {formatUAH(totalFor(person.userId))}
+                {/* Підсумок — притиснутий праворуч. Нуль блідий: у порожнього
+                    рядка він нічого не каже, а «0» у кожній з двох колонок
+                    сімнадцять разів — це шум. */}
+                <TableCell
+                  className={cn(
+                    cellClass("total"),
+                    "whitespace-nowrap text-right text-sm font-medium tabular-nums",
+                    sums.total === 0 && "text-muted-foreground"
+                  )}
+                >
+                  {formatAmount(sums.total)}
                 </TableCell>
-                <TableCell>
+                <TableCell
+                  className={cn(
+                    cellClass("earned"),
+                    "whitespace-nowrap text-right text-sm tabular-nums text-muted-foreground"
+                  )}
+                >
+                  {formatAmount(sums.earned)}
+                </TableCell>
+                <TableCell className={cellClass("note")}>
                   <PayrollNoteCell
                     note={entries.get(person.userId)?.note ?? null}
                     onSave={(text) => saveNote(person.userId, text)}
                   />
                 </TableCell>
-                <TableCell className="text-center">
+                <TableCell className={cn(cellClass("status"), "text-center")}>
                   <PayoutStatusButton
                     paid={isPaid}
                     paidAt={m?.paidAt ?? null}
@@ -676,11 +744,17 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
  */
 function PayrollTableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <PayrollTableFrame columns={PAYROLL_COLUMNS} role="status" aria-busy="true" aria-label="Завантаження виплат">
+    <PayrollTableFrame
+      columns={PAYROLL_COLUMNS}
+      groups={PAYROLL_GROUPS}
+      role="status"
+      aria-busy="true"
+      aria-label="Завантаження виплат"
+    >
       {Array.from({ length: rows }).map((_, index) => (
         <TableRow key={index}>
           {PAYROLL_COLUMNS.map((column) => (
-            <TableCell key={column.key} className={column.align}>
+            <TableCell key={column.key} className={cn(column.align, frameCellClass(column))}>
               {column.cell === "person" ? (
                 <div className="flex min-w-0 items-center gap-2">
                   <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
@@ -717,15 +791,29 @@ function PayrollTableSkeleton({ rows = 8 }: { rows?: number }) {
  * таблиця «дихала». Кнопка-тригер тієї ж висоти, що й поле (h-8), і присутня
  * завжди, тож рядок не змінює висоту ні за яких значень.
  *
- * Без суми дата недоступна — цього ж вимагає перевірка в БД
- * (payroll_entries_advance_date_needs_amount).
+ * Без суми дата недоступна — цього ж вимагають перевірки в БД
+ * (payroll_entries_advance_date_needs_amount і її двійник для АЗП).
+ *
+ * Одна клітинка на обидва аванси: готівковий і офіційний (АЗП, REQ-284)
+ * відрізняються лише підписами.
  */
+const ADVANCE_KINDS = {
+  cash: { label: "Аванс готівкою", dateLabel: "Дата видачі авансу", prompt: "Вказати дату авансу" },
+  official: {
+    label: "Офіційний аванс (АЗП)",
+    dateLabel: "Дата офіційного авансу",
+    prompt: "Вказати дату офіційного авансу",
+  },
+} as const;
+
 function AdvanceCell({
+  kind,
   amount,
   date,
   onAmountChange,
   onDateChange,
 }: {
+  kind: keyof typeof ADVANCE_KINDS;
   amount: string;
   date: string;
   onAmountChange: (next: string) => void;
@@ -733,6 +821,7 @@ function AdvanceCell({
 }) {
   const [open, setOpen] = React.useState(false);
   const hasAmount = parsePayrollAmount(amount) > 0;
+  const words = ADVANCE_KINDS[kind];
 
   return (
     <div className="relative">
@@ -741,7 +830,7 @@ function AdvanceCell({
       <AmountInput
         value={amount}
         onChange={onAmountChange}
-        label="Аванс"
+        label={words.label}
         className={cn(hasAmount && "pl-[3.25rem]")}
       />
       {hasAmount ? (
@@ -749,7 +838,7 @@ function AdvanceCell({
           <PopoverTrigger asChild>
             <button
               type="button"
-              aria-label={date ? `Дата авансу: ${formatDayMonth(date)}` : "Вказати дату авансу"}
+              aria-label={date ? `${words.dateLabel}: ${formatDayMonth(date)}` : words.prompt}
               className={cn(
                 "absolute left-1.5 top-1/2 -translate-y-1/2 rounded px-1 py-0.5 text-2xs tabular-nums",
                 "transition-colors hover:bg-muted hover:text-foreground",
@@ -765,7 +854,7 @@ function AdvanceCell({
               controlSize="sm"
               value={date}
               onChange={(e) => onDateChange(e.target.value)}
-              aria-label="Дата видачі авансу"
+              aria-label={words.dateLabel}
               className="w-[9.5rem]"
             />
             {date ? (
