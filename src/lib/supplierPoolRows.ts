@@ -613,6 +613,38 @@ function mergeCluster(cluster: SupplierPoolDraft[]): SupplierPoolProduct {
  * сотня власне ручок не показувалась — бо «Е» стоїть перед «Р», а місць у
  * випадайці шість. Виглядало це як «у постачальника немає ручок», хоч їх 100.
  */
+/** Літера або цифра — усе решта вважаємо межею слова. */
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+
+function isWholeWord(name: string, at: number, length: number): boolean {
+  const before = at > 0 ? name[at - 1] : "";
+  const after = at + length < name.length ? name[at + length] : "";
+  return !WORD_CHAR.test(before) && !WORD_CHAR.test(after);
+}
+
+/**
+ * Наскільки збіг цілим словом кращий за збіг шматком.
+ *
+ * Число більше за будь-яку назву (стеля 200 символів), тож воно РОЗВОДИТЬ
+ * КЛАСИ, а не змішує їх: усі цілі слова стоять попереду всіх шматків, а
+ * всередині кожного класу порядок і далі вирішує позиція.
+ *
+ * ЗВІДКИ ЦЕ ВЗЯЛОСЬ (REQ-286). На запит «soft» менеджер не знаходив «Записна
+ * книжка А5, Soft» від Тотобі, хоч у пулі вона є. Доречність рахувала саму
+ * позицію, тож книжка (19-й символ) ставала ДЕВ'ЯТОЮ з дев'яти карток
+ * постачальника, а попереду неї стояли «Футболка SoftStyle 153» (9) і
+ * «Футболка дитяча SoftStyle JN 153» (16) — де «soft» узагалі не слово, а
+ * початок довшого. Стеля списку в 24 картки ділиться по колу між десятьма
+ * джерелами, тобто на Тотобі припадає два-три місця, і дев'ята картка не мала
+ * шансів у принципі.
+ *
+ * ЦЕ НЕ ЛІКУЄ СТЕЛЮ, і так і має бути: чип постачальника фільтрує вже обрізані
+ * 24 картки, а не перепитує базу, тож глибокі картки лишаються недосяжними
+ * (REQ-286, друга половина). Тут ми лише перестаємо ховати те, що людина
+ * назвала точно.
+ */
+const PARTIAL_WORD_PENALTY = 1_000;
+
 function matchRank(product: SupplierPoolProduct, terms: readonly string[]): number {
   if (!terms.length) return 0;
   const article = product.article?.trim().toLowerCase() ?? "";
@@ -635,8 +667,10 @@ function matchRank(product: SupplierPoolProduct, terms: readonly string[]): numb
       if (article === term) return -2;
       if (article.startsWith(term)) return -1;
     }
-    const at = name.indexOf(term);
-    if (at >= 0 && at < best) best = at;
+    for (let at = name.indexOf(term); at >= 0; at = name.indexOf(term, at + 1)) {
+      const score = at + (isWholeWord(name, at, term.length) ? 0 : PARTIAL_WORD_PENALTY);
+      if (score < best) best = score;
+    }
   }
   return best;
 }

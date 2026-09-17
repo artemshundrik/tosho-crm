@@ -446,6 +446,47 @@ describe("порядок карток за доречністю", () => {
 
     expect(names[0]).toBe("Яскравий рюкзак");
   });
+
+  /**
+   * Живий випадок 17.09.2026 (REQ-286). На запит «soft» менеджер не знаходив
+   * «Записна книжка А5, Soft» від Тотобі, хоч у пулі вона є — 14 кольорів,
+   * активні. Доречність міряла лише ПОЗИЦІЮ слова, тож книжка (19-й символ)
+   * ставала дев'ятою з дев'яти карток постачальника й не влізала в стелю
+   * списку. Попереду неї стояли футболки «SoftStyle», де «soft» — узагалі не
+   * слово, а початок довшого.
+   */
+  it("ціле слово важить більше за початок довшого слова", () => {
+    const rows = [
+      row({ id: "a", supplier_slug: "totobi.com.ua", article: "6141-01", name: "Футболка SoftStyle 153", price: 108 }),
+      row({ id: "b", supplier_slug: "totobi.com.ua", article: "1291-12", name: "Записна книжка А5, Soft", price: 174 }),
+    ];
+
+    const names = groupSupplierPoolRows(rows, 2, ["soft"]).map((product) => product.name);
+
+    expect(names[0]).toBe("Записна книжка А5, Soft");
+  });
+
+  it("серед цілих слів і далі вирішує позиція", () => {
+    const rows = [
+      row({ id: "a", supplier_slug: "totobi.com.ua", article: "1291-12", name: "Записна книжка А5, Soft", price: 174 }),
+      row({ id: "b", supplier_slug: "totobi.com.ua", article: "3108-10", name: "Плед Soft, TM Discover", price: 833 }),
+    ];
+
+    const names = groupSupplierPoolRows(rows, 2, ["soft"]).map((product) => product.name);
+
+    expect(names[0]).toBe("Плед Soft, TM Discover");
+  });
+
+  it("коли ціле слово не збігається ні в кого, порядок лишається як був", () => {
+    const rows = [
+      row({ id: "a", supplier_slug: "totobi.com.ua", article: "1", name: "Куртка утеплена", price: 100 }),
+      row({ id: "b", supplier_slug: "totobi.com.ua", article: "2", name: "Утеплена жилетка", price: 200 }),
+    ];
+
+    const names = groupSupplierPoolRows(rows, 2, ["утеплен"]).map((product) => product.name);
+
+    expect(names[0]).toBe("Утеплена жилетка");
+  });
 });
 
 /**
