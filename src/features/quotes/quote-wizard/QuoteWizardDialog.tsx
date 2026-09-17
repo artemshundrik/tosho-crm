@@ -29,7 +29,12 @@ import type {
 } from "@/features/quotes/quote-import/types";
 import { countSettledPreviews, fetchLinkPreview, useLinkPreviews } from "@/features/quotes/quote-import/useLinkPreviews";
 import { pluralWordUk } from "@/lib/lastSeen";
-import { SHOP_SUPPLIER_SLUG, type SupplierPoolProduct, type SupplierPoolVariant } from "@/lib/supplierPool";
+import {
+  applySupplierVariant,
+  SHOP_SUPPLIER_SLUG,
+  type SupplierPoolProduct,
+  type SupplierPoolVariant,
+} from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
 
 import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions";
@@ -256,8 +261,20 @@ export function QuoteWizardDialog({
    * `ImportDraftRow` дивиться на `draft.sku`.
    */
   const pickLinkVariant = (key: string, variant: SupplierPoolVariant) => {
+    const product = linkPreviews[key] && linkPreviews[key].status !== "pending" ? linkPreviews[key].pool?.product : null;
+    // Рядок пулу беремо звужений до обраного кольору: у Е-Сувеніра ціни
+    // кольорів збігаються, а в Топтайма ні, і платимо ми за той, що обрали.
+    const priceRowId = product ? applySupplierVariant(product, variant).priceRowId : null;
     setDrafts((prev) =>
-      prev.map((draft) => (draft.key === key ? { ...draft, sku: variant.article ?? draft.sku } : draft))
+      prev.map((draft) =>
+        draft.key === key
+          ? {
+              ...draft,
+              sku: variant.article ?? draft.sku,
+              supplierProductId: priceRowId ?? draft.supplierProductId,
+            }
+          : draft
+      )
     );
     // Фото теж стає кольоровим: у прев'ю досі лежить знімок картки, тобто
     // першого-ліпшого кольору, і лишати його після вибору — показувати не те,
@@ -586,6 +603,13 @@ export function QuoteWizardDialog({
             // не чекає фонової розвідки. У порожнє: якщо менеджер уже вписав
             // свій — його рука головніша за розмітку магазину.
             const next = { ...draft, name: draft.name || title || "", sku: draft.sku || sku };
+            // НАША ЦІНА З ПУЛУ (REQ-285). Число не їде через браузер: ми лише
+            // називаємо РЯДОК пулу, а собівартість читає й пише сама база
+            // (`set_quote_run_cost_from_pool`) — так само, як для товару,
+            // обраного в пошуку. Коли кольори різні, рядок ще не визначений:
+            // його назве вибір кольору, інакше ціна була б від чужого кольору.
+            const pooled = preview.status !== "pending" ? preview.pool : null;
+            if (pooled && !pooled.needsColor) next.supplierProductId = pooled.product.priceRowId;
             if (guess && !draft.catalog) {
               next.catalog = {
                 modelId: null,
