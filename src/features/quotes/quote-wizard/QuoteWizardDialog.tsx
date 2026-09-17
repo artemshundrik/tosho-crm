@@ -264,7 +264,8 @@ export function QuoteWizardDialog({
     const product = linkPreviews[key] && linkPreviews[key].status !== "pending" ? linkPreviews[key].pool?.product : null;
     // Рядок пулу беремо звужений до обраного кольору: у Е-Сувеніра ціни
     // кольорів збігаються, а в Топтайма ні, і платимо ми за той, що обрали.
-    const priceRowId = product ? applySupplierVariant(product, variant).priceRowId : null;
+    const picked = product ? applySupplierVariant(product, variant) : null;
+    const priceRowId = picked?.priceRowId ?? null;
     setDrafts((prev) =>
       prev.map((draft) =>
         draft.key === key
@@ -272,6 +273,13 @@ export function QuoteWizardDialog({
               ...draft,
               sku: variant.article ?? draft.sku,
               supplierProductId: priceRowId ?? draft.supplierProductId,
+              // Ціна теж стає кольоровою: у Топтайма кольори коштують
+              // по-різному, і показувати далі діапазон означало б ховати те,
+              // що вже вирішено.
+              poolPrice:
+                picked?.priceMin != null
+                  ? { amount: picked.priceMin, currency: picked.currency }
+                  : draft.poolPrice,
             }
           : draft
       )
@@ -610,6 +618,14 @@ export function QuoteWizardDialog({
             // його назве вибір кольору, інакше ціна була б від чужого кольору.
             const pooled = preview.status !== "pending" ? preview.pool : null;
             if (pooled && !pooled.needsColor) next.supplierProductId = pooled.product.priceRowId;
+            // ЦІНУ ВИДНО ОДРАЗУ, а не лише після створення прорахунку. Число
+            // тут — те саме, що менеджер бачить у підказці пулу: показуємо його
+            // в тій самій колонці рядка. Поки кольори не розведені, ціна може
+            // різнитись (у Топтайма 269,99–301,35), тож не показуємо нічого:
+            // одне число з діапазону читалось би як відповідь.
+            if (pooled && !pooled.needsColor && pooled.product.priceMin !== null) {
+              next.poolPrice = { amount: pooled.product.priceMin, currency: pooled.product.currency };
+            }
             if (guess && !draft.catalog) {
               next.catalog = {
                 modelId: null,

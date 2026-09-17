@@ -236,12 +236,12 @@ export function QuoteItemCommandField({
     onValueChange("");
   };
 
-  const commitLinks = () => {
-    const { urls, bad } = parseCommandFieldLinks(value);
+  const commitLinks = (raw: string = value) => {
+    const { urls, bad } = parseCommandFieldLinks(raw);
     if (bad) {
       // Одна адреса — кажемо, чого їй бракує; список — називаємо, який саме
       // рядок зайвий, бо решту вже впізнали як посилання.
-      const single = value.trim().split(/[\s,]+/).filter(Boolean).length === 1;
+      const single = raw.trim().split(/[\s,]+/).filter(Boolean).length === 1;
       onInvalid(
         single
           ? "Це не схоже на посилання: потрібна адреса, що починається з http:// або https://."
@@ -326,6 +326,31 @@ export function QuoteItemCommandField({
       return;
     }
     commitName();
+  };
+
+  /**
+   * ВСТАВЛЕНЕ ПОСИЛАННЯ ТЯГНЕ ТОВАР ОДРАЗУ, без Enter (Артем, 17.09.2026).
+   *
+   * Посилання не набирають — його вставляють, і після вставки людині нема чого
+   * дописувати: адреса або повна, або її немає. Enter тут був зайвим кроком,
+   * який до того ж легко пропустити: поле показувало підпис «Посилання», рядок
+   * стояв у полі, а позиція не з'являлась.
+   *
+   * НАЗВИ ЦЕ НЕ СТОСУЄТЬСЯ. Вставлений текст, що не є адресою, — це початок
+   * пошуку («soft»), і створювати з нього позицію не можна: рівно від цього
+   * Enter відучили 08.09.2026, бо поки пул шукається, «додати як нову» лишався
+   * єдиним рядком у списку.
+   *
+   * Беремо текст із самої події, а не зі стану: `onValueChange` ще не встиг
+   * пройти, і `value` у цю мить показує те, що було ДО вставки.
+   */
+  const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = event.clipboardData.getData("text").trim();
+    if (!pasted) return;
+    const { urls, bad } = parseCommandFieldLinks(pasted);
+    if (bad || urls.length === 0) return;
+    event.preventDefault();
+    commitLinks(pasted);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -424,6 +449,7 @@ export function QuoteItemCommandField({
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
           />
           {/*
             Підпис праворуч — не кнопка, а відповідь поля на набране: «це я
