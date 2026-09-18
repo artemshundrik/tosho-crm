@@ -101,7 +101,9 @@ export function QuotePartyCard({
       </button>
 
       <div className="px-1.5 pb-1.5">
-        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-border/40">
+        {/* Третини не вужчі за підпис: у рейці на 340 px (REQ-294) рівна третина
+            давала «Відвантаженню» 92 px на 100 px тексту, і кінець слова зрізало. */}
+        <div className="grid grid-cols-[repeat(3,minmax(max-content,1fr))] gap-px overflow-hidden rounded-lg bg-border/40">
           {deadlines.map((item) => (
             <HoverTip key={`deadline-track-${item.label}`} asChild label={item.title}>
               <button

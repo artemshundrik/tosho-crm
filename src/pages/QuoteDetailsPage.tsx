@@ -1,4 +1,4 @@
-import { createElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
@@ -46,6 +46,7 @@ import { QuotePriceSummary } from "@/features/quotes/quote-details/QuotePriceSum
 import { QuoteStatusControl } from "@/features/quotes/quote-details/QuoteStatusControl";
 import { threadKeyForQuote } from "@/lib/taskThread";
 import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
+import { ThreadDock, ThreadDockButton, ThreadDockProvider, type ThreadDockHandle } from "@/features/taskChat/ThreadDock";
 import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
 import {
   getAttachmentDisplayFileName,
@@ -101,6 +102,7 @@ import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import { LiveCursorsLayer } from "@/components/app/LiveCursorsLayer";
 import { useEntityLock } from "@/hooks/useEntityLock";
+import { useRecordPageHeight } from "@/hooks/useRecordPageHeight";
 import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
@@ -617,44 +619,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    */
   const [sideSummaryOpen, setSideSummaryOpen] = useState(true);
 
-  /**
-   * Висота повноекранної розкладки — ВИМІРЯНА, а не порахована.
-   *
-   * Той самий рецепт, що на сторінці дизайн-задачі, і з тієї ж причини: над
-   * сторінкою може стояти не лише топбар, а й смуга «Дивитесь очима», і будь-яке
-   * `calc(100dvh - 112px)` тоді бреше рівно на її висоту — сторінка стає вищою
-   * за вікно, і з'являється скрол «на два пальці», хоча скролити нема чого.
-   * Міряємо фактичну відстань від верху сторінки до низу вікна.
-   *
-   * Висоту з `overflow: hidden` отримує КОРІНЬ: якщо обмежити саму сітку, вміст
-   * усередині все одно виштовхує сторінку, і замість скролу з'являється дірка
-   * знизу.
-   */
+  /** Корінь сторінки: контейнер `record` і висота повноекранної розкладки. */
   const layoutRootRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const node = layoutRootRef.current;
-    if (!node) return;
-
-    const apply = () => {
-      // Нижче xl колонка йде під контентом — там сторінка скролиться як звичайна.
-      if (window.innerWidth < 1280) {
-        node.style.removeProperty("height");
-        node.style.removeProperty("overflow");
-        return;
-      }
-      const documentTop = node.getBoundingClientRect().top + window.scrollY;
-      const available = Math.max(360, Math.round(window.innerHeight - documentTop));
-      const next = `${available}px`;
-      if (node.style.height !== next) {
-        node.style.height = next;
-        node.style.overflow = "hidden";
-      }
-    };
-
-    apply();
-    window.addEventListener("resize", apply);
-    return () => window.removeEventListener("resize", apply);
-  });
+  useRecordPageHeight(layoutRootRef);
+  /** Шторка «Обговорення» у вузькому вигляді — її відкриває й стрічка. */
+  const threadDockRef = useRef<ThreadDockHandle>(null);
   const [briefText, setBriefText] = useState("");
 
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
@@ -4150,25 +4119,33 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   ];
 
   return (
-    <div ref={layoutRootRef} className="text-foreground">
+    <div ref={layoutRootRef} className="@container/record text-foreground">
       {/* Курсори колег — те саме, що на дошках: якщо в прорахунку є ще хтось,
           видно, куди він дивиться (REQ-163). Ключ каналу включає id, щоб
           зустрічались лише ті, хто в ЦЬОМУ прорахунку. */}
       <LiveCursorsLayer pageKey={`quote:${quoteId}`} />
       {/*
-        Дві колонки на всю висоту вікна.
+        Дві колонки на всю висоту вікна — коли їх вміщає СТОРІНКА (`record-split`,
+        REQ-294). Вужче рейка йде в шторку, а вкладка «Деталі» стає видимою.
 
         Шапка прорахунку живе ВСЕРЕДИНІ лівої колонки, а не над обома: інакше
         права колонка починалась би на 81 px нижче й ніколи не діставала верху
         екрана. Тепер розмова праворуч отримує всю висоту, а номер зі статусом
         стоять рівно над тим, до чого належать — над вмістом прорахунку.
       */}
-      <div className="grid grid-cols-1 xl:h-full xl:grid-cols-[minmax(0,1fr)_var(--quote-rail-w,380px)] xl:overflow-hidden">
-        <div className="flex min-w-0 flex-col xl:h-full xl:min-h-0 xl:overflow-hidden">
+      <ThreadDockProvider
+        handleRef={threadDockRef}
+        onModeChange={(mode) => {
+          if (mode === "split") setActiveQuoteTab((tab) => (tab === "details" ? "products" : tab));
+        }}
+      >
+      <div className="grid grid-cols-1 [--record-rail-w:21.25rem] record-wide:[--record-rail-w:23.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1fr)_var(--record-rail-w)] record-split:overflow-hidden">
+        <div className="flex min-w-0 flex-col record-split:h-full record-split:min-h-0 record-split:overflow-hidden">
       {/* Без власної риски (REQ-175#p47): одразу під шапкою йде смуга вкладок,
           і в неї своя нижня межа. Дві горизонтальні лінії за 40 px одна від
-          одної читались як порожня перекладина між номером справи й вкладками. */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur xl:static xl:shrink-0 xl:bg-transparent xl:backdrop-blur-none">
+          одної читались як порожня перекладина між номером справи й вкладками.
+          У вузькому вигляді липне ПІД обв'язкою застосунку: з `top-0` ховалась за нею. */}
+      <header className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-40 bg-background/95 backdrop-blur record-split:static record-split:shrink-0 record-split:bg-transparent record-split:backdrop-blur-none">
         {/*
           Поле шапки — те саме, що в <main> (REQ-175#p50).
 
@@ -4247,6 +4224,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <QuoteUnsavedRunChip runs={unsavedRuns} onFocus={(id) => focusOnPage(`quote-run-${id}`, "error")} />
               <QuoteMarkupGateChip blocking={markupGateRuns} dealType={dealType} onFocus={(id) => focusOnPage(`quote-run-${id}`)} />
               <QuoteRunChoiceChip items={runChoiceItems} onFocus={(id) => focusOnPage(`quote-item-${id}`)} />
+              {teamId ? <ThreadDockButton /> : null}
               {currentStatus === "approved" ? (
                 <Button
                   variant="outline"
@@ -4346,7 +4324,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             // Колонка стала вужчою після того, як розмова забрала праву
             // частину, і поля по 24-32 px з'їдали ширину, якої бракує таблиці
             // тиражів. Дихання лишається, порожнього канта — ні.
-            "min-w-0 px-2 pt-0 md:px-2.5 lg:px-3 xl:flex xl:h-full xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden xl:pb-0 2xl:px-4",
+            "min-w-0 px-2 pt-0 md:px-2.5 lg:px-3 record-split:flex record-split:h-full record-split:min-h-0 record-split:flex-1 record-split:flex-col record-split:overflow-hidden record-split:pb-0 2xl:px-4",
             // На телефоні вкладка «Деталі» живе в боковій колонці, і тіло тут
             // порожнє — нижній відступ у такому разі малює 40 px дірки між
             // вкладками й першою карткою.
@@ -4360,7 +4338,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             губилась серед них. Тепер активна тримається вагою тексту і тонкою
             рискою знизу — рядок вкладок перестав сперечатися зі смугою дій.
           */}
-          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:mb-0 xl:shrink-0 2xl:-mx-8 2xl:px-8">
+          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
             <TabBar value={activeQuoteTab}>
               {quotePageTabs.map((tab) => {
                 return (
@@ -4368,7 +4346,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     key={tab.value}
                     value={tab.value}
                     onSelect={(next) => setActiveQuoteTab(next as QuotePageTab)}
-                    className={cn(tab.mobileOnly && "xl:hidden")}
+                    className={cn(tab.mobileOnly && "record-split:hidden")}
                   >
                     <span>{tab.label}</span>
                     {/*
@@ -4417,7 +4395,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             зовнішнім, вміст зникав на 16 px нижче за риску, і між ними стояла
             порожня сходинка. Тепер прокрутка починається рівно від риски.
           */}
-          <div className="space-y-6 xl:-mr-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pb-8 xl:pr-3 xl:pt-4 2xl:-mr-4 2xl:pr-4">
+          <div className="space-y-6 record-split:-mr-3 record-split:min-h-0 record-split:flex-1 record-split:overflow-y-auto record-split:overscroll-contain record-split:pb-8 record-split:pr-3 record-split:pt-4 record-split:2xl:-mr-4 record-split:2xl:pr-4">
             {/* `markup.gate.blocked` з умови прибрано (REQ-175#p66): замок
                 переїхав у шапку, а обгортка лишалась і малювала порожню смугу
                 на всю ширину над «Товарами і тиражами». */}
@@ -5974,7 +5952,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   });
                 }}
                 onDeleteFile={requestDeleteAttachment}
-                onOpenThread={() => setActiveQuoteTab("details")}
+                onOpenThread={() => threadDockRef.current?.open()}
                 canLoadMore={!activityLoadedAll}
                 loadingMore={activityLoading}
                 onLoadMore={() => void loadActivityLog({ full: true })}
@@ -6000,8 +5978,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             // Без власного тла (REQ-175#p51): колонка розмови стоїть на тому ж
             // тлі, що й середина, а межу тримає волосінь ліворуч. Своя заливка
             // робила з неї третю поверхню поруч із карткою й сторінкою.
-            "self-start px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:flex xl:min-h-0 xl:h-full xl:flex-col xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:px-0 xl:pb-0 xl:pt-0",
-            activeQuoteTab !== "details" && "max-xl:hidden"
+            "self-start px-4 pb-10 pt-2 md:px-5 lg:px-6 record-split:flex record-split:min-h-0 record-split:h-full record-split:flex-col record-split:self-stretch record-split:overflow-hidden record-split:border-l record-split:border-[hsl(var(--app-structure-divider))] record-split:px-0 record-split:pb-0 record-split:pt-0",
+            activeQuoteTab !== "details" && "record-stack:hidden"
           )}
         >
           {/*
@@ -6011,7 +5989,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             справді довге (стрічка повідомлень), а не вся колонка разом із
             заголовками.
           */}
-          <div className="flex flex-col gap-2 xl:h-full xl:min-h-0 xl:px-3 xl:pt-3">
+          <div className="flex flex-col gap-2 record-split:h-full record-split:min-h-0 record-split:px-3 record-split:pt-3">
             <QuotePartyCard
               customerName={quote.customer_name}
               customerLogoUrl={quote.customer_logo_url}
@@ -6069,13 +6047,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               як зламана кнопка. Візуалів це не чіпає: ними рахується лише те,
               що лежить у теці `design-outputs/`, а сюди файл кладеться в
               `quote-attachments/`.
+
+              У вузькому вигляді рейка живе в шторці (ThreadDock, REQ-294), а на
+              вкладці «Деталі» лишаються сторони й підсумок.
             */}
             {teamId ? (
-              // Обгортка навмисно `div`, а не `section`: рейка сама рендерить
+              // Гніздо дока — `div`, а не `section`: рейка сама рендерить
               // <section>, і другий такий самий тег навколо неї дав би вкладену
               // секцію без власного заголовка — зайвий орієнтир для читача екрана.
-              <div className="flex min-h-[360px] flex-col pb-4 xl:min-h-0 xl:flex-1">
+              <ThreadDock
+                className="min-h-0 flex-1 pb-4"
+                renderRail={(slot) => (
                 <TaskThreadRail
+                  {...slot}
                   threadKey={threadKeyForQuote(quoteId)}
                   eventActions={THREAD_EVENT_ACTIONS}
                   quoteId={quoteId}
@@ -6093,11 +6077,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   }}
                   attaching={attachmentsUploading}
                 />
-              </div>
+                )}
+              />
             ) : null}
           </div>
         </aside>
       </div>
+      </ThreadDockProvider>
 
     {/* Разове попередження про поріг заробітку. Показуємо тим, хто реально
 

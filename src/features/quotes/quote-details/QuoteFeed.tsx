@@ -412,16 +412,16 @@ export function QuoteFeed({
 
       {/*
         ПИСАТИ — У РОЗМОВІ, і кнопка тут стоїть рівно там, де до розмови інакше
-        не дотягтись. Права колонка з ниткою `quote:<id>` ховається нижче xl
-        (`max-xl:hidden` на <aside> сторінки) і живе на власній вкладці
-        «Деталі». На десктопі рейка стоїть поруч — там ця кнопка була б другим
-        входом в одну нитку на одному екрані, тобто тим самим дублем, заради
-        якого й прибирали список коментарів із центру.
+        не дотягтись. Коли сторінка вузька для двох колонок (`record-stack`,
+        REQ-294), рейка з ниткою `quote:<id>` живе в шторці, і кнопка її
+        відкриває. У двох колонках рейка стоїть поруч — там ця кнопка була б
+        другим входом в одну нитку на одному екрані, тобто тим самим дублем,
+        заради якого й прибирали список коментарів із центру.
 
         Тому кнопка, а не друге поле вводу: поле означало б другий шлях запису
         (свій стан, своя чернетка, свої згадки) у ту саму нитку.
       */}
-      <Button variant="outline" size="sm" className="w-full gap-2 xl:hidden" onClick={onOpenThread}>
+      <Button variant="outline" size="sm" className="w-full gap-2 record-split:hidden" onClick={onOpenThread}>
         <MessageSquare className="h-4 w-4" />
         Написати в розмову
       </Button>
@@ -471,7 +471,7 @@ export function QuoteFeed({
       ) : null}
 
       <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border/40 pt-3 text-2xs text-muted-foreground">
-        <span className="max-xl:hidden">
+        <span className="record-stack:hidden">
           Писати — у панелі праворуч: тут розмова показана як частина історії
         </span>
         <span className="ml-auto tabular-nums">

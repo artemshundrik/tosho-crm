@@ -93,7 +93,13 @@ export function QuoteRunPriceFields({
     markupState.kind === "pending" ? "заморожено до відповіді" : "заморожено — погоджено";
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    // Стовпці перемикає ШИРИНА ЦЬОГО БЛОКУ, а не вікна (REQ-294), як і в
+    // переліку тиражів над ним: поруч із рейкою обговорення колонка буває
+    // вузькою при широкому вікні, а без рейки — широкою при вузькому.
+    // Чотири — від 36rem, тобто від ~135 px на поле: вужче «з ПДВ / без ПДВ»
+    // під сумою вже не стає в рядок.
+    <div className="@container">
+    <div className="grid gap-3 @min-[28rem]:grid-cols-2 @min-[36rem]:grid-cols-4">
       {COST_FIELDS.map(({ field, label, who, aria }) => (
         <div key={field} className="space-y-1.5">
           {/* Реченням, а не капсом (REQ-175#p33): підписи полів, заголовки
@@ -214,6 +220,7 @@ export function QuoteRunPriceFields({
           </div>
         ) : null}
       </div>
+    </div>
     </div>
   );
 }

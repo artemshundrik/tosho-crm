@@ -58,6 +58,16 @@ type Props = {
   /** Завантаження файлів тим самим шляхом, що й вкладення задачі. */
   onAttachFiles?: (files: FileList) => Promise<ThreadAttachment[] | void> | void;
   attaching?: boolean;
+  /**
+   * Чи рейку зараз справді видно. У закритій шторці (ThreadDock) вона
+   * змонтована, але схована — і позначати нитку прочитаною там не можна:
+   * лічильник на кнопці «Обговорення» гас би за 3 с, хоч ніхто нічого не читав.
+   */
+  active?: boolean;
+  /** Що поставити в кінець шапки — у шторці це хрестик. */
+  headerAction?: React.ReactNode;
+  /** Скільки непрочитаних — те саме число, що в шапці рейки. Для кнопки шторки. */
+  onUnreadChange?: (count: number) => void;
 };
 
 /**
@@ -75,6 +85,9 @@ export function TaskThreadRail({
   canManage = false,
   onAttachFiles,
   attaching,
+  active = true,
+  headerAction,
+  onUnreadChange,
 }: Props) {
   const { userId, session } = useAuth();
 
@@ -161,14 +174,18 @@ export function TaskThreadRail({
 
   const unread = countUnread(messages, readQuery.data ?? null, userId ?? null);
 
+  React.useEffect(() => {
+    onUnreadChange?.(unread);
+  }, [onUnreadChange, unread]);
+
   // Позначаємо прочитаним через 3 с перегляду, а не в мить відкриття:
   // інакше «заглянув на секунду» гасить лічильник брехливо.
   React.useEffect(() => {
-    if (!userId || messages.length === 0) return;
+    if (!active || !userId || messages.length === 0) return;
     const timer = window.setTimeout(() => markRead.mutate(userId), READ_DELAY_MS);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, messages.length, threadKey]);
+  }, [active, userId, messages.length, threadKey]);
 
   /**
    * Сповіщення про нове повідомлення — усім, хто задіяний у задачі.
@@ -320,6 +337,7 @@ export function TaskThreadRail({
                 ? `${messages.length}`
                 : ""}
         </span>
+        {headerAction}
       </div>
 
       <div

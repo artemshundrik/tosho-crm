@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { DateTimePicker, deadlineUrgencyTone } from "@/components/ui/picker-input";
 import { PageLoading } from "@/components/app/page-loading";
 import { useNavigate, useParams } from "react-router-dom";
@@ -86,6 +86,7 @@ import {
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
+import { ThreadDock, ThreadDockButton, ThreadDockProvider } from "@/features/taskChat/ThreadDock";
 import { threadKeys } from "@/features/taskChat/queries";
 import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
 import { quoteIdFromRef, threadKeyForQuote } from "@/lib/taskThread";
@@ -129,6 +130,7 @@ import { LiveCursorsLayer } from "@/components/app/LiveCursorsLayer";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useEntityLock } from "@/hooks/useEntityLock";
+import { useRecordPageHeight } from "@/hooks/useRecordPageHeight";
 import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { type ActivityRow } from "@/lib/activity";
 import {
@@ -1610,50 +1612,9 @@ export default function DesignTaskPage() {
     });
   }, []);
 
-  /**
-   * Висота повноекранної сітки — ВИМІРЯНА, а не порахована.
-   *
-   * Раніше стояло calc(100dvh - 56px), тобто «вікно мінус топбар». Але над
-   * сторінкою можуть бути й інші смуги (напр. «Дивитесь очима»), і тоді
-   * сторінка виходить вищою за вікно рівно на них — з'являється скрол «на два
-   * пальці», хоч скролити нема чого. Міряємо фактичну відстань від верху сітки
-   * до низу вікна: жодних припущень про те, що саме стоїть вище.
-   */
+  /** Корінь сторінки: контейнер `record` і висота повноекранної розкладки. */
   const layoutRootRef = useRef<HTMLDivElement>(null);
-
-  /**
-   * Висота повноекранної розкладки — виміряна, і задається КОРЕНЮ сторінки.
-   *
-   * Раніше я міряв саму сітку й, коли сторінка все одно вилазила, зрізав
-   * різницю. Через це замість скролу з'являлась дірка: колонка закінчувалась
-   * на 10-15 px вище низу вікна. Тепер висоту з обмеженням переповнення дістає
-   * корінь сторінки — усе, що всередині, фізично не може виштовхнути сторінку
-   * за вікно, і зрізати нічого не треба.
-   */
-  useLayoutEffect(() => {
-    const node = layoutRootRef.current;
-    if (!node) return;
-
-    const apply = () => {
-      // Нижче xl колонка стає під контентом — там сторінка має скролитись як звичайно.
-      if (window.innerWidth < 1280) {
-        node.style.removeProperty("height");
-        node.style.removeProperty("overflow");
-        return;
-      }
-      const documentTop = node.getBoundingClientRect().top + window.scrollY;
-      const available = Math.max(360, Math.round(window.innerHeight - documentTop));
-      const next = `${available}px`;
-      if (node.style.height !== next) {
-        node.style.height = next;
-        node.style.overflow = "hidden";
-      }
-    };
-
-    apply();
-    window.addEventListener("resize", apply);
-    return () => window.removeEventListener("resize", apply);
-  });
+  useRecordPageHeight(layoutRootRef);
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canEditBriefChangeRequests = permissions.canEditDesignBriefChangeRequests;
@@ -9668,11 +9629,14 @@ export default function DesignTaskPage() {
   ];
 
   return (
-    <div ref={layoutRootRef} className="w-full max-w-none space-y-4 pb-20 md:pb-0 xl:space-y-0 xl:pb-0">
+    <div ref={layoutRootRef} className="@container/record w-full max-w-none pb-20 md:pb-0">
       {/* Курсори колег — див. QuoteDetailsPage. Канал на кожну задачу окремо. */}
       <LiveCursorsLayer pageKey={`design-task:${id ?? ""}`} />
-      <div className="grid grid-cols-1 xl:h-full xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden">
-        <div className="min-w-0 space-y-4 xl:min-h-0 xl:h-full xl:overflow-y-auto">
+      {/* Дві колонки — коли їх вміщає СТОРІНКА, а не вікно (`record-split`,
+          REQ-294). Вужче рейка обговорення йде в шторку. */}
+      <ThreadDockProvider>
+      <div className="grid grid-cols-1 [--record-rail-w:21.25rem] record-wide:[--record-rail-w:25.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1.75fr)_var(--record-rail-w)] record-split:items-start record-split:overflow-hidden">
+        <div className="min-w-0 space-y-4 record-split:min-h-0 record-split:h-full record-split:overflow-y-auto">
       <EntityHeader
         className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 sm:px-5 md:px-6 xl:px-8"
         topBar={null}
@@ -9736,7 +9700,7 @@ export default function DesignTaskPage() {
         }
         subtitle={null}
         meta={
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Badge className={cn("px-2.5 py-1 text-xs font-semibold", statusColors[task.status])}>
               {statusLabels[task.status]}
             </Badge>
@@ -9886,8 +9850,8 @@ export default function DesignTaskPage() {
         }
         actions={
           <div className="flex shrink-0 items-start gap-2">
-            {/* Нижче xl смуга живе в липкій панелі внизу — інакше вона видима двічі. */}
-            {renderTaskActionBar({ className: "hidden xl:flex" })}
+            {/* У вузькому вигляді смуга живе в липкій панелі внизу — інакше вона видима двічі. */}
+            {renderTaskActionBar({ className: "hidden record-split:flex" })}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="shrink-0">
@@ -9954,8 +9918,11 @@ export default function DesignTaskPage() {
         className="mx-4 sm:mx-5 md:mx-6 xl:mx-8"
       />
 
-      <div className="sticky top-0 z-30 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur sm:px-5 md:px-6 xl:px-8 xl:pr-10">
-        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* У вузькому вигляді сторінку скролить вікно, і `top-0` ховав смугу ПІД
+          шапкою застосунку — тож там вона липне під обв'язкою. Там же кнопка
+          «Обговорення»: смуга видна завжди, хоч би куди догортали. */}
+      <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 flex items-center gap-2 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur record-split:top-0 sm:px-5 md:px-6 xl:px-8 xl:pr-10">
+        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {designTaskTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeDesignTab === tab.value;
@@ -9991,6 +9958,7 @@ export default function DesignTaskPage() {
             );
           })}
         </div>
+        {effectiveTeamId ? <ThreadDockButton look="tab" className="mb-1" /> : null}
       </div>
 
       <div className="space-y-8 px-4 sm:px-5 md:px-6 xl:px-8 xl:pr-10">
@@ -11655,10 +11623,10 @@ export default function DesignTaskPage() {
 
         </div>
 
-        <aside className="self-start xl:min-h-0 xl:h-full xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:bg-[hsl(var(--design-task-details-bg))]">
+        <aside className="self-start record-split:min-h-0 record-split:h-full record-split:self-stretch record-split:overflow-hidden record-split:border-l record-split:border-[hsl(var(--app-structure-divider))] record-split:bg-[hsl(var(--design-task-details-bg))]">
           {/* Щільне обрамлення: поля 10 px, проміжок 8 px. Сіре тло лишається
               тонкою рамкою, картки — максимально широкі (варіант 2). */}
-          <div className="flex flex-col gap-2 p-2.5 xl:h-full xl:min-h-0 xl:overflow-hidden">
+          <div className="flex flex-col gap-2 p-2.5 record-split:h-full record-split:min-h-0 record-split:overflow-hidden">
           {/* Ховер на всю картку: падінги перенесені на дітей, тож кнопка
               заголовка тягнеться від краю до краю, а має-селектор підсвічує
               всю секцію — незалежно від того, куди саме навели, на підпис чи
@@ -11999,13 +11967,15 @@ export default function DesignTaskPage() {
             </div>
           </section>
 
-          {/* Нижче xl колонка стає під контентом: там висоту задає max-h від
-              вікна, а не фіксовані пікселі — інакше картка додавала сторінці
-              зайву висоту й з'являвся скрол «на два пальці». На xl+ колонка
-              зафіксована й не скролиться взагалі: тягнеться лише ця секція. */}
-          <section className="flex max-h-[70vh] min-h-[360px] flex-col xl:max-h-none xl:min-h-0 xl:flex-1">
-            {effectiveTeamId ? (
+          {/* У двох колонках колонка зафіксована й не скролиться взагалі:
+              тягнеться лише обговорення. У вузькому вигляді воно не падає під
+              «Деталі» й «Таймер», а живе в шторці (ThreadDock, REQ-294). */}
+          {effectiveTeamId ? (
+            <ThreadDock
+              className="min-h-0 flex-1"
+              renderRail={(slot) => (
               <TaskThreadRail
+                {...slot}
                 threadKey={threadKeyForQuote(String(task.quoteId))}
                 eventActions={THREAD_EVENT_ACTIONS}
                 quoteId={quoteIdFromRef(String(task.quoteId))}
@@ -12024,11 +11994,13 @@ export default function DesignTaskPage() {
                 }}
                 attaching={attachmentUploading}
               />
-            ) : null}
-          </section>
+              )}
+            />
+          ) : null}
           </div>
         </aside>
       </div>
+      </ThreadDockProvider>
 
       <Dialog open={briefEditorOpen} onOpenChange={setBriefEditorOpen}>
         <DialogContent className="flex h-[min(92dvh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(920px,92vw)]">
@@ -12829,7 +12801,7 @@ export default function DesignTaskPage() {
           власну гілку і, на відміну від шапки, не враховувала блокування. */}
       {renderTaskActionBar({
         className:
-          "sticky bottom-3 z-10 xl:hidden rounded-lg border border-border/60 bg-card/90 px-3 py-2 backdrop-blur",
+          "sticky bottom-3 z-10 mt-4 record-split:hidden rounded-lg border border-border/60 bg-card/90 px-3 py-2 backdrop-blur",
       })}
     </div>
   );
