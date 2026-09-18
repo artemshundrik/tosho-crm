@@ -56,13 +56,13 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 6247 | вкладка «Економіка» (заглушка `EconomicsComingSoon`) |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 808 lines, 583 KB, as of 2026-09-18)
+## src/pages/DesignTaskPage.tsx (~12 853 lines, 587 KB, as of 2026-09-18)
 
 | Range | Content |
 |---|---|
 | 1–222 | imports |
 | 223–1325 | types + Dropbox export helpers (`collectDesignTaskStorageFiles`, `buildDropboxClientFolderPath`, `buildDropboxBrandFolderPath`, `formatDropboxDate`, `buildDropboxExportFileName`, brief-format helpers) |
-| **1348** | `export default function DesignTaskPage()` — main component starts |
+| **1357** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
 ## src/pages/QuotesPage.tsx (~7 934 lines, 345 KB, as of 2026-09-18)
