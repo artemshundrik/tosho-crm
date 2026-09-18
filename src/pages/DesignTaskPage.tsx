@@ -281,6 +281,15 @@ type AttachmentRow = {
   audience?: QuoteAttachmentAudience;
 };
 
+/**
+ * Файли замовника (`tosho.quote_attachments`) разом із прорахунком, для якого їх
+ * завантажено. Прорахунок у парі робить «завантажено» похідним: перепривʼязка до
+ * іншого прорахунку сама по собі знецінює старий список, скидати його руками не треба.
+ */
+type CustomerAttachmentsState = { quoteId: string | null; rows: AttachmentRow[] };
+
+const EMPTY_CUSTOMER_ATTACHMENTS: CustomerAttachmentsState = { quoteId: null, rows: [] };
+
 type DesignOutputFile = {
   id: string;
   file_name: string;
@@ -1362,9 +1371,26 @@ export default function DesignTaskPage() {
   const [productZoomPreviewUrl, setProductZoomPreviewUrl] = useState<string | null>(
     () => initialCache?.productZoomPreviewUrl ?? null
   );
-  const [attachments, setAttachments] = useState<AttachmentRow[]>(() => initialCache?.attachments ?? []);
-  const [customerAttachmentsLoaded, setCustomerAttachmentsLoaded] = useState<boolean>(
-    () => initialCache?.customerAttachmentsLoaded ?? false
+  // Файли ТЗ (standalone_brief_files у metadata) і файли замовника (quote_attachments)
+  // мають різних власників: перші кладе load(), другі — loadCustomerAttachments. Поки
+  // обидва жили в одному масиві, load() затирав файли замовника: при повторному
+  // відкритті кеш уже знає quoteId, тож файли замовника приходять ПЕРШИМИ, а load(),
+  // завершившись пізніше, скидав список і прапорець «завантажено» — і повторно їх
+  // ніхто не просив. Людина бачила «Файли замовника ще не завантажені» й
+  // вантажила ті самі файли вдруге (REQ-295).
+  const [briefAttachments, setBriefAttachments] = useState<AttachmentRow[]>(() => initialCache?.attachments ?? []);
+  const [customerAttachmentsState, setCustomerAttachmentsState] =
+    useState<CustomerAttachmentsState>(EMPTY_CUSTOMER_ATTACHMENTS);
+  // Задача, яку load() уже звірив із базою. Файли замовника вантажаться лише після
+  // цього: з кешу не приходять файли-результати дизайнера (designOutputFiles), а
+  // саме їх loadCustomerAttachments вирізає зі списку файлів прорахунку.
+  const [syncedTaskId, setSyncedTaskId] = useState<string | null>(null);
+  const customerAttachmentsLoaded = Boolean(
+    task && isUuid(task.quoteId) && customerAttachmentsState.quoteId === task.quoteId
+  );
+  const attachments = useMemo(
+    () => (customerAttachmentsLoaded ? [...briefAttachments, ...customerAttachmentsState.rows] : briefAttachments),
+    [briefAttachments, customerAttachmentsLoaded, customerAttachmentsState.rows]
   );
   const [customerAttachmentsLoading, setCustomerAttachmentsLoading] = useState(false);
   const [customerAttachmentsError, setCustomerAttachmentsError] = useState<string | null>(null);
@@ -2027,8 +2053,9 @@ export default function DesignTaskPage() {
     setQuoteItem(nextInitialCache?.quoteItem ?? null);
     setProductPreviewUrl(nextInitialCache?.productPreviewUrl ?? null);
     setProductZoomPreviewUrl(nextInitialCache?.productZoomPreviewUrl ?? null);
-    setAttachments(nextInitialCache?.attachments ?? []);
-    setCustomerAttachmentsLoaded(nextInitialCache?.customerAttachmentsLoaded ?? false);
+    setBriefAttachments(nextInitialCache?.attachments ?? []);
+    setCustomerAttachmentsState(EMPTY_CUSTOMER_ATTACHMENTS);
+    setSyncedTaskId(null);
     setCustomerAttachmentsError(null);
     setDesignOutputFiles(nextInitialCache?.designOutputFiles ?? []);
     setDesignOutputLinks(nextInitialCache?.designOutputLinks ?? []);
@@ -2441,12 +2468,12 @@ export default function DesignTaskPage() {
         setQuoteItem(nextQuoteItem);
         setProductPreviewUrl(nextProductPreviewUrl);
         setProductZoomPreviewUrl(nextProductZoomPreviewUrl);
-        setAttachments(nextAttachments);
-        setCustomerAttachmentsLoaded(false);
-        setCustomerAttachmentsError(null);
+        // Лише файли ТЗ: файли замовника має свій завантажувач, і load() їх не чіпає.
+        setBriefAttachments(nextAttachments);
         setDesignOutputFiles(nextDesignOutputFiles);
         setDesignOutputLinks(nextDesignOutputLinks);
         setDesignOutputGroups(nextDesignOutputGroups);
+        setSyncedTaskId(id);
         if (typeof window !== "undefined") {
           try {
             sessionStorage.setItem(
@@ -2530,6 +2557,7 @@ export default function DesignTaskPage() {
     if (customerAttachmentsLoading) return;
     if (customerAttachmentsLoaded && !options?.force) return;
 
+    const quoteId = task.quoteId;
     setCustomerAttachmentsLoading(true);
     setCustomerAttachmentsError(null);
     try {
@@ -2537,7 +2565,7 @@ export default function DesignTaskPage() {
         .schema("tosho")
         .from("quote_attachments")
         .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by,audience")
-        .eq("quote_id", task.quoteId);
+        .eq("quote_id", quoteId);
       if (error) throw error;
 
       const attachmentRows = ((data as AttachmentRow[] | null) ?? []).map((file) => ({ ...file, signed_url: null }));
@@ -2547,34 +2575,15 @@ export default function DesignTaskPage() {
       const customerOnlyAttachments = attachmentRows.filter(
         (file) => !designOutputKeys.has(`${file.storage_bucket}:${file.storage_path}`)
       );
-      const standaloneKeys = new Set(
-        (Array.isArray(task.metadata?.standalone_brief_files) ? task.metadata.standalone_brief_files : [])
-          .map((row) => {
-            if (!row || typeof row !== "object") return null;
-            const entry = row as Record<string, unknown>;
-            if (typeof entry.storage_bucket !== "string" || typeof entry.storage_path !== "string") return null;
-            return `${entry.storage_bucket}:${entry.storage_path}`;
-          })
-          .filter((value): value is string => !!value)
-      );
 
-      setAttachments((prev) => {
-        const standaloneAttachments = prev.filter((file) =>
-          standaloneKeys.has(`${file.storage_bucket}:${file.storage_path}`)
-        );
-        return [...standaloneAttachments, ...customerOnlyAttachments];
-      });
-      setCustomerAttachmentsLoaded(true);
+      setCustomerAttachmentsState({ quoteId, rows: customerOnlyAttachments });
 
       if (typeof window !== "undefined" && id) {
         const cacheKey = `design-task-page-cache:${effectiveTeamId}:${id}`;
         try {
           const cachedRaw = sessionStorage.getItem(cacheKey);
           const cached = cachedRaw ? (JSON.parse(cachedRaw) as Partial<DesignTaskPageCachePayload>) : null;
-          const nextCachedAttachments = [
-            ...attachments.filter((file) => standaloneKeys.has(`${file.storage_bucket}:${file.storage_path}`)),
-            ...customerOnlyAttachments,
-          ];
+          const nextCachedAttachments = [...briefAttachments, ...customerOnlyAttachments];
           sessionStorage.setItem(
             cacheKey,
             JSON.stringify({
@@ -2601,7 +2610,7 @@ export default function DesignTaskPage() {
       setCustomerAttachmentsLoading(false);
     }
   }, [
-    attachments,
+    briefAttachments,
     customerAttachmentsLoaded,
     customerAttachmentsLoading,
     designOutputFiles,
@@ -2615,13 +2624,25 @@ export default function DesignTaskPage() {
     task,
   ]);
 
-  // Auto-load customer attachments when the task is linked to a quote
+  // Файли замовника підтягуються самі, щойно задачу звірено з базою, — і знову, коли
+  // список знецінився: перепривʼязка до іншого прорахунку, перехід на іншу задачу.
+  // Раніше ефект слухав лише quoteId, а той із кешу відомий одразу, тож після
+  // скидання в load() повторного запиту не було (REQ-295). Поки файлів немає,
+  // інтерфейс показує «Підтягуємо…» без кнопки, тому ефект мусить дочекатись і
+  // чужого запиту в дорозі (loading), а після помилки — зупинитись: там є кнопка.
   useEffect(() => {
-    if (task && isUuid(task.quoteId) && !customerAttachmentsLoaded) {
+    if (
+      task &&
+      isUuid(task.quoteId) &&
+      syncedTaskId === task.id &&
+      !customerAttachmentsLoaded &&
+      !customerAttachmentsLoading &&
+      !customerAttachmentsError
+    ) {
       void loadCustomerAttachments();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task?.quoteId]);
+  }, [task?.quoteId, syncedTaskId, customerAttachmentsLoaded, customerAttachmentsLoading, customerAttachmentsError]);
 
   /**
    * Раніше тут вантажилась історія для секції правої колонки. Секцію замінено
@@ -4259,9 +4280,17 @@ export default function DesignTaskPage() {
         setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
       }
 
-      setAttachments((prev) => [...uploadedAttachments, ...prev]);
       if (isUuid(task.quoteId)) {
-        setCustomerAttachmentsLoaded(true);
+        const quoteId = task.quoteId;
+        // Дописуємо лише до вже підтягнутого списку цього прорахунку. Якщо його ще
+        // немає (впав запит), підтягуємо весь, разом із новими: дописати самі нові й
+        // назвати список завантаженим означало б сховати давніші файли.
+        setCustomerAttachmentsState((prev) =>
+          prev.quoteId === quoteId ? { quoteId, rows: [...uploadedAttachments, ...prev.rows] } : prev
+        );
+        if (!customerAttachmentsLoaded && syncedTaskId === task.id) void loadCustomerAttachments();
+      } else {
+        setBriefAttachments((prev) => [...uploadedAttachments, ...prev]);
       }
 
       try {
@@ -4355,7 +4384,8 @@ export default function DesignTaskPage() {
         setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
       }
 
-      setAttachments((prev) => prev.filter((file) => file.id !== attachmentId));
+      setBriefAttachments((prev) => prev.filter((file) => file.id !== attachmentId));
+      setCustomerAttachmentsState((prev) => ({ ...prev, rows: prev.rows.filter((file) => file.id !== attachmentId) }));
       toast.success("Файл видалено");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося видалити файл"));
@@ -11035,22 +11065,30 @@ export default function DesignTaskPage() {
             </div>
             <div className="space-y-2">
               {attachments.length === 0 ? (
+                // Файли замовника підтягуються самі. Кнопка — лише після помилки: колишні
+                // «Файли замовника ще не завантажені» + «Завантажити файли замовника»
+                // читались як «ви ще нічого не вивантажили», і файли вантажили вдруге (REQ-295).
                 isLinkedQuote && !customerAttachmentsLoaded ? (
-                  <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground space-y-3">
-                    <div>Файли замовника ще не завантажені.</div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5"
-                      disabled={customerAttachmentsLoading}
-                      onClick={() => void loadCustomerAttachments()}
-                    >
-                      {customerAttachmentsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                      Завантажити файли замовника
-                    </Button>
-                    {customerAttachmentsError ? <div className="text-xs text-destructive">{customerAttachmentsError}</div> : null}
-                  </div>
+                  customerAttachmentsError ? (
+                    <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground space-y-3">
+                      <div>Не вдалося показати файли замовника.</div>
+                      <div className="text-xs text-destructive">{customerAttachmentsError}</div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={customerAttachmentsLoading}
+                        onClick={() => void loadCustomerAttachments()}
+                      >
+                        Спробувати ще раз
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Підтягуємо файли замовника…
+                    </div>
+                  )
                 ) : (
                   <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
                     Немає вкладень
@@ -11059,19 +11097,26 @@ export default function DesignTaskPage() {
               ) : (
                 <div className="space-y-2.5">
                   {isLinkedQuote && !customerAttachmentsLoaded ? (
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
-                      <span>Файли замовника не завантажені. Зараз показані лише файли з ТЗ.</span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="px-2.5"
-                        disabled={customerAttachmentsLoading}
-                        onClick={() => void loadCustomerAttachments()}
-                      >
-                        {customerAttachmentsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Завантажити"}
-                      </Button>
-                    </div>
+                    customerAttachmentsError ? (
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                        <span>Не вдалося показати файли замовника. Зараз показані лише файли з ТЗ.</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="px-2.5"
+                          disabled={customerAttachmentsLoading}
+                          onClick={() => void loadCustomerAttachments()}
+                        >
+                          Спробувати ще раз
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Підтягуємо файли замовника…
+                      </div>
+                    )
                   ) : null}
                   {customerAttachmentsError ? <div className="text-xs text-destructive">{customerAttachmentsError}</div> : null}
                   <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
