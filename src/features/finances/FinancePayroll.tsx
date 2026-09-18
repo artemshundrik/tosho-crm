@@ -301,7 +301,8 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   // Підставлену ставку одразу закріплюємо в базі. Інакше у відомості видно одні
   // числа, а збережено інші: людину можна позначити виплаченою (це пише в іншу
   // таблицю), і ставка так і лишилась би нулем, а підсумок минулого місяця
-  // рахується вже зі збереженого.
+  // рахується вже зі збереженого. Давніх місяців це не торкається: для них
+  // запит ставок не віддає (isRatePrefillPeriod у payrollMath.ts).
   const prefillSavedRef = React.useRef("");
   React.useEffect(() => {
     const data = periodQuery.data;

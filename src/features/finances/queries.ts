@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { loadEffectiveBaseRates, loadPayrollEntries, periodKey, type PayrollEntry } from "@/lib/payroll";
+import { isRatePrefillPeriod } from "@/lib/payrollMath";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   listWorkspaceMembersForDisplay,
@@ -271,16 +272,21 @@ export function usePayrollPeriodData(
   return useQuery<{
     entries: Map<string, PayrollEntry>;
     meta: Map<string, FinancePayoutMeta>;
+    /** Ставки з картки для підстановки. Для давніх місяців — порожньо. */
     rates: Map<string, number>;
   }>({
     queryKey: financeKeys.payrollPeriod(teamId ?? "", workspaceId, period),
     queryFn: async () => {
       // Ставки з картки співробітника їдуть тим самим запитом: редактор
       // підставляє їх у порожню «Ставку», тож без них гідратація неповна.
+      // Лише для робочих місяців: підставлене редактор одразу пише в базу, і в
+      // давньому місяці це дописало б історію заднім числом.
       const [entries, meta, rates] = await Promise.all([
         loadPayrollEntries(workspaceId as string, period),
         listPayoutMeta(teamId as string, period),
-        loadEffectiveBaseRates(workspaceId as string, period),
+        isRatePrefillPeriod(period, new Date())
+          ? loadEffectiveBaseRates(workspaceId as string, period)
+          : Promise.resolve(new Map<string, number>()),
       ]);
       return { entries, meta, rates };
     },

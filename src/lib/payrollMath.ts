@@ -30,3 +30,18 @@ export function computePayrollTotals(v: PayrollMoney): { total: number; earned: 
     earned - v.personalOrderAmount - v.deductionAmount - v.officialAdvanceAmount - v.advanceAmount;
   return { total, earned };
 }
+
+/**
+ * Чи підставляти в місяць `period` (YYYY-MM-01) ставку з картки співробітника.
+ *
+ * Від попереднього місяця й далі. Відомість за місяць заповнюють наступного
+ * (серпень — у вересні), тож попередній ще робочий, а все давніше — історія.
+ * Межа потрібна, бо підставлена ставка одразу пишеться в базу: без неї сам
+ * перегляд старого місяця дописував туди рядки людей, яких у відомості тоді не
+ * було, і підсумок того місяця ріс.
+ */
+export function isRatePrefillPeriod(period: string, today: Date): boolean {
+  const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const prevKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-01`;
+  return period >= prevKey;
+}

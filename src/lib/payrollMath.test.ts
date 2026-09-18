@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computePayrollTotals, type PayrollMoney } from "./payrollMath";
+import { computePayrollTotals, isRatePrefillPeriod, type PayrollMoney } from "./payrollMath";
 
 const money = (over: Partial<PayrollMoney> = {}): PayrollMoney => ({
   baseAmount: 0,
@@ -46,5 +46,29 @@ describe("computePayrollTotals", () => {
 
   it("порожній рядок дає нулі, а не NaN", () => {
     expect(computePayrollTotals(money())).toEqual({ total: 0, earned: 0 });
+  });
+});
+
+describe("isRatePrefillPeriod", () => {
+  const sept18 = new Date(2026, 8, 18);
+
+  it("поточний і попередній місяць — так: відомість за серпень заповнюють у вересні", () => {
+    expect(isRatePrefillPeriod("2026-09-01", sept18)).toBe(true);
+    expect(isRatePrefillPeriod("2026-08-01", sept18)).toBe(true);
+  });
+
+  it("майбутній — так", () => {
+    expect(isRatePrefillPeriod("2026-10-01", sept18)).toBe(true);
+  });
+
+  it("давніші — ні: перегляд старого місяця не дописує туди рядків", () => {
+    expect(isRatePrefillPeriod("2026-07-01", sept18)).toBe(false);
+    expect(isRatePrefillPeriod("2026-01-01", sept18)).toBe(false);
+  });
+
+  it("у січні попередній — грудень минулого року", () => {
+    const jan5 = new Date(2027, 0, 5);
+    expect(isRatePrefillPeriod("2026-12-01", jan5)).toBe(true);
+    expect(isRatePrefillPeriod("2026-11-01", jan5)).toBe(false);
   });
 });
