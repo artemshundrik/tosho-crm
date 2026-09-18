@@ -202,26 +202,35 @@ export function NotificationsMenu({
           className="relative transition-colors duration-base"
           aria-label={unreadCount > 0 ? `Сповіщення, непрочитаних: ${unreadCount}` : "Сповіщення"}
         >
-          <Bell className="h-4.5 w-4.5" />
-          {unreadCount > 0 ? (
-            /*
-             * Лічильник кріпиться ФІКСОВАНИМ відступом від кута, а не
-             * відсотковим зсувом. Було `right-0 top-0` плюс
-             * `translate-x-1/3 -translate-y-1/3`, а відсоток у `translate`
-             * рахується від РОЗМІРУ САМОГО бейджа — тобто «1» відскакувала від
-             * кута на 7 px, а «99+» на всі 12, і значок гуляв тим більше, чим
-             * більше сповіщень. Заразом він виліз за межі кнопки: 20 px висоти
-             * на кнопці 40 px — це половина, і поруч із сусідніми кнопками
-             * шапки читалось як збій верстки.
-             *
-             * Тепер 16 px у куті кнопки: бейдж перекриває дзвіночок рівно
-             * настільки, щоб читатись як його позначка, і не залежить від
-             * кількості цифр — праве кріплення відпускає ширину вліво.
-             */
-            <span className="pointer-events-none absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-3xs font-semibold leading-none tabular-nums text-primary-foreground">
-              {unreadCount > 99 ? "99+" : unreadCount}
-            </span>
-          ) : null}
+          {/*
+            Бейдж кріпиться до ЦІЄЇ обгортки (розміром рівно з іконку), а не
+            до кнопки. Кнопка — `--control-h`, токен, що сам міняється зі
+            стану/брейкпоінта (40px на телефоні, 32px від md, REQ-271#p3), а
+            іконка лишається 16px завжди. Коли бейдж стояв `right-1 top-1` від
+            КНОПКИ, фіксований відступ мав сенс лише для того розміру, на
+            якому його підбирали (40px) — на 32px той самий відступ зʼїдав
+            центр дзвіночка (заміряно: бейдж і glyph перекривались на ~75%
+            площі іконки). Обгортка без явного розміру сама стискається до
+            вмісту (inline-flex), тож кут завжди точно на краю іконки, а не
+            кнопки.
+          */}
+          <span className="relative inline-flex">
+            <Bell className="h-4.5 w-4.5" />
+            {unreadCount > 0 ? (
+              /*
+               * Фіксований відступ від кута ІКОНКИ (не відсотковий зсув —
+               * відсоток у `translate` рахується від розміру самого бейджа, і
+               * «1» відскакувала б інакше, ніж «99+»). Праве й верхнє
+               * кріплення від'ємні: бейдж росте НАЗОВНІ, углиб іконки лізе
+               * лише кутом, а ширина при двох-трьох знаках додається ліворуч,
+               * не над глифом. Ring кольору тла відділяє бейдж від дзвіночка
+               * так само, як у стосі аватарок.
+               */
+              <span className="pointer-events-none absolute -right-2.5 -top-2.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-3xs font-semibold leading-none tabular-nums text-primary-foreground ring-2 ring-background">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            ) : null}
+          </span>
         </Button>
       }
       content={
