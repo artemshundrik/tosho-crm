@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-09-14T07:38:20.509Z",
+  "generatedAt": "2026-09-18T10:10:33.342Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -122,11 +122,14 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "2.1.10",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-09-14T10:40:41+03:00",
+      "bumpCommit": {
+        "sha": "c30ff681",
+        "subject": "Усі значки CRM тепер у стилі Phosphor: активний пункт меню заповнений, а кнопки оновлення, видалення, копіювання, пошуку, плюс і дзвіночок оживають під курсором"
+      },
       "description": "Набір іконок Phosphor. Майже кожна іконка в CRM — звідси (через components/icons/appIcons).",
       "homepage": "https://phosphoricons.com",
-      "usedIn": 2,
+      "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=phosphoricons.com&sz=128"
     },
     {
@@ -336,7 +339,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 96,
+      "usedIn": 97,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -366,7 +369,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Памʼятає, що вже завантажено, і не питає базу двічі. Через нього ходять майже всі запити.",
       "homepage": "https://tanstack.com/query",
-      "usedIn": 25,
+      "usedIn": 26,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
@@ -411,7 +414,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 40,
+      "usedIn": 46,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -426,7 +429,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Клікає й друкує в тестах так, як це робить людина, — з наведенням, фокусом і клавіатурою, а не одним синтетичним кліком.",
       "homepage": null,
-      "usedIn": 14,
+      "usedIn": 17,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -782,7 +785,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 328,
+      "usedIn": 331,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -879,7 +882,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "sharp",
-      "version": "0.35.3",
+      "version": "0.35.4",
       "layer": "platform",
       "dev": false,
       "bumpedAt": "2026-08-23T18:14:42+03:00",
@@ -904,7 +907,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Спливні повідомлення в кутку: «Збережено», «Не вийшло».",
       "homepage": "https://sonner.emilkowal.ski/",
-      "usedIn": 67,
+      "usedIn": 68,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
     },
     {
@@ -996,7 +999,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 190,
+      "usedIn": 206,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1057,12 +1060,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 2419,
-  "testFiles": 188,
+  "tests": 2565,
+  "testFiles": 204,
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 46,
-  "sourceLines": 291385,
+  "sourceLines": 295272,
   "automation": {
     "workflows": [
       {
