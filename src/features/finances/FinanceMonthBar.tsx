@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button";
 // Нижче lg скрол-панелі немає — прокручується документ, а верх вікна перекритий
 // фіксованою шапкою застосунку. Тому там top = її висота: з top-0 бар ховався
 // за шапкою цілком саме тоді, коли по нього тягнешся (REQ-272).
+// Висота — з --finance-bar-height (index.css), а не з падінгів: від неї ж
+// відштовхується липка шапка відомості виплат.
 export function FinanceStickyBar({ children }: { children: React.ReactNode }) {
   return (
-    <div className="sticky top-[var(--app-header-height)] z-20 -mx-4 -mt-4 flex items-center gap-1.5 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur-md lg:-top-6 lg:-mx-6 lg:-mt-6 lg:px-6">
+    <div className="sticky top-[var(--app-header-height)] z-20 -mx-4 -mt-4 flex h-(--finance-bar-height) items-center gap-1.5 border-b border-border/50 bg-background/95 px-4 backdrop-blur-md lg:-top-6 lg:-mx-6 lg:-mt-6 lg:px-6">
       {children}
     </div>
   );
