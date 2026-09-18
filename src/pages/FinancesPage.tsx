@@ -244,18 +244,21 @@ export default function FinancesPage() {
         </div>
 
         {/* Майстер-детейл впритул до країв: нав-рейка з роздільником + панель контенту,
-            обидві заповнюють висоту до низу вікна й скролять незалежно (як Співробітники). */}
+            обидві заповнюють висоту до низу вікна й скролять незалежно (як Співробітники).
+            Рейка — впритул до найдовшого пункту: «Платіжний календар» 142px + іконка й
+            відступи = 201, ще 7px запасу → 208. Відступи ті самі, що в головного
+            сайдбара (іконка за 16px від краю), — і кожен піксель іде таблицям. */}
         <div
           ref={panesRef}
-          className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)]"
+          className="lg:grid lg:grid-cols-[208px_minmax(0,1fr)]"
           style={panesTop != null ? ({ ["--fin-panes-h" as string]: `calc(100dvh - ${panesTop}px)` }) : undefined}
         >
           <aside className="hidden border-r border-border/60 lg:block lg:h-[var(--fin-panes-h,auto)] lg:overflow-y-auto">
-            <nav className="flex flex-col gap-0.5 p-3">
+            <nav className="flex flex-col gap-0.5 px-1.5 py-3">
               {sectionGroups.map((group) => (
                 <div key={group.label ?? "main"} className="flex flex-col gap-0.5">
                   {group.label ? (
-                    <div className="px-3 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    <div className="px-2.5 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground/60">
                       {group.label}
                     </div>
                   ) : null}
@@ -270,7 +273,7 @@ export default function FinancesPage() {
                         aria-current={active ? "page" : undefined}
                         title={section.description}
                         className={cn(
-                          "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                          "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors",
                           active
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
