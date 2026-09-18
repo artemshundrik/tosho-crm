@@ -118,11 +118,20 @@ export const PAYROLL_EXCLUDED_USER_IDS = new Set<string>([
   "e328c5fc-1773-48c0-a5d4-a73f42687c66", // Тиць Клікович — службовий акаунт перевірок
 ]);
 
-/** People paid through the sheet without a CRM account (fixed placeholder ids). */
+/**
+ * People paid through the sheet without a CRM account (fixed placeholder ids).
+ *
+ * Людина прийшла в CRM акаунтом — спершу злий історію заглушки на акаунт, потім
+ * прибери її звідси. Голий `update … set user_id` тут не годиться: відомість
+ * сама пише в базу ставку з картки, тож за ті самі місяці в акаунта вже можуть
+ * лежати свої рядки. Зразок злиття з перевірками —
+ * scripts/payroll-merge-accountant-placeholders.sql.
+ */
 export type ManualPayrollPerson = { userId: string; name: string; jobRole: string };
 export const MANUAL_PAYROLL_PEOPLE: ManualPayrollPerson[] = [
-  { userId: "30e3147f-3c00-45f9-ac04-91a160799efd", name: "Тетяна Карандюк", jobRole: "Бухгалтер" },
-  { userId: "d604c8de-9976-42db-b9ec-f2f756818295", name: "Юлія Кубенко", jobRole: "Бухгалтер" },
+  // Тетяна Карандюк і Юлія Кубенко — заглушки прибрано 18.09.2026: обидві
+  // прийшли в CRM акаунтами, історію виплат і позначки «виплачено» перенесено
+  // туди (scripts/payroll-merge-accountant-placeholders.sql).
   // "Анастасія К." placeholder removed 2026-07-14 — merged into the real
   // Настя Коптева account (d664089c…); her payroll + payout history was moved there.
   { userId: "5630d0bc-5ae7-40a1-bd4b-2f46c89e1000", name: "Сашко З.", jobRole: "Пакувальник" },
