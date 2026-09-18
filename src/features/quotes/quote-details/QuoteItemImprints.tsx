@@ -75,7 +75,7 @@ export function QuoteItemImprints({
   const [seen, setSeen] = React.useState(signature);
   const [saving, setSaving] = React.useState(false);
   const placeCache = React.useRef<PlaceCache>(new Map());
-  const { byKind } = useKindImprintOptions(teamId, kindId ? [kindId] : []);
+  const { byKind, directoryFor } = useKindImprintOptions(teamId, kindId ? [kindId] : []);
 
   /* Прийшли інші дані (перечитали товари, перемкнули позицію) — беремо їх.
      Порівнянням під час рендера, а не ефектом: ефект тут ганяв би зайвий
@@ -150,6 +150,8 @@ export function QuoteItemImprints({
         imprints={imprints}
         methods={options.methods}
         places={places}
+        // «Інші методи…» (REQ-292): той самий довідник, що у вікні створення.
+        directory={directoryFor(kindId)}
         disabled={disabled || saving}
         onChange={(next) => void apply(next)}
         // Ескіз є не в кожного виду: немає — смуга лишається поповерами.

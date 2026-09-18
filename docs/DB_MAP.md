@@ -337,6 +337,12 @@ Practical implication:
 
 - `catalog_types`
 - `catalog_methods`
+  - "this method is available for this kind"; the name mirrors `method_directory`
+    (see Trigger-Filled Columns below). Written by the Catalog page and, since
+    REQ-292, by the quote imprint strip («Інші методи…» in the new-quote wizard
+    and the quote item card): it only **attaches an existing directory entry** to
+    the kind (`directory_id` given, 23505 → reuse the existing row) and never
+    creates a new method name — names are added in the Catalog only.
 - `catalog_model_methods`
 - `catalog_price_tiers`
 - `catalog_print_positions`

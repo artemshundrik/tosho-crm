@@ -18,6 +18,7 @@ import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
 import { getImprintSheet } from "@/features/quotes/quote-details/imprintSheets";
+import type { MethodDirectorySource } from "@/features/quotes/quote-details/useKindImprintOptions";
 
 import type {
   QuoteImportDraftCatalog,
@@ -206,7 +207,12 @@ export function ImportDraftRow({
    * Не задано — смуги немає: в імпорті з файлу виду ще не знають, а без виду
    * методу нема на що вказувати.
    */
-  imprintOptions?: { methods: Array<{ id: string; name: string }>; places: PlaceOption[] };
+  imprintOptions?: {
+    methods: Array<{ id: string; name: string }>;
+    places: PlaceOption[];
+    /** «Інші методи…» зі спільного довідника (REQ-292). Немає — лише методи виду. */
+    directory?: MethodDirectorySource;
+  };
   onChangeImprints?: (next: QuoteImportDraftImprint[]) => void;
   /**
    * Види каталогу для рядка без моделі (REQ-182#p18): припущення з назви
@@ -523,6 +529,7 @@ export function ImportDraftRow({
               imprints={draft.imprints}
               methods={imprintOptions.methods}
               places={imprintOptions.places}
+              directory={imprintOptions.directory}
               disabled={disabled}
               onChange={onChangeImprints}
               // Ескіз є не в кожного виду: немає — смуга працює як раніше.

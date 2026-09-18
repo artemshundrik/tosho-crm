@@ -7,6 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 
 import { ImprintPickerDialog, type ImprintProduct } from "./ImprintPickerDialog";
 import type { ImprintSheet } from "./imprintSheets";
+import { OtherMethodsEntry, OtherMethodsPanel } from "./OtherMethodsPanel";
+import type { MethodDirectorySource } from "./useKindImprintOptions";
 import type { QuoteImportDraftImprint } from "@/features/quotes/quote-import/types";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +85,7 @@ export function ImprintChips({
   onChange,
   sheet,
   product,
+  directory,
 }: {
   imprints: QuoteImportDraftImprint[];
   methods: Array<{ id: string; name: string }>;
@@ -92,8 +95,16 @@ export function ImprintChips({
   /** Ескіз виду. Є — смуга веде у вікно; немає — все як раніше, поповерами. */
   sheet?: ImprintSheet | null;
   product?: ImprintProduct;
+  /**
+   * Спільний довідник методів (REQ-292). Задано — у кожному списку методів є
+   * «Інші методи…», тож вид без потрібного методу (чи зовсім без методів)
+   * більше не глухий кут. Не задано — лише методи виду, як раніше.
+   */
+  directory?: MethodDirectorySource;
 }) {
   const [listOpen, setListOpen] = React.useState(false);
+  /** Панель списку показує довідник, а не методи виду. Скидається на відкритті. */
+  const [directoryView, setDirectoryView] = React.useState(false);
   const closeList = React.useCallback(() => setListOpen(false), []);
   usePopoverEscape(listOpen, closeList);
 
@@ -103,6 +114,17 @@ export function ImprintChips({
     onChange(imprints.map((imprint) => (imprint.key === key ? { ...imprint, ...next } : imprint)));
   const remove = (key: string) => onChange(imprints.filter((imprint) => imprint.key !== key));
   const methodName = (methodId: string) => methods.find((method) => method.id === methodId)?.name ?? "Метод";
+
+  // Екран панелі скидаємо на ВІДКРИТТІ, а не на закритті: інакше вона на
+  // пів кадру перемикалась би на методи виду просто під час зникнення.
+  const toggleList = (next: boolean) => {
+    if (next) setDirectoryView(false);
+    setListOpen(next);
+  };
+  const addAndClose = (methodId: string) => {
+    add(methodId);
+    setListOpen(false);
+  };
 
   // Вид із ескізом веде у вікно (REQ-268): у смузі лишається ОДИН вхід, а не
   // чотири, бо саме чотири й дозволяли проскочити повз питання «де».
@@ -118,11 +140,14 @@ export function ImprintChips({
         product={product}
         methodName={methodName}
         onRemove={remove}
+        directory={directory}
       />
     );
   }
 
   if (imprints.length > 0) {
+    // Виду без методів нічого показувати, крім довідника, — одразу він.
+    const showDirectory = Boolean(directory) && (directoryView || methods.length === 0);
     return (
       <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label="Нанесення">
         {imprints.map((imprint) => (
@@ -135,10 +160,11 @@ export function ImprintChips({
             disabled={disabled}
             onPatch={(next) => patch(imprint.key, next)}
             onRemove={() => remove(imprint.key)}
+            directory={directory}
           />
         ))}
         {/* «Ще одне нанесення» — не «ще методи»: пара додається цілком. */}
-        <Popover open={listOpen} onOpenChange={setListOpen}>
+        <Popover open={listOpen} onOpenChange={toggleList}>
           <PopoverTrigger asChild>
             <Chip
               size="sm"
@@ -150,19 +176,23 @@ export function ImprintChips({
               нанесення
             </Chip>
           </PopoverTrigger>
-          <PopoverContent align="start" className="max-h-72 w-56 overflow-y-auto p-1.5">
-            <PopoverHeading>Метод</PopoverHeading>
-            {methods.map((method) => (
-              <ListRow
-                key={method.id}
-                label={method.name}
-                checked={false}
-                onSelect={() => {
-                  add(method.id);
-                  setListOpen(false);
-                }}
+          <PopoverContent align="start" className={cn("w-56 p-1.5", !showDirectory && "max-h-72 overflow-y-auto")}>
+            {directory && showDirectory ? (
+              <OtherMethodsPanel
+                directory={directory}
+                kindMethods={methods}
+                onBack={methods.length > 0 ? () => setDirectoryView(false) : undefined}
+                onPicked={(method) => addAndClose(method.id)}
               />
-            ))}
+            ) : (
+              <>
+                <PopoverHeading>Метод</PopoverHeading>
+                {methods.map((method) => (
+                  <ListRow key={method.id} label={method.name} checked={false} onSelect={() => addAndClose(method.id)} />
+                ))}
+                {directory ? <OtherMethodsEntry onOpen={() => setDirectoryView(true)} /> : null}
+              </>
+            )}
           </PopoverContent>
         </Popover>
       </div>
@@ -171,6 +201,15 @@ export function ImprintChips({
 
   const visible = methods.slice(0, VISIBLE_METHODS);
   const hidden = methods.length - visible.length;
+  /*
+    ДОРОГА ДО РЕШТИ МЕТОДІВ Є ЗАВЖДИ (REQ-292). «ще N» з'являлось лише тоді,
+    коли методів виду більше двох, тож у мультитула з одним методом
+    («Лазерне гравіювання») іншого шляху не було зовсім, а вид без методів
+    лишав саме «Без нанесення». Тепер на місці «ще N» стоїть «інші» — і
+    відкриває відразу довідник: усі методи виду й так видно чипами поруч.
+  */
+  const moreLabel = hidden > 0 ? `ще ${hidden}` : methods.length > 0 ? "інші" : "обрати метод";
+  const showDirectory = Boolean(directory) && (directoryView || hidden === 0);
 
   return (
     <div className="flex min-w-0 items-center gap-1.5" role="group" aria-label="Нанесення">
@@ -196,31 +235,35 @@ export function ImprintChips({
           </Chip>
         ))}
       </div>
-      {hidden > 0 ? (
-        <Popover open={listOpen} onOpenChange={setListOpen}>
+      {hidden > 0 || directory ? (
+        <Popover open={listOpen} onOpenChange={toggleList}>
           <PopoverTrigger asChild>
             <Chip
               size="sm"
               disabled={disabled}
               icon={<ChevronDown />}
-              aria-label={`Усі методи нанесення, ще ${hidden}`}
+              aria-label={hidden > 0 ? `Усі методи нанесення, ще ${hidden}` : "Інші методи нанесення"}
               className="shrink-0 border-transparent bg-muted text-muted-foreground"
             >
-              ще {hidden}
+              {moreLabel}
             </Chip>
           </PopoverTrigger>
-          <PopoverContent align="end" className="max-h-72 w-60 overflow-y-auto p-1.5">
-            {methods.map((method) => (
-              <ListRow
-                key={method.id}
-                label={method.name}
-                checked={false}
-                onSelect={() => {
-                  add(method.id);
-                  setListOpen(false);
-                }}
+          <PopoverContent align="end" className={cn("w-60 p-1.5", !showDirectory && "max-h-72 overflow-y-auto")}>
+            {directory && showDirectory ? (
+              <OtherMethodsPanel
+                directory={directory}
+                kindMethods={methods}
+                onBack={hidden > 0 ? () => setDirectoryView(false) : undefined}
+                onPicked={(method) => addAndClose(method.id)}
               />
-            ))}
+            ) : (
+              <>
+                {methods.map((method) => (
+                  <ListRow key={method.id} label={method.name} checked={false} onSelect={() => addAndClose(method.id)} />
+                ))}
+                {directory ? <OtherMethodsEntry onOpen={() => setDirectoryView(true)} /> : null}
+              </>
+            )}
           </PopoverContent>
         </Popover>
       ) : null}
@@ -249,6 +292,7 @@ function ImprintChip({
   disabled,
   onPatch,
   onRemove,
+  directory,
 }: {
   imprint: QuoteImportDraftImprint;
   methodLabel: string;
@@ -257,9 +301,11 @@ function ImprintChip({
   disabled?: boolean;
   onPatch: (next: Partial<QuoteImportDraftImprint>) => void;
   onRemove: () => void;
+  directory?: MethodDirectorySource;
 }) {
   const [open, setOpen] = React.useState(false);
   const [typed, setTyped] = React.useState("");
+  const [directoryView, setDirectoryView] = React.useState(false);
   const close = React.useCallback(() => setOpen(false), []);
   usePopoverEscape(open, close);
 
@@ -282,6 +328,7 @@ function ImprintChip({
           // Набране й не підтверджене Enter'ом не пропадає: закриття панелі —
           // теж відповідь, і людина вважає, що вписала місце, бо вона його вписала.
           if (!next) applyTyped(typed);
+          if (next) setDirectoryView(false);
           setOpen(next);
         }}
       >
@@ -303,75 +350,94 @@ function ImprintChip({
             </span>
           </Chip>
         </PopoverTrigger>
-        <PopoverContent align="start" className="max-h-80 w-64 overflow-y-auto p-1.5">
-          {/*
-            МІСЦЕ СТОЇТЬ ПЕРШИМ, хоч у назві пари воно друге. Пари без методу
-            не буває — його вже назвали, коли пару створювали, — а місце саме
-            те, чого бракує. Перевірено живцем: із методами вгорі список місць
-            ішов під край панелі, і питання, заради якого її відкрили, було не
-            видно без прокрутки. Поле фокусується саме, бо в 89 видів із 92
-            місця вписують, а не вибирають.
-          */}
-          <PopoverHeading>Місце</PopoverHeading>
-          <Input
-            value={typed}
-            controlSize="md"
-            aria-label="Своє місце нанесення"
-            placeholder={places.length > 0 ? "Або своє місце…" : "Напишіть місце…"}
-            className="mb-1"
-            onChange={(event) => setTyped(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              applyTyped(typed);
-              setOpen(false);
-            }}
-          />
-          {places.map((option) => (
-            <ListRow
-              key={option.id ?? option.label}
-              label={option.label}
-              checked={
-                option.id
-                  ? imprint.positionId === option.id
-                  : !imprint.positionId && imprint.positionLabel === option.label
-              }
-              onSelect={() => {
-                onPatch({ positionId: option.id, positionLabel: option.label });
-                setOpen(false);
+        <PopoverContent align="start" className={cn("w-64 p-1.5", !directoryView && "max-h-80 overflow-y-auto")}>
+          {directory && directoryView ? (
+            /*
+              Метод пари міняється і на метод із довідника. Після вибору —
+              назад до місця: саме воно лишається питанням цієї пари.
+            */
+            <OtherMethodsPanel
+              directory={directory}
+              kindMethods={methods}
+              onBack={() => setDirectoryView(false)}
+              onPicked={(method) => {
+                onPatch({ methodId: method.id });
+                setDirectoryView(false);
               }}
             />
-          ))}
-          {place ? (
-            <ListRow
-              label="Без місця"
-              checked={false}
-              onSelect={() => {
-                onPatch({ positionId: null, positionLabel: null });
-                setOpen(false);
-              }}
-            />
-          ) : null}
-          <div className="my-1.5 h-px bg-border/60" />
-          <PopoverHeading>Метод</PopoverHeading>
-          {methods.map((method) => (
-            <ListRow
-              key={method.id}
-              label={method.name}
-              checked={method.id === imprint.methodId}
-              onSelect={() => onPatch({ methodId: method.id })}
-            />
-          ))}
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onRemove();
-            }}
-            className="mt-1 flex w-full items-center rounded-md border-t border-border/60 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
-          >
-            Прибрати нанесення
-          </button>
+          ) : (
+            <>
+              {/*
+                МІСЦЕ СТОЇТЬ ПЕРШИМ, хоч у назві пари воно друге. Пари без методу
+                не буває — його вже назвали, коли пару створювали, — а місце саме
+                те, чого бракує. Перевірено живцем: із методами вгорі список місць
+                ішов під край панелі, і питання, заради якого її відкрили, було не
+                видно без прокрутки. Поле фокусується саме, бо в 89 видів із 92
+                місця вписують, а не вибирають.
+              */}
+              <PopoverHeading>Місце</PopoverHeading>
+              <Input
+                value={typed}
+                controlSize="md"
+                aria-label="Своє місце нанесення"
+                placeholder={places.length > 0 ? "Або своє місце…" : "Напишіть місце…"}
+                className="mb-1"
+                onChange={(event) => setTyped(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  applyTyped(typed);
+                  setOpen(false);
+                }}
+              />
+              {places.map((option) => (
+                <ListRow
+                  key={option.id ?? option.label}
+                  label={option.label}
+                  checked={
+                    option.id
+                      ? imprint.positionId === option.id
+                      : !imprint.positionId && imprint.positionLabel === option.label
+                  }
+                  onSelect={() => {
+                    onPatch({ positionId: option.id, positionLabel: option.label });
+                    setOpen(false);
+                  }}
+                />
+              ))}
+              {place ? (
+                <ListRow
+                  label="Без місця"
+                  checked={false}
+                  onSelect={() => {
+                    onPatch({ positionId: null, positionLabel: null });
+                    setOpen(false);
+                  }}
+                />
+              ) : null}
+              <div className="my-1.5 h-px bg-border/60" />
+              <PopoverHeading>Метод</PopoverHeading>
+              {methods.map((method) => (
+                <ListRow
+                  key={method.id}
+                  label={method.name}
+                  checked={method.id === imprint.methodId}
+                  onSelect={() => onPatch({ methodId: method.id })}
+                />
+              ))}
+              {directory ? <OtherMethodsEntry onOpen={() => setDirectoryView(true)} /> : null}
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onRemove();
+                }}
+                className="mt-1 flex w-full items-center rounded-md border-t border-border/60 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
+              >
+                Прибрати нанесення
+              </button>
+            </>
+          )}
         </PopoverContent>
       </Popover>
       {/*
@@ -448,6 +514,7 @@ function SheetChips({
   product,
   methodName,
   onRemove,
+  directory,
 }: {
   imprints: QuoteImportDraftImprint[];
   methods: Array<{ id: string; name: string }>;
@@ -458,6 +525,7 @@ function SheetChips({
   product: ImprintProduct;
   methodName: (methodId: string) => string;
   onRemove: (key: string) => void;
+  directory?: MethodDirectorySource;
 }) {
   const [open, setOpen] = React.useState(false);
 
@@ -514,6 +582,7 @@ function SheetChips({
         methods={methods}
         places={places}
         onChange={onChange}
+        directory={directory}
       />
     </div>
   );

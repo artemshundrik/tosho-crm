@@ -180,7 +180,11 @@ export function QuoteWizardDialog({
     () => drafts.map((draft) => draft.catalog?.kindId).filter((id): id is string => Boolean(id)),
     [drafts]
   );
-  const { byKind: optionsByKind, reset: resetKindOptions } = useKindImprintOptions(teamId, draftKindIds);
+  const {
+    byKind: optionsByKind,
+    reset: resetKindOptions,
+    directoryFor,
+  } = useKindImprintOptions(teamId, draftKindIds);
   /**
    * Місця виду: довідник плюс те, що вже вписали руками на інших позиціях
    * ЦЬОГО Ж виду. Рядок довідника з'явиться лише на «Створити», а прорахунок
@@ -1045,6 +1049,7 @@ export function QuoteWizardDialog({
                             ? {
                                 methods: optionsByKind[draft.catalog.kindId].methods,
                                 places: placesByKind[draft.catalog.kindId] ?? [],
+                                directory: directoryFor(draft.catalog.kindId),
                               }
                             : undefined
                         }

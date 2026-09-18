@@ -40,6 +40,8 @@ vi.mock("./useKindImprintOptions", () => ({
       },
     },
     reset: () => {},
+    // «Інші методи…» (REQ-292) тут не перевіряються — лише щоб смуга рендерилась.
+    directoryFor: () => ({ entries: [], failed: false, request: () => {}, attach: vi.fn() }),
   }),
 }));
 

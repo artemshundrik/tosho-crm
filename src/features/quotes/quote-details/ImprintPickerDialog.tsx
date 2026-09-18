@@ -1,5 +1,5 @@
 import * as React from "react";
-import { X } from "@/components/icons/appIcons";
+import { ChevronRight, X } from "@/components/icons/appIcons";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import type { QuoteImportDraftImprint } from "@/features/quotes/quote-import/types";
 import type { PlaceOption } from "./ImprintChips";
 import { zonesOfView, viewOfLabel, type ImprintSheet, type ImprintViewId, type ImprintZone } from "./imprintSheets";
+import { OtherMethodsPanel } from "./OtherMethodsPanel";
+import type { MethodDirectorySource } from "./useKindImprintOptions";
 
 /**
  * Вибір місця нанесення на ескізі товару (REQ-268).
@@ -59,6 +61,7 @@ export function ImprintPickerDialog({
   methods,
   places,
   onChange,
+  directory,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -68,6 +71,8 @@ export function ImprintPickerDialog({
   methods: Method[];
   places: PlaceOption[];
   onChange: (next: QuoteImportDraftImprint[]) => void;
+  /** Спільний довідник методів (REQ-292): «Інші методи…» під методами виду. */
+  directory?: MethodDirectorySource;
 }) {
   /**
    * Правки живуть ЛОКАЛЬНО до «Готово». У смузі нанесення пишуться одразу, бо
@@ -77,6 +82,8 @@ export function ImprintPickerDialog({
   const [draft, setDraft] = React.useState<QuoteImportDraftImprint[]>([]);
   const [activeKey, setActiveKey] = React.useState<string | null>(null);
   const [view, setView] = React.useState<ImprintViewId>(sheet.views[0]?.id ?? "front");
+  /** «Інші методи…» розгорнуті в рейці. */
+  const [othersOpen, setOthersOpen] = React.useState(false);
 
   /**
    * Набір читається РІВНО НА ВІДКРИТТІ, а не на кожній зміні входів.
@@ -95,6 +102,7 @@ export function ImprintPickerDialog({
       setDraft(start);
       setActiveKey(start[0]?.key ?? null);
       setView(viewOfLabel(sheet, start[0]?.positionLabel) ?? sheet.views[0]?.id ?? "front");
+      setOthersOpen(false);
     }
     wasOpen.current = open;
   }, [open, imprints, methods, sheet]);
@@ -103,6 +111,21 @@ export function ImprintPickerDialog({
   const patchActive = (next: Partial<QuoteImportDraftImprint>) => {
     if (!active) return;
     setDraft((rows) => rows.map((row) => (row.key === active.key ? { ...row, ...next } : row)));
+  };
+
+  /**
+   * Метод із «Інших методів» стає методом активної пари. Пари ще немає — а
+   * так буває саме у виду без жодного методу — заводимо її: без методу
+   * клік по товару не мав би з чим поставити місце.
+   */
+  const applyMethod = (methodId: string) => {
+    if (active) {
+      patchActive({ methodId });
+      return;
+    }
+    const pair = newPair(methodId);
+    setDraft((rows) => [...rows, pair]);
+    setActiveKey(pair.key);
   };
 
   /**
@@ -325,6 +348,41 @@ export function ImprintPickerDialog({
                   onSelect={() => patchActive({ methodId: method.id })}
                 />
               ))}
+              {/*
+                У рейці «Інші методи…» розгортаються НА МІСЦІ, а не окремим
+                екраном, як у поповері: рейка й так прокручується, а місце
+                під методом має лишатись видно — воно наступне питання.
+                Виду без методів розгортати нічого — довідник стоїть одразу.
+              */}
+              {directory && methods.length > 0 ? (
+                <button
+                  type="button"
+                  aria-expanded={othersOpen}
+                  onClick={() => setOthersOpen((was) => !was)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors duration-base ease-out hover:bg-muted/60 hover:text-foreground motion-reduce:transition-none"
+                >
+                  <ChevronRight
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 transition-transform duration-base ease-out motion-reduce:transition-none",
+                      othersOpen && "rotate-90"
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 truncate">Інші методи…</span>
+                </button>
+              ) : null}
+              {directory && (othersOpen || methods.length === 0) ? (
+                <div className="pt-1">
+                  <OtherMethodsPanel
+                    directory={directory}
+                    kindMethods={methods}
+                    inRail
+                    onPicked={(method) => {
+                      applyMethod(method.id);
+                      setOthersOpen(false);
+                    }}
+                  />
+                </div>
+              ) : null}
             </div>
 
             <div className="mx-4 my-3 h-px bg-border/60" />

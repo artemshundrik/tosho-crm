@@ -370,7 +370,9 @@ describe("QuoteWizardDialog — один екран", () => {
     const group = await screen.findByRole("group", { name: "Нанесення" });
     const chips = within(group).getAllByRole("button");
     // ДТФ уживали двічі, вишивку раз — ДТФ стоїть першим, хоч за абеткою був би другим.
-    expect(chips.map((chip) => chip.textContent)).toEqual(["Без нанесення", "ДТФ", "Вишивка"]);
+    // «інші» — дорога до решти довідника методів (REQ-292): є навіть тоді, коли
+    // всі методи виду вже видно чипами.
+    expect(chips.map((chip) => chip.textContent)).toEqual(["Без нанесення", "ДТФ", "Вишивка", "інші"]);
     expect(chips[0]).toHaveAttribute("aria-pressed", "true");
 
     // Клік по методу створює ПАРУ, і рядок одразу питає про місце.
