@@ -1529,6 +1529,8 @@ export default function DesignTaskPage() {
   // previous write.
   const designOutputRemovalChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const [loading, setLoading] = useState(() => !initialCache?.task);
+  // Лише для завантаження задачі: цей стан заміняє собою всю сторінку. Невдала
+  // дія (файл, статус, дедлайн…) — це тост і відкат, а не setError.
   const [error, setError] = useState<string | null>(null);
   const [briefDraft, setBriefDraft] = useState("");
   const [briefDirty, setBriefDirty] = useState(false);
@@ -4191,7 +4193,6 @@ export default function DesignTaskPage() {
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося завантажити файли");
       toast.error(message);
-      setError(message);
     } finally {
       setOutputUploading(false);
       if (outputInputRef.current) outputInputRef.current.value = "";
@@ -4203,9 +4204,17 @@ export default function DesignTaskPage() {
     if (!ensureCanEdit()) return;
 
     setAttachmentUploading(true);
+    const uploadedAttachments: AttachmentRow[] = [];
+    // Дописуємо лише до вже підтягнутого списку цього прорахунку. Якщо його ще
+    // немає (впав запит), підтягуємо весь, разом із новими: дописати самі нові й
+    // назвати список завантаженим означало б сховати давніші файли.
+    const showSavedCustomerAttachments = (quoteId: string) => {
+      setCustomerAttachmentsState((prev) =>
+        prev.quoteId === quoteId ? { quoteId, rows: [...uploadedAttachments, ...prev.rows] } : prev
+      );
+      if (!customerAttachmentsLoaded && syncedTaskId === task.id) void loadCustomerAttachments();
+    };
     try {
-      const uploadedAttachments: AttachmentRow[] = [];
-
       for (const file of Array.from(files)) {
         const safeName = file.name.replace(/[^\w.-]+/g, "_");
         const baseName = `${Date.now()}-${safeName}`;
@@ -4281,14 +4290,7 @@ export default function DesignTaskPage() {
       }
 
       if (isUuid(task.quoteId)) {
-        const quoteId = task.quoteId;
-        // Дописуємо лише до вже підтягнутого списку цього прорахунку. Якщо його ще
-        // немає (впав запит), підтягуємо весь, разом із новими: дописати самі нові й
-        // назвати список завантаженим означало б сховати давніші файли.
-        setCustomerAttachmentsState((prev) =>
-          prev.quoteId === quoteId ? { quoteId, rows: [...uploadedAttachments, ...prev.rows] } : prev
-        );
-        if (!customerAttachmentsLoaded && syncedTaskId === task.id) void loadCustomerAttachments();
+        showSavedCustomerAttachments(task.quoteId);
       } else {
         setBriefAttachments((prev) => [...uploadedAttachments, ...prev]);
       }
@@ -4322,8 +4324,14 @@ export default function DesignTaskPage() {
       return uploadedAttachments;
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося додати файли");
-      setError(message);
-      toast.error(message);
+      // До прорахунку файли пишуться в базу по одному: коли падає третій, перші
+      // два вже збережені. Якщо їх не показати, людина завантажить їх удруге.
+      if (isUuid(task.quoteId) && uploadedAttachments.length > 0) {
+        showSavedCustomerAttachments(task.quoteId);
+        toast.error(message, { description: `Збережено ${uploadedAttachments.length} з ${files.length}` });
+      } else {
+        toast.error(message);
+      }
     } finally {
       setAttachmentUploading(false);
       if (attachmentInputRef.current) attachmentInputRef.current.value = "";
@@ -5147,21 +5155,25 @@ export default function DesignTaskPage() {
         fallbackUploadedBy: userId ?? null,
       });
 
-      await logDesignTaskActivity({
-        teamId: effectiveTeamId,
-        designTaskId: task.id,
-        quoteId: quoteCandidate.id,
-        userId,
-        actorName: actorLabel,
-        action: "design_task_attachment",
-        title: `Задачу прив’язано до прорахунку ${quoteCandidate.number ?? quoteCandidate.id.slice(0, 8)}`,
-        metadata: {
-          source: "design_task_attachment",
-          from_quote_id: isUuid(task.quoteId) ? task.quoteId : null,
-          to_quote_id: quoteCandidate.id,
-          selected_design_output_file_ids: selectedFiles.map((file) => file.id),
-        },
-      });
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: quoteCandidate.id,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_attachment",
+          title: `Задачу прив’язано до прорахунку ${quoteCandidate.number ?? quoteCandidate.id.slice(0, 8)}`,
+          metadata: {
+            source: "design_task_attachment",
+            from_quote_id: isUuid(task.quoteId) ? task.quoteId : null,
+            to_quote_id: quoteCandidate.id,
+            selected_design_output_file_ids: selectedFiles.map((file) => file.id),
+          },
+        });
+      } catch (logError) {
+        console.warn("Failed to log design task quote attachment event", logError);
+      }
 
       setTask((prev) =>
         prev
@@ -5177,7 +5189,6 @@ export default function DesignTaskPage() {
       toast.success("Задачу прив’язано до прорахунку");
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося прив’язати задачу до прорахунку");
-      setError(message);
       toast.error(message);
     } finally {
       setAttachingQuoteId(null);
@@ -5525,7 +5536,6 @@ export default function DesignTaskPage() {
     } catch (e: unknown) {
       setTask(previousTask);
       const message = getErrorMessage(e, "Не вдалося змінити статус");
-      setError(message);
       toast.error(message);
     } finally {
       setStatusSaving(null);
@@ -5564,21 +5574,25 @@ export default function DesignTaskPage() {
       if (updateError) throw updateError;
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
-      await logDesignTaskActivity({
-        teamId: effectiveTeamId,
-        designTaskId: previousTask.id,
-        quoteId: previousTask.quoteId,
-        userId,
-        actorName: actorLabel,
-        action: "design_task_title",
-        title: `Назва задачі: ${previousTitle || "Без назви"} → ${normalizedTitle}`,
-        metadata: {
-          source: "design_task_title",
-          from_title: previousTitle || null,
-          to_title: normalizedTitle,
-        },
-      });
-      await loadHistory();
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: previousTask.id,
+          quoteId: previousTask.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_title",
+          title: `Назва задачі: ${previousTitle || "Без назви"} → ${normalizedTitle}`,
+          metadata: {
+            source: "design_task_title",
+            from_title: previousTitle || null,
+            to_title: normalizedTitle,
+          },
+        });
+        await loadHistory();
+      } catch (logError) {
+        console.warn("Failed to log design task title event", logError);
+      }
 
       if (typeof window !== "undefined" && id) {
         sessionStorage.setItem(
@@ -5604,7 +5618,6 @@ export default function DesignTaskPage() {
       setTask(previousTask);
       const message = getErrorMessage(e, "Не вдалося оновити назву задачі");
       setRenameError(message);
-      setError(message);
       toast.error(message);
     } finally {
       setRenameSaving(false);
@@ -5681,7 +5694,6 @@ export default function DesignTaskPage() {
     } catch (e: unknown) {
       setTask(previousTask);
       const message = getErrorMessage(e, "Не вдалося оновити дедлайн");
-      setError(message);
       toast.error(message);
     } finally {
       setDeadlineSaving(false);
@@ -5812,7 +5824,6 @@ export default function DesignTaskPage() {
     } catch (e: unknown) {
       setTask(previousTask);
       const message = getErrorMessage(e, "Не вдалося оновити тип задачі");
-      setError(message);
       toast.error(message);
     } finally {
       setTypeSaving(false);
@@ -5963,7 +5974,6 @@ export default function DesignTaskPage() {
     } catch (e: unknown) {
       setTask(previousTask);
       const message = getErrorMessage(e, "Не вдалося оновити ТЗ");
-      setError(message);
       toast.error(message);
     } finally {
       setBriefSaving(false);
@@ -6617,7 +6627,6 @@ export default function DesignTaskPage() {
       setTask(previousTask);
       setDesignQueueTasks((prev) => prev.map((queueTask) => (queueTask.id === previousTask.id ? previousTask : queueTask)));
       const message = getErrorMessage(e, "Не вдалося оновити виконавця");
-      setError(message);
       toast.error(message);
     } finally {
       setAssigningMemberId(null);
@@ -6709,7 +6718,6 @@ export default function DesignTaskPage() {
       setTask(previousTask);
       setDesignQueueTasks((prev) => prev.map((queueTask) => (queueTask.id === previousTask.id ? previousTask : queueTask)));
       const message = getErrorMessage(e, "Не вдалося оновити співвиконавців");
-      setError(message);
       toast.error(message);
     } finally {
       setCollaboratorSaving(false);
@@ -6778,7 +6786,6 @@ export default function DesignTaskPage() {
     } catch (e: unknown) {
       setTask(previousTask);
       const message = getErrorMessage(e, `Не вдалося оновити ${roleLabelLower}`);
-      setError(message);
       toast.error(message);
     } finally {
       setManagerSaving(false);
@@ -6963,7 +6970,6 @@ export default function DesignTaskPage() {
       setDesignQueueTasks((prev) => prev.map((queueTask) => (queueTask.id === previousTask.id ? previousTask : queueTask)));
       const message = getErrorMessage(e, "Не вдалося призначити задачу");
       toast.error(message);
-      setError(message);
     } finally {
       setAssigningSelf(false);
     }
@@ -7011,28 +7017,31 @@ export default function DesignTaskPage() {
       if (updateError) throw updateError;
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
-      await logDesignTaskActivity({
-        teamId: effectiveTeamId,
-        designTaskId: task.id,
-        quoteId: task.quoteId,
-        userId,
-        actorName: actorLabel,
-        action: "design_task_estimate",
-        title: previousEstimate
-          ? `Естімейт: ${formatEstimateMinutes(previousEstimate)} → ${formatEstimateMinutes(estimateMinutes)}`
-          : `Естімейт: ${formatEstimateMinutes(estimateMinutes)}`,
-        metadata: {
-          source: "design_task_estimate",
-          from_estimate_minutes: previousEstimate,
-          to_estimate_minutes: estimateMinutes,
-        },
-      });
-      await loadHistory();
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_estimate",
+          title: previousEstimate
+            ? `Естімейт: ${formatEstimateMinutes(previousEstimate)} → ${formatEstimateMinutes(estimateMinutes)}`
+            : `Естімейт: ${formatEstimateMinutes(estimateMinutes)}`,
+          metadata: {
+            source: "design_task_estimate",
+            from_estimate_minutes: previousEstimate,
+            to_estimate_minutes: estimateMinutes,
+          },
+        });
+        await loadHistory();
+      } catch (logError) {
+        console.warn("Failed to log design task estimate event", logError);
+      }
       toast.success(previousEstimate ? "Естімейт оновлено" : "Естімейт встановлено");
     } catch (e: unknown) {
       setTask(previousTask);
       const message = getErrorMessage(e, "Не вдалося оновити естімейт");
-      setError(message);
       toast.error(message);
     }
   };
@@ -7113,7 +7122,6 @@ export default function DesignTaskPage() {
       navigate("/design", { replace: true });
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося видалити задачу");
-      setError(message);
       toast.error(message);
     } finally {
       setDeletingTask(false);
