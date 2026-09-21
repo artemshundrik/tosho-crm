@@ -653,7 +653,13 @@ export async function listQuotes(params: ListQuotesParams) {
 
 export async function listCustomersBySearch(teamId: string, search: string) {
   const q = search.trim();
-  const buildQuery = (variant: "full" | "no_logo" | "base") => {
+  /**
+   * СТЕЛЯ РЯДКІВ. Порожній список (перше відкриття) лишається на 20 — це
+   * просто «почніть писати». Пошук бере 60: раніше кожен варіант написання мав
+   * власні 20 рядків, а тепер запит один, і на 20 алфавітно перші збіги могли
+   * відрізати потрібний (сортування йде за назвою, не за схожістю).
+   */
+  const buildQuery = (variant: "full" | "no_logo" | "base", limit: number) => {
     const columns =
       variant === "full"
         ? "id,name,legal_name,logo_url,manager,manager_user_id"
@@ -666,24 +672,34 @@ export async function listCustomersBySearch(teamId: string, search: string) {
       .select(columns)
       .eq("team_id", teamId)
       .order("name", { ascending: true })
-      .limit(20);
+      .limit(limit);
   };
 
   type IlikeMode = "substring" | "prefix-name-only";
-  const executeWithFallback = async (term?: string | null, mode: IlikeMode = "substring") => {
-    const applySearch = async (variant: "full" | "no_logo" | "base") => {
-      let query = buildQuery(variant);
-      if (term?.trim()) {
+  /**
+   * УСІ ВАРІАНТИ НАПИСАННЯ — ОДНИМ ЗАПИТОМ (REQ-302).
+   *
+   * Було по запиту на варіант: «fantom» давало чотири, українська назва —
+   * сім, і все це множилось на дві таблиці. Заміряно на зібраному застосунку:
+   * кожен запит 230–280 мс, і це не база (рядків 376), а дорога та PostgREST.
+   * `or` приймає всі умови разом, тож замість восьми запитів іде два.
+   */
+  const executeWithFallback = async (terms: string[] = [], mode: IlikeMode = "substring") => {
+    const conditions = terms
+      .filter((term) => term.trim())
+      .flatMap((term) => {
         const escapedTerm = escapePostgrestIlikeTerm(term);
-        if (mode === "prefix-name-only") {
-          // Short-query path: match only the trade name. legal_name is excluded
-          // because in UA most rows start with "ФОП"/"ТОВ"/"ПП" — those prefixes
-          // would dominate the result on any single-letter query.
-          query = query.ilike("name", `${escapedTerm}%`);
-        } else {
-          query = query.or(`name.ilike.%${escapedTerm}%,legal_name.ilike.%${escapedTerm}%`);
-        }
-      }
+        // Short-query path: match only the trade name. legal_name is excluded
+        // because in UA most rows start with "ФОП"/"ТОВ"/"ПП" — those prefixes
+        // would dominate the result on any single-letter query.
+        return mode === "prefix-name-only"
+          ? [`name.ilike.${escapedTerm}%`]
+          : [`name.ilike.%${escapedTerm}%`, `legal_name.ilike.%${escapedTerm}%`];
+      });
+
+    const applySearch = async (variant: "full" | "no_logo" | "base") => {
+      let query = buildQuery(variant, conditions.length > 0 ? 60 : 20);
+      if (conditions.length > 0) query = query.or(conditions.join(","));
       return await query;
     };
 
@@ -711,42 +727,17 @@ export async function listCustomersBySearch(teamId: string, search: string) {
   // the trade name — legal_name is full of ФОП/ТОВ/ПП prefixes that would pollute
   // single-letter results.
   if (q.length < 3) {
-    const prefixes = buildShortQueryPrefixVariants(q);
-    const responses = await Promise.all(
-      prefixes.map(async (term) => ({ term, ...(await executeWithFallback(term, "prefix-name-only")) }))
-    );
-    const firstError = responses.find((response) => response.error)?.error ?? null;
-    if (responses.length > 0 && !responses.some((response) => !response.error)) {
-      handleError(firstError);
-    }
-    const deduped = new Map<string, CustomerRow>();
-    for (const response of responses) {
-      const rows = (response.data as unknown as CustomerRow[]) ?? [];
-      for (const row of rows) {
-        if (!deduped.has(row.id)) deduped.set(row.id, row);
-      }
-    }
-    return Array.from(deduped.values())
+    const { data, error } = await executeWithFallback(buildShortQueryPrefixVariants(q), "prefix-name-only");
+    handleError(error);
+    return ((data as unknown as CustomerRow[]) ?? [])
       .sort((left, right) => (left.name ?? "").localeCompare(right.name ?? "", "uk"))
       .slice(0, 20);
   }
 
-  const variants = buildCompanySearchVariants(q);
-  const responses = await Promise.all(variants.map(async (term) => ({ term, ...(await executeWithFallback(term)) })));
-  const firstError = responses.find((response) => response.error)?.error ?? null;
-  if (!responses.some((response) => !response.error)) {
-    handleError(firstError);
-  }
+  const { data, error } = await executeWithFallback(buildCompanySearchVariants(q));
+  handleError(error);
 
-  const deduped = new Map<string, CustomerRow>();
-  for (const response of responses) {
-    const rows = (response.data as unknown as CustomerRow[]) ?? [];
-    for (const row of rows) {
-      if (!deduped.has(row.id)) deduped.set(row.id, row);
-    }
-  }
-
-  return Array.from(deduped.values())
+  return ((data as unknown as CustomerRow[]) ?? [])
     .map((row) => ({
       row,
       score: scoreCompanyNameMatch(q, [row.name ?? null, row.legal_name ?? null]),
@@ -759,7 +750,7 @@ export async function listCustomersBySearch(teamId: string, search: string) {
 
 export async function listLeadsBySearch(teamId: string, search: string) {
   const q = search.trim();
-  const buildQuery = (variant: "full" | "base") => {
+  const buildQuery = (variant: "full" | "base", limit: number) => {
     return supabase
       .schema("tosho")
       .from("leads")
@@ -770,26 +761,33 @@ export async function listLeadsBySearch(teamId: string, search: string) {
       )
       .eq("team_id", teamId)
       .order("company_name", { ascending: true })
-      .limit(20);
+      .limit(limit);
   };
 
   type IlikeMode = "substring" | "prefix-name-only";
-  const executeWithFallback = async (term?: string | null, mode: IlikeMode = "substring") => {
-    const applySearch = async (variant: "full" | "base") => {
-      let query = buildQuery(variant);
-      if (term?.trim()) {
+  // Усі варіанти написання — одним запитом; чому саме так, див. у
+  // listCustomersBySearch вище.
+  const executeWithFallback = async (terms: string[] = [], mode: IlikeMode = "substring") => {
+    const conditions = terms
+      .filter((term) => term.trim())
+      .flatMap((term) => {
         const escapedTerm = escapePostgrestIlikeTerm(term);
-        if (mode === "prefix-name-only") {
-          // Short-query path: match only the company name. legal_name (often
-          // "ФОП/ТОВ/ПП ...") and personal first/last names would otherwise
-          // dominate single-letter queries with irrelevant rows.
-          query = query.ilike("company_name", `${escapedTerm}%`);
-        } else {
-          query = query.or(
-            `company_name.ilike.%${escapedTerm}%,legal_name.ilike.%${escapedTerm}%,first_name.ilike.%${escapedTerm}%,last_name.ilike.%${escapedTerm}%`
-          );
-        }
-      }
+        // Short-query path: match only the company name. legal_name (often
+        // "ФОП/ТОВ/ПП ...") and personal first/last names would otherwise
+        // dominate single-letter queries with irrelevant rows.
+        return mode === "prefix-name-only"
+          ? [`company_name.ilike.${escapedTerm}%`]
+          : [
+              `company_name.ilike.%${escapedTerm}%`,
+              `legal_name.ilike.%${escapedTerm}%`,
+              `first_name.ilike.%${escapedTerm}%`,
+              `last_name.ilike.%${escapedTerm}%`,
+            ];
+      });
+
+    const applySearch = async (variant: "full" | "base") => {
+      let query = buildQuery(variant, conditions.length > 0 ? 60 : 20);
+      if (conditions.length > 0) query = query.or(conditions.join(","));
       return await query;
     };
 
@@ -809,42 +807,17 @@ export async function listLeadsBySearch(teamId: string, search: string) {
   // Short query (1-2 chars): prefix search with Latin↔Cyrillic transliteration pair.
   // Matches company_name only — see comment in listCustomersBySearch.
   if (q.length < 3) {
-    const prefixes = buildShortQueryPrefixVariants(q);
-    const responses = await Promise.all(
-      prefixes.map(async (term) => ({ term, ...(await executeWithFallback(term, "prefix-name-only")) }))
-    );
-    const firstError = responses.find((response) => response.error)?.error ?? null;
-    if (responses.length > 0 && !responses.some((response) => !response.error)) {
-      handleError(firstError);
-    }
-    const deduped = new Map<string, LeadSearchRow>();
-    for (const response of responses) {
-      const rows = (response.data as unknown as LeadSearchRow[]) ?? [];
-      for (const row of rows) {
-        if (!deduped.has(row.id)) deduped.set(row.id, row);
-      }
-    }
-    return Array.from(deduped.values())
+    const { data, error } = await executeWithFallback(buildShortQueryPrefixVariants(q), "prefix-name-only");
+    handleError(error);
+    return ((data as unknown as LeadSearchRow[]) ?? [])
       .sort((left, right) => (left.company_name ?? "").localeCompare(right.company_name ?? "", "uk"))
       .slice(0, 20);
   }
 
-  const variants = buildCompanySearchVariants(q);
-  const responses = await Promise.all(variants.map(async (term) => ({ term, ...(await executeWithFallback(term)) })));
-  const firstError = responses.find((response) => response.error)?.error ?? null;
-  if (!responses.some((response) => !response.error)) {
-    handleError(firstError);
-  }
+  const { data, error } = await executeWithFallback(buildCompanySearchVariants(q));
+  handleError(error);
 
-  const deduped = new Map<string, LeadSearchRow>();
-  for (const response of responses) {
-    const rows = (response.data as unknown as LeadSearchRow[]) ?? [];
-    for (const row of rows) {
-      if (!deduped.has(row.id)) deduped.set(row.id, row);
-    }
-  }
-
-  return Array.from(deduped.values())
+  return ((data as unknown as LeadSearchRow[]) ?? [])
     .map((row) => ({
       row,
       score: scoreCompanyNameMatch(q, [

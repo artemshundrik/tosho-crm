@@ -1859,9 +1859,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setCustomersError(null);
     try {
       type CustomerQueryMode = "rich-substring" | "prefix-name-only";
+      /**
+       * УСІ ВАРІАНТИ НАПИСАННЯ — ОДНИМ ЗАПИТОМ (REQ-302). Було по запиту на
+       * варіант: «fantom» давало чотири, українська назва — сім, і стільки ж
+       * окремо по лідах. Кожен коштує 230–280 мс дороги, а не бази.
+       */
       const buildCustomersQuery = (
         columns: string,
-        searchTerm?: string | null,
+        searchTerms: string[] = [],
         mode: CustomerQueryMode = "rich-substring"
       ) => {
         let query = supabase
@@ -1886,20 +1891,27 @@ function CustomersPage({ teamId }: { teamId: string }) {
           }
         }
 
-        const normalizedSearch = searchTerm?.trim() ?? "";
-        if (normalizedSearch) {
-          const escaped = escapePostgrestTerm(normalizedSearch);
-          if (mode === "prefix-name-only") {
-            // Short-query path: match only the trade name. legal_name/manager/contact_*
-            // would dominate single-letter queries with rows where someone's email or
-            // legal-form prefix (ФОП/ТОВ/ПП) starts with that letter.
-            query = query.ilike("name", `${escaped}%`);
-          } else {
-            query = query.or(
-              `name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,manager.ilike.%${escaped}%,contact_name.ilike.%${escaped}%,contact_phone.ilike.%${escaped}%,contact_email.ilike.%${escaped}%,website.ilike.%${escaped}%,tax_id.ilike.%${escaped}%`
-            );
-          }
-        }
+        // Short-query path: match only the trade name. legal_name/manager/contact_*
+        // would dominate single-letter queries with rows where someone's email or
+        // legal-form prefix (ФОП/ТОВ/ПП) starts with that letter.
+        const conditions = searchTerms
+          .filter((term) => term.trim())
+          .flatMap((term) => {
+            const escaped = escapePostgrestTerm(term.trim());
+            return mode === "prefix-name-only"
+              ? [`name.ilike.${escaped}%`]
+              : [
+                  `name.ilike.%${escaped}%`,
+                  `legal_name.ilike.%${escaped}%`,
+                  `manager.ilike.%${escaped}%`,
+                  `contact_name.ilike.%${escaped}%`,
+                  `contact_phone.ilike.%${escaped}%`,
+                  `contact_email.ilike.%${escaped}%`,
+                  `website.ilike.%${escaped}%`,
+                  `tax_id.ilike.%${escaped}%`,
+                ];
+          });
+        if (conditions.length > 0) query = query.or(conditions.join(","));
 
         return query;
       };
@@ -1917,21 +1929,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
         // letter would return ~every ФОП/ТОВ/manager whose initial matches. See the
         // matching short-query path in `src/lib/toshoApi.ts` (listCustomersBySearch).
         if (normalizedSearch.length < 3) {
-          const prefixes = buildShortQueryPrefixVariants(normalizedSearch);
-          const responses = await Promise.all(
-            prefixes.map(async (term) => {
-              const { data, error: loadError } = await runCustomerSelect(async (columns) =>
-                await buildCustomersQuery(columns, term, "prefix-name-only").range(0, pageSize - 1)
-              );
-              if (loadError) throw loadError;
-              return ((data as unknown) as CustomerRow[]) ?? [];
-            })
+          const { data, error: loadError } = await runCustomerSelect(async (columns) =>
+            await buildCustomersQuery(
+              columns,
+              buildShortQueryPrefixVariants(normalizedSearch),
+              "prefix-name-only"
+            ).range(0, pageSize - 1)
           );
-          const deduped = new Map<string, CustomerRow>();
-          responses.flat().forEach((row) => {
-            if (!deduped.has(row.id)) deduped.set(row.id, row);
-          });
-          const rankedRows = Array.from(deduped.values()).sort((left, right) =>
+          if (loadError) throw loadError;
+          const rankedRows = (((data as unknown) as CustomerRow[]) ?? []).sort((left, right) =>
             (left.name ?? "").localeCompare(right.name ?? "", "uk")
           );
           setCustomersTotal(rankedRows.length);
@@ -1943,23 +1949,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
           return;
         }
 
-        const variants = buildCompanySearchVariants(normalizedSearch);
-        const responses = await Promise.all(
-          variants.map(async (term) => {
-            const { data, error: loadError } = await runCustomerSelect(async (columns) =>
-              await buildCustomersQuery(columns, term).range(0, pageSize - 1)
-            );
-            if (loadError) throw loadError;
-            return ((data as unknown) as CustomerRow[]) ?? [];
-          })
+        const { data, error: loadError } = await runCustomerSelect(async (columns) =>
+          await buildCustomersQuery(columns, buildCompanySearchVariants(normalizedSearch)).range(0, pageSize - 1)
         );
+        if (loadError) throw loadError;
 
-        const deduped = new Map<string, CustomerRow>();
-        responses.flat().forEach((row) => {
-          if (!deduped.has(row.id)) deduped.set(row.id, row);
-        });
-
-        const rankedRows = Array.from(deduped.values())
+        const rankedRows = (((data as unknown) as CustomerRow[]) ?? [])
           .map((row) => ({
             row,
             score: Math.max(
@@ -2043,7 +2038,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         variant: LeadColumnsVariant,
         rangeOffset: number,
         pageSize: number,
-        searchTerm?: string | null,
+        searchTerms: string[] = [],
         mode: LeadQueryMode = "rich-substring"
       ) => {
         let query = supabase
@@ -2068,17 +2063,25 @@ function CustomersPage({ teamId }: { teamId: string }) {
           }
         }
 
-        const normalizedSearch = searchTerm?.trim() ?? "";
-        if (normalizedSearch) {
-          const escaped = escapePostgrestTerm(normalizedSearch);
-          if (mode === "prefix-name-only") {
-            query = query.ilike("company_name", `${escaped}%`);
-          } else {
-            query = query.or(
-              `company_name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,email.ilike.%${escaped}%,source.ilike.%${escaped}%,manager.ilike.%${escaped}%,website.ilike.%${escaped}%`
-            );
-          }
-        }
+        // Усі варіанти написання — одним `or`; чому, див. buildCustomersQuery.
+        const conditions = searchTerms
+          .filter((term) => term.trim())
+          .flatMap((term) => {
+            const escaped = escapePostgrestTerm(term.trim());
+            return mode === "prefix-name-only"
+              ? [`company_name.ilike.${escaped}%`]
+              : [
+                  `company_name.ilike.%${escaped}%`,
+                  `legal_name.ilike.%${escaped}%`,
+                  `first_name.ilike.%${escaped}%`,
+                  `last_name.ilike.%${escaped}%`,
+                  `email.ilike.%${escaped}%`,
+                  `source.ilike.%${escaped}%`,
+                  `manager.ilike.%${escaped}%`,
+                  `website.ilike.%${escaped}%`,
+                ];
+          });
+        if (conditions.length > 0) query = query.or(conditions.join(","));
 
         return await query.range(rangeOffset, rangeOffset + pageSize - 1);
       };
@@ -2095,28 +2098,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
         // Short query (1-2 chars): prefix-name-only with Latin↔Cyrillic transliteration.
         // Mirrors the customer-table and picker fix.
         if (normalizedSearch.length < 3) {
-          const prefixes = buildShortQueryPrefixVariants(normalizedSearch);
-          const responses = await Promise.all(
-            prefixes.map(async (term) => {
-              let activeVariant: LeadColumnsVariant = "full";
-              let { data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term, "prefix-name-only");
-              let fallbackVariant: LeadColumnsVariant | null = loadError
-                ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "")
-                : null;
-              while (loadError && fallbackVariant) {
-                activeVariant = fallbackVariant;
-                ({ data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term, "prefix-name-only"));
-                fallbackVariant = loadError ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "") : null;
-              }
-              if (loadError) throw loadError;
-              return ((data as unknown) as LeadRow[]) ?? [];
-            })
-          );
-          const deduped = new Map<string, LeadRow>();
-          responses.flat().forEach((row) => {
-            if (!deduped.has(row.id)) deduped.set(row.id, row);
-          });
-          const rankedLeads = Array.from(deduped.values()).sort((left, right) =>
+          const terms = buildShortQueryPrefixVariants(normalizedSearch);
+          let activeVariant: LeadColumnsVariant = "full";
+          let { data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, terms, "prefix-name-only");
+          let fallbackVariant: LeadColumnsVariant | null = loadError
+            ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "")
+            : null;
+          while (loadError && fallbackVariant) {
+            activeVariant = fallbackVariant;
+            ({ data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, terms, "prefix-name-only"));
+            fallbackVariant = loadError ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "") : null;
+          }
+          if (loadError) throw loadError;
+          const rankedLeads = (((data as unknown) as LeadRow[]) ?? []).sort((left, right) =>
             (left.company_name ?? "").localeCompare(right.company_name ?? "", "uk")
           );
           setLeadsTotal(rankedLeads.length);
@@ -2128,30 +2122,20 @@ function CustomersPage({ teamId }: { teamId: string }) {
           return;
         }
 
-        const variants = buildCompanySearchVariants(normalizedSearch);
-        const responses = await Promise.all(
-          variants.map(async (term) => {
-            let activeVariant: LeadColumnsVariant = "full";
-            let { data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term);
-            let fallbackVariant: LeadColumnsVariant | null = loadError
-              ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "")
-              : null;
-            while (loadError && fallbackVariant) {
-              activeVariant = fallbackVariant;
-              ({ data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term));
-              fallbackVariant = loadError ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "") : null;
-            }
-            if (loadError) throw loadError;
-            return ((data as unknown) as LeadRow[]) ?? [];
-          })
-        );
+        const terms = buildCompanySearchVariants(normalizedSearch);
+        let activeVariant: LeadColumnsVariant = "full";
+        let { data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, terms);
+        let fallbackVariant: LeadColumnsVariant | null = loadError
+          ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "")
+          : null;
+        while (loadError && fallbackVariant) {
+          activeVariant = fallbackVariant;
+          ({ data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, terms));
+          fallbackVariant = loadError ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "") : null;
+        }
+        if (loadError) throw loadError;
 
-        const deduped = new Map<string, LeadRow>();
-        responses.flat().forEach((row) => {
-          if (!deduped.has(row.id)) deduped.set(row.id, row);
-        });
-
-        const rankedLeads = Array.from(deduped.values())
+        const rankedLeads = (((data as unknown) as LeadRow[]) ?? [])
           .map((row) => ({
             row,
             score: Math.max(

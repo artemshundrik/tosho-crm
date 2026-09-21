@@ -10,8 +10,6 @@ import {
   upsertQuoteRuns,
   setStatus,
   updateQuote,
-  listCustomersBySearch,
-  listLeadsBySearch,
   listCatalogModelsByIds,
   getQuoteSummary,
   listQuoteSetMemberships,
@@ -21,6 +19,7 @@ import {
   type QuoteSummaryRow,
 } from "@/lib/toshoApi";
 import { normalizeQuoteRunModelPriceVat } from "@/lib/quoteRuns";
+import { searchQuoteParties } from "@/features/quotes/quoteParties";
 import { canOpenQuoteDetails } from "@/lib/permissions";
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
@@ -850,23 +849,10 @@ export async function fetchQuotePartyOptions(
   search: string
 ): Promise<QueryResult<QuotePartyOption[]>> {
   try {
-    const [customerRows, leadRows] = await Promise.all([
-      listCustomersBySearch(teamId, search),
-      listLeadsBySearch(teamId, search),
-    ]);
-    return {
-      ok: true,
-      data: [
-        ...customerRows.map((customer) => ({ ...customer, entityType: "customer" as const })),
-        ...leadRows.map((lead) => ({
-          id: lead.id,
-          name: lead.company_name ?? lead.legal_name ?? null,
-          legal_name: lead.legal_name ?? null,
-          logo_url: lead.logo_url ?? null,
-          entityType: "lead" as const,
-        })),
-      ],
-    };
+    // Той самий список у памʼяті, що й у вікні створення прорахунку (REQ-302):
+    // жодного запиту на літеру, і мапер ліда в опцію лежить в одному місці, а
+    // не двома копіями, які розійдуться на першій же зміні полів.
+    return { ok: true, data: await searchQuoteParties(teamId, search) };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити замовників.") };
   }
