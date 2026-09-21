@@ -23,6 +23,8 @@ export type PartyHoverInfo = {
   logoUrl: string | null;
   contactName: string | null;
   phone: string | null;
+  /** Нік без «@» — у ліда власна колонка, у замовника перший контакт. */
+  telegram: string | null;
   email: string | null;
   website: string | null;
   managerUserId: string | null;
@@ -41,6 +43,17 @@ function cacheKey(kind: PartyKind, id: string) {
   return `${kind}:${id}`;
 }
 
+/** Telegram першого контакту замовника — там, де в ліда окрема колонка. */
+function firstContactTelegram(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const handle = (item as { telegram?: unknown }).telegram;
+    if (typeof handle === "string" && handle.trim()) return handle.trim();
+  }
+  return null;
+}
+
 function firstPhone(value: unknown): string | null {
   if (Array.isArray(value)) {
     const found = value.find((item) => typeof item === "string" && item.trim());
@@ -55,7 +68,7 @@ async function fetchCustomer(id: string): Promise<PartyHoverInfo | null> {
     .schema("tosho")
     .from("customers")
     .select(
-      "id,name,legal_name,logo_url,contact_name,phone,email,contact_phone,contact_email,website,manager,manager_user_id"
+      "id,name,legal_name,logo_url,contact_name,phone,email,contact_phone,contact_email,contacts,website,manager,manager_user_id"
     )
     .eq("id", id)
     .maybeSingle();
@@ -70,6 +83,7 @@ async function fetchCustomer(id: string): Promise<PartyHoverInfo | null> {
     logoUrl: normalizeCustomerLogoUrl(data.logo_url ?? null),
     contactName: data.contact_name?.trim() || null,
     phone: data.phone?.trim() || data.contact_phone?.trim() || null,
+    telegram: firstContactTelegram(data.contacts),
     email: data.email?.trim() || data.contact_email?.trim() || null,
     website: data.website?.trim() || null,
     managerUserId: data.manager_user_id ?? null,
@@ -86,7 +100,7 @@ async function fetchLead(id: string): Promise<PartyHoverInfo | null> {
     .schema("tosho")
     .from("leads")
     .select(
-      "id,company_name,legal_name,logo_url,first_name,last_name,email,phone_numbers,website,source,manager,manager_user_id"
+      "id,company_name,legal_name,logo_url,first_name,last_name,email,phone_numbers,telegram,website,source,manager,manager_user_id"
     )
     .eq("id", id)
     .maybeSingle();
@@ -103,6 +117,7 @@ async function fetchLead(id: string): Promise<PartyHoverInfo | null> {
     logoUrl: normalizeCustomerLogoUrl(data.logo_url ?? null),
     contactName,
     phone: firstPhone(data.phone_numbers),
+    telegram: data.telegram?.trim() || null,
     email: data.email?.trim() || null,
     website: data.website?.trim() || null,
     managerUserId: data.manager_user_id ?? null,

@@ -200,6 +200,7 @@ export type LeadRow = {
   last_name?: string | null;
   email?: string | null;
   phone_numbers?: string[] | null;
+  telegram?: string | null;
   source?: string | null;
   website?: string | null;
   manager?: string | null;
@@ -866,7 +867,7 @@ export async function getLeadById(teamId: string, leadId: string) {
     .schema("tosho")
     .from("leads")
     .select(
-      "id,team_id,company_name,legal_name,logo_url,first_name,last_name,email,phone_numbers,source,website,manager,iban,signatory_name,signatory_position,reminder_at,reminder_comment,event_name,event_at,event_comment,notes"
+      "id,team_id,company_name,legal_name,logo_url,first_name,last_name,email,phone_numbers,telegram,source,website,manager,iban,signatory_name,signatory_position,reminder_at,reminder_comment,event_name,event_at,event_comment,notes"
     )
     .eq("team_id", teamId)
     .eq("id", leadId)

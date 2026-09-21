@@ -18,6 +18,7 @@ import {
 } from "@/lib/customerLogo";
 import { buildReminderAtIso } from "@/lib/reminderDateTime";
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
+import { getLeadContactIssue } from "./leadContact";
 
 type MemberOption = {
   id: string;
@@ -90,6 +91,7 @@ const createInitialLeadForm = (prefillName: string, defaultManagerLabel: string)
   lastName: "",
   email: "",
   phones: [""],
+  telegram: "",
   source: "",
   website: "",
   logoUrl: "",
@@ -421,8 +423,11 @@ export const useCustomerLeadCreate = ({
       return;
     }
     const phones = leadForm.phones.map((phone) => phone.trim()).filter(Boolean);
-    if (phones.length === 0) {
-      setLeadError("Вкажіть хоча б один номер телефону.");
+    const leadTelegram = normalizeTelegramUsername(leadForm.telegram);
+    /** Телефон АБО Telegram (REQ-298) — правило спільне, див. leadContact.ts. */
+    const leadContactIssue = getLeadContactIssue({ phones, telegram: leadForm.telegram });
+    if (leadContactIssue) {
+      setLeadError(leadContactIssue);
       return;
     }
 
@@ -500,6 +505,7 @@ export const useCustomerLeadCreate = ({
       last_name: leadForm.lastName.trim() || null,
       email: leadForm.email.trim() || null,
       phone_numbers: phones,
+      telegram: leadTelegram || null,
       source: leadForm.source.trim(),
       website: leadForm.website.trim() || null,
       manager: (

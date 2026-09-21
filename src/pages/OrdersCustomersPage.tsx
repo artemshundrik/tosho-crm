@@ -91,7 +91,15 @@ import {
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader2, MoreHorizontal, PlusCircle, Trash2, Unlink, Users } from "@/components/icons/appIcons";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
-import { normalizeTelegramUsername } from "@/lib/telegramContact";
+import { formatTelegramHandle, normalizeTelegramUsername } from "@/lib/telegramContact";
+import { getLeadContactIssue, leadContactLabel } from "@/components/customers/leadContact";
+import {
+  getFallbackLeadColumnsVariant,
+  getLeadColumns,
+  getLeadConversionMissingFields,
+  type LeadColumnsVariant,
+  type LeadRow,
+} from "@/components/customers/leadRecord";
 import type { TableInsert } from "@/lib/dbTables";
 import { toast } from "sonner";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
@@ -133,38 +141,6 @@ type CustomerRow = {
   dropbox_client_path?: string | null;
   dropbox_brand_path?: string | null;
   dropbox_shared_url?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
-
-type LeadRow = {
-  id: string;
-  team_id?: string | null;
-  company_name?: string | null;
-  payment_type?: string | null;
-  legal_name?: string | null;
-  ownership_type?: string | null;
-  tax_id?: string | null;
-  legal_address?: string | null;
-  logo_url?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  email?: string | null;
-  phone_numbers?: string[] | null;
-  source?: string | null;
-  website?: string | null;
-  manager?: string | null;
-  manager_user_id?: string | null;
-  iban?: string | null;
-  signatory_name?: string | null;
-  signatory_position?: string | null;
-  reminder_at?: string | null;
-  reminder_comment?: string | null;
-  event_name?: string | null;
-  event_at?: string | null;
-  event_comment?: string | null;
-  notes?: string | null;
-  delivery_points?: unknown;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -419,51 +395,6 @@ const CUSTOMER_DROPBOX_COLUMNS = [
 ];
 const CUSTOMER_COLUMNS = [...CUSTOMER_BASE_COLUMNS, ...CUSTOMER_DROPBOX_COLUMNS].join(",");
 const CUSTOMER_COLUMNS_LEGACY = CUSTOMER_BASE_COLUMNS.join(",");
-const LEAD_COLUMNS = [
-  "id",
-  "team_id",
-  "company_name",
-  "payment_type",
-  "legal_name",
-  "ownership_type",
-  "tax_id",
-  "legal_address",
-  "logo_url",
-  "first_name",
-  "last_name",
-  "email",
-  "phone_numbers",
-  "source",
-  "website",
-  "manager",
-  "manager_user_id",
-  "iban",
-  "signatory_name",
-  "signatory_position",
-  "reminder_at",
-  "reminder_comment",
-  "event_name",
-  "event_at",
-  "event_comment",
-  "notes",
-  "delivery_points",
-  "created_at",
-  "updated_at",
-].join(",");
-const LEAD_COLUMNS_WITHOUT_REQUISITES = LEAD_COLUMNS.replace("tax_id,", "").replace("legal_address,", "");
-const LEAD_COLUMNS_LEGACY = LEAD_COLUMNS_WITHOUT_REQUISITES.replace("ownership_type,", "");
-type LeadColumnsVariant = "full" | "no_requisites" | "no_ownership";
-const getLeadColumns = (variant: LeadColumnsVariant) => {
-  if (variant === "no_ownership") return LEAD_COLUMNS_LEGACY;
-  if (variant === "no_requisites") return LEAD_COLUMNS_WITHOUT_REQUISITES;
-  return LEAD_COLUMNS;
-};
-const getFallbackLeadColumnsVariant = (variant: LeadColumnsVariant, message: string): LeadColumnsVariant | null => {
-  if (!/column/i.test(message)) return null;
-  if (variant === "full" && (/tax_id/i.test(message) || /legal_address/i.test(message))) return "no_requisites";
-  if ((variant === "full" || variant === "no_requisites") && /ownership_type/i.test(message)) return "no_ownership";
-  return null;
-};
 const isManagerFilterMember = (member: Pick<WorkspaceMemberDisplayRow, "accessRole" | "jobRole">) =>
   isQuoteManagerJobRole(member.jobRole) ||
   (member.jobRole ?? "").trim().toLowerCase() === "seo" ||
@@ -474,18 +405,6 @@ const normalizeManagerKey = (value?: string | null) =>
   (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
 const escapePostgrestTerm = (value: string) => value.replace(/[%_,]/g, (char) => `\\${char}`);
-
-const getLeadConversionMissingFields = (form: LeadFormState, phones: string[]) => {
-  const missing: string[] = [];
-  if (!form.ownershipType.trim()) missing.push("форма власності");
-  if (!form.taxId.trim()) missing.push(form.ownershipType === "fop" ? "ІПН" : "ЄДРПОУ / ІПН");
-  if (!form.legalAddress.trim()) missing.push(form.ownershipType === "fop" ? "прописка" : "юридична адреса");
-  if (!form.iban.trim()) missing.push("IBAN");
-  if (!form.signatoryPosition.trim()) missing.push("посада підписанта");
-  if (!phones.length) missing.push("телефон");
-  if (!form.email.trim()) missing.push("email");
-  return missing;
-};
 
 type CustomersPageCachePayload = {
   activeTab: "customers" | "leads";
@@ -680,6 +599,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     lastName: "",
     email: "",
     phones: [""],
+    telegram: "",
     source: "",
     website: "",
     manager: "",
@@ -1477,6 +1397,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       lastName: "",
       email: "",
       phones: [""],
+      telegram: "",
       source: "",
       website: "",
       manager: currentManagerLabel || defaultManagerName,
@@ -1829,6 +1750,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       lastName: lead.last_name ?? "",
       email: lead.email ?? "",
       phones: lead.phone_numbers?.length ? lead.phone_numbers : [""],
+      telegram: lead.telegram ?? "",
       source: lead.source ?? "",
       website: lead.website ?? "",
       manager: resolveManagerLabel(lead.manager_user_id, lead.manager) || (currentManagerLabel || defaultManagerName),
@@ -2880,8 +2802,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
 
     const phones = leadForm.phones.map((phone) => phone.trim()).filter(Boolean);
-    if (phones.length === 0) {
-      setLeadFormError("Вкажіть хоча б один номер телефону.");
+    const leadTelegram = normalizeTelegramUsername(leadForm.telegram);
+    /**
+     * Телефон АБО Telegram (REQ-298) — правило спільне з формою й зі швидким
+     * створенням із прорахунку. Для переведення в замовника номер і далі
+     * обовʼязковий: це стереже getLeadConversionMissingFields нижче.
+     */
+    const contactIssue = getLeadContactIssue({ phones, telegram: leadForm.telegram });
+    if (contactIssue) {
+      setLeadFormError(contactIssue);
       return;
     }
     if (options?.convertToCustomer && !leadEditingId) {
@@ -2959,6 +2888,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       last_name: leadForm.lastName.trim() || null,
       email: leadForm.email.trim() || null,
       phone_numbers: phones,
+      telegram: leadTelegram || null,
       source: leadForm.source.trim(),
       website: leadForm.website.trim() || null,
       manager: selectedManagerLabel || currentManagerLabel || defaultManagerName || null,
@@ -3088,7 +3018,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             phone: phones[0] ?? "",
             email: leadForm.email.trim(),
             birthday: "",
-            telegram: "",
+            telegram: leadTelegram,
           },
         ];
         const customerPayload: Record<string, unknown> = {
@@ -3889,6 +3819,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         <div><span className="text-muted-foreground">Контакт:</span> {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Не вказано"}</div>
                         <div><span className="text-muted-foreground">Email:</span> {lead.email ?? "Не вказано"}</div>
                         <div><span className="text-muted-foreground">Телефони:</span> {lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : "Не вказано"}</div>
+                        {lead.telegram ? <div><span className="text-muted-foreground">Telegram:</span> {formatTelegramHandle(lead.telegram)}</div> : null}
                         <div><span className="text-muted-foreground">Джерело:</span> {lead.source ?? "Не вказано"}</div>
                         <div><span className="text-muted-foreground">Менеджер:</span> {resolveManagerLabel(lead.manager_user_id, lead.manager) || "Не вказано"}</div>
                         {lead.website ? (
@@ -3956,8 +3887,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="truncate" title={lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : undefined}>
-                              {lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : "Не вказано"}
+                            <div className="truncate" title={leadContactLabel(lead)}>
+                              {leadContactLabel(lead)}
                             </div>
                           </TableCell>
                           <TableCell>

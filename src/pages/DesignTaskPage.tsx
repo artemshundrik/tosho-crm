@@ -7218,18 +7218,21 @@ export default function DesignTaskPage() {
           const { data, error } = await supabase
             .schema("tosho")
             .from("leads")
-            .select("email, phone_numbers")
+            .select("email, phone_numbers, telegram")
             .eq("team_id", effectiveTeamId)
             .eq("id", task.customerId)
             .maybeSingle();
           if (error) throw error;
-          const row = (data ?? null) as { email?: string | null; phone_numbers?: string[] | null } | null;
+          const row = (data ?? null) as
+            | { email?: string | null; phone_numbers?: string[] | null; telegram?: string | null }
+            | null;
           if (!active) return;
           setClientContact({
             entityKind,
             email: row?.email?.trim() || null,
             phone: row?.phone_numbers?.find((value) => typeof value === "string" && value.trim())?.trim() || null,
-            telegram: null,
+            // Лід буває тільки з Telegram — без цього в задачі не було б чим звʼязатись (REQ-298).
+            telegram: row?.telegram?.trim() || null,
           });
           return;
         }

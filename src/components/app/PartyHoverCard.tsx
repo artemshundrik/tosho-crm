@@ -1,11 +1,12 @@
 import * as React from "react";
-import { Globe, Loader2, Mail, Phone, User } from "@/components/icons/appIcons";
+import { Globe, Loader2, Mail, Phone, Send, User } from "@/components/icons/appIcons";
 
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 import { toneBadgeClass } from "@/lib/statusTones";
 import { loadPartyHoverInfo, type PartyHoverInfo, type PartyKind } from "@/lib/partyHoverInfo";
+import { formatTelegramHandle } from "@/lib/telegramContact";
 
 /**
  * Картка замовника або ліда під курсором — та сама ідея, що й для людини:
@@ -44,6 +45,7 @@ function CardBody({ target, info, loading }: { target: PartyHoverTarget; info: P
   const name = info?.name || target.name;
   const contacts = [
     info?.phone ? { icon: Phone, value: info.phone } : null,
+    info?.telegram ? { icon: Send, value: formatTelegramHandle(info.telegram) } : null,
     info?.email ? { icon: Mail, value: info.email } : null,
     info?.website ? { icon: Globe, value: info.website.replace(/^https?:\/\//, "") } : null,
   ].filter(Boolean) as Array<{ icon: typeof Phone; value: string }>;

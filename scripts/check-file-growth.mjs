@@ -238,6 +238,14 @@ const GIANT_THRESHOLD = 2000;
  * і сам гейт у `saveRuns` — п'ять рядків рівно там, де відбувається запис, бо
  * питати треба на санітизованих рядках і скасовувати саме це збереження.
  *
+ * ПІДНЯТО 21.09.2026 для toshoApi (+1) — колонка `telegram` у типі рядка ліда
+ * та в переліку колонок запиту (REQ-298). Той самий випадок, що двічі нижче:
+ * ОДНЕ поле, яке читає запит із цього ж файлу. Усе, що з цієї роботи виносилось,
+ * винесено — правило «телефон або Telegram» поїхало в
+ * src/components/customers/leadContact.ts (з тестами), а рядок ліда, його
+ * колонки й вимоги до переведення в замовника — у leadRecord.ts, через що
+ * OrdersCustomersPage став на 71 рядок МЕНШИМ, ніж був до задачі.
+ *
  * ПІДНЯТО 21.09.2026 для toshoApi (+2) — колонка `sent_at` у типі рядка
  * прорахунку та в переліку колонок запиту (REQ-296#p7). Поле бере з бази
  * дату, коли пропозицію востаннє віддали замовнику; тип рядка й запит, який
@@ -342,7 +350,7 @@ const CEILINGS = {
   "src/components/design/DesignersDashboard.tsx": 2705,
   "src/features/orders/orderRecords.ts": 2614,
   // +1 (11.09.2026): те саме, що в QuoteDetailsPage — імпорт типу замість копії union.
-  "src/lib/toshoApi.ts": 2645,
+  "src/lib/toshoApi.ts": 2646,
   "src/pages/TeamPage.tsx": 2182,
   "src/pages/ProfilePage.tsx": 2054,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,

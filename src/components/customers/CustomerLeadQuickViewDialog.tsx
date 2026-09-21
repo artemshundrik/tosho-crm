@@ -72,6 +72,7 @@ type LeadRow = {
   last_name?: string | null;
   email?: string | null;
   phone_numbers?: string[] | null;
+  telegram?: string | null;
   source?: string | null;
   website?: string | null;
   manager?: string | null;
@@ -140,6 +141,7 @@ const LEAD_COLUMNS = [
   "last_name",
   "email",
   "phone_numbers",
+  "telegram",
   "source",
   "website",
   "manager",
@@ -843,7 +845,22 @@ export function CustomerLeadQuickViewDialog({
                     <div className="rounded-xl border border-border/50 bg-muted/10 p-3">
                       <div className="text-xs text-muted-foreground">Комунікація</div>
                       <div className="mt-1 space-y-1 text-sm font-medium text-foreground">
-                        {lead?.phone_numbers?.[0] ? <div className="inline-flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{lead.phone_numbers.join(", ")}</div> : <div>Не вказано</div>}
+                        {lead?.phone_numbers?.[0] ? <div className="inline-flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{lead.phone_numbers.join(", ")}</div> : null}
+                        {lead?.telegram ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <Send className="h-3.5 w-3.5" />
+                            <a
+                              href={buildTelegramHref(lead.telegram) ?? "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:underline"
+                            >
+                              {formatTelegramHandle(lead.telegram)}
+                            </a>
+                          </div>
+                        ) : null}
+                        {/* «Не вказано» лише коли немає ЖОДНОГО способу звʼязку (REQ-298). */}
+                        {!lead?.phone_numbers?.[0] && !lead?.telegram ? <div>Не вказано</div> : null}
                         {lead?.email ? <div className="inline-flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{lead.email}</div> : null}
                       </div>
                     </div>

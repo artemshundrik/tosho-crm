@@ -35,6 +35,8 @@ import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/
 import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
 import { IbanInput } from "@/components/customers/IbanInput";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { TelegramInput } from "@/components/ui/telegram-input";
+import { hasLeadContact } from "./leadContact";
 import { EmailInput } from "@/components/ui/email-input";
 import { DigitsInput } from "@/components/ui/digits-input";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -49,6 +51,8 @@ export type LeadFormState = {
   lastName: string;
   email: string;
   phones: string[];
+  /** Нік без «@» або з ним — на запис нормалізується (REQ-298). */
+  telegram: string;
   source: string;
   website: string;
   logoUrl: string;
@@ -221,6 +225,12 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   const displayedLogoUrl = form.logoUploadMode === "file" ? logoPreviewUrl : normalizedLogoUrl;
   const currentOwnership = ownershipOptions.find((option) => option.value === form.ownershipType);
   const isFopOwnership = form.ownershipType === "fop";
+  /**
+   * Лід живий, поки є ЧИМ його набрати. Телефон і Telegram рівноправні
+   * (REQ-298), тож зірочка горить на обох, поки порожні обидва, і гасне на
+   * обох, щойно заповнили один. Умова — та сама функція, що вирішує збереження.
+   */
+  const contactMissing = !hasLeadContact({ phones: form.phones, telegram: form.telegram });
   const groupedOwnershipOptions = React.useMemo(() => {
     const groups = new Map<string, NonNullable<LeadDialogProps["ownershipOptions"]>>();
     ownershipOptions.forEach((option) => {
@@ -778,7 +788,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2">
                     <div className="flex h-8 items-center justify-between">
-                      <Label>Телефон <span className="text-destructive">*</span></Label>
+                      <Label>Телефон {contactMissing ? <span className="text-destructive">*</span> : null}</Label>
                       <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addPhone}>
                         <PlusCircle className="mr-1 h-4 w-4" />
                         Додати номер
@@ -806,6 +816,18 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         </div>
                       ))}
                     </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <div className="flex h-8 items-center">
+                      <Label>Telegram {contactMissing ? <span className="text-destructive">*</span> : null}</Label>
+                    </div>
+                    <TelegramInput
+                      value={form.telegram}
+                      onChange={(telegram) => setForm((prev) => ({ ...prev, telegram }))}
+                    />
+                    <p className="text-xs text-muted-foreground">Досить чогось одного — номера або Telegram.</p>
                   </div>
                 </div>
               </div>
@@ -915,7 +937,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     </div>
                     <div className="grid gap-2">
                       <div className="flex h-8 items-center justify-between">
-                        <Label>Телефон <span className="text-destructive">*</span></Label>
+                        <Label>Телефон {contactMissing ? <span className="text-destructive">*</span> : null}</Label>
                         <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addPhone}>
                           <PlusCircle className="mr-1 h-4 w-4" />
                           Додати номер
@@ -943,6 +965,18 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                           </div>
                         ))}
                       </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <div className="flex h-8 items-center">
+                        <Label>Telegram {contactMissing ? <span className="text-destructive">*</span> : null}</Label>
+                      </div>
+                      <TelegramInput
+                        value={form.telegram}
+                        onChange={(telegram) => setForm((prev) => ({ ...prev, telegram }))}
+                      />
+                      <p className="text-xs text-muted-foreground">Досить чогось одного — номера або Telegram.</p>
                     </div>
                   </div>
                 </div>

@@ -2773,6 +2773,7 @@ export type Database = {
           source: string
           tax_id: string | null
           team_id: string
+          telegram: string | null
           updated_at: string
           website: string | null
         }
@@ -2808,6 +2809,7 @@ export type Database = {
           source: string
           tax_id?: string | null
           team_id: string
+          telegram?: string | null
           updated_at?: string
           website?: string | null
         }
@@ -2843,6 +2845,7 @@ export type Database = {
           source?: string
           tax_id?: string | null
           team_id?: string
+          telegram?: string | null
           updated_at?: string
           website?: string | null
         }
