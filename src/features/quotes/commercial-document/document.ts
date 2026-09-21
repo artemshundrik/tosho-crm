@@ -182,6 +182,13 @@ export const parseMethodsSummary = (methods: QuoteItemExportRow["methods"]) => {
     .filter(Boolean);
   return labels.join(", ");
 };
+/** Розмір нанесення, який справді є: нуль і порожнє поле — це «не вказано». */
+const toPositiveSize = (value: unknown) => {
+  if (value == null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
 export const parsePlacementSummary = (
   methods: QuoteItemExportRow["methods"],
   printPositionLabelById: Map<string, string>,
@@ -198,10 +205,9 @@ export const parsePlacementSummary = (
       const posLabelRaw = String(row.print_position_label ?? row.printPositionLabel ?? "").trim();
       const widthRaw = row.print_width_mm ?? row.printWidthMm ?? null;
       const heightRaw = row.print_height_mm ?? row.printHeightMm ?? null;
-      const width = widthRaw == null || widthRaw === "" ? null : Number(widthRaw);
-      const height = heightRaw == null || heightRaw === "" ? null : Number(heightRaw);
-      const sizeLabel =
-        Number.isFinite(width) && Number.isFinite(height) ? `${width}x${height} мм` : "";
+      const width = toPositiveSize(widthRaw);
+      const height = toPositiveSize(heightRaw);
+      const sizeLabel = width !== null && height !== null ? `${width}x${height} мм` : "";
       const posLabel = posLabelRaw || (posId ? printPositionLabelById.get(posId) ?? "" : "");
       const chunk = [posLabel, sizeLabel].filter(Boolean).join(" · ");
       if (chunk) parts.push(chunk);
@@ -209,10 +215,15 @@ export const parsePlacementSummary = (
   }
   if (parts.length > 0) return parts.join(", ");
   const fallbackPositionLabel = fallbackPositionId ? printPositionLabelById.get(fallbackPositionId) ?? "" : "";
+  /*
+    ПОРОЖНЄ ПОЛЕ — НЕ НУЛЬ. `Number(null)` дає 0, і `Number.isFinite(0)` правда,
+    тож позиція без розміру друкувалась замовнику як «0x0 мм». Гілка вище цю
+    пастку вже обходила, а запасна — ні.
+  */
+  const fallbackWidth = toPositiveSize(fallbackWidthMm);
+  const fallbackHeight = toPositiveSize(fallbackHeightMm);
   const fallbackSize =
-    Number.isFinite(Number(fallbackWidthMm)) && Number.isFinite(Number(fallbackHeightMm))
-      ? `${Number(fallbackWidthMm)}x${Number(fallbackHeightMm)} мм`
-      : "";
+    fallbackWidth !== null && fallbackHeight !== null ? `${fallbackWidth}x${fallbackHeight} мм` : "";
   return [fallbackPositionLabel, fallbackSize].filter(Boolean).join(" · ");
 };
 

@@ -132,6 +132,7 @@ import {
   needsQuoteItemChoice,
 } from "@/lib/quoteItemApproval";
 import { QuoteItemChoiceDialog } from "@/features/quotes/quote-details/QuoteItemChoiceDialog";
+import { QuoteOfferSend } from "@/features/quotes/quote-details/QuoteOfferSend";
 import { QuoteItemDeclinedBanner } from "@/features/quotes/quote-details/QuoteItemDeclinedBanner";
 import { useQuoteItemChoice } from "@/features/quotes/quote-details/useQuoteItemChoice";
 import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatGateMessage, MODEL_PRICE_VAT_ROW_HINT } from "@/features/quotes/quote-details/quoteRunModelPriceVat";
@@ -4238,6 +4239,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <span className="truncate max-sm:sr-only">Створити замовлення</span>
                 </Button>
               ) : null}
+              <QuoteOfferSend
+                teamId={teamId}
+                quote={quote}
+                managerName={quote?.assigned_to ? memberById.get(quote.assigned_to) ?? null : null}
+              />
               <QuoteStatusControl
                 currentStatus={currentStatus}
                 busy={statusBusy}

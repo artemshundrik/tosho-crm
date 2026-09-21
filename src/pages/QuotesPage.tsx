@@ -227,6 +227,7 @@ import {
 } from "@/features/quotes/commercial-document/document";
 import { buildCommercialDocument as buildCommercialDocumentFromQuotes } from "@/features/quotes/commercial-document/build";
 import { CommercialPreviewSummary } from "@/features/quotes/commercial-document/CommercialPreviewSummary";
+import { downloadBlob, printCommercialHtml } from "@/features/quotes/commercial-document/outputs";
 
 type QuotesPageProps = {
   teamId: string;
@@ -3787,40 +3788,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       customerName: quoteSetDetailsTarget.customer_name ?? "Замовник не вказаний",
       createdAt: quoteSetDetailsTarget.created_at,
     });
-  };
-
-  const downloadBlob = (filename: string, blob: Blob) => {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
-  };
-  const printCommercialHtml = (html: string) => {
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    iframe.setAttribute("aria-hidden", "true");
-    document.body.appendChild(iframe);
-    iframe.srcdoc = html;
-    iframe.onload = () => {
-      const printWindow = iframe.contentWindow;
-      if (!printWindow) return;
-      printWindow.focus();
-      window.setTimeout(() => {
-        printWindow.print();
-      }, 120);
-    };
-    window.setTimeout(() => {
-      iframe.remove();
-    }, 60_000);
   };
 
   const clearFilters = useCallback(() => {
