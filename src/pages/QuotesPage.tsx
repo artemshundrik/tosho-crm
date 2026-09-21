@@ -197,6 +197,7 @@ import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/m
 import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
 import { isOffBoardStatus } from "@/lib/kanbanBoards";
+import { QUOTES_COLUMN_WIDTH } from "@/lib/kanbanColumnWidth";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { getCurrentUserId } from "@/lib/currentUser";
 // Документ КП цілком живе окремим модулем (REQ-267#p2): типи, формати чисел,
@@ -5874,6 +5875,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             >
               <KanbanSkeleton
                 columns={KANBAN_COLUMNS.map((column) => ({ id: column.id }))}
+                // Та сама ширина, що в дошки: інакше картки читались би як стрибок.
+                columnWidth={QUOTES_COLUMN_WIDTH}
               />
             </div>
           ) : error ? (
@@ -5960,8 +5963,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         "kanban-column-surface transition-colors",
                         drag.draggingId && "kanban-column-armed",
                         drag.overColumnId === column.id && "kanban-column-drop-target",
-                        "basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] shrink-0 flex flex-col h-full"
+                        "shrink-0 flex flex-col h-full"
                       )}
+                      // Ділить полотно націло, мінімум 224 px (lib/kanbanColumnWidth).
+                      style={{ flexBasis: QUOTES_COLUMN_WIDTH }}
                       header={
                         <KanbanColumnHeader
                           icon={statusIcons[column.id] ?? Clock}

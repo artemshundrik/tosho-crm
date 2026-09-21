@@ -11,7 +11,7 @@ import { MobileStatusBoard } from "@/components/kanban/MobileStatusBoard";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
-import { fluidKanbanColumn } from "@/lib/kanbanColumnWidth";
+import { DEV_BACKLOG_COLUMN_WIDTH } from "@/lib/kanbanColumnWidth";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { CardActionsMenu } from "./CardActionsMenu";
@@ -38,20 +38,6 @@ import {
   type DevRequest,
   type RequestStatus,
 } from "./types";
-
-/**
- * Колонка ділить полотно націло, поки на неї лишається 300 px (REQ-300).
- *
- * 300 px — та сама ширина, що стояла тут жорстко: на ноутбуці п'ять колонок у
- * рядок не влазять, і дошка скролиться горизонтально, як і скролилась. Новим є
- * лише верх: на широкому моніторі колонки більше не впираються в стелю й не
- * лишають порожньої смуги праворуч. Формула — у `lib/kanbanColumnWidth.ts`,
- * там же пояснено, чому вона їде інлайновим стилем, а не класом.
- *
- * Експортується заради каркаса дошки на самій сторінці: він малює ті самі
- * колонки, поки їдуть дані, і мусить мати ту саму ширину.
- */
-export const DEV_BOARD_COLUMN_WIDTH = fluidKanbanColumn({ columns: BOARD_COLUMNS.length, minPx: 300 });
 
 type DevRequestBoardProps = {
   requests: DevRequest[];
@@ -292,7 +278,7 @@ export function DevRequestBoard({
               drag.draggingId && "kanban-column-armed",
               drag.overColumnId === column.status && "kanban-column-drop-target"
             )}
-            style={{ flexBasis: DEV_BOARD_COLUMN_WIDTH }}
+            style={{ flexBasis: DEV_BACKLOG_COLUMN_WIDTH }}
             header={
               <KanbanColumnHeader
                 icon={column.icon}

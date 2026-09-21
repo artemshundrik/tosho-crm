@@ -22,7 +22,8 @@ import { KanbanSkeleton } from "@/components/kanban/KanbanSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MOBILE_CARD_LIST, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
-import { DevRequestBoard, DEV_BOARD_COLUMN_WIDTH } from "@/features/devRequests/DevRequestBoard";
+import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
+import { DEV_BACKLOG_COLUMN_WIDTH } from "@/lib/kanbanColumnWidth";
 import {
   BoardFilters,
   EMPTY_BOARD_FILTERS,
@@ -685,7 +686,7 @@ export default function DevRequestsPage() {
                формула, що ділить полотно націло. */
             <KanbanSkeleton
               columns={BOARD_COLUMNS.map((column) => ({ id: column.status }))}
-              columnWidth={DEV_BOARD_COLUMN_WIDTH}
+              columnWidth={DEV_BACKLOG_COLUMN_WIDTH}
               boardClassName="h-full pb-2 md:pb-3"
               rowClassName="h-full items-stretch"
               cardsPerColumn={3}
