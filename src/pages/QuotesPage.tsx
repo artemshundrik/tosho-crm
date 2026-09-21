@@ -220,8 +220,8 @@ import {
   buildCommercialExcelTsv,
   formatMoney,
   formatMoneyPlain,
-  formatMoneyRange,
   getCommercialDocFilename,
+  initialsFor,
   renderCommercialDocumentHtml,
   type CommercialDocument,
 } from "@/features/quotes/commercial-document/document";
@@ -6689,8 +6689,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               {quoteSetDetailsTarget?.name ?? "Деталі набору"}
               {quoteSetDetailsTarget ? <QuoteKindBadge kind={quoteSetDetailsTarget.kind} /> : null}
             </DialogTitle>
-            <DialogDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="font-medium text-foreground">
+            {/* asChild — бо всередині стоїть <Badge>, а він <div>: у <p> це
+                негодяща вкладеність, і React писав попередження в консоль на
+                кожне відкриття вікна. */}
+            <DialogDescription asChild>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">
                 {quoteSetDetailsTarget?.customer_name ?? "Замовник не вказаний"}
               </span>
               <Badge
@@ -6710,7 +6714,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       minute: "2-digit",
                     })
                   : "Дата не вказана"}
-              </span>
+                </span>
+              </div>
             </DialogDescription>
           </DialogHeader>
 
@@ -7107,12 +7112,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               Комерційний прев'ю
               {quoteSetDetailsTarget ? <QuoteKindBadge kind={quoteSetDetailsTarget.kind} label={quoteSetDetailsTarget.name} /> : null}
             </DialogTitle>
+            {/* Числа «Разом» у шапці більше немає: документ його не друкує, а
+                прев'ю мусить показувати рівно те, що поїде. Заразом виправлено
+                підпис — «Позицій» стояло на кількості ПРОРАХУНКІВ. */}
             <DialogDescription>
-              Разом:{" "}
+              Прорахунків: {quoteSetCommercialDoc?.sections.length ?? quoteSetDetailsItems.length} · Позицій:{" "}
               {quoteSetCommercialDoc
-                ? formatMoneyRange(quoteSetCommercialDoc.totalRange)
-                : formatMoney(quoteSetTotalAmount)}{" "}
-              · Позицій: {quoteSetCommercialDoc?.sections.length ?? quoteSetDetailsItems.length}
+                ? quoteSetCommercialDoc.sections.reduce((sum, section) => sum + section.items.length, 0)
+                : "—"}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
@@ -7136,19 +7143,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <span className="font-medium">{quoteSetCommercialDoc.sections.length}</span>
                   </div>
                 </div>
+                {/* Картки замість таблиці на вісім колонок — той самий лад, що в
+                    друкованому документі: номер, фото, нанесення, тиражі поруч
+                    як явне «або/або». Рядка «Разом по прорахунку» тут більше
+                    немає: позиції взаємовиключні, і сума описувала замовлення,
+                    якого ніхто не робив. */}
                 {quoteSetCommercialDoc.sections.map((section, sectionIndex) => (
-                  <div key={`preview-group-${section.quoteId}`} className="rounded-xl border border-border/60 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-border/60 bg-muted/20 flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-sm font-semibold">
+                  <div key={`preview-group-${section.quoteId}`} className="space-y-3">
+                    {quoteSetCommercialDoc.sections.length > 1 ? (
+                      <div className="text-sm font-semibold text-muted-foreground">
                         {sectionIndex + 1}. {section.quoteNumber}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {section.status} · {section.createdAt}
-                      </div>
-                    </div>
+                    ) : null}
                     {section.visualizations.length > 0 ? (
-                      <div className="px-4 py-3 border-b border-border/60 bg-muted/10">
-                        <div className="text-xs text-muted-foreground mb-2">
+                      <div className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3">
+                        <div className="mb-2 text-xs text-muted-foreground">
                           Візуалізації ({section.visualizations.length})
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -7167,114 +7176,68 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         </div>
                       </div>
                     ) : null}
-                    <Table variant="compact" size="sm">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[60px]">#</TableHead>
-                          <TableHead className="w-[84px]">Фото</TableHead>
-                          <TableHead>Товар</TableHead>
-                          <TableHead>Специфікація</TableHead>
-                          <TableHead className="text-right">К-сть</TableHead>
-                          <TableHead className="text-right">Од.</TableHead>
-                          <TableHead className="text-right">Ціна</TableHead>
-                          <TableHead className="text-right">Сума</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {section.items.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
-                              У цьому прорахунку немає товарних позицій.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          section.items.map((item) => (
-                            <TableRow key={`preview-item-${item.id}`}>
-                              <TableCell className="text-muted-foreground">{item.position}</TableCell>
-                              <TableCell>
-                                {item.imageUrl ? (
-                                  <KanbanImageZoomPreview
-                                    imageUrl={item.imageUrl}
-                                    alt={item.name}
-                                    loadStrategy="eager"
-                                    className="h-12 w-12 rounded-md border border-border/60 bg-muted/20"
-                                  />
-                                ) : (
-                                  <div className="h-12 w-12 rounded-md border border-border/60 bg-muted/20 grid place-items-center text-xs text-muted-foreground">
-                                    —
-                                  </div>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <div className="font-medium">{item.name}</div>
-                                {item.description ? (
-                                  <div className="text-xs text-muted-foreground mt-0.5">{item.description}</div>
-                                ) : null}
-                              </TableCell>
-                              <TableCell>
-                                {item.catalogPath ? (
-                                  <div className="text-xs text-muted-foreground">{item.catalogPath}</div>
-                                ) : null}
-                                {item.placementSummary ? (
-                                  <div className="text-xs text-muted-foreground">{item.placementSummary}</div>
-                                ) : null}
-                                {item.methodsSummary ? (
-                                  <div className="text-xs text-muted-foreground">{item.methodsSummary}</div>
-                                ) : null}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {item.runs.map((run) => (
-                                  <div
-                                    key={`qty-${run.id}`}
-                                    className="whitespace-nowrap border-t border-dashed border-border/60 py-1 first:border-t-0"
-                                  >
-                                    {formatMoneyPlain(run.qty)}
-                                  </div>
-                                ))}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {item.runs.map((run) => (
-                                  <div
-                                    key={`unit-${run.id}`}
-                                    className="whitespace-nowrap border-t border-dashed border-border/60 py-1 first:border-t-0"
-                                  >
-                                    {item.unit}
-                                  </div>
-                                ))}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {item.runs.map((run) => (
-                                  <div
-                                    key={`price-${run.id}`}
-                                    className="whitespace-nowrap border-t border-dashed border-border/60 py-1 first:border-t-0"
-                                  >
-                                    {formatMoneyPlain(run.unitPrice)}
-                                  </div>
-                                ))}
-                              </TableCell>
-                              <TableCell className="text-right font-medium">
-                                {item.runs.map((run) => (
-                                  <div
-                                    key={`sum-${run.id}`}
-                                    className="whitespace-nowrap border-t border-dashed border-border/60 py-1 first:border-t-0"
-                                  >
-                                    {formatMoney(run.lineTotal)}
-                                  </div>
-                                ))}
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                    <div className="px-4 py-3 border-t border-border/60 bg-muted/10 flex flex-wrap items-baseline justify-end gap-x-2 text-sm font-medium">
-                      <span>Разом по прорахунку: {formatMoneyRange(section.totalRange)}</span>
-                      {section.items.some((item) => item.runs.length > 1) ? (
-                        <span className="text-xs font-normal text-muted-foreground">
-                          залежно від обраного тиражу
-                        </span>
-                      ) : null}
-                    </div>
+                    {section.items.length === 0 ? (
+                      <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
+                        У цьому прорахунку немає товарних позицій.
+                      </div>
+                    ) : (
+                      section.items.map((item) => (
+                        <div
+                          key={`preview-item-${item.id}`}
+                          className="flex items-start gap-3 rounded-xl border border-border/60 p-3"
+                        >
+                          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+                            {item.position}
+                          </div>
+                          {item.imageUrl ? (
+                            <KanbanImageZoomPreview
+                              imageUrl={item.imageUrl}
+                              alt={item.name}
+                              loadStrategy="eager"
+                              className="h-16 w-16 shrink-0 rounded-lg border border-border/60 bg-muted/20"
+                            />
+                          ) : (
+                            // Плитка з ініціалами, а не порожній квадрат: те саме
+                            // правило, що й у документі (`initialsFor`).
+                            <div className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-info-soft text-lg font-semibold text-info-foreground">
+                              {initialsFor(item.name)}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="font-medium leading-snug">{item.name}</div>
+                            {item.methodsSummary || item.placementSummary ? (
+                              <div className="text-xs text-muted-foreground">
+                                {[
+                                  item.methodsSummary ? `Нанесення: ${item.methodsSummary}` : "",
+                                  item.placementSummary ? `Місце: ${item.placementSummary}` : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </div>
+                            ) : null}
+                            {item.description ? (
+                              <div className="text-xs text-muted-foreground">{item.description}</div>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            {item.runs.map((run) => (
+                              <div
+                                key={`run-${run.id}`}
+                                className="w-[124px] rounded-lg border border-border/60 px-2.5 py-2"
+                              >
+                                <div className="text-2xs uppercase tracking-wide text-muted-foreground">
+                                  {formatMoneyPlain(run.qty)} {item.unit}
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {formatMoneyPlain(run.unitPrice)} грн/{item.unit}
+                                </div>
+                                <div className="mt-0.5 text-sm font-semibold">{formatMoney(run.lineTotal)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 ))}
                 <CommercialPreviewSummary doc={quoteSetCommercialDoc} />

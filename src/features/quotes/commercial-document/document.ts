@@ -19,9 +19,16 @@ import { moneyRangeOf, sumMoneyRanges, type MoneyRange } from "@/lib/moneyRange"
 
 export type { MoneyRange };
 
-/** Пояснення про тиражі — один текст на всі чотири виходи. */
+/**
+ * Пояснення про тиражі — один текст на всі чотири виходи.
+ *
+ * Текст переписано 21.09.2026 разом із рішенням прибрати «Разом»: раніше він
+ * обіцяв підсумок межами («від найменшого тиражу до найбільшого»), а меж у
+ * документі більше немає — поки замовник не обрав позиції й тираж, єдиної суми
+ * не існує.
+ */
 export const RUN_CHOICE_NOTE =
-  "У документі є позиції з кількома тиражами. Тиражі взаємовиключні — замовник обирає один, тому підсумок показано межами: від найменшого тиражу до найбільшого.";
+  "У пропозиції є позиції з кількома тиражами. Тиражі взаємовиключні — ви обираєте один, тому ціна наведена окремо для кожного тиражу, а спільного підсумку в документі немає.";
 
 /**
  * Один тираж позиції: своя кількість, своя ціна за штуку, своя сума.
@@ -71,6 +78,11 @@ export type CommercialQuoteSection = {
   totalRange: MoneyRange;
 };
 
+/**
+ * Поля менеджера, терміну дії й номера пропозиції НЕОБОВ'ЯЗКОВІ й друкуються
+ * лише коли заповнені. Плейсхолдерів на кшталт «[ТЕЛЕФОН]» у документі для
+ * замовника бути не може: порожній рядок краще за видимий пропуск.
+ */
 export type CommercialDocument = {
   title: string;
   kindLabel: string;
@@ -79,7 +91,18 @@ export type CommercialDocument = {
   generatedAt: string;
   currency: string;
   sections: CommercialQuoteSection[];
+  /**
+   * Сума всіх позицій. У документі НЕ друкується (позиції — варіанти на вибір),
+   * лишається для внутрішніх екранів, які показують порядок величини.
+   */
   totalRange: MoneyRange;
+  offerNumber?: string;
+  validUntil?: string;
+  manager?: {
+    name: string;
+    phone?: string;
+    email?: string;
+  };
 };
 
 /**
@@ -197,59 +220,148 @@ export const getCommercialDocFilename = (doc: CommercialDocument, extension: "xl
   return `${sanitized || "commercial_offer"}.${extension}`;
 };
 
+/**
+ * Ініціали для позиції без фото — те саме правило для HTML і для прев'ю.
+ *
+ * Фото є у 334 позицій із 378 (заміряно 21.09.2026). З 44 порожніх сім можна
+ * підтягнути з пулу за артикулом, решта 37 не мають ні моделі, ні артикула —
+ * саме їм потрібна плитка. Сірий квадрат з іконкою «зображення» тут не годиться:
+ * у документі для замовника він прямо каже «фото немає», тоді як плитка з
+ * літерами читається як оформлення.
+ */
+export const initialsFor = (name: string) => {
+  const words = name
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return "—";
+  const letters = words.slice(0, 2).map((word) => word[0] ?? "");
+  return letters.join("").toLocaleUpperCase("uk-UA");
+};
+
+/**
+ * Наскільки дешевша штука на цьому тиражі проти найменшого. Факт, а не порада:
+ * числа обидва свої, ми лише рахуємо різницю. Менше за 1 % не показуємо — такий
+ * рядок нічого не додає, лише шумить.
+ */
+const unitDiscountPercent = (runs: readonly CommercialRunRow[], index: number) => {
+  if (index === 0) return 0;
+  const base = runs[0]?.unitPrice ?? 0;
+  const current = runs[index]?.unitPrice ?? 0;
+  if (base <= 0 || current <= 0 || current >= base) return 0;
+  return Math.round((1 - current / base) * 100);
+};
+
+const documentHasRunChoice = (doc: CommercialDocument) =>
+  doc.sections.some((section) => section.items.some((item) => item.runs.length > 1));
+
+const countItems = (doc: CommercialDocument) =>
+  doc.sections.reduce((sum, section) => sum + section.items.length, 0);
+
+const pluralPositions = (count: number) => {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return "позиція";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "позиції";
+  return "позицій";
+};
+
+/** Вступний абзац: скільки позицій і як на них відповісти. */
+export const buildOfferIntro = (doc: CommercialDocument) => {
+  const count = countItems(doc);
+  const head = `У пропозиції ${count} ${pluralPositions(count)}.`;
+  return documentHasRunChoice(doc)
+    ? `${head} Для частини з них прораховано кілька тиражів — ви обираєте один тираж, а не замовляєте всі. Напишіть номери позицій і потрібний тираж, і ми порахуємо підсумок та терміни.`
+    : `${head} Напишіть, які з них вас цікавлять, і ми порахуємо підсумок та терміни.`;
+};
+
+/**
+ * Те, що стоїть у документі ЗАМІСТЬ «Разом».
+ *
+ * Підсумок прибрано свідомо (REQ-296, закриває дірку REQ-267#p2): позиції
+ * прорахунку — це варіанти, які замовник обирає, а документ складав їх
+ * додаванням. На живому прорахунку TS-0926-0029 це давало «від 80 162 до
+ * 120 618 ₴» там, де реальна вилка 34 257 – 85 276 ₴. Менше число замість
+ * більшого нічого не полагодило б: поки вибору немає, ЖОДНА сума не правдива.
+ */
+export const OFFER_SUMMARY_TEXT_WITH_RUNS =
+  "Єдиної суми тут немає навмисно: вона залежить від того, які позиції й який тираж ви оберете. Назвіть номери — порахуємо підсумок того ж дня.";
+export const OFFER_SUMMARY_TEXT_SINGLE_RUN =
+  "Єдиної суми тут немає навмисно: вона залежить від того, які позиції ви оберете. Назвіть номери — порахуємо підсумок того ж дня.";
+
+export const offerSummaryText = (doc: CommercialDocument) =>
+  documentHasRunChoice(doc) ? OFFER_SUMMARY_TEXT_WITH_RUNS : OFFER_SUMMARY_TEXT_SINGLE_RUN;
+
+const renderPhotoCell = (item: CommercialItemRow) =>
+  item.imageUrl
+    ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" class="photo" />`
+    : `<div class="photo photo-initials">${escapeHtml(initialsFor(item.name))}</div>`;
+
+const renderRunTile = (item: CommercialItemRow, runIndex: number) => {
+  const run = item.runs[runIndex];
+  const discount = unitDiscountPercent(item.runs, runIndex);
+  return `
+    <div class="run">
+      <div class="run-qty">${formatMoneyPlain(run.qty)} ${escapeHtml(item.unit)}</div>
+      <div class="run-unit">${formatMoneyPlain(run.unitPrice)} грн/${escapeHtml(item.unit)}</div>
+      <div class="run-total">${formatMoney(run.lineTotal)}</div>
+      ${discount > 0 ? `<div class="run-hint">−${discount}&nbsp;% за ${escapeHtml(item.unit)}</div>` : ""}
+    </div>
+  `;
+};
+
+const renderItemCard = (item: CommercialItemRow) => {
+  const lines = [
+    item.methodsSummary ? `Нанесення: ${escapeHtml(item.methodsSummary)}` : "",
+    item.placementSummary ? `Місце: ${escapeHtml(item.placementSummary)}` : "",
+  ].filter(Boolean);
+  return `
+    <article class="item">
+      <div class="item-num">${item.position}</div>
+      ${renderPhotoCell(item)}
+      <div class="item-body">
+        <div class="item-name">${escapeHtml(item.name)}</div>
+        ${lines.length > 0 ? `<div class="item-line">${lines.join(" · ")}</div>` : ""}
+        ${item.description ? `<div class="item-desc">${escapeHtml(item.description)}</div>` : ""}
+      </div>
+      <div class="runs">${item.runs.map((_, index) => renderRunTile(item, index)).join("")}</div>
+    </article>
+  `;
+};
+
+/**
+ * Документ для ЗАМОВНИКА, не вигрузка для нас.
+ *
+ * До 21.09.2026 це була ландшафтна таблиця на десять колонок, у якій замовник
+ * бачив наш внутрішній номер прорахунку, наш статус («На погодженні»), рядок
+ * «Прорахунків у документі» й колонку «Категорія / модель». Тепер портретний A4
+ * і картки позицій: великий номер, щоб на нього посилались у відповіді, фото,
+ * нанесення й тиражі плитками — явне «або/або» замість двох рядків, які легко
+ * прочитати як «додається».
+ */
 export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
-  const docHasRunChoice = doc.sections.some((section) =>
-    section.items.some((item) => item.runs.length > 1)
-  );
+  const hasRunChoice = documentHasRunChoice(doc);
+  const showSectionHeads = doc.sections.length > 1;
+
   const sectionsHtml = doc.sections
     .map((section, sectionIndex) => {
-      const rowsHtml =
+      const itemsHtml =
         section.items.length === 0
-          ? `<tr><td colspan="10" class="empty">У цьому прорахунку немає товарних позицій.</td></tr>`
-          : section.items
-              .map(
-                (item) => `
-                  <tr>
-                    <td>${item.position}</td>
-                    <td>${
-                      item.imageUrl
-                        ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" class="thumb" />`
-                        : `<div class="thumb placeholder">—</div>`
-                    }</td>
-                    <td>${escapeHtml(item.name)}${
-                      item.description ? `<div class="cell-muted">${escapeHtml(item.description)}</div>` : ""
-                    }</td>
-                    <td>${escapeHtml(item.catalogPath || "—")}</td>
-                    <td>${escapeHtml(item.placementSummary || "—")}</td>
-                    <td>${escapeHtml(item.methodsSummary || "—")}</td>
-                    <td class="num">${item.runs
-                      .map((run) => `<div class="run-line">${formatMoneyPlain(run.qty)}</div>`)
-                      .join("")}</td>
-                    <td>${item.runs
-                      .map(() => `<div class="run-line">${escapeHtml(item.unit)}</div>`)
-                      .join("")}</td>
-                    <td class="num">${item.runs
-                      .map((run) => `<div class="run-line">${formatMoneyPlain(run.unitPrice)}</div>`)
-                      .join("")}</td>
-                    <td class="num">${item.runs
-                      .map((run) => `<div class="run-line">${formatMoneyPlain(run.lineTotal)}</div>`)
-                      .join("")}</td>
-                  </tr>
-                `
-              )
-              .join("");
-      const sectionHasRunChoice = section.items.some((item) => item.runs.length > 1);
+          ? `<div class="empty">У цьому прорахунку немає товарних позицій.</div>`
+          : section.items.map((item) => renderItemCard(item)).join("");
 
       return `
         <section class="quote-section">
-          <div class="section-head">
-            <div class="section-title">${sectionIndex + 1}. ${escapeHtml(section.quoteNumber)}</div>
-            <div class="section-meta">${escapeHtml(section.status)} · ${escapeHtml(section.createdAt)}</div>
-          </div>
+          ${
+            showSectionHeads
+              ? `<div class="section-head">${sectionIndex + 1}. ${escapeHtml(section.quoteNumber)}</div>`
+              : ""
+          }
           ${
             section.visualizations.length > 0
               ? `<div class="visual-group">
-                   <div class="visual-label">Візуалізації (${section.visualizations.length})</div>
+                   <div class="visual-label">Візуалізації</div>
                    <div class="visual-grid">
                      ${section.visualizations
                        .map(
@@ -261,32 +373,28 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
                  </div>`
               : ""
           }
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Фото</th>
-                <th>Товар</th>
-                <th>Категорія / модель</th>
-                <th>Місце / розмір</th>
-                <th>Нанесення</th>
-                <th>К-сть</th>
-                <th>Од.</th>
-                <th>Ціна</th>
-                <th>Сума</th>
-              </tr>
-            </thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-          <div class="section-total">Разом по ${escapeHtml(section.quoteNumber)}: <b>${formatMoneyRange(
-            section.totalRange
-          )}</b>${
-            sectionHasRunChoice ? `<span class="run-hint">залежно від обраного тиражу</span>` : ""
-          }</div>
+          ${itemsHtml}
         </section>
       `;
     })
     .join("");
+
+  const managerHtml = doc.manager
+    ? `<div class="manager">${[
+        `${escapeHtml(doc.manager.name)}, менеджер`,
+        doc.manager.phone ? escapeHtml(doc.manager.phone) : "",
+        doc.manager.email ? escapeHtml(doc.manager.email) : "",
+      ]
+        .filter(Boolean)
+        .join("<br />")}</div>`
+    : "";
+
+  const numberLine = [
+    doc.offerNumber ? `№ ${escapeHtml(doc.offerNumber)}` : "",
+    `від ${escapeHtml(doc.createdAt)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return `<!doctype html>
 <html lang="uk">
@@ -296,87 +404,127 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
 <title>${escapeHtml(doc.title)}</title>
 <style>
   :root { color-scheme: light; }
-  body { margin: 0; font-family: "Inter", "Segoe UI", sans-serif; color: #0f172a; background: #ffffff; }
-  .page { max-width: 1120px; margin: 0 auto; padding: 24px; }
-  .head { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
-  .title { font-size: 28px; font-weight: 700; margin: 0 0 6px; }
-  .muted { color: #475569; font-size: 13px; }
-  .summary { border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin: 14px 0 22px; }
-  .summary strong { font-size: 18px; }
-  .quote-section { margin-bottom: 18px; }
-  .section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-  .section-title { font-size: 17px; font-weight: 700; }
-  .section-meta { color: #334155; font-size: 13px; }
-  table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; }
-  th, td { border-bottom: 1px solid #e2e8f0; padding: 8px 10px; font-size: 13px; vertical-align: top; }
-  th { background: #f8fafc; text-align: left; font-weight: 600; }
-  td.num { text-align: right; white-space: nowrap; }
-  td.empty { text-align: center; color: #475569; padding: 16px; }
-  .thumb { width: 56px; height: 56px; object-fit: cover; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; display: block; }
-  .thumb.placeholder { display: inline-flex; align-items: center; justify-content: center; color: #64748b; font-size: 12px; }
-  .cell-muted { margin-top: 4px; color: #475569; font-size: 12px; }
-  .visual-group { margin: 0 0 10px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-  .visual-label { font-size: 12px; color: #334155; }
-  .visual-grid { display: flex; gap: 8px; flex-wrap: wrap; }
-  .visual-thumb { width: 180px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid #cbd5e1; }
-  .section-total { display: flex; justify-content: flex-end; align-items: baseline; gap: 8px; margin-top: 8px; font-size: 14px; }
-  .run-line { padding: 2px 0; }
-  .run-line + .run-line { border-top: 1px dashed #e2e8f0; }
-  .run-hint { color: #475569; font-size: 12px; }
-  /* block + fit-content: назва товару має починатись із нового рядка, інакше
-     довга назва обтікає пігулку й ламається навпіл. */
-  .total { margin-top: 20px; padding-top: 10px; border-top: 2px solid #0f172a; display: flex; justify-content: flex-end; font-size: 20px; font-weight: 700; }
+  body { margin: 0; font-family: "Inter", "Segoe UI", sans-serif; color: #111213; background: #f4f5f6; }
+  .page { max-width: 794px; margin: 0 auto; padding: 44px 48px; background: #ffffff; box-sizing: border-box; }
+  .head { display: flex; align-items: flex-start; gap: 24px; }
+  .head-left { flex-grow: 1; }
+  .title { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+  .meta { margin-top: 8px; font-size: 12px; color: #5b5c62; }
+  .head-right { text-align: right; }
+  .brand { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .manager { margin-top: 6px; font-size: 11px; color: #5b5c62; line-height: 1.6; }
+  .rule { height: 2px; background: #111213; margin: 22px 0; }
+  .party { display: flex; align-items: center; gap: 16px; }
+  .party-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; }
+  .party-name { font-size: 17px; font-weight: 600; margin-top: 3px; }
+  .valid { margin-left: auto; background: #f0f1f2; border-radius: 8px; padding: 8px 12px; text-align: right; }
+  .valid-label { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; }
+  .valid-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
+  .intro { margin: 22px 0 0 0; font-size: 13px; line-height: 1.6; color: #3a3b40; }
+  .quote-section { margin-top: 22px; }
+  .section-head { font-size: 13px; font-weight: 600; color: #5b5c62; margin-bottom: 10px; }
+  .visual-group { margin-bottom: 12px; }
+  .visual-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; margin-bottom: 6px; }
+  .visual-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .visual-thumb { width: 150px; height: 106px; object-fit: cover; border-radius: 8px; border: 1px solid #dbdce1; }
+  .item { display: flex; gap: 14px; align-items: flex-start; border: 1px solid #dbdce1; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+  .item-num { width: 26px; height: 26px; flex-shrink: 0; background: #f0f1f2; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #5b5c62; }
+  .photo { width: 84px; height: 84px; flex-shrink: 0; border-radius: 8px; object-fit: cover; background: #f0f1f2; }
+  .photo-initials { display: flex; align-items: center; justify-content: center; background: #e3eaf4; color: #2a5c94; font-size: 22px; font-weight: 600; }
+  .item-body { flex-grow: 1; min-width: 0; }
+  .item-name { font-size: 14px; font-weight: 500; line-height: 1.35; }
+  .item-line { font-size: 12px; color: #5b5c62; margin-top: 5px; }
+  .item-desc { font-size: 12px; color: #5b5c62; margin-top: 4px; }
+  .runs { display: flex; gap: 8px; flex-shrink: 0; }
+  .run { width: 124px; box-sizing: border-box; border: 1px solid #dbdce1; border-radius: 8px; padding: 8px 10px; }
+  .run-qty { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; }
+  .run-unit { font-size: 12px; color: #3a3b40; margin-top: 4px; }
+  .run-total { font-size: 15px; font-weight: 600; margin-top: 2px; }
+  .run-hint { font-size: 10px; color: #037c52; margin-top: 3px; }
+  .empty { font-size: 13px; color: #5b5c62; padding: 12px 0; }
+  .summary { margin-top: 24px; background: #f0f1f2; border-radius: 12px; padding: 18px 20px; }
+  .summary-title { font-size: 14px; font-weight: 600; }
+  .summary-text { margin: 6px 0 0 0; font-size: 12px; line-height: 1.6; color: #3a3b40; }
+  .summary-note { margin: 10px 0 0 0; font-size: 11px; line-height: 1.6; color: #5b5c62; }
+  .foot { margin-top: 16px; font-size: 11px; color: #5b5c62; text-align: center; }
   @media print {
     body { background: #fff; }
     .page { max-width: none; padding: 0; }
-    @page { size: A4 landscape; margin: 10mm; }
-    tr, td, th { page-break-inside: avoid; }
+    @page { size: A4 portrait; margin: 14mm; }
+    .item, .summary { page-break-inside: avoid; }
   }
 </style>
 </head>
 <body>
 <main class="page">
   <header class="head">
-    <div>
-      <h1 class="title">${escapeHtml(doc.title)}</h1>
-      <div class="muted">${escapeHtml(doc.kindLabel)} · Замовник: ${escapeHtml(doc.customerName)}</div>
-      <div class="muted">Дата формування: ${escapeHtml(doc.generatedAt)}</div>
+    <div class="head-left">
+      <h1 class="title">Комерційна пропозиція</h1>
+      <div class="meta">${numberLine}</div>
+    </div>
+    <div class="head-right">
+      <div class="brand">ToSho</div>
+      ${managerHtml}
     </div>
   </header>
-  <section class="summary">
-    <div><b>Прорахунків у документі:</b> ${doc.sections.length}</div>
-    <div><b>Номери:</b> ${escapeHtml(doc.sections.map((s) => s.quoteNumber).join(", "))}</div>
-    <div><b>Підсумок "Разом":</b> <strong>${formatMoneyRange(doc.totalRange)}</strong></div>
+  <div class="rule"></div>
+  <div class="party">
+    <div>
+      <div class="party-label">Для</div>
+      <div class="party-name">${escapeHtml(doc.customerName)}</div>
+    </div>
     ${
-      docHasRunChoice ? `<div class="muted">${escapeHtml(RUN_CHOICE_NOTE)}</div>` : ""
+      doc.validUntil
+        ? `<div class="valid">
+             <div class="valid-label">Пропозиція дійсна до</div>
+             <div class="valid-value">${escapeHtml(doc.validUntil)}</div>
+           </div>`
+        : ""
     }
-  </section>
+  </div>
+  <p class="intro">${escapeHtml(buildOfferIntro(doc))}</p>
   ${sectionsHtml}
-  <div class="total">Разом: ${formatMoneyRange(doc.totalRange)}</div>
+  <div class="summary">
+    <div class="summary-title">Підсумок</div>
+    <p class="summary-text">${escapeHtml(offerSummaryText(doc))}</p>
+    ${hasRunChoice ? `<p class="summary-note">${escapeHtml(RUN_CHOICE_NOTE)}</p>` : ""}
+  </div>
+  <div class="foot">Ціни вказані з ПДВ.</div>
 </main>
 </body>
 </html>`;
 };
 
+/**
+ * Той самий документ таблицею — для тих, хто рахує в Excel.
+ *
+ * Рядків «Разом по прорахунку» й «Загальна сума» тут БІЛЬШЕ НЕМАЄ з тієї ж
+ * причини, що й у друкованому документі: позиції — варіанти на вибір, і будь-яка
+ * їх сума описує замовлення, якого ніхто не робив. Зведення замовник збере сам,
+ * коли обере позиції.
+ */
 export const buildCommercialExcelTsv = (doc: CommercialDocument) => {
   const lines: string[] = [];
   lines.push(normalizeTextCell(doc.title));
   lines.push(`Тип:\t${normalizeTextCell(doc.kindLabel)}`);
   lines.push(`Замовник:\t${normalizeTextCell(doc.customerName)}`);
+  if (doc.offerNumber) lines.push(`Номер:\t${normalizeTextCell(doc.offerNumber)}`);
   lines.push(`Сформовано:\t${normalizeTextCell(doc.generatedAt)}`);
-  lines.push(`Прорахунків:\t${doc.sections.length}`);
-  lines.push(`Разом:\t${formatMoneyRangePlain(doc.totalRange)}`);
+  if (doc.validUntil) lines.push(`Дійсна до:\t${normalizeTextCell(doc.validUntil)}`);
+  lines.push(`Позицій:\t${countItems(doc)}`);
+  lines.push("");
+  lines.push(normalizeTextCell(offerSummaryText(doc)));
   lines.push("");
   doc.sections.forEach((section, index) => {
-    lines.push(`${index + 1}. ${normalizeTextCell(section.quoteNumber)}\t${normalizeTextCell(section.status)}\t${normalizeTextCell(section.createdAt)}`);
+    if (doc.sections.length > 1) {
+      lines.push(`${index + 1}. ${normalizeTextCell(section.quoteNumber)}`);
+    }
     lines.push(
       `Візуалізації\t${normalizeTextCell(
         section.visualizations.length > 0 ? section.visualizations.map((item) => item.url).join(" | ") : "—"
       )}`
     );
-    lines.push(
-      "№\tТовар\tОпис\tКатегорія/модель\tМісце/розмір\tНанесення\tК-сть\tОд.\tЦіна\tСума\tФото URL"
-    );
+    lines.push("№\tТовар\tОпис\tКатегорія/модель\tМісце/розмір\tНанесення\tК-сть\tОд.\tЦіна\tСума\tФото URL");
     if (section.items.length === 0) {
       lines.push("\tНемає товарних позицій");
     } else {
@@ -403,16 +551,9 @@ export const buildCommercialExcelTsv = (doc: CommercialDocument) => {
         });
       });
     }
-    lines.push(
-      `\t\t\t\t\t\t\t\tРазом по прорахунку\t${formatMoneyRangePlain(section.totalRange)}`
-    );
     lines.push("");
   });
-  lines.push(`Загальна сума\t${formatMoneyRangePlain(doc.totalRange)}`);
-  if (doc.sections.some((section) => section.items.some((item) => item.runs.length > 1))) {
-    // Той самий текст, що в HTML і в прев'ю: пам'ятка була переписана тут
-    // своїми словами й через це казала «обирає один варіант» там, де йдеться
-    // про тираж.
+  if (documentHasRunChoice(doc)) {
     lines.push(normalizeTextCell(RUN_CHOICE_NOTE));
   }
   return lines.join("\r\n");

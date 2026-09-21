@@ -109,32 +109,47 @@ describe("підсумок прорахунку в документі", () => {
   });
 });
 
+/**
+ * Підсумку в документі НЕМАЄ — ні числом, ні межами (REQ-296, дірка REQ-267#p2).
+ * Позиції прорахунку замовник обирає, а документ складав їх додаванням: на
+ * TS-0926-0029 це давало 80–120 тис. ₴ замість реальних 34–85 тис. Тести стоять
+ * саме на відсутності: підсумок легко повернути одним рядком у шаблон.
+ */
 describe("вихід 2/3 — HTML для друку й PDF", () => {
-  it("один тираж у кожної позиції — звичайна сума без пам'яток", () => {
-    const html = renderCommercialDocumentHtml(doc([section(threeProducts)]));
-    expect(norm(html)).toContain("Разом: 40 624 грн");
-    expect(norm(html)).not.toContain("залежно від обраного тиражу");
+  it("суми всіх позицій у документі немає", () => {
+    const html = norm(renderCommercialDocumentHtml(doc([section(threeProducts)])));
+    expect(html).not.toContain("Разом");
+    expect(html).not.toContain("40 624");
+    expect(html).toContain("Єдиної суми тут немає");
   });
 
-  it("кілька тиражів — межі й пам'ятка про вибір тиражу", () => {
-    const html = renderCommercialDocumentHtml(doc([section(withRunChoice)]));
-    expect(norm(html)).toContain("від 10 000 грн до 18 000 грн");
-    expect(norm(html)).toContain("залежно від обраного тиражу");
-    expect(norm(html)).toContain("Тиражі взаємовиключні");
+  it("ціна кожного тиражу лишається — зникає лише спільний підсумок", () => {
+    const html = norm(renderCommercialDocumentHtml(doc([section(withRunChoice)])));
+    expect(html).toContain("10 000 грн");
+    expect(html).toContain("18 000 грн");
+    expect(html).not.toContain("від 10 000 грн до 18 000 грн");
+    expect(html).toContain("Тиражі взаємовиключні");
+  });
+
+  it("позиція без фото отримує плитку з ініціалами, а не порожній квадрат", () => {
+    const html = norm(renderCommercialDocumentHtml(doc([section(threeProducts)])));
+    expect(html).toContain("photo-initials");
   });
 });
 
 describe("вихід 4 — TSV для Excel", () => {
-  it("підсумок — сума, коли тираж у кожної позиції один", () => {
-    const tsv = buildCommercialExcelTsv(doc([section(threeProducts)]));
-    expect(norm(tsv)).toContain("Загальна сума\t40 624");
+  it("рядків із підсумком немає — ні по прорахунку, ні загального", () => {
+    const tsv = norm(buildCommercialExcelTsv(doc([section(threeProducts)])));
+    expect(tsv).not.toContain("Загальна сума");
+    expect(tsv).not.toContain("Разом по прорахунку");
   });
 
-  it("кілька тиражів — межі й пояснення в кінці", () => {
-    const tsv = buildCommercialExcelTsv(doc([section(withRunChoice)]));
-    expect(norm(tsv)).toContain("Загальна сума\tвід 10 000 до 18 000");
-    expect(norm(tsv)).toContain("Разом по прорахунку\tвід 10 000 до 18 000");
-    expect(norm(tsv)).toContain("взаємовиключні");
+  it("кілька тиражів — ціни на місці, пояснення в кінці", () => {
+    const tsv = norm(buildCommercialExcelTsv(doc([section(withRunChoice)])));
+    expect(tsv).not.toContain("Загальна сума");
+    expect(tsv).toContain("10 000");
+    expect(tsv).toContain("18 000");
+    expect(tsv).toContain("взаємовиключні");
   });
 
   /**
