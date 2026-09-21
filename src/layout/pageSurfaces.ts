@@ -29,6 +29,7 @@
  */
 
 import { KANBAN_BOARDS, type KanbanBoardKey } from "@/lib/kanbanBoards";
+import { fluidKanbanColumn } from "@/lib/kanbanColumnWidth";
 
 /**
  * Форма майбутнього вмісту — за нею малюється каркас завантаження.
@@ -116,8 +117,9 @@ export type PageSurface = {
    * Геометрія дошки, якщо ця поверхня — канбан.
    *
    * Ширина колонки в кожної дошки СВОЯ: «Прорахунки» й «Дизайн» тягнуть колонку
-   * від ширини полотна, «Замовлення» ділять його на три, беклог має рівно
-   * 300 px. Каркас маршруту малюється до того, як дошка існує, тож ці числа
+   * від ширини полотна до стелі 312 px, «Замовлення» ділять його на три, беклог
+   * ділить націло з мінімумом 300 px. Каркас маршруту малюється до того, як
+   * дошка існує, тож ці числа
    * мусять лежати тут — інакше каркас показує колонки одної ширини, а дошка
    * приїжджає з іншою, і це видно як стрибок.
    *
@@ -159,6 +161,13 @@ const KANBAN_FLUID_COLUMN = "clamp(224px, calc((100cqw - 52px) / 4.2), 312px)";
  * kanbanBoards.ts, і згадати про цей файл ніхто не зобов'язаний.
  */
 const boardColumnCount = (key: KanbanBoardKey) => KANBAN_BOARDS[key].onBoard.length;
+
+/**
+ * Беклог розтягує колонки на всю ширину полотна (REQ-300), тож стала «300px»
+ * тут більше не годиться: каркас малював би вузькі колонки, а дошка наступної
+ * миті приїжджала б на всю ширину. Формула та сама, що й у самій дошці.
+ */
+const DEV_BACKLOG_COLUMNS = boardColumnCount("devRequests");
 
 /**
  * Порядок має значення: перший збіг виграє, тож картки сутностей стоять перед
@@ -220,7 +229,7 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "features", path: "/whats-new/features", page: "src/pages/FeaturesPage.tsx", toolbar: "full", shape: "grid" },
   { id: "whats-new", path: "/whats-new", page: "src/pages/WhatsNewPage.tsx", toolbar: "full", shape: "list", maxWidth: 760 },
 
-  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: boardColumnCount("devRequests"), columnWidth: "300px" } },
+  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: DEV_BACKLOG_COLUMNS, columnWidth: fluidKanbanColumn({ columns: DEV_BACKLOG_COLUMNS, minPx: 300 }) } },
   { id: "dev-releases", path: "/dev/releases", page: "src/pages/ReleasesPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
   { id: "dev-health", path: "/dev/health", page: "src/pages/AdminObservabilityPage.tsx", toolbar: "none", shape: "dashboard" },
   // Смуги дій немає навмисно: вкладки «за шарами / за терміновістю» живуть у

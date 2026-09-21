@@ -22,7 +22,7 @@ import { KanbanSkeleton } from "@/components/kanban/KanbanSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MOBILE_CARD_LIST, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
-import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
+import { DevRequestBoard, DEV_BOARD_COLUMN_WIDTH } from "@/features/devRequests/DevRequestBoard";
 import {
   BoardFilters,
   EMPTY_BOARD_FILTERS,
@@ -679,13 +679,13 @@ export default function DevRequestsPage() {
           style={kanbanViewportHeight ? { height: `${kanbanViewportHeight}px` } : undefined}
         >
           {showBoardSkeleton ? (
-            /* Ті самі п'ять колонок і та сама ширина 300 px, що й у справжньої
-               дошки: інакше поява карток читалась би як перебудова екрана. */
+            /* Ті самі п'ять колонок і та сама ширина, що й у справжньої дошки:
+               інакше поява карток читалась би як перебудова екрана. Ширину
+               беремо з самої дошки — з REQ-300 це вже не стала «300px», а
+               формула, що ділить полотно націло. */
             <KanbanSkeleton
-              columns={BOARD_COLUMNS.map((column) => ({
-                id: column.status,
-                className: "w-[300px] basis-[300px]",
-              }))}
+              columns={BOARD_COLUMNS.map((column) => ({ id: column.status }))}
+              columnWidth={DEV_BOARD_COLUMN_WIDTH}
               boardClassName="h-full pb-2 md:pb-3"
               rowClassName="h-full items-stretch"
               cardsPerColumn={3}

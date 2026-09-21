@@ -11,6 +11,7 @@ import { MobileStatusBoard } from "@/components/kanban/MobileStatusBoard";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
+import { fluidKanbanColumn } from "@/lib/kanbanColumnWidth";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { CardActionsMenu } from "./CardActionsMenu";
@@ -37,6 +38,20 @@ import {
   type DevRequest,
   type RequestStatus,
 } from "./types";
+
+/**
+ * Колонка ділить полотно націло, поки на неї лишається 300 px (REQ-300).
+ *
+ * 300 px — та сама ширина, що стояла тут жорстко: на ноутбуці п'ять колонок у
+ * рядок не влазять, і дошка скролиться горизонтально, як і скролилась. Новим є
+ * лише верх: на широкому моніторі колонки більше не впираються в стелю й не
+ * лишають порожньої смуги праворуч. Формула — у `lib/kanbanColumnWidth.ts`,
+ * там же пояснено, чому вона їде інлайновим стилем, а не класом.
+ *
+ * Експортується заради каркаса дошки на самій сторінці: він малює ті самі
+ * колонки, поки їдуть дані, і мусить мати ту саму ширину.
+ */
+export const DEV_BOARD_COLUMN_WIDTH = fluidKanbanColumn({ columns: BOARD_COLUMNS.length, minPx: 300 });
 
 type DevRequestBoardProps = {
   requests: DevRequest[];
@@ -262,7 +277,10 @@ export function DevRequestBoard({
     // h-full + items-stretch: колонки тягнуться на всю висоту дошки, а не на
     // висоту найдовшої з них. Без цього фіксована висота ззовні нічого не дає —
     // короткі колонки лишаються короткими, а довга однаково росте вниз.
-    <KanbanBoard className="h-full pb-2 md:pb-3" rowClassName="h-full items-stretch">
+    <KanbanBoard
+      className="h-full pb-2 md:pb-3 [container-type:inline-size]"
+      rowClassName="h-full items-stretch"
+    >
       {BOARD_COLUMNS.map((column) => {
         const items = byStatus.get(column.status) ?? [];
         return (
@@ -270,10 +288,11 @@ export function DevRequestBoard({
             key={column.status}
             {...drag.columnProps(column.status)}
             className={cn(
-              "kanban-column-surface h-full w-[300px] shrink-0 transition-colors",
+              "kanban-column-surface h-full shrink-0 transition-colors",
               drag.draggingId && "kanban-column-armed",
               drag.overColumnId === column.status && "kanban-column-drop-target"
             )}
+            style={{ flexBasis: DEV_BOARD_COLUMN_WIDTH }}
             header={
               <KanbanColumnHeader
                 icon={column.icon}
