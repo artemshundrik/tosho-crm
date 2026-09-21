@@ -4,7 +4,15 @@ import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
+import {
+  CustomerLeadPicker,
+  getCreatedCustomerLeadLabel,
+  toQuotePartyOption,
+  upsertByIdAndEntityType,
+  useCustomerLeadCreate,
+  type CreatedCustomerLead,
+  type CustomerLeadOption,
+} from "@/components/customers";
 import { Chip } from "@/components/ui/chip";
 import { DateTimePicker } from "@/components/ui/picker-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -211,6 +219,54 @@ export function QuoteWizardHeader({
   );
 
   const manager = members.find((member) => member.id === value.managerId) ?? null;
+
+  /*
+    ЗАВЕСТИ ЗАМОВНИКА, НЕ ВИХОДЯЧИ З ВІКНА (REQ-301).
+
+    Дотепер пошук, який нічого не знайшов, був глухим кутом: вікно доводилось
+    закрити, піти на «Замовників», завести картку й почати прорахунок наново —
+    разом із уже набраними позиціями. Тепер те саме вікно створення, яким
+    заводять замовника з білдера й з дизайн-задачі (`useCustomerLeadCreate`),
+    відкривається поверх візарда, а створене одразу стає вибраним.
+
+    ВІКНА НЕ ДУБЛЮЮТЬСЯ НАВМИСНО. Своя коротка форма на пʼять полів здавалась
+    доречнішою в модалці поверх модалки, але картка замовника має правила, яких
+    у ній не буде: контакт ліда (телефон АБО телеграм), юрособи, логотип за
+    посиланням, нагадування. Половина з них мовчки не спрацювала б.
+  */
+  const currentUserLabel = members.find((member) => member.id === currentUserId)?.label ?? "";
+
+  const handleCreatedParty = (created: CreatedCustomerLead) => {
+    const label = getCreatedCustomerLeadLabel(created);
+    // Щойно створене кладемо в той самий список, з якого малюються підказки:
+    // інакше воно зникло б із поповера до наступного запиту до бази.
+    setParties((prev) => upsertByIdAndEntityType(prev, toQuotePartyOption(created) as QuotePartyOption));
+    setPartySearch(label);
+    patch({
+      partyId: created.id,
+      partyLabel: label,
+      partyType: created.entityType,
+      partyLogoUrl: created.logoUrl ?? null,
+    });
+  };
+
+  const customerLeadCreate = useCustomerLeadCreate({
+    teamId,
+    defaultManagerLabel: currentUserLabel,
+    teamMembers: members.map((member) => ({
+      id: member.id,
+      label: member.label,
+      avatarUrl: member.avatarUrl,
+    })),
+    onCreated: handleCreatedParty,
+    customerDialogTitle: "Новий замовник",
+    customerDialogDescription: "Додайте дані замовника — прорахунок одразу стане на нього.",
+    customerSubmitLabel: "Створити замовника",
+    leadDialogTitle: "Новий лід",
+    leadDialogDescription: "Досить назви й одного контакту — решту доповните потім.",
+    leadSubmitLabel: "Створити ліда",
+  });
+
   // Читаємо тією самою конвенцією, якою пишемо: дедлайн — настінний час, і
   // `new Date(...)` перерахував би його з фіктивного «+00» у зону браузера.
   const deadlineDate = parseDeadlineDate(value.deadlineAt);
@@ -235,6 +291,8 @@ export function QuoteWizardHeader({
             partyLogoUrl: option.logoUrl ?? null,
           })
         }
+        onCreateCustomer={(name) => customerLeadCreate.openCustomerCreate(name)}
+        onCreateLead={(name) => customerLeadCreate.openLeadCreate(name)}
         onClear={() => patch({ partyId: "", partyLabel: "", partyType: "customer", partyLogoUrl: null })}
       />
     </span>
@@ -328,6 +386,14 @@ export function QuoteWizardHeader({
             {currencyPicker}
           </HeaderField>
         </div>
+        {/*
+          Вікна створення стоять ТУТ, а не поруч із пікером: обгортка пікера
+          має `key={nudgeSignal}` і перемонтовується на кожне хитання поля —
+          разом із нею закривалось би й відкрите вікно замовника. Закрите
+          вікно Radix не малює жодного вузла, тож зайвого проміжку в стовпчику
+          воно не додає.
+        */}
+        {customerLeadCreate.dialogs}
       </div>
     );
   }
@@ -346,6 +412,7 @@ export function QuoteWizardHeader({
         {deadlinePicker}
         {currencyPicker}
       </div>
+      {customerLeadCreate.dialogs}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Building2, Check, Lock } from "@/components/icons/appIcons";
+import { Building2, Check, Lock, Plus } from "@/components/icons/appIcons";
 import { EntityAvatar } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -85,6 +85,30 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
   }, [maxVisible, options, search]);
   const canCreate = Boolean(searchValue.trim());
   const canScroll = !loading && visibleOptions.length > 0;
+  /*
+    «НЕ ЗНАЙДЕНО» — РОЗВИЛКА, А НЕ ГЛУХИЙ КУТ (REQ-301).
+
+    Дотепер на місці списку стояв сірий рядок «Замовників або лідів не
+    знайдено», а завести нового пропонували дві однакові кнопки в підвалі —
+    тобто відповідь на «його ще немає» лежала не там, куди людина дивиться.
+    У візарді прорахунку цих кнопок не було взагалі, і порожній пошук
+    закінчувався нічим.
+
+    Тепер пропозиція стоїть РІВНО на місці ненайденого: набране імʼя і два
+    виходи. Підвал у цю мить свої кнопки ховає — двох однакових пропозицій
+    в одному вікні бути не має.
+
+    «Лід» головний навмисно: компанія, якої в базі ще немає, замовником поки
+    не стала — вона щойно попросила прорахунок. Замовник лишається поруч для
+    випадку, коли картку заводять уже на відому компанію.
+  */
+  const nothingFound = !loading && Boolean(search) && visibleOptions.length === 0;
+  const canOfferCreate = Boolean(onCreateCustomer || onCreateLead);
+  const offerCreateInstead = nothingFound && canOfferCreate;
+  const showClear = Boolean(selectedLabel.trim()) && Boolean(onClear);
+  // Порожній підвал малював саму лише лінію `border-t` — смужку нізвідки
+  // під списком. Тепер підвала просто немає, коли в ньому нічого немає.
+  const showFooter = (canOfferCreate && !offerCreateInstead) || showClear;
 
   const updateScrollHints = React.useCallback(() => {
     const node = listRef.current;
@@ -213,6 +237,46 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                       </Button>
                   );
                 })
+              ) : offerCreateInstead ? (
+                <div className="px-1 pb-1 pt-2 text-center">
+                  <p className="truncate text-sm font-medium text-foreground" title={search}>
+                    «{search}»
+                  </p>
+                  <p className="mt-0.5 text-2xs text-muted-foreground">
+                    Такого ще немає — заведіть картку
+                  </p>
+                  <div className="mt-2.5 flex flex-col gap-1.5">
+                    {onCreateLead ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="w-full gap-1.5"
+                        onClick={() => {
+                          onCreateLead(search);
+                          onOpenChange(false);
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Створити ліда
+                      </Button>
+                    ) : null}
+                    {onCreateCustomer ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-1.5"
+                        onClick={() => {
+                          onCreateCustomer(search);
+                          onOpenChange(false);
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Створити замовника
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
               ) : search ? (
                 <div className="p-2 text-xs text-muted-foreground">Замовників або лідів не знайдено</div>
               ) : (
@@ -226,8 +290,9 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-popover to-transparent" />
             ) : null}
           </div>
+          {showFooter ? (
           <div className="grid grid-cols-2 gap-2 border-t border-border/50 pt-1">
-            {onCreateCustomer ? (
+            {onCreateCustomer && !offerCreateInstead ? (
               <Button
                 type="button"
                 size="sm"
@@ -242,7 +307,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                 Новий замовник
               </Button>
             ) : null}
-            {onCreateLead ? (
+            {onCreateLead && !offerCreateInstead ? (
               <Button
                 type="button"
                 size="sm"
@@ -257,7 +322,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                 Новий лід
               </Button>
             ) : null}
-            {selectedLabel.trim() && onClear ? (
+            {showClear && onClear ? (
               <Button
                 type="button"
                 size="sm"
@@ -272,6 +337,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
               </Button>
             ) : null}
           </div>
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>
