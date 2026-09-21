@@ -23,10 +23,13 @@ import type { OfferFormat } from "./useQuoteOfferSend";
  * висота з `size="sm"` давала 30 px проти 32 і радіус 10 проти 8 — поруч це
  * читалось як недбалість.
  *
- * МІЖ ПОЛОВИНКАМИ НЕМАЄ РИСКИ. Вона там була, і на 32 px читалась як огріх:
- * коротка вертикальна лінія з відступами зверху й знизу, яка не збігалась ні з
- * рамкою, ні з підсвіткою стрілочки при наведенні. Половинки й так розділені —
- * власним тлом стрілочки.
+ * ОРЕОЛ ФОКУСА — НА ОБГОРТЦІ, А НЕ НА ПОЛОВИНКАХ. Кожна кнопка має власний
+ * `focus-visible:ring-2` з відступом, а обгортка ріже все, що виходить за її
+ * межі (`overflow-hidden` тримає заокруглення). Коли меню закривалось, Radix
+ * повертав фокус стрілочці — і від її ореола лишалась видимою одна смуга: рівно
+ * на стику половинок, поверх тонкої риски. Здавалось, що риска раптом
+ * потовщала. Тепер половинки свій ореол не малюють, а підсвічується весь
+ * контрол через `focus-within` — помітно так само, а різати нема чого.
  *
  * ОКРЕМИМ ФАЙЛОМ — бо `QuoteDetailsPage` під ратчетом розміру, а це самостійний
  * вузол без власного стану.
@@ -37,11 +40,11 @@ export function QuoteOfferSendButton(props: {
   disabled?: boolean;
 }) {
   return (
-    <div className="flex h-8 items-stretch overflow-hidden rounded-lg border border-border bg-background">
+    <div className="flex h-8 items-stretch overflow-hidden rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-foreground/20 focus-within:ring-offset-1 focus-within:ring-offset-background">
       <Button
         variant="ghost"
         size="sm"
-        className="h-full gap-2 rounded-none border-0"
+        className="h-full gap-2 rounded-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
         disabled={props.disabled}
         onClick={props.onOpen}
       >
@@ -50,12 +53,15 @@ export function QuoteOfferSendButton(props: {
             замовлення», підпис із двох слів з'їдав би рядок. */}
         <span className="truncate max-sm:sr-only">Надіслати пропозицію</span>
       </Button>
+      {/* Риска з відступами зверху й знизу, а не від краю до краю: контрол
+          низький, і лінія на всю висоту зливалася б із рамкою. */}
+      <span aria-hidden className="my-1.5 w-px bg-border" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
-            className="h-full rounded-none border-0 px-2"
+            className="h-full rounded-none border-0 px-2 focus-visible:ring-0 focus-visible:ring-offset-0"
             aria-label="Обрати формат без вікна"
             disabled={props.disabled}
           >
