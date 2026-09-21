@@ -56,7 +56,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 6247 | вкладка «Економіка» (заглушка `EconomicsComingSoon`) |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 861 lines, 588 KB, as of 2026-09-21)
+## src/pages/DesignTaskPage.tsx (~12 864 lines, 588 KB, as of 2026-09-21)
 
 | Range | Content |
 |---|---|
@@ -65,13 +65,13 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | **1357** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~7 545 lines, 328 KB, as of 2026-09-21)
+## src/pages/QuotesPage.tsx (~6 947 lines, 300 KB, as of 2026-09-21)
 
 | Range | Content |
 |---|---|
 | 1–193 | imports |
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
-| **459** | `export function QuotesPage(...)` — main component starts |
+| **446** | `export function QuotesPage(...)` — main component starts |
 
 ## src/pages/DesignPage.tsx (~5 932 lines, 262 KB, as of 2026-09-21)
 
