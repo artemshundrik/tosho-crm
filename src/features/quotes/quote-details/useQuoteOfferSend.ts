@@ -83,22 +83,37 @@ export function useQuoteOfferSend(params: {
    */
   const [sentAtLocal, setSentAtLocal] = useState<string | null>(null);
   /**
-   * Телефон менеджера в документі (власник, 21.09.2026). Тягнемо окремо: у
-   * картці є тільки ім'я, а профіль із контактами вона не читає. Пошти в
-   * профілі НЕМАЄ жодної — поки що в документі буде сам телефон.
+   * Контакти менеджера в документі (власник, 21.09.2026). Тягнемо окремо: у
+   * картці є саме ім'я.
+   *
+   * ДВА РІЗНІ ДЖЕРЕЛА, і це не примха. Телефон лежить у профілі співробітника
+   * (`team_member_profiles.phone`), а пошта — у `memberships_view.email`, тобто
+   * там же, звідки застосунок читає склад команди. Шукати пошту в профілі
+   * марно: її там немає, і саме через це я спершу оголосив, що пошти немає
+   * взагалі. Немає її в ОДНІЙ таблиці.
    */
   const [managerPhone, setManagerPhone] = useState<string | null>(null);
+  const [managerEmail, setManagerEmail] = useState<string | null>(null);
 
   const build = useCallback(async () => {
     if (!quote) return null;
     if (quote.assigned_to) {
-      const { data } = await supabase
-        .schema("tosho")
-        .from("team_member_profiles")
-        .select("phone")
-        .eq("user_id", quote.assigned_to)
-        .maybeSingle();
-      setManagerPhone(((data as { phone?: string | null } | null)?.phone ?? "").trim() || null);
+      const [profile, membership] = await Promise.all([
+        supabase
+          .schema("tosho")
+          .from("team_member_profiles")
+          .select("phone")
+          .eq("user_id", quote.assigned_to)
+          .maybeSingle(),
+        supabase
+          .schema("tosho")
+          .from("memberships_view")
+          .select("email")
+          .eq("user_id", quote.assigned_to)
+          .maybeSingle(),
+      ]);
+      setManagerPhone(((profile.data as { phone?: string | null } | null)?.phone ?? "").trim() || null);
+      setManagerEmail(((membership.data as { email?: string | null } | null)?.email ?? "").trim() || null);
     }
     return buildCommercialDocument({
       teamId,
@@ -128,12 +143,14 @@ export function useQuoteOfferSend(params: {
     return {
       ...doc,
       validUntil: formatValidUntil(validUntil) || undefined,
-      manager: managerName ? { name: managerName, phone: managerPhone ?? undefined } : undefined,
+      manager: managerName
+        ? { name: managerName, phone: managerPhone ?? undefined, email: managerEmail ?? undefined }
+        : undefined,
       sections: includeVisualizations
         ? doc.sections
         : doc.sections.map((section) => ({ ...section, visualizations: [] })),
     } satisfies CommercialDocument;
-  }, [doc, includeVisualizations, managerName, managerPhone, validUntil]);
+  }, [doc, includeVisualizations, managerEmail, managerName, managerPhone, validUntil]);
 
   const previewHtml = useMemo(
     () => (decorated ? renderCommercialDocumentHtml(decorated) : ""),
@@ -249,7 +266,9 @@ export function useQuoteOfferSend(params: {
           {
             ...next,
             validUntil: formatValidUntil(validUntil) || undefined,
-            manager: managerName ? { name: managerName, phone: managerPhone ?? undefined } : undefined,
+            manager: managerName
+              ? { name: managerName, phone: managerPhone ?? undefined, email: managerEmail ?? undefined }
+              : undefined,
           },
           kind
         );
@@ -260,7 +279,7 @@ export function useQuoteOfferSend(params: {
         });
       }
     },
-    [build, emit, managerName, managerPhone, validUntil]
+    [build, emit, managerEmail, managerName, managerPhone, validUntil]
   );
 
   return {
