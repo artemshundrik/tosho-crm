@@ -93,7 +93,6 @@ import {
   Trash2,
   Paperclip,
   CheckCircle2,
-  PlusCircle,
   PlayCircle,
   Check,
   Hourglass,
@@ -115,7 +114,6 @@ import type { CatalogType } from "@/types/catalog";
  * Quote statuses
  */
 const QUOTE_STATUSES = [
-  { value: "new", label: "Новий", icon: PlusCircle, iconClass: "tone-text-neutral" },
   { value: "estimating", label: "На прорахунку", icon: PlayCircle, iconClass: "tone-text-warning" },
   { value: "estimated", label: "Пораховано", icon: Check, iconClass: "tone-text-info" },
   { value: "awaiting_approval", label: "На погодженні", icon: Hourglass, iconClass: "text-primary" },
@@ -602,7 +600,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   /** Чи вже тиснули «Зберегти»: до першого натиску вікно нічого не червонить. */
   const [submitTried, setSubmitTried] = React.useState(false);
   // Form state
-  const [status, setStatus] = React.useState<(typeof QUOTE_STATUSES)[number]["value"]>("new");
+  const [status, setStatus] = React.useState<(typeof QUOTE_STATUSES)[number]["value"]>("estimating");
   const [comment, setComment] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [customerId, setCustomerId] = React.useState<string>("");
@@ -895,7 +893,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const availableStatuses = React.useMemo(() => {
     if (isEditMode) return QUOTE_STATUSES;
     return QUOTE_STATUSES.filter(
-      (statusOption) => statusOption.value === "new" || statusOption.value === "estimating"
+      (statusOption) => statusOption.value === "estimating"
     );
   }, [isEditMode]);
 
@@ -909,10 +907,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       height: app.height ?? "",
     }));
 
-    const initialStatus = initialValues?.status ?? "new";
+    const initialStatus = initialValues?.status ?? "estimating";
     const nextStatus = availableStatuses.some((statusOption) => statusOption.value === initialStatus)
       ? initialStatus
-      : availableStatuses[0]?.value ?? "new";
+      : availableStatuses[0]?.value ?? "estimating";
     setStatus(nextStatus);
     setComment(initialValues?.comment ?? "");
     setNotes(initialValues?.notes ?? "");

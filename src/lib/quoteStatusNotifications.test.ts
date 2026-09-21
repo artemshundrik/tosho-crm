@@ -150,22 +150,33 @@ describe("відкат статусу прорахунку", () => {
   it("мовчить, коли попередній статус невідомий", async () => {
     await notifyQuoteInitiatorOnStatusChange({
       quoteId,
-      toStatus: "new",
+      // Ціль — «На прорахунку»: після REQ-299 у неї немає свого сповіщення,
+      // як не було і в «Нового», що стояв тут раніше. УВАГА: тиша тут саме
+      // через це, а не через невідомий «звідки» — з ціллю, у якої сповіщення
+      // Є, воно піде (перевірено 21.09.2026). Поведінка давня, не з цієї
+      // задачі, але знати про неї варто.
+      toStatus: "estimating",
       actorUserId: "someone-else",
     });
     expect(notifyUsers).not.toHaveBeenCalled();
   });
 
-  it("не плутає взяття в роботу з відкатом", async () => {
+  /**
+   * Раніше тут стояв перехід «Новий → На прорахунку» («Прорахунок взято в
+   * роботу»). Статусу «Новий» більше немає (REQ-299), і сповіщення пішло
+   * разом із ним: прорахунок народжується вже в роботі, брати його нізвідки.
+   * Перевірку лишаємо на найближчому русі вперед, який справді буває.
+   */
+  it("не плутає рух уперед із відкатом", async () => {
     await notifyQuoteInitiatorOnStatusChange({
       quoteId,
-      fromStatus: "new",
-      toStatus: "estimating",
+      fromStatus: "estimating",
+      toStatus: "estimated",
       actorUserId: "someone-else",
     });
     expect(notifyUsers).toHaveBeenCalledTimes(1);
     expect(notifyUsers.mock.calls[0][0]).toMatchObject({
-      title: "Прорахунок взято в роботу",
+      title: "Прорахунок готовий",
     });
   });
 });

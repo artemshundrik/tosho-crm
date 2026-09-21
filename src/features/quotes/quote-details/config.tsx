@@ -106,7 +106,7 @@ export const CANCEL_REASON_OPTIONS = [
 ];
 
 /** Статуси, якими оперує інтерфейс. Решта переліку з бази — історична. */
-const UI_QUOTE_STATUSES = ["new", "estimating", "estimated", "awaiting_approval", "approved", "cancelled"] as const;
+const UI_QUOTE_STATUSES = ["estimating", "estimated", "awaiting_approval", "approved", "cancelled"] as const;
 
 /**
  * Приводить статус до того, що інтерфейс уміє показати.
@@ -118,9 +118,9 @@ const UI_QUOTE_STATUSES = ["new", "estimating", "estimated", "awaiting_approval"
  * вийде, тож краще показати зрозумілий стан, ніж зламати збереження.
  */
 export const normalizeStatus = (value?: string | null): (typeof UI_QUOTE_STATUSES)[number] => {
-  if (!value) return "new";
+  if (!value) return "estimating";
   const legacy: Record<string, (typeof UI_QUOTE_STATUSES)[number]> = {
-    draft: "new",
+    draft: "estimating",
     in_progress: "estimating",
     sent: "estimated",
     rejected: "cancelled",
@@ -129,11 +129,10 @@ export const normalizeStatus = (value?: string | null): (typeof UI_QUOTE_STATUSE
   const mapped = legacy[value] ?? value;
   return (UI_QUOTE_STATUSES as readonly string[]).includes(mapped)
     ? (mapped as (typeof UI_QUOTE_STATUSES)[number])
-    : "new";
+    : "estimating";
 };
 
 export const STATUS_OPTIONS = [
-  "new",
   "estimating",
   "estimated",
   "awaiting_approval",
@@ -142,6 +141,8 @@ export const STATUS_OPTIONS = [
 ];
 
 export const statusLabels: Record<string, string> = {
+  // Мітка лишається заради історії статусів — сам статус більше не ставиться
+  // (REQ-299).
   new: "Новий",
   estimating: "На прорахунку",
   estimated: "Пораховано",
@@ -177,7 +178,7 @@ export const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-export const STATUS_FLOW: string[] = ["new", "estimating", "estimated", "awaiting_approval", "approved"];
+export const STATUS_FLOW: string[] = ["estimating", "estimated", "awaiting_approval", "approved"];
 
 export const STATUS_NEXT_ACTION: Record<
   string,
@@ -188,12 +189,6 @@ export const STATUS_NEXT_ACTION: Record<
     nextStatus: string | null;
   }
 > = {
-  new: {
-    ctaLabel: "Почати прорахунок",
-    title: "Етап старту",
-    description: "Підготуйте позиції та дедлайн, після чого переведіть у роботу.",
-    nextStatus: "estimating",
-  },
   estimating: {
     ctaLabel: "Позначити як пораховано",
     title: "Етап розрахунку",

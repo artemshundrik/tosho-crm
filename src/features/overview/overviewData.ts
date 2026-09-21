@@ -23,7 +23,7 @@ import type { OverviewActivityRow } from "./OverviewAside";
  * означало б платити трафіком за рядки, які ніде не показуються.
  */
 
-const ACTIVE_QUOTE_STATUSES = ["new", "estimating", "estimated", "awaiting_approval"];
+const ACTIVE_QUOTE_STATUSES = ["estimating", "estimated", "awaiting_approval"];
 
 /** Стеля вибірки активних прорахунків. Більше за це — вже не «огляд». */
 const QUOTE_LIMIT = 300;
@@ -356,7 +356,7 @@ export async function loadOverviewData(params: { teamId: string | null; userId: 
   const quotes: OverviewQuoteInput[] = (quoteRows ?? []).map((row) => ({
     id: row.id,
     number: firstNonEmptyString(row.number),
-    status: (row.status ?? "new").trim(),
+    status: (row.status ?? "estimating").trim(),
     customerName: firstNonEmptyString(row.customer_name, row.title),
     customerLogoUrl: normalizeCustomerLogoUrl(row.customer_logo_url ?? null),
     assignedTo: firstNonEmptyString(row.assigned_to),

@@ -59,7 +59,9 @@ type KanbanBoardPlan = {
 export const KANBAN_BOARDS: Record<KanbanBoardKey, KanbanBoardPlan> = {
   /** /orders/estimates — прорахунки. */
   quotes: {
-    onBoard: ["new", "estimating", "estimated", "awaiting_approval", "approved"],
+    // «Новий» прибрано 21.09.2026 (REQ-299): прорахунок народжується вже
+    // «На прорахунку», тож колонки під ненароджуваний стан більше немає.
+    onBoard: ["estimating", "estimated", "awaiting_approval", "approved"],
     offBoard: ["cancelled"],
   },
   /** /design — дизайн-задачі. */

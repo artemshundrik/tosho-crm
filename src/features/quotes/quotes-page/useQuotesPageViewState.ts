@@ -10,7 +10,7 @@ import { normalizeStatus } from "@/features/quotes/quotes-page/config";
 
 type SortBy = "date" | "number" | null;
 type SortOrder = "asc" | "desc";
-type QuickFilter = "all" | "new" | "estimated";
+type QuickFilter = "all" | "estimated";
 type ContentView = "quotes" | "sets" | "all";
 type QuoteSetKindFilter = "all" | "kp" | "set";
 
@@ -104,9 +104,7 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
       });
     }
 
-    if (quickFilter === "new") {
-      filtered = filtered.filter((row) => normalizeStatus(row.status) === "new");
-    } else if (quickFilter === "estimated") {
+    if (quickFilter === "estimated") {
       filtered = filtered.filter((row) => normalizeStatus(row.status) === "estimated");
     }
 

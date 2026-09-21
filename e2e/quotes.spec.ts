@@ -21,18 +21,19 @@ test.describe("Прорахунки", () => {
     await waitForPageBody(page, page.locator(columns));
 
     /**
-     * П'ять колонок — не випадкове число: скасовані з дошки виведені в окремий
-     * список (REQ-138). Якщо тут раптом стане шість, це або повернули колонку,
+     * Чотири колонки — не випадкове число. Скасовані з дошки виведені в окремий
+     * список (REQ-138), а «Новий» прибрано зовсім: прорахунок народжується вже
+     * «На прорахунку» (REQ-299). Якщо тут стане пʼять, це або повернули колонку,
      * або реєстр канбанів розійшовся зі сторінкою.
      */
-    await expect(page.locator(columns)).toHaveCount(5);
+    await expect(page.locator(columns)).toHaveCount(4);
 
     await page.getByRole("button", { name: "Список" }).click();
     await expect(page.getByRole("table")).toBeVisible();
     await expect(page.locator(columns)).toHaveCount(0);
 
     await page.getByRole("button", { name: "Kanban" }).click();
-    await expect(page.locator(columns)).toHaveCount(5);
+    await expect(page.locator(columns)).toHaveCount(4);
   });
 
   test("картка прорахунку відкривається за UUID", async ({ page, guard }) => {
@@ -92,7 +93,7 @@ test.describe("Прорахунки", () => {
       await expectDialogClosed(page);
 
       // Дошка на місці й та сама: колонки не зникали, каркас не повертався.
-      await expect(page.locator(columns)).toHaveCount(5);
+      await expect(page.locator(columns)).toHaveCount(4);
       const flicker = await flickerReport(page);
       await stopWatchingFlicker(page);
 

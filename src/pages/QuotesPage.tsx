@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
+import { useModalMount } from "@/components/ui/modal-mount";
 import { cn } from "@/lib/utils";
 import { useKanbanDrag } from "@/components/kanban/kanbanDrag";
 import { normalizeUnitLabel } from "@/lib/units";
@@ -42,18 +42,7 @@ import { hasOwnManagedWork } from "@/lib/managedWorkOwnership";
 import { isQuoteManagerJobRole, normalizeAccessRole, normalizeJobRole } from "@/lib/permissions";
 import { type DesignTaskType } from "@/lib/designTaskType";
 import { type QuoteAttachmentAudience } from "@/lib/quoteAttachmentAudience";
-import {
-  formatPrintProductSummary,
-  getPrintProductConfig,
-  getProductKindFromPreset,
-  type QuoteItemMetadata,
-} from "@/lib/printPackage";
-import {
-  formatPrintSpecSummary,
-  getPrintSpecPreset,
-  isPrintSpecFilled,
-  parsePrintSpecValues,
-} from "@/lib/printSpec";
+import { getPrintProductConfig, type QuoteItemMetadata } from "@/lib/printPackage";
 import {
   listQuotes,
   listQuoteSets,
@@ -102,9 +91,9 @@ import {
 import { toWallClockValue } from "@/features/quotes/quote-details/deadlineLabels";
 import { searchQuoteParties, type QuotePartyOption } from "@/features/quotes/quoteParties";
 import { DEFAULT_MANAGER_RATE, getManagerRateForUser } from "@/lib/managerRate";
-import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
-import type { NewQuoteFormData, QuoteBatchBuilderFormData } from "@/components/quotes";
-import { TestQuoteWizardButton } from "@/features/quotes/quote-wizard/TestQuoteWizard";
+import { NewQuoteDialog } from "@/components/quotes";
+import type { NewQuoteFormData } from "@/components/quotes";
+import { QuoteWizardMount } from "@/features/quotes/quote-wizard/QuoteWizardEntry";
 import {
   getCreatedCustomerLeadLabel,
   toQuotePartyOption,
@@ -182,9 +171,7 @@ import {
   statusLabels,
   type PrintConfig,
 } from "@/features/quotes/quotes-page/config";
-import { groupProductsForQuotes } from "@/features/quotes/quoteBatchGrouping";
 import { resolveQuoteEditItemRuns } from "@/features/quotes/quoteEditItemRuns";
-import { pluralUk } from "@/lib/lastSeen";
 import { useQuotesPageViewState } from "@/features/quotes/quotes-page/useQuotesPageViewState";
 import {
   SEGMENTED_GROUP,
@@ -240,7 +227,7 @@ const QUOTES_TABLE_PAGE_SIZE = 50;
 const QUOTES_TABLE_PAGE_INCREMENT = 50;
 const QUOTES_KANBAN_INITIAL_PAGE_SIZE = 120;
 /** Статуси, у яких прорахунок ще в роботі — їх дошка мусить показувати всі. */
-const ACTIVE_QUOTE_STATUSES = ["new", "estimating", "estimated", "awaiting_approval"] as const;
+const ACTIVE_QUOTE_STATUSES = ["estimating", "estimated", "awaiting_approval"] as const;
 const QUOTES_KANBAN_PAGE_INCREMENT = 60;
 const QUOTES_SEARCH_FETCH_PAGE_SIZE = 500;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
@@ -557,13 +544,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    * намальоване. Тримаємо його заради ефектів, які на ньому висять: пошук
    * замовників і довантаження каталогу.
    */
-  const [batchBuilderOpen, setBatchBuilderOpen] = useState(false);
   // Тип виробу з першого кроку тестового візарда (REQ-134). Ref, а не стан:
   // стан цієї сторінки коштує перемальовки списку (REQ-75), а значення
   // потрібне рівно тоді, коли ModalMount рендерить білдер, — після кліку.
-  const batchBuilder = useModalMount();
-  const [batchBuilderError, setBatchBuilderError] = useState<string | null>(null);
-  const [batchCreating, setBatchCreating] = useState(false);
+  const quoteWizard = useModalMount();
   const [customers, setCustomers] = useState<QuotePartyOption[]>(EMPTY_PARTY_OPTIONS);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
@@ -588,7 +572,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [currency, setCurrency] = useState("UAH");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const creatingRef = useRef(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [viewMode, setViewMode] = useState<"table" | "kanban">(() => initialViewMode);
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
@@ -610,8 +593,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
   const [sortBy, setSortBy] = useState<"date" | "number" | null>(() => restoredFilters?.sortBy ?? "date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => restoredFilters?.sortOrder ?? "desc");
-  const [quickFilter, setQuickFilter] = useState<"all" | "new" | "estimated">(
-    () => restoredFilters?.quickFilter ?? "all"
+  const [quickFilter, setQuickFilter] = useState<"all" | "estimated">(
+    // Збережений фільтр «Нові» зі старих вкладок звужував список до статусу,
+    // якого більше немає, — тому все, крім «Пораховано», падає в «Усі».
+    () => (restoredFilters?.quickFilter === "estimated" ? "estimated" : "all")
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -1169,7 +1154,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [currentUserId, teamId]);
 
   useEffect(() => {
-    if (!createOpen && !editDialogOpen && !batchBuilderOpen) return;
+    if (!createOpen && !editDialogOpen) return;
     const id = window.setTimeout(async () => {
       setCustomersLoading(true);
       try {
@@ -1181,10 +1166,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }
     }, 250);
     return () => window.clearTimeout(id);
-  }, [batchBuilderOpen, customerSearch, createOpen, editDialogOpen, teamId]);
+  }, [customerSearch, createOpen, editDialogOpen, teamId]);
 
   useEffect(() => {
-    if ((!createOpen && !editDialogOpen && !batchBuilderOpen) || !teamId) return;
+    if ((!createOpen && !editDialogOpen) || !teamId) return;
     let cancelled = false;
 
     const loadCatalog = async () => {
@@ -1357,7 +1342,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [batchBuilderOpen, createOpen, editDialogOpen, teamId]);
+  }, [createOpen, editDialogOpen, teamId]);
 
   const loadQuotes = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     if (!teamId) return;
@@ -2165,19 +2150,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     [ensureImportedCatalogMethodIds, importCatalogImageFromUrl, teamId]
   );
 
-  const openBatchBuilder = useCallback(() => {
-    // Спершу — саме вікно, без жодного стану сторінки: інакше клік тягне за
-    // собою перемальовку списку (REQ-75, +100 мс на 100 рядків).
-    batchBuilder.open();
-    // Решта — підготовка ДАНИХ сторінки, а не того, що людина зараз побачить.
-    // У transition, щоб React нарізав її й не з'їв анімацію відкриття.
-    startTransition(() => {
-      setBatchBuilderError(null);
-      setCustomerSearch("");
-      setCustomers(EMPTY_PARTY_OPTIONS);
-      setAttachmentsError(null);
-    });
-  }, [batchBuilder]);
 
   // Поліграфія й «інше» ведуть просто в нинішній білдер; мерч отримає розвилку
   // «руками / з ексельки» окремим кроком (REQ-134#p2).
@@ -2196,536 +2168,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
-  const handleBatchBuilderSubmit = async (data: QuoteBatchBuilderFormData) => {
-    if (creatingRef.current) return;
-    creatingRef.current = true;
-    setBatchCreating(true);
-    setBatchBuilderError(null);
-
-    const createdQuoteIds: string[] = [];
-    let completed = false;
-
-    try {
-      if (!teamId) {
-        throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
-      }
-      if (data.products.length === 0) {
-        throw new Error("Додайте хоча б один товар.");
-      }
-
-      // Спільне правило з білдером — features/quotes/quoteBatchGrouping.
-      // Друга копія цього коду тут розсипала кожну позицію «Інше» в окремий
-      // прорахунок, і білдер на кнопці рахував так само.
-      const productGroups = groupProductsForQuotes(data.products);
-
-      // Білдер блокує цей випадок ще до збереження, але правило лишається й
-      // тут: сторінка не має покладатись на те, що вікно все перевірило.
-      if (productGroups.length > 1 && data.customerType !== "customer") {
-        throw new Error("КП з кількох прорахунків зараз можна створити тільки для замовника, не ліда.");
-      }
-
-      const selectedParty = customers.find(
-        (item) => item.id === data.customerId && (item.entityType ?? "customer") === data.customerType
-      );
-      const customerIdForQuote = data.customerType === "lead" ? null : data.customerId;
-      const customerName =
-        (selectedParty?.name || selectedParty?.legal_name || "").trim() ||
-        (data.customerType === "lead" ? "Лід" : "Замовник");
-      const customerLogoUrl = selectedParty?.logo_url ?? null;
-      const quoteTitleFromLead = data.customerType === "lead" ? customerName : null;
-      const managerRate = await getManagerRateForUser(data.managerId?.trim() || userId);
-      const isUuid = (value?: string | null) =>
-        typeof value === "string" &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-          value
-        );
-      const omitPayloadKeys = (row: Record<string, unknown>, keys: string[]) => {
-        const next = { ...row };
-        keys.forEach((key) => {
-          delete next[key];
-        });
-        return next;
-      };
-
-      const createdProductLabels: string[] = [];
-      const attachmentWarnings: string[] = [];
-      let createdDesignTaskCount = 0;
-
-      const getProductIndex = (productId: string) =>
-        Math.max(0, data.products.findIndex((item) => item.id === productId)) + 1;
-
-      const getDeliveryLabel = (product: QuoteBatchBuilderFormData["products"][number]) => {
-        if (!product.deliveryType) return null;
-        const deliveryName =
-          product.deliveryType === "nova_poshta"
-            ? "Нова пошта"
-            : product.deliveryType === "pickup"
-              ? "Самовивіз"
-              : product.deliveryType === "taxi"
-                ? "Таксі / Uklon"
-                : product.deliveryType === "cargo"
-                  ? "Вантажне перевезення"
-                  : product.deliveryType;
-        const details = product.deliveryDetails;
-        const detailParts = details
-          ? [
-              details.region,
-              details.city,
-              details.address,
-              details.street,
-              details.npDeliveryType,
-              details.payer ? `платить: ${details.payer}` : null,
-            ].filter((value): value is string => Boolean(value?.trim()))
-          : [];
-        return [deliveryName, detailParts.join(", ")].filter(Boolean).join(" · ");
-      };
-
-      const getGroupDelivery = (products: QuoteBatchBuilderFormData["products"]) => {
-        const deliveryProducts = products.filter((product) => product.deliveryType);
-        if (deliveryProducts.length !== products.length || deliveryProducts.length === 0) {
-          return { deliveryType: null, deliveryDetails: null };
-        }
-        const [first] = deliveryProducts;
-        const firstKey = JSON.stringify({
-          deliveryType: first.deliveryType,
-          deliveryDetails: first.deliveryDetails ?? null,
-        });
-        const allSame = deliveryProducts.every(
-          (product) =>
-            JSON.stringify({
-              deliveryType: product.deliveryType,
-              deliveryDetails: product.deliveryDetails ?? null,
-            }) === firstKey
-        );
-        return allSame
-          ? { deliveryType: first.deliveryType, deliveryDetails: first.deliveryDetails ?? null }
-          : { deliveryType: null, deliveryDetails: null };
-      };
-
-      const getPackageItemName = (packageConfig: NonNullable<QuoteBatchBuilderFormData["products"][number]["printPackageConfig"]>) => {
-        if (packageConfig.productKind === "notebook") {
-          return `Блокнот${packageConfig.notebookFormat === "other" ? "" : ` ${packageConfig.notebookFormat.toUpperCase()}`}`;
-        }
-        if (packageConfig.productKind === "note_blocks") {
-          return `Блоки для записів${
-            packageConfig.noteBlockFormat && packageConfig.noteBlockFormat !== "other"
-              ? ` ${packageConfig.noteBlockFormat}`
-              : ""
-          }`;
-        }
-        if (packageConfig.productKind === "certificates") {
-          return `Сертифікат${
-            packageConfig.certificateFormatType === "standard" && packageConfig.certificateStandardFormat
-              ? ` ${packageConfig.certificateStandardFormat.toUpperCase()}`
-              : packageConfig.certificateFormatType === "custom" &&
-                  packageConfig.certificateWidthMm &&
-                  packageConfig.certificateHeightMm
-                ? ` ${packageConfig.certificateWidthMm}×${packageConfig.certificateHeightMm} мм`
-                : ""
-          }`;
-        }
-        return `Пакет${
-          packageConfig.packageType === "ready"
-            ? " готовий"
-            : packageConfig.widthMm && packageConfig.heightMm && packageConfig.lengthMm
-              ? ` ${packageConfig.widthMm}×${packageConfig.heightMm}×${packageConfig.lengthMm} мм`
-              : ""
-        }`;
-      };
-
-      for (const group of productGroups) {
-        const groupDelivery = getGroupDelivery(group.products);
-        const groupNotes = group.products
-          .map((product) => {
-            const type = catalogTypes.find((item) => item.id === product.categoryId) ?? null;
-            const kind = type?.kinds.find((item) => item.id === product.kindId) ?? null;
-            const model = kind?.models.find((item) => item.id === product.modelId) ?? null;
-            const label = model?.name ?? `Товар ${getProductIndex(product.id)}`;
-            const lines = [
-              product.managerNote.trim() ? product.managerNote.trim() : null,
-              getDeliveryLabel(product) ? `Логістика: ${getDeliveryLabel(product)}` : null,
-            ].filter(Boolean);
-            return lines.length > 0 ? `${label}: ${lines.join("\n")}` : null;
-          })
-          .filter((value): value is string => Boolean(value));
-        const quoteComment = [data.comment, ...groupNotes].filter((value) => value.trim()).join("\n\n") || null;
-        const designBriefForQuote =
-          group.products
-            .map((product) => product.designBrief || product.managerNote)
-            .filter((value) => value.trim())
-            .join("\n\n") ||
-          data.comment ||
-          null;
-        const created = await createQuote({
-          teamId,
-          customerId: customerIdForQuote,
-          customerName,
-          customerLogoUrl,
-          title: quoteTitleFromLead,
-          quoteType: group.quoteType,
-          dealType: data.dealType,
-          deliveryType: groupDelivery.deliveryType,
-          deliveryDetails: groupDelivery.deliveryDetails,
-          comment: quoteComment,
-          designBrief: designBriefForQuote,
-          notes: data.notes?.trim() || null,
-          currency: data.currency,
-          assignedTo: data.managerId || null,
-          deadlineAt: data.deadlineAt,
-          deadlineNote: data.deadlineNote || null,
-        });
-
-        if (!created?.id) {
-          throw new Error("Не вдалося створити прорахунок.");
-        }
-        createdQuoteIds.push(created.id);
-
-        const designProducts: Array<{
-          itemName: string;
-          itemId: string;
-          product: QuoteBatchBuilderFormData["products"][number];
-          methodsCount: number;
-        }> = [];
-
-        for (const [groupProductIndex, product] of group.products.entries()) {
-          const type = catalogTypes.find((item) => item.id === product.categoryId) ?? null;
-          const kind = type?.kinds.find((item) => item.id === product.kindId) ?? null;
-          const model = kind?.models.find((item) => item.id === product.modelId) ?? null;
-          const productIndex = getProductIndex(product.id);
-          const productConfiguratorPreset =
-            product.productConfiguratorPreset ?? model?.metadata?.configuratorPreset ?? null;
-          const modelSku = model?.metadata?.sku?.trim() || null;
-          const productVariant = product.catalogVariant ?? null;
-          const productSku = productVariant?.sku?.trim() || modelSku;
-          const isPrintPackageQuote = product.quoteType === "print" && Boolean(productConfiguratorPreset);
-          const packageConfig =
-            isPrintPackageQuote && product.printPackageConfig && productConfiguratorPreset
-              ? {
-                  ...product.printPackageConfig,
-                  productKind:
-                    product.printPackageConfig.productKind || getProductKindFromPreset(productConfiguratorPreset),
-                }
-              : null;
-          const primaryRunQuantity = product.runs[0]?.quantity ?? 0;
-
-          if ((!model && !isPrintPackageQuote) || primaryRunQuantity <= 0) {
-            throw new Error(`Товар ${productIndex}: оберіть модель і додайте тираж.`);
-          }
-
-          const packageItemDescription =
-            packageConfig && isPrintPackageQuote
-              ? formatPrintProductSummary(packageConfig).join(" • ")
-              : null;
-          const packageItemMetadata: QuoteItemMetadata | null =
-            isPrintPackageQuote && packageConfig && productConfiguratorPreset
-              ? {
-                  configuratorPreset: productConfiguratorPreset,
-                  printProduct: {
-                    ...packageConfig,
-                    productKind:
-                      packageConfig.productKind || getProductKindFromPreset(productConfiguratorPreset),
-                  },
-                }
-              : null;
-          // Описовий вид: значення полів кладемо під власний ключ, щоб читач
-          // старого формату їх не розбирав, а сам вид лишався звʼязаним із моделлю.
-          const specPreset = getPrintSpecPreset(model?.metadata?.specPreset ?? null);
-          const specValues =
-            specPreset && product.printSpecValues
-              ? parsePrintSpecValues(specPreset, product.printSpecValues)
-              : null;
-          const specItemMetadata =
-            specPreset && specValues && isPrintSpecFilled(specPreset, specValues)
-              ? { printSpec: { presetKey: specPreset.key, values: specValues } }
-              : null;
-          const specItemDescription =
-            specPreset && specValues && isPrintSpecFilled(specPreset, specValues)
-              ? formatPrintSpecSummary(specPreset, specValues).join(" • ")
-              : null;
-
-          const itemMetadata = {
-            ...(packageItemMetadata ?? {}),
-            ...(specItemMetadata ?? {}),
-            ...(product.deliveryType
-              ? {
-                  delivery: {
-                    type: product.deliveryType,
-                    details: product.deliveryDetails ?? null,
-                  },
-                }
-              : {}),
-            ...(productSku ? { sku: productSku } : {}),
-            ...(productVariant ? { catalogVariant: productVariant } : {}),
-          } as QuoteItemMetadata & {
-            delivery?: { type: string; details: Record<string, unknown> | null };
-          };
-          const packageItemName = packageConfig ? getPackageItemName(packageConfig) : null;
-          const itemName = packageItemName ?? model?.name ?? "Позиція";
-          createdProductLabels.push(itemName);
-
-          const methodsPayload =
-            !isPrintPackageQuote && product.printApplications.length > 0
-              ? product.printApplications.map((app) => ({
-                  method_id: isUuid(app.method) ? app.method : null,
-                  count: 1,
-                  print_position_id: isUuid(app.position) ? app.position : null,
-                  print_width_mm: app.width.trim() ? Number(app.width) : null,
-                  print_height_mm: app.height.trim() ? Number(app.height) : null,
-                }))
-              : null;
-          const primaryPrint = methodsPayload?.[0] ?? null;
-          const basePrice = isPrintPackageQuote ? 0 : model?.price ?? 0;
-          const itemId = crypto.randomUUID();
-          const itemPayload = {
-            id: itemId,
-            team_id: teamId,
-            quote_id: created.id,
-            position: groupProductIndex + 1,
-            name: itemName,
-            description: packageItemDescription ?? specItemDescription,
-            qty: primaryRunQuantity,
-            unit_price: basePrice,
-            line_total: primaryRunQuantity * basePrice,
-            catalog_type_id: product.categoryId || null,
-            catalog_kind_id: product.kindId || null,
-            catalog_model_id: product.modelId || null,
-            print_position_id: primaryPrint?.print_position_id ?? null,
-            print_width_mm: primaryPrint?.print_width_mm ?? null,
-            print_height_mm: primaryPrint?.print_height_mm ?? null,
-            methods: methodsPayload,
-            metadata: Object.keys(itemMetadata).length > 0 ? (itemMetadata as Json) : null,
-            unit: normalizeUnitLabel(product.quantityUnit),
-          };
-
-          let { error: itemError } = await supabase.schema("tosho").from("quote_items").insert(itemPayload);
-          if (
-            itemError &&
-            /column|schema cache|could not find/i.test(itemError.message ?? "") &&
-            /metadata/i.test(itemError.message ?? "")
-          ) {
-            const fallbackItemPayload = omitPayloadKeys(itemPayload, ["metadata"]) as Database["tosho"]["Tables"]["quote_items"]["Insert"];
-            ({ error: itemError } = await supabase.schema("tosho").from("quote_items").insert(fallbackItemPayload));
-          }
-          if (
-            itemError &&
-            /column|schema cache|could not find/i.test(itemError.message ?? "") &&
-            /(methods|print_position_id|print_width_mm|print_height_mm)/i.test(itemError.message ?? "")
-          ) {
-            const fallbackItemPayload = omitPayloadKeys(itemPayload, [
-              "methods",
-              "metadata",
-              "print_position_id",
-              "print_width_mm",
-              "print_height_mm",
-            ]) as Database["tosho"]["Tables"]["quote_items"]["Insert"];
-            ({ error: itemError } = await supabase.schema("tosho").from("quote_items").insert(fallbackItemPayload));
-          }
-          if (itemError) throw itemError;
-
-          // Накрутку СТАВИМО ЯВНО, а не лишаємо колонці (REQ-182).
-          //
-          // Доти рядок ішов без markup_rate, і база підставляла свій default 40.
-          // На поліграфії це давало картку, у якої підставлено 40 при дні 53,8 —
-          // тобто новий прорахунок одразу народжувався «нижче дна» й просив
-          // погодження на порожньому місці. Помічено Артемом на проді 01.09.2026
-          // на прорахунку «Поліграфія брошюра».
-          //
-          // На мерчі значення те саме, що й було (шкала туди не поширюється), тож
-          // для нього нічого не змінюється.
-          const runMarkupRate = defaultMarkupRateFor(
-            resolveQuoteDealType(group.quoteType, data.dealType)
-          );
-          const runRows = product.runs.map((run) => ({
-            id: crypto.randomUUID(),
-            quote_id: created.id,
-            quote_item_id: itemId,
-            quantity: run.quantity,
-            unit_price_model: 0,
-            unit_price_print: 0,
-            logistics_cost: 0,
-            desired_manager_income: 0,
-            markup_rate: runMarkupRate,
-            manager_rate: managerRate,
-            fixed_cost_rate: companyRates.fixedCostRate,
-            vat_rate: companyRates.vatRate,
-            team_id: teamId,
-          }));
-
-          let runRowsToInsert: Array<Record<string, unknown>> = runRows;
-          let { error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert as Database["tosho"]["Tables"]["quote_item_runs"]["Insert"][]);
-          if (
-            runsError &&
-            /column/i.test(runsError.message ?? "") &&
-            /team_id/i.test(runsError.message ?? "")
-          ) {
-            runRowsToInsert = runRowsToInsert.map((row) => omitPayloadKeys(row, ["team_id"]));
-            ({ error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert as Database["tosho"]["Tables"]["quote_item_runs"]["Insert"][]));
-          }
-          if (
-            runsError &&
-            /column/i.test(runsError.message ?? "") &&
-            /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(runsError.message ?? "")
-          ) {
-            runRowsToInsert = runRowsToInsert.map((row) =>
-              omitPayloadKeys(row, [
-                "desired_manager_income",
-                "manager_rate",
-                "fixed_cost_rate",
-                "vat_rate",
-              ])
-            );
-            ({ error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert as Database["tosho"]["Tables"]["quote_item_runs"]["Insert"][]));
-          }
-          if (runsError) throw runsError;
-
-          // Два незалежні набори з різними адресатами: файли прорахунку
-          // лишаються в межах прорахунку, дизайнерські вмикають has_files
-          // і показуються в дизайн-задачі.
-          if (product.projectFiles.length > 0) {
-            try {
-              await uploadFilesForQuote(created.id, product.projectFiles, "project");
-            } catch (attachmentError: unknown) {
-              attachmentWarnings.push(`${itemName}: ${getErrorMessage(attachmentError, "файли не завантажено")}`);
-            }
-          }
-
-          if (product.files.length > 0) {
-            try {
-              await uploadFilesForQuote(created.id, product.files, "design");
-            } catch (attachmentError: unknown) {
-              attachmentWarnings.push(`${itemName}: ${getErrorMessage(attachmentError, "файли не завантажено")}`);
-            }
-          }
-
-          if (product.createDesignTask) {
-            designProducts.push({
-              itemName,
-              itemId,
-              product,
-              methodsCount: isPrintPackageQuote ? 1 : product.printApplications.length,
-            });
-          }
-        }
-
-        // Задача на КОЖНУ позначену позицію, а не одна злита на всі. Раніше тут
-        // склеювались назви («Модель A, Модель B»), сумувались нанесення, а тип
-        // і виконавець бралися від першої позиції — тобто інтерфейс обіцяв
-        // задачу на кожну позицію, а видавав одну.
-        for (const designProduct of designProducts) {
-          const designTaskType = designProduct.product.designTaskType;
-          if (!designTaskType) {
-            throw new Error(`${designProduct.itemName}: оберіть тип дизайнерської задачі.`);
-          }
-          const brief = designProduct.product.designBrief || designProduct.product.managerNote;
-          const designTaskId = await createDesignTaskForQuote({
-            quoteId: created.id,
-            quoteType: group.quoteType,
-            modelName: designProduct.itemName,
-            methodsCount: designProduct.methodsCount,
-            designBrief: brief.trim() || null,
-            designDeadline: data.deadlineAt,
-            assigneeUserId: designProduct.product.designAssigneeId,
-            collaboratorUserIds: designProduct.product.designCollaboratorIds.filter(
-              (userId) => userId && userId !== designProduct.product.designAssigneeId
-            ),
-            designTaskType,
-            hasFiles: designProduct.product.files.length > 0,
-            quoteItemId: designProduct.itemId,
-            quoteItemTitle: designProduct.itemName,
-          });
-          if (designTaskId) createdDesignTaskCount += 1;
-        }
-      }
-
-      let createdSetId: string | null = null;
-      if (createdQuoteIds.length > 1 && data.combineIntoSet) {
-        const createdSet = await createQuoteSet({
-          teamId,
-          quoteIds: createdQuoteIds,
-          name: `КП ${customerName} ${new Date().toLocaleDateString("uk-UA")}`,
-          kind: "kp",
-        });
-        createdSetId = createdSet.id;
-      }
-
-      completed = true;
-      batchBuilder.close();
-      setBatchBuilderError(null);
-      setSelectedIds(new Set());
-
-      /**
-       * Вікно закривається, ЩОЙНО прорахунок є в базі — а не коли доробить усе
-       * інше.
-       *
-       * Було навпаки: спершу сповіщення керівництву (виклик Netlify-функції,
-       * тобто ще й можливий холодний старт), потім повне перечитування дошки —
-       * і лише тоді вікно зникало. Людина тим часом дивилась на завмерлу кнопку
-       * і не розуміла, чи взагалі щось відбувається. Скарга власника 20.08.2026:
-       * «зависає при створенні».
-       *
-       * Обидві дії нікому не потрібні СИНХРОННО: сповіщення адресоване не тому,
-       * хто натиснув, а дошку ми або перечитаємо у фоні, або взагалі покинемо —
-       * нижче стоїть перехід у картку створеного прорахунку.
-       */
-      void notifyQuotesCreated({
-        quoteIds: createdQuoteIds,
-        actorUserId: currentUserId ?? null,
-        actorName: currentUserManagerLabel,
-        customerName,
-      }).catch((notifyError) => {
-        console.warn("Failed to notify leadership about new quotes", notifyError);
-      });
-      void Promise.all([loadQuotes(), loadQuoteSets()]);
-
-      if (createdSetId) {
-        setContentView("sets");
-        toast.success("КП створено", {
-          description: `${pluralUk(createdQuoteIds.length, "прорахунок", "прорахунки", "прорахунків")} · ${customerName}`,
-        });
-      } else if (createdQuoteIds.length > 1) {
-        // Кілька прорахунків без КП: у картку першого не провалюємось, бо так
-        // решта просто зникне з очей. Лишаємось на дошці, де видно всі.
-        toast.success(
-          `Створено ${pluralUk(createdQuoteIds.length, "прорахунок", "прорахунки", "прорахунків")}`,
-          { description: `${customerName} · без обʼєднання в КП` }
-        );
-      } else {
-        const quoteId = createdQuoteIds[0];
-        toast.success("Прорахунок створено", {
-          description: [
-            customerName,
-            createdProductLabels[0],
-            createdDesignTaskCount ? "дизайн-задача створена" : null,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-          action: quoteId
-            ? {
-                label: "Відкрити",
-                onClick: () => navigate(`/orders/estimates/${quoteId}`),
-              }
-            : undefined,
-        });
-        if (quoteId) navigate(`/orders/estimates/${quoteId}`);
-      }
-
-      if (attachmentWarnings.length > 0) {
-        toast.error("Не всі файли завантажено", {
-          description: attachmentWarnings.slice(0, 2).join("\n"),
-        });
-      }
-    } catch (e: unknown) {
-      if (!completed && createdQuoteIds.length > 0) {
-        await Promise.allSettled(createdQuoteIds.map((quoteId) => deleteQuote(quoteId, teamId)));
-      }
-      const message = getErrorMessage(e, "Не вдалося створити прорахунок.");
-      setBatchBuilderError(message);
-      toast.error("Помилка створення", { description: message });
-    } finally {
-      creatingRef.current = false;
-      setBatchCreating(false);
-    }
-  };
 
   const validateStep1 = () => {
     setCreateError(null);
@@ -5010,7 +4452,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         mobileFilterCount={mobileFilterCount}
         mobileViewSwitch={<EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />}
         mobilePrimary={
-          <Button onClick={openBatchBuilder} size="icon" aria-label="Новий прорахунок" className="h-11 w-11 shrink-0">
+          <Button onClick={quoteWizard.open} size="icon" aria-label="Новий прорахунок" className="h-11 w-11 shrink-0">
             <PlusIcon className="h-5 w-5" />
           </Button>
         }
@@ -5039,15 +4481,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         topRight={
           <>
             <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
-            {/* Полігон нового способу створення (REQ-134): стоїть ПОРУЧ, а не
-                замість, — робочий шлях менеджерів не чіпаємо, поки візард не визріє. */}
-            <TestQuoteWizardButton
-              teamId={teamId}
-              currentUserId={currentUserId}
-              onCreated={(quoteId) => navigate(`/orders/estimates/${quoteId}`)}
-              className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
-            />
-            <Button onClick={openBatchBuilder} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
+            <Button onClick={quoteWizard.open} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
               <PlusIcon className="h-4 w-4" />
               Новий прорахунок
             </Button>
@@ -5206,15 +4640,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     getManagerAvatar,
     getManagerLabel,
     hasActiveFilters,
-    navigate,
-    teamId,
+    quoteWizard.open,
     isManagerInactive,
     isManagerUser,
     loading,
     managerFilter,
     managerFilterOptions,
     mobileFilterCount,
-    openBatchBuilder,
     quoteListMode,
     quoteSetKindFilter,
     quoteSetKpCount,
@@ -5765,7 +5197,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для замовника"}
               </p>
               {!search && (
-                <Button onClick={openBatchBuilder} variant="outline" className="gap-2">
+                <Button onClick={quoteWizard.open} variant="outline" className="gap-2">
                   <PlusIcon className="h-4 w-4" />
                   Створити прорахунок
                 </Button>
@@ -6480,7 +5912,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для замовника"}
               </p>
               {!search && (
-                <Button onClick={openBatchBuilder} variant="outline" className="gap-2">
+                <Button onClick={quoteWizard.open} variant="outline" className="gap-2">
                   <PlusIcon className="h-4 w-4" />
                   Створити прорахунок
                 </Button>
@@ -6584,42 +6016,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         </div>
       )}
 
-      <ModalMount ref={batchBuilder.ref} onOpenChange={setBatchBuilderOpen}>
-        {(batchOpen, setBatchOpen) => (
-      <QuoteBatchBuilderDialog
-        open={batchOpen}
+      <QuoteWizardMount
+        mount={quoteWizard}
         teamId={teamId}
-        onOpenChange={(open) => {
-          if (batchCreating) return;
-          setBatchOpen(open);
-          if (!open) {
-            // БЕЗ transition: на закритті ніхто не чекає кадру, а окремий
-            // рендер, що прилітає посеред анімації зникання, видно як блимання.
-            setBatchBuilderError(null);
-            setCustomerSearch("");
-          }
-        }}
-        onSubmit={handleBatchBuilderSubmit}
-        submitting={batchCreating}
-        submitError={batchBuilderError}
-        customers={customers}
-        customersLoading={customersLoading}
-        onCustomerSearch={handleCustomerSearchChange}
-        onCreateCustomer={(name) => {
-          customerLeadCreate.openCustomerCreate(name || "");
-        }}
-        onCreateLead={(name) => {
-          customerLeadCreate.openLeadCreate(name || "");
-        }}
-        teamMembers={teamMembers}
-        catalogTypes={catalogTypes}
-        onCreateCatalogModel={handleCreateCatalogModelFromQuote}
         currentUserId={currentUserId}
-        restrictPartySelectionToOwn={isManagerUser}
-        currentManagerLabel={currentUserManagerLabel}
+        onCreated={(quoteId) => navigate(`/orders/estimates/${quoteId}`)}
       />
-        )}
-      </ModalMount>
 
       {/* Old multi-step form removed - using NewQuoteDialog instead */}
 

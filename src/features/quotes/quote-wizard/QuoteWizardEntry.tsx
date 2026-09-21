@@ -1,8 +1,4 @@
 import * as React from "react";
-import { FlaskConical } from "@/components/icons/appIcons";
-
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
 import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import { getManagerRateForUser } from "@/lib/managerRate";
@@ -20,35 +16,37 @@ import {
 import type { QuoteKindValue } from "./quoteWizardKinds";
 
 /**
- * Кнопка «Тестовий прорахунок» і все, що стоїть за нею (REQ-134 → REQ-237).
+ * Вікно створення прорахунку — ЄДИНИЙ вхід (REQ-134 → REQ-237 → REQ-299).
  *
- * ЩО ВОНА ЛІКУЄ. Імпорт ексельки поїхав кнопкою ВСЕРЕДИНІ вже створеного
+ * ЩО ВОНО ЛІКУЄ. Імпорт ексельки колись жив кнопкою ВСЕРЕДИНІ вже створеного
  * прорахунку — тобто способом його доробити. Задум був інший: імпорт має бути
  * ВХОДОМ, одним зі способів прорахунок створити. Тепер входів три — руками,
  * з файлу, за посиланням — і всі на одному екрані.
  *
- * ЧОМУ ОКРЕМА КНОПКА З БЕЙДЖЕМ. Полігон: робочий шлях менеджерів не чіпаємо,
- * поки візард не визріє. «beta» на кнопці каже це прямо, щоб ніхто не шукав
- * тут те, чого в робочому шляху немає.
+ * ЧОМУ ТЕПЕР БЕЗ ВЛАСНОЇ КНОПКИ. Півтора місяця воно стояло ПОРУЧ із робочим
+ * шляхом, кнопкою «Тестовий прорахунок» із бейджем «beta», щоб не чіпати
+ * менеджерів, поки візард не визріє. 21.09.2026 візард став робочим шляхом:
+ * кнопки «Новий прорахунок» на сторінці прорахунків ведуть сюди, а пакетний
+ * білдер виходить з ужитку. Тож вікно більше не носить кнопку із собою —
+ * сторінка відкриває його сама, звідки їй треба (а таких місць чотири).
  *
- * ПОРЯДОК СТВОРЕННЯ — ГОЛОВНЕ ТУТ. Прорахунок з'являється в базі рівно тоді,
+ * ПОРЯДОК СТВОРЕННЯ — ГОЛОВНЕ ТУТ. Прорахунок зʼявляється в базі рівно тоді,
  * коли людина натиснула «Створити» під чернетками. До того моменту закрите
  * вікно не лишає по собі нічого.
  */
-
-export function TestQuoteWizardButton({
-  className,
+export function QuoteWizardMount({
+  mount,
   teamId,
   currentUserId,
   onCreated,
 }: {
-  className?: string;
+  /** Монтування вікна, яким володіє сторінка: вона ж його й відкриває. */
+  mount: ReturnType<typeof useModalMount>;
   teamId: string;
   currentUserId?: string | null;
   /** Прорахунок створено — сторінка вирішує, куди вести далі. */
   onCreated: (quoteId: string) => void;
 }) {
-  const wizard = useModalMount();
   const [header, setHeader] = React.useState<QuoteWizardHeaderValue>(() =>
     createEmptyQuoteWizardHeader(currentUserId ?? "")
   );
@@ -130,38 +128,28 @@ export function TestQuoteWizardButton({
   );
 
   return (
-    <>
-      <Button onClick={wizard.open} variant="outline" className={className}>
-        <FlaskConical className="h-4 w-4" />
-        Тестовий прорахунок
-        <Badge tone="accent" size="sm" pill className="ml-0.5 normal-case tracking-normal">
-          beta
-        </Badge>
-      </Button>
-
-      <ModalMount ref={wizard.ref} onOpenChange={handleOpenChange}>
-        {(open, setOpen) => (
-          <QuoteWizardDialog
-            open={open}
-            onOpenChange={setOpen}
-            teamId={teamId}
-            header={(nudgeSignal) => (
-              <QuoteWizardHeader
-                teamId={teamId}
-                currentUserId={currentUserId}
-                value={header}
-                onChange={setHeader}
-                nudgeSignal={nudgeSignal}
-                layout="column"
-              />
-            )}
-            headerIssue={headerIssue}
-            runDefaultsFor={runDefaultsFor}
-            onPrepareQuote={prepareQuote}
-            onCreated={onCreated}
+    <ModalMount ref={mount.ref} onOpenChange={handleOpenChange}>
+      {(open, setOpen) => (
+        <QuoteWizardDialog
+          open={open}
+          onOpenChange={setOpen}
+          teamId={teamId}
+          header={(nudgeSignal) => (
+            <QuoteWizardHeader
+              teamId={teamId}
+              currentUserId={currentUserId}
+              value={header}
+              onChange={setHeader}
+              nudgeSignal={nudgeSignal}
+              layout="column"
           />
-        )}
-      </ModalMount>
-    </>
+          )}
+          headerIssue={headerIssue}
+          runDefaultsFor={runDefaultsFor}
+          onPrepareQuote={prepareQuote}
+          onCreated={onCreated}
+          />
+      )}
+    </ModalMount>
   );
 }

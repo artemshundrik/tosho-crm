@@ -96,7 +96,7 @@ export type OverviewSource = {
   activityCount: number;
 };
 
-const ACTIVE_QUOTE_STATUSES = new Set(["new", "estimating", "estimated", "awaiting_approval"]);
+const ACTIVE_QUOTE_STATUSES = new Set(["estimating", "estimated", "awaiting_approval"]);
 const isActiveQuote = (status: string) => ACTIVE_QUOTE_STATUSES.has(status);
 const isActiveDesign = (status: string) => status !== "approved" && status !== "cancelled";
 
@@ -354,7 +354,7 @@ const SIGNALS: Signal[] = [
     lenses: ["sales", "general"],
     build: (source) =>
       freshQuotes(source)
-        .filter((quote) => quote.status === "new" || quote.status === "estimating")
+        .filter((quote) => quote.status === "estimating")
         .map((quote) => {
           const age = daysSince(quote.createdAt, source.now) ?? 0;
           return {
@@ -915,7 +915,7 @@ const statusSplit = (
     }))
     .filter((part) => part.weight > 0);
 
-const QUOTE_FUNNEL_ORDER = ["new", "estimating", "estimated", "awaiting_approval"];
+const QUOTE_FUNNEL_ORDER = ["estimating", "estimated", "awaiting_approval"];
 const DESIGN_FUNNEL_ORDER = ["new", "in_progress", "changes", "pm_review", "client_review"];
 
 function buildAside(source: OverviewSource): OverviewAsideCard[] {

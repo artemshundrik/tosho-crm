@@ -43,7 +43,7 @@ export type QuoteWizardHeaderValue = {
   partyType: "customer" | "lead";
   partyLogoUrl: string | null;
   managerId: string;
-  /** ISO-рядок або порожньо. Дедлайн необов'язковий — як і в білдері. */
+  /** ISO-рядок. Обовʼязковий із REQ-299 — див. firstMissingHeaderField. */
   deadlineAt: string;
   currency: string;
 };
@@ -68,18 +68,24 @@ export const createEmptyQuoteWizardHeader = (managerId: string): QuoteWizardHead
 export function getQuoteWizardHeaderIssue(value: QuoteWizardHeaderValue): string | null {
   if (!value.partyId) return "Оберіть замовника — прорахунок створюється на нього.";
   if (!value.managerId) return "Оберіть менеджера прорахунку.";
+  if (!value.deadlineAt) return "Оберіть дедлайн — прорахунок одразу йде в роботу.";
   return null;
 }
 
 /**
  * Перше незаповнене поле шапки — щоб «Створити» ВІДКРИВАЛО його, а не лаялось.
  *
- * Дедлайна тут немає навмисно (Артем, 09.09.2026): порожній дедлайн — робочий
- * стан прорахунку, а не пропуск, тож і питати про нього нема чого.
+ * ДЕДЛАЙН ТУТ ЗʼЯВИВСЯ 21.09.2026 (REQ-299), і це свідоме скасування
+ * попереднього рішення. Доти його не було навмисно: «порожній дедлайн —
+ * робочий стан прорахунку, а не пропуск» (Артем, 09.09.2026). Тоді це було
+ * правдою, бо прорахунок лежав у «Новому», і дедлайн доставляли, коли він
+ * ставав відомий. «Нового» більше немає — прорахунок народжується вже в
+ * роботі, тож і паузи, у яку дедлайн можна доставити, не лишилось.
  */
-function firstMissingHeaderField(value: QuoteWizardHeaderValue): "party" | "manager" | null {
+function firstMissingHeaderField(value: QuoteWizardHeaderValue): "party" | "manager" | "deadline" | null {
   if (!value.partyId) return "party";
   if (!value.managerId) return "manager";
+  if (!value.deadlineAt) return "deadline";
   return null;
 }
 
@@ -147,6 +153,7 @@ export function QuoteWizardHeader({
     const missing = promptRef.current;
     if (missing === "party") setPartyPickerOpen(true);
     else if (missing === "manager") setManagerPopoverOpen(true);
+    else if (missing === "deadline") setDeadlineOpen(true);
   }, [nudgeSignal]);
 
   // Пошук замовників — із тією ж паузою в 250 мс, що й у білдері: без неї

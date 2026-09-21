@@ -110,16 +110,19 @@ describe("скасоване поза дошкою", () => {
 describe("відсів колонок", () => {
   it("лишає порядок дошки й викидає виведені стани", () => {
     const columns = [
-      { id: "new" },
+      { id: "estimating" },
       { id: "cancelled" },
       { id: "approved" },
     ];
-    expect(onBoardColumns("quotes", columns, (column) => column.id)).toEqual([{ id: "new" }, { id: "approved" }]);
+    expect(onBoardColumns("quotes", columns, (column) => column.id)).toEqual([
+      { id: "estimating" },
+      { id: "approved" },
+    ]);
   });
 
   it("незнайомий стан на дошку не пробирається", () => {
-    const columns = [{ id: "new" }, { id: "totally_new_status" }];
-    expect(onBoardColumns("quotes", columns, (column) => column.id)).toEqual([{ id: "new" }]);
+    const columns = [{ id: "estimating" }, { id: "totally_new_status" }];
+    expect(onBoardColumns("quotes", columns, (column) => column.id)).toEqual([{ id: "estimating" }]);
   });
 });
 

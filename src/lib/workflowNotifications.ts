@@ -239,14 +239,6 @@ function isQuoteStatusRollback(fromStatus: string, toStatus: string): boolean {
 }
 
 function getQuoteStatusAlert(fromStatus: string, toStatus: string) {
-  if (fromStatus === "new" && toStatus === "estimating") {
-    return {
-      title: "Прорахунок взято в роботу",
-      body: (quoteRef: string) => `${quoteRef} переведено у статус «На прорахунку».`,
-      type: "info" as const,
-    };
-  }
-
   /*
    * ВІДКАТ — ПЕРЕД таблицею руху вперед, і саме в цьому суть виправлення
    * (REQ-287).
@@ -309,12 +301,9 @@ export async function notifyQuoteInitiatorOnStatusChange(params: {
   const alert = getQuoteStatusAlert(fromStatus, params.toStatus);
   if (!alert) return;
 
-  const { teamId, createdBy, assignedTo, userId, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
+  const { teamId, userId, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
   const recipients = new Set<string>();
-  if (fromStatus === "new" && params.toStatus === "estimating") {
-    if (createdBy) recipients.add(createdBy);
-    if (assignedTo) recipients.add(assignedTo);
-  } else if (userId) {
+  if (userId) {
     recipients.add(userId);
   }
   // СЕО чує і про затвердження, і про його скасування. Асиметрія тут була б
