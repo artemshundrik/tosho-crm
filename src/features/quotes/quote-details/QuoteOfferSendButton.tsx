@@ -1,4 +1,4 @@
-import { ChevronDown, FileDown, Send } from "@/components/icons/appIcons";
+import { ChevronDown, Download, FileDown, Printer, Send } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,13 +19,14 @@ import type { OfferFormat } from "./useQuoteOfferSend";
  * вікна. Без неї звичний шлях «швидко скинути PDF» щоразу проходив би через
  * форму; без форми надсилання лишалось би сліпим.
  *
- * У ШВИДКИХ ДІЯХ ЛИШЕ PDF. Excel і друк звідси прибрані (Артем, 21.09.2026):
- * вони нікуди не діваються, просто живуть у формі. PDF — те, що шлють щодня й
- * не глядячи; Excel і друк вибирають свідомо, а отже вже відкривають вікно.
- *
  * РОЗМІР — ЯК У КОНТРОЛА СТАТУСУ, що стоїть поруч: h-8 і rounded-lg. Своя
  * висота з `size="sm"` давала 30 px проти 32 і радіус 10 проти 8 — поруч це
  * читалось як недбалість.
+ *
+ * МІЖ ПОЛОВИНКАМИ НЕМАЄ РИСКИ. Вона там була, і на 32 px читалась як огріх:
+ * коротка вертикальна лінія з відступами зверху й знизу, яка не збігалась ні з
+ * рамкою, ні з підсвіткою стрілочки при наведенні. Половинки й так розділені —
+ * власним тлом стрілочки.
  *
  * ОКРЕМИМ ФАЙЛОМ — бо `QuoteDetailsPage` під ратчетом розміру, а це самостійний
  * вузол без власного стану.
@@ -49,7 +50,6 @@ export function QuoteOfferSendButton(props: {
             замовлення», підпис із двох слів з'їдав би рядок. */}
         <span className="truncate max-sm:sr-only">Надіслати пропозицію</span>
       </Button>
-      <span aria-hidden className="my-1.5 w-px bg-border" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -74,6 +74,14 @@ export function QuoteOfferSendButton(props: {
           <DropdownMenuItem onSelect={() => props.onQuick("pdf")}>
             <FileDown className="mr-2 h-4 w-4" />
             Одразу PDF
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => props.onQuick("xlsx")}>
+            <Download className="mr-2 h-4 w-4" />
+            Одразу Excel
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => props.onQuick("print")}>
+            <Printer className="mr-2 h-4 w-4" />
+            Друк
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
