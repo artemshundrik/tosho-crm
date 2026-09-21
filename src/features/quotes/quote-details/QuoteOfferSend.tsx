@@ -19,8 +19,20 @@ export function QuoteOfferSend(props: {
 }) {
   const offer = useQuoteOfferSend(props);
 
+  const sentLabel = offer.sentAt
+    ? new Date(offer.sentAt).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })
+    : null;
+
   return (
     <>
+      {/* Позначка живе поруч із кнопкою, а не в шапці сторінки: питання «а ми
+          йому вже відправляли?» виникає рівно в мить, коли рука тягнеться
+          надіслати ще раз. */}
+      {sentLabel ? (
+        <span className="rounded-md bg-success-soft px-2 py-1 text-2xs font-medium text-success-foreground">
+          Надіслано {sentLabel}
+        </span>
+      ) : null}
       <QuoteOfferSendButton
         disabled={!props.quote}
         onOpen={offer.openDialog}
@@ -42,6 +54,8 @@ export function QuoteOfferSend(props: {
         onIncludeVisualizationsChange={offer.setIncludeVisualizations}
         visualizationCount={offer.visualizationCount}
         itemsWithoutPhoto={offer.itemsWithoutPhoto}
+        markSent={offer.markSent}
+        onMarkSentChange={offer.setMarkSent}
         onSubmit={offer.submit}
       />
     </>

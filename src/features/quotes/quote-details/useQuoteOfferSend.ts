@@ -2,6 +2,9 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { buildCommercialDocument } from "@/features/quotes/commercial-document/build";
+import { supabase } from "@/lib/supabaseClient";
+
+import { logQuoteActivity } from "./queries";
 import {
   renderCommercialDocumentHtml,
   type CommercialDocument,
@@ -31,6 +34,7 @@ export type OfferFormat = "pdf" | "xlsx" | "print";
 
 export type QuoteOfferSource = {
   id: string;
+  sent_at?: string | null;
   number?: string | null;
   status?: string | null;
   created_at?: string | null;
@@ -67,6 +71,12 @@ export function useQuoteOfferSend(params: {
   const [format, setFormat] = useState<OfferFormat>("pdf");
   const [validUntil, setValidUntil] = useState(() => isoPlusDays(DEFAULT_VALID_DAYS));
   const [includeVisualizations, setIncludeVisualizations] = useState(true);
+  const [markSent, setMarkSent] = useState(true);
+  /**
+   * Дату тримаємо локально ПОВЕРХ прорахунку: сторінка перечитує картку не
+   * одразу, а менеджер має побачити відповідь на свою дію негайно.
+   */
+  const [sentAtLocal, setSentAtLocal] = useState<string | null>(null);
 
   const build = useCallback(async () => {
     if (!quote) return null;
@@ -156,11 +166,53 @@ export function useQuoteOfferSend(params: {
     printCommercialHtml(renderCommercialDocumentHtml(target));
   }, []);
 
+  /**
+   * Слід надсилання (REQ-296#p7): дата в `quotes.sent_at` і рядок у стрічці.
+   *
+   * ДО 21.09.2026 ЦЬОГО НЕ БУЛО НІДЕ: `sent_at` стояв порожнім у всіх 322
+   * прорахунках, а статус `sent` не вжили жодного разу. На питання «а що я йому
+   * відправляв минулого тижня» відповісти було нічим.
+   *
+   * СТАТУС НЕ ЧІПАЄМО. Конвеєр іде через «На погодженні», і додавати на дошку
+   * колонку заради факту надсилання не треба: це подія, а не етап.
+   */
+  const rememberSent = useCallback(
+    async (kind: OfferFormat) => {
+      if (!quote) return;
+      const stamp = new Date().toISOString();
+      const { error } = await supabase
+        .schema("tosho")
+        .from("quotes")
+        .update({ sent_at: stamp } as never)
+        .eq("id", quote.id);
+      if (error) {
+        toast.error("Файл збережено, але позначку не записано", { description: error.message });
+        return;
+      }
+      setSentAtLocal(stamp);
+      void logQuoteActivity(
+        {
+          teamId,
+          action: "надіслав пропозицію",
+          entityType: "quotes",
+          entityId: quote.id,
+          title: `Пропозиція ${kind === "xlsx" ? "в Excel" : kind === "pdf" ? "у PDF" : "на друк"}`,
+          href: `/orders/estimates/${quote.id}`,
+          metadata: { source: "quote_offer_send", format: kind },
+        },
+        "Не вдалося записати подію"
+      );
+    },
+    [quote, teamId]
+  );
+
   const submit = useCallback(() => {
     if (!decorated) return;
-    void emit(decorated, format);
+    void emit(decorated, format).then(() => {
+      if (markSent) return rememberSent(format);
+    });
     setOpen(false);
-  }, [decorated, emit, format]);
+  }, [decorated, emit, format, markSent, rememberSent]);
 
   /** Швидка дія зі стрілочки: без вікна, але зі станом у тості. */
   const runQuick = useCallback(
@@ -205,6 +257,9 @@ export function useQuoteOfferSend(params: {
     setValidUntil,
     includeVisualizations,
     setIncludeVisualizations,
+    markSent,
+    setMarkSent,
+    sentAt: sentAtLocal ?? quote?.sent_at ?? null,
     itemsWithoutPhoto,
     visualizationCount,
     submit,

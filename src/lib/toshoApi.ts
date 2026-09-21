@@ -66,6 +66,8 @@ export type QuoteListRow = {
   deadline_reminder_offset_minutes?: number | null;
   deadline_reminder_comment?: string | null;
   notes?: string | null;
+  /** Коли пропозицію востаннє віддали замовнику (REQ-296#p7). */
+  sent_at?: string | null;
 };
 
 export type QuoteSummaryRow = QuoteListRow;
@@ -1031,7 +1033,7 @@ export async function getQuoteSummary(quoteId: string) {
     const { data, error } = await supabase
       .schema("tosho")
       .from("quotes")
-      .select("id,team_id,customer_id,number,status,comment,design_brief,title,quote_type,print_type,delivery_type,delivery_details,currency,total,created_at,updated_at,created_by,customer_name,customer_logo_url,assigned_to,deadline_at,customer_deadline_at,design_deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment")
+      .select("id,team_id,customer_id,number,status,comment,design_brief,title,quote_type,print_type,delivery_type,delivery_details,currency,total,created_at,updated_at,created_by,customer_name,customer_logo_url,assigned_to,sent_at,deadline_at,customer_deadline_at,design_deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment")
       .eq("id", quoteId)
       .single();
     handleError(error);

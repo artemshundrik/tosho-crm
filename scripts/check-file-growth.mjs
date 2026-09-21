@@ -238,6 +238,11 @@ const GIANT_THRESHOLD = 2000;
  * і сам гейт у `saveRuns` — п'ять рядків рівно там, де відбувається запис, бо
  * питати треба на санітизованих рядках і скасовувати саме це збереження.
  *
+ * ПІДНЯТО 21.09.2026 для toshoApi (+2) — колонка `sent_at` у типі рядка
+ * прорахунку та в переліку колонок запиту (REQ-296#p7). Поле бере з бази
+ * дату, коли пропозицію востаннє віддали замовнику; тип рядка й запит, який
+ * його читає, живуть в одному файлі, тож виносити нема чого.
+ *
  * ПІДНЯТО 11.09.2026 для toshoApi (+2) — те саме ОДНЕ поле `is_approved` у типі
  * рядка позиції та в переліку колонок, що й нижче. Мапер рядка не існує окремо
  * від запиту, який його читає, тож виносити нема чого.
@@ -321,7 +326,7 @@ const CEILINGS = {
   // тестами; у сторінці лишився один рядок протягування метаданих позиції —
   // виносити тут більше нічого.
   "src/pages/QuoteDetailsPage.tsx": 6864,
-  "src/pages/QuotesPage.tsx": 7935,
+  "src/pages/QuotesPage.tsx": 7546,
   "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
@@ -337,7 +342,7 @@ const CEILINGS = {
   "src/components/design/DesignersDashboard.tsx": 2705,
   "src/features/orders/orderRecords.ts": 2614,
   // +1 (11.09.2026): те саме, що в QuoteDetailsPage — імпорт типу замість копії union.
-  "src/lib/toshoApi.ts": 2643,
+  "src/lib/toshoApi.ts": 2645,
   "src/pages/TeamPage.tsx": 2182,
   "src/pages/ProfilePage.tsx": 2054,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,

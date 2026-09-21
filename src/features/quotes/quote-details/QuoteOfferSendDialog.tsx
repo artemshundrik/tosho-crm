@@ -70,6 +70,8 @@ export function QuoteOfferSendDialog(props: {
   onIncludeVisualizationsChange: (value: boolean) => void;
   visualizationCount: number;
   itemsWithoutPhoto: number[];
+  markSent: boolean;
+  onMarkSentChange: (value: boolean) => void;
   onSubmit: () => void;
 }) {
   const activeFormat = FORMATS.find((item) => item.value === props.format) ?? FORMATS[0];
@@ -190,7 +192,18 @@ export function QuoteOfferSendDialog(props: {
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border/60 px-5 py-4">
+        <DialogFooter className="shrink-0 items-center border-t border-border/60 px-5 py-4 sm:justify-between">
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+            <Checkbox
+              checked={props.markSent}
+              onCheckedChange={(value) => props.onMarkSentChange(value === true)}
+            />
+            <span>
+              Позначити як надіслану{" "}
+              <span className="text-muted-foreground">— дата й формат підуть у стрічку</span>
+            </span>
+          </label>
+          <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={() => props.onOpenChange(false)}>
             Скасувати
           </Button>
@@ -198,6 +211,7 @@ export function QuoteOfferSendDialog(props: {
             <SubmitIcon className="mr-1.5 h-4 w-4" />
             {SUBMIT_LABEL[props.format]}
           </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
