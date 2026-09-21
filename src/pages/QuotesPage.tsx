@@ -217,17 +217,19 @@ import { getCurrentUserId } from "@/lib/currentUser";
 // яке більше не знає про набори. Сторінці лишились друк через iframe і розмітка
 // прев'ю — усе, що без React не існує.
 import {
-  buildCommercialExcelTsv,
   formatMoney,
   formatMoneyPlain,
-  getCommercialDocFilename,
   initialsFor,
   renderCommercialDocumentHtml,
   type CommercialDocument,
 } from "@/features/quotes/commercial-document/document";
 import { buildCommercialDocument as buildCommercialDocumentFromQuotes } from "@/features/quotes/commercial-document/build";
 import { CommercialPreviewSummary } from "@/features/quotes/commercial-document/CommercialPreviewSummary";
-import { downloadBlob, printCommercialHtml } from "@/features/quotes/commercial-document/outputs";
+import {
+  downloadCommercialPdf,
+  downloadCommercialWorkbook,
+  printCommercialHtml,
+} from "@/features/quotes/commercial-document/outputs";
 
 type QuotesPageProps = {
   teamId: string;
@@ -4786,20 +4788,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         return;
       }
       setQuoteSetCommercialDoc(doc);
-      const html = renderCommercialDocumentHtml(doc);
 
       if (format === "xls") {
-        const tsv = buildCommercialExcelTsv(doc);
-        const blob = new Blob([`\ufeff${tsv}`], {
-          type: "text/tab-separated-values;charset=utf-8",
-        });
-        downloadBlob(getCommercialDocFilename(doc, "xls"), blob);
-        toast.success("Excel файл згенеровано");
+        await downloadCommercialWorkbook(doc);
+        toast.success("Excel файл збережено");
         return;
       }
 
-      printCommercialHtml(html);
-      toast.message("У вікні друку оберіть «Зберегти як PDF»");
+      await downloadCommercialPdf(doc);
+      toast.success("PDF збережено");
     } catch (e: unknown) {
       toast.error(`Не вдалося експортувати ${format.toUpperCase()}`, { description: getErrorMessage(e, "") });
     } finally {

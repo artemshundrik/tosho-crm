@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildCommercialExcelTsv,
+  buildCommercialSheetRows,
+  COMMERCIAL_SHEET_COLUMNS,
   commercialSectionTotalRange,
   renderCommercialDocumentHtml,
   type CommercialDocument,
@@ -137,19 +138,33 @@ describe("вихід 2/3 — HTML для друку й PDF", () => {
   });
 });
 
-describe("вихід 4 — TSV для Excel", () => {
+const flat = (rows: ReturnType<typeof buildCommercialSheetRows>) =>
+  rows.map((row) => row.map((cell) => String(cell ?? "")).join("\t")).join("\n");
+
+describe("вихід 4 — аркуш для Excel", () => {
   it("рядків із підсумком немає — ні по прорахунку, ні загального", () => {
-    const tsv = norm(buildCommercialExcelTsv(doc([section(threeProducts)])));
-    expect(tsv).not.toContain("Загальна сума");
-    expect(tsv).not.toContain("Разом по прорахунку");
+    const sheet = flat(buildCommercialSheetRows(doc([section(threeProducts)])));
+    expect(sheet).not.toContain("Загальна сума");
+    expect(sheet).not.toContain("Разом по прорахунку");
   });
 
   it("кілька тиражів — ціни на місці, пояснення в кінці", () => {
-    const tsv = norm(buildCommercialExcelTsv(doc([section(withRunChoice)])));
-    expect(tsv).not.toContain("Загальна сума");
-    expect(tsv).toContain("10 000");
-    expect(tsv).toContain("18 000");
-    expect(tsv).toContain("взаємовиключні");
+    const sheet = flat(buildCommercialSheetRows(doc([section(withRunChoice)])));
+    expect(sheet).not.toContain("Загальна сума");
+    expect(sheet).toContain("взаємовиключні");
+  });
+
+  /**
+   * ЧИСЛО, А НЕ ТЕКСТ. Доки це був TSV, кількість і ціна їхали вже
+   * відформатованими («17 276,1» з нерозривним пробілом), і Excel приймав їх за
+   * текст: замовник не міг ні підсумувати, ні відсортувати стовпчик.
+   */
+  it("кількість, ціна й сума лишаються числами", () => {
+    const rows = buildCommercialSheetRows(doc([section(threeProducts)]));
+    const first = rows.find((row) => row[0] === 1) ?? [];
+    expect(typeof first[6]).toBe("number");
+    expect(typeof first[8]).toBe("number");
+    expect(first[9]).toBe(10_000);
   });
 
   /**
@@ -158,9 +173,7 @@ describe("вихід 4 — TSV для Excel", () => {
    * ОСТАННЬОЮ, тому її зникнення нічого не зсунуло.
    */
   it("колонки стоять на своїх місцях, «Сума» — десята", () => {
-    const tsv = buildCommercialExcelTsv(doc([section(threeProducts)]));
-    const header = norm(tsv).split("\r\n").find((line) => line.startsWith("№\t")) ?? "";
-    expect(header.split("\t")).toEqual([
+    expect([...COMMERCIAL_SHEET_COLUMNS]).toEqual([
       "№",
       "Товар",
       "Опис",
@@ -173,9 +186,10 @@ describe("вихід 4 — TSV для Excel", () => {
       "Сума",
       "Фото URL",
     ]);
-    const firstRow = norm(tsv).split("\r\n").find((line) => line.startsWith("1\t")) ?? "";
-    expect(firstRow.split("\t")).toHaveLength(11);
-    expect(firstRow.split("\t")[9]).toBe("10 000");
+    const rows = buildCommercialSheetRows(doc([section(threeProducts)]));
+    const first = rows.find((row) => row[0] === 1) ?? [];
+    expect(first).toHaveLength(11);
+    expect(first[9]).toBe(10_000);
   });
 });
 
@@ -189,7 +203,7 @@ describe("роль «варіант» не лишила слідів", () => {
     const withEverything = doc([section([...threeProducts, ...withRunChoice])]);
     for (const output of [
       renderCommercialDocumentHtml(withEverything),
-      buildCommercialExcelTsv(withEverything),
+      flat(buildCommercialSheetRows(withEverything)),
     ]) {
       expect(norm(output)).not.toContain("Варіант");
       expect(norm(output)).not.toContain("варіант");

@@ -1,7 +1,7 @@
 import { pdf } from "@react-pdf/renderer";
 import type { InvoiceDocParams } from "../documentHtml";
 import { InvoiceDocument } from "./InvoiceDocument";
-import { ensurePdfFonts } from "./pdfFonts";
+import { ensurePdfFonts } from "@/lib/pdfFonts";
 
 // Рендер рахунку у справжній (текстовий) PDF на клієнті → Blob.
 export async function renderInvoicePdfBlob(params: InvoiceDocParams): Promise<Blob> {

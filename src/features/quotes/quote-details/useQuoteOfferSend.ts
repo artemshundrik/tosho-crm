@@ -3,12 +3,14 @@ import { toast } from "sonner";
 
 import { buildCommercialDocument } from "@/features/quotes/commercial-document/build";
 import {
-  buildCommercialExcelTsv,
-  getCommercialDocFilename,
   renderCommercialDocumentHtml,
   type CommercialDocument,
 } from "@/features/quotes/commercial-document/document";
-import { downloadBlob, printCommercialHtml } from "@/features/quotes/commercial-document/outputs";
+import {
+  downloadCommercialPdf,
+  downloadCommercialWorkbook,
+  printCommercialHtml,
+} from "@/features/quotes/commercial-document/outputs";
 
 /**
  * «Надіслати пропозицію» з картки прорахунку (REQ-296#p2, #p3).
@@ -140,25 +142,23 @@ export function useQuoteOfferSend(params: {
       .finally(() => setBuilding(false));
   }, [build]);
 
-  const emit = useCallback((target: CommercialDocument, kind: OfferFormat) => {
+  const emit = useCallback(async (target: CommercialDocument, kind: OfferFormat) => {
     if (kind === "xlsx") {
-      const tsv = buildCommercialExcelTsv(target);
-      downloadBlob(
-        getCommercialDocFilename(target, "xls"),
-        new Blob([`﻿${tsv}`], { type: "text/tab-separated-values;charset=utf-8" })
-      );
+      await downloadCommercialWorkbook(target);
       toast.success("Файл для Excel збережено");
       return;
     }
-    printCommercialHtml(renderCommercialDocumentHtml(target));
     if (kind === "pdf") {
-      toast.message("У вікні друку оберіть «Зберегти як PDF»");
+      await downloadCommercialPdf(target);
+      toast.success("PDF збережено");
+      return;
     }
+    printCommercialHtml(renderCommercialDocumentHtml(target));
   }, []);
 
   const submit = useCallback(() => {
     if (!decorated) return;
-    emit(decorated, format);
+    void emit(decorated, format);
     setOpen(false);
   }, [decorated, emit, format]);
 
@@ -173,7 +173,7 @@ export function useQuoteOfferSend(params: {
           return;
         }
         toast.dismiss(progress);
-        emit(
+        await emit(
           {
             ...next,
             validUntil: formatValidUntil(validUntil) || undefined,

@@ -166,8 +166,6 @@ export const escapeHtml = (value: string) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-export const normalizeTextCell = (value: string) =>
-  value.replaceAll(/\s+/g, " ").replaceAll("\t", " ").trim();
 export const parseMethodsSummary = (methods: QuoteItemExportRow["methods"]) => {
   if (!Array.isArray(methods) || methods.length === 0) return "";
   const labels = methods
@@ -227,7 +225,10 @@ export const parsePlacementSummary = (
   return [fallbackPositionLabel, fallbackSize].filter(Boolean).join(" · ");
 };
 
-export const getCommercialDocFilename = (doc: CommercialDocument, extension: "xls" | "html") => {
+export const getCommercialDocFilename = (
+  doc: CommercialDocument,
+  extension: "xlsx" | "pdf" | "html"
+) => {
   const raw = `${doc.kindLabel}_${doc.customerName}_${doc.createdAt}`;
   const sanitized = raw
     .toLowerCase()
@@ -262,7 +263,7 @@ export const initialsFor = (name: string) => {
  * числа обидва свої, ми лише рахуємо різницю. Менше за 1 % не показуємо — такий
  * рядок нічого не додає, лише шумить.
  */
-const unitDiscountPercent = (runs: readonly CommercialRunRow[], index: number) => {
+export const unitDiscountPercent = (runs: readonly CommercialRunRow[], index: number) => {
   if (index === 0) return 0;
   const base = runs[0]?.unitPrice ?? 0;
   const current = runs[index]?.unitPrice ?? 0;
@@ -516,63 +517,83 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
 /**
  * Той самий документ таблицею — для тих, хто рахує в Excel.
  *
- * Рядків «Разом по прорахунку» й «Загальна сума» тут БІЛЬШЕ НЕМАЄ з тієї ж
- * причини, що й у друкованому документі: позиції — варіанти на вибір, і будь-яка
- * їх сума описує замовлення, якого ніхто не робив. Зведення замовник збере сам,
- * коли обере позиції.
+ * ЧИСЛА ЛИШАЮТЬСЯ ЧИСЛАМИ. До 21.09.2026 це був TSV, у якому кількість і ціна
+ * їхали вже відформатованими рядками («17 276,1» з нерозривним пробілом), тож
+ * в Excel вони ставали текстом: ні підсумувати, ні відсортувати. Тепер аркуш
+ * збирається значеннями, а вигляд лишається за Excel.
+ *
+ * ПОРЯДОК КОЛОНОК — це чужі шаблони й формули: вони рахують позиції зліва, і
+ * зсув «Суми» мовчки зіпсував би їх усі. Міняти його можна лише свідомо.
+ *
+ * Рядків «Разом по прорахунку» й «Загальна сума» тут НЕМАЄ з тієї ж причини,
+ * що й у друкованому документі: позиції — те, з чого замовник обирає, і будь-яка
+ * їх сума описує замовлення, якого ніхто не робив.
  */
-export const buildCommercialExcelTsv = (doc: CommercialDocument) => {
-  const lines: string[] = [];
-  lines.push(normalizeTextCell(doc.title));
-  lines.push(`Тип:\t${normalizeTextCell(doc.kindLabel)}`);
-  lines.push(`Замовник:\t${normalizeTextCell(doc.customerName)}`);
-  lines.push(`Номер:\t${normalizeTextCell(doc.sections.map((section) => section.quoteNumber).join(", "))}`);
-  lines.push(`Сформовано:\t${normalizeTextCell(doc.generatedAt)}`);
-  if (doc.validUntil) lines.push(`Дійсна до:\t${normalizeTextCell(doc.validUntil)}`);
-  lines.push(`Позицій:\t${countItems(doc)}`);
-  lines.push("");
-  lines.push(normalizeTextCell(offerSummaryText(doc)));
-  lines.push("");
+export const COMMERCIAL_SHEET_COLUMNS = [
+  "№",
+  "Товар",
+  "Опис",
+  "Категорія/модель",
+  "Місце/розмір",
+  "Нанесення",
+  "К-сть",
+  "Од.",
+  "Ціна",
+  "Сума",
+  "Фото URL",
+] as const;
+
+export type CommercialSheetCell = string | number | null;
+
+export const buildCommercialSheetRows = (doc: CommercialDocument): CommercialSheetCell[][] => {
+  const rows: CommercialSheetCell[][] = [];
+  rows.push([doc.title]);
+  rows.push(["Замовник", doc.customerName]);
+  rows.push(["Номер", doc.sections.map((section) => section.quoteNumber).join(", ")]);
+  rows.push(["Сформовано", doc.generatedAt]);
+  if (doc.validUntil) rows.push(["Дійсна до", doc.validUntil]);
+  rows.push(["Позицій", countItems(doc)]);
+  rows.push([]);
+  rows.push([offerSummaryText(doc)]);
+  rows.push([]);
+
   doc.sections.forEach((section, index) => {
     if (doc.sections.length > 1) {
-      lines.push(`${index + 1}. ${normalizeTextCell(section.quoteNumber)}`);
+      rows.push([`${index + 1}. ${section.quoteNumber}`]);
     }
-    lines.push(
-      `Візуалізації\t${normalizeTextCell(
-        section.visualizations.length > 0 ? section.visualizations.map((item) => item.url).join(" | ") : "—"
-      )}`
-    );
-    lines.push("№\tТовар\tОпис\tКатегорія/модель\tМісце/розмір\tНанесення\tК-сть\tОд.\tЦіна\tСума\tФото URL");
+    if (section.visualizations.length > 0) {
+      rows.push(["Візуалізації", section.visualizations.map((item) => item.url).join(" | ")]);
+    }
+    rows.push([...COMMERCIAL_SHEET_COLUMNS]);
     if (section.items.length === 0) {
-      lines.push("\tНемає товарних позицій");
+      rows.push([null, "Немає товарних позицій"]);
     } else {
       section.items.forEach((item) => {
-        // Один рядок таблиці на КОЖЕН тираж. Опис товару повторювати не треба —
-        // порожні клітинки в продовженні читаються як «те саме, інший тираж».
+        // Один рядок на КОЖЕН тираж. Опис товару в продовженні не повторюємо —
+        // порожні клітинки читаються як «те саме, інший тираж».
         item.runs.forEach((run, runIndex) => {
-          const isFirst = runIndex === 0;
-          lines.push(
-            [
-              isFirst ? item.position : "",
-              isFirst ? normalizeTextCell(item.name) : "",
-              isFirst ? normalizeTextCell(item.description || "—") : "",
-              isFirst ? normalizeTextCell(item.catalogPath || "—") : "",
-              isFirst ? normalizeTextCell(item.placementSummary || "—") : "",
-              isFirst ? normalizeTextCell(item.methodsSummary || "—") : "",
-              formatMoneyPlain(run.qty),
-              normalizeTextCell(item.unit),
-              formatMoneyPlain(run.unitPrice),
-              formatMoneyPlain(run.lineTotal),
-              isFirst ? normalizeTextCell(item.imageUrl || "—") : "",
-            ].join("\t")
-          );
+          const first = runIndex === 0;
+          rows.push([
+            first ? item.position : null,
+            first ? item.name : null,
+            first ? item.description || null : null,
+            first ? item.catalogPath || null : null,
+            first ? item.placementSummary || null : null,
+            first ? item.methodsSummary || null : null,
+            run.qty,
+            item.unit,
+            run.unitPrice,
+            run.lineTotal,
+            first ? item.imageUrl || null : null,
+          ]);
         });
       });
     }
-    lines.push("");
+    rows.push([]);
   });
+
   if (documentHasRunChoice(doc)) {
-    lines.push(normalizeTextCell(RUN_CHOICE_NOTE));
+    rows.push([RUN_CHOICE_NOTE]);
   }
-  return lines.join("\r\n");
+  return rows;
 };
