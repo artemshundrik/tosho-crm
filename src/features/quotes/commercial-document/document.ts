@@ -79,9 +79,16 @@ export type CommercialQuoteSection = {
 };
 
 /**
- * Поля менеджера, терміну дії й номера пропозиції НЕОБОВ'ЯЗКОВІ й друкуються
- * лише коли заповнені. Плейсхолдерів на кшталт «[ТЕЛЕФОН]» у документі для
- * замовника бути не може: порожній рядок краще за видимий пропуск.
+ * Поля менеджера й терміну дії НЕОБОВ'ЯЗКОВІ й друкуються лише коли заповнені.
+ * Плейсхолдерів на кшталт «[ТЕЛЕФОН]» у документі для замовника бути не може:
+ * порожній рядок краще за видимий пропуск. З тієї ж причини в підвалі немає
+ * ані терміну виготовлення, ані умов оплати й доставки — у базі їх немає, а
+ * вигадувати їх у документі, який поїде клієнту, не можна (рішення Артема
+ * 21.09.2026).
+ *
+ * НОМЕРА ПРОПОЗИЦІЇ ТЕЖ НЕМАЄ. Була спокуса завести власний «КП-MMYY-NNNN»,
+ * щоб не світити внутрішній TS-, але це лічильник, якого ніхто не просив:
+ * друкуємо номер прорахунку як є.
  */
 export type CommercialDocument = {
   title: string;
@@ -96,7 +103,6 @@ export type CommercialDocument = {
    * лишається для внутрішніх екранів, які показують порядок величини.
    */
   totalRange: MoneyRange;
-  offerNumber?: string;
   validUntil?: string;
   manager?: {
     name: string;
@@ -389,8 +395,9 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
         .join("<br />")}</div>`
     : "";
 
+  const quoteNumbers = doc.sections.map((section) => section.quoteNumber).filter(Boolean);
   const numberLine = [
-    doc.offerNumber ? `№ ${escapeHtml(doc.offerNumber)}` : "",
+    quoteNumbers.length > 0 ? `№ ${escapeHtml(quoteNumbers.join(", "))}` : "",
     `від ${escapeHtml(doc.createdAt)}`,
   ]
     .filter(Boolean)
@@ -508,7 +515,7 @@ export const buildCommercialExcelTsv = (doc: CommercialDocument) => {
   lines.push(normalizeTextCell(doc.title));
   lines.push(`Тип:\t${normalizeTextCell(doc.kindLabel)}`);
   lines.push(`Замовник:\t${normalizeTextCell(doc.customerName)}`);
-  if (doc.offerNumber) lines.push(`Номер:\t${normalizeTextCell(doc.offerNumber)}`);
+  lines.push(`Номер:\t${normalizeTextCell(doc.sections.map((section) => section.quoteNumber).join(", "))}`);
   lines.push(`Сформовано:\t${normalizeTextCell(doc.generatedAt)}`);
   if (doc.validUntil) lines.push(`Дійсна до:\t${normalizeTextCell(doc.validUntil)}`);
   lines.push(`Позицій:\t${countItems(doc)}`);
