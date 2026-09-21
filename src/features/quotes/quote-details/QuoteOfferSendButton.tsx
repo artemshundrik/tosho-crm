@@ -1,4 +1,4 @@
-import { ChevronDown, Download, FileDown, Printer, Send } from "@/components/icons/appIcons";
+import { ChevronDown, FileDown, Send } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,6 +19,14 @@ import type { OfferFormat } from "./useQuoteOfferSend";
  * вікна. Без неї звичний шлях «швидко скинути PDF» щоразу проходив би через
  * форму; без форми надсилання лишалось би сліпим.
  *
+ * У ШВИДКИХ ДІЯХ ЛИШЕ PDF. Excel і друк звідси прибрані (Артем, 21.09.2026):
+ * вони нікуди не діваються, просто живуть у формі. PDF — те, що шлють щодня й
+ * не глядячи; Excel і друк вибирають свідомо, а отже вже відкривають вікно.
+ *
+ * РОЗМІР — ЯК У КОНТРОЛА СТАТУСУ, що стоїть поруч: h-8 і rounded-lg. Своя
+ * висота з `size="sm"` давала 30 px проти 32 і радіус 10 проти 8 — поруч це
+ * читалось як недбалість.
+ *
  * ОКРЕМИМ ФАЙЛОМ — бо `QuoteDetailsPage` під ратчетом розміру, а це самостійний
  * вузол без власного стану.
  */
@@ -28,11 +36,11 @@ export function QuoteOfferSendButton(props: {
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-stretch overflow-hidden rounded-[var(--btn-radius)] border border-border bg-background">
+    <div className="flex h-8 items-stretch overflow-hidden rounded-lg border border-border bg-background">
       <Button
         variant="ghost"
         size="sm"
-        className="gap-2 rounded-none border-0"
+        className="h-full gap-2 rounded-none border-0"
         disabled={props.disabled}
         onClick={props.onOpen}
       >
@@ -47,7 +55,7 @@ export function QuoteOfferSendButton(props: {
           <Button
             variant="ghost"
             size="sm"
-            className="rounded-none border-0 px-2"
+            className="h-full rounded-none border-0 px-2"
             aria-label="Обрати формат без вікна"
             disabled={props.disabled}
           >
@@ -55,42 +63,17 @@ export function QuoteOfferSendButton(props: {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault();
-              props.onOpen();
-            }}
-          >
+          {/* БЕЗ `event.preventDefault()`: він скасовує закриття меню, і поповер
+              лишався висіти поверх сторінки навіть після того, як вікно вже
+              відкрилось і закрилось. */}
+          <DropdownMenuItem onSelect={() => props.onOpen()}>
             <Send className="mr-2 h-4 w-4" />
             Зібрати й переглянути…
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault();
-              props.onQuick("pdf");
-            }}
-          >
+          <DropdownMenuItem onSelect={() => props.onQuick("pdf")}>
             <FileDown className="mr-2 h-4 w-4" />
             Одразу PDF
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault();
-              props.onQuick("xlsx");
-            }}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Одразу Excel
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault();
-              props.onQuick("print");
-            }}
-          >
-            <Printer className="mr-2 h-4 w-4" />
-            Друк
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
