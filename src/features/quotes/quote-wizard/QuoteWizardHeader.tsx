@@ -18,7 +18,7 @@ import { DateTimePicker } from "@/components/ui/picker-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { parseDeadlineDate, toWallClockValue } from "@/features/quotes/quote-details/deadlineLabels";
-import { searchQuoteParties, type QuotePartyOption } from "@/features/quotes/quoteParties";
+import { rememberQuoteParty, searchQuoteParties, type QuotePartyOption } from "@/features/quotes/quoteParties";
 import { isInactiveEmployment } from "@/lib/employment";
 import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -130,7 +130,7 @@ export function QuoteWizardHeader({
 }) {
   const [partySearch, setPartySearch] = React.useState("");
   const [parties, setParties] = React.useState<QuotePartyOption[]>([]);
-  const [partiesLoading, setPartiesLoading] = React.useState(false);
+  const [partiesReady, setPartiesReady] = React.useState(false);
   const [partyPickerOpen, setPartyPickerOpen] = React.useState(false);
   const [members, setMembers] = React.useState<MemberOption[]>([]);
   const [managerPopoverOpen, setManagerPopoverOpen] = React.useState(false);
@@ -164,25 +164,30 @@ export function QuoteWizardHeader({
     else if (missing === "deadline") setDeadlineOpen(true);
   }, [nudgeSignal]);
 
-  // Пошук замовників — із тією ж паузою в 250 мс, що й у білдері: без неї
-  // кожна літера це два запити до бази.
+  /*
+    ПАУЗИ БІЛЬШЕ НЕМАЄ (REQ-302). Вона стояла тут тому, що кожна літера
+    означала похід у базу — і не один, а вісім (див. шапку quoteParties.ts).
+    Тепер список лежить у памʼяті вкладки, а `searchQuoteParties` лише фільтрує
+    його, тож чекати 250 мс означало б гальмувати рівно на 250 мс.
+
+    Каркас показуємо ЛИШЕ до першої відповіді: далі фільтр повертається тим же
+    кадром, і смуга «Завантажуємо…» блимала б на кожну літеру.
+  */
   React.useEffect(() => {
     if (!teamId) return;
     let alive = true;
-    const timer = window.setTimeout(async () => {
-      setPartiesLoading(true);
+    void (async () => {
       try {
         const rows = await searchQuoteParties(teamId, partySearch);
         if (alive) setParties(rows);
       } catch {
         if (alive) setParties([]);
       } finally {
-        if (alive) setPartiesLoading(false);
+        if (alive) setPartiesReady(true);
       }
-    }, 250);
+    })();
     return () => {
       alive = false;
-      window.clearTimeout(timer);
     };
   }, [partySearch, teamId]);
 
@@ -238,9 +243,11 @@ export function QuoteWizardHeader({
 
   const handleCreatedParty = (created: CreatedCustomerLead) => {
     const label = getCreatedCustomerLeadLabel(created);
-    // Щойно створене кладемо в той самий список, з якого малюються підказки:
-    // інакше воно зникло б із поповера до наступного запиту до бази.
-    setParties((prev) => upsertByIdAndEntityType(prev, toQuotePartyOption(created) as QuotePartyOption));
+    // Щойно створене кладемо і в показаний список, і в кеш усіх замовників:
+    // інакше воно зникло б із поповера на першій же літері пошуку.
+    const party = toQuotePartyOption(created) as QuotePartyOption;
+    rememberQuoteParty(party);
+    setParties((prev) => upsertByIdAndEntityType(prev, party));
     setPartySearch(label);
     patch({
       partyId: created.id,
@@ -282,7 +289,7 @@ export function QuoteWizardHeader({
         searchValue={partySearch}
         onSearchChange={setPartySearch}
         options={partyOptions}
-        loading={partiesLoading}
+        loading={!partiesReady}
         onSelect={(option) =>
           patch({
             partyId: option.id,
