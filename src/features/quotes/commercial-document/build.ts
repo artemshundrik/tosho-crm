@@ -78,6 +78,29 @@ const formatStatusLabel = (value: string | null | undefined) => {
   return (normalized && statusLabels[normalized]) || value || "Не вказано";
 };
 
+/**
+ * Фото, яке позиція несе САМА.
+ *
+ * Товар, заведений посиланням, не завжди стає рядком каталогу — але імпорт
+ * одразу кладе його знімок у `metadata.catalogVariant.imageUrl`
+ * (`quote-import-research-background`), і картка позиції цим уже малює
+ * картинку. Документ туди не заглядав і показував плитку з ініціалами там, де
+ * фото було весь час.
+ *
+ * ЦЕ ЗАМІНИЛО ПЛАН ІТИ ПО ФОТО В ПУЛ ПОСТАЧАЛЬНИКІВ (REQ-296#p8). Заміряно
+ * 21.09.2026: із 44 позицій без фото моделі 11 мають його тут, а з решти 33
+ * жодна не має навіть артикула — тобто запит у пул не врятував би НІ ОДНОЇ, а
+ * коштував би нової функції з привілейованим читанням таблиці, у якій лежать
+ * закупівельні ціни.
+ */
+const readVariantImage = (metadata: QuoteItemExportRow["metadata"]) => {
+  if (!metadata || typeof metadata !== "object") return "";
+  const variant = (metadata as Record<string, unknown>).catalogVariant;
+  if (!variant || typeof variant !== "object") return "";
+  const url = (variant as Record<string, unknown>).imageUrl;
+  return typeof url === "string" ? url.trim() : "";
+};
+
 export async function buildCommercialDocument(
   params: BuildCommercialDocumentParams
 ): Promise<CommercialDocument | null> {
@@ -318,7 +341,8 @@ export async function buildCommercialDocument(
               },
             ];
       const modelMeta = row.catalog_model_id ? modelById.get(row.catalog_model_id) : undefined;
-      const imageUrl = modelMeta?.imageUrl || "";
+      // Модель — головне джерело; те, що принесла сама позиція, — запасне.
+      const imageUrl = modelMeta?.imageUrl || readVariantImage(row.metadata);
       const catalogPath = [
         row.catalog_type_id ? typeNameById.get(row.catalog_type_id) ?? "" : "",
         row.catalog_kind_id ? kindNameById.get(row.catalog_kind_id) ?? "" : "",

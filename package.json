@@ -41,6 +41,7 @@
     "migrate:avatar-variants": "node scripts/migrate-avatar-variants.mjs",
     "migrate:attachment-previews": "node scripts/migrate-attachment-previews.mjs",
     "migrate:catalog-images": "node scripts/migrate-catalog-model-images.mjs",
+    "migrate:quote-item-images": "node scripts/migrate-quote-item-images.mjs",
     "migrate:customer-logos": "node scripts/migrate-customer-lead-logos.mjs",
     "migrate:raster-attachment-variants": "node scripts/migrate-raster-attachment-variants.mjs",
     "sync:quote-logo-snapshots": "node scripts/sync-quote-logo-snapshots.mjs",
