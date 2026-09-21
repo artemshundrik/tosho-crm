@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Globe, Megaphone, Presentation, ThumbsUp, UserCheck } from "@/components/icons/appIcons";
+import { Globe, Megaphone, PhoneCall, Presentation, ThumbsUp, UserCheck } from "@/components/icons/appIcons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TikTokIcon } from "@/components/icons/TikTokIcon";
 import { ThreadsIcon } from "@/components/icons/ThreadsIcon";
@@ -25,6 +25,7 @@ export const CUSTOMER_LEAD_SOURCES: ReadonlyArray<{ value: string; label: string
   { value: "Сайт", label: "Сайт", Icon: Globe },
   { value: "Реклама", label: "Реклама", Icon: Megaphone },
   { value: "Конференція", label: "Конференція", Icon: Presentation },
+  { value: "Холодний дзвінок", label: "Холодний дзвінок", Icon: PhoneCall },
   { value: "Існуючий клієнт", label: "Існуючий клієнт", Icon: UserCheck },
 ];
 
