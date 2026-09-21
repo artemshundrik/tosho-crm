@@ -83,7 +83,6 @@ import {
   type QuoteSetItemRow,
   type QuoteSetMembershipInfo,
   type CustomerQuoteRow,
-  type QuoteItemExportRow,
   type QuoteItemPreviewRow,
   type QuoteRunPreviewRow,
   type QuoteRun,
@@ -92,19 +91,15 @@ import {
 import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import {
   COLUMN_MARKUP_FALLBACK,
-  getRunSalePricingFromRun,
   mergeQuoteRunsWithExisting,
   normalizeQuoteRunModelPriceVat,
 } from "@/lib/quoteRuns";
-import { markupGateMessage, resolveQuoteMarkupGate } from "@/lib/quoteMarkupApproval";
 import {
   defaultMarkupRateFor,
   normalizeQuoteDealType,
   resolveQuoteDealType,
-  type QuoteDealType,
 } from "@/lib/quoteDealType";
 import { toWallClockValue } from "@/features/quotes/quote-details/deadlineLabels";
-import { fetchMarkupApprovalsForQuotes } from "@/features/quotes/quote-details/markupApproval";
 import { searchQuoteParties, type QuotePartyOption } from "@/features/quotes/quoteParties";
 import { DEFAULT_MANAGER_RATE, getManagerRateForUser } from "@/lib/managerRate";
 import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
@@ -130,7 +125,6 @@ import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import {
   getAttachmentVariantPath,
-  getSignedAttachmentUrl,
   removeAttachmentWithVariants,
   uploadAttachmentWithVariants,
 } from "@/lib/attachmentPreview";
@@ -219,26 +213,20 @@ import { isOffBoardStatus } from "@/lib/kanbanBoards";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { getCurrentUserId } from "@/lib/currentUser";
 // Документ КП цілком живе окремим модулем (REQ-267#p2): типи, формати чисел,
-// HTML для друку/PDF і TSV для Excel. Сторінці лишились походи в базу, друк
-// через iframe і розмітка прев'ю — усе, що без React не існує.
+// HTML для друку/PDF і TSV для Excel — а з 21.09.2026 ще й збирання (`build.ts`),
+// яке більше не знає про набори. Сторінці лишились друк через iframe і розмітка
+// прев'ю — усе, що без React не існує.
 import {
   buildCommercialExcelTsv,
-  commercialSectionTotalRange,
-  formatDateTime,
   formatMoney,
   formatMoneyPlain,
   formatMoneyRange,
   getCommercialDocFilename,
-  parseMethodsSummary,
-  parsePlacementSummary,
   renderCommercialDocumentHtml,
   type CommercialDocument,
-  type CommercialItemRow,
-  type CommercialQuoteSection,
-  type CommercialRunRow,
 } from "@/features/quotes/commercial-document/document";
+import { buildCommercialDocument as buildCommercialDocumentFromQuotes } from "@/features/quotes/commercial-document/build";
 import { CommercialPreviewSummary } from "@/features/quotes/commercial-document/CommercialPreviewSummary";
-import { sumMoneyRanges } from "@/lib/moneyRange";
 
 type QuotesPageProps = {
   teamId: string;
@@ -3777,332 +3765,28 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (quoteSetDetailsItems.length === 0) return 0;
     return quoteSetTotalAmount / quoteSetDetailsItems.length;
   }, [quoteSetDetailsItems.length, quoteSetTotalAmount]);
+  /*
+    Документ збирає `features/quotes/commercial-document/build.ts`; сторінка лишає
+    собі лише переклад набору на список прорахунків. До 21.09.2026 збирання жило
+    тут замиканням і стояло на `quoteSetDetailsTarget` — через це КП не міг
+    народитись із одного прорахунку, а набір вимагає щонайменше двох.
+  */
   const buildCommercialDocument = async (): Promise<CommercialDocument | null> => {
     if (!quoteSetDetailsTarget) return null;
-    const quoteIds = quoteSetDetailsItems.map((item) => item.quote_id).filter(Boolean);
-    if (quoteIds.length === 0) return null;
-
-    const itemRows = await listQuoteItemsForQuotes({ teamId, quoteIds });
-    // Продажні ціни (з націнкою) зберігаються в quote_item_runs, а не в quote_items.unit_price
-    // (там лежить собівартість). Підтягуємо runs, щоб КП показувало ту саму ціну, що й замовлення.
-    const runsByQuoteId = new Map<string, QuoteRun[]>();
-    await Promise.all(
-      quoteIds.map(async (quoteId) => {
-        runsByQuoteId.set(quoteId, await getQuoteRuns(quoteId));
-      })
-    );
-
-    // Двері назовні (REQ-149). Гейт стоїть тут, а не на кнопках «Друк» і
-    // «Експорт»: саме ця функція збирає документ, який бачить клієнт, і всі
-    // три дії — прев'ю, друк, вивантаження — ходять через неї. Окремі
-    // перевірки на кожній кнопці рано чи пізно розійшлися б, а прев'ю показує
-    // рівно те, що поїде.
-    const markupApprovals = await fetchMarkupApprovalsForQuotes(quoteIds);
-    // Дно залежить від типу УГОДИ, а в комплект їх входить кілька — тому гейт
-    // рахуємо по кожному прорахунку окремо (REQ-182). Спільний прохід по всіх
-    // тиражах брав би дно навмання з першого-ліпшого.
-    const { data: dealTypeRows } = await supabase
-      .schema("tosho")
-      .from("quotes")
-      .select("id,quote_type,deal_type")
-      .in("id", quoteIds);
-    const dealTypeByQuoteId = new Map<string, QuoteDealType | null>(
-      (
-        (dealTypeRows as Array<{
-          id: string;
-          quote_type: string | null;
-          deal_type: string | null;
-        }> | null) ?? []
-      ).map((row) => [row.id, resolveQuoteDealType(row.quote_type, row.deal_type)])
-    );
-    // `undefined` — «жоден не заблокований». Саме `undefined`, а не `null`:
-    // null — повноцінне значення шкали, воно означає мерч зі старим дном 20 %.
-    let blockedDealType: QuoteDealType | null | undefined;
-    for (const [quoteId, quoteRuns] of runsByQuoteId) {
-      const dealType = dealTypeByQuoteId.get(quoteId) ?? null;
-      const gate = resolveQuoteMarkupGate(
-        quoteRuns
-          .filter((run): run is QuoteRun & { id: string } => !!run.id)
-          .map((run) => {
-            const pricing = getRunSalePricingFromRun(run);
-            return {
-              id: run.id,
-              costTotal: pricing.costTotal,
-              markupRate: Number(run.markup_rate) || 0,
-              approval: markupApprovals.get(run.id) ?? null,
-            };
-          }),
-        dealType
-      );
-      if (gate.blocked) {
-        blockedDealType = dealType;
-        break;
-      }
-    }
-    if (blockedDealType !== undefined) {
-      throw new Error(markupGateMessage(blockedDealType));
-    }
-    const { data: visualizationRows, error: visualizationsError } = await supabase
-      .schema("tosho")
-      .from("quote_attachments")
-      .select("quote_id,file_name,mime_type,storage_bucket,storage_path,created_at")
-      .in("quote_id", quoteIds)
-      .order("created_at", { ascending: false });
-    if (visualizationsError) throw visualizationsError;
-    const typeIds = Array.from(new Set(itemRows.map((row) => row.catalog_type_id ?? "").filter(Boolean)));
-    const kindIds = Array.from(new Set(itemRows.map((row) => row.catalog_kind_id ?? "").filter(Boolean)));
-    const modelIds = Array.from(new Set(itemRows.map((row) => row.catalog_model_id ?? "").filter(Boolean)));
-    const printPositionIds = Array.from(
-      new Set(
-        itemRows
-          .flatMap((row) => {
-            const fromMethods = Array.isArray(row.methods)
-              ? row.methods
-                  .map((entry) => {
-                    if (!entry || typeof entry !== "object") return "";
-                    const value = (entry as Record<string, unknown>).print_position_id;
-                    return typeof value === "string" ? value : "";
-                  })
-                  .filter(Boolean)
-              : [];
-            return [row.print_position_id ?? "", ...fromMethods];
-          })
-          .filter(Boolean)
-      )
-    );
-
-    const [typeRows, kindRows, modelRows, printPositionRows] = await Promise.all([
-      typeIds.length > 0
-        ? supabase
-            .schema("tosho")
-            .from("catalog_types")
-            .select("id,name")
-            .in("id", typeIds)
-        : Promise.resolve({ data: [], error: null }),
-      kindIds.length > 0
-        ? supabase
-            .schema("tosho")
-            .from("catalog_kinds")
-            .select("id,name")
-            .in("id", kindIds)
-        : Promise.resolve({ data: [], error: null }),
-      modelIds.length > 0
-        ? listCatalogModelsByIds(modelIds).then((map) => ({ data: Array.from(map.values()), error: null }))
-        : Promise.resolve({ data: [], error: null }),
-      printPositionIds.length > 0
-        ? supabase
-            .schema("tosho")
-            .from("catalog_print_positions")
-            .select("id,label")
-            .in("id", printPositionIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-    if (typeRows.error) throw typeRows.error;
-    if (kindRows.error) throw kindRows.error;
-    if (modelRows.error) throw modelRows.error;
-    if (printPositionRows.error) throw printPositionRows.error;
-
-    const typeNameById = new Map(
-      (((typeRows.data ?? []) as unknown) as Array<{ id: string; name?: string | null }>).map((row) => [
-        row.id,
-        row.name ?? "",
-      ])
-    );
-    const kindNameById = new Map(
-      (((kindRows.data ?? []) as unknown) as Array<{ id: string; name?: string | null }>).map((row) => [
-        row.id,
-        row.name ?? "",
-      ])
-    );
-    const modelById = new Map(
-      (
-        ((modelRows.data ?? []) as unknown) as Array<{ id: string; name?: string | null; image_url?: string | null }>
-      ).map((row) => [row.id, { name: row.name ?? "", imageUrl: row.image_url ?? "" }])
-    );
-    const printPositionLabelById = new Map(
-      (((printPositionRows.data ?? []) as unknown) as Array<{ id: string; label?: string | null }>).map((row) => [
-        row.id,
-        row.label ?? "",
-      ])
-    );
-    const visualizationsByQuoteId = new Map<string, Array<{ url: string; thumbUrl?: string; name: string }>>();
-    const typedVisualizations = ((visualizationRows ?? []) as unknown) as Array<{
-      quote_id?: string | null;
-      file_name?: string | null;
-      mime_type?: string | null;
-      storage_bucket?: string | null;
-      storage_path?: string | null;
-      created_at?: string | null;
-    }>;
-    for (const row of typedVisualizations) {
-      const quoteId = row.quote_id ?? "";
-      if (!quoteId) continue;
-      if (!row.storage_bucket || !row.storage_path) continue;
-      const storagePath = row.storage_path;
-      const isDesignVisualization = storagePath.includes("design-outputs/");
-      if (!isDesignVisualization) continue;
-      const mimeType = row.mime_type?.toLowerCase() ?? "";
-      const fileName = row.file_name?.toLowerCase() ?? "";
-      const canRenderPreview =
-        mimeType.startsWith("image/") ||
-        mimeType === "application/pdf" ||
-        mimeType === "image/tiff" ||
-        /\.(png|jpg|jpeg|webp|gif|bmp|svg|pdf|tif|tiff)$/i.test(fileName);
-      if (!canRenderPreview) continue;
-
-      const signedUrl =
-        (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "preview", 60 * 60 * 24 * 7)) ??
-        (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "thumb", 60 * 60 * 24 * 7)) ??
-        (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "original", 60 * 60 * 24 * 7)) ??
-        supabase.storage.from(row.storage_bucket).getPublicUrl(storagePath).data.publicUrl;
-      if (!signedUrl) continue;
-      const thumbUrl =
-        (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "thumb", 60 * 60 * 24 * 7)) ?? signedUrl;
-      const list = visualizationsByQuoteId.get(quoteId) ?? [];
-      if (!list.some((item) => item.url === signedUrl)) {
-        list.push({
-          url: signedUrl,
-          thumbUrl,
-          name: row.file_name ?? "visualization",
-        });
-      }
-      visualizationsByQuoteId.set(quoteId, list);
-    }
-
-    const itemsByQuoteId = new Map<string, QuoteItemExportRow[]>();
-    itemRows.forEach((row) => {
-      const quoteId = row.quote_id;
-      if (!quoteId) return;
-      const existing = itemsByQuoteId.get(quoteId) ?? [];
-      existing.push(row);
-      itemsByQuoteId.set(quoteId, existing);
-    });
-
-    const sections: CommercialQuoteSection[] = quoteSetDetailsItems.map((quoteRef) => {
-      const rows = (itemsByQuoteId.get(quoteRef.quote_id) ?? []).slice().sort((a, b) => {
-        const aPosition = typeof a.position === "number" ? a.position : Number.MAX_SAFE_INTEGER;
-        const bPosition = typeof b.position === "number" ? b.position : Number.MAX_SAFE_INTEGER;
-        return aPosition - bPosition;
-      });
-
-      const quoteRuns = runsByQuoteId.get(quoteRef.quote_id) ?? [];
-
-      const mappedItems: CommercialItemRow[] = rows.map((row, index) => {
-        const fallbackQty = Number(row.qty ?? 0) || 0;
-        const fallbackUnitPrice = Number(row.unit_price ?? 0) || 0;
-        const fallbackLineTotal =
-          Number.isFinite(Number(row.line_total)) && row.line_total !== null
-            ? Number(row.line_total)
-            : fallbackQty * fallbackUnitPrice;
-        // Продажні ціни (з націнкою) живуть у quote_item_runs, а не в quote_items.unit_price
-        // (там — застаріла/собівартісна копія, через що КП губив націнку або показував 0).
-        // Один товар у прорахунку ⇒ беремо всі run-и (quote_item_id інколи null).
-        const itemRuns =
-          rows.length === 1
-            ? quoteRuns
-            : quoteRuns.filter((run) => run.quote_item_id === row.id);
-
-        // Кожен тираж — окремий рядок. НЕ підсумовувати: варіанти взаємовиключні,
-        // сума «всіх разом» не відповідає жодному можливому замовленню.
-        const runRows: CommercialRunRow[] = itemRuns
-          .map((run, runIndex) => {
-            const runQty = Math.max(0, Number(run.quantity) || 0);
-            const saleTotal = getRunSalePricingFromRun(run).saleTotal;
-            return {
-              id: run.id ?? `${row.id}-run-${runIndex}`,
-              qty: runQty,
-              unitPrice: runQty > 0 ? saleTotal / runQty : 0,
-              lineTotal: saleTotal,
-            };
-          })
-          .filter((run) => run.qty > 0)
-          .sort((a, b) => a.qty - b.qty);
-
-        // Прорахунки без збережених тиражів (старі або ще не порахованi) далі
-        // живуть на копії з quote_items — інакше позиція зникла б із КП.
-        const runs: CommercialRunRow[] =
-          runRows.length > 0
-            ? runRows
-            : [
-                {
-                  id: `${row.id}-fallback`,
-                  qty: fallbackQty,
-                  unitPrice: fallbackUnitPrice,
-                  lineTotal: fallbackLineTotal,
-                },
-              ];
-        const modelMeta = row.catalog_model_id ? modelById.get(row.catalog_model_id) : undefined;
-        const imageUrl = modelMeta?.imageUrl || "";
-        const catalogPath = [
-          row.catalog_type_id ? typeNameById.get(row.catalog_type_id) ?? "" : "",
-          row.catalog_kind_id ? kindNameById.get(row.catalog_kind_id) ?? "" : "",
-          modelMeta?.name ?? "",
-        ]
-          .filter(Boolean)
-          .join(" / ");
-        const placementSummary = parsePlacementSummary(
-          row.methods,
-          printPositionLabelById,
-          row.print_position_id,
-          row.print_width_mm,
-          row.print_height_mm
-        );
-        return {
-          id: row.id,
-          position: typeof row.position === "number" ? row.position : index + 1,
-          imageUrl,
-          name: row.name?.trim() || "Без назви",
-          catalogPath,
-          description: row.description?.trim() || "",
-          methodsSummary: parseMethodsSummary(row.methods),
-          placementSummary,
-          unit: normalizeUnitLabel(row.unit),
-          runs,
-        };
-      });
-
-      // Підсумок прорахунку — не число, а межі: тиражі всередині позиції
-      // взаємовиключні, тож у позиції з кількома тиражами точної суми не існує.
-      // Один тираж у всіх позицій ⇒ межі збігаються ⇒ звичайна сума.
-      const itemsTotalRange = commercialSectionTotalRange(mappedItems);
-      const quoteTotalFromSummary =
-        typeof quoteRef.quote_total === "number" && Number.isFinite(quoteRef.quote_total)
-          ? Number(quoteRef.quote_total)
-          : null;
-
-      return {
-        quoteId: quoteRef.quote_id,
-        quoteNumber: quoteRef.quote_number ?? quoteRef.quote_id.slice(0, 8),
-        status: formatStatusLabel(quoteRef.quote_status ?? null),
-        createdAt: formatDateTime(quoteRef.quote_created_at),
-        visualizations: visualizationsByQuoteId.get(quoteRef.quote_id) ?? [],
-        items: mappedItems,
-        // На збережений quote_total відкочуємось лише коли цін немає зовсім.
-        totalRange:
-          itemsTotalRange.max > 0
-            ? itemsTotalRange
-            : { min: quoteTotalFromSummary ?? 0, max: quoteTotalFromSummary ?? 0 },
-      };
-    });
-
-    // Прорахунки в КП складаються: це РІЗНІ товари, а межі кожного вже
-    // враховані вище.
-    const totalRange = sumMoneyRanges(sections.map((section) => section.totalRange));
-    const now = new Date();
-    const createdAt = quoteSetDetailsTarget.created_at
-      ? new Date(quoteSetDetailsTarget.created_at).toLocaleDateString("uk-UA")
-      : now.toLocaleDateString("uk-UA");
-
-    return {
+    return buildCommercialDocumentFromQuotes({
+      teamId,
+      quotes: quoteSetDetailsItems.map((item) => ({
+        id: item.quote_id,
+        number: item.quote_number,
+        status: item.quote_status,
+        createdAt: item.quote_created_at,
+        total: item.quote_total,
+      })),
       title: quoteSetDetailsTarget.name ?? "Комерційна пропозиція",
       kindLabel: quoteSetDetailsTarget.kind === "kp" ? "КП" : "Набір",
       customerName: quoteSetDetailsTarget.customer_name ?? "Замовник не вказаний",
-      createdAt,
-      generatedAt: formatDateTime(now.toISOString()),
-      currency: "грн",
-      sections,
-      totalRange,
-    };
+      createdAt: quoteSetDetailsTarget.created_at,
+    });
   };
 
   const downloadBlob = (filename: string, blob: Blob) => {
