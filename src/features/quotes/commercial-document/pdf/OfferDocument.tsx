@@ -1,11 +1,11 @@
 import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
 import {
-  buildOfferIntro,
   formatMoney,
   formatMoneyPlain,
   initialsFor,
   offerSummaryText,
+  stripSupplierTag,
   RUN_CHOICE_NOTE,
   unitDiscountPercent,
   type CommercialDocument,
@@ -51,10 +51,10 @@ const styles = StyleSheet.create({
   valid: { marginLeft: "auto", backgroundColor: "#f0f1f2", borderRadius: 6, padding: 8, textAlign: "right" },
   validLabel: { fontSize: 7, color: "#5b5c62", letterSpacing: 0.4 },
   validValue: { fontSize: 11, fontWeight: "bold", marginTop: 2 },
-  intro: { fontSize: 9.5, color: "#3a3b40", marginTop: 16, lineHeight: 1.55 },
-  sectionHead: { fontSize: 10, fontWeight: "bold", color: "#5b5c62", marginTop: 16 },
+  sectionHead: { fontSize: 10, fontWeight: "bold", color: "#5b5c62", marginTop: 18 },
   visuals: { flexDirection: "row", flexWrap: "wrap", marginTop: 10 },
   visual: { width: 120, height: 84, objectFit: "cover", borderRadius: 6, marginRight: 8, marginBottom: 8 },
+  firstItem: { marginTop: 18 },
   item: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -101,7 +101,6 @@ const styles = StyleSheet.create({
   summaryTitle: { fontSize: 11, fontWeight: "bold" },
   summaryText: { fontSize: 9, color: "#3a3b40", marginTop: 5, lineHeight: 1.55 },
   summaryNote: { fontSize: 8, color: "#5b5c62", marginTop: 8, lineHeight: 1.55 },
-  foot: { fontSize: 8, color: "#5b5c62", textAlign: "center", marginTop: 14 },
 });
 
 /** Адреси картинок уже перетворені на data-URL: див. `resolvePdfImages`. */
@@ -123,7 +122,7 @@ function ItemCard({ item, images }: { item: CommercialItemRow; images: PdfImageM
         <Text style={styles.photoInitials}>{initialsFor(item.name)}</Text>
       )}
       <View style={styles.itemBody}>
-        <Text style={styles.itemName}>{item.name}</Text>
+        <Text style={styles.itemName}>{stripSupplierTag(item.name)}</Text>
         {lines.length > 0 ? <Text style={styles.itemLine}>{lines.join(" · ")}</Text> : null}
         {item.description ? <Text style={styles.itemLine}>{item.description}</Text> : null}
       </View>
@@ -194,8 +193,6 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
           ) : null}
         </View>
 
-        <Text style={styles.intro}>{buildOfferIntro(doc)}</Text>
-
         {doc.sections.map((section, index) => (
           <View key={section.quoteId}>
             {showSectionHeads ? (
@@ -227,7 +224,6 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
           {hasRunChoice ? <Text style={styles.summaryNote}>{RUN_CHOICE_NOTE}</Text> : null}
         </View>
 
-        <Text style={styles.foot}>Ціни вказані з ПДВ.</Text>
       </Page>
     </Document>
   );

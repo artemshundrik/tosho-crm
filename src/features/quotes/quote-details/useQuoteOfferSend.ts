@@ -35,6 +35,7 @@ export type OfferFormat = "pdf" | "xlsx" | "print";
 export type QuoteOfferSource = {
   id: string;
   sent_at?: string | null;
+  assigned_to?: string | null;
   number?: string | null;
   status?: string | null;
   created_at?: string | null;
@@ -42,12 +43,16 @@ export type QuoteOfferSource = {
   customer_name?: string | null;
 };
 
-const DEFAULT_VALID_DAYS = 14;
-
-const isoPlusDays = (days: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+/**
+ * Дефолт терміну — КІНЕЦЬ ПОТОЧНОГО МІСЯЦЯ (власник, 21.09.2026), а не «плюс
+ * два тижні». Ціни живуть календарем постачальників, і «до 30 вересня» замовник
+ * читає без арифметики. Поле у формі лишається: конкретну дату можна змінити.
+ */
+const endOfMonthIso = () => {
+  const now = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`;
 };
 
 const formatValidUntil = (iso: string) => {
@@ -69,7 +74,7 @@ export function useQuoteOfferSend(params: {
   const [doc, setDoc] = useState<CommercialDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [format, setFormat] = useState<OfferFormat>("pdf");
-  const [validUntil, setValidUntil] = useState(() => isoPlusDays(DEFAULT_VALID_DAYS));
+  const [validUntil, setValidUntil] = useState(() => endOfMonthIso());
   const [includeVisualizations, setIncludeVisualizations] = useState(true);
   const [markSent, setMarkSent] = useState(true);
   /**
@@ -77,9 +82,24 @@ export function useQuoteOfferSend(params: {
    * одразу, а менеджер має побачити відповідь на свою дію негайно.
    */
   const [sentAtLocal, setSentAtLocal] = useState<string | null>(null);
+  /**
+   * Телефон менеджера в документі (власник, 21.09.2026). Тягнемо окремо: у
+   * картці є тільки ім'я, а профіль із контактами вона не читає. Пошти в
+   * профілі НЕМАЄ жодної — поки що в документі буде сам телефон.
+   */
+  const [managerPhone, setManagerPhone] = useState<string | null>(null);
 
   const build = useCallback(async () => {
     if (!quote) return null;
+    if (quote.assigned_to) {
+      const { data } = await supabase
+        .schema("tosho")
+        .from("team_member_profiles")
+        .select("phone")
+        .eq("user_id", quote.assigned_to)
+        .maybeSingle();
+      setManagerPhone(((data as { phone?: string | null } | null)?.phone ?? "").trim() || null);
+    }
     return buildCommercialDocument({
       teamId,
       quotes: [
@@ -108,12 +128,12 @@ export function useQuoteOfferSend(params: {
     return {
       ...doc,
       validUntil: formatValidUntil(validUntil) || undefined,
-      manager: managerName ? { name: managerName } : undefined,
+      manager: managerName ? { name: managerName, phone: managerPhone ?? undefined } : undefined,
       sections: includeVisualizations
         ? doc.sections
         : doc.sections.map((section) => ({ ...section, visualizations: [] })),
     } satisfies CommercialDocument;
-  }, [doc, includeVisualizations, managerName, validUntil]);
+  }, [doc, includeVisualizations, managerName, managerPhone, validUntil]);
 
   const previewHtml = useMemo(
     () => (decorated ? renderCommercialDocumentHtml(decorated) : ""),
@@ -229,7 +249,7 @@ export function useQuoteOfferSend(params: {
           {
             ...next,
             validUntil: formatValidUntil(validUntil) || undefined,
-            manager: managerName ? { name: managerName } : undefined,
+            manager: managerName ? { name: managerName, phone: managerPhone ?? undefined } : undefined,
           },
           kind
         );
@@ -240,7 +260,7 @@ export function useQuoteOfferSend(params: {
         });
       }
     },
-    [build, emit, managerName, validUntil]
+    [build, emit, managerName, managerPhone, validUntil]
   );
 
   return {

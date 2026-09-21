@@ -225,6 +225,26 @@ export const parsePlacementSummary = (
   return [fallbackPositionLabel, fallbackSize].filter(Boolean).join(" · ");
 };
 
+/**
+ * Назва товару без хвоста постачальника.
+ *
+ * «Ручка кулькова металева Simple, ТМ Totobi» — у документі для замовника
+ * останні два слова зайві: це мітка НАШОГО постачальника, а не властивість
+ * товару (зауваження власника 21.09.2026).
+ *
+ * ПРАВИЛО НАВМИСНО ВУЗЬКЕ — рівно хвіст рядка: «, ТМ <бренд>», «ТМ <бренд>» або
+ * самотнє «ТМ» у кінці. Бренд усередині назви («Записна книжка Mem'O! А5») не
+ * чіпаємо: відрізнити його від назви моделі нічим, а зіпсована назва в
+ * комерційній пропозиції дорожча за зайве слово.
+ */
+export const stripSupplierTag = (name: string) =>
+  name
+    // Межа слова тут РУЧНА: `\b` у JS рахує лише латиницю, тож кириличне «ТМ»
+    // повз нього проходило — саме той випадок, заради якого все й робиться.
+    .replace(/[\s,;·–—-]*(?<!\p{L})(?:ТМ|TM)(?!\p{L})\s*[«"']?[\p{L}\p{N}&.-]*[»"']?\s*$/u, "")
+    .replace(/[\s,;·–—-]+$/u, "")
+    .trim();
+
 export const getCommercialDocFilename = (
   doc: CommercialDocument,
   extension: "xlsx" | "pdf" | "html"
@@ -277,23 +297,6 @@ const documentHasRunChoice = (doc: CommercialDocument) =>
 const countItems = (doc: CommercialDocument) =>
   doc.sections.reduce((sum, section) => sum + section.items.length, 0);
 
-const pluralPositions = (count: number) => {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return "позиція";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "позиції";
-  return "позицій";
-};
-
-/** Вступний абзац: скільки позицій і як на них відповісти. */
-export const buildOfferIntro = (doc: CommercialDocument) => {
-  const count = countItems(doc);
-  const head = `У пропозиції ${count} ${pluralPositions(count)}.`;
-  return documentHasRunChoice(doc)
-    ? `${head} Для частини з них прораховано кілька тиражів — ви обираєте один тираж, а не замовляєте всі. Напишіть номери позицій і потрібний тираж, і ми порахуємо підсумок та терміни.`
-    : `${head} Напишіть, які з них вас цікавлять, і ми порахуємо підсумок та терміни.`;
-};
-
 /**
  * Те, що стоїть у документі ЗАМІСТЬ «Разом».
  *
@@ -339,7 +342,7 @@ const renderItemCard = (item: CommercialItemRow) => {
       <div class="item-num">${item.position}</div>
       ${renderPhotoCell(item)}
       <div class="item-body">
-        <div class="item-name">${escapeHtml(item.name)}</div>
+        <div class="item-name">${escapeHtml(stripSupplierTag(item.name))}</div>
         ${lines.length > 0 ? `<div class="item-line">${lines.join(" · ")}</div>` : ""}
         ${item.description ? `<div class="item-desc">${escapeHtml(item.description)}</div>` : ""}
       </div>
@@ -439,8 +442,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .valid { margin-left: auto; background: #f0f1f2; border-radius: 8px; padding: 8px 12px; text-align: right; }
   .valid-label { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; }
   .valid-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
-  .intro { margin: 22px 0 0 0; font-size: 13px; line-height: 1.6; color: #3a3b40; }
-  .quote-section { margin-top: 22px; }
+  .quote-section { margin-top: 24px; }
   .section-head { font-size: 13px; font-weight: 600; color: #5b5c62; margin-bottom: 10px; }
   .visual-group { margin-bottom: 12px; }
   .visual-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; margin-bottom: 6px; }
@@ -465,7 +467,6 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .summary-title { font-size: 14px; font-weight: 600; }
   .summary-text { margin: 6px 0 0 0; font-size: 12px; line-height: 1.6; color: #3a3b40; }
   .summary-note { margin: 10px 0 0 0; font-size: 11px; line-height: 1.6; color: #5b5c62; }
-  .foot { margin-top: 16px; font-size: 11px; color: #5b5c62; text-align: center; }
   @media print {
     body { background: #fff; }
     .page { max-width: none; padding: 0; }
@@ -501,14 +502,12 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
         : ""
     }
   </div>
-  <p class="intro">${escapeHtml(buildOfferIntro(doc))}</p>
   ${sectionsHtml}
   <div class="summary">
     <div class="summary-title">Підсумок</div>
     <p class="summary-text">${escapeHtml(offerSummaryText(doc))}</p>
     ${hasRunChoice ? `<p class="summary-note">${escapeHtml(RUN_CHOICE_NOTE)}</p>` : ""}
   </div>
-  <div class="foot">Ціни вказані з ПДВ.</div>
 </main>
 </body>
 </html>`;
@@ -575,7 +574,7 @@ export const buildCommercialSheetRows = (doc: CommercialDocument): CommercialShe
           const first = runIndex === 0;
           rows.push([
             first ? item.position : null,
-            first ? item.name : null,
+            first ? stripSupplierTag(item.name) : null,
             first ? item.description || null : null,
             first ? item.catalogPath || null : null,
             first ? item.placementSummary || null : null,

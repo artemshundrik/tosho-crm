@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCommercialSheetRows,
+  stripSupplierTag,
   COMMERCIAL_SHEET_COLUMNS,
   commercialSectionTotalRange,
   renderCommercialDocumentHtml,
@@ -207,6 +208,37 @@ describe("роль «варіант» не лишила слідів", () => {
     ]) {
       expect(norm(output)).not.toContain("Варіант");
       expect(norm(output)).not.toContain("варіант");
+    }
+  });
+});
+
+/**
+ * Мітка постачальника в назві — це наша внутрішня приписка, і замовнику вона
+ * ні про що (власник, 21.09.2026). Тест стоїть на ОБОХ кінцях: що хвіст
+ * зникає і що назва без хвоста лишається недоторканою — правило працює на
+ * тексті, який бачить клієнт, і зіпсована назва дорожча за зайве слово.
+ */
+describe("мітка постачальника в назві", () => {
+  it("хвіст «ТМ <бренд>» зникає — і кирилицею теж", () => {
+    // `\b` у JS рахує лише латиницю, тож кириличне «ТМ» колись проходило повз.
+    expect(stripSupplierTag("Ручка кулькова металева Simple, TM Totobi")).toBe(
+      "Ручка кулькова металева Simple"
+    );
+    expect(stripSupplierTag("Горнятко керамічне Bonni, ТМ Discover")).toBe("Горнятко керамічне Bonni");
+    expect(stripSupplierTag("Ніж Driver 3в1,TM Discover")).toBe("Ніж Driver 3в1");
+    expect(stripSupplierTag("Записна книжка 'Туксон' А5 кольоровий зріз Mem'O! ТМ")).toBe(
+      "Записна книжка 'Туксон' А5 кольоровий зріз Mem'O!"
+    );
+  });
+
+  it("назву без мітки не чіпає", () => {
+    for (const name of [
+      "Бавовняний шопер з бузковими ручками для покупок",
+      "Футболка ST7000 Lux for men & women",
+      "Фліс ka911 FALCO - FULL ZIP MICROFLEECE JACKET",
+      "KATRINA, Сублімаційне горнятко, 450 мл",
+    ]) {
+      expect(stripSupplierTag(name)).toBe(name);
     }
   });
 });
