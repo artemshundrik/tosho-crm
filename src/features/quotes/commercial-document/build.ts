@@ -172,6 +172,38 @@ export async function buildCommercialDocument(
     .order("created_at", { ascending: false });
   if (visualizationsError) throw visualizationsError;
 
+  /*
+    ЩО САМЕ ВВАЖАЄТЬСЯ ВІЗУАЛОМ — ВИРІШУЄ ДИЗАЙН-ЗАДАЧА (REQ-304).
+
+    Доти КП брало все, що лежить у `design-outputs/` серед файлів прорахунку, і
+    задачу не питало взагалі. Але видалення виходу з задачі прибирає його лише
+    з метаданих задачі — рядок вкладення лишається. Тож видалений візуал
+    мовчки їхав клієнтові: на TS-0926-0026 у задачі був один вихід, а в
+    документ ішло два.
+
+    Задачі без ключа `design_output_files` (старі) списку не мають — для їхніх
+    прорахунків лишається все як було, інакше в них КП втратило б візуали.
+  */
+  const { data: designTaskRows } = await supabase
+    .from("activity_log")
+    .select("entity_id,metadata")
+    .eq("action", "design_task")
+    .in("entity_id", quoteIds);
+
+  const allowedVisualPaths = new Map<string, Set<string>>();
+  for (const row of (designTaskRows ?? []) as Array<{ entity_id?: string | null; metadata?: unknown }>) {
+    const quoteId = row.entity_id ?? "";
+    if (!quoteId) continue;
+    const outputs = (row.metadata as { design_output_files?: unknown } | null)?.design_output_files;
+    if (!Array.isArray(outputs)) continue;
+    const paths = allowedVisualPaths.get(quoteId) ?? new Set<string>();
+    for (const output of outputs) {
+      const path = (output as { storage_path?: unknown } | null)?.storage_path;
+      if (typeof path === "string" && path.trim()) paths.add(path.trim());
+    }
+    allowedVisualPaths.set(quoteId, paths);
+  }
+
   const typeIds = Array.from(new Set(itemRows.map((row) => row.catalog_type_id ?? "").filter(Boolean)));
   const kindIds = Array.from(new Set(itemRows.map((row) => row.catalog_kind_id ?? "").filter(Boolean)));
   const modelIds = Array.from(new Set(itemRows.map((row) => row.catalog_model_id ?? "").filter(Boolean)));
@@ -238,6 +270,7 @@ export async function buildCommercialDocument(
   );
 
   const visualizationsByQuoteId = new Map<string, Array<{ url: string; thumbUrl?: string; name: string }>>();
+  const seenVisualPaths = new Map<string, Set<string>>();
   const typedVisualizations = ((visualizationRows ?? []) as unknown) as Array<{
     quote_id?: string | null;
     file_name?: string | null;
@@ -253,6 +286,12 @@ export async function buildCommercialDocument(
     const storagePath = row.storage_path;
     const isDesignVisualization = storagePath.includes("design-outputs/");
     if (!isDesignVisualization) continue;
+    const allowed = allowedVisualPaths.get(quoteId);
+    if (allowed && !allowed.has(storagePath)) continue;
+    // Дублі рядків у вкладеннях бувають (той самий файл записаний двічі з
+    // різницею у 80 мс), а підписане посилання щоразу нове — тож єдине, за чим
+    // тут можна впізнати той самий файл, це шлях у сховищі.
+    if (seenVisualPaths.get(quoteId)?.has(storagePath)) continue;
     const mimeType = row.mime_type?.toLowerCase() ?? "";
     const fileName = row.file_name?.toLowerCase() ?? "";
     const canRenderPreview =
@@ -271,14 +310,15 @@ export async function buildCommercialDocument(
     const thumbUrl =
       (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "thumb", 60 * 60 * 24 * 7)) ?? signedUrl;
     const list = visualizationsByQuoteId.get(quoteId) ?? [];
-    if (!list.some((item) => item.url === signedUrl)) {
-      list.push({
-        url: signedUrl,
-        thumbUrl,
-        name: row.file_name ?? "visualization",
-      });
-    }
+    list.push({
+      url: signedUrl,
+      thumbUrl,
+      name: row.file_name ?? "visualization",
+    });
     visualizationsByQuoteId.set(quoteId, list);
+    const seen = seenVisualPaths.get(quoteId) ?? new Set<string>();
+    seen.add(storagePath);
+    seenVisualPaths.set(quoteId, seen);
   }
 
   const itemsByQuoteId = new Map<string, QuoteItemExportRow[]>();

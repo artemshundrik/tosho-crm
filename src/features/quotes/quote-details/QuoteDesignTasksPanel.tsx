@@ -125,9 +125,10 @@ export type QuoteDesignSectionSource = {
  * фоновий ефект докладає лише ОБРАНИЙ вихід, і на двох задачах він однаково не
  * сказав би, чий це файл.
  *
- * Виняток — прорахунок з ОДНІЄЮ задачею: там до її списку доливаються файли
- * прорахунку, яких немає в метаданих. На старих задачах візуали лежать тільки
- * там, і без цього вони б зникли з екрана. З тієї ж причини й ТЗ прорахунку
+ * Виняток — прорахунок з ОДНІЄЮ СТАРОЮ задачею, у якої ключа
+ * `design_output_files` немає зовсім: там візуали лежать тільки у файлах
+ * прорахунку, і без доливання вони б зникли з екрана. Щойно список у задачі
+ * зʼявився, він і є відповідь — див. REQ-304 нижче. З тієї ж причини й ТЗ прорахунку
  * підставляється запасним варіантом лише при одній задачі: на двох спільний
  * текст приписав би одній із них чуже ТЗ.
  */
@@ -159,6 +160,21 @@ export function buildQuoteDesignTaskCards({
       const itemId = readString("quote_item_id");
       const section = itemId ? sectionByItemId.get(itemId) ?? null : null;
 
+      /*
+        СПИСОК ЗАДАЧІ — ДЖЕРЕЛО ПРАВДИ, ЯКЩО ВІН УЗАГАЛІ Є (REQ-304).
+
+        Доливання з файлів прорахунку воскрешало видалені візуали: рядок у
+        `quote_attachments` при видаленні виходу з задачі НЕ прибирається, тож
+        файл, якого в задачі вже немає, повертався на вкладку «Дизайн» — і
+        далі в КП. Заміряно на TS-0926-0026: у задачі один вихід (`_v2`), а в
+        прорахунку три рядки, з них два — дублі старого файлу.
+
+        Доливаємо тепер лише тоді, коли ключа `design_output_files` немає
+        ЗОВСІМ. Це і є ознака старої задачі, заради якої доливання заводили:
+        у неї візуали лежать тільки в файлах прорахунку. Порожній список —
+        це вже відповідь «виходів немає», а не «ще не знаємо».
+      */
+      const hasOwnOutputList = Array.isArray(metadata.design_output_files);
       const visuals: QuoteAttachment[] = parseDesignOutputMetaFiles(metadata.design_output_files).map(
         (file) => ({
           id: file.id,
@@ -172,7 +188,7 @@ export function buildQuoteDesignTaskCards({
           storagePath: file.storage_path,
         })
       );
-      if (single) {
+      if (single && !hasOwnOutputList) {
         designVisualizations.forEach((file) => {
           if (visuals.some((known) => known.storagePath && known.storagePath === file.storagePath)) return;
           visuals.push(file);
