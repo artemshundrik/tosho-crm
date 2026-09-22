@@ -5,11 +5,15 @@ import {
   formatMoneyPlain,
   initialsFor,
   offerSummaryText,
+  OFFER_DOC_LABEL,
+  OFFER_HEADLINE,
   OFFER_INTRO_TEXT,
+  OFFER_LOCKUP_URL,
   OFFER_LOGO_URL,
+  OFFER_MOTTO,
   OFFER_NEXT_STEP_TITLE,
   OFFER_PARTNER_TEXT,
-  OFFER_PARTNER_TITLE,
+  OFFER_SITE,
   stripSupplierTag,
   RUN_CHOICE_NOTE,
   unitDiscountPercent,
@@ -20,144 +24,187 @@ import {
 /**
  * Пропозиція справжнім PDF — векторним, із текстом, який можна виділити.
  *
- * ЧОМУ НЕ «ЗБЕРЕГТИ ЯК PDF» У ВІКНІ ДРУКУ. Це був не файл, а три зайві кроки
- * для менеджера, різний результат у різних браузерах і колонтитули з адресою
- * сторінки поверх документа, який їде замовнику.
- *
  * ЧОМУ ДРУГА РОЗМІТКА, А НЕ ОДНА НА ДВА ВИХОДИ. @react-pdf розуміє власний
  * набір примітивів, а не HTML: спільного шаблону тут не буває в принципі. Тому
- * спільними лишаються ЧИСЛА Й ТЕКСТИ — вони приходять із `document.ts`
- * (`buildOfferIntro`, `offerSummaryText`, `RUN_CHOICE_NOTE`, `initialsFor`,
- * `unitDiscountPercent`), і розійтися двом виходам нема на чому.
+ * спільними лишаються ЧИСЛА Й ТЕКСТИ — вони приходять із `document.ts`, і
+ * розійтися двом виходам нема на чому.
+ *
+ * РОЗМІРИ — ЦЕ ПІКСЕЛІ МАКЕТА, ПОДІЛЕНІ НА 0,75. Сторінка A4 має 794 px ширини
+ * й 595 pt, тож один піксель макета = 0,75 pt. Без цього перерахунку документ
+ * виходив би приблизно на третину дрібнішим за те, що бачив менеджер у прев'ю.
+ *
+ * НОМЕРА СТОРІНКИ НЕМАЄ, хоч у макеті він був. Динамічний вміст @react-pdf
+ * малює лише через `render`, і в цій версії воно не працює в жодному вигляді:
+ * `render` на вкладеному вузлі мовчки викидає ВЕСЬ батьківський стовпчик (так
+ * зникли контакти менеджера), а окремим `fixed`-вузлом не малює нічого. Ставити
+ * замість нього статичну «01» не можна: на другій сторінці вона брехала б.
+ *
+ * НАСИЧЕНОСТЕЙ РІВНО ДВІ. Roboto зареєстрований як normal і bold (`pdfFonts`),
+ * і проміжні 500/600 рушій не знайде — він упаде, а не підбере найближчу. Тому
+ * все, що в макеті 600, тут bold.
  */
+
+const INK = "#0e0e10";
+const MUTE = "#6b6c72";
+const SOFT = "#8b8c92";
+const HAIR = "#dcdcd6";
+const RULE = "#e4e4e7";
+const ACCENT = "#b0136b";
 
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Roboto",
     fontSize: 10,
-    color: "#111213",
-    paddingVertical: 40,
+    color: INK,
+    paddingTop: 40,
     paddingHorizontal: 40,
-    lineHeight: 1.4,
+    // Місце під колонтитул: він стоїть `fixed` поверх потоку, тож нижнє поле
+    // мусить бути більшим за нього, інакше текст полізе під лінію.
+    paddingBottom: 96,
+    lineHeight: 1.45,
   },
   head: { flexDirection: "row", alignItems: "flex-start" },
-  headLeft: { flexGrow: 1, flexBasis: 1 },
-  // lineHeight на заголовку обов'язковий: успадкований 1.4 лишав рядок нижче,
-  // ніж його рахує розкладка, і номер прорахунку налазив на назву.
-  title: { fontSize: 22, fontWeight: "bold", letterSpacing: -0.4, lineHeight: 1.15 },
-  meta: { fontSize: 9, color: "#5b5c62", marginTop: 8 },
-  headRight: { textAlign: "right", width: 170 },
-  brand: { fontSize: 15, fontWeight: "bold", letterSpacing: -0.3 },
-  // Лише ширина: висоту рушій дорахує за пропорціями файла, і лого не сплющиться,
-  // якщо бренд колись перемалюють під іншу пропорцію.
-  brandLogo: { width: 62, marginLeft: "auto" },
-  manager: { fontSize: 8, color: "#5b5c62", marginTop: 4, lineHeight: 1.5 },
-  rule: { height: 2, backgroundColor: "#111213", marginTop: 16, marginBottom: 16 },
-  party: { flexDirection: "row", alignItems: "center" },
-  partyLabel: { fontSize: 8, color: "#5b5c62", letterSpacing: 0.4 },
-  partyName: { fontSize: 13, fontWeight: "bold", marginTop: 2 },
-  valid: { marginLeft: "auto", backgroundColor: "#f0f1f2", borderRadius: 6, padding: 8, textAlign: "right" },
-  validLabel: { fontSize: 7, color: "#5b5c62", letterSpacing: 0.4 },
-  validValue: { fontSize: 11, fontWeight: "bold", marginTop: 2 },
-  sectionHead: { fontSize: 10, fontWeight: "bold", color: "#5b5c62", marginTop: 18 },
-  visuals: { flexDirection: "row", flexWrap: "wrap", marginTop: 10 },
-  visual: { width: 120, height: 84, objectFit: "cover", borderRadius: 6, marginRight: 8, marginBottom: 8 },
-  firstItem: { marginTop: 18 },
+  lockup: { width: 100 },
+  brandFallback: { fontSize: 14, fontWeight: "bold" },
+  headRight: { marginLeft: "auto", textAlign: "right" },
+  eyebrow: { fontSize: 6.5, fontWeight: "bold", letterSpacing: 0.9, textTransform: "uppercase", color: MUTE },
+  docNo: { fontSize: 10, fontWeight: "bold", marginTop: 4 },
+  validLabel: { marginTop: 8 },
+  validValue: { fontSize: 10, fontWeight: "bold", marginTop: 2 },
+  // lineHeight на заголовку обов'язковий: успадкований 1.45 лишав рядок нижче,
+  // ніж його рахує розкладка, і підзаголовок налазив на назву.
+  h1: { fontSize: 17, fontWeight: "bold", letterSpacing: -0.2, lineHeight: 1.2, marginTop: 15 },
+  ledeSub: { fontSize: 12, color: MUTE, marginTop: 2 },
+  intro: { fontSize: 10, color: MUTE, marginTop: 8, lineHeight: 1.6, maxWidth: 380 },
+  sectionHead: { fontSize: 8, fontWeight: "bold", letterSpacing: 0.7, textTransform: "uppercase", color: MUTE, marginTop: 14 },
+  visuals: { flexDirection: "row", flexWrap: "wrap", marginTop: 6 },
+  visual: { width: 112, height: 79, objectFit: "cover", borderRadius: 3, borderWidth: 1, borderColor: "#e6e6e1", marginRight: 6, marginBottom: 6 },
   item: {
     flexDirection: "row",
     alignItems: "flex-start",
-    border: "1px solid #dbdce1",
-    borderRadius: 8,
-    padding: 10,
+    borderWidth: 1,
+    borderColor: HAIR,
+    borderRadius: 12,
+    padding: 9,
     marginTop: 8,
   },
-  itemNum: {
-    width: 20,
-    height: 20,
-    backgroundColor: "#f0f1f2",
-    borderRadius: 4,
-    fontSize: 9,
-    fontWeight: "bold",
-    color: "#5b5c62",
-    textAlign: "center",
-    paddingTop: 4,
-  },
-  photo: { width: 62, height: 62, borderRadius: 6, objectFit: "cover", marginLeft: 10 },
+  photo: { width: 100, height: 100, borderWidth: 1, borderColor: "#e6e6e1", borderRadius: 3, objectFit: "cover" },
   photoInitials: {
-    width: 62,
-    height: 62,
-    borderRadius: 6,
-    marginLeft: 10,
-    backgroundColor: "#e3eaf4",
-    color: "#2a5c94",
-    fontSize: 17,
+    width: 100,
+    height: 100,
+    borderWidth: 1,
+    borderColor: "#e6e6e1",
+    borderRadius: 3,
+    backgroundColor: "#f4f7fc",
+    color: "#234f80",
+    fontSize: 20,
     fontWeight: "bold",
     textAlign: "center",
-    paddingTop: 21,
+    paddingTop: 36,
   },
-  itemBody: { flexGrow: 1, flexBasis: 1, marginLeft: 10, marginRight: 10 },
-  itemName: { fontSize: 10, fontWeight: "bold", lineHeight: 1.3 },
-  itemLine: { fontSize: 8.5, color: "#5b5c62", marginTop: 4 },
-  runs: { flexDirection: "row" },
-  run: { width: 92, border: "1px solid #dbdce1", borderRadius: 6, padding: 6, marginLeft: 6 },
-  runQty: { fontSize: 7, color: "#5b5c62", letterSpacing: 0.4 },
-  runUnit: { fontSize: 8, color: "#3a3b40", marginTop: 3 },
-  runTotal: { fontSize: 11, fontWeight: "bold", marginTop: 1 },
-  runHint: { fontSize: 7, color: "#037c52", marginTop: 2 },
-  empty: { fontSize: 9, color: "#5b5c62", marginTop: 8 },
-  intro: { fontSize: 10, color: "#3a3b40", marginTop: 14, lineHeight: 1.6 },
-  block: { borderWidth: 1, borderColor: "#dbdce1", borderRadius: 8, padding: 14, marginTop: 10 },
-  blockTitle: { fontSize: 9, fontWeight: "bold", letterSpacing: 0.4, textTransform: "uppercase" },
-  blockText: { fontSize: 9, color: "#3a3b40", marginTop: 5, lineHeight: 1.55 },
-  summary: { backgroundColor: "#f0f1f2", borderRadius: 8, padding: 14, marginTop: 10 },
-  summaryTitle: { fontSize: 11, fontWeight: "bold" },
-  summaryText: { fontSize: 9, color: "#3a3b40", marginTop: 5, lineHeight: 1.55 },
-  summaryNote: { fontSize: 8, color: "#5b5c62", marginTop: 8, lineHeight: 1.55 },
+  itemBody: { flexGrow: 1, flexBasis: 1, marginLeft: 12 },
+  itemNum: { fontSize: 7.5, fontWeight: "bold", letterSpacing: 0.9, color: ACCENT },
+  itemName: { fontSize: 11.5, fontWeight: "bold", marginTop: 3, lineHeight: 1.3 },
+  itemSpec: { fontSize: 9, color: MUTE, marginTop: 2 },
+  runsHead: { flexDirection: "row", marginTop: 8, paddingBottom: 4 },
+  runsRow: { flexDirection: "row", borderTopWidth: 1, borderTopColor: RULE, paddingVertical: 6 },
+  th: { fontSize: 7.5, fontWeight: "bold", letterSpacing: 0.7, textTransform: "uppercase", color: MUTE },
+  qty: { fontSize: 10 },
+  unit: { fontSize: 10, color: MUTE },
+  sum: { fontSize: 11, fontWeight: "bold", textAlign: "right" },
+  gain: { fontSize: 8, color: "#026a46", textAlign: "right" },
+  note: { fontSize: 8, color: SOFT, marginTop: 8, lineHeight: 1.55 },
+  closing: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: HAIR },
+  closingTitle: { fontSize: 11, fontWeight: "bold" },
+  closingText: { fontSize: 10, color: MUTE, marginTop: 4, lineHeight: 1.6 },
+  empty: { fontSize: 10, color: MUTE, marginTop: 8 },
+  foot: {
+    position: "absolute",
+    left: 40,
+    right: 40,
+    bottom: 34,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: HAIR,
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
+  mark: { width: 36 },
+  motto: { fontSize: 8.5, fontWeight: "bold", letterSpacing: 0.5, marginTop: 6 },
+  footText: { fontSize: 8, color: MUTE, marginTop: 3, lineHeight: 1.5, maxWidth: 300 },
+  // Явна ширина, а не `marginLeft: "auto"`: у @react-pdf авто-відступ праву
+  // колонку не притискає — ліва з flexGrow зʼїдала всю ширину, і контакти
+  // з номером сторінки виїжджали за край аркуша.
+  footRight: { width: 150, textAlign: "right" },
+  footLine: { fontSize: 8, color: MUTE, lineHeight: 1.55 },
 });
 
-/** Адреси картинок уже перетворені на data-URL: див. `resolvePdfImages`. */
 export type PdfImageMap = Record<string, string>;
 
-function ItemCard({ item, images }: { item: CommercialItemRow; images: PdfImageMap }) {
-  const photo = item.imageUrl ? images[item.imageUrl] : "";
-  const lines = [
-    item.methodsSummary ? `Нанесення: ${item.methodsSummary}` : "",
-    item.placementSummary ? `Місце: ${item.placementSummary}` : "",
+/** Ширини колонок таблиці тиражів — ті самі, що в HTML-виході. */
+const COL = { qty: "26%", unit: "24%", sum: "26%", gain: "24%" } as const;
+
+function RunTable({ item, showGain }: { item: CommercialItemRow; showGain: boolean }) {
+  return (
+    <View>
+      <View style={styles.runsHead}>
+        <Text style={[styles.th, { width: COL.qty }]}>Тираж</Text>
+        <Text style={[styles.th, { width: COL.unit }]}>Ціна за шт.</Text>
+        <Text style={[styles.th, { width: showGain ? COL.sum : "50%", textAlign: "right" }]}>Вартість</Text>
+        {showGain ? <Text style={[styles.th, { width: COL.gain, textAlign: "right" }]}>Вигода</Text> : null}
+      </View>
+      {item.runs.map((run, index) => {
+        const discount = unitDiscountPercent(item.runs, index);
+        return (
+          <View key={run.id} style={styles.runsRow}>
+            <Text style={[styles.qty, { width: COL.qty }]}>
+              {formatMoneyPlain(run.qty)} {item.unit}
+            </Text>
+            <Text style={[styles.unit, { width: COL.unit }]}>{formatMoneyPlain(run.unitPrice)} грн</Text>
+            <Text style={[styles.sum, { width: showGain ? COL.sum : "50%" }]}>{formatMoney(run.lineTotal)}</Text>
+            {showGain ? (
+              <Text style={[styles.gain, { width: COL.gain }]}>
+                {discount > 0 ? `−${discount} % за ${item.unit}` : "—"}
+              </Text>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function ItemCard({
+  item,
+  images,
+  showGain,
+}: {
+  item: CommercialItemRow;
+  images: PdfImageMap;
+  showGain: boolean;
+}) {
+  const src = item.imageUrl ? images[item.imageUrl] : undefined;
+  const specs = [
+    item.description,
+    [item.methodsSummary, item.placementSummary].filter(Boolean).join(" — "),
   ].filter(Boolean);
 
   return (
     <View style={styles.item} wrap={false}>
-      <Text style={styles.itemNum}>{item.position}</Text>
-      {photo ? (
-        <Image src={photo} style={styles.photo} />
+      {src ? (
+        <Image src={src} style={styles.photo} />
       ) : (
         <Text style={styles.photoInitials}>{initialsFor(item.name)}</Text>
       )}
       <View style={styles.itemBody}>
+        <Text style={styles.itemNum}>{String(item.position).padStart(2, "0")}</Text>
         <Text style={styles.itemName}>{stripSupplierTag(item.name)}</Text>
-        {lines.length > 0 ? <Text style={styles.itemLine}>{lines.join(" · ")}</Text> : null}
-        {item.description ? <Text style={styles.itemLine}>{item.description}</Text> : null}
-      </View>
-      <View style={styles.runs}>
-        {item.runs.map((run, index) => {
-          const discount = unitDiscountPercent(item.runs, index);
-          return (
-            <View key={run.id} style={styles.run}>
-              <Text style={styles.runQty}>
-                {formatMoneyPlain(run.qty)} {item.unit}
-              </Text>
-              <Text style={styles.runUnit}>
-                {formatMoneyPlain(run.unitPrice)} грн/{item.unit}
-              </Text>
-              <Text style={styles.runTotal}>{formatMoney(run.lineTotal)}</Text>
-              {discount > 0 ? (
-                <Text style={styles.runHint}>
-                  −{discount} % за {item.unit}
-                </Text>
-              ) : null}
-            </View>
-          );
-        })}
+        {specs.map((line) => (
+          <Text key={line} style={styles.itemSpec}>
+            {line}
+          </Text>
+        ))}
+        <RunTable item={item} showGain={showGain} />
       </View>
     </View>
   );
@@ -167,51 +214,38 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
   const hasRunChoice = doc.sections.some((section) => section.items.some((item) => item.runs.length > 1));
   const showSectionHeads = doc.sections.length > 1;
   const quoteNumbers = doc.sections.map((section) => section.quoteNumber).filter(Boolean);
+  const numberLine = [quoteNumbers.length > 0 ? `№ ${quoteNumbers.join(", ")}` : "", doc.createdAt]
+    .filter(Boolean)
+    .join(" · ");
+  const contactLines = doc.manager
+    ? [`${doc.manager.name}, менеджер`, doc.manager.phone, doc.manager.email].filter(Boolean)
+    : [];
 
   return (
     <Document title={doc.title} author="ToSho">
       <Page size="A4" style={styles.page}>
-        <View style={styles.head} fixed={false}>
-          <View style={styles.headLeft}>
-            <Text style={styles.title}>Комерційна пропозиція</Text>
-            <Text style={styles.meta}>
-              {quoteNumbers.length > 0 ? `№ ${quoteNumbers.join(", ")} · ` : ""}від {doc.createdAt}
-            </Text>
-          </View>
+        <View style={styles.head}>
+          {images[OFFER_LOCKUP_URL] ? (
+            <Image src={images[OFFER_LOCKUP_URL]} style={styles.lockup} />
+          ) : (
+            /* Лого не намалювалось — назва словом: документ без жодного знака
+               відправника гірший за документ без картинки. */
+            <Text style={styles.brandFallback}>ToSho</Text>
+          )}
           <View style={styles.headRight}>
-            {images[OFFER_LOGO_URL] ? (
-              <Image src={images[OFFER_LOGO_URL]} style={styles.brandLogo} />
-            ) : (
-              /* Лого не намалювалось (файл не доїхав, полотно не дало PNG) —
-                 назва словом. Документ без жодного знака відправника гірший за
-                 документ без картинки. */
-              <Text style={styles.brand}>ToSho</Text>
-            )}
-            {doc.manager ? (
-              <Text style={styles.manager}>
-                {[`${doc.manager.name}, менеджер`, doc.manager.phone, doc.manager.email]
-                  .filter(Boolean)
-                  .join("\n")}
-              </Text>
+            <Text style={styles.eyebrow}>{OFFER_DOC_LABEL}</Text>
+            <Text style={styles.docNo}>{numberLine}</Text>
+            {doc.validUntil ? (
+              <>
+                <Text style={[styles.eyebrow, styles.validLabel]}>Пропозиція дійсна до</Text>
+                <Text style={styles.validValue}>{doc.validUntil}</Text>
+              </>
             ) : null}
           </View>
         </View>
 
-        <View style={styles.rule} />
-
-        <View style={styles.party}>
-          <View>
-            <Text style={styles.partyLabel}>ДЛЯ</Text>
-            <Text style={styles.partyName}>{doc.customerName}</Text>
-          </View>
-          {doc.validUntil ? (
-            <View style={styles.valid}>
-              <Text style={styles.validLabel}>ПРОПОЗИЦІЯ ДІЙСНА ДО</Text>
-              <Text style={styles.validValue}>{doc.validUntil}</Text>
-            </View>
-          ) : null}
-        </View>
-
+        <Text style={styles.h1}>{OFFER_HEADLINE}</Text>
+        <Text style={styles.ledeSub}>для {doc.customerName}</Text>
         <Text style={styles.intro}>{OFFER_INTRO_TEXT}</Text>
 
         {doc.sections.map((section, index) => (
@@ -234,22 +268,37 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
             {section.items.length === 0 ? (
               <Text style={styles.empty}>У цьому прорахунку немає товарних позицій.</Text>
             ) : (
-              section.items.map((item) => <ItemCard key={item.id} item={item} images={images} />)
+              section.items.map((item) => (
+                <ItemCard key={item.id} item={item} images={images} showGain={hasRunChoice} />
+              ))
             )}
           </View>
         ))}
 
-        <View style={styles.block} wrap={false}>
-          <Text style={styles.blockTitle}>{OFFER_PARTNER_TITLE}</Text>
-          <Text style={styles.blockText}>{OFFER_PARTNER_TEXT}</Text>
+        {hasRunChoice ? <Text style={styles.note}>{RUN_CHOICE_NOTE}</Text> : null}
+
+        <View style={styles.closing} wrap={false}>
+          <Text style={styles.closingTitle}>{OFFER_NEXT_STEP_TITLE}</Text>
+          <Text style={styles.closingText}>{offerSummaryText(doc)}</Text>
         </View>
 
-        <View style={styles.summary} wrap={false}>
-          <Text style={styles.summaryTitle}>{OFFER_NEXT_STEP_TITLE}</Text>
-          <Text style={styles.summaryText}>{offerSummaryText(doc)}</Text>
-          {hasRunChoice ? <Text style={styles.summaryNote}>{RUN_CHOICE_NOTE}</Text> : null}
+        {/* Колонтитул `fixed` — він повторюється на КОЖНІЙ сторінці, і номер у
+            ньому справжній. Сказати рушію «лише на останній» не можна. */}
+        <View style={styles.foot} fixed>
+          <View style={{ flexGrow: 1, flexBasis: 0 }}>
+            {images[OFFER_LOGO_URL] ? <Image src={images[OFFER_LOGO_URL]} style={styles.mark} /> : null}
+            <Text style={styles.motto}>{OFFER_MOTTO}</Text>
+            <Text style={styles.footText}>{OFFER_PARTNER_TEXT}</Text>
+          </View>
+          <View style={styles.footRight}>
+            {contactLines.map((line) => (
+              <Text key={line} style={styles.footLine}>
+                {line}
+              </Text>
+            ))}
+            <Text style={styles.footLine}>{OFFER_SITE}</Text>
+          </View>
         </View>
-
       </Page>
     </Document>
   );

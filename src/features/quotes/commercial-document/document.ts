@@ -14,7 +14,7 @@
  * (`buildCommercialDocument`), друк через iframe і розмітка прев'ю.
  */
 
-import { getAgencyLogo } from "@/lib/agencyAssets";
+import { getAgencyLogo, getAgencyLockup } from "@/lib/agencyAssets";
 import type { QuoteItemExportRow } from "@/lib/toshoApi";
 import { moneyRangeOf, sumMoneyRanges, type MoneyRange } from "@/lib/moneyRange";
 
@@ -320,6 +320,22 @@ const countItems = (doc: CommercialDocument) =>
  * на все одразу. Без нього документ починається таблицею, і кілька варіантів
  * читаються як кілька окремих покупок.
  */
+/**
+ * Шапка й підвал документа (REQ-307).
+ *
+ * ЗАГОЛОВОК ГОВОРИТЬ ПРО ЗАМОВНИКА, а не про себе. «Комерційна пропозиція»
+ * пішла в дрібний надпис над номером: слово, яке нічого не додає, займало
+ * найбільший кегль на сторінці. Тепер перший рядок називає, що саме всередині
+ * і для кого.
+ */
+export const OFFER_DOC_LABEL = "Комерційна пропозиція";
+export const OFFER_HEADLINE = "Брендовані рішення";
+export const OFFER_MOTTO = "ІДЕЯ. ДИЗАЙН. ВИРОБНИЦТВО.";
+export const OFFER_SITE = "tosho.agency";
+
+/** Повний лок-ап у шапці, чистий вордмарк у підвалі — див. `getAgencyLockup`. */
+export const OFFER_LOCKUP_URL = getAgencyLockup();
+
 export const OFFER_INTRO_TEXT =
   "Підібрали варіанти під ваш запит, щоб ви могли порівняти рішення та обрати оптимальне за бюджетом і тиражем.";
 
@@ -360,47 +376,78 @@ const renderPhotoCell = (item: CommercialItemRow) =>
     ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" class="photo" />`
     : `<div class="photo photo-initials">${escapeHtml(initialsFor(item.name))}</div>`;
 
-const renderRunTile = (item: CommercialItemRow, runIndex: number) => {
-  const run = item.runs[runIndex];
-  const discount = unitDiscountPercent(item.runs, runIndex);
-  return `
-    <div class="run">
-      <div class="run-qty">${formatMoneyPlain(run.qty)} ${escapeHtml(item.unit)}</div>
-      <div class="run-unit">${formatMoneyPlain(run.unitPrice)} грн/${escapeHtml(item.unit)}</div>
-      <div class="run-total">${formatMoney(run.lineTotal)}</div>
-      ${discount > 0 ? `<div class="run-hint">−${discount}&nbsp;% за ${escapeHtml(item.unit)}</div>` : ""}
-    </div>
-  `;
+/**
+ * Тиражі — ТАБЛИЦЕЮ, а не плитками в рядок (REQ-307).
+ *
+ * Плитки стояли праворуч від назви й не переносились. На двох тиражах це
+ * працювало, на чотирьох назва товару стискалась у нуль: у PDF прорахунку
+ * TS-0926-0043 «IT1332-21 Anti stress SOLO» склалося в стовпчик по літері, а
+ * перша плитка налізла на назву. Таблиця росте вниз і витримує скільки завгодно
+ * тиражів.
+ *
+ * Колонка «Вигода» з'являється лише коли в документі є позиція з кількома
+ * тиражами: на єдиному тиражі вона була б стовпчиком прочерків.
+ */
+const renderRunTable = (item: CommercialItemRow, showGain: boolean) => {
+  const rows = item.runs
+    .map((run, index) => {
+      const discount = unitDiscountPercent(item.runs, index);
+      const gain = showGain
+        ? `<td class="gain right">${discount > 0 ? `−${discount}&nbsp;% за ${escapeHtml(item.unit)}` : "—"}</td>`
+        : "";
+      return `<tr>
+              <td>${formatMoneyPlain(run.qty)} ${escapeHtml(item.unit)}</td>
+              <td class="unit">${formatMoneyPlain(run.unitPrice)} грн</td>
+              <td class="sum right">${formatMoney(run.lineTotal)}</td>
+              ${gain}
+            </tr>`;
+    })
+    .join("");
+  return `<table class="runs">
+          <thead>
+            <tr>
+              <th class="c1">Тираж</th>
+              <th class="c2">Ціна за шт.</th>
+              <th class="c3 right">Вартість</th>
+              ${showGain ? `<th class="right">Вигода</th>` : ""}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
 };
 
-const renderItemCard = (item: CommercialItemRow) => {
-  const lines = [
-    item.methodsSummary ? `Нанесення: ${escapeHtml(item.methodsSummary)}` : "",
-    item.placementSummary ? `Місце: ${escapeHtml(item.placementSummary)}` : "",
+const renderItemCard = (item: CommercialItemRow, showGain: boolean) => {
+  const specs = [
+    item.description,
+    [item.methodsSummary, item.placementSummary].filter(Boolean).join(" — "),
   ].filter(Boolean);
   return `
-    <article class="item">
-      <div class="item-num">${item.position}</div>
-      ${renderPhotoCell(item)}
-      <div class="item-body">
-        <div class="item-name">${escapeHtml(stripSupplierTag(item.name))}</div>
-        ${lines.length > 0 ? `<div class="item-line">${lines.join(" · ")}</div>` : ""}
-        ${item.description ? `<div class="item-desc">${escapeHtml(item.description)}</div>` : ""}
-      </div>
-      <div class="runs">${item.runs.map((_, index) => renderRunTile(item, index)).join("")}</div>
-    </article>
-  `;
+      <article class="item">
+        ${renderPhotoCell(item)}
+        <div class="item-body">
+          <div class="item-num">${String(item.position).padStart(2, "0")}</div>
+          <h2 class="item-name">${escapeHtml(stripSupplierTag(item.name))}</h2>
+          ${specs.map((line) => `<div class="item-spec">${escapeHtml(line)}</div>`).join("")}
+          ${renderRunTable(item, showGain)}
+        </div>
+      </article>`;
 };
 
 /**
- * Документ для ЗАМОВНИКА, не вигрузка для нас.
+ * Документ для ЗАМОВНИКА, не вигрузка для нас (оформлення REQ-307).
  *
- * До 21.09.2026 це була ландшафтна таблиця на десять колонок, у якій замовник
- * бачив наш внутрішній номер прорахунку, наш статус («На погодженні»), рядок
- * «Прорахунків у документі» й колонку «Категорія / модель». Тепер портретний A4
- * і картки позицій: великий номер, щоб на нього посилались у відповіді, фото,
- * нанесення й тиражі плитками — явне «або/або» замість двох рядків, які легко
- * прочитати як «додається».
+ * НІ ОДНІЄЇ ЗАЛИВКИ — і це не смак, а друк. Браузер за замовчуванням не друкує
+ * фонові кольори, тож будь-яка підкладка зникала б на роздруку, а в PDF, де вона
+ * малюється по-справжньому, аркуш виходив би сірим із білим полем по периметру —
+ * принтери не вміють друк під обріз. Усе тримають волосяні лінії: екран, друк і
+ * PDF показують одне й те саме.
+ *
+ * ЗАОКРУГЛЕННЯ КОНЦЕНТРИЧНІ: фото 4 + відступ картки 12 = картка 16. Зовнішній
+ * радіус завжди дорівнює внутрішньому плюс відступ, інакше кути фото й картки не
+ * паралельні.
+ *
+ * КЕГЛЬ РАХОВАНИЙ ПІД ПАПІР: сторінка A4 має ширину 794 px, тобто один піксель =
+ * 0,75 pt. Текст у 12 px — це 9 pt, дрібно для друку; основний тут 13 px (≈10 pt).
  */
 export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   const hasRunChoice = documentHasRunChoice(doc);
@@ -411,53 +458,48 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
       const itemsHtml =
         section.items.length === 0
           ? `<div class="empty">У цьому прорахунку немає товарних позицій.</div>`
-          : section.items.map((item) => renderItemCard(item)).join("");
+          : section.items.map((item) => renderItemCard(item, hasRunChoice)).join("");
 
       return `
-        <section class="quote-section">
-          ${
-            showSectionHeads
-              ? `<div class="section-head">${sectionIndex + 1}. ${escapeHtml(section.quoteNumber)}</div>`
-              : ""
-          }
-          ${
-            section.visualizations.length > 0
-              ? `<div class="visual-group">
-                   <div class="visual-label">Візуалізації</div>
-                   <div class="visual-grid">
-                     ${section.visualizations
-                       .map(
-                         (file) =>
-                           `<img src="${escapeHtml(file.url)}" alt="${escapeHtml(file.name || section.quoteNumber)}" class="visual-thumb" />`
-                       )
-                       .join("")}
-                   </div>
-                 </div>`
-              : ""
-          }
-          ${itemsHtml}
-        </section>
-      `;
+      ${
+        showSectionHeads
+          ? `<div class="section-head">${sectionIndex + 1}. ${escapeHtml(section.quoteNumber)}</div>`
+          : ""
+      }
+      ${
+        section.visualizations.length > 0
+          ? `<div class="visual-group">
+               <div class="eyebrow">Візуалізації</div>
+               <div class="visual-grid">
+                 ${section.visualizations
+                   .map(
+                     (file) =>
+                       `<img src="${escapeHtml(file.url)}" alt="${escapeHtml(file.name || section.quoteNumber)}" class="visual-thumb" />`
+                   )
+                   .join("")}
+               </div>
+             </div>`
+          : ""
+      }
+      <div class="items">${itemsHtml}</div>`;
     })
     .join("");
-
-  const managerHtml = doc.manager
-    ? `<div class="manager">${[
-        `${escapeHtml(doc.manager.name)}, менеджер`,
-        doc.manager.phone ? escapeHtml(doc.manager.phone) : "",
-        doc.manager.email ? escapeHtml(doc.manager.email) : "",
-      ]
-        .filter(Boolean)
-        .join("<br />")}</div>`
-    : "";
 
   const quoteNumbers = doc.sections.map((section) => section.quoteNumber).filter(Boolean);
   const numberLine = [
     quoteNumbers.length > 0 ? `№ ${escapeHtml(quoteNumbers.join(", "))}` : "",
-    `від ${escapeHtml(doc.createdAt)}`,
+    escapeHtml(doc.createdAt),
   ]
     .filter(Boolean)
     .join(" · ");
+
+  const contactLines = doc.manager
+    ? [
+        `${escapeHtml(doc.manager.name)}, менеджер`,
+        doc.manager.phone ? escapeHtml(doc.manager.phone) : "",
+        doc.manager.email ? escapeHtml(doc.manager.email) : "",
+      ].filter(Boolean)
+    : [];
 
   return `<!doctype html>
 <html lang="uk">
@@ -467,97 +509,98 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
 <title>${escapeHtml(doc.title)}</title>
 <style>
   :root { color-scheme: light; }
-  body { margin: 0; font-family: "Inter", "Segoe UI", sans-serif; color: #111213; background: #f4f5f6; }
-  .page { max-width: 794px; margin: 0 auto; padding: 44px 48px; background: #ffffff; box-sizing: border-box; }
+  /* Roboto першим — саме ним складається PDF, тож на машині зі шрифтом усі
+     чотири виходи збігаються до літери. */
+  body { margin: 0; font-family: "Roboto", "Inter", "Segoe UI", system-ui, sans-serif; color: #0e0e10; background: #ececed; }
+  .page { max-width: 794px; min-height: 1123px; margin: 0 auto; padding: 36px 46px; background: #ffffff; box-sizing: border-box; display: flex; flex-direction: column; }
   .head { display: flex; align-items: flex-start; gap: 24px; }
-  .head-left { flex-grow: 1; }
-  .title { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
-  .meta { margin-top: 8px; font-size: 12px; color: #5b5c62; }
-  .head-right { text-align: right; }
-  .brand { height: 26px; width: auto; }
-  .manager { margin-top: 6px; font-size: 11px; color: #5b5c62; line-height: 1.6; }
-  .rule { height: 2px; background: #111213; margin: 22px 0; }
-  .party { display: flex; align-items: center; gap: 16px; }
-  .party-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; }
-  .party-name { font-size: 17px; font-weight: 600; margin-top: 3px; }
-  .valid { margin-left: auto; background: #f0f1f2; border-radius: 8px; padding: 8px 12px; text-align: right; }
-  .valid-label { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; }
-  .valid-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
-  .intro { margin: 18px 0 0 0; font-size: 13px; line-height: 1.6; color: #3a3b40; max-width: 62ch; }
-  .quote-section { margin-top: 24px; }
-  .block { margin-top: 12px; border: 1px solid #dbdce1; border-radius: 12px; padding: 16px 18px; }
-  .block-title { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-  .block-text { margin: 6px 0 0 0; font-size: 12px; line-height: 1.6; color: #3a3b40; }
-  .section-head { font-size: 13px; font-weight: 600; color: #5b5c62; margin-bottom: 10px; }
-  .visual-group { margin-bottom: 12px; }
-  .visual-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; margin-bottom: 6px; }
-  .visual-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-  .visual-thumb { width: 150px; height: 106px; object-fit: cover; border-radius: 8px; border: 1px solid #dbdce1; }
-  .item { display: flex; gap: 14px; align-items: flex-start; border: 1px solid #dbdce1; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
-  .item-num { width: 26px; height: 26px; flex-shrink: 0; background: #f0f1f2; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #5b5c62; }
-  .photo { width: 84px; height: 84px; flex-shrink: 0; border-radius: 8px; object-fit: cover; background: #f0f1f2; }
-  .photo-initials { display: flex; align-items: center; justify-content: center; background: #e3eaf4; color: #2a5c94; font-size: 22px; font-weight: 600; }
+  .lockup { height: 42px; width: auto; display: block; }
+  .head-right { margin-left: auto; text-align: right; }
+  .eyebrow { font-size: 9px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #6b6c72; }
+  .doc-no { font-size: 13px; font-weight: 600; margin-top: 5px; }
+  .valid-label { margin-top: 10px; }
+  .valid-value { font-size: 13px; font-weight: 700; margin-top: 2px; }
+  .lede { margin-top: 20px; }
+  .lede h1 { margin: 0; font-size: 23px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+  .lede-sub { font-size: 16px; font-weight: 500; color: #6b6c72; margin-top: 2px; }
+  .intro { margin: 10px 0 0 0; font-size: 13px; line-height: 1.6; color: #6b6c72; max-width: 62ch; }
+  .section-head { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6c72; margin: 18px 0 0 0; }
+  .visual-group { margin-top: 14px; }
+  .visual-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .visual-thumb { width: 150px; height: 106px; object-fit: cover; border-radius: 4px; border: 1px solid #e6e6e1; }
+  .items { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .item { display: flex; gap: 16px; align-items: flex-start; border: 1px solid #dcdcd6; border-radius: 16px; padding: 12px; }
+  .photo { width: 134px; height: 134px; flex-shrink: 0; box-sizing: border-box; border: 1px solid #e6e6e1; border-radius: 4px; object-fit: cover; background: #ffffff; }
+  .photo-initials { display: flex; align-items: center; justify-content: center; background: #f4f7fc; color: #234f80; font-size: 26px; font-weight: 600; }
   .item-body { flex-grow: 1; min-width: 0; }
-  .item-name { font-size: 14px; font-weight: 500; line-height: 1.35; }
-  .item-line { font-size: 12px; color: #5b5c62; margin-top: 5px; }
-  .item-desc { font-size: 12px; color: #5b5c62; margin-top: 4px; }
-  .runs { display: flex; gap: 8px; flex-shrink: 0; }
-  .run { width: 124px; box-sizing: border-box; border: 1px solid #dbdce1; border-radius: 8px; padding: 8px 10px; }
-  .run-qty { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; }
-  .run-unit { font-size: 12px; color: #3a3b40; margin-top: 4px; }
-  .run-total { font-size: 15px; font-weight: 600; margin-top: 2px; }
-  .run-hint { font-size: 10px; color: #037c52; margin-top: 3px; }
-  .empty { font-size: 13px; color: #5b5c62; padding: 12px 0; }
-  .summary { margin-top: 24px; background: #f0f1f2; border-radius: 12px; padding: 18px 20px; }
-  .summary-title { font-size: 14px; font-weight: 600; }
-  .summary-text { margin: 6px 0 0 0; font-size: 12px; line-height: 1.6; color: #3a3b40; }
-  .summary-note { margin: 10px 0 0 0; font-size: 11px; line-height: 1.6; color: #5b5c62; }
+  .item-num { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #b0136b; }
+  .item-name { margin: 4px 0 0 0; font-size: 15.5px; font-weight: 600; line-height: 1.3; }
+  .item-spec { font-size: 12px; color: #6b6c72; margin-top: 3px; }
+  .runs { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .runs th { text-align: left; padding: 0 0 5px 0; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6c72; }
+  .runs th.c1 { width: 26%; }
+  .runs th.c2 { width: 24%; }
+  .runs th.c3 { width: 26%; }
+  .runs td { padding: 8px 0; border-top: 1px solid #e4e4e7; font-size: 13px; }
+  .runs td.unit { color: #6b6c72; }
+  .runs td.sum { font-size: 15px; font-weight: 700; }
+  .runs td.gain { font-size: 11px; color: #026a46; }
+  .runs .right { text-align: right; }
+  .note { margin: 10px 0 0 0; font-size: 11px; line-height: 1.55; color: #8b8c92; }
+  .closing { margin-top: 16px; padding-top: 14px; border-top: 1px solid #dcdcd6; }
+  .closing h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .closing p { margin: 5px 0 0 0; font-size: 13px; line-height: 1.6; color: #6b6c72; max-width: 64ch; }
+  .empty { font-size: 13px; color: #6b6c72; padding: 12px 0; }
+  .foot { margin-top: auto; padding-top: 14px; border-top: 1px solid #dcdcd6; display: flex; align-items: flex-end; gap: 24px; }
+  .mark { height: 15px; width: auto; display: block; }
+  .motto { font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; margin-top: 8px; }
+  .foot-text { margin: 3px 0 0 0; font-size: 10.5px; line-height: 1.5; color: #6b6c72; max-width: 54ch; }
+  .foot-right { text-align: right; font-size: 10.5px; color: #6b6c72; line-height: 1.55; white-space: nowrap; }
   @media print {
     body { background: #fff; }
-    .page { max-width: none; padding: 0; }
+    .page { max-width: none; min-height: 0; padding: 0; }
     @page { size: A4 portrait; margin: 14mm; }
-    .item, .summary, .block { page-break-inside: avoid; }
+    .item, .closing { page-break-inside: avoid; }
   }
 </style>
 </head>
 <body>
 <main class="page">
   <header class="head">
-    <div class="head-left">
-      <h1 class="title">Комерційна пропозиція</h1>
-      <div class="meta">${numberLine}</div>
-    </div>
+    <img src="${escapeHtml(OFFER_LOCKUP_URL)}" alt="ToSho — Brand Experience &amp; Production" class="lockup" />
     <div class="head-right">
-      <img class="brand" src="${OFFER_LOGO_URL}" alt="ToSho" />
-      ${managerHtml}
+      <div class="eyebrow">${escapeHtml(OFFER_DOC_LABEL)}</div>
+      <div class="doc-no">${numberLine}</div>
+      ${
+        doc.validUntil
+          ? `<div class="eyebrow valid-label">Пропозиція дійсна до</div>
+             <div class="valid-value">${escapeHtml(doc.validUntil)}</div>`
+          : ""
+      }
     </div>
   </header>
-  <div class="rule"></div>
-  <div class="party">
-    <div>
-      <div class="party-label">Для</div>
-      <div class="party-name">${escapeHtml(doc.customerName)}</div>
-    </div>
-    ${
-      doc.validUntil
-        ? `<div class="valid">
-             <div class="valid-label">Пропозиція дійсна до</div>
-             <div class="valid-value">${escapeHtml(doc.validUntil)}</div>
-           </div>`
-        : ""
-    }
+  <div class="lede">
+    <h1>${escapeHtml(OFFER_HEADLINE)}</h1>
+    <div class="lede-sub">для ${escapeHtml(doc.customerName)}</div>
   </div>
   <p class="intro">${escapeHtml(OFFER_INTRO_TEXT)}</p>
   ${sectionsHtml}
-  <div class="block">
-    <div class="block-title">${escapeHtml(OFFER_PARTNER_TITLE)}</div>
-    <p class="block-text">${escapeHtml(OFFER_PARTNER_TEXT)}</p>
-  </div>
-  <div class="summary">
-    <div class="summary-title">${escapeHtml(OFFER_NEXT_STEP_TITLE)}</div>
-    <p class="summary-text">${escapeHtml(offerSummaryText(doc))}</p>
-    ${hasRunChoice ? `<p class="summary-note">${escapeHtml(RUN_CHOICE_NOTE)}</p>` : ""}
-  </div>
+  ${hasRunChoice ? `<p class="note">${escapeHtml(RUN_CHOICE_NOTE)}</p>` : ""}
+  <section class="closing">
+    <h2>${escapeHtml(OFFER_NEXT_STEP_TITLE)}</h2>
+    <p>${escapeHtml(offerSummaryText(doc))}</p>
+  </section>
+  <footer class="foot">
+    <div style="flex-grow: 1;">
+      <img src="${escapeHtml(OFFER_LOGO_URL)}" alt="ToSho" class="mark" />
+      <div class="motto">${escapeHtml(OFFER_MOTTO)}</div>
+      <p class="foot-text">${escapeHtml(OFFER_PARTNER_TEXT)}</p>
+    </div>
+    <div class="foot-right">
+      ${contactLines.map((line) => `<div>${line}</div>`).join("")}
+      <div>${escapeHtml(OFFER_SITE)}</div>
+    </div>
+  </footer>
 </main>
 </body>
 </html>`;

@@ -15,6 +15,7 @@ import {
   buildCommercialSheetRows,
   COMMERCIAL_SHEET_COLUMNS,
   getCommercialDocFilename,
+  OFFER_LOCKUP_URL,
   OFFER_LOGO_URL,
   type CommercialDocument,
 } from "./document";
@@ -171,6 +172,9 @@ const resolvePdfImages = async (doc: CommercialDocument) => {
     // Лого йде тією ж дорогою, що й фото товарів: @react-pdf не вміє SVG, а
     // бренд у нас саме SVG — без растеризації шапка PDF лишилась би порожньою.
     (async () => [OFFER_LOGO_URL, await toPngDataUrl(OFFER_LOGO_URL, LOGO_RASTER_WIDTH)] as const)(),
+    // Лок-ап шапки — растр із коробки, але великий: у документі він стоїть
+    // на 100 pt, тобто вдвічі ширший за вордмарк у підвалі.
+    (async () => [OFFER_LOCKUP_URL, await toPngDataUrl(OFFER_LOCKUP_URL, LOGO_RASTER_WIDTH)] as const)(),
     ...Array.from(urls).map(async (url) => [url, await toPngDataUrl(url)] as const),
   ]);
   return Object.fromEntries(entries.filter(([, data]) => data));
