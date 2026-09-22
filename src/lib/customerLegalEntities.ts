@@ -256,6 +256,21 @@ export const formatOwnershipTypeLabel = (value?: string | null) => {
   return OWNERSHIP_LABELS[normalized] ?? normalized.toUpperCase();
 };
 
+/**
+ * Чи платник ПДВ — за ставкою з реквізитів. Один предикат на всі місця, де від
+ * цього залежить, вимагати ІПН платника ПДВ чи ні.
+ *
+ * СТАВКА 0% — ЦЕ НЕ ПЛАТНИК. У переліку є і «немає», і «0%», і менеджери
+ * ставлять «0%» саме тим, хто ПДВ не платить. Доки «0%» рахувалось ставкою
+ * платника, таким замовникам поле «ІПН платника ПДВ» світилось обовʼязковим —
+ * при тому, що ІПН їм нізвідки взяти.
+ */
+export const isVatPayerRate = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === "" || value === "none") return false;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0;
+};
+
 export const formatVatRateLabel = (value?: string | null) => {
   const normalized = (value ?? "").trim().toLowerCase();
   if (!normalized || normalized === "none") return "Без ПДВ";

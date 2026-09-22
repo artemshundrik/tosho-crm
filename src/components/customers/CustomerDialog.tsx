@@ -46,6 +46,7 @@ import {
   formatVatRateLabel,
   getCustomerLegalEntityDocumentMissingFields,
   hasCustomerLegalEntityIdentity,
+  isVatPayerRate,
   splitSignatoryFullName,
   type CustomerLegalEntity,
 } from "@/lib/customerLegalEntities";
@@ -309,6 +310,20 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     "basic"
   );
   const [quickMode, setQuickMode] = React.useState(true);
+  /**
+   * Збереження, зупинене підсвіченими полями, мусить сказати про себе БІЛЯ КНОПКИ.
+   * Самі поля живуть на «Основному», і з вкладки «Юр. особи» натискання
+   * «Зберегти» виглядало як «нічого не сталось»: вікно мовчить, а чому не
+   * зберігається — невідомо.
+   */
+  const blockedByFields = fieldErrors ? Object.keys(fieldErrors).length > 0 : false;
+  const footerMessage =
+    error ??
+    (blockedByFields
+      ? quickMode || section === "basic"
+        ? "Не зберегли: заповніть підсвічені обовʼязкові поля."
+        : "Не зберегли: на вкладці «Основне» не заповнені обовʼязкові поля."
+      : null);
   const normalizedLogoUrl = React.useMemo(() => normalizeCustomerLogoUrl(form.logoUrl), [form.logoUrl]);
   const [logoPreviewUrl, setLogoPreviewUrl] = React.useState<string | null>(null);
   const hasInvalidLogoUrl = React.useMemo(
@@ -1363,7 +1378,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       />
                     </div>
 
-                    {/* ЄДРПОУ та ІПН платника ПДВ — два окремі поля. Для платника ПДВ ІПН обовʼязковий (12 цифр). */}
+                    {/* ЄДРПОУ та ІПН платника ПДВ — два окремі поля. ІПН обовʼязковий лише платнику
+                        ПДВ (ставка > 0): «немає» і «0%» — не платники, див. isVatPayerRate. */}
                     <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="grid gap-2">
                         <Label>{activeLegalEntityIsPerson ? "ІПН (10 цифр)" : "Код ЄДРПОУ"}</Label>
@@ -1379,7 +1395,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         <div className="grid gap-2">
                           <Label>
                             ІПН платника ПДВ
-                            {activeLegalEntity.vatRate !== "none" && activeLegalEntity.vatRate !== "" ? (
+                            {isVatPayerRate(activeLegalEntity.vatRate) ? (
                               <span className="text-destructive"> *</span>
                             ) : null}
                           </Label>
@@ -1390,9 +1406,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             validLength={12}
                             placeholder="12-значний ІПН"
                           />
-                          {activeLegalEntity.vatRate !== "none" &&
-                          activeLegalEntity.vatRate !== "" &&
-                          activeLegalEntity.vatId.trim() !== "" &&
+                          {activeLegalEntity.vatId.trim() !== "" &&
                           activeLegalEntity.vatId.trim().length !== 12 ? (
                             <p className="text-xs text-destructive">
                               ІПН має містити рівно 12 цифр (зараз {activeLegalEntity.vatId.trim().length}).
@@ -1766,16 +1780,20 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
           </Tabs>
           )}
 
-          {error ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
+        </div>
+
+        </div>
+
+        {/* Причина відмови живе при кнопці, а не в кінці полотна: раніше вона
+            лягала останнім блоком усередині прокрутки, і з вкладки «Юр. особи»
+            її не було видно — натиснув «Зберегти», нічого не сталось, чому не
+            зберігається, невідомо. */}
+        <div className="px-6 py-4 border-t shrink-0 bg-background">
+          {footerMessage ? (
+            <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {footerMessage}
             </div>
           ) : null}
-        </div>
-
-        </div>
-
-        <div className="px-6 py-4 border-t shrink-0 bg-background">
           <SheetFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Скасувати

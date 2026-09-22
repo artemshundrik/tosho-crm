@@ -5,6 +5,7 @@ import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborator
 import type { Database, Json } from "@/lib/database.types";
 import {
   formatCustomerLegalEntityTitle,
+  isVatPayerRate,
   parseCustomerLegalEntities,
 } from "@/lib/customerLegalEntities";
 import { supabase } from "@/lib/supabaseClient";
@@ -1103,8 +1104,10 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     const hasLegalEntityIdentity = Boolean(
       legalEntityLabel && taxId && customerIban && customerLegalAddress && signatoryName && signatoryPosition && signatoryAuthority
     );
-    // Платник ПДВ (ставка ПДВ задана, не "none") зобовʼязаний мати ІПН платника ПДВ — рівно 12 цифр.
-    const isVatPayer = Boolean(vatRate && vatRate !== "none");
+    // Платник ПДВ (ставка > 0) зобовʼязаний мати ІПН платника ПДВ — рівно 12 цифр.
+    // «немає» і «0%» — не платники, і вимагати з них ІПН означало б намертво
+    // заблокувати готовність замовлення номером, якого в них немає.
+    const isVatPayer = isVatPayerRate(vatRate);
     const hasValidVatId = /^\d{12}$/.test(vatId.trim());
     // Підписант має бути вказаний повним ПІБ (прізвище + імʼя + по-батькові) — тягнеться у договір/СП.
     const hasFullSignatoryName = signatoryName.trim().split(/\s+/).filter(Boolean).length >= 3;

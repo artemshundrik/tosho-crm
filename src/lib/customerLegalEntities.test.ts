@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { splitSignatoryFullName } from "./customerLegalEntities";
+import { isVatPayerRate, splitSignatoryFullName } from "./customerLegalEntities";
 
 /**
  * Розбір ПІБ визначає, що потрапить у договір: підпис «Д.О. Буйна» будується з
@@ -84,5 +84,33 @@ describe("splitSignatoryFullName", () => {
       first: "Дар'я",
       middle: "Олександрівна",
     });
+  });
+});
+
+/**
+ * Від цього предиката залежить, кому CRM вимагає ІПН платника ПДВ: і зірочка в
+ * реквізитах, і блокувальний пункт готовності замовлення. «0%» тут — НЕ платник:
+ * менеджери ставлять цю ставку тим, хто ПДВ не платить, і вимагати з них
+ * 12-значний номер означало б не дати ні зберегти реквізити, ні оформити
+ * замовлення.
+ */
+describe("isVatPayerRate", () => {
+  it("ставка більша за нуль — платник", () => {
+    expect(isVatPayerRate("20")).toBe(true);
+    expect(isVatPayerRate("7")).toBe(true);
+    expect(isVatPayerRate(20)).toBe(true);
+  });
+
+  it("0%, «немає» і порожнеча — не платник", () => {
+    expect(isVatPayerRate("0")).toBe(false);
+    expect(isVatPayerRate(0)).toBe(false);
+    expect(isVatPayerRate("none")).toBe(false);
+    expect(isVatPayerRate("")).toBe(false);
+    expect(isVatPayerRate(null)).toBe(false);
+    expect(isVatPayerRate(undefined)).toBe(false);
+  });
+
+  it("сміття замість ставки не робить платником", () => {
+    expect(isVatPayerRate("абищо")).toBe(false);
   });
 });

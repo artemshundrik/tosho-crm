@@ -1193,16 +1193,18 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             </Tabs>
           )}
 
+        </div>
+
+        </div>
+
+        {/* Причина відмови — при кнопці, а не в кінці полотна: у прокрутці її
+            з верхніх вкладок не видно (та сама історія, що в CustomerDialog). */}
+        <div className="px-6 py-4 border-t shrink-0 bg-background">
           {error ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           ) : null}
-        </div>
-
-        </div>
-
-        <div className="px-6 py-4 border-t shrink-0 bg-background">
           <SheetFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Скасувати
