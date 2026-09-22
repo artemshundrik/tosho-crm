@@ -5,7 +5,11 @@ import {
   formatMoneyPlain,
   initialsFor,
   offerSummaryText,
+  OFFER_INTRO_TEXT,
   OFFER_LOGO_URL,
+  OFFER_NEXT_STEP_TITLE,
+  OFFER_PARTNER_TEXT,
+  OFFER_PARTNER_TITLE,
   stripSupplierTag,
   RUN_CHOICE_NOTE,
   unitDiscountPercent,
@@ -101,7 +105,11 @@ const styles = StyleSheet.create({
   runTotal: { fontSize: 11, fontWeight: "bold", marginTop: 1 },
   runHint: { fontSize: 7, color: "#037c52", marginTop: 2 },
   empty: { fontSize: 9, color: "#5b5c62", marginTop: 8 },
-  summary: { backgroundColor: "#f0f1f2", borderRadius: 8, padding: 14, marginTop: 18 },
+  intro: { fontSize: 10, color: "#3a3b40", marginTop: 14, lineHeight: 1.6 },
+  block: { borderWidth: 1, borderColor: "#dbdce1", borderRadius: 8, padding: 14, marginTop: 10 },
+  blockTitle: { fontSize: 9, fontWeight: "bold", letterSpacing: 0.4, textTransform: "uppercase" },
+  blockText: { fontSize: 9, color: "#3a3b40", marginTop: 5, lineHeight: 1.55 },
+  summary: { backgroundColor: "#f0f1f2", borderRadius: 8, padding: 14, marginTop: 10 },
   summaryTitle: { fontSize: 11, fontWeight: "bold" },
   summaryText: { fontSize: 9, color: "#3a3b40", marginTop: 5, lineHeight: 1.55 },
   summaryNote: { fontSize: 8, color: "#5b5c62", marginTop: 8, lineHeight: 1.55 },
@@ -204,6 +212,8 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
           ) : null}
         </View>
 
+        <Text style={styles.intro}>{OFFER_INTRO_TEXT}</Text>
+
         {doc.sections.map((section, index) => (
           <View key={section.quoteId}>
             {showSectionHeads ? (
@@ -229,8 +239,13 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
           </View>
         ))}
 
+        <View style={styles.block} wrap={false}>
+          <Text style={styles.blockTitle}>{OFFER_PARTNER_TITLE}</Text>
+          <Text style={styles.blockText}>{OFFER_PARTNER_TEXT}</Text>
+        </View>
+
         <View style={styles.summary} wrap={false}>
-          <Text style={styles.summaryTitle}>Підсумок</Text>
+          <Text style={styles.summaryTitle}>{OFFER_NEXT_STEP_TITLE}</Text>
           <Text style={styles.summaryText}>{offerSummaryText(doc)}</Text>
           {hasRunChoice ? <Text style={styles.summaryNote}>{RUN_CHOICE_NOTE}</Text> : null}
         </View>

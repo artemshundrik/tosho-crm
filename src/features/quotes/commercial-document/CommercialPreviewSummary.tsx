@@ -1,4 +1,11 @@
-import { offerSummaryText, RUN_CHOICE_NOTE, type CommercialDocument } from "./document";
+import {
+  offerSummaryText,
+  OFFER_NEXT_STEP_TITLE,
+  OFFER_PARTNER_TEXT,
+  OFFER_PARTNER_TITLE,
+  RUN_CHOICE_NOTE,
+  type CommercialDocument,
+} from "./document";
 
 /**
  * Смуга підсумку в прев'ю КП — рівно те, що поїде в документі.
@@ -21,10 +28,16 @@ export function CommercialPreviewSummary({ doc }: { doc: CommercialDocument }) {
   );
 
   return (
-    <div className="space-y-1 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
-      <div className="text-sm font-semibold">Підсумок</div>
-      <p className="text-xs text-muted-foreground">{offerSummaryText(doc)}</p>
-      {hasRunChoice ? <p className="text-xs text-muted-foreground">{RUN_CHOICE_NOTE}</p> : null}
+    <div className="space-y-3">
+      <div className="space-y-1 rounded-lg border border-border/60 px-4 py-3">
+        <div className="text-2xs font-bold uppercase tracking-wide">{OFFER_PARTNER_TITLE}</div>
+        <p className="text-xs text-muted-foreground">{OFFER_PARTNER_TEXT}</p>
+      </div>
+      <div className="space-y-1 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+        <div className="text-sm font-semibold">{OFFER_NEXT_STEP_TITLE}</div>
+        <p className="text-xs text-muted-foreground">{offerSummaryText(doc)}</p>
+        {hasRunChoice ? <p className="text-xs text-muted-foreground">{RUN_CHOICE_NOTE}</p> : null}
+      </div>
     </div>
   );
 }

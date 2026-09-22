@@ -312,6 +312,26 @@ const countItems = (doc: CommercialDocument) =>
   doc.sections.reduce((sum, section) => sum + section.items.length, 0);
 
 /**
+ * Абзац під шапкою — перше, що замовник читає перед товарами.
+ *
+ * Не той вступ, що прибирали 21.09.2026 (REQ-297#p1): там був технічний рядок
+ * про кількість позицій і ПДВ, тобто переказ того, що й так видно нижче. Цей
+ * пояснює, ЧОМУ позицій кілька — їх підібрали на вибір, а не виставили рахунок
+ * на все одразу. Без нього документ починається таблицею, і кілька варіантів
+ * читаються як кілька окремих покупок.
+ */
+export const OFFER_INTRO_TEXT =
+  "Підібрали варіанти під ваш запит, щоб ви могли порівняти рішення та обрати оптимальне за бюджетом і тиражем.";
+
+/**
+ * Блок після товарів. Текст власника (22.09.2026) — переписувати його своїми
+ * словами не можна: це те, чим агенція себе продає, а не пояснення механіки.
+ */
+export const OFFER_PARTNER_TITLE = "Один партнер замість кількох підрядників";
+export const OFFER_PARTNER_TEXT =
+  "ToSho бере на себе весь процес: підбір, дизайн і макети, брендування, виробництво, пакування та логістику.";
+
+/**
  * Те, що стоїть у документі ЗАМІСТЬ «Разом».
  *
  * Підсумок прибрано свідомо (REQ-296, закриває дірку REQ-267#p2): позиції
@@ -319,11 +339,18 @@ const countItems = (doc: CommercialDocument) =>
  * додаванням. На живому прорахунку TS-0926-0029 це давало «від 80 162 до
  * 120 618 ₴» там, де реальна вилка 34 257 – 85 276 ₴. Менше число замість
  * більшого нічого не полагодило б: поки вибору немає, ЖОДНА сума не правдива.
+ *
+ * ЧОМУ ЦЕ ОДИН БЛОК, А НЕ «ПІДСУМОК» + «РУХАЄМОСЯ ДАЛІ?». Кінцівка власника
+ * просить рівно те саме, що й пояснення про суму: назвати позиції. Двома
+ * блоками поспіль документ питав про це двічі різними словами — на макеті це
+ * було видно одразу. Тому заголовок став питанням, а прохання — продовженням
+ * пояснення, чому підсумку немає.
  */
+export const OFFER_NEXT_STEP_TITLE = "Рухаємося далі?";
 export const OFFER_SUMMARY_TEXT_WITH_RUNS =
-  "Єдиної суми тут немає навмисно: вона залежить від того, які позиції й який тираж ви оберете. Назвіть номери — порахуємо підсумок того ж дня.";
+  "Єдиної суми тут немає навмисно: вона залежить від того, які позиції й який тираж ви оберете. Напишіть, які позиції вам сподобались, — підготуємо фінальний прорахунок, візуалізації та уточнимо терміни.";
 export const OFFER_SUMMARY_TEXT_SINGLE_RUN =
-  "Єдиної суми тут немає навмисно: вона залежить від того, які позиції ви оберете. Назвіть номери — порахуємо підсумок того ж дня.";
+  "Єдиної суми тут немає навмисно: вона залежить від того, які позиції ви оберете. Напишіть, які позиції вам сподобались, — підготуємо фінальний прорахунок, візуалізації та уточнимо терміни.";
 
 export const offerSummaryText = (doc: CommercialDocument) =>
   documentHasRunChoice(doc) ? OFFER_SUMMARY_TEXT_WITH_RUNS : OFFER_SUMMARY_TEXT_SINGLE_RUN;
@@ -456,7 +483,11 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .valid { margin-left: auto; background: #f0f1f2; border-radius: 8px; padding: 8px 12px; text-align: right; }
   .valid-label { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; }
   .valid-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
+  .intro { margin: 18px 0 0 0; font-size: 13px; line-height: 1.6; color: #3a3b40; max-width: 62ch; }
   .quote-section { margin-top: 24px; }
+  .block { margin-top: 12px; border: 1px solid #dbdce1; border-radius: 12px; padding: 16px 18px; }
+  .block-title { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .block-text { margin: 6px 0 0 0; font-size: 12px; line-height: 1.6; color: #3a3b40; }
   .section-head { font-size: 13px; font-weight: 600; color: #5b5c62; margin-bottom: 10px; }
   .visual-group { margin-bottom: 12px; }
   .visual-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #5b5c62; margin-bottom: 6px; }
@@ -485,7 +516,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
     body { background: #fff; }
     .page { max-width: none; padding: 0; }
     @page { size: A4 portrait; margin: 14mm; }
-    .item, .summary { page-break-inside: avoid; }
+    .item, .summary, .block { page-break-inside: avoid; }
   }
 </style>
 </head>
@@ -516,9 +547,14 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
         : ""
     }
   </div>
+  <p class="intro">${escapeHtml(OFFER_INTRO_TEXT)}</p>
   ${sectionsHtml}
+  <div class="block">
+    <div class="block-title">${escapeHtml(OFFER_PARTNER_TITLE)}</div>
+    <p class="block-text">${escapeHtml(OFFER_PARTNER_TEXT)}</p>
+  </div>
   <div class="summary">
-    <div class="summary-title">Підсумок</div>
+    <div class="summary-title">${escapeHtml(OFFER_NEXT_STEP_TITLE)}</div>
     <p class="summary-text">${escapeHtml(offerSummaryText(doc))}</p>
     ${hasRunChoice ? `<p class="summary-note">${escapeHtml(RUN_CHOICE_NOTE)}</p>` : ""}
   </div>
@@ -567,6 +603,11 @@ export const buildCommercialSheetRows = (doc: CommercialDocument): CommercialShe
   if (doc.validUntil) rows.push(["Дійсна до", doc.validUntil]);
   rows.push(["Позицій", countItems(doc)]);
   rows.push([]);
+  // Тексти документа стоять ПЕРЕД таблицею, хоч у пропозиції два з них ідуть
+  // після товарів: під таблицею на сотню рядків їх не прочитає ніхто, а порядок
+  // абзаців у аркуші нічого не означає — на відміну від порядку колонок.
+  rows.push([OFFER_INTRO_TEXT]);
+  rows.push([`${OFFER_PARTNER_TITLE}. ${OFFER_PARTNER_TEXT}`]);
   rows.push([offerSummaryText(doc)]);
   rows.push([]);
 

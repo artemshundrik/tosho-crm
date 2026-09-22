@@ -200,15 +200,34 @@ describe("вихід 4 — аркуш для Excel", () => {
  * назад, не згадавши про колонку в Excel. Один тест на всі виходи одразу.
  */
 describe("роль «варіант» не лишила слідів", () => {
-  it("жоден вихід не згадує варіантів", () => {
+  /**
+   * Сторож стереже СЛІДИ РОЛІ, а не саме слово.
+   *
+   * До 22.09.2026 він забороняв у виходах будь-яке «варіант» — і спіткнувся об
+   * вступний абзац пропозиції («підібрали варіанти під ваш запит»), де це
+   * звичайне слово, а не позначка. Заборона на слово стерегла б і від нього, а
+   * писати документ замовнику в обхід словника — надто дорога плата за тест.
+   *
+   * Тому нижче перелічені рівно ті рядки, якими роль себе показувала: пігулка
+   * «Варіант» у рядку позиції, пояснення про цю позначку, підказка про обраний
+   * варіант і остання колонка «Роль» в Excel.
+   */
+  const ROLE_TRACES = ["«Варіант»", "Позиції з позначкою", "обраного варіанта"];
+
+  it("жоден вихід не згадує ролі", () => {
     const withEverything = doc([section([...threeProducts, ...withRunChoice])]);
-    for (const output of [
-      renderCommercialDocumentHtml(withEverything),
-      flat(buildCommercialSheetRows(withEverything)),
-    ]) {
-      expect(norm(output)).not.toContain("Варіант");
-      expect(norm(output)).not.toContain("варіант");
+    const html = norm(renderCommercialDocumentHtml(withEverything));
+    const rows = buildCommercialSheetRows(withEverything);
+
+    for (const output of [html, flat(rows)]) {
+      for (const trace of ROLE_TRACES) expect(norm(output)).not.toContain(trace);
     }
+
+    // Пігулка й колонка — не фрази, а окремі значення: у розмітці це підпис
+    // елемента, в аркуші — ціла клітинка.
+    expect(html).not.toContain(">Варіант<");
+    expect(rows.some((row) => row.some((cell) => cell === "Варіант"))).toBe(false);
+    expect(COMMERCIAL_SHEET_COLUMNS).not.toContain("Роль");
   });
 });
 
