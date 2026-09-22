@@ -14,6 +14,7 @@
  * (`buildCommercialDocument`), друк через iframe і розмітка прев'ю.
  */
 
+import { getAgencyLogo } from "@/lib/agencyAssets";
 import type { QuoteItemExportRow } from "@/lib/toshoApi";
 import { moneyRangeOf, sumMoneyRanges, type MoneyRange } from "@/lib/moneyRange";
 
@@ -27,6 +28,19 @@ export type { MoneyRange };
  * документі більше немає — поки замовник не обрав позиції й тираж, єдиної суми
  * не існує.
  */
+/**
+ * Логотип у шапці документа — той самий файл, що й у сайдбарі (`getAgencyLogo`),
+ * а не друга копія й не слово «ToSho» текстом.
+ *
+ * ВАРІАНТ ЗАВЖДИ СВІТЛИЙ: сторінка документа біла в усіх виходах — і на екрані,
+ * і в друці, і в PDF, — тож теми тут немає й вибирати нема з чого. Тёмний файл
+ * на білому аркуші був би невидимий.
+ *
+ * Адреса, а не вбудований SVG: інакше байти лого жили б у двох місцях і
+ * розійшлися б при першій же зміні бренду.
+ */
+export const OFFER_LOGO_URL = getAgencyLogo("light");
+
 export const RUN_CHOICE_NOTE =
   "У пропозиції є позиції з кількома тиражами. Тиражі взаємовиключні — ви обираєте один, тому ціна наведена окремо для кожного тиражу, а спільного підсумку в документі немає.";
 
@@ -433,7 +447,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .title { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
   .meta { margin-top: 8px; font-size: 12px; color: #5b5c62; }
   .head-right { text-align: right; }
-  .brand { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .brand { height: 26px; width: auto; }
   .manager { margin-top: 6px; font-size: 11px; color: #5b5c62; line-height: 1.6; }
   .rule { height: 2px; background: #111213; margin: 22px 0; }
   .party { display: flex; align-items: center; gap: 16px; }
@@ -483,7 +497,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
       <div class="meta">${numberLine}</div>
     </div>
     <div class="head-right">
-      <div class="brand">ToSho</div>
+      <img class="brand" src="${OFFER_LOGO_URL}" alt="ToSho" />
       ${managerHtml}
     </div>
   </header>

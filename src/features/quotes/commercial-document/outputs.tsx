@@ -15,6 +15,7 @@ import {
   buildCommercialSheetRows,
   COMMERCIAL_SHEET_COLUMNS,
   getCommercialDocFilename,
+  OFFER_LOGO_URL,
   type CommercialDocument,
 } from "./document";
 
@@ -124,8 +125,14 @@ export const COMMERCIAL_SHEET_COLUMN_COUNT = COMMERCIAL_SHEET_COLUMNS.length;
  */
 const MAX_IMAGE_SIDE = 600;
 const FALLBACK_IMAGE_SIDE = 300;
+/**
+ * Лого малюємо втричі більшим за його власні 230 px. Воно векторне, тож
+ * збільшення нічого не коштує в якості, а в PDF воно стоїть ~62 pt завширшки:
+ * піксель-у-пункт дав би розмиту пляму на друці замість чіткого знака.
+ */
+const LOGO_RASTER_WIDTH = 690;
 
-const toPngDataUrl = async (url: string): Promise<string> => {
+const toPngDataUrl = async (url: string, targetWidth?: number): Promise<string> => {
   try {
     const response = await fetch(url);
     if (!response.ok) return "";
@@ -138,7 +145,7 @@ const toPngDataUrl = async (url: string): Promise<string> => {
       // SVG без власних розмірів віддає нуль — беремо розумний квадрат.
       const width = image.naturalWidth || FALLBACK_IMAGE_SIDE;
       const height = image.naturalHeight || FALLBACK_IMAGE_SIDE;
-      const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(width, height));
+      const scale = targetWidth ? targetWidth / width : Math.min(1, MAX_IMAGE_SIDE / Math.max(width, height));
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.round(width * scale));
       canvas.height = Math.max(1, Math.round(height * scale));
@@ -160,9 +167,12 @@ const resolvePdfImages = async (doc: CommercialDocument) => {
     for (const item of section.items) if (item.imageUrl) urls.add(item.imageUrl);
     for (const visual of section.visualizations) if (visual.url) urls.add(visual.url);
   }
-  const entries = await Promise.all(
-    Array.from(urls).map(async (url) => [url, await toPngDataUrl(url)] as const)
-  );
+  const entries = await Promise.all([
+    // Лого йде тією ж дорогою, що й фото товарів: @react-pdf не вміє SVG, а
+    // бренд у нас саме SVG — без растеризації шапка PDF лишилась би порожньою.
+    (async () => [OFFER_LOGO_URL, await toPngDataUrl(OFFER_LOGO_URL, LOGO_RASTER_WIDTH)] as const)(),
+    ...Array.from(urls).map(async (url) => [url, await toPngDataUrl(url)] as const),
+  ]);
   return Object.fromEntries(entries.filter(([, data]) => data));
 };
 

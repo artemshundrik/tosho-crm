@@ -5,6 +5,7 @@ import {
   formatMoneyPlain,
   initialsFor,
   offerSummaryText,
+  OFFER_LOGO_URL,
   stripSupplierTag,
   RUN_CHOICE_NOTE,
   unitDiscountPercent,
@@ -43,6 +44,9 @@ const styles = StyleSheet.create({
   meta: { fontSize: 9, color: "#5b5c62", marginTop: 8 },
   headRight: { textAlign: "right", width: 170 },
   brand: { fontSize: 15, fontWeight: "bold", letterSpacing: -0.3 },
+  // Лише ширина: висоту рушій дорахує за пропорціями файла, і лого не сплющиться,
+  // якщо бренд колись перемалюють під іншу пропорцію.
+  brandLogo: { width: 62, marginLeft: "auto" },
   manager: { fontSize: 8, color: "#5b5c62", marginTop: 4, lineHeight: 1.5 },
   rule: { height: 2, backgroundColor: "#111213", marginTop: 16, marginBottom: 16 },
   party: { flexDirection: "row", alignItems: "center" },
@@ -167,7 +171,14 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
             </Text>
           </View>
           <View style={styles.headRight}>
-            <Text style={styles.brand}>ToSho</Text>
+            {images[OFFER_LOGO_URL] ? (
+              <Image src={images[OFFER_LOGO_URL]} style={styles.brandLogo} />
+            ) : (
+              /* Лого не намалювалось (файл не доїхав, полотно не дало PNG) —
+                 назва словом. Документ без жодного знака відправника гірший за
+                 документ без картинки. */
+              <Text style={styles.brand}>ToSho</Text>
+            )}
             {doc.manager ? (
               <Text style={styles.manager}>
                 {[`${doc.manager.name}, менеджер`, doc.manager.phone, doc.manager.email]
