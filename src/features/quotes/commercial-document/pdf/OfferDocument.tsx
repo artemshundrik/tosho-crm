@@ -104,8 +104,10 @@ const styles = StyleSheet.create({
   },
   itemBody: { flexGrow: 1, flexBasis: 1, marginLeft: 12 },
   itemNum: { fontSize: 7.5, fontWeight: "bold", letterSpacing: 0.9, color: ACCENT },
-  itemName: { fontSize: 11.5, fontWeight: "bold", marginTop: 3, lineHeight: 1.3 },
-  itemSpec: { fontSize: 9, color: MUTE, marginTop: 2 },
+  // maxWidth — та сама міра рядка, що в HTML: довга назва має переноситись,
+  // а не тягнутись через усю картку.
+  itemName: { fontSize: 10.5, fontWeight: "bold", marginTop: 3, lineHeight: 1.3, maxWidth: 265 },
+  itemSpec: { fontSize: 9, color: MUTE, marginTop: 2, maxWidth: 265 },
   runsHead: { flexDirection: "row", marginTop: 8, paddingBottom: 4 },
   runsRow: { flexDirection: "row", borderTopWidth: 1, borderTopColor: RULE, paddingVertical: 6 },
   th: { fontSize: 7.5, fontWeight: "bold", letterSpacing: 0.7, textTransform: "uppercase", color: MUTE },

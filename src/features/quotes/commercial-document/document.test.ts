@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCommercialSheetRows,
+  formatMoney,
   stripSupplierTag,
   COMMERCIAL_SHEET_COLUMNS,
   commercialSectionTotalRange,
@@ -259,5 +260,23 @@ describe("мітка постачальника в назві", () => {
     ]) {
       expect(stripSupplierTag(name)).toBe(name);
     }
+  });
+});
+
+/**
+ * Гроші в документі для замовника: копійки або є обидві, або їх немає зовсім.
+ * Одна цифра після коми читається як обрізана сума.
+ */
+describe("формат грошей", () => {
+  it("ціле число — без копійок", () => {
+    expect(norm(formatMoney(24_290))).toBe("24 290 грн");
+  });
+
+  it("дробове — рівно дві цифри, а не одна", () => {
+    expect(norm(formatMoney(17_276.1))).toBe("17 276,10 грн");
+  });
+
+  it("двійковий хвіст не породжує «,00»", () => {
+    expect(norm(formatMoney(50 * 309.04))).toBe("15 452 грн");
   });
 });

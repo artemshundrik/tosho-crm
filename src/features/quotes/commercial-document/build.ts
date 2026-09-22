@@ -207,6 +207,31 @@ export async function buildCommercialDocument(
   const typeIds = Array.from(new Set(itemRows.map((row) => row.catalog_type_id ?? "").filter(Boolean)));
   const kindIds = Array.from(new Set(itemRows.map((row) => row.catalog_kind_id ?? "").filter(Boolean)));
   const modelIds = Array.from(new Set(itemRows.map((row) => row.catalog_model_id ?? "").filter(Boolean)));
+  /**
+   * Назви методів нанесення лежать у довіднику, а в позиції — самі id.
+   *
+   * ДО 22.09.2026 ДОКУМЕНТ МОВЧАВ ПРО НАНЕСЕННЯ ВЗАГАЛІ. `parseMethodsSummary`
+   * шукала назву всередині запису методу (`method_name`), а туди пишеться лише
+   * `method_id` — тож рядок виходив порожній і просто не малювався. На живому
+   * прорахунку TS-0926-0029 так зникли ДТФ, УФ-друк і Сублімація з шести
+   * позицій: замовник бачив товари й ціни, але не бачив, чим ми їх брендуємо.
+   */
+  const methodIds = Array.from(
+    new Set(
+      itemRows
+        .flatMap((row) =>
+          Array.isArray(row.methods)
+            ? row.methods.map((entry) => {
+                if (!entry || typeof entry !== "object") return "";
+                const value = (entry as Record<string, unknown>).method_id;
+                return typeof value === "string" ? value : "";
+              })
+            : []
+        )
+        .filter(Boolean)
+    )
+  );
+
   const printPositionIds = Array.from(
     new Set(
       itemRows
@@ -226,7 +251,7 @@ export async function buildCommercialDocument(
     )
   );
 
-  const [typeRows, kindRows, modelRows, printPositionRows] = await Promise.all([
+  const [typeRows, kindRows, modelRows, printPositionRows, methodRows] = await Promise.all([
     typeIds.length > 0
       ? supabase.schema("tosho").from("catalog_types").select("id,name").in("id", typeIds)
       : Promise.resolve({ data: [], error: null }),
@@ -239,11 +264,15 @@ export async function buildCommercialDocument(
     printPositionIds.length > 0
       ? supabase.schema("tosho").from("catalog_print_positions").select("id,label").in("id", printPositionIds)
       : Promise.resolve({ data: [], error: null }),
+    methodIds.length > 0
+      ? supabase.schema("tosho").from("catalog_methods").select("id,name").in("id", methodIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (typeRows.error) throw typeRows.error;
   if (kindRows.error) throw kindRows.error;
   if (modelRows.error) throw modelRows.error;
   if (printPositionRows.error) throw printPositionRows.error;
+  if (methodRows.error) throw methodRows.error;
 
   const typeNameById = new Map(
     (((typeRows.data ?? []) as unknown) as Array<{ id: string; name?: string | null }>).map((row) => [
@@ -261,6 +290,12 @@ export async function buildCommercialDocument(
     (
       ((modelRows.data ?? []) as unknown) as Array<{ id: string; name?: string | null; image_url?: string | null }>
     ).map((row) => [row.id, { name: row.name ?? "", imageUrl: row.image_url ?? "" }])
+  );
+  const methodNameById = new Map(
+    (((methodRows.data ?? []) as unknown) as Array<{ id: string; name?: string | null }>).map((row) => [
+      row.id,
+      row.name ?? "",
+    ])
   );
   const printPositionLabelById = new Map(
     (((printPositionRows.data ?? []) as unknown) as Array<{ id: string; label?: string | null }>).map((row) => [
@@ -381,8 +416,16 @@ export async function buildCommercialDocument(
               },
             ];
       const modelMeta = row.catalog_model_id ? modelById.get(row.catalog_model_id) : undefined;
-      // Модель — головне джерело; те, що принесла сама позиція, — запасне.
-      const imageUrl = modelMeta?.imageUrl || readVariantImage(row.metadata);
+      /**
+       * ПОЗИЦІЯ ГОЛОВНІША ЗА МОДЕЛЬ, а не навпаки.
+       *
+       * Модель віддає один знімок на всі свої кольори, а позиція несе той, який
+       * менеджер справді обрав. До 22.09.2026 перемагала модель — і на живому
+       * прорахунку TS-0926-0029 «Записна книжка А5, Soft» їхала замовнику
+       * фіолетовою, хоч у прорахунку стояла синя. Картка позиції весь час
+       * малювала правильну: розходився саме документ.
+       */
+      const imageUrl = readVariantImage(row.metadata) || modelMeta?.imageUrl || "";
       const catalogPath = [
         row.catalog_type_id ? typeNameById.get(row.catalog_type_id) ?? "" : "",
         row.catalog_kind_id ? kindNameById.get(row.catalog_kind_id) ?? "" : "",
@@ -404,7 +447,7 @@ export async function buildCommercialDocument(
         name: row.name?.trim() || "Без назви",
         catalogPath,
         description: row.description?.trim() || "",
-        methodsSummary: parseMethodsSummary(row.methods),
+        methodsSummary: parseMethodsSummary(row.methods, methodNameById),
         placementSummary,
         unit: normalizeUnitLabel(row.unit),
         runs,

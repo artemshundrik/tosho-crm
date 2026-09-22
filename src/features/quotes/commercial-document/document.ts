@@ -137,15 +137,29 @@ export function commercialSectionTotalRange(items: readonly CommercialItemRow[])
   return sumMoneyRanges(items.map((item) => moneyRangeOf(item.runs.map((run) => run.lineTotal))));
 }
 
+/**
+ * Копійки або є обидві, або їх немає зовсім.
+ *
+ * Було `min 0 / max 2`, і документ показував «17 276,1 грн» поруч із
+ * «24 290 грн» та «575,87 грн» — три різні види числа на одній сторінці. Одна
+ * цифра після коми читається як обрізана сума, а в документі про гроші це
+ * найгірше, що можна зробити.
+ */
+/**
+ * Рахуємо копійки, а не дивимось на `Number.isInteger`: 50 × 309,04 у двійковому
+ * дробі дає 15452.000000000002, і документ показував «15 452,00 грн» поруч із
+ * «24 290 грн».
+ */
+const moneyDigits = (value: number) => (Math.round(value * 100) % 100 === 0 ? 0 : 2);
 export const formatMoney = (value: number) =>
   `${new Intl.NumberFormat("uk-UA", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: moneyDigits(value),
+    maximumFractionDigits: moneyDigits(value),
   }).format(value)} грн`;
 export const formatMoneyPlain = (value: number) =>
   new Intl.NumberFormat("uk-UA", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: moneyDigits(value),
+    maximumFractionDigits: moneyDigits(value),
   }).format(value);
 /**
  * Підсумок для взаємовиключних тиражів. Поки замовник не обрав тираж, точної
@@ -180,13 +194,24 @@ export const escapeHtml = (value: string) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-export const parseMethodsSummary = (methods: QuoteItemExportRow["methods"]) => {
+/**
+ * Назва методу береться з довідника за `method_id`, бо в самому записі її немає.
+ *
+ * Поля `method_name`/`name` лишились для старих записів і для імпорту, який
+ * кладе назву поруч; новий прорахунок пише тільки id.
+ */
+export const parseMethodsSummary = (
+  methods: QuoteItemExportRow["methods"],
+  methodNameById?: ReadonlyMap<string, string>
+) => {
   if (!Array.isArray(methods) || methods.length === 0) return "";
   const labels = methods
     .map((entry) => {
       if (!entry || typeof entry !== "object") return "";
       const row = entry as Record<string, unknown>;
-      const methodName = String(row.method_name ?? row.methodName ?? row.name ?? "").trim();
+      const byId =
+        typeof row.method_id === "string" ? methodNameById?.get(row.method_id) ?? "" : "";
+      const methodName = String(row.method_name ?? row.methodName ?? row.name ?? byId).trim();
       const count = Number(row.count ?? 1) || 1;
       if (!methodName) return "";
       return count > 1 ? `${methodName} x${count}` : methodName;
@@ -534,8 +559,11 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .photo-initials { display: flex; align-items: center; justify-content: center; background: #f4f7fc; color: #234f80; font-size: 26px; font-weight: 600; }
   .item-body { flex-grow: 1; min-width: 0; }
   .item-num { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #b0136b; }
-  .item-name { margin: 4px 0 0 0; font-size: 15.5px; font-weight: 600; line-height: 1.3; }
-  .item-spec { font-size: 12px; color: #6b6c72; margin-top: 3px; }
+  /* Своя міра рядка, а не вся ширина картки: у прикладі назва коротка й займає
+     неповний рядок, а наші назви по 60 знаків розтягувались від краю до краю і
+     перебивали таблицю. */
+  .item-name { margin: 4px 0 0 0; font-size: 14px; font-weight: 600; line-height: 1.3; max-width: 46ch; }
+  .item-spec { font-size: 12px; color: #6b6c72; margin-top: 3px; max-width: 46ch; }
   .runs { width: 100%; border-collapse: collapse; margin-top: 10px; }
   .runs th { text-align: left; padding: 0 0 5px 0; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6c72; }
   .runs th.c1 { width: 26%; }
