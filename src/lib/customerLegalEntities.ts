@@ -271,9 +271,15 @@ export const isVatPayerRate = (value?: string | number | null) => {
   return Number.isFinite(parsed) && parsed > 0;
 };
 
+/**
+ * Підпис ставки в переліку юросіб. Неплатник і нульова ставка названі словами
+ * з тієї ж причини, що й у самому переліку ставок (VAT_OPTIONS): «Без ПДВ» і
+ * «0%» читались як одне й те саме.
+ */
 export const formatVatRateLabel = (value?: string | null) => {
   const normalized = (value ?? "").trim().toLowerCase();
-  if (!normalized || normalized === "none") return "Без ПДВ";
+  if (!normalized || normalized === "none") return "Не платник ПДВ";
+  if (Number(normalized) === 0) return "ПДВ 0% (експорт)";
   return `${normalized}%`;
 };
 

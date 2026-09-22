@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isVatPayerRate, splitSignatoryFullName } from "./customerLegalEntities";
+import { formatVatRateLabel, isVatPayerRate, splitSignatoryFullName } from "./customerLegalEntities";
 
 /**
  * Розбір ПІБ визначає, що потрапить у договір: підпис «Д.О. Буйна» будується з
@@ -112,5 +112,22 @@ describe("isVatPayerRate", () => {
 
   it("сміття замість ставки не робить платником", () => {
     expect(isVatPayerRate("абищо")).toBe(false);
+  });
+});
+
+/**
+ * Підпис ставки має розрізняти неплатника й нульову ставку: доки обидва
+ * читались як «без ПДВ», менеджери ставили «0%» тим, хто ПДВ не платить.
+ */
+describe("formatVatRateLabel", () => {
+  it("неплатник і нульова ставка названі по-різному", () => {
+    expect(formatVatRateLabel("none")).toBe("Не платник ПДВ");
+    expect(formatVatRateLabel(null)).toBe("Не платник ПДВ");
+    expect(formatVatRateLabel("0")).toBe("ПДВ 0% (експорт)");
+  });
+
+  it("звичайні ставки лишаються числом", () => {
+    expect(formatVatRateLabel("20")).toBe("20%");
+    expect(formatVatRateLabel("7")).toBe("7%");
   });
 });

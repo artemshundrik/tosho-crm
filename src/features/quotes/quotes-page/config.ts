@@ -109,9 +109,17 @@ export const OWNERSHIP_OPTIONS: OwnershipOption[] = [
   { value: "fop", label: "ФОП", description: "Фізична особа-підприємець", group: "Фізичні особи" },
 ];
 
+/**
+ * Ставки ПДВ у реквізитах замовника.
+ *
+ * ПЕРШІ ДВА ПУНКТИ НАЗВАНІ СЛОВАМИ, А НЕ ЧИСЛОМ. «немає» і «0%» означають
+ * різні речі — не платник і платник на нульовій ставці (експорт), — але
+ * виглядали однаково, і менеджери ставили «0%» саме неплатникам. Далі від
+ * цього вибору залежить, чи вимагати ІПН платника ПДВ (isVatPayerRate).
+ */
 export const VAT_OPTIONS: VatOption[] = [
-  { value: "none", label: "немає", rate: null },
-  { value: "0", label: "0%", rate: 0 },
+  { value: "none", label: "Не платник ПДВ", rate: null },
+  { value: "0", label: "0% (експорт)", rate: 0 },
   { value: "7", label: "7%", rate: 7 },
   { value: "14", label: "14%", rate: 14 },
   { value: "20", label: "20%", rate: 20 },
