@@ -356,7 +356,6 @@ const countItems = (doc: CommercialDocument) =>
 export const OFFER_DOC_LABEL = "Комерційна пропозиція";
 export const OFFER_HEADLINE = "Брендовані рішення";
 export const OFFER_MOTTO = "ІДЕЯ. ДИЗАЙН. ВИРОБНИЦТВО.";
-export const OFFER_SITE = "tosho.agency";
 
 /** Повний лок-ап у шапці, чистий вордмарк у підвалі — див. `getAgencyLockup`. */
 export const OFFER_LOCKUP_URL = getAgencyLockup();
@@ -373,28 +372,27 @@ export const OFFER_PARTNER_TEXT =
   "ToSho бере на себе весь процес: підбір, дизайн і макети, брендування, виробництво, пакування та логістику.";
 
 /**
- * Те, що стоїть у документі ЗАМІСТЬ «Разом».
+ * Кінцівка документа — РІВНО ОДНЕ РЕЧЕННЯ (власник, 22.09.2026).
+ *
+ * До цього тут стояло зшите: спершу пояснення, чому немає єдиної суми, потім
+ * прохання назвати позиції. Два речення робили з заклику абзац, і він тягнувся
+ * на всю ширину сторінки там, де в макеті був короткий рядок.
+ *
+ * ПОЯСНЕННЯ ПРО СУМУ НЕ ЗНИКЛО — воно в ноті над кінцівкою (`RUN_CHOICE_NOTE`),
+ * яка прямо каже, що спільного підсумку в документі немає. Повторювати те саме
+ * двічі різними словами й було помилкою.
  *
  * Підсумок прибрано свідомо (REQ-296, закриває дірку REQ-267#p2): позиції
  * прорахунку — це варіанти, які замовник обирає, а документ складав їх
  * додаванням. На живому прорахунку TS-0926-0029 це давало «від 80 162 до
- * 120 618 ₴» там, де реальна вилка 34 257 – 85 276 ₴. Менше число замість
- * більшого нічого не полагодило б: поки вибору немає, ЖОДНА сума не правдива.
- *
- * ЧОМУ ЦЕ ОДИН БЛОК, А НЕ «ПІДСУМОК» + «РУХАЄМОСЯ ДАЛІ?». Кінцівка власника
- * просить рівно те саме, що й пояснення про суму: назвати позиції. Двома
- * блоками поспіль документ питав про це двічі різними словами — на макеті це
- * було видно одразу. Тому заголовок став питанням, а прохання — продовженням
- * пояснення, чому підсумку немає.
+ * 120 618 ₴» там, де реальна вилка 34 257 – 85 276 ₴.
  */
 export const OFFER_NEXT_STEP_TITLE = "Рухаємося далі?";
-export const OFFER_SUMMARY_TEXT_WITH_RUNS =
-  "Єдиної суми тут немає навмисно: вона залежить від того, які позиції й який тираж ви оберете. Напишіть, які позиції вам сподобались, — підготуємо фінальний прорахунок, візуалізації та уточнимо терміни.";
-export const OFFER_SUMMARY_TEXT_SINGLE_RUN =
-  "Єдиної суми тут немає навмисно: вона залежить від того, які позиції ви оберете. Напишіть, які позиції вам сподобались, — підготуємо фінальний прорахунок, візуалізації та уточнимо терміни.";
+export const OFFER_NEXT_STEP_TEXT =
+  "Напишіть, які позиції вам сподобались, і ми підготуємо фінальний прорахунок, візуалізації та уточнимо терміни.";
 
-export const offerSummaryText = (doc: CommercialDocument) =>
-  documentHasRunChoice(doc) ? OFFER_SUMMARY_TEXT_WITH_RUNS : OFFER_SUMMARY_TEXT_SINGLE_RUN;
+/** Текст кінцівки один на всі виходи й не залежить від складу документа. */
+export const offerSummaryText = (_doc: CommercialDocument) => OFFER_NEXT_STEP_TEXT;
 
 const renderPhotoCell = (item: CommercialItemRow) =>
   item.imageUrl
@@ -546,7 +544,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .valid-label { margin-top: 10px; }
   .valid-value { font-size: 13px; font-weight: 700; margin-top: 2px; }
   .lede { margin-top: 20px; }
-  .lede h1 { margin: 0; font-size: 23px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+  .lede h1 { margin: 0; font-size: 23px; font-weight: 700; letter-spacing: 0.01em; line-height: 1.2; text-transform: uppercase; }
   .lede-sub { font-size: 16px; font-weight: 500; color: #6b6c72; margin-top: 2px; }
   .intro { margin: 10px 0 0 0; font-size: 13px; line-height: 1.6; color: #6b6c72; max-width: 62ch; }
   .section-head { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6c72; margin: 18px 0 0 0; }
@@ -559,11 +557,8 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .photo-initials { display: flex; align-items: center; justify-content: center; background: #f4f7fc; color: #234f80; font-size: 26px; font-weight: 600; }
   .item-body { flex-grow: 1; min-width: 0; }
   .item-num { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: #b0136b; }
-  /* Своя міра рядка, а не вся ширина картки: у прикладі назва коротка й займає
-     неповний рядок, а наші назви по 60 знаків розтягувались від краю до краю і
-     перебивали таблицю. */
-  .item-name { margin: 4px 0 0 0; font-size: 14px; font-weight: 600; line-height: 1.3; max-width: 46ch; }
-  .item-spec { font-size: 12px; color: #6b6c72; margin-top: 3px; max-width: 46ch; }
+  .item-name { margin: 4px 0 0 0; font-size: 15.5px; font-weight: 600; line-height: 1.3; }
+  .item-spec { font-size: 12px; color: #6b6c72; margin-top: 3px; }
   .runs { width: 100%; border-collapse: collapse; margin-top: 10px; }
   .runs th { text-align: left; padding: 0 0 5px 0; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6b6c72; }
   .runs th.c1 { width: 26%; }
@@ -626,7 +621,6 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
     </div>
     <div class="foot-right">
       ${contactLines.map((line) => `<div>${line}</div>`).join("")}
-      <div>${escapeHtml(OFFER_SITE)}</div>
     </div>
   </footer>
 </main>

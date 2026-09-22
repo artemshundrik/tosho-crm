@@ -123,7 +123,11 @@ describe("вихід 2/3 — HTML для друку й PDF", () => {
     const html = norm(renderCommercialDocumentHtml(doc([section(threeProducts)])));
     expect(html).not.toContain("Разом");
     expect(html).not.toContain("40 624");
-    expect(html).toContain("Єдиної суми тут немає");
+    // Замість підсумку стоїть заклик назвати позиції. Пояснення «спільного
+    // підсумку немає» лишилось у ноті про тиражі, а не в кінцівці: власник
+    // 22.09.2026 просив у кінцівці рівно одне речення.
+    expect(html).toContain("Рухаємося далі?");
+    expect(html).toContain("які позиції вам сподобались");
   });
 
   it("ціна кожного тиражу лишається — зникає лише спільний підсумок", () => {

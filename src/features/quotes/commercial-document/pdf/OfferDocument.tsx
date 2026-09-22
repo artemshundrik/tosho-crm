@@ -13,7 +13,6 @@ import {
   OFFER_MOTTO,
   OFFER_NEXT_STEP_TITLE,
   OFFER_PARTNER_TEXT,
-  OFFER_SITE,
   stripSupplierTag,
   RUN_CHOICE_NOTE,
   unitDiscountPercent,
@@ -73,7 +72,7 @@ const styles = StyleSheet.create({
   validValue: { fontSize: 10, fontWeight: "bold", marginTop: 2 },
   // lineHeight на заголовку обов'язковий: успадкований 1.45 лишав рядок нижче,
   // ніж його рахує розкладка, і підзаголовок налазив на назву.
-  h1: { fontSize: 17, fontWeight: "bold", letterSpacing: -0.2, lineHeight: 1.2, marginTop: 15 },
+  h1: { fontSize: 17, fontWeight: "bold", letterSpacing: 0.2, lineHeight: 1.2, marginTop: 15, textTransform: "uppercase" },
   ledeSub: { fontSize: 12, color: MUTE, marginTop: 2 },
   intro: { fontSize: 10, color: MUTE, marginTop: 8, lineHeight: 1.6, maxWidth: 380 },
   sectionHead: { fontSize: 8, fontWeight: "bold", letterSpacing: 0.7, textTransform: "uppercase", color: MUTE, marginTop: 14 },
@@ -104,10 +103,8 @@ const styles = StyleSheet.create({
   },
   itemBody: { flexGrow: 1, flexBasis: 1, marginLeft: 12 },
   itemNum: { fontSize: 7.5, fontWeight: "bold", letterSpacing: 0.9, color: ACCENT },
-  // maxWidth — та сама міра рядка, що в HTML: довга назва має переноситись,
-  // а не тягнутись через усю картку.
-  itemName: { fontSize: 10.5, fontWeight: "bold", marginTop: 3, lineHeight: 1.3, maxWidth: 265 },
-  itemSpec: { fontSize: 9, color: MUTE, marginTop: 2, maxWidth: 265 },
+  itemName: { fontSize: 11.5, fontWeight: "bold", marginTop: 3, lineHeight: 1.3 },
+  itemSpec: { fontSize: 9, color: MUTE, marginTop: 2 },
   runsHead: { flexDirection: "row", marginTop: 8, paddingBottom: 4 },
   runsRow: { flexDirection: "row", borderTopWidth: 1, borderTopColor: RULE, paddingVertical: 6 },
   th: { fontSize: 7.5, fontWeight: "bold", letterSpacing: 0.7, textTransform: "uppercase", color: MUTE },
@@ -200,6 +197,9 @@ function ItemCard({
       )}
       <View style={styles.itemBody}>
         <Text style={styles.itemNum}>{String(item.position).padStart(2, "0")}</Text>
+        {/* maxLines={1} — рівно один рядок, як у прикладі: довгі назви від
+            постачальників інакше перебивають таблицю тиражів. Обрізається показ,
+            а не дані. */}
         <Text style={styles.itemName}>{stripSupplierTag(item.name)}</Text>
         {specs.map((line) => (
           <Text key={line} style={styles.itemSpec}>
@@ -298,7 +298,6 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
                 {line}
               </Text>
             ))}
-            <Text style={styles.footLine}>{OFFER_SITE}</Text>
           </View>
         </View>
       </Page>
