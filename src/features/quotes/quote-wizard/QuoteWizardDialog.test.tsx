@@ -231,6 +231,49 @@ describe("QuoteWizardDialog — один екран", () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith("quote-1"));
   });
 
+  it("шапка пропущеного рахує рядки файлу, а не зауваги моделі", async () => {
+    // ТЗ на жилетку (24.09.2026): одна заувага «пропущено заголовки, критерії й
+    // документи» показувалась як «1 рядок з файлу не став позицією», хоча поза
+    // позицією лишилось 46 рядків із 59.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              sourceRows: [2],
+              name: "Флісова жилетка",
+              comment: "Фліс від 260 г/м²",
+              links: [],
+              runs: [{ quantity: 650 }],
+              flags: [],
+              notes: null,
+              variantGroup: null,
+            },
+          ],
+          warnings: ["Пропущено заголовки, критерії оцінки й перелік документів."],
+          model: "test",
+          costUsd: 0,
+          fileName: "tz.csv",
+        }),
+      })) as unknown as typeof fetch
+    );
+    // Читання файлу в цьому наборі підмінене одним рядком — тут потрібні чотири.
+    const { readWorkbookSheets } = await import("@/features/quotes/quote-import/readWorkbook");
+    vi.mocked(readWorkbookSheets).mockResolvedValueOnce([
+      { name: "ТЗ", rows: [["Позиція", "К-сть"], ["Флісова жилетка", 650], ["Критерії оцінки"], ["Документи"]], links: [] },
+    ]);
+    const user = userEvent.setup();
+    renderWizard();
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, new File(["x"], "tz.csv", { type: "text/csv" }));
+    await waitFor(() => expect(screen.getByDisplayValue("Флісова жилетка")).toBeInTheDocument());
+
+    expect(screen.getByText("3 рядки з файлу не стали позиціями")).toBeInTheDocument();
+  });
+
   it("без замовника файл беруть, а створити не дають", () => {
     // Дропзона відкрита навмисно: прорахунок з'являється лише на «Створити»,
     // тож розібрати файл раніше нічим не шкодить. Замовника вимагає саме

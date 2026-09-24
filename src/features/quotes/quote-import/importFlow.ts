@@ -43,7 +43,7 @@ import type { QuoteImportDraftItem, QuoteImportParseResponse } from "./types";
 export type ImportParseStep = "read" | "model";
 
 export type ImportParseOutcome =
-  | { ok: true; drafts: QuoteImportDraftItem[]; warnings: string[]; fileName: string }
+  | { ok: true; drafts: QuoteImportDraftItem[]; warnings: string[]; fileName: string; rowCount: number }
   | { ok: false; error: string; warnings: string[] };
 
 export async function parseImportFile(
@@ -114,7 +114,8 @@ export async function parseImportFile(
         warnings,
       };
     }
-    return { ok: true, drafts, warnings, fileName: file.name };
+    // rowCount — щоб вікно саме порахувало, скільки рядків не стали позиціями.
+    return { ok: true, drafts, warnings, fileName: file.name, rowCount: dump.rowCount };
   } catch (cause) {
     return { ok: false, error: cause instanceof Error ? cause.message : "Не вдалося прочитати файл.", warnings: [] };
   }

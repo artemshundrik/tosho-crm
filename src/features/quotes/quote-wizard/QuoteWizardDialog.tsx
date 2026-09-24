@@ -162,6 +162,7 @@ export function QuoteWizardDialog({
   const [stage, setStage] = React.useState<Stage>("compose");
   const [drafts, setDrafts] = React.useState<QuoteImportDraftItem[]>([]);
   const [warnings, setWarnings] = React.useState<string[]>([]);
+  const [fileRowCount, setFileRowCount] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
   const [fileName, setFileName] = React.useState("");
   const [parseStep, setParseStep] = React.useState<ImportParseStep>("read");
@@ -223,6 +224,7 @@ export function QuoteWizardDialog({
     setWarnings([]);
     setError(null);
     setFileName("");
+    setFileRowCount(0);
     setSavedCount(0);
     setFieldValue("");
     setLinkBusy(false);
@@ -234,6 +236,17 @@ export function QuoteWizardDialog({
 
   const selected = React.useMemo(() => drafts.filter((draft) => draft.selected), [drafts]);
   const fileDrafts = React.useMemo(() => drafts.filter(isFileDraft), [drafts]);
+  /**
+   * Скільки рядків файлу не пішло в жодну позицію. Рахуємо самі, а не беремо
+   * кількість зауваг моделі: одна заувага «пропущено заголовки й критерії»
+   * покриває десятки рядків, і шапка «1 рядок не став позицією» брехала
+   * (ТЗ на жилетку, 24.09.2026: з 59 рядків документа в позицію пішли 13).
+   */
+  const skippedFileRows = React.useMemo(() => {
+    if (fileRowCount === 0) return 0;
+    const used = new Set(fileDrafts.flatMap((draft) => draft.sourceRows));
+    return Math.max(0, fileRowCount - used.size);
+  }, [fileDrafts, fileRowCount]);
   const nameless = React.useMemo(() => selected.filter((draft) => !draft.name.trim()).length, [selected]);
   const runless = React.useMemo(
     () => selected.filter((draft) => !draft.runs.some((run) => run.quantity > 0)).length,
@@ -341,6 +354,7 @@ export function QuoteWizardDialog({
     setDrafts((prev) => prev.filter((draft) => !isFileDraft(draft)));
     setWarnings([]);
     setFileName("");
+    setFileRowCount(0);
     resetLinkPreviews();
   }, [resetLinkPreviews]);
 
@@ -361,6 +375,7 @@ export function QuoteWizardDialog({
     // Файл один: новий заміняє рядки попереднього, а позиції з поля лишаються.
     setDrafts((prev) => [...prev.filter((draft) => !isFileDraft(draft)), ...outcome.drafts]);
     setWarnings(outcome.warnings);
+    setFileRowCount(outcome.rowCount);
     void startLinkPreviews(outcome.drafts);
   };
 
@@ -990,15 +1005,19 @@ export function QuoteWizardDialog({
                     Тепер це тиха картка тієї ж родини, що й картка файлу, а
                     заголовком стоїть ЧИСЛО: «4 рядки не стали позиціями» каже те
                     саме, що «Що не вдалося розібрати», але одразу з масштабом.
-                    Жовтий лишається за тим, що потребує дії.
+                    Жовтий лишається за тим, що потребує дії. Число — рядки файлу
+                    поза позиціями (skippedFileRows), а НЕ кількість зауваг.
                   */}
                   {warnings.length > 0 ? (
                     <div className="overflow-hidden rounded-xl border border-border/60">
                       <div className="flex items-center gap-2.5 border-b border-border/60 bg-muted/25 px-3 py-2">
                         <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <span className="text-sm font-medium">
-                          {warnings.length} {pluralWordUk(warnings.length, "рядок", "рядки", "рядків")} з файлу не{" "}
-                          {warnings.length === 1 ? "став позицією" : "стали позиціями"}
+                          {skippedFileRows > 0
+                            ? `${skippedFileRows} ${pluralWordUk(skippedFileRows, "рядок", "рядки", "рядків")} з файлу не ${
+                                skippedFileRows === 1 ? "став позицією" : "стали позиціями"
+                              }`
+                            : "Зауваги до розбору"}
                         </span>
                       </div>
                       <ul className="divide-y divide-border/60">
