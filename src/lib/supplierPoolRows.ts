@@ -675,6 +675,37 @@ function matchRank(product: SupplierPoolProduct, terms: readonly string[]): numb
   return best;
 }
 
+/**
+ * Рядки пулу, чия назва містить УСІ стеми `mustContain` (REQ-182#p27,
+ * `poolQueryPlan.ts`). RPC шукає ОДНИМ терміном — головним стемом назви з ТЗ
+ * («жиле» з «жилетка»), а решта стемів («фліс» з «флісова») звужує відповідь
+ * тут, на клієнті, точно так само, як звузила б людина, що читає список
+ * очима. Фільтр стоїть ДО згортання в картки: `groupSupplierPoolRows` рахує
+ * артикул і доречність по рядках, які вже мають бути «про той самий товар», —
+ * пропустити зайві рядки пізніше означало б склеювати їх у чужі картки.
+ *
+ * Порожній або відсутній `mustContain` рядків не займає: виклики без цього
+ * поля (весь наявний код) мають поводитись так само, як і до фільтра.
+ */
+export function filterSupplierPoolRowsByStems(
+  rows: SupplierPoolRow[],
+  mustContain: string[] | undefined
+): SupplierPoolRow[] {
+  const stems = (mustContain ?? [])
+    .map((term) => term.trim().toLowerCase())
+    .filter((term) => term.length > 0);
+  if (stems.length === 0) return rows;
+
+  // Той самий запасний хід, що для основного терміна нижче: назва пулу буває
+  // латиницею («JHK KID POLO»), а стем із ТЗ — завжди кирилицею.
+  const variants = stems.map((term) => [term, transliterateSearchTerm(term)] as const);
+
+  return rows.filter((row) => {
+    const name = row.name.toLowerCase();
+    return variants.every(([plain, translit]) => name.includes(plain) || (translit !== "" && name.includes(translit)));
+  });
+}
+
 /** Згорнути рядки в товари: назва в межах постачальника, потім артикул поміж. */
 export function groupSupplierPoolRows(
   rows: SupplierPoolRow[],

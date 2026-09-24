@@ -3,6 +3,7 @@ import * as React from "react";
 import { searchSupplierPool, type SupplierPoolProduct } from "@/lib/supplierPool";
 
 import type { QuoteImportDraftItem } from "@/features/quotes/quote-import/types";
+import { planPoolQueries } from "./poolQueryPlan";
 
 /**
  * «Схожі в пулі» для позицій файлу без посилання (REQ-182#p27).
@@ -26,8 +27,35 @@ import type { QuoteImportDraftItem } from "@/features/quotes/quote-import/types"
  * effect`). Статус «loading» ніде окремо не зберігається: це просто «імені
  * ще нема серед завершених», і як тільки відповідь прийде, `setState`
  * перемальовує рядок уже з готовим списком.
+ *
+ * ЗАПИТ ІДЕ ПЛАНАМИ, А НЕ ЦІЛОЮ НАЗВОЮ (REQ-182#p27, живий доказ 24.09.2026).
+ * `searchSupplierPool(draft.name)` шукав ЦІЛУ фразу одним ILIKE-шаблоном, а
+ * пул зве той самий товар іншим порядком слів і формою («Флісова жилетка»
+ * клієнта проти «Жилет флісовий Mercury» пулу) — і не знаходив нічого на 24
+ * профільних товарах. `resolvePoolCandidates` нижче пробує плани
+ * `planPoolQueries` по черзі, зупиняючись на першому, що щось знайшов.
  */
 export type PoolCandidates = { status: "loading" | "done"; products: SupplierPoolProduct[] };
+
+/**
+ * Плани по черзі — перший, що знайшов хоч один товар, зупиняє перебір: решта
+ * планів вужчі, а не кращі. Не знайшов жоден — запасний хід: головне слово
+ * (перший план) БЕЗ `mustContain`, ширшим пошуком — «схожий товар кращий за
+ * жоден» (задум #p27). Для однослівної назви це той самий запит, що вже
+ * пробували в циклі, тож другого разу не летить.
+ */
+async function resolvePoolCandidates(name: string): Promise<SupplierPoolProduct[]> {
+  const plans = planPoolQueries(name);
+  for (const plan of plans) {
+    const products = await searchSupplierPool(plan.term, { limit: 5, mustContain: plan.mustContain });
+    if (products.length > 0) return products;
+  }
+  const broadest = plans[0];
+  if (broadest && broadest.mustContain.length > 0) {
+    return searchSupplierPool(broadest.term, { limit: 5 });
+  }
+  return [];
+}
 
 /** Чи варто шукати кандидатів для цієї чернетки — рядок файлу, ще нічим не зайнятий. */
 function wantsCandidates(draft: QuoteImportDraftItem, isFileDraft: (draft: QuoteImportDraftItem) => boolean): boolean {
@@ -54,7 +82,7 @@ export function usePoolCandidates(
       const name = draft.name.trim();
       if (requested.current.has(name)) continue;
       requested.current.add(name);
-      void searchSupplierPool(name, { limit: 5 })
+      void resolvePoolCandidates(name)
         .then((products) => {
           setDoneByName((prev) => ({ ...prev, [name]: products }));
         })

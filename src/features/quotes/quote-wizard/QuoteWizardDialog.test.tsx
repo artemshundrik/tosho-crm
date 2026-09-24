@@ -71,13 +71,14 @@ function fakeTable(table: string) {
  * саме те, що й мало бути.
  */
 const searchSupplierPool = vi.fn(
-  async (_term: string, _options?: { limit?: number }): Promise<SupplierPoolProduct[]> => []
+  async (_term: string, _options?: { limit?: number; mustContain?: string[] }): Promise<SupplierPoolProduct[]> => []
 );
 vi.mock("@/lib/supplierPool", async () => {
   const actual = await vi.importActual<typeof import("@/lib/supplierPool")>("@/lib/supplierPool");
   return {
     ...actual,
-    searchSupplierPool: (term: string, options?: { limit?: number }) => searchSupplierPool(term, options),
+    searchSupplierPool: (term: string, options?: { limit?: number; mustContain?: string[] }) =>
+      searchSupplierPool(term, options),
   };
 });
 
@@ -789,10 +790,12 @@ describe("«Схожі в пулі» і нанесення з ТЗ (REQ-182#p27,
     await user.upload(input, new File(["x"], "tz.csv", { type: "text/csv" }));
     await waitFor(() => expect(screen.getByDisplayValue("Флісова жилетка")).toBeInTheDocument());
 
-    // «Схожі в пулі» шукає за назвою рядка файлу (REQ-182#p27); картка
-    // кандидата з'являється, коли пошук пулу завершився.
+    // «Схожі в пулі» шукає СТЕМОМ головного слова назви, а не цілою фразою
+    // (REQ-182#p27, `poolQueryPlan.ts`): «Флісова жилетка» → термін «жиле»
+    // (останнє значуще слово — «жилетка»), «фліс» — обов'язкова домішка.
+    // Картка кандидата з'являється, коли пошук пулу завершився.
     const pick = await screen.findByRole("button", { name: "Обрати «Жилетка флісова Mercury»" });
-    expect(searchSupplierPool).toHaveBeenCalledWith("Флісова жилетка", { limit: 5 });
+    expect(searchSupplierPool).toHaveBeenCalledWith("жиле", { limit: 5, mustContain: ["фліс"] });
     await user.click(pick);
 
     // Клік прив'язує товар: назва стає назвою товару, кандидатів більше нема.
@@ -817,5 +820,47 @@ describe("«Схожі в пулі» і нанесення з ТЗ (REQ-182#p27,
       description: expect.stringMatching(/^За ТЗ: Флісова жилетка/),
       methods: [expect.objectContaining({ method_id: "method-embroidery", print_position_label: "груди ліворуч" })],
     });
+  });
+
+  it("перший план пустий — пробує наступний, а не здається одразу", async () => {
+    // «жиле» + mustContain «фліс» нічого не дав (наприклад, пул звужений під
+    // інший бренд) — план №2 («фліс» + mustContain «жиле») мусить піти сам,
+    // без додаткової дії людини.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              sourceRows: [2],
+              name: "Флісова жилетка",
+              comment: null,
+              links: [],
+              runs: [{ quantity: 650 }],
+              flags: [],
+              notes: null,
+              imprint: null,
+            },
+          ],
+          warnings: [],
+          model: "test",
+          costUsd: 0,
+          fileName: "tz.csv",
+        }),
+      })) as unknown as typeof fetch
+    );
+    searchSupplierPool.mockReset();
+    searchSupplierPool.mockResolvedValueOnce([]);
+    searchSupplierPool.mockResolvedValueOnce([poolProduct]);
+    const user = userEvent.setup();
+    renderWizard();
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, new File(["x"], "tz.csv", { type: "text/csv" }));
+
+    await screen.findByRole("button", { name: "Обрати «Жилетка флісова Mercury»" });
+    expect(searchSupplierPool).toHaveBeenNthCalledWith(1, "жиле", { limit: 5, mustContain: ["фліс"] });
+    expect(searchSupplierPool).toHaveBeenNthCalledWith(2, "фліс", { limit: 5, mustContain: ["жиле"] });
   });
 });

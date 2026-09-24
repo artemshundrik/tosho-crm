@@ -13,6 +13,7 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import {
+  filterSupplierPoolRowsByStems,
   groupSupplierPoolRows,
   sanitizeSearchTerm,
   SUPPLIER_SEARCH_MIN_TERM,
@@ -46,10 +47,15 @@ export type {
  * Знайти товари постачальників. Порожній або закороткий запит повертає
  * порожньо: пул великий, і показувати «все підряд» у вікні прорахунку сенсу
  * немає. Про поріг довжини — `SUPPLIER_SEARCH_MIN_TERM`.
+ *
+ * `mustContain` — додаткові стеми, які назва товару має містити ВСІ, поверх
+ * основного терміна (REQ-182#p27, `poolQueryPlan.ts`): термін іде в RPC як
+ * зазвичай, а `mustContain` звужує відповідь тут, до згортання в картки. Без
+ * цього поля поведінка не міняється — фільтр пропускає все, як і раніше.
  */
 export async function searchSupplierPool(
   rawTerm: string,
-  options: { limit?: number } = {}
+  options: { limit?: number; mustContain?: string[] } = {}
 ): Promise<SupplierPoolProduct[]> {
   const term = sanitizeSearchTerm(rawTerm);
   if (term.length < SUPPLIER_SEARCH_MIN_TERM) return [];
@@ -110,10 +116,14 @@ export async function searchSupplierPool(
   });
 
   if (error) throw error;
+  // `mustContain` звужує рядки ДО згортання (докладніше — сам фільтр);
+  // порожній/відсутній список повертає рядки як є.
+  const rows = filterSupplierPoolRowsByStems(
+    (data ?? []) as unknown as SupplierPoolRow[],
+    options.mustContain
+  );
   // Слова запиту йдуть у згортання, щоб порядок карток вирішував запит, а не
   // абетка: див. `matchRank` у supplierPoolRows.
-  return groupSupplierPoolRows((data ?? []) as unknown as SupplierPoolRow[], options.limit ?? 40, [
-    ...variants,
-  ]);
+  return groupSupplierPoolRows(rows, options.limit ?? 40, [...variants]);
 }
 

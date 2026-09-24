@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applySupplierVariant,
   baseProductName,
+  filterSupplierPoolRowsByStems,
   groupSupplierPoolRows,
   normalizeArticle,
   supplierNameFromUrl,
@@ -554,5 +555,38 @@ describe("дитяча ознака картки", () => {
     expect(products).toHaveLength(1);
     expect(products[0].name).toBe("Кепка «JN 6P»");
     expect(products[0].isKids).toBe(true);
+  });
+});
+
+/**
+ * REQ-182#p27: `planPoolQueries` (quote-wizard) лишає в RPC лише головний
+ * стем, а решту віддає сюди — звузити рядки до тих, де є ВСІ, ще до того, як
+ * вони стали картками.
+ */
+describe("filterSupplierPoolRowsByStems", () => {
+  it("без mustContain рядки не займає", () => {
+    const rows = [row({ id: "a", name: "Жилет флісовий Mercury" }), row({ id: "b", name: "Рюкзак міський" })];
+    expect(filterSupplierPoolRowsByStems(rows, undefined)).toBe(rows);
+    expect(filterSupplierPoolRowsByStems(rows, [])).toBe(rows);
+  });
+
+  it("лишає лише рядки, де назва містить УСІ стеми", () => {
+    const rows = [
+      row({ id: "a", name: "Жилет флісовий Mercury" }),
+      row({ id: "b", name: "Жилет шкіряний Mercury" }), // немає «фліс»
+      row({ id: "c", name: "Рюкзак флісовий" }), // немає «жиле»
+    ];
+    expect(filterSupplierPoolRowsByStems(rows, ["фліс", "жиле"]).map((r) => r.id)).toEqual(["a"]);
+  });
+
+  it("регістр не заважає", () => {
+    const rows = [row({ id: "a", name: "ЖИЛЕТ ФЛІСОВИЙ Mercury" })];
+    expect(filterSupplierPoolRowsByStems(rows, ["фліс"])).toHaveLength(1);
+  });
+
+  it("приймає й транслітерований варіант стема — назва пулу буває латиницею", () => {
+    // Той самий запасний хід, що в searchSupplierPool: «поло» → «polo».
+    const rows = [row({ id: "a", supplier_slug: "berrytex.com.ua", name: "JHK POLO KIDS" })];
+    expect(filterSupplierPoolRowsByStems(rows, ["поло"])).toHaveLength(1);
   });
 });
