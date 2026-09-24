@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { deliverNotifications } from "./_notificationDelivery";
+import { absenceDecisionActions } from "./_lib/absenceDecisionButtons";
 import { NOTIFY_FROM_HOUR, NOTIFY_UNTIL_HOUR, isQuietHour } from "./_lib/quietHours";
 
 type HttpEvent = {
@@ -567,7 +568,7 @@ export const handler = async (event: HttpEvent) => {
       const notification: Omit<PendingNotificationRow, "user_id"> = urgent
         ? {
             title: `⏳ Заявка без рішення — ${(request.start_date ?? "") <= todayKey ? "вже почалась" : "стартує завтра"}`,
-            body: `${requesterName} — ${kindText}, ${range}. Погодьте або відхиліть у CRM.`,
+            body: `${requesterName} — ${kindText}, ${range}. Погодьте або відхиліть.`,
             href,
             type: "warning",
           }
@@ -587,7 +588,7 @@ export const handler = async (event: HttpEvent) => {
           ...notification,
           // Пул уже відфільтрований за правом вирішувати саме цю заявку, тож
           // кнопка не приведе до 403. Права все одно перевіряються при кліку.
-          telegramActions: [{ text: "✅ Підтвердити", callbackData: `absd:a:${request.id}` }],
+          telegramActions: absenceDecisionActions(request.id),
         });
       }
     }

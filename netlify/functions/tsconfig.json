@@ -47,6 +47,8 @@
     "_cronAuth.ts",
     "_designAssistant.ts",
     "_lib/absenceDecision.ts",
+    "_lib/absenceDecisionButtons.test.ts",
+    "_lib/absenceDecisionButtons.ts",
     "_lib/absenceSubmit.test.ts",
     "_lib/aiPricing.test.ts",
     "_lib/absenceSubmit.ts",

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "../_notificationDelivery";
+import { absenceDecisionActions } from "./absenceDecisionButtons";
 import { isQuietHour } from "./quietHours";
 
 // Спільна логіка подання відсутності — для двох ротів одного процесу:
@@ -285,7 +286,7 @@ export async function notifySubmittedAbsence(
         type: "info" as const,
         telegramActions:
           !approvedFact && (row.isOwner || !requesterPrivileged)
-            ? [{ text: "✅ Підтвердити", callbackData: `absd:a:${absence.id}` }]
+            ? absenceDecisionActions(absence.id)
             : undefined,
       })),
       { category: approvedFact ? "team_events" : "team_absences" }

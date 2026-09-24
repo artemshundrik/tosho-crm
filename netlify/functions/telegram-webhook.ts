@@ -28,6 +28,11 @@ import {
 import { resolveMemberWorkspaceId } from "./_lib/absenceSubmit";
 import { decideAbsenceRequest } from "./_lib/absenceDecision";
 import {
+  decisionKeyboard,
+  declineConfirmKeyboard,
+  parseAbsenceDecisionCallback,
+} from "./_lib/absenceDecisionButtons";
+import {
   visibleNotificationCategories,
   type NotificationCategory,
   type RoleContext,
@@ -789,14 +794,19 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
 }
 
 /**
- * Кнопка «Підтвердити» під сповіщенням про заявку.
+ * Кнопки «Підтвердити» / «Відхилити» під сповіщенням про заявку.
  *
  * Відповідь на callback тримаємо ДО кінця роботи (а не одразу, як у флоу
  * оформлення): рішення — це запис у базу, і людині треба показати саме його
  * результат, включно з «заявку вже опрацювали», якщо хтось натиснув першим.
  * Telegram дає на це ~10 секунд, чого вистачає.
  *
- * Після успіху кнопки прибираємо: повторний клік по тій самій заявці все одно
+ * «Відхилити» спершу лише питає (кнопки «Так, відхилити» / «Назад»), а
+ * відхиляє друге натискання — чому, див. _lib/absenceDecisionButtons.ts. Ці
+ * два проміжні кроки нічого не пишуть: міняють кнопки ТОГО САМОГО
+ * повідомлення в чаті того, хто натиснув.
+ *
+ * Після рішення кнопки прибираємо: повторний клік по тій самій заявці все одно
  * впав би на перевірці статусу, але порожня кнопка виглядає як «не спрацювало».
  */
 async function handleAbsenceDecisionCallback(
@@ -807,21 +817,39 @@ async function handleAbsenceDecisionCallback(
   userId: string,
   data: string
 ) {
-  const parts = data.split(":"); // ["absd", verb, absenceId]
-  const absenceId = parts[2]?.trim();
-  if (parts[1] !== "a" || !absenceId) {
+  const parsed = parseAbsenceDecisionCallback(data);
+  if (!parsed) {
     await answerTelegramCallback(callbackId, "Невідома дія");
     return;
   }
+  const crmUrl = buildAppUrl("/team?tab=requests");
 
+  if (parsed.action === "ask_decline") {
+    await answerTelegramCallback(callbackId, "Відхилити заявку? Підтвердьте кнопкою під повідомленням");
+    await editTelegramReplyMarkup(chatId, messageId, declineConfirmKeyboard(parsed.absenceId, crmUrl));
+    return;
+  }
+  if (parsed.action === "back") {
+    await answerTelegramCallback(callbackId);
+    await editTelegramReplyMarkup(chatId, messageId, decisionKeyboard(parsed.absenceId, crmUrl));
+    return;
+  }
+
+  // Кожна дія — явно: невідома не має тихо ставати відмовою.
+  const decision =
+    parsed.action === "approve" ? "approved" : parsed.action === "decline" ? "declined" : null;
+  if (!decision) {
+    await answerTelegramCallback(callbackId, "Невідома дія");
+    return;
+  }
   const result = await decideAbsenceRequest({
     adminClient,
     // Бот не має JWT: членство читаємо адмінським клієнтом, але лише після
     // isActiveMember вище — блокований співробітник сюди не доходить.
     actorClient: adminClient,
     actorId: userId,
-    absenceId,
-    decision: "approved",
+    absenceId: parsed.absenceId,
+    decision,
   });
 
   if (!result.ok) {
@@ -829,11 +857,14 @@ async function handleAbsenceDecisionCallback(
     return;
   }
 
-  await answerTelegramCallback(callbackId, "Погоджено");
-  await editTelegramReplyMarkup(chatId, messageId, [
-    [{ text: "Відкрити в CRM", url: buildAppUrl("/team?tab=requests") }],
-  ]);
-  await sendTelegramMessage(chatId, `✅ Погоджено: ${escapeTelegramHtml(result.summary)}`, { parseMode: "HTML" });
+  const approved = decision === "approved";
+  await answerTelegramCallback(callbackId, approved ? "Погоджено" : "Відхилено");
+  await editTelegramReplyMarkup(chatId, messageId, [[{ text: "Відкрити в CRM", url: crmUrl }]]);
+  await sendTelegramMessage(
+    chatId,
+    `${approved ? "✅ Погоджено" : "✖️ Відхилено"}: ${escapeTelegramHtml(result.summary)}`,
+    { parseMode: "HTML" }
+  );
 }
 
 /**
