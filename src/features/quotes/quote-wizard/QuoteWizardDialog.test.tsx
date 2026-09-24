@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { QuoteImportItem } from "@/features/quotes/quote-import/types";
+import type { SupplierPoolProduct } from "@/lib/supplierPoolRows";
 
 import { QuoteWizardDialog } from "./QuoteWizardDialog";
 
@@ -60,6 +61,26 @@ function fakeTable(table: string) {
   return chain;
 }
 
+/**
+ * «Схожі в пулі» (REQ-182#p27) шукає через `usePoolCandidates`, який кличе
+ * `searchSupplierPool`. Мок — на рівні модуля, а не всередині тесту: без
+ * нього КОЖЕН тест, що завантажує файл, стукав би в справжній RPC — а мок
+ * supabase вище не має `rpc` узагалі, тож виклик впав би винятком. Порожній
+ * список за замовчуванням: рядки файлу з інших тестів («Футболка бавовна»
+ * тощо) не питали про кандидатів навмисно, і порожня відповідь для них —
+ * саме те, що й мало бути.
+ */
+const searchSupplierPool = vi.fn(
+  async (_term: string, _options?: { limit?: number }): Promise<SupplierPoolProduct[]> => []
+);
+vi.mock("@/lib/supplierPool", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/supplierPool")>("@/lib/supplierPool");
+  return {
+    ...actual,
+    searchSupplierPool: (term: string, options?: { limit?: number }) => searchSupplierPool(term, options),
+  };
+});
+
 vi.mock("@/lib/supabaseClient", () => ({
   supabase: {
     auth: { getSession: async () => ({ data: { session: { access_token: "token" } } }) },
@@ -87,6 +108,9 @@ const fetchCatalogBase = vi.fn(async () => ({
     kindRows: [
       { id: "k-hoodie", type_id: "t-cloth", name: "Худі" },
       { id: "k-notebook", type_id: "t-paper", name: "Блокнот" },
+      // Для кандидата з пулу (REQ-182#p27): «Жилетка флісова Mercury» мусить
+      // вгадати вид «Жилетка», щоб нанесення з ТЗ мало на чому зіставитись.
+      { id: "k-vest", type_id: "t-cloth", name: "Жилетка" },
     ],
     modelRows: [
       { id: "m-lenny", kind_id: "k-hoodie", name: "Реглан LENNY", image_url: "https://cdn/lenny.jpg" },
@@ -695,5 +719,103 @@ describe("тип угоди при створенні", () => {
     await user.click(await screen.findByRole("menuitem", { name: /Тендер/ }));
     await user.click(create);
     await waitFor(() => expect(prepareQuote).toHaveBeenCalledWith("print", "tender"));
+  });
+});
+
+/**
+ * Позиція з файлу пропонує схожі товари з пулу, а нанесення з ТЗ стає чипами
+ * (REQ-182#p27, #p28). Кандидати шукаються за назвою файлу; клік прив'язує
+ * товар тим самим набором полів, що й вибір у полі («Товар»), а слова
+ * клієнта лишаються першим рядком опису. Нанесення з ТЗ («Вишивка · груди
+ * ліворуч») стає чипом позиції, щойно в неї з'являється вид і його методи.
+ */
+describe("«Схожі в пулі» і нанесення з ТЗ (REQ-182#p27, #p28)", () => {
+  const poolProduct: SupplierPoolProduct = {
+    key: "pool-1",
+    supplierSlug: "totobi.com.ua",
+    article: "M-123",
+    name: "Жилетка флісова Mercury",
+    vendor: null,
+    category: null,
+    isKids: false,
+    url: "https://totobi.com.ua/mercury",
+    imageUrl: "https://totobi.com.ua/mercury.jpg",
+    currency: "UAH",
+    priceKind: "wholesale",
+    priceMin: 480,
+    priceMax: 480,
+    variantCount: 1,
+    variants: [],
+    variantsAreColors: false,
+    variantsHaveSizes: false,
+    sources: [],
+    priceRowId: "pr-1",
+  };
+
+  beforeEach(() => {
+    searchSupplierPool.mockReset();
+    searchSupplierPool.mockResolvedValue([poolProduct]);
+  });
+
+  it("клік по кандидату прив'язує товар, а нанесення з ТЗ стає чипом позиції", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              sourceRows: [2],
+              name: "Флісова жилетка",
+              comment: null,
+              links: [],
+              runs: [{ quantity: 650 }],
+              flags: [],
+              notes: null,
+              imprint: { method: "Вишивка", place: "груди ліворуч", size: null, colors: null },
+            },
+          ],
+          warnings: [],
+          model: "test",
+          costUsd: 0,
+          fileName: "tz.csv",
+        }),
+      })) as unknown as typeof fetch
+    );
+    const user = userEvent.setup();
+    const { prepareQuote } = renderWizard();
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, new File(["x"], "tz.csv", { type: "text/csv" }));
+    await waitFor(() => expect(screen.getByDisplayValue("Флісова жилетка")).toBeInTheDocument());
+
+    // «Схожі в пулі» шукає за назвою рядка файлу (REQ-182#p27); картка
+    // кандидата з'являється, коли пошук пулу завершився.
+    const pick = await screen.findByRole("button", { name: "Обрати «Жилетка флісова Mercury»" });
+    expect(searchSupplierPool).toHaveBeenCalledWith("Флісова жилетка", { limit: 5 });
+    await user.click(pick);
+
+    // Клік прив'язує товар: назва стає назвою товару, кандидатів більше нема.
+    expect(screen.getByText("Жилетка флісова Mercury")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Обрати «Жилетка флісова Mercury»" })).not.toBeInTheDocument();
+
+    // Нанесення з ТЗ («Вишивка · груди ліворуч») стає чипом, щойно в позиції
+    // з'явився вид і методи цього виду доїхали (REQ-182#p28) — похідно, без
+    // ефекту: `withHintImprints` рахується просто на кожному рендері наново.
+    const group = await screen.findByRole("group", { name: "Нанесення" });
+    expect(
+      within(group).getByRole("button", { name: "Нанесення: Вишивка, місце груди ліворуч" })
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Створити прорахунок/ }));
+    await waitFor(() => expect(prepareQuote).toHaveBeenCalled());
+
+    expect(insertQuoteItemRow.mock.calls[0][0]).toMatchObject({
+      name: "Жилетка флісова Mercury",
+      // Слова клієнта лишаються першим рядком опису — незалежно від того, що
+      // саме модель написала в comment/requirements/imprint далі.
+      description: expect.stringMatching(/^За ТЗ: Флісова жилетка/),
+      methods: [expect.objectContaining({ method_id: "method-embroidery", print_position_label: "груди ліворуч" })],
+    });
   });
 });

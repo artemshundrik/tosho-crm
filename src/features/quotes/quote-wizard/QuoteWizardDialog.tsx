@@ -20,6 +20,7 @@ import {
   writeDraftsToQuote,
   type ImportParseStep,
 } from "@/features/quotes/quote-import/importFlow";
+import { withHintImprints } from "@/features/quotes/quote-import/imprintHint";
 import type { QuoteImportRunDefaults } from "@/features/quotes/quote-import/mapping";
 import { QUOTE_IMPORT_ACCEPT, isWordImportFile } from "@/features/quotes/quote-import/readWorkbook";
 import type {
@@ -45,6 +46,7 @@ import { QuoteDealTypePicker } from "@/features/quotes/components/QuoteDealTypeP
 import type { QuoteDealType } from "@/lib/quoteDealType";
 import { useCatalogSuggestions } from "./useCatalogSuggestions";
 import { useKindImprintOptions } from "@/features/quotes/quote-details/useKindImprintOptions";
+import { usePoolCandidates } from "./usePoolCandidates";
 
 /**
  * Вікно «Новий прорахунок» на один екран (REQ-237, обраний концепт із трьох).
@@ -216,6 +218,9 @@ export function QuoteWizardDialog({
     }
     return result;
   }, [drafts, optionsByKind]);
+
+  /** «Схожі в пулі» для позицій файлу без посилання (REQ-182#p27). */
+  const poolCandidates = usePoolCandidates(drafts, isFileDraft);
 
   const reset = React.useCallback(() => {
     setKind("merch");
@@ -490,8 +495,13 @@ export function QuoteWizardDialog({
    * вони стояли рівно тому, що ми знали адреси й мовчали (Артем: «нема
    * картинка, нема посилань»). Тому адреси йдуть окремими полями, повз `links`.
    */
-  const handleAddSupplierProduct = (product: SupplierPoolProduct) => {
-    setError(null);
+  /**
+   * Поля позиції з товару пулу — ЧИСТА функція, без жодного `setDrafts`
+   * (REQ-182#p27): і нова позиція (`handleAddSupplierProduct`), і прив'язка
+   * кандидата до вже наявного рядка файлу (`bindCandidate`) заповнюють товар
+   * одним і тим самим способом, і розходитись їм нема причини.
+   */
+  const supplierProductDraftFields = (product: SupplierPoolProduct): Partial<QuoteImportDraftItem> => {
     /**
      * Вид — припущення, і джерел у нього два, у порядку надійності.
      *
@@ -520,7 +530,7 @@ export function QuoteWizardDialog({
       під нього не малюється.
     */
     const variant = product.variants.length === 1 ? product.variants[0] : null;
-    const draft = makeDraft({
+    return {
       name: product.name,
       color: variant?.label ?? null,
       sku: variant?.article ?? product.article,
@@ -551,7 +561,12 @@ export function QuoteWizardDialog({
             guessed: true,
           }
         : null,
-    });
+    };
+  };
+
+  const handleAddSupplierProduct = (product: SupplierPoolProduct) => {
+    setError(null);
+    const draft = makeDraft(supplierProductDraftFields(product));
     setDrafts((prev) => [...prev, draft]);
     /**
      * ДРУГА СТОРОЖА — вже ПІСЛЯ кліку. Перша, бейдж «Дитяча» в підказці, ловить
@@ -574,6 +589,52 @@ export function QuoteWizardDialog({
       setLinkPreviews((prev) => ({
         ...prev,
         [draft.key]: { status: "done", imageUrl, title: product.name },
+      }));
+    }
+  };
+
+  /**
+   * Прив'язка кандидата з «Схожі в пулі» до наявного рядка файлу
+   * (REQ-182#p27) — той самий набір полів, що й нова позиція з поля
+   * (`supplierProductDraftFields`), але ПАТЧИТЬ чернетку, а не заводить нову:
+   * тираж, вимоги й нанесення з ТЗ людина могла вже поправити, і губити їх на
+   * кліку не можна.
+   *
+   * НАЗВА З ТЗ ЛИШАЄТЬСЯ В `tzName` (`?? draft.name`, не завжди
+   * `draft.name`): другий клік по іншому кандидату не має затирати вже
+   * збережені слова клієнта. Перший рядок опису («За ТЗ: …») бере звідси, а
+   * сама позиція — з `withHintImprints` — після цього вже знає вид і може
+   * спробувати зіставити нанесення з ТЗ методом каталогу.
+   */
+  const bindCandidate = (draftKey: string, product: SupplierPoolProduct) => {
+    const fields = supplierProductDraftFields(product);
+    setDrafts((prev) =>
+      prev.map((draft) =>
+        draft.key === draftKey
+          ? {
+              ...draft,
+              ...fields,
+              tzName: draft.tzName ?? draft.name,
+              // Явно, а не лише сподіваючись на спред вище: прив'язка міняє
+              // ТОВАР, не запит клієнта — це те, чого `supplierProductDraftFields`
+              // не повертає взагалі, і мусить пережити клік незмінним.
+              imprints: draft.imprints,
+              runs: draft.runs,
+              requirements: draft.requirements,
+              imprintHint: draft.imprintHint,
+              comment: draft.comment,
+              sourceRows: draft.sourceRows,
+            }
+          : draft
+      )
+    );
+    // Те саме засівання фото, що й для нової позиції з поля: рядок прев'ю не
+    // розрізняє, звідки картинка, і не мусить чекати фонової розвідки.
+    const imageUrl = product.imageUrl;
+    if (imageUrl) {
+      setLinkPreviews((prev) => ({
+        ...prev,
+        [draftKey]: { status: "done", imageUrl, title: product.name },
       }));
     }
   };
@@ -704,8 +765,11 @@ export function QuoteWizardDialog({
 
     // Слід джерела — на кожній позиції окремо (`describeDraftOrigin`): у
     // списку впереміш файл, посилання й каталог, і один підпис на всіх брехав би.
+    // `withHintImprints` тут ще раз (REQ-182#p28): рядок прев'ю показує чип
+    // похідним на рендері, а запис читає той самий список drafts, а не JSX,
+    // тож без цього виклику підмішаний чип долетів би до екрана, але не в базу.
     const written = await writeDraftsToQuote({
-      drafts: selected,
+      drafts: selected.map((draft) => withHintImprints(draft, optionsByKind)),
       quoteId,
       teamId,
       nextPosition: appendTo?.nextPosition ?? 1,
@@ -1056,10 +1120,17 @@ export function QuoteWizardDialog({
                   </div>
 
                   <div className="space-y-2">
-                    {drafts.map((draft) => (
+                    {drafts.map((draft) => {
+                      // Похідний чип нанесення з ТЗ (REQ-182#p28) — рахується
+                      // щоразу заново, БЕЗ ефекту й без свого стану: щойно вид
+                      // і його методи стають відомі, наступний рендер підбирає
+                      // чип сам. Патчити `drafts` тут не можна — це підмінило б
+                      // «людина обрала» на «модель вгадала» назавжди.
+                      const shown = withHintImprints(draft, optionsByKind);
+                      return (
                       <ImportDraftRow
                         key={draft.key}
-                        draft={draft}
+                        draft={shown}
                         preview={previews[draft.key] ?? linkPreviews[draft.key] ?? catalogPreview(draft)}
                         disabled={busy}
                         onPatch={(patch) => patchDraft(draft.key, patch)}
@@ -1076,15 +1147,28 @@ export function QuoteWizardDialog({
                               }
                             : undefined
                         }
-                        onChangeImprints={draft.catalog ? (next) => changeImprints(draft.key, next) : undefined}
+                        onChangeImprints={
+                          draft.catalog
+                            ? (next) => {
+                                changeImprints(draft.key, next);
+                                // Людина торкнулась чипів руками — підмішувати
+                                // imprintHint далі не можна, навіть якщо вона
+                                // прибрала останній чип і список знову порожній.
+                                patchDraft(draft.key, { imprintHintApplied: true });
+                              }
+                            : undefined
+                        }
                         // Вид руками — лише в рядків без моделі: у позиції з каталогу він уже є.
                         kindOptions={isFileDraft(draft) ? undefined : catalog.kinds}
                         onChangeKind={isFileDraft(draft) ? undefined : (kind) => changeKind(draft.key, kind)}
                         onAddRun={() => addRun(draft.key)}
                         onRemoveRun={(runKey) => removeRun(draft.key, runKey)}
                         onPickVariant={(variant) => pickLinkVariant(draft.key, variant)}
+                        candidates={poolCandidates[draft.key]}
+                        onPickCandidate={(product) => bindCandidate(draft.key, product)}
                       />
-                    ))}
+                      );
+                    })}
                   </div>
 
                 </section>

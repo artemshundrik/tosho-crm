@@ -6,7 +6,7 @@ import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { KidsBadge } from "@/components/catalog/SupplierPoolRow";
 import { SupplierVariantTiles } from "@/components/catalog/SupplierVariantTiles";
-import type { SupplierPoolVariant } from "@/lib/supplierPoolRows";
+import type { SupplierPoolProduct, SupplierPoolVariant } from "@/lib/supplierPoolRows";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { catalogPlace } from "@/features/quotes/quote-wizard/catalogPlace";
 import { CatalogPlaceChip } from "@/features/quotes/quote-wizard/CatalogPlaceChip";
 import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
+import type { PoolCandidates } from "@/features/quotes/quote-wizard/usePoolCandidates";
 
 import { formatImprintHint } from "./mapping";
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
@@ -177,6 +178,8 @@ export function ImportDraftRow({
   onChangeImprints,
   kindOptions,
   onChangeKind,
+  candidates,
+  onPickCandidate,
 }: {
   draft: QuoteImportDraftItem;
   preview: QuoteImportLinkPreview | undefined;
@@ -222,6 +225,14 @@ export function ImportDraftRow({
    */
   kindOptions?: DraftKindOption[];
   onChangeKind?: (kind: DraftKindOption | null) => void;
+  /**
+   * Товари з пулу постачальників, схожі на цю позицію файлу (REQ-182#p27).
+   * Не задано — блоку немає: рядок без посилання, ще не прив'язаний товар
+   * і т. д. рахує сам `usePoolCandidates`, тут лише показ.
+   */
+  candidates?: PoolCandidates;
+  /** Клік по картці кандидата — прив'язку робить візард (`bindCandidate`). */
+  onPickCandidate?: (product: SupplierPoolProduct) => void;
 }) {
   /*
     Артикул приходить двома шляхами (REQ-247): візард кладе його в чернетку
@@ -423,6 +434,8 @@ export function ImportDraftRow({
             </div>
           ) : null}
 
+          {candidates ? <PoolCandidatesBlock candidates={candidates} onPick={onPickCandidate} /> : null}
+
           {(draft.requirements?.length ?? 0) > 0 ? (
             <RequirementsToggle requirements={draft.requirements ?? []} disabled={disabled} onPatch={onPatch} />
           ) : null}
@@ -565,6 +578,84 @@ export function ImportDraftRow({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * «Схожі в пулі» (REQ-182#p27): позиція з файлу без посилання пропонує до
+ * п'яти товарів, знайдених за її назвою (`usePoolCandidates`). Клік прив'язує
+ * товар тим самим шляхом, що й вибір у полі візарда, — назва стає назвою
+ * товару, а слова клієнта лишаються в описі («За ТЗ: …»). НІКОЛИ не
+ * прив'язується сама: без кліку людини картки лише показ, як і підпис
+ * нанесення поруч.
+ */
+function PoolCandidatesBlock({
+  candidates,
+  onPick,
+}: {
+  candidates: PoolCandidates;
+  onPick?: (product: SupplierPoolProduct) => void;
+}) {
+  if (candidates.status === "loading") {
+    return <span className="block text-2xs text-muted-foreground">Шукаю схожі в пулі…</span>;
+  }
+  if (candidates.products.length === 0) return null;
+
+  return (
+    <div className="space-y-1">
+      <span className="block text-2xs text-muted-foreground/70">Схожі в пулі</span>
+      <div className="flex flex-wrap gap-1.5">
+        {candidates.products.slice(0, 5).map((product) => (
+          <button
+            key={product.key}
+            type="button"
+            onClick={() => onPick?.(product)}
+            aria-label={`Обрати «${product.name}»`}
+            className="flex min-w-0 items-center gap-2 rounded-lg border border-border/60 px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-muted/50"
+          >
+            <PoolCandidatePhoto url={product.imageUrl} />
+            <span className="min-w-0">
+              <span className="block max-w-[180px] truncate text-xs font-medium" title={product.name}>
+                {product.name}
+              </span>
+              <span className="block truncate text-3xs text-muted-foreground">
+                {product.vendor ?? product.supplierSlug} · {product.article ?? "без артикула"}
+              </span>
+              {product.priceMin !== null ? (
+                <span className="block text-3xs tabular-nums text-muted-foreground">
+                  від {formatAmount(product.priceMin)} {currencyLabel(product.currency)}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Фото картки кандидата — 40×40, обрізане під квадрат: тут це підказка, не паспорт товару. */
+function PoolCandidatePhoto({ url }: { url: string | null }) {
+  const base = "h-10 w-10 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/40";
+  if (!url) {
+    return (
+      <span className={cn(base, "grid place-items-center")} aria-hidden>
+        <ImageOff className="h-3.5 w-3.5 text-muted-foreground/40" />
+      </span>
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt=""
+      loading="lazy"
+      className={cn(base, "object-cover")}
+      // Кнопка вже має aria-label з назвою — фото тут декоративне, а адреса
+      // могла протухнути: замість порваної картинки лишається сіра плитка.
+      onError={(event) => {
+        event.currentTarget.style.visibility = "hidden";
+      }}
+    />
   );
 }
 
