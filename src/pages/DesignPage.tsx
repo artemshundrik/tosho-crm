@@ -2362,12 +2362,16 @@ export default function DesignPage() {
           return;
         }
 
+        // Без `.in("entity_id", усі задачі сторінки)`: ~690 id робили адресу
+        // на 25,9 тис. символів, шлюз відповідав 400, і зведення тихо лишалось
+        // порожнім (24.09.2026: 34 з 68 таких запитів за добу). Запит і так
+        // вузький — команда, «затверджено», період (за 90 днів це ~120 рядків),
+        // а «лише задачі цієї сторінки» відбирає taskById нижче.
         const { data, error: fetchError } = await supabase
           .from("activity_log")
           .select("entity_id,created_at,to_status:metadata->>to_status,assignee_user_id:metadata->>assignee_user_id,design_task_type:metadata->>design_task_type")
           .eq("team_id", effectiveTeamId)
           .eq("action", "design_task_status")
-          .in("entity_id", taskIds)
           .eq("metadata->>to_status", "approved")
           .gte("created_at", since);
         if (fetchError) throw fetchError;
@@ -2382,6 +2386,7 @@ export default function DesignPage() {
         }>).forEach((row) => {
           const taskId = typeof row.entity_id === "string" ? row.entity_id.trim() : "";
           const task = taskById.get(taskId);
+          if (!task) return;
           const assigneeUserId =
             (typeof row.assignee_user_id === "string" && row.assignee_user_id.trim()
               ? row.assignee_user_id.trim()
