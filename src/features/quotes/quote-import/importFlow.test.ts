@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Запис чернеток у прорахунок. Перевіряється те, що вже двічі ламалось тихо:
@@ -35,7 +35,9 @@ vi.mock("@/features/quotes/quote-details/imprintPlaces", () => ({
   resolveImprintPlaces: async (imprints: unknown) => imprints,
 }));
 
-vi.mock("@/lib/supabaseClient", () => ({ supabase: {} }));
+vi.mock("@/lib/supabaseClient", () => ({
+  supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "token" } } }) } },
+}));
 
 const { parseImportFile, writeDraftsToQuote } = await import("./importFlow");
 const { toDraftItems } = await import("./mapping");
@@ -122,5 +124,56 @@ describe("parseImportFile — які файли беремо (REQ-308)", () => {
   it(".docx іде в розбір Word: порожній документ так і названо", async () => {
     const outcome = await parseImportFile(docx("<w:p/>"));
     expect(outcome).toMatchObject({ ok: false, error: "У документі немає тексту." });
+  });
+
+  describe("успішний розбір", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("conditions з відповіді моделі доходять в успіх (REQ-182#p26)", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({
+          ok: true,
+          json: async () => ({
+            items: [
+              { sourceRows: [1], name: "Флісова жилетка", comment: null, links: [], runs: [{ quantity: 650 }], flags: [], notes: null },
+            ],
+            warnings: [],
+            conditions: ["Доставка до РЦ Луцьк"],
+            model: "test",
+            costUsd: 0,
+            fileName: "ТЗ.docx",
+          }),
+        })) as unknown as typeof fetch
+      );
+
+      const outcome = await parseImportFile(docx("<w:p><w:r><w:t>Флісова жилетка 650</w:t></w:r></w:p>"));
+
+      expect(outcome).toMatchObject({ ok: true, conditions: ["Доставка до РЦ Луцьк"] });
+    });
+
+    it("без conditions у відповіді — порожній список, а не збій", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({
+          ok: true,
+          json: async () => ({
+            items: [
+              { sourceRows: [1], name: "Кухоль", comment: null, links: [], runs: [{ quantity: 100 }], flags: [], notes: null },
+            ],
+            warnings: [],
+            model: "test",
+            costUsd: 0,
+            fileName: "ТЗ.docx",
+          }),
+        })) as unknown as typeof fetch
+      );
+
+      const outcome = await parseImportFile(docx("<w:p><w:r><w:t>Кухоль 100</w:t></w:r></w:p>"));
+
+      expect(outcome).toMatchObject({ ok: true, conditions: [] });
+    });
   });
 });

@@ -4,6 +4,7 @@ import { normalizeProductUrl } from "./productUrl";
 import type {
   QuoteImportDraftItem,
   QuoteImportDraftRun,
+  QuoteImportImprintHint,
   QuoteImportItem,
   QuoteImportTrace,
 } from "./types";
@@ -32,6 +33,37 @@ const MAX_LINKS_PER_ITEM = 5;
 
 /** Стеля тиражів однієї позиції: діапазон «300-500» дає два, решта — от́руєні дані. */
 const MAX_RUNS_PER_ITEM = 6;
+
+/** Стеля вимог із файлу на позицію (REQ-182#p26): більше — це вже не вимоги, а переказ ТЗ. */
+const MAX_REQUIREMENTS = 8;
+
+/** Той самий пробільний клінінг, що й у назви й коментаря, — але як функція, а не інлайн. */
+const cleanText = (value: unknown) => (typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "");
+
+/**
+ * Сире `imprint` моделі → нанесення з ТЗ або `null` (REQ-182#p26).
+ *
+ * ПОРОЖНІ ПІДПОЛЯ ГАСНУТЬ ДО `null` ТУТ, а не в рендері: `formatImprintHint`
+ * і `withHintImprints` (REQ-182#p28) мають працювати з чистими даними, не
+ * повторюючи один і той самий `.trim() || null` на кожному читачі. Усі чотири
+ * підполя порожні — модель нічого не сказала про нанесення, і весь підпис
+ * зникає, а не показує самі крапки-роздільники.
+ */
+export function normalizeImprintHint(raw: QuoteImportItem["imprint"]): QuoteImportImprintHint | null {
+  if (!raw || typeof raw !== "object") return null;
+  const hint = {
+    method: cleanText(raw.method) || null,
+    place: cleanText(raw.place) || null,
+    size: cleanText(raw.size) || null,
+    colors: cleanText(raw.colors) || null,
+  };
+  return hint.method || hint.place || hint.size || hint.colors ? hint : null;
+}
+
+/** Нанесення з ТЗ підписом у прев'ю: «Вишивка · груди ліворуч · до 10×10 см · до 3 кольорів». */
+export function formatImprintHint(hint: QuoteImportImprintHint): string {
+  return [hint.method, hint.place, hint.size, hint.colors].filter(Boolean).join(" · ");
+}
 
 export function sanitizeExternalUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -121,11 +153,16 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
         flags: Array.isArray(item.flags) ? item.flags : [],
         sourceRows: (item.sourceRows ?? []).filter((row) => Number.isFinite(row)).map((row) => Math.trunc(row)),
         notes: (item.notes ?? "").trim() || null,
+        // Вимоги з ТЗ (REQ-182#p26): очищені, без порожніх рядків, обрізані до
+        // восьми — стара відповідь моделі поля не мала, тож `?? []` не ламає її.
+        requirements: (item.requirements ?? []).map(cleanText).filter(Boolean).slice(0, MAX_REQUIREMENTS),
         variant,
         catalog: null,
         // Артикула у файлі клієнта немає — його називає сторінка постачальника
         // (REQ-247), і він доїде розвідкою посилання, а не розбором таблиці.
         sku: null,
+        // Нанесення з ТЗ текстом, до вибору товару (REQ-182#p26, #p28).
+        imprintHint: normalizeImprintHint(item.imprint),
         imprints: [],
       };
     })

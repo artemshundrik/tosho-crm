@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildImportItemPayload,
   buildImportRunPayloads,
+  formatImprintHint,
   sanitizeExternalUrl,
   toDraftItems,
 } from "./mapping";
@@ -331,5 +332,36 @@ describe("рядки прев'ю → payload мутацій", () => {
     expect(runFromFile.unit_price_model).toBe(0);
     expect(runFromFile.unit_price_print).toBe(0);
     expect(runFromFile.logistics_cost).toBe(0);
+  });
+});
+
+describe("toDraftItems — вимоги й нанесення з файлу (REQ-182#p26)", () => {
+  const base = { sourceRows: [9], name: "Флісова жилетка", comment: null, links: [], runs: [{ quantity: 650 }], flags: [], notes: null };
+
+  it("кладе вимоги, чистить і ріже до 8", () => {
+    const [draft] = toDraftItems([
+      { ...base, requirements: ["  Фліс ≥ 260 г/м² ", "", ...Array.from({ length: 10 }, (_, i) => `вимога ${i}`)] },
+    ]);
+    expect(draft.requirements).toEqual(["Фліс ≥ 260 г/м²", ...Array.from({ length: 7 }, (_, i) => `вимога ${i}`)]);
+  });
+
+  it("нанесення: порожнє → null, часткове лишається", () => {
+    expect(toDraftItems([{ ...base, imprint: { method: " ", place: null, size: null, colors: null } }])[0].imprintHint).toBeNull();
+    expect(
+      toDraftItems([{ ...base, imprint: { method: "Вишивка", place: "груди ліворуч", size: null, colors: "до 3 кольорів" } }])[0]
+        .imprintHint
+    ).toEqual({ method: "Вишивка", place: "груди ліворуч", size: null, colors: "до 3 кольорів" });
+  });
+
+  it("без нових полів — порожній список і null (стара відповідь не ламається)", () => {
+    const [draft] = toDraftItems([base]);
+    expect(draft.requirements).toEqual([]);
+    expect(draft.imprintHint).toBeNull();
+  });
+
+  it("formatImprintHint пропускає порожні частини", () => {
+    expect(formatImprintHint({ method: "Вишивка", place: "груди ліворуч", size: "до 10×10 см", colors: null })).toBe(
+      "Вишивка · груди ліворуч · до 10×10 см"
+    );
   });
 });

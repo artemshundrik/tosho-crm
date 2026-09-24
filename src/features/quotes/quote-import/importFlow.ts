@@ -43,7 +43,15 @@ import type { QuoteImportDraftItem, QuoteImportParseResponse } from "./types";
 export type ImportParseStep = "read" | "model";
 
 export type ImportParseOutcome =
-  | { ok: true; drafts: QuoteImportDraftItem[]; warnings: string[]; fileName: string; rowCount: number }
+  | {
+      ok: true;
+      drafts: QuoteImportDraftItem[];
+      warnings: string[];
+      fileName: string;
+      rowCount: number;
+      /** Умови закупівлі всього запиту (REQ-182#p26) — на «Створити» стають повідомленням в обговорення. */
+      conditions: string[];
+    }
   | { ok: false; error: string; warnings: string[] };
 
 export async function parseImportFile(
@@ -114,8 +122,14 @@ export async function parseImportFile(
         warnings,
       };
     }
+    // Умови закупівлі (REQ-182#p26) — той самий фільтр, що й на сервері: рядки,
+    // без порожніх, стеля 20. Стара відповідь функції поля не мала — `?? []`.
+    const conditions = (payload?.conditions ?? [])
+      .filter((condition): condition is string => typeof condition === "string" && condition.trim() !== "")
+      .map((condition) => condition.trim())
+      .slice(0, 20);
     // rowCount — щоб вікно саме порахувало, скільки рядків не стали позиціями.
-    return { ok: true, drafts, warnings, fileName: file.name, rowCount: dump.rowCount };
+    return { ok: true, drafts, warnings, fileName: file.name, rowCount: dump.rowCount, conditions };
   } catch (cause) {
     return { ok: false, error: cause instanceof Error ? cause.message : "Не вдалося прочитати файл.", warnings: [] };
   }
