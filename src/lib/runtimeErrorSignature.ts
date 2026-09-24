@@ -8,6 +8,34 @@
  */
 
 /**
+ * Обрив мережі, а не помилка в коді.
+ *
+ * Браузери кажуть про нього кожен по-своєму: Chrome — «Failed to fetch»,
+ * Firefox — «NetworkError when attempting to fetch resource.», Safari — «Load
+ * failed». Клієнт бази (postgrest-js) ще й ставить попереду ім'я:
+ * «TypeError: Failed to fetch». Такий запис означає, що в людини на мить
+ * зник інтернет, а не що реліз щось зламав.
+ *
+ * «Failed to fetch dynamically imported module» сюди НЕ належить: це стара
+ * вкладка після викочування, на неї окрема реакція (перезавантаження).
+ */
+const NETWORK_FAILURE_PATTERN =
+  /^(?:typeerror:\s*)?(?:failed to fetch|load failed|networkerror when attempting to fetch resource|the network connection was lost|the internet connection appears to be offline)/i;
+
+export function isNetworkFailureMessage(message: string): boolean {
+  const text = message.trim();
+  if (!text || /dynamically imported module/i.test(text)) return false;
+  return NETWORK_FAILURE_PATTERN.test(text);
+}
+
+/**
+ * Усі обриви мережі — одна група, хоч би як їх назвав браузер. Інакше троє
+ * людей без зв'язку в Chrome, Firefox і Safari розійшлись би по трьох групах
+ * по одній людині, і поріг «зачепило кількох» не спрацював би ніколи.
+ */
+const NETWORK_FAILURE_SIGNATURE = "Обрив мережі (Failed to fetch)";
+
+/**
  * Ключ групування.
  *
  * Числа й адреси прибираємо: «Loading chunk 42» і «Loading chunk 77» — це одна
@@ -15,6 +43,7 @@
  * різними: у лапках стоїть ім'я поля, і воно вказує на різні місця в коді.
  */
 export function runtimeErrorSignature(message: string): string {
+  if (isNetworkFailureMessage(message)) return NETWORK_FAILURE_SIGNATURE;
   return message
     .replace(/\b\d+\b/g, "#")
     .replace(/https?:\/\/[^\s)]+/g, "<url>")

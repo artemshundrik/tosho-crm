@@ -1,5 +1,6 @@
 import {
   groupRuntimeErrors,
+  isNetworkFailureMessage,
   runtimeErrorSignature,
   type RuntimeErrorGroup,
   type RuntimeErrorLike,
@@ -23,6 +24,12 @@ import {
  *
  * Другий привід — коли відома помилка раптом зачепила багато людей: одна
  * людина з дивною вкладкою це не подія, четверо за годину — подія.
+ *
+ * Обрив мережі «новим» не буває ніколи. 24.09.2026 «TypeError: Failed to
+ * fetch» в Іллі прийшов як «Нова помилка в браузері», бо попередній такий був
+ * у квітні, за межами 30-денної історії. У коді нічого не зламалось — у
+ * людини на мить зник інтернет. А от коли без зв'язку одразу троє, це вже
+ * база чи шлюз, і масове правило про це скаже.
  */
 
 /** Скільки людей за вікно робить відому помилку вартою окремої згадки. */
@@ -52,7 +59,7 @@ export function buildRuntimeErrorAlerts({ recent, knownSignatures }: BuildAlerts
   const alerts: RuntimeErrorAlert[] = [];
 
   for (const group of groups) {
-    if (!known.has(group.signature)) {
+    if (!known.has(group.signature) && !isNetworkFailureMessage(group.message)) {
       alerts.push({ kind: "new", group });
       continue;
     }

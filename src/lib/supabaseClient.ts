@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
+import { trackNetworkFailures } from "./networkFailureTrail";
 import { fetchWithReadTimeout } from "./requestTimeout";
 import {
   blockedRpc,
@@ -43,8 +44,11 @@ export function getSupabaseClient(): AnySupabaseClient {
        * скільки шлюз тримає зʼєднання, і людина не розуміє, чи щось відбувається.
        * Тепер запит здається сам і сторінка може сказати правду. Записи й
        * завантаження файлів не чіпаємо — див. requestTimeout.ts.
+       *
+       * Зовні — слід обірваних запитів для журналу помилок: клієнт бази
+       * віддає обрив мережі без стека й адреси (див. networkFailureTrail.ts).
        */
-      fetch: fetchWithReadTimeout(),
+      fetch: trackNetworkFailures(fetchWithReadTimeout()),
     },
     /**
      * Стеля частоти broadcast — записана явно, хоч це і типове значення.

@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { NOTIFICATION_CATEGORIES } from "@/lib/notificationCategories";
 import { getInitialsFromName } from "@/lib/userName";
-import { runtimeErrorSignature } from "@/lib/runtimeErrorSignature";
+import { isNetworkFailureMessage, runtimeErrorSignature } from "@/lib/runtimeErrorSignature";
 import {
   findReleaseActiveAt,
   findReleaseBefore,
@@ -1620,6 +1620,8 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
                 const meta = (group.sample.metadata ?? {}) as Record<string, unknown>;
                 const stack = typeof meta.stack === "string" ? meta.stack : null;
                 const componentStack = typeof meta.component_stack === "string" ? meta.component_stack : null;
+                const networkFailure = isNetworkFailureMessage(group.message);
+                const networkRequest = typeof meta.network_request === "string" ? meta.network_request : null;
                 // Дві різні відповіді: «на чому це сталось» (є завжди, якщо
                 // релізи взагалі відомі) і «чи почалось одразу після
                 // викочування» (лише в межах вікна).
@@ -1644,6 +1646,7 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
                           {[...group.routes].slice(0, 2).map((route) => (
                             <span key={route} className="tabular-nums">{route}</span>
                           ))}
+                          {networkFailure ? <span>обрив мережі, не код</span> : null}
                           {/* Мітка лише коли реліз справді поруч: підказка, яка
                               світиться завжди, перестає щось означати. */}
                           {startedAfter ? (
@@ -1695,6 +1698,21 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
                             <pre className="max-h-64 overflow-auto rounded-inner border border-border/60 bg-background p-2 text-3xs leading-relaxed text-foreground">
                               {stack}
                             </pre>
+                          </div>
+                        ) : networkFailure ? (
+                          // Тут стека немає не через вік запису: клієнт бази
+                          // віддає обрив мережі об'єктом без стека. Єдина нитка
+                          // до коду — який запит обірвався.
+                          <div className="text-muted-foreground">
+                            Стека немає: клієнт бази віддає обрив мережі без нього.{" "}
+                            {networkRequest ? (
+                              <>
+                                Останній обірваний запит:{" "}
+                                <span className="font-mono text-foreground">{networkRequest}</span>
+                              </>
+                            ) : (
+                              "Запит, що обірвався, журнал записує з 24.09.2026 — у цьому записі його ще немає."
+                            )}
                           </div>
                         ) : (
                           <div className="text-muted-foreground">

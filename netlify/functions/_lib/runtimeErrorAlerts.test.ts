@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { isNetworkFailureMessage } from "../../../src/lib/runtimeErrorSignature";
 import {
   alertsFingerprint,
   buildRuntimeErrorAlerts,
@@ -108,5 +109,53 @@ describe("алерти про помилки в браузері", () => {
     const text = formatRuntimeErrorAlert(alerts, { appUrl: "https://tosho.pro", escape: (v) => v });
     expect(alerts).toHaveLength(8);
     expect(text).toContain("…і ще 3");
+  });
+
+  it("обрив мережі в однієї людини — не нова помилка, навіть уперше за місяць", () => {
+    // 24.09.2026: «TypeError: Failed to fetch» в Іллі на картці прорахунку
+    // прийшов як «Нова помилка в браузері», хоча попередній такий був у квітні
+    // й нічого в коді не ламав. Мить без інтернету — не подія для алерту.
+    const alerts = buildRuntimeErrorAlerts({
+      recent: [row("TypeError: Failed to fetch", "Ілля", "2026-09-24T06:56:35Z", "/orders/estimates/:id")],
+      knownSignatures: [],
+    });
+    expect(alerts).toEqual([]);
+  });
+
+  it("обрив мережі в трьох людей за вікно — масовий, про нього пишемо", () => {
+    // Троє без зв'язку одночасно — це вже не чийсь роутер, а база чи шлюз.
+    const alerts = buildRuntimeErrorAlerts({
+      recent: [
+        row("TypeError: Failed to fetch", "Ілля"),
+        row("Failed to fetch", "Дар'я"),
+        row("TypeError: Load failed", "Лєна"),
+      ],
+      knownSignatures: [],
+    });
+    expect(alerts.map((alert) => alert.kind)).toContain("mass");
+  });
+});
+
+describe("isNetworkFailureMessage", () => {
+  it("впізнає обрив мережі в усіх браузерах і в обгортці клієнта бази", () => {
+    for (const message of [
+      "Failed to fetch",
+      "TypeError: Failed to fetch",
+      "TypeError: NetworkError when attempting to fetch resource.",
+      "Load failed",
+      "TypeError: Load failed",
+      "The Internet connection appears to be offline.",
+    ]) {
+      expect(isNetworkFailureMessage(message), message).toBe(true);
+    }
+  });
+
+  it("стара вкладка після викочування — не обрив мережі, а чанк", () => {
+    expect(isNetworkFailureMessage("Failed to fetch dynamically imported module: /assets/x.js")).toBe(false);
+  });
+
+  it("звичайні помилки коду лишаються помилками коду", () => {
+    expect(isNetworkFailureMessage("Cannot read properties of undefined (reading 'url')")).toBe(false);
+    expect(isNetworkFailureMessage("")).toBe(false);
   });
 });

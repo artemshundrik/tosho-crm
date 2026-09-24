@@ -14,6 +14,8 @@ import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "./lib/supabaseClient";
 import { logRuntimeError } from "@/lib/runtimeErrorLogger";
+import { isNetworkFailureMessage } from "@/lib/runtimeErrorSignature";
+import { describeRecentNetworkFailure } from "@/lib/networkFailureTrail";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { useAuth } from "@/auth/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
@@ -400,6 +402,10 @@ function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; s
   if (isChunkLikeError(params.error)) return;
 
   const message = getRuntimeErrorMessage(params.error) || "Unknown runtime error";
+  // Обрив мережі клієнт бази віддає без стека, і `throw error` поза try
+  // лишає в журналі тільки «Failed to fetch». Який запит упав, знає лише
+  // обгортка над fetch — беремо зараз, поки слід свіжий.
+  const networkRequest = isNetworkFailureMessage(message) ? describeRecentNetworkFailure() : null;
   const path = typeof window !== "undefined"
     ? `${window.location.pathname}${window.location.search}${window.location.hash}`
     : "/";
@@ -449,6 +455,7 @@ function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; s
           // «Cannot read properties of undefined» без стека не веде нікуди, а
           // без версії неможливо сказати, чи помилка ще жива після викочування.
           stack: extractErrorStack(params.error),
+          network_request: networkRequest,
           release: __APP_VERSION__.buildId,
           app_version: __APP_VERSION__.version,
           origin: typeof window !== "undefined" ? window.location.origin : null,
