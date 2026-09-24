@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, Info, Loader2 } from "@/components/icons/appIcons";
+import { AlertTriangle, ArrowRight, Check, FileSpreadsheet, FileText, Info, Loader2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
   type ImportParseStep,
 } from "@/features/quotes/quote-import/importFlow";
 import type { QuoteImportRunDefaults } from "@/features/quotes/quote-import/mapping";
-import { QUOTE_IMPORT_ACCEPT } from "@/features/quotes/quote-import/readWorkbook";
+import { QUOTE_IMPORT_ACCEPT, isWordImportFile } from "@/features/quotes/quote-import/readWorkbook";
 import type {
   QuoteImportDraftImprint,
   QuoteImportDraftItem,
@@ -954,7 +954,11 @@ export function QuoteWizardDialog({
                   {fileName && fileDrafts.length > 0 ? (
                     <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/25 p-3">
                       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground ring-1 ring-border/60">
-                        <FileSpreadsheet className="h-4 w-4" />
+                        {isWordImportFile(fileName) ? (
+                          <FileText className="h-4 w-4" />
+                        ) : (
+                          <FileSpreadsheet className="h-4 w-4" />
+                        )}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium" title={fileName}>
@@ -1149,7 +1153,7 @@ function ExcelPanel({
 }) {
   if (stage === "parsing") {
     const steps: Array<{ key: ImportParseStep | "preview"; label: string }> = [
-      { key: "read", label: "Читаю аркуші файлу" },
+      { key: "read", label: isWordImportFile(fileName) ? "Читаю текст і таблиці документа" : "Читаю аркуші файлу" },
       { key: "model", label: "Знаходжу позиції, тиражі й варіанти" },
       { key: "preview", label: "Збираю прев'ю — нічого ще не збережено" },
     ];
@@ -1227,16 +1231,16 @@ function ExcelPanel({
       <FileDropZone
         accept={QUOTE_IMPORT_ACCEPT}
         dropTitle="Відпустіть — розберу файл"
-        hint="Як є, з об’єднаними клітинками й кількома аркушами: модель сама знайде позиції, тиражі й варіанти"
+        hint="Ексель як є, з об’єднаними клітинками й аркушами, або ТЗ у Word: модель сама знайде позиції, тиражі й варіанти"
         inputRef={inputRef}
-        label="Обрати файл Excel"
+        label="Обрати файл Excel чи Word"
         onFiles={(files) => {
           const file = files[0];
           if (file) onFile(file);
         }}
         size="row"
-        tags={[".xlsx", ".csv", "до 12 МБ"]}
-        title="Або ексельку від клієнта"
+        tags={[".xlsx", ".csv", ".docx", "до 12 МБ"]}
+        title="Або ексельку чи Word від клієнта"
       />
     </div>
   );

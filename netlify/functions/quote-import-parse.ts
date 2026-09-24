@@ -8,7 +8,8 @@ import { chatCostUsd } from "./_aiPricing";
 import { logAiUsage } from "./_aiUsageLog";
 
 /**
- * Розшифровка ексельки в позиції прорахунку (REQ-233, docs/QUOTE_IMPORT_DESIGN.md).
+ * Розшифровка ексельки чи ТЗ у Word в позиції прорахунку (REQ-233, REQ-308,
+ * docs/QUOTE_IMPORT_DESIGN.md).
  *
  * ФУНКЦІЯ НІЧОГО НЕ ПИШЕ В БАЗУ, крім рядка обліку витрат. Позиції й тиражі
  * створює фронт наявними мутаціями під RLS користувача — після того, як людина
@@ -110,6 +111,7 @@ const DEVELOPER_PROMPT = [
   "You extract quote line items from a spreadsheet dump of a client's request (Ukrainian print/merch industry).",
   "Each dump line starts with the row number from the file, then tab-separated cell values.",
   "A section '=== Посилання (рядок → адреса)' maps row numbers to hyperlinks found in that row.",
+  "The dump may come from a Word document instead (FILE ends with .docx): then paragraphs are single-cell rows and table rows are multi-cell rows, in document order, and '• ' marks a list item. One product may be described across several neighbouring paragraphs — merge them into one item and list all their rows in sourceRows.",
   "Return ONE item per product. sourceRows must list the dump row numbers the item came from.",
   "PRICES: ignore every price and cost in the file — they are never imported. Do not put numbers from price columns anywhere.",
   "If a price cell holds a request or condition instead of a number (e.g. 'прохання запитати підрядника вартість, якщо робимо індивідуально'), copy that text into comment — it is the most valuable thing in the row.",

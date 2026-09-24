@@ -12,18 +12,34 @@ import { SHEET_DUMP_MAX_COLUMNS, SHEET_DUMP_MAX_ROWS } from "./sheetDump";
  * розбору — а розбираємо ми саме чужі файли.
  */
 
-/** Розширення, які ми беремо. Все інше — відмова ще до читання. */
-export const QUOTE_IMPORT_ACCEPT = ".xlsx,.xls,.xlsm,.csv";
+/**
+ * Розширення, які ми беремо. Все інше — відмова ще до читання.
+ * `.docx` читає не SheetJS-аркуш, а readWordDocument.ts (REQ-308): ТЗ у Word.
+ */
+export const QUOTE_IMPORT_ACCEPT = ".xlsx,.xls,.xlsm,.csv,.docx";
 
-const ALLOWED_EXTENSIONS = ["xlsx", "xls", "xlsm", "csv"];
+const ALLOWED_EXTENSIONS = ["xlsx", "xls", "xlsm", "csv", "docx"];
+
+function extensionOf(fileName: string): string {
+  const dot = fileName.lastIndexOf(".");
+  return dot === -1 ? "" : fileName.slice(dot + 1).toLowerCase();
+}
+
+/** ТЗ у Word: читається readWordDocument.ts, а не як аркуш. */
+export function isWordImportFile(fileName: string): boolean {
+  return extensionOf(fileName) === "docx";
+}
+
+/** Word 97–2003: інший, двійковий формат — просимо зберегти як .docx. */
+export function isLegacyWordFile(fileName: string): boolean {
+  return extensionOf(fileName) === "doc";
+}
 
 /** Стеля файлу. Більше — це вже не запит клієнта, а вивантаження бази. */
 export const QUOTE_IMPORT_MAX_FILE_BYTES = 12 * 1024 * 1024;
 
 export function isSupportedImportFile(fileName: string): boolean {
-  const dot = fileName.lastIndexOf(".");
-  if (dot === -1) return false;
-  return ALLOWED_EXTENSIONS.includes(fileName.slice(dot + 1).toLowerCase());
+  return ALLOWED_EXTENSIONS.includes(extensionOf(fileName));
 }
 
 type SheetJsCell = {

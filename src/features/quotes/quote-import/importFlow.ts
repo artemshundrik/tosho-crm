@@ -17,7 +17,14 @@ import {
   type QuoteImportRunDefaults,
 } from "./mapping";
 import { buildSheetDump } from "./sheetDump";
-import { QUOTE_IMPORT_MAX_FILE_BYTES, isSupportedImportFile, readWorkbookSheets } from "./readWorkbook";
+import {
+  QUOTE_IMPORT_MAX_FILE_BYTES,
+  isLegacyWordFile,
+  isSupportedImportFile,
+  isWordImportFile,
+  readWorkbookSheets,
+} from "./readWorkbook";
+import { readWordDocumentSheets } from "./readWordDocument";
 import type { QuoteImportDraftItem, QuoteImportParseResponse } from "./types";
 
 /**
@@ -43,9 +50,17 @@ export async function parseImportFile(
   file: File,
   options: { quoteId?: string | null; onStep?: (step: ImportParseStep) => void } = {}
 ): Promise<ImportParseOutcome> {
-  if (!isSupportedImportFile(file.name)) {
-    return { ok: false, error: "Підтримуються лише xlsx, xls, xlsm і csv.", warnings: [] };
+  if (isLegacyWordFile(file.name)) {
+    return {
+      ok: false,
+      error: "Старий формат .doc не читаємо — відкрийте файл у Word і збережіть як .docx.",
+      warnings: [],
+    };
   }
+  if (!isSupportedImportFile(file.name)) {
+    return { ok: false, error: "Підтримуються лише xlsx, xls, xlsm, csv і docx.", warnings: [] };
+  }
+  const word = isWordImportFile(file.name);
   if (file.size > QUOTE_IMPORT_MAX_FILE_BYTES) {
     return {
       ok: false,
@@ -56,10 +71,16 @@ export async function parseImportFile(
 
   try {
     options.onStep?.("read");
-    const sheets = await readWorkbookSheets(file);
+    // Word іде в той самий дамп: абзаци й рядки таблиць стають рядками, і
+    // сервер із моделлю не відрізняють ТЗ від ексельки.
+    const sheets = word ? await readWordDocumentSheets(file) : await readWorkbookSheets(file);
     const dump = buildSheetDump(sheets);
     if (dump.rowCount === 0) {
-      return { ok: false, error: "У файлі немає жодного заповненого рядка.", warnings: [] };
+      return {
+        ok: false,
+        error: word ? "У документі немає тексту." : "У файлі немає жодного заповненого рядка.",
+        warnings: [],
+      };
     }
 
     const { data: sessionData } = await supabase.auth.getSession();
@@ -87,7 +108,9 @@ export async function parseImportFile(
     if (drafts.length === 0) {
       return {
         ok: false,
-        error: "Модель не знайшла в файлі жодної позиції. Перевірте, чи це справді таблиця запиту.",
+        error: word
+          ? "Модель не знайшла в документі жодної позиції. Перевірте, чи це справді ТЗ із переліком товарів."
+          : "Модель не знайшла в файлі жодної позиції. Перевірте, чи це справді таблиця запиту.",
         warnings,
       };
     }

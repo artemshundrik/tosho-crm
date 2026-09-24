@@ -58,7 +58,7 @@ export function QuoteImportDialog({
   nextPosition,
   runDefaults,
   title = "Імпорт позицій з файлу",
-  description = "Excel від клієнта → позиції з тиражами. Ціни вписуються вже в прорахунку. Нічого не записується, поки ви не подивитесь прев'ю.",
+  description = "Excel чи ТЗ у Word від клієнта → позиції з тиражами. Ціни вписуються вже в прорахунку. Нічого не записується, поки ви не подивитесь прев'ю.",
   header,
   canPick = true,
   pickBlockedHint,
@@ -240,14 +240,14 @@ export function QuoteImportDialog({
             accept={QUOTE_IMPORT_ACCEPT}
             disabled={!canPick}
             dropTitle="Відпустіть — розберу файл"
-            hint="Як є, з об’єднаними клітинками й кількома аркушами: модель сама знайде позиції, тиражі й варіанти"
+            hint="Ексель як є, з об’єднаними клітинками й аркушами, або ТЗ у Word: модель сама знайде позиції, тиражі й варіанти"
             inputRef={inputRef}
-            label="Обрати файл Excel"
+            label="Обрати файл Excel чи Word"
             onFiles={(files) => {
               const file = files[0];
               if (file) void handleFile(file);
             }}
-            tags={[".xlsx", ".xls", ".xlsm", ".csv", "до 12 МБ"]}
+            tags={[".xlsx", ".xls", ".xlsm", ".csv", ".docx", "до 12 МБ"]}
             title="Перетягніть файл сюди або клацніть"
           />
         ) : null}

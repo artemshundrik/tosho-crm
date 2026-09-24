@@ -199,7 +199,7 @@ describe("QuoteWizardDialog — один екран", () => {
     // Вкладок джерела більше немає (REQ-182#p14): поле саме розуміє, що набрали.
     expect(screen.queryByRole("tablist", { name: "Джерело позицій" })).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Товар: посилання або назва" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Обрати файл Excel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обрати файл Excel чи Word" })).toBeInTheDocument();
   });
 
   it("у «Поліграфії» поле позицій більше не просить товар (REQ-178#p11)", async () => {
@@ -238,7 +238,7 @@ describe("QuoteWizardDialog — один екран", () => {
     // би як поломка.
     renderWizard({ headerIssue: "Оберіть замовника — прорахунок створюється на нього." });
 
-    expect(screen.getByRole("button", { name: "Обрати файл Excel" })).not.toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Обрати файл Excel чи Word" })).not.toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText(/Оберіть замовника/)).toBeInTheDocument();
     // Кнопка не мовчить: без позицій вона вимкнена, а з позиціями натиск
     // покаже, чого бракує, замість того щоб не робити нічого.
@@ -596,7 +596,7 @@ describe("QuoteWizardDialog — один екран", () => {
     await user.click(screen.getByRole("button", { name: "Інший файл" }));
     expect(screen.queryByDisplayValue("Футболка бавовна")).not.toBeInTheDocument();
     expect(screen.getAllByRole("textbox", { name: "Назва позиції" })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Обрати файл Excel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обрати файл Excel чи Word" })).toBeInTheDocument();
   });
 });
 

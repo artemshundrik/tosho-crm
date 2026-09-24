@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -36,7 +37,7 @@ vi.mock("@/features/quotes/quote-details/imprintPlaces", () => ({
 
 vi.mock("@/lib/supabaseClient", () => ({ supabase: {} }));
 
-const { writeDraftsToQuote } = await import("./importFlow");
+const { parseImportFile, writeDraftsToQuote } = await import("./importFlow");
 const { toDraftItems } = await import("./mapping");
 
 const draft = (patch: Record<string, unknown>) => ({
@@ -91,5 +92,35 @@ describe("writeDraftsToQuote — вартість ставить база, а н
     if (!result.ok) expect(result.error).toContain("Прорахунок заблоковано");
     // Ціну ставити нема кому: тиражу не з'явилось.
     expect(setQuoteRunCostFromPool).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseImportFile — які файли беремо (REQ-308)", () => {
+  const docx = (body: string) => {
+    const container = XLSX.CFB.utils.cfb_new();
+    XLSX.CFB.utils.cfb_add(
+      container,
+      "word/document.xml",
+      new TextEncoder().encode(
+        `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`
+      )
+    );
+    const bytes = XLSX.CFB.write(container, { type: "array", fileType: "zip" }) as unknown as ArrayLike<number>;
+    return new File([new Uint8Array(Array.from(bytes))], "ТЗ клієнта.docx");
+  };
+
+  it("старий .doc — не «не підтримується», а що саме зробити", async () => {
+    const outcome = await parseImportFile(new File(["x"], "ТЗ.doc"));
+    expect(outcome).toMatchObject({ ok: false, error: expect.stringContaining("збережіть як .docx") });
+  });
+
+  it("чужий формат називає й Word серед підтримуваних", async () => {
+    const outcome = await parseImportFile(new File(["x"], "ТЗ.pdf"));
+    expect(outcome).toMatchObject({ ok: false, error: "Підтримуються лише xlsx, xls, xlsm, csv і docx." });
+  });
+
+  it(".docx іде в розбір Word: порожній документ так і названо", async () => {
+    const outcome = await parseImportFile(docx("<w:p/>"));
+    expect(outcome).toMatchObject({ ok: false, error: "У документі немає тексту." });
   });
 });
