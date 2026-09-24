@@ -15,6 +15,7 @@ import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { UploadIllustration } from "@/components/ui/upload-illustration";
 import { ImportDraftRow, type DraftKindOption, type PlaceOption } from "@/features/quotes/quote-import/ImportDraftRow";
 import {
+  attachImportExtras,
   parseImportFile,
   startImportResearch,
   writeDraftsToQuote,
@@ -167,6 +168,14 @@ export function QuoteWizardDialog({
   const [fileRowCount, setFileRowCount] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
   const [fileName, setFileName] = React.useState("");
+  /** Умови закупівлі з ТЗ — на «Створити» стають повідомленням в обговорення (REQ-182#p31). */
+  const [conditions, setConditions] = React.useState<string[]>([]);
+  /**
+   * Сам файл — у ref, а не в стані: на «Створити» він летить у «Файли
+   * прорахунку» без жодного перерендеру, а зайвий рендер великого `File`
+   * у залежностях ефектів нікому не потрібен.
+   */
+  const sourceFileRef = React.useRef<File | null>(null);
   const [parseStep, setParseStep] = React.useState<ImportParseStep>("read");
   const [savedCount, setSavedCount] = React.useState(0);
   const [fieldValue, setFieldValue] = React.useState("");
@@ -229,6 +238,8 @@ export function QuoteWizardDialog({
     setWarnings([]);
     setError(null);
     setFileName("");
+    setConditions([]);
+    sourceFileRef.current = null;
     setFileRowCount(0);
     setSavedCount(0);
     setFieldValue("");
@@ -359,6 +370,8 @@ export function QuoteWizardDialog({
     setDrafts((prev) => prev.filter((draft) => !isFileDraft(draft)));
     setWarnings([]);
     setFileName("");
+    setConditions([]);
+    sourceFileRef.current = null;
     setFileRowCount(0);
     resetLinkPreviews();
   }, [resetLinkPreviews]);
@@ -381,6 +394,8 @@ export function QuoteWizardDialog({
     setDrafts((prev) => [...prev.filter((draft) => !isFileDraft(draft)), ...outcome.drafts]);
     setWarnings(outcome.warnings);
     setFileRowCount(outcome.rowCount);
+    sourceFileRef.current = file;
+    setConditions(outcome.conditions);
     void startLinkPreviews(outcome.drafts);
   };
 
@@ -788,6 +803,15 @@ export function QuoteWizardDialog({
     }
 
     await startImportResearch(quoteId, written.researchItemIds);
+    // Файл і умови — лише тепер, коли позиції вже в базі: без товару вони
+    // нікому не потрібні (REQ-182#p30, #p31).
+    const extras = await attachImportExtras({
+      quoteId,
+      teamId,
+      file: sourceFileRef.current,
+      conditions,
+    });
+    for (const message of extras.errors) toast.warning(message);
     const count = written.itemIds.length;
     const word = pluralWordUk(count, "позицією", "позиціями", "позиціями");
     const created = appendTo ? `Додано ${count} ${word}` : `Створено прорахунок з ${count} ${word}`;

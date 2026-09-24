@@ -126,7 +126,7 @@ export type SendMessageInput = {
  * слати, вирішує сервер, який бачить склад справи; сюди йде лише нитка й
  * текст. Саме threadKey, а не quoteId: у самостійних задач quoteId порожній.
  */
-async function notifyThreadMessage(threadKey: string, body: string): Promise<void> {
+export async function notifyThreadMessage(threadKey: string, body: string): Promise<void> {
   try {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -141,31 +141,34 @@ async function notifyThreadMessage(threadKey: string, body: string): Promise<voi
   }
 }
 
+/** Записати повідомлення нитки — те, що раніше жило прямо в `mutationFn` хука. */
+export async function insertThreadMessage(threadKey: string, input: SendMessageInput): Promise<ThreadEntry> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quote_comments")
+    .insert({
+      team_id: input.teamId,
+      quote_id: input.quoteId,
+      thread_key: threadKey,
+      body: input.body,
+      created_by: input.userId,
+      kind: "message",
+      visibility: input.visibility,
+      source: "crm",
+      thread_meta: input.attachments?.length ? { attachments: input.attachments } : {},
+      reply_to: input.replyTo ?? null,
+    })
+    .select(MESSAGE_COLUMNS)
+    .single();
+  if (error) throw error;
+  return toEntry(data as MessageRow);
+}
+
 export function useSendThreadMessage(threadKey: string | null) {
   const client = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: SendMessageInput) => {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("quote_comments")
-        .insert({
-          team_id: input.teamId,
-          quote_id: input.quoteId,
-          thread_key: threadKey!,
-          body: input.body,
-          created_by: input.userId,
-          kind: "message",
-          visibility: input.visibility,
-          source: "crm",
-          thread_meta: input.attachments?.length ? { attachments: input.attachments } : {},
-          reply_to: input.replyTo ?? null,
-        })
-        .select(MESSAGE_COLUMNS)
-        .single();
-      if (error) throw error;
-      return toEntry(data as MessageRow);
-    },
+    mutationFn: (input: SendMessageInput) => insertThreadMessage(threadKey!, input),
 
     // Оптимістично: баббл з'являється миттєво блідим.
     onMutate: async (input) => {

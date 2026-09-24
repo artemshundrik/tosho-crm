@@ -1,4 +1,5 @@
 import { resolveImprintPlaces, type PlaceCache } from "@/features/quotes/quote-details/imprintPlaces";
+import { ITEM_VISUAL_BUCKET } from "@/features/quotes/quote-details/config";
 import {
   findCatalogModelByKindAndName,
   insertCatalogModelRow,
@@ -6,8 +7,12 @@ import {
   persistQuoteRuns,
   setQuoteRunCostFromPool,
   updateCatalogModelImage,
+  uploadQuoteAttachmentFile,
 } from "@/features/quotes/quote-details/queries";
+import { insertThreadMessage, notifyThreadMessage } from "@/features/taskChat/queries";
+import { getCurrentUserId } from "@/lib/currentUser";
 import { supabase } from "@/lib/supabaseClient";
+import { threadKeyForQuote } from "@/lib/taskThread";
 import type { QuoteRun } from "@/lib/toshoApi";
 
 import {
@@ -340,6 +345,63 @@ export async function writeDraftsToQuote(input: {
  * створені, а картинка з назвою — приємний додаток, без якого прорахунок
  * робиться так само.
  */
+/** Умови закупівлі одним повідомленням: заголовок і рядки списком (REQ-182#p31). */
+export function conditionsMessage(conditions: string[]): string {
+  return ["Умови з ТЗ:", ...conditions.map((condition) => `• ${condition}`)].join("\n");
+}
+
+/**
+ * Файл клієнта — у «Файли прорахунку», умови закупівлі — повідомленням в
+ * обговорення (REQ-182#p30, #p31). Обидва кроки — після того, як позиції вже
+ * записані: без товару файл і умови нікому не потрібні, а якщо запис позицій
+ * не вдався, до цієї функції взагалі не доходять.
+ *
+ * Жодна з невдач тут не кидає виняток: людина вже отримала прорахунок із
+ * товарами, і втрачений файл чи умови — це те, що можна доробити руками, а не
+ * привід показати їй помилку на весь екран.
+ */
+export async function attachImportExtras(input: {
+  quoteId: string;
+  teamId: string;
+  file: File | null;
+  conditions: string[];
+}): Promise<{ fileAttached: boolean; conditionsPosted: boolean; errors: string[] }> {
+  const errors: string[] = [];
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return { fileAttached: false, conditionsPosted: false, errors: ["Сесія застаріла — файл і умови не збережено."] };
+  }
+
+  let fileAttached = false;
+  if (input.file) {
+    const uploaded = await uploadQuoteAttachmentFile({
+      teamId: input.teamId,
+      quoteId: input.quoteId,
+      file: input.file,
+      uploadedBy: userId,
+      audience: "project",
+      bucket: ITEM_VISUAL_BUCKET,
+    });
+    fileAttached = uploaded.ok;
+    if (!uploaded.ok) errors.push(`Файл «${input.file.name}» не прикріпився: ${uploaded.message}`);
+  }
+
+  let conditionsPosted = false;
+  if (input.conditions.length > 0) {
+    const threadKey = threadKeyForQuote(input.quoteId);
+    const body = conditionsMessage(input.conditions);
+    try {
+      await insertThreadMessage(threadKey, { body, visibility: "team", teamId: input.teamId, quoteId: input.quoteId, userId });
+      conditionsPosted = true;
+      void notifyThreadMessage(threadKey, body);
+    } catch {
+      errors.push("Умови з ТЗ не лягли в обговорення — додайте їх туди руками.");
+    }
+  }
+
+  return { fileAttached, conditionsPosted, errors };
+}
+
 export async function startImportResearch(quoteId: string, itemIds: string[]) {
   if (itemIds.length === 0) return;
   try {

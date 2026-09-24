@@ -21,6 +21,11 @@ const setQuoteRunCostFromPool = vi.fn(async (_runId: string, _poolId: string) =>
 });
 
 const insertQuoteItemRow = vi.fn(async () => ({ ok: true as const, data: { id: "item-1" } }));
+type UploadOutcome = { ok: true; data: Record<string, never> } | { ok: false; message: string };
+const uploadQuoteAttachmentFile = vi.fn(async (_input: Record<string, unknown>): Promise<UploadOutcome> => {
+  void _input;
+  return { ok: true, data: {} };
+});
 
 vi.mock("@/features/quotes/quote-details/queries", () => ({
   insertQuoteItemRow: () => insertQuoteItemRow(),
@@ -29,6 +34,7 @@ vi.mock("@/features/quotes/quote-details/queries", () => ({
   setQuoteRunCostFromPool: (runId: string, poolId: string) => setQuoteRunCostFromPool(runId, poolId),
   findCatalogModelByKindAndName: async () => null,
   updateCatalogModelImage: async () => undefined,
+  uploadQuoteAttachmentFile: (input: Record<string, unknown>) => uploadQuoteAttachmentFile(input),
 }));
 
 vi.mock("@/features/quotes/quote-details/imprintPlaces", () => ({
@@ -39,7 +45,25 @@ vi.mock("@/lib/supabaseClient", () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "token" } } }) } },
 }));
 
-const { parseImportFile, writeDraftsToQuote } = await import("./importFlow");
+vi.mock("@/lib/currentUser", () => ({
+  getCurrentUserId: async () => "u-1",
+}));
+
+const insertThreadMessage = vi.fn(async (_threadKey: string, _input: Record<string, unknown>) => {
+  void _threadKey;
+  void _input;
+  return {} as never;
+});
+const notifyThreadMessage = vi.fn(async (_threadKey: string, _body: string) => {
+  void _threadKey;
+  void _body;
+});
+vi.mock("@/features/taskChat/queries", () => ({
+  insertThreadMessage: (threadKey: string, input: Record<string, unknown>) => insertThreadMessage(threadKey, input),
+  notifyThreadMessage: (threadKey: string, body: string) => notifyThreadMessage(threadKey, body),
+}));
+
+const { parseImportFile, writeDraftsToQuote, attachImportExtras } = await import("./importFlow");
 const { toDraftItems } = await import("./mapping");
 
 const draft = (patch: Record<string, unknown>) => ({
@@ -175,5 +199,52 @@ describe("parseImportFile — які файли беремо (REQ-308)", () => {
 
       expect(outcome).toMatchObject({ ok: true, conditions: [] });
     });
+  });
+});
+
+describe("attachImportExtras — файл у «Файли прорахунку», умови в обговорення (REQ-182#p30, #p31)", () => {
+  beforeEach(() => {
+    uploadQuoteAttachmentFile.mockClear();
+    insertThreadMessage.mockClear();
+    notifyThreadMessage.mockClear();
+  });
+
+  it("файл лягає у «Файли прорахунку», умови — одним повідомленням в обговорення", async () => {
+    const file = new File(["x"], "ТЗ.docx");
+    const result = await attachImportExtras({
+      quoteId: "q-1",
+      teamId: "t-1",
+      file,
+      conditions: ["Доставка до РЦ Луцьк", "Зразок за 5 робочих днів"],
+    });
+
+    expect(uploadQuoteAttachmentFile).toHaveBeenCalledWith(
+      expect.objectContaining({ quoteId: "q-1", teamId: "t-1", file, uploadedBy: "u-1", audience: "project" })
+    );
+    expect(insertThreadMessage).toHaveBeenCalledWith(
+      "quote:q-1",
+      expect.objectContaining({
+        body: "Умови з ТЗ:\n• Доставка до РЦ Луцьк\n• Зразок за 5 робочих днів",
+        visibility: "team",
+        quoteId: "q-1",
+        teamId: "t-1",
+        userId: "u-1",
+      })
+    );
+    expect(result).toEqual({ fileAttached: true, conditionsPosted: true, errors: [] });
+  });
+
+  it("без умов повідомлення немає; невдалий файл — помилка словами, а не виняток", async () => {
+    uploadQuoteAttachmentFile.mockResolvedValueOnce({ ok: false, message: "квота" });
+    const result = await attachImportExtras({
+      quoteId: "q-1",
+      teamId: "t-1",
+      file: new File(["x"], "a.xlsx"),
+      conditions: [],
+    });
+
+    expect(insertThreadMessage).not.toHaveBeenCalled();
+    expect(result.fileAttached).toBe(false);
+    expect(result.errors[0]).toContain("a.xlsx");
   });
 });
