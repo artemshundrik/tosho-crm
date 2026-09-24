@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildImportItemPayload,
   buildImportRunPayloads,
+  buildItemDescription,
   formatImprintHint,
   sanitizeExternalUrl,
   toDraftItems,
@@ -363,5 +364,26 @@ describe("toDraftItems — вимоги й нанесення з файлу (REQ
     expect(formatImprintHint({ method: "Вишивка", place: "груди ліворуч", size: "до 10×10 см", colors: null })).toBe(
       "Вишивка · груди ліворуч · до 10×10 см"
     );
+  });
+});
+
+describe("buildItemDescription — опис позиції з файлу (REQ-182#p29)", () => {
+  it("назва з ТЗ, коментар, вимоги й нанесення — рядками", () => {
+    expect(
+      buildItemDescription({
+        tzName: "Флісова жилетка",
+        comment: "",
+        requirements: ["Фліс ≥ 260 г/м²", "Розміри S–3XL, одна ціна"],
+        imprintHint: { method: "Вишивка", place: "груди ліворуч", size: "до 10×10 см", colors: "до 3 кольорів" },
+      })
+    ).toBe(
+      "За ТЗ: Флісова жилетка\n• Фліс ≥ 260 г/м²\n• Розміри S–3XL, одна ціна\n• Нанесення: Вишивка · груди ліворуч · до 10×10 см · до 3 кольорів"
+    );
+  });
+
+  it("проста ексель-позиція — лише коментар, як і було", () => {
+    expect(
+      buildItemDescription({ comment: "прохання запитати підрядника", requirements: [], imprintHint: null, tzName: null })
+    ).toBe("прохання запитати підрядника");
   });
 });

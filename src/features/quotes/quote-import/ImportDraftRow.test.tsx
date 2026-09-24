@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import userEvent from "@testing-library/user-event";
@@ -143,5 +143,83 @@ describe("ImportDraftRow — вибір кольору з посилання", (
       />
     );
     expect(screen.queryByText("Оберіть колір — його артикул поїде в замовлення")).toBeNull();
+  });
+});
+
+/**
+ * ВИМОГИ З ТЗ ЗГОРТКОМ (REQ-182#p29). Пункти не видно, поки менеджер не
+ * розгорнув список: у щільному рядку прев'ю вони б забрали більше місця, ніж
+ * сама позиція.
+ */
+describe("ImportDraftRow — вимоги з ТЗ", () => {
+  const requirements = ["Фліс ≥ 260 г/м²", "Комір-стійка"];
+
+  it("рахує пункти згорнутими, розгортає по кліку", async () => {
+    render(<ImportDraftRow draft={draft({ requirements })} preview={undefined} onPatch={noop} onPatchRun={noop} />);
+    expect(screen.getByText("Вимоги з ТЗ · 2")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Фліс ≥ 260 г/м²")).toBeNull();
+
+    await userEvent.click(screen.getByText("Вимоги з ТЗ · 2"));
+    expect(screen.getByDisplayValue("Фліс ≥ 260 г/м²")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Комір-стійка")).toBeInTheDocument();
+  });
+
+  it("правка вимоги йде через onPatch", async () => {
+    const patches: Array<Partial<QuoteImportDraftItem>> = [];
+    render(
+      <ImportDraftRow
+        draft={draft({ requirements })}
+        preview={undefined}
+        onPatch={(patch) => patches.push(patch)}
+        onPatchRun={noop}
+      />
+    );
+    await userEvent.click(screen.getByText("Вимоги з ТЗ · 2"));
+    const field = screen.getByDisplayValue("Фліс ≥ 260 г/м²");
+    fireEvent.change(field, { target: { value: "Фліс ≥ 280 г/м²" } });
+    expect(patches.at(-1)).toEqual({ requirements: ["Фліс ≥ 280 г/м²", "Комір-стійка"] });
+  });
+
+  it("кнопка «Прибрати вимогу» знімає лише свій пункт", async () => {
+    const patches: Array<Partial<QuoteImportDraftItem>> = [];
+    render(
+      <ImportDraftRow
+        draft={draft({ requirements })}
+        preview={undefined}
+        onPatch={(patch) => patches.push(patch)}
+        onPatchRun={noop}
+      />
+    );
+    await userEvent.click(screen.getByText("Вимоги з ТЗ · 2"));
+    const removeButtons = screen.getAllByLabelText("Прибрати вимогу");
+    await userEvent.click(removeButtons[1]);
+    expect(patches.at(-1)).toEqual({ requirements: ["Фліс ≥ 260 г/м²"] });
+  });
+});
+
+/**
+ * НАНЕСЕННЯ З ТЗ ПІДПИСОМ (REQ-182#p28), поки чипів ще немає: до вибору
+ * товару прив'язати метод нема до чого.
+ */
+describe("ImportDraftRow — підпис нанесення з ТЗ", () => {
+  const imprintHint = { method: "Вишивка", place: "груди ліворуч", size: null, colors: null };
+
+  it("видно підпис, коли чипів немає", () => {
+    render(
+      <ImportDraftRow draft={draft({ imprintHint, imprints: [] })} preview={undefined} onPatch={noop} onPatchRun={noop} />
+    );
+    expect(screen.getByText("Нанесення з ТЗ: Вишивка · груди ліворуч")).toBeInTheDocument();
+  });
+
+  it("чипи вже є — підпису немає", () => {
+    render(
+      <ImportDraftRow
+        draft={draft({ imprintHint, imprints: [{ key: "i1", methodId: "m1", positionId: null, positionLabel: null }] }) }
+        preview={undefined}
+        onPatch={noop}
+        onPatchRun={noop}
+      />
+    );
+    expect(screen.queryByText("Нанесення з ТЗ: Вишивка · груди ліворуч")).toBeNull();
   });
 });

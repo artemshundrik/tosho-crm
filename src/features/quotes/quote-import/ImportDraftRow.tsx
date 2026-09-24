@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ExternalLink, ImageOff, Plus, Search, Tag, Trash2, X } from "@/components/icons/appIcons";
+import { Check, ChevronDown, ChevronRight, ExternalLink, ImageOff, Plus, Search, Tag, Trash2, X } from "@/components/icons/appIcons";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
@@ -16,6 +16,7 @@ import { catalogPlace } from "@/features/quotes/quote-wizard/catalogPlace";
 import { CatalogPlaceChip } from "@/features/quotes/quote-wizard/CatalogPlaceChip";
 import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 
+import { formatImprintHint } from "./mapping";
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
 import { getImprintSheet } from "@/features/quotes/quote-details/imprintSheets";
 import type { MethodDirectorySource } from "@/features/quotes/quote-details/useKindImprintOptions";
@@ -422,6 +423,16 @@ export function ImportDraftRow({
             </div>
           ) : null}
 
+          {(draft.requirements?.length ?? 0) > 0 ? (
+            <RequirementsToggle requirements={draft.requirements ?? []} disabled={disabled} onPatch={onPatch} />
+          ) : null}
+
+          {draft.imprintHint && draft.imprints.length === 0 ? (
+            <span className="block text-2xs text-muted-foreground">
+              Нанесення з ТЗ: {formatImprintHint(draft.imprintHint)}
+            </span>
+          ) : null}
+
           {sources.length > 0 ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {sources.map((source) => (
@@ -553,6 +564,65 @@ export function ImportDraftRow({
           <div className="ml-auto shrink-0 pl-2">{runsField}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Вимоги з ТЗ згортком (REQ-182#p29). Згорнуто видно лише кількість — сама
+ * ідея вимог у файлі часто зайва (проста ексель-позиція її не має), і
+ * тримати список розгорнутим на кожному рядку означало б розтягувати прев'ю
+ * заради того, що менеджер здебільшого й так не читає.
+ */
+function RequirementsToggle({
+  requirements,
+  disabled,
+  onPatch,
+}: {
+  requirements: string[];
+  disabled?: boolean;
+  onPatch: (patch: Partial<QuoteImportDraftItem>) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex items-center gap-1 text-2xs text-muted-foreground transition-colors hover:text-foreground"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        Вимоги з ТЗ · {requirements.length}
+      </button>
+      {open ? (
+        <div className="space-y-1">
+          {requirements.map((requirement, index) => (
+            <div key={index} className="flex items-center gap-1.5">
+              <Input
+                value={requirement}
+                disabled={disabled}
+                controlSize="sm"
+                aria-label="Вимога з ТЗ"
+                onChange={(event) => {
+                  const next = [...requirements];
+                  next[index] = event.target.value;
+                  onPatch({ requirements: next });
+                }}
+              />
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label="Прибрати вимогу"
+                onClick={() => onPatch({ requirements: requirements.filter((_, i) => i !== index) })}
+                className={cn(ICON_ACTION, "h-7 w-7 hover:bg-danger-soft hover:text-danger-foreground")}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -169,6 +169,26 @@ export function toDraftItems(items: QuoteImportItem[]): QuoteImportDraftItem[] {
     .filter((item): item is QuoteImportDraftItem => item !== null);
 }
 
+/**
+ * Опис позиції для `quote_items.description` (REQ-182#p29).
+ *
+ * НАЗВА З ТЗ — ПЕРШИМ РЯДКОМ, коли позицію прив'язали до товару з пулу: сама
+ * назва стала назвою товару постачальника, і слова клієнта інакше губляться.
+ * Вимоги й нанесення — маркованим списком під коментарем, а не вплетені в
+ * нього текстом: у картці прорахунку так само видно, що з файлу, а що дописав
+ * менеджер.
+ */
+export function buildItemDescription(
+  draft: Pick<QuoteImportDraftItem, "comment" | "requirements" | "imprintHint" | "tzName">
+): string {
+  const lines: string[] = [];
+  if (draft.tzName) lines.push(`За ТЗ: ${draft.tzName}`);
+  if (draft.comment) lines.push(draft.comment);
+  for (const requirement of draft.requirements ?? []) lines.push(`• ${requirement}`);
+  if (draft.imprintHint) lines.push(`• Нанесення: ${formatImprintHint(draft.imprintHint)}`);
+  return lines.join("\n");
+}
+
 export type QuoteImportItemPayloadInput = {
   draft: QuoteImportDraftItem;
   itemId: string;
@@ -265,7 +285,7 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
       назвою (`bindCatalogModel`), інакше кожен колір ставав би окремою моделлю.
     */
     name: draft.color ? `${draft.name} · ${draft.color}` : draft.name,
-    description: draft.comment || null,
+    description: buildItemDescription(draft) || null,
     metadata,
     qty,
     unit: "шт.",

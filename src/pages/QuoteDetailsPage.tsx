@@ -4827,7 +4827,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             {shouldShowDescription ? (
                               <div className="mt-5">
                                 <div className="mb-2 text-xs font-medium text-muted-foreground">Опис</div>
-                                <div className="text-sm leading-relaxed text-foreground">{item.description}</div>
+                                <div className="whitespace-pre-line text-sm leading-relaxed text-foreground">
+                                  {item.description}
+                                </div>
                               </div>
                             ) : null}
 
