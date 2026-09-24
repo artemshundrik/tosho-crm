@@ -52,7 +52,15 @@ const Chip = React.forwardRef<HTMLButtonElement, ChipProps>(
             {icon}
           </span>
         )}
-        <span className="font-medium">{children}</span>
+        {/*
+          min-w-0: БЕЗ ЦЬОГО ТЕКСТ ВИЛІЗАЄ ЗА МЕЖІ ЧИПА. Цей span — flex-елемент
+          кнопки вище, а типове min-width:auto у flex-елемента не дає йому
+          стиснутись менше за вміст, навіть якщо сам вміст (наприклад, рядок
+          нижче з min-w-0 + truncate) готовий стиснутись. Без цього рядка
+          max-w на кнопці лише обрізає РАМКУ, а текст малюється поверх неї —
+          саме так «Вишивка · ліва частина грудей» вилазила за чип.
+        */}
+        <span className="min-w-0 font-medium">{children}</span>
       </button>
     );
   }

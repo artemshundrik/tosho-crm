@@ -339,7 +339,7 @@ function ImprintChip({
             active
             title={place ? `${methodLabel} · ${place}` : `${methodLabel} — місце не вказане`}
             aria-label={place ? `Нанесення: ${methodLabel}, місце ${place}` : `Нанесення: ${methodLabel}, місце не вказане`}
-            className="max-w-[190px]"
+            className="max-w-[190px] overflow-hidden"
           >
             <span className="flex min-w-0 items-center gap-1">
               <span className="shrink-0">{methodLabel}</span>
@@ -550,12 +550,12 @@ function SheetChips({
               active
               onClick={() => setOpen(true)}
               title={`${methodName(imprint.methodId)} · ${imprint.positionLabel ?? "місце не вказане"}`}
-              className="max-w-[210px] pr-6"
+              className="max-w-[210px] overflow-hidden pr-6"
             >
-              <span className="min-w-0 truncate">
-                {methodName(imprint.methodId)}
-                <span className="text-muted-foreground"> · </span>
-                <span className={cn(!imprint.positionLabel && "font-normal text-muted-foreground")}>
+              <span className="flex min-w-0 items-center gap-1">
+                <span className="shrink-0">{methodName(imprint.methodId)}</span>
+                <span className="text-muted-foreground">·</span>
+                <span className={cn("min-w-0 truncate", !imprint.positionLabel && "font-normal text-muted-foreground")}>
                   {imprint.positionLabel || "місце?"}
                 </span>
               </span>

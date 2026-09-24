@@ -221,4 +221,20 @@ describe("Інші методи зі спільного довідника", () 
     await user.click(screen.getByRole("button", { name: "Спробувати ще" }));
     expect(request).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * Довгий підпис місця (REQ-175#p107). Чип «Вишивка · ліва частина грудей»
+   * вилазив за рамку: місце тепер обрізається з «…», а повний текст лишається
+   * доступним через title — саме на нього спирається людина, що наводить
+   * курсор на обрізаний чип, і скрінрідер через aria-label.
+   */
+  it("довге місце: title і aria-label несуть повну пару навіть коли видима частина обріже", () => {
+    const pair = { key: "a", methodId: "m-laser", positionId: null, positionLabel: "ліва частина грудей" };
+    renderChips({ imprints: [pair] });
+
+    const chip = screen.getByRole("button", {
+      name: "Нанесення: Лазерне гравіювання, місце ліва частина грудей",
+    });
+    expect(chip).toHaveAttribute("title", "Лазерне гравіювання · ліва частина грудей");
+  });
 });
