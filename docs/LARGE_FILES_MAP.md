@@ -13,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~6 848 lines, 335 KB, as of 2026-09-22)
+## src/pages/QuoteDetailsPage.tsx (~6 850 lines, 335 KB, as of 2026-09-24)
 
 Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p12. Файл СХУДНУВ на
 2 460 рядків (9 893 → 7 434): три вкладки з чотирьох поїхали в окремі модулі, а
@@ -56,7 +56,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 6247 | вкладка «Економіка» (заглушка `EconomicsComingSoon`) |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 864 lines, 588 KB, as of 2026-09-22)
+## src/pages/DesignTaskPage.tsx (~12 864 lines, 588 KB, as of 2026-09-24)
 
 | Range | Content |
 |---|---|
@@ -65,7 +65,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | **1357** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~6 952 lines, 300 KB, as of 2026-09-22)
+## src/pages/QuotesPage.tsx (~6 952 lines, 300 KB, as of 2026-09-24)
 
 | Range | Content |
 |---|---|
@@ -73,14 +73,14 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
 | **447** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 932 lines, 262 KB, as of 2026-09-22)
+## src/pages/DesignPage.tsx (~5 937 lines, 262 KB, as of 2026-09-24)
 
 | Range | Content |
 |---|---|
 | 1–144 | imports |
 | 145–943 | types + module-level helpers (cache I/O, `sanitizeDesignTaskMetadataForCache`, `sanitizeDesignTaskForCache`, `buildDesignPageCachePayload`, `resolveTaskCustomerLogo`, `applyCustomerLogosToTasks`) |
 | **896** | `export default function DesignPage()` — main component starts |
-| 3977 | `duplicateStandaloneTask(source, options)` — builds the new task's metadata when copying a design task |
+| 3982 | `duplicateStandaloneTask(source, options)` — builds the new task's metadata when copying a design task |
 | 5895 | `<DuplicateDesignTaskDialog>` mount + `source`/`onConfirm` wiring |
 
 ---

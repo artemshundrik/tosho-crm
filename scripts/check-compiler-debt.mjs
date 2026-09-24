@@ -213,7 +213,7 @@ import { execFileSync } from "node:child_process";
 const ALLOWED_PER_RULE = {
   "react-hooks/set-state-in-effect": 187,
   "react-hooks/preserve-manual-memoization": 33,
-  "react-hooks/refs": 17,
+  "react-hooks/refs": 15,
   "react-hooks/immutability": 3,
   "react-hooks/purity": 4,
 };
