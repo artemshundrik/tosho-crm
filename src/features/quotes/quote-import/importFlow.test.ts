@@ -45,8 +45,9 @@ vi.mock("@/lib/supabaseClient", () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "token" } } }) } },
 }));
 
+const getCurrentUserId = vi.fn(async () => "u-1");
 vi.mock("@/lib/currentUser", () => ({
-  getCurrentUserId: async () => "u-1",
+  getCurrentUserId: () => getCurrentUserId(),
 }));
 
 const insertThreadMessage = vi.fn(async (_threadKey: string, _input: Record<string, unknown>) => {
@@ -207,6 +208,16 @@ describe("attachImportExtras — файл у «Файли прорахунку»
     uploadQuoteAttachmentFile.mockClear();
     insertThreadMessage.mockClear();
     notifyThreadMessage.mockClear();
+    getCurrentUserId.mockClear();
+  });
+
+  it("без файлу й умов не питає сесію — інакше створення з каталогу чи посилань ловило б «Сесія застаріла»", async () => {
+    const result = await attachImportExtras({ quoteId: "q-1", teamId: "t-1", file: null, conditions: [] });
+
+    expect(getCurrentUserId).not.toHaveBeenCalled();
+    expect(uploadQuoteAttachmentFile).not.toHaveBeenCalled();
+    expect(insertThreadMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({ fileAttached: false, conditionsPosted: false, errors: [] });
   });
 
   it("файл лягає у «Файли прорахунку», умови — одним повідомленням в обговорення", async () => {

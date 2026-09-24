@@ -366,6 +366,14 @@ export async function attachImportExtras(input: {
   file: File | null;
   conditions: string[];
 }): Promise<{ fileAttached: boolean; conditionsPosted: boolean; errors: string[] }> {
+  // Нічого прикріпляти — сесію питати нема причини. Створення з каталогу чи
+  // за посиланнями теж проходить через цю функцію (файл і умови в ньому
+  // порожні), і без цього виходу воно ловило б зайве «Сесія застаріла — файл
+  // і умови не збережено», хоч жодного файлу й жодних умов не було.
+  if (!input.file && input.conditions.length === 0) {
+    return { fileAttached: false, conditionsPosted: false, errors: [] };
+  }
+
   const errors: string[] = [];
   const userId = await getCurrentUserId();
   if (!userId) {
