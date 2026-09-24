@@ -5,7 +5,15 @@ import { parseBody } from "./_lib/parseBody";
 import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
 import { isDeliverable } from "./_lib/teamMembers";
-import { quoteRefFromThreadKey } from "../../src/lib/taskThread";
+import { quoteIdFromRef, quoteRefFromThreadKey } from "../../src/lib/taskThread";
+import {
+  buildThreadNotificationRows,
+  hasFreshOwnMessage,
+  planThreadRecipients,
+  toThreadTask,
+  type ThreadMessageRow,
+  type ThreadQuote,
+} from "./_lib/threadNotifications";
 
 /** Форма запиту — і перевірка, і тип (REQ-137). */
 const requestSchema = z
@@ -269,67 +277,87 @@ export const handler = async (event: HttpEvent) => {
   };
 
   /**
-   * Сповіщення про нове повідомлення в чаті дизайн-задачі.
+   * Сповіщення про нове повідомлення в обговоренні справи (нитка `quote:<ref>`).
    *
    * Дзвонили лише згадки через «@» — тобто звичайна репліка не доходила ні до
    * дизайнера, ні до менеджера, і людина писала «затвердили варіант, прикріпи
    * макет» у порожнечу, доки хтось випадково не відкриє задачу. Тепер отримують
-   * усі, хто в задачі задіяний, без жодних тегів.
+   * усі, хто в справі задіяний, без жодних тегів. Кому саме й куди веде
+   * посилання — _lib/threadNotifications.ts.
    */
   const sendThreadNotifications = async (bodyRaw: unknown) => {
     const text = typeof bodyRaw === "string" ? bodyRaw.trim() : "";
     if (!text || !threadRef) return { delivered: 0, allowed: true };
 
-    // Авторизація КОРИСТУВАЦЬКИМ клієнтом: політика `activity_log_read_team`
-    // пускає лише члена команди задачі, тож видимість рядка тут і є правом
-    // писати в цю нитку. Для самостійних задач прорахунку немає взагалі, і
-    // перевіряти доступ через `tosho.quotes` було б і неможливо, і не тим.
-    const { data: taskRow, error: taskError } = await userClient
-      .from("activity_log")
-      .select("id,title,metadata,created_at")
-      .eq("action", "design_task")
-      .eq("metadata->>quote_id", threadRef)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<{ id: string; title?: string | null; metadata?: Record<string, unknown> | null }>();
+    // Авторизація КОРИСТУВАЦЬКИМ клієнтом: RLS пускає лише члена команди — і до
+    // задач (`activity_log_read_team`), і до прорахунків (`quotes_select`), тож
+    // видимість бодай одного з них і є правом писати в цю нитку. У самостійної
+    // задачі прорахунку немає, а в прорахунку часто немає задачі — саме такі
+    // нитки раніше мовчали.
+    const threadQuoteId = quoteIdFromRef(threadRef);
+    const [tasksResult, quoteResult] = await Promise.all([
+      userClient
+        .from("activity_log")
+        .select("id,title,metadata,created_at")
+        .eq("action", "design_task")
+        .eq("metadata->>quote_id", threadRef)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      threadQuoteId
+        ? userClient
+            .schema("tosho")
+            .from("quotes")
+            .select("id,number,assigned_to,created_by")
+            .eq("id", threadQuoteId)
+            .maybeSingle<{ id: string; number?: string | null; assigned_to?: string | null; created_by?: string | null }>()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    if (tasksResult.error) throw new Error(tasksResult.error.message);
+    if (quoteResult.error) throw new Error(quoteResult.error.message);
 
-    if (taskError) throw new Error(taskError.message);
-    // Рядка не видно — або задачі немає, або RLS не пускає. Розрізняти ці два
-    // випадки у відповіді не варто: це підказувало б, що така задача існує.
-    if (!taskRow?.id) return { delivered: 0, allowed: false };
+    const tasks = (
+      (tasksResult.data ?? []) as Array<{ id: string; title?: string | null; metadata?: Record<string, unknown> | null }>
+    ).map(toThreadTask);
+    const quoteRow = quoteResult.data;
+    const quote: ThreadQuote | null = quoteRow?.id
+      ? {
+          id: quoteRow.id,
+          number: quoteRow.number ?? null,
+          assignedTo: quoteRow.assigned_to ?? null,
+          createdBy: quoteRow.created_by ?? null,
+        }
+      : null;
+    // Не видно ні задачі, ні прорахунку — або їх немає, або RLS не пускає.
+    // Розрізняти ці випадки у відповіді не варто: це підказувало б, що справа існує.
+    if (!quote && tasks.length === 0) return { delivered: 0, allowed: false };
 
-    const metadata = taskRow.metadata ?? {};
-    const recipientIds = new Set<string>();
-    const addRecipient = (value: unknown) => {
-      if (typeof value !== "string") return;
-      const id = value.trim();
-      // Автор сам собі не дзвонить.
-      if (id && id !== userData.user.id) recipientIds.add(id);
-    };
-
-    addRecipient(metadata.assignee_user_id);
-    addRecipient(metadata.manager_user_id);
-    const collaborators = metadata.collaborator_user_ids;
-    if (Array.isArray(collaborators)) collaborators.forEach(addRecipient);
-
-    // Плюс ті, хто вже писав у цій нитці: розмову часто веде хтось, кого в
+    // Свіжі рядки нитки: з них і перевірка, що автор справді написав цей
+    // текст, і ті, хто вже писав у нитці. Розмову часто веде хтось, кого в
     // картці немає — CEO чи інший менеджер, — і лишати його без відповіді
     // означало б обірвати саме ту переписку, заради якої це й робиться.
-    const { data: participants } = await adminClient
+    const { data: threadRows } = await adminClient
       .schema("tosho")
       .from("quote_comments")
-      .select("created_by")
+      .select("created_by,kind,body,created_at,visibility,deleted_at")
       .eq("thread_key", payload.threadKey ?? "")
+      .order("created_at", { ascending: false })
       .limit(200);
-    for (const row of participants ?? []) {
-      addRecipient((row as { created_by?: string | null }).created_by);
+    const recentRows = (threadRows ?? []) as ThreadMessageRow[];
+    if (!hasFreshOwnMessage(recentRows, { authorId: userData.user.id, text, now: Date.now() })) {
+      return { delivered: 0, allowed: true };
     }
 
-    if (recipientIds.size === 0) return { delivered: 0, allowed: true };
+    const planned = planThreadRecipients({
+      authorId: userData.user.id,
+      quote,
+      tasks,
+      participantIds: recentRows.map((row) => row.created_by ?? "").filter(Boolean),
+    });
+    if (planned.length === 0) return { delivered: 0, allowed: true };
 
     // Звільнених не турбуємо. Предикат спільний з рештою розсилок — інакше
     // «кому можна слати» розповзається по функціях і починає розходитись.
-    const ids = Array.from(recipientIds);
+    const ids = planned.map((target) => target.userId);
     const { data: profiles } = await adminClient
       .schema("tosho")
       .from("team_member_profiles")
@@ -341,38 +369,35 @@ export const handler = async (event: HttpEvent) => {
         return [typed.user_id ?? "", typed.employment_status ?? null];
       })
     );
-    const deliverableIds = ids.filter((id) =>
+    const targets = planned.filter((target) =>
       isDeliverable({
-        userId: id,
+        userId: target.userId,
         workspaceId: null,
         teamId: null,
         accessRole: null,
         jobRole: null,
-        employmentStatus: statusByUser.get(id) ?? null,
+        employmentStatus: statusByUser.get(target.userId) ?? null,
         fullName: null,
       })
     );
-    if (deliverableIds.length === 0) return { delivered: 0, allowed: true };
+    if (targets.length === 0) return { delivered: 0, allowed: true };
 
     const actorLabel =
       (userData.user.user_metadata?.full_name as string | undefined)?.trim() ||
       userData.user.email?.split("@")[0]?.trim() ||
       "Користувач";
-    const taskLabel = (taskRow.title ?? "").trim() || "дизайн-задача";
-    const trimmedBody = text.length > 220 ? `${text.slice(0, 217)}...` : text;
+    const rows = buildThreadNotificationRows(targets, { actorLabel, text });
 
-    const rows = deliverableIds.map((recipientId) => ({
-      user_id: recipientId,
-      title: `${actorLabel} написав(ла) в чаті задачі`,
-      body: `${taskLabel}: ${trimmedBody}`,
-      // Префікс «/design/» — це ще й те, за чим notify-users розпізнає
-      // дизайн-категорію, тож він тут не лише для переходу.
-      href: `/design/${taskRow.id}`,
-      type: "info" as const,
-    }));
-
-    const result = await deliverNotifications(adminClient, rows, { category: "design" });
-    return { delivered: result.delivered, allowed: true };
+    // Дві категорії — два виклики: вимкнені канали людина вибирає окремо для
+    // «Коментарів у прорахунках» і для «Дизайн-задач».
+    const [quoteDelivery, designDelivery] = await Promise.all([
+      rows.quote.length > 0 ? deliverNotifications(adminClient, rows.quote, { category: "quote_comment" }) : null,
+      rows.design.length > 0 ? deliverNotifications(adminClient, rows.design, { category: "design" }) : null,
+    ]);
+    return {
+      delivered: (quoteDelivery?.delivered ?? 0) + (designDelivery?.delivered ?? 0),
+      allowed: true,
+    };
   };
 
   if (payload.mode === "notify_mentions") {

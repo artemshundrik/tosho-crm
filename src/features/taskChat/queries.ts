@@ -114,6 +114,33 @@ export type SendMessageInput = {
   replyTo?: string | null;
 };
 
+/**
+ * Сповістити учасників справи про нове повідомлення.
+ *
+ * Живе в самій мутації, а не в колбеку `mutate(…, { onSuccess })` панелі: той
+ * колбек TanStack викликає, лише поки компонент змонтований. 22.09.2026
+ * менеджерка надіслала повідомлення й одразу перейшла в дизайн-задачу —
+ * панель зникла, повідомлення збереглось, а запиту на сповіщення не було.
+ *
+ * Токен — у момент виклику, а не з рендера: сесія могла оновитись. Кому саме
+ * слати, вирішує сервер, який бачить склад справи; сюди йде лише нитка й
+ * текст. Саме threadKey, а не quoteId: у самостійних задач quoteId порожній.
+ */
+async function notifyThreadMessage(threadKey: string, body: string): Promise<void> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    await fetch("/.netlify/functions/quote-comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ mode: "notify_thread", threadKey, body }),
+    });
+  } catch {
+    // Сповіщення — не критичний шлях: повідомлення вже збережено.
+  }
+}
+
 export function useSendThreadMessage(threadKey: string | null) {
   const client = useQueryClient();
 
@@ -172,8 +199,10 @@ export function useSendThreadMessage(threadKey: string | null) {
       }
     },
 
-    onSuccess: () => {
-      if (threadKey) void client.invalidateQueries({ queryKey: threadKeys.entries(threadKey) });
+    onSuccess: (_entry, input) => {
+      if (!threadKey) return;
+      void client.invalidateQueries({ queryKey: threadKeys.entries(threadKey) });
+      void notifyThreadMessage(threadKey, input.body);
     },
   });
 }

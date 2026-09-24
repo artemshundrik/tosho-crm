@@ -97,6 +97,8 @@
     "_lib/teamMembers.ts",
     "_lib/telegramUpdate.test.ts",
     "_lib/telegramUpdate.ts",
+    "_lib/threadNotifications.test.ts",
+    "_lib/threadNotifications.ts",
     "_lib/workSchedules.test.ts",
     "_lib/workSchedules.ts",
     "_netlifyUsage.ts",

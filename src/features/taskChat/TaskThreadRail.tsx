@@ -89,7 +89,7 @@ export function TaskThreadRail({
   headerAction,
   onUnreadChange,
 }: Props) {
-  const { userId, session } = useAuth();
+  const { userId } = useAuth();
 
   const entriesQuery = useThreadEntries(threadKey, teamId, eventActions);
   const readQuery = useThreadRead(threadKey, userId ?? null);
@@ -187,33 +187,9 @@ export function TaskThreadRail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, userId, messages.length, threadKey]);
 
-  /**
-   * Сповіщення про нове повідомлення — усім, хто задіяний у задачі.
-   *
-   * Раніше умовою було `body.includes("@")`, тобто дзвеніли лише згадки, а
-   * звичайна репліка не доходила ні до дизайнера, ні до менеджера. Тепер
-   * запит іде на кожне повідомлення, а кому саме слати (і чи слати окремо
-   * згаданим) вирішує сервер, який бачить склад задачі.
-   */
-  const notifyThread = React.useCallback(
-    async (body: string) => {
-      const token = session?.access_token;
-      if (!token) return;
-      try {
-        await fetch("/.netlify/functions/quote-comments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          // Саме threadKey, а не quoteId: у самостійних задач quoteId порожній,
-          // а таких задач більшість — на них сповіщення й мовчали.
-          body: JSON.stringify({ mode: "notify_thread", threadKey, body }),
-        });
-      } catch {
-        // Сповіщення — не критичний шлях: повідомлення вже збережено.
-      }
-    },
-    [threadKey, session?.access_token]
-  );
-
+  // Сповіщення учасникам справи шле сама мутація (useSendThreadMessage), а не
+  // панель: колбек у `mutate(…)` не спрацьовує, якщо панель зникла раніше, ніж
+  // повідомлення записалось.
   const handleSend = async (body: string) => {
     if (!userId) return;
 
@@ -227,10 +203,15 @@ export function TaskThreadRail({
       setPendingFiles([]);
     }
 
-    sendMutation.mutate(
-      { body, visibility: "team", teamId, quoteId, userId, attachments, replyTo: replyTo?.id ?? null },
-      { onSuccess: () => void notifyThread(body) }
-    );
+    sendMutation.mutate({
+      body,
+      visibility: "team",
+      teamId,
+      quoteId,
+      userId,
+      attachments,
+      replyTo: replyTo?.id ?? null,
+    });
     setReplyTo(null);
   };
 
