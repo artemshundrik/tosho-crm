@@ -3,6 +3,7 @@ import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/render
 import {
   formatMoney,
   formatMoneyPlain,
+  getCommercialDocName,
   initialsFor,
   offerSummaryText,
   OFFER_DOC_LABEL,
@@ -224,7 +225,7 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
     : [];
 
   return (
-    <Document title={doc.title} author="ToSho">
+    <Document title={getCommercialDocName(doc)} author="ToSho">
       <Page size="A4" style={styles.page}>
         <View style={styles.head}>
           {images[OFFER_LOCKUP_URL] ? (
@@ -247,7 +248,7 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
         </View>
 
         <Text style={styles.h1}>{OFFER_HEADLINE}</Text>
-        <Text style={styles.ledeSub}>для {doc.customerName}</Text>
+        {doc.customerName ? <Text style={styles.ledeSub}>для {doc.customerName}</Text> : null}
         <Text style={styles.intro}>{OFFER_INTRO_TEXT}</Text>
 
         {doc.sections.map((section, index) => (

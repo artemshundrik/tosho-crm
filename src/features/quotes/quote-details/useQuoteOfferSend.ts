@@ -127,8 +127,7 @@ export function useQuoteOfferSend(params: {
         },
       ],
       title: "Комерційна пропозиція",
-      kindLabel: "КП",
-      customerName: quote.customer_name?.trim() || "Замовник не вказаний",
+      customerName: quote.customer_name,
       createdAt: quote.created_at ?? null,
     });
   }, [quote, teamId]);

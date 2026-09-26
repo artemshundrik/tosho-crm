@@ -3229,8 +3229,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         total: item.quote_total,
       })),
       title: quoteSetDetailsTarget.name ?? "Комерційна пропозиція",
-      kindLabel: quoteSetDetailsTarget.kind === "kp" ? "КП" : "Набір",
-      customerName: quoteSetDetailsTarget.customer_name ?? "Замовник не вказаний",
+      customerName: quoteSetDetailsTarget.customer_name,
       createdAt: quoteSetDetailsTarget.created_at,
     });
   };

@@ -106,7 +106,10 @@ export type CommercialQuoteSection = {
  */
 export type CommercialDocument = {
   title: string;
-  kindLabel: string;
+  /**
+   * Назва клієнта вже в тому вигляді, в якому її бачить клієнт
+   * (`cleanCustomerName`). Порожня — клієнта не вказано, і рядка «для …» немає.
+   */
   customerName: string;
   createdAt: string;
   generatedAt: string;
@@ -284,18 +287,145 @@ export const stripSupplierTag = (name: string) =>
     .replace(/[\s,;·–—-]+$/u, "")
     .trim();
 
+/**
+ * Назва клієнта в тому вигляді, в якому її бачить сам клієнт: у шапці КП і в
+ * назві файлу (REQ-178#p41).
+ *
+ * У картці клієнта пишуть як доведеться, і до 26.09.2026 це їхало в документ
+ * як є: «для ПРАТ "НОВІ ІНЖИНІРИНГОВІ ТЕХНОЛОГІЇ" (HYATT)». Правила нижче зняті
+ * з усіх 105 назв, що траплялись у прорахунках за вісім місяців; 70 із них не
+ * змінюються взагалі.
+ *
+ * - «ЧЕКБОКС /Checkbox» — друга половина дублює першу, лишається перша.
+ *   «24/7» не чіпаємо: між цифрами це не роздільник.
+ * - Дужки з малої літери — примітка менеджера («(сімі сім)»), не для клієнта.
+ * - Юридична назва з брендом у дужках віддає бренд: «ПРАТ "…" (HYATT)» → «Hyatt».
+ *   Саме так цього клієнта знаємо ми й знає він сам.
+ * - Юридична форма на початку («ТОВ», «ПрАТ», «Благодійна організація») і
+ *   «ФОП …» у хвості («Золабікс ФОП Чухвицька…») прибираються, лапки теж.
+ * - КАПС від чотирьох літер стає звичайними літерами. Коротші слова лишаються:
+ *   це абревіатури («ВКФ», «PAH», «ТАС»).
+ *
+ * Порожній рядок означає, що клієнта немає: ні «для …» у шапці, ні в назві файлу.
+ */
+const LEGAL_FORMS = [
+  "товариство з обмеженою відповідальністю",
+  "приватне акціонерне товариство",
+  "публічне акціонерне товариство",
+  "акціонерне товариство",
+  "приватне підприємство",
+  "державне підприємство",
+  "комунальне підприємство",
+  "міжнародний благодійний фонд",
+  "благодійна організація",
+  "благодійний фонд",
+  "громадська організація",
+  "тзов",
+  "тов",
+  "прат",
+  "пат",
+  "ат",
+  "пп",
+  "дп",
+  "кп",
+  "фоп",
+  "го",
+  "бо",
+  "бф",
+  "мбф",
+  "llc",
+  "ltd",
+  "ngo",
+];
+// Межа слова ручна з тієї ж причини, що в `stripSupplierTag`: `\b` бачить лише латиницю.
+const LEADING_LEGAL_FORM = new RegExp(
+  `^(?:${LEGAL_FORMS.map((form) => form.replaceAll(" ", "\\s+")).join("|")})(?!\\p{L})[\\s.,]*`,
+  "iu"
+);
+const TRAILING_FOP = /\s(?:фоп|фізична\s+особа\s*-\s*підприємець)(?!\p{L}).*$/iu;
+const NAME_QUOTES = /[«»"„“”‟″]/gu;
+
+const isShouted = (word: string) => {
+  const letters = word.replaceAll(/\P{L}/gu, "");
+  return (
+    letters.length >= 4 &&
+    letters === letters.toLocaleUpperCase("uk") &&
+    letters !== letters.toLocaleLowerCase("uk")
+  );
+};
+
+export const cleanCustomerName = (raw: string | null | undefined) => {
+  let name = (raw ?? "").split(/(?<!\d)\/|\/(?!\d)/u)[0] ?? "";
+  name = name.replaceAll(/\s*\(\s*\p{Ll}[^)]*\)/gu, " ").replaceAll(NAME_QUOTES, " ").trim();
+  const bracketBrand = name.match(/\(\s*([^)]*?)\s*\)$/u)?.[1];
+  if (bracketBrand && LEADING_LEGAL_FORM.test(name)) name = bracketBrand;
+  name = name
+    .replace(LEADING_LEGAL_FORM, "")
+    .replace(TRAILING_FOP, "")
+    .replaceAll(/\s+/g, " ")
+    .replaceAll(/^[\s,;·–—-]+|[\s,;·–—-]+$/gu, "");
+  if (!/\p{L}{2}/u.test(name)) return "";
+  name = name
+    .split(" ")
+    .map((word) =>
+      isShouted(word)
+        ? word.replaceAll(/\p{L}+/gu, (run) => run.charAt(0) + run.slice(1).toLocaleLowerCase("uk"))
+        : word
+    )
+    .join(" ");
+  return name.charAt(0).toLocaleUpperCase("uk") + name.slice(1);
+};
+
+/**
+ * Назва КП без розширення: «ToSho — КП для Hyatt · TS-0926-0050» (REQ-178#p41).
+ *
+ * Команда обрала цей варіант із чотирьох 26.09.2026. Досі файл називався
+ * «кп_прат_нові_інжинірингові_технології_hyatt_25_09_2026.pdf», і з цього
+ * виросли три рішення.
+ *
+ * ВІДПРАВНИК ПЕРШИМ. Клієнт збирає КП від кількох постачальників, і файл без
+ * нашої назви в нього губиться.
+ *
+ * НОМЕР, А НЕ ДАТА. Одному клієнту за день іде кілька КП (у ДАХ-сервіс 14.08 —
+ * п'ять), і з датою всі вони мали однакову назву; браузер лише дописував «_1».
+ * Номер той самий, що в шапці документа, і за ним прорахунок знаходиться в
+ * CRM. Тим паче дата була днем створення прорахунку, а не надсилання.
+ *
+ * ТА САМА НАЗВА ВСЮДИ: файл, властивості PDF і `<title>` HTML — друк у PDF
+ * бере назву саме звідти.
+ *
+ * Клієнта довшого за 40 знаків обрізаємо по слову, щоб назва не розросталась.
+ */
+const FILE_NAME_CUSTOMER_MAX = 40;
+const FORBIDDEN_IN_FILE_NAME = /[\\/:*?"<>|\p{Cc}]/gu;
+
+const cutByWords = (text: string, max: number) => {
+  if (text.length <= max) return text;
+  let result = "";
+  for (const word of text.split(" ")) {
+    const next = result ? `${result} ${word}` : word;
+    if (next.length > max) break;
+    result = next;
+  }
+  return result || text.slice(0, max);
+};
+
+export const getCommercialDocName = (doc: CommercialDocument) => {
+  const numbers = doc.sections.map((section) => section.quoteNumber).filter(Boolean);
+  const number = numbers.length > 1 ? `${numbers[0]} +${numbers.length - 1}` : (numbers[0] ?? "");
+  const customer = cutByWords(doc.customerName.trim(), FILE_NAME_CUSTOMER_MAX);
+  return [customer ? `ToSho — КП для ${customer}` : "ToSho — КП", number]
+    .filter(Boolean)
+    .join(" · ")
+    .replaceAll(FORBIDDEN_IN_FILE_NAME, " ")
+    .replaceAll(/\s+/g, " ")
+    .replace(/[\s.]+$/u, "");
+};
+
 export const getCommercialDocFilename = (
   doc: CommercialDocument,
   extension: "xlsx" | "pdf" | "html"
-) => {
-  const raw = `${doc.kindLabel}_${doc.customerName}_${doc.createdAt}`;
-  const sanitized = raw
-    .toLowerCase()
-    .replaceAll(/[^a-zа-яіїєґ0-9]+/gi, "_")
-    .replaceAll(/^_+|_+$/g, "")
-    .slice(0, 96);
-  return `${sanitized || "commercial_offer"}.${extension}`;
-};
+) => `${getCommercialDocName(doc)}.${extension}`;
 
 /**
  * Ініціали для позиції без фото — те саме правило для HTML і для прев'ю.
@@ -529,7 +659,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${escapeHtml(doc.title)}</title>
+<title>${escapeHtml(getCommercialDocName(doc))}</title>
 <style>
   :root { color-scheme: light; }
   /* Roboto першим — саме ним складається PDF, тож на машині зі шрифтом усі
@@ -604,7 +734,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   </header>
   <div class="lede">
     <h1>${escapeHtml(OFFER_HEADLINE)}</h1>
-    <div class="lede-sub">для ${escapeHtml(doc.customerName)}</div>
+    ${doc.customerName ? `<div class="lede-sub">для ${escapeHtml(doc.customerName)}</div>` : ""}
   </div>
   <p class="intro">${escapeHtml(OFFER_INTRO_TEXT)}</p>
   ${sectionsHtml}
@@ -662,7 +792,7 @@ export type CommercialSheetCell = string | number | null;
 export const buildCommercialSheetRows = (doc: CommercialDocument): CommercialSheetCell[][] => {
   const rows: CommercialSheetCell[][] = [];
   rows.push([doc.title]);
-  rows.push(["Замовник", doc.customerName]);
+  if (doc.customerName) rows.push(["Замовник", doc.customerName]);
   rows.push(["Номер", doc.sections.map((section) => section.quoteNumber).join(", ")]);
   rows.push(["Сформовано", doc.generatedAt]);
   if (doc.validUntil) rows.push(["Дійсна до", doc.validUntil]);

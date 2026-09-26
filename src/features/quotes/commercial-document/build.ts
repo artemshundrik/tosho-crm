@@ -37,6 +37,7 @@ import {
 import { normalizeUnitLabel } from "@/lib/units";
 
 import {
+  cleanCustomerName,
   commercialSectionTotalRange,
   formatDateTime,
   parseMethodsSummary,
@@ -67,8 +68,8 @@ export type BuildCommercialDocumentParams = {
   teamId: string;
   quotes: readonly CommercialSourceQuote[];
   title: string;
-  kindLabel: string;
-  customerName: string;
+  /** Як у картці клієнта; чиститься тут, для всіх виходів разом (`cleanCustomerName`). */
+  customerName: string | null | undefined;
   /** Дата документа; порожня — береться сьогоднішня. */
   createdAt?: string | null;
 };
@@ -486,8 +487,7 @@ export async function buildCommercialDocument(
 
   return {
     title: params.title,
-    kindLabel: params.kindLabel,
-    customerName: params.customerName,
+    customerName: cleanCustomerName(params.customerName),
     createdAt,
     generatedAt: formatDateTime(now.toISOString()),
     currency: "грн",

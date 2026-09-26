@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCommercialSheetRows,
+  cleanCustomerName,
   formatMoney,
+  getCommercialDocFilename,
+  getCommercialDocName,
   stripSupplierTag,
   COMMERCIAL_SHEET_COLUMNS,
   commercialSectionTotalRange,
@@ -62,8 +65,7 @@ function section(items: CommercialItemRow[]): CommercialQuoteSection {
 function doc(sections: CommercialQuoteSection[]): CommercialDocument {
   return {
     title: "КП на щоденники",
-    kindLabel: "КП",
-    customerName: 'ТОВ "Ромашка"',
+    customerName: "Ромашка",
     createdAt: "01.09.2026",
     generatedAt: "01.09.2026, 10:00",
     currency: "грн",
@@ -282,5 +284,86 @@ describe("формат грошей", () => {
 
   it("двійковий хвіст не породжує «,00»", () => {
     expect(norm(formatMoney(50 * 309.04))).toBe("15 452 грн");
+  });
+});
+
+/**
+ * Назва клієнта в шапці й у назві файлу. Випадки — справжні назви з карток
+ * клієнтів, на яких правило й складалось (REQ-178#p41).
+ */
+describe("назва клієнта для клієнта", () => {
+  it.each([
+    ['ПРАТ "НОВІ ІНЖИНІРИНГОВІ ТЕХНОЛОГІЇ" (HYATT)', "Hyatt"],
+    ['ТОВ "ВИГІДНА ПОКУПКА" (АВРОРА)', "Аврора"],
+    ['ТОВ "КЛЕВЕР СТОРС" (сімі сім)', "Клевер Сторс"],
+    ["Золабікс (ветеринарна лабораторія) ФОП Чухвицька Соломія Олегівна", "Золабікс"],
+    ['БЛАГОДІЙНА ОРГАНІЗАЦІЯ "ФОНД РІНАТА АХМЕТОВА"', "Фонд Ріната Ахметова"],
+    ["ГО «ЕДЖ»/ NGO «EDGE»", "ЕДЖ"],
+    ["ЧЕКБОКС /Checkbox", "Чекбокс"],
+    ["ФК «ЛОКОМОТИВ Київ»", "ФК Локомотив Київ"],
+    ["ТОВ ВКФ ВВ", "ВКФ ВВ"],
+    ["ТОВ АРКАДА-ПЛАСТ", "Аркада-Пласт"],
+    ["Алвіва (КиївХліб)", "Алвіва (КиївХліб)"],
+    ["ДАХ-сервіс", "ДАХ-сервіс"],
+    ["Шевченко Даниїл Костянтинович", "Шевченко Даниїл Костянтинович"],
+    ["people force", "People force"],
+    ["Сервіс 24/7", "Сервіс 24/7"],
+  ])("«%s» → «%s»", (raw, expected) => {
+    expect(cleanCustomerName(raw)).toBe(expected);
+  });
+
+  it("порожня або беззмістовна назва — порожній рядок", () => {
+    for (const raw of ["", "  ", ".", "..", "А.Т.", null, undefined]) {
+      expect(cleanCustomerName(raw)).toBe("");
+    }
+  });
+
+  it("повторне чищення нічого не міняє", () => {
+    for (const raw of ['ПРАТ "НОВІ ІНЖИНІРИНГОВІ ТЕХНОЛОГІЇ" (HYATT)', "ТОВ ВКФ ВВ", "ФК «ЛОКОМОТИВ Київ»"]) {
+      const once = cleanCustomerName(raw);
+      expect(cleanCustomerName(once)).toBe(once);
+    }
+  });
+});
+
+describe("назва файлу КП", () => {
+  const forCustomer = (customerName: string) => ({ ...doc([section(threeProducts)]), customerName });
+
+  it("ToSho, клієнт і номер прорахунку — у PDF і в Excel однаково", () => {
+    expect(getCommercialDocFilename(forCustomer("Hyatt"), "pdf")).toBe("ToSho — КП для Hyatt · TS-0926-0022.pdf");
+    expect(getCommercialDocFilename(forCustomer("Hyatt"), "xlsx")).toBe("ToSho — КП для Hyatt · TS-0926-0022.xlsx");
+  });
+
+  it("без клієнта — без «для»", () => {
+    expect(getCommercialDocName(forCustomer(""))).toBe("ToSho — КП · TS-0926-0022");
+  });
+
+  it("кілька прорахунків — перший номер і скільки ще", () => {
+    const pair = {
+      ...doc([section(threeProducts), { ...section(threeProducts), quoteId: "q2", quoteNumber: "TS-0926-0023" }]),
+      customerName: "Hyatt",
+    };
+    expect(getCommercialDocName(pair)).toBe("ToSho — КП для Hyatt · TS-0926-0022 +1");
+  });
+
+  it("довгий клієнт обрізається по слову", () => {
+    expect(getCommercialDocName(forCustomer("PAH Polish Humanitarian Action Ukraine Mission Office"))).toBe(
+      "ToSho — КП для PAH Polish Humanitarian Action Ukraine · TS-0926-0022"
+    );
+  });
+
+  it("знаки, заборонені в назвах файлів, стають пробілами", () => {
+    expect(getCommercialDocName(forCustomer('Сервіс 24/7: "Швидко"?'))).toBe(
+      "ToSho — КП для Сервіс 24 7 Швидко · TS-0926-0022"
+    );
+  });
+
+  it("та сама назва — у заголовку HTML, а без клієнта рядка «для …» немає", () => {
+    expect(renderCommercialDocumentHtml(forCustomer("Hyatt"))).toContain(
+      "<title>ToSho — КП для Hyatt · TS-0926-0022</title>"
+    );
+    expect(renderCommercialDocumentHtml(forCustomer("Hyatt"))).toContain(">для Hyatt</div>");
+    expect(renderCommercialDocumentHtml(forCustomer(""))).not.toContain('class="lede-sub"');
+    expect(buildCommercialSheetRows(forCustomer("")).some((row) => row[0] === "Замовник")).toBe(false);
   });
 });
