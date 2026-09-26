@@ -13,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~6 850 lines, 335 KB, as of 2026-09-24)
+## src/pages/QuoteDetailsPage.tsx (~6 860 lines, 336 KB, as of 2026-09-26)
 
 Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p12. Файл СХУДНУВ на
 2 460 рядків (9 893 → 7 434): три вкладки з чотирьох поїхали в окремі модулі, а
@@ -42,7 +42,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 3517 / 3633 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
 | 3845 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
 | 3960 | items: `handleSaveItem` |
-| **4063** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
+| **4067** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
 | 4336–4492 | `<header>`: статус-контрол (DropdownMenu) + меню «⋮» (там же «Створити дизайн-задачу») |
 | 4507 | смуга вкладок — спільний `<TabBar>` (`src/components/ui/tab-bar.tsx`); риска ПЕРЕЇЖДЖАЄ окремим вузлом, псевдоелемента `after:` у файлі більше немає |
 | 4548 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
@@ -56,7 +56,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 6247 | вкладка «Економіка» (заглушка `EconomicsComingSoon`) |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 864 lines, 588 KB, as of 2026-09-24)
+## src/pages/DesignTaskPage.tsx (~12 864 lines, 588 KB, as of 2026-09-26)
 
 | Range | Content |
 |---|---|
@@ -65,7 +65,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | **1357** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~6 952 lines, 300 KB, as of 2026-09-24)
+## src/pages/QuotesPage.tsx (~6 951 lines, 300 KB, as of 2026-09-26)
 
 | Range | Content |
 |---|---|
@@ -73,7 +73,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
 | **447** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 937 lines, 262 KB, as of 2026-09-24)
+## src/pages/DesignPage.tsx (~5 937 lines, 262 KB, as of 2026-09-26)
 
 | Range | Content |
 |---|---|
