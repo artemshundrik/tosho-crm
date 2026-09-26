@@ -35,18 +35,15 @@ const formatMarkupRate = (value: number) => String(Math.round((Number(value) || 
 async function resolveTeamMembers(teamId?: string | null): Promise<TeamMemberRoleRow[]> {
   if (!isUuid(teamId ?? null)) return [];
 
-  // team_members lives in public, but tosho.team_members is checked as a fallback for older deploys.
   // Roles (access_role / job_role) are stored separately in tosho.memberships_view keyed by user_id.
-  const idResults = await Promise.all([
-    supabase.from("team_members").select("user_id").eq("team_id", teamId as string),
-    supabase.schema("tosho").from("team_members" as never).select("user_id").eq("team_id", teamId as string),
-  ]);
+  const { data: memberRows, error: membersError } = await supabase
+    .from("team_members")
+    .select("user_id")
+    .eq("team_id", teamId as string);
+  if (membersError) return [];
   const userIds = new Set<string>();
-  for (const result of idResults) {
-    if (result.error) continue;
-    for (const row of (result.data as Array<{ user_id?: string | null }> | null) ?? []) {
-      if (row?.user_id) userIds.add(row.user_id);
-    }
+  for (const row of memberRows ?? []) {
+    if (row.user_id) userIds.add(row.user_id);
   }
   if (userIds.size === 0) return [];
 
