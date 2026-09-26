@@ -28,7 +28,8 @@ import { FinanceReports } from "@/features/finances/FinanceReports";
 import { FinanceAccountsView } from "@/features/finances/FinanceAccountsView";
 import { FinanceReconciliation } from "@/features/finances/FinanceReconciliation";
 import { FinanceDashboard } from "@/features/finances/FinanceDashboard";
-import { findMissingMonthEntries } from "@/features/finances/monthClose";
+import { countOutstandingMonthEntries } from "@/features/finances/monthClose";
+import { todayISO } from "@/features/finances/expenseFormat";
 import { useFinanceAccounts, useFinanceExpenses, useFinanceExpenseEntries } from "@/features/finances/queries";
 
 type FinanceSectionId =
@@ -169,7 +170,7 @@ export default function FinancesPage() {
   const expensesQuery = useFinanceExpenses(teamId);
   const entriesQuery = useFinanceExpenseEntries(teamId);
   const accountsQuery = useFinanceAccounts(teamId);
-  const missingThisMonth = useMemo(() => {
+  const outstandingEntries = useMemo(() => {
     // Чутливі каси ховаємо тим самим правилом, що й сам список витрат — інакше
     // лічильник видавав би існування рядка, якого людина не бачить.
     const sensitiveAccounts = new Set(
@@ -178,14 +179,14 @@ export default function FinancesPage() {
     const visible = canSeeSensitive
       ? expensesQuery.data ?? []
       : (expensesQuery.data ?? []).filter((e) => !e.accountId || !sensitiveAccounts.has(e.accountId));
-    // Завжди про ПОТОЧНИЙ місяць, а не про той, що відкритий у Витратах: мітка в
-    // навігації відповідає на «що не зроблено зараз», а не «що в місяці, який гортаю».
-    const monthKey = new Date().toISOString().slice(0, 7);
-    return findMissingMonthEntries(visible, entriesQuery.data ?? new Map(), monthKey, monthKey).size;
+    // Не про місяць, відкритий у Витратах: мітка в навігації відповідає на «що не
+    // зроблено зараз» — кожна витрата за свій належний місяць (вода — за поточний,
+    // комуналка — за минулий, починаючи з 10-го числа).
+    return countOutstandingMonthEntries(visible, entriesQuery.data ?? new Map(), todayISO());
   }, [expensesQuery.data, entriesQuery.data, accountsQuery.data, canSeeSensitive]);
   // На самій вкладці Витрат мітку не дублюємо — там уже бейдж на кожному рядку
   // і лічильник у заголовку секції. Два сигнали про один факт читаються як шум.
-  const expensesBadge = activeSection === "expenses" ? 0 : missingThisMonth;
+  const expensesBadge = activeSection === "expenses" ? 0 : outstandingEntries;
 
   const activeContent = (
     <>

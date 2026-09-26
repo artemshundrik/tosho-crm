@@ -7,6 +7,8 @@ import type { FxRates } from "@/lib/fxRates";
 
 const RATES: FxRates = { usdUah: 41, eurUah: 45, updatedAt: null, sourceLabel: null };
 const NOW = "2026-08";
+// Для «не внесено» потрібна дата, а не місяць: комуналка закривається 10-го наступного.
+const TODAY = "2026-08-15";
 
 const expense = (over: Partial<FinanceExpense> = {}): FinanceExpense => ({
   id: "e1",
@@ -23,6 +25,7 @@ const expense = (over: Partial<FinanceExpense> = {}): FinanceExpense => ({
   isRecurring: true,
   recurrence: "monthly",
   amountVaries: true,
+  billedNextMonth: false,
   objectGroup: null,
   reminderLeadDays: null,
   vendorOptions: [],
@@ -118,7 +121,7 @@ describe("findMissingMonthEntries", () => {
   const entries = (pairs: Array<[string, ExpenseEntry[]]>) => new Map(pairs);
 
   it("ловить НОВУ витрату з нулем записів — раніше вона мовчала", () => {
-    const missing = findMissingMonthEntries([expense()], entries([]), "2026-08", NOW);
+    const missing = findMissingMonthEntries([expense()], entries([]), "2026-08", TODAY);
     expect(missing.has("e1")).toBe(true);
   });
 
@@ -127,31 +130,31 @@ describe("findMissingMonthEntries", () => {
       [expense()],
       entries([["e1", [entry("2026-08-10", 500)]]]),
       "2026-08",
-      NOW
+      TODAY
     );
     expect(missing.size).toBe(0);
   });
 
   it("не чіпає місяці до «веду облік з», архівні витрати й майбутнє", () => {
-    expect(findMissingMonthEntries([expense()], entries([]), "2026-06", NOW).size).toBe(0);
+    expect(findMissingMonthEntries([expense()], entries([]), "2026-06", TODAY).size).toBe(0);
     expect(
-      findMissingMonthEntries([expense({ archivedAt: "2026-07-31T10:00:00Z" })], entries([]), "2026-08", NOW).size
+      findMissingMonthEntries([expense({ archivedAt: "2026-07-31T10:00:00Z" })], entries([]), "2026-08", TODAY).size
     ).toBe(0);
-    expect(findMissingMonthEntries([expense()], entries([]), "2026-09", NOW).size).toBe(0);
+    expect(findMissingMonthEntries([expense()], entries([]), "2026-09", TODAY).size).toBe(0);
   });
 
   it("подія не «ведеться щомісяця», тож у чекліст не йде", () => {
     const party = expense({ eventType: "Корпоратив" });
-    expect(findMissingMonthEntries([party], entries([]), "2026-08", NOW).size).toBe(0);
+    expect(findMissingMonthEntries([party], entries([]), "2026-08", TODAY).size).toBe(0);
   });
 
   it("«по потребі» не буває «не внесеним» — воно або сталось, або ні", () => {
     // Паливо, таксі, Нова Пошта, подарунки, кондиціонери: місяць без запису для
     // них НОРМА, а не забутий обовʼязок.
     const asNeeded = expense({ recurrence: "as_needed" });
-    expect(findMissingMonthEntries([asNeeded], entries([]), "2026-08", NOW).size).toBe(0);
+    expect(findMissingMonthEntries([asNeeded], entries([]), "2026-08", TODAY).size).toBe(0);
     // А те, що ходить щомісяця (комуналка, вода, прибирання), — світиться.
-    expect(findMissingMonthEntries([expense()], entries([]), "2026-08", NOW).size).toBe(1);
+    expect(findMissingMonthEntries([expense()], entries([]), "2026-08", TODAY).size).toBe(1);
   });
 });
 

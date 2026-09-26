@@ -2273,6 +2273,7 @@ export type Database = {
           amount: number
           amount_varies: boolean
           archived_at: string | null
+          billed_next_month: boolean
           category_id: string | null
           created_at: string
           currency: string
@@ -2302,6 +2303,7 @@ export type Database = {
           amount?: number
           amount_varies?: boolean
           archived_at?: string | null
+          billed_next_month?: boolean
           category_id?: string | null
           created_at?: string
           currency?: string
@@ -2331,6 +2333,7 @@ export type Database = {
           amount?: number
           amount_varies?: boolean
           archived_at?: string | null
+          billed_next_month?: boolean
           category_id?: string | null
           created_at?: string
           currency?: string

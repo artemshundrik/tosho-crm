@@ -59,6 +59,7 @@ import {
 } from "@/lib/fxRates";
 import { BENTO_COLORS, FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { findMissingMonthEntries, shiftMonthKey } from "./monthClose";
+import { BilledNextMonthCard, ExpenseCheckboxCard } from "./ExpenseCheckboxCard";
 import {
   expenseMonthCost,
   isExpenseArchived,
@@ -292,7 +293,8 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   // саме за цей місяць (комуналка різна щомісяця). Сповіщення «закрити місяць»
   // веде сюди з ?month=YYYY-MM&highlight=missing — інакше людина приземлялась би
   // на поточний місяць і не бачила того, про що їй написали.
-  const currentKey = React.useMemo(() => todayISO().slice(0, 7), []);
+  const todayKey = React.useMemo(() => todayISO(), []);
+  const currentKey = todayKey.slice(0, 7);
   const [searchParams] = useSearchParams();
   const [selectedMonth, setSelectedMonth] = React.useState(() => {
     const fromUrl = searchParams.get("month");
@@ -308,10 +310,11 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   );
 
   // «Не внесено за місяць» — правило спільне з підпунктом «Витрати» й крон-функцією
-  // finance-month-close-reminders, тому живе в ./monthClose, а не тут.
+  // finance-month-close-reminders, тому живе в ./monthClose, а не тут. Потрібна
+  // саме дата, а не місяць: комуналка свій місяць закриває 10-го числа наступного.
   const missingEntryIds = React.useMemo(
-    () => findMissingMonthEntries(visibleExpenses, entriesByExpense, selectedMonth, currentKey),
-    [visibleExpenses, entriesByExpense, selectedMonth, currentKey]
+    () => findMissingMonthEntries(visibleExpenses, entriesByExpense, selectedMonth, todayKey),
+    [visibleExpenses, entriesByExpense, selectedMonth, todayKey]
   );
 
   // Дата останнього запису — підказка «останній запис — 13.07» під назвою.
@@ -1471,6 +1474,7 @@ function ExpenseDialog({
     editing ? billingPeriodOf(editing) : "monthly"
   );
   const [amountVaries, setAmountVaries] = React.useState(editing?.amountVaries ?? false);
+  const [billedNextMonth, setBilledNextMonth] = React.useState(editing?.billedNextMonth ?? false);
   const [objectGroup, setObjectGroup] = React.useState(editing?.objectGroup ?? "");
   const [nextChargeDate, setNextChargeDate] = React.useState(editing?.nextChargeDate ?? "");
   // Нагадування про платіж: увімкнено = reminderLeadDays не null; дефолт 7 днів.
@@ -1609,6 +1613,7 @@ function ExpenseDialog({
       // ліг у свій місяць), але на екрані періодичність не показуємо — див. isEvent.
       recurrence: isRecurring ? (isEvent ? "monthly" : billingPeriod) : null,
       amountVaries: varyingRecurring,
+      billedNextMonth: varyingRecurring && !isEvent && billingPeriod !== "as_needed" && billedNextMonth,
       eventType: isEvent ? eventType || null : null,
       objectGroup: isRecurring && !isEvent ? objectGroup || null : null,
       nextChargeDate: isRecurring ? nextChargeDate || null : null,
@@ -2056,28 +2061,19 @@ function ExpenseDialog({
 
               {/* Сума змінна: у списку зʼявиться журнал — кожна оплата з датою й коментарем. */}
               {isRecurring && !isEvent ? (
-                <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border/60 bg-muted/10 p-3 sm:col-span-2">
-                  <Checkbox
-                    checked={amountVaries}
-                    onCheckedChange={(v) => {
-                      const next = v === true;
-                      setAmountVaries(next);
-                      // «По потребі» існує лише в журналі: вимкнули журнал — повертаємо
-                      // місячний графік, інакше в сталої витрати лишився б період,
-                      // якого в її селекті немає.
-                      if (!next && billingPeriod === "as_needed") setBillingPeriod("monthly");
-                    }}
-                    className="mt-0.5"
-                  />
-                  <span className="text-sm">
-                    <span className="font-medium text-foreground">Сума змінна — вести журнал по датах</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Для прибирання, комуналки й подібного: у списку зʼявиться журнал, куди вписуватимеш
-                      кожну оплату — конкретна дата, сума й коментар (кілька на місяць — теж можна).
-                      Сума вище — лише орієнтир. Оренда/підписки — лишай вимкненим.
-                    </span>
-                  </span>
-                </label>
+                <ExpenseCheckboxCard
+                  className="sm:col-span-2"
+                  checked={amountVaries}
+                  onCheckedChange={(next) => {
+                    setAmountVaries(next);
+                    // «По потребі» існує лише в журналі: вимкнули журнал — повертаємо
+                    // місячний графік, інакше в сталої витрати лишився б період,
+                    // якого в її селекті немає.
+                    if (!next && billingPeriod === "as_needed") setBillingPeriod("monthly");
+                  }}
+                  title="Сума змінна — вести журнал по датах"
+                  hint="Для прибирання, комуналки й подібного: у списку зʼявиться журнал, куди вписуватимеш кожну оплату — конкретна дата, сума й коментар (кілька на місяць — теж можна). Сума вище — лише орієнтир. Оренда/підписки — лишай вимкненим."
+                />
               ) : null}
 
               {/* Обʼєкт/адреса — групує оренду+комуналку одного офісу в списку «Інші регулярні». */}
@@ -2119,6 +2115,9 @@ function ExpenseDialog({
                       </p>
                     ) : null}
                   </div>
+                  {varyingRecurring && billingPeriod !== "as_needed" ? (
+                    <BilledNextMonthCard checked={billedNextMonth} onCheckedChange={setBilledNextMonth} />
+                  ) : null}
                   {/* Наступне списання — лише для сталої суми: у журналі дати ведуться поштучно. */}
                   {varyingRecurring ? null : (
                     <div className="grid gap-2">

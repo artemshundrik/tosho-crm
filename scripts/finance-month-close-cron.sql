@@ -5,10 +5,14 @@
 -- місяць просто забувають внести (за серпень 2026 станом на 06.08 не було
 -- жодного запису, хоча комуналку Богданівської вели стабільно лютий–липень).
 --
--- Дві стадії, кожна — окрема джоба (стадію функція читає з query):
---   soft  25-го — про ПОТОЧНИЙ місяць, мʼяке попередження;
---   final  5-го — про ПОПЕРЕДНІЙ місяць, коли платежі вже точно пройшли
---                 (до 5-го числа ще бувають доплати за минулий місяць).
+-- Три стадії, кожна — окрема джоба (стадію функція читає з query):
+--   soft   25-го — про ПОТОЧНИЙ місяць, мʼяке попередження;
+--   final   5-го — про ПОПЕРЕДНІЙ місяць, коли платежі вже точно пройшли
+--                  (до 5-го числа ще бувають доплати за минулий місяць);
+--   billed 10-го — про ПОПЕРЕДНІЙ місяць, лише для витрат із рахунком
+--                  НАСТУПНОГО місяця (finance_expenses.billed_next_month):
+--                  комуналку виставляють 6–8 числа, тож 25-го й 5-го вносити
+--                  ще нічого (REQ-314). Soft і final такі витрати пропускають.
 --
 -- Обидві о 06:00 UTC ≈ 09:00 Київ. Функція резолвить «сьогодні» в Europe/Kiev
 -- сама, тож точна година тригера не критична.
@@ -31,6 +35,18 @@ select cron.schedule(
   '0 6 5 * *',
   $$ select net.http_post(
        url := 'https://tosho.pro/.netlify/functions/finance-month-close-reminders?stage=final',
+       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
+       timeout_milliseconds := 20000) $$
+);
+
+-- Поки на проді стара функція, вона читає невідому стадію як final — і з тим
+-- самим ключем дедупу (`month-close:<місяць>:final`), тож 10-го нічого не
+-- продублює: те, що пішло 5-го, вдруге не піде.
+select cron.schedule(
+  'finance-month-close-billed',
+  '0 6 10 * *',
+  $$ select net.http_post(
+       url := 'https://tosho.pro/.netlify/functions/finance-month-close-reminders?stage=billed',
        headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
        timeout_milliseconds := 20000) $$
 );

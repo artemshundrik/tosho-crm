@@ -672,7 +672,7 @@ export async function deleteExpenseCategory(teamId: string, id: string): Promise
 // ---------------------------------------------------------------------------
 
 const EXPENSE_COLUMNS =
-  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,object_group,reminder_lead_days,vendor_options,event_type,next_charge_date,vendor_key,logo_url,archived_at,notes,file,entered_by,created_at,updated_at";
+  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,billed_next_month,object_group,reminder_lead_days,vendor_options,event_type,next_charge_date,vendor_key,logo_url,archived_at,notes,file,entered_by,created_at,updated_at";
 
 type ExpenseRow = {
   id: string;
@@ -689,6 +689,7 @@ type ExpenseRow = {
   is_recurring: boolean | null;
   recurrence: string | null;
   amount_varies: boolean | null;
+  billed_next_month: boolean | null;
   object_group: string | null;
   reminder_lead_days: number | null;
   vendor_options: string[] | null;
@@ -733,6 +734,7 @@ const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation
   isRecurring: Boolean(row.is_recurring),
   recurrence: row.recurrence ?? null,
   amountVaries: Boolean(row.amount_varies),
+  billedNextMonth: Boolean(row.billed_next_month),
   objectGroup: row.object_group ?? null,
   reminderLeadDays: row.reminder_lead_days ?? null,
   vendorOptions: row.vendor_options ?? [],
@@ -798,6 +800,7 @@ export type ExpenseInput = {
   isRecurring: boolean;
   recurrence?: BillingPeriod | null;
   amountVaries?: boolean;
+  billedNextMonth?: boolean;
   objectGroup?: string | null;
   reminderLeadDays?: number | null;
   vendorOptions?: string[];
@@ -824,6 +827,8 @@ const serializeExpense = (input: ExpenseInput) => ({
   recurrence: input.isRecurring ? input.recurrence || "monthly" : null,
   // Змінна сума — лише для регулярних; для решти завжди false.
   amount_varies: input.isRecurring ? Boolean(input.amountVaries) : false,
+  // «Рахунок приходить наступного місяця» має сенс лише для журнальної витрати.
+  billed_next_month: input.isRecurring && input.amountVaries ? Boolean(input.billedNextMonth) : false,
   // Обʼєкт/адреса — тільки для регулярних (групування офісних платежів).
   object_group: input.isRecurring ? input.objectGroup?.trim() || null : null,
   // Дата наступного списання має сенс лише для сталої витрати/підписки.

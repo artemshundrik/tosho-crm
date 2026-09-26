@@ -15,9 +15,18 @@ import {
 // якими за цільовий місяць немає ЖОДНОГО запису, і шлемо ОДНЕ сповіщення зі
 // списком, згрупованим за обʼєктом.
 //
-// Дві стадії (?stage=), кожна — окрема крон-джоба:
-//   soft  (25-го) — про ПОТОЧНИЙ місяць, мʼяке попередження;
-//   final (5-го)  — про ПОПЕРЕДНІЙ місяць, коли платежі вже точно пройшли.
+// Три стадії (?stage=), кожна — окрема крон-джоба:
+//   soft   (25-го) — про ПОТОЧНИЙ місяць, мʼяке попередження;
+//   final  (5-го)  — про ПОПЕРЕДНІЙ місяць, коли платежі вже точно пройшли;
+//   billed (10-го) — про ПОПЕРЕДНІЙ місяць, лише для витрат із рахунком
+//                    НАСТУПНОГО місяця (billed_next_month, REQ-314).
+//
+// Soft і final ці витрати пропускають. Комуналку по офісу виставляють 6–8 числа
+// наступного місяця, тож «До кінця вересня не внесено» 25 вересня (і «Вересень
+// не закритий» 5 жовтня) приходило, коли вносити було ще нічого, — і його читали
+// як докір за серпень. Вода й прибирання вносяться в межах місяця й лишились на
+// 25-му та 5-му. Число 10 — те саме, що NEXT_MONTH_BILL_DUE_DAY у monthClose.ts,
+// за яким загоряється бейдж «не внесено» в застосунку.
 //
 // Свідомо БЕЗ export const config: стадію передає pg_cron у query, а планувальник
 // Netlify параметрів не передає (і в цьому репозиторії все одно не використовується
@@ -70,10 +79,6 @@ const MONTHS_NOMINATIVE = [
   "Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень",
   "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень",
 ];
-const MONTHS_GENITIVE = [
-  "січня", "лютого", "березня", "квітня", "травня", "червня",
-  "липня", "серпня", "вересня", "жовтня", "листопада", "грудня",
-];
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -123,10 +128,9 @@ function isExpenseInMonth(expense: ExpenseRow, monthKey: string): boolean {
   return true;
 }
 
-function monthLabel(monthKey: string, form: "nominative" | "genitive"): string {
+function monthLabel(monthKey: string): string {
   const idx = Number(monthKey.slice(5, 7)) - 1;
-  const table = form === "nominative" ? MONTHS_NOMINATIVE : MONTHS_GENITIVE;
-  return table[idx] ?? monthKey;
+  return MONTHS_NOMINATIVE[idx] ?? monthKey;
 }
 
 /** 1 витрата / 2 витрати / 5 витрат. */
@@ -152,7 +156,8 @@ export const handler = async (event: HttpEvent) => {
   }
 
   const params = event.queryStringParameters ?? {};
-  const stage = (params.stage ?? "final").trim().toLowerCase() === "soft" ? "soft" : "final";
+  const rawStage = (params.stage ?? "final").trim().toLowerCase();
+  const stage = rawStage === "soft" ? "soft" : rawStage === "billed" ? "billed" : "final";
   // Прогін без запису — щоб перевірити склад списку на реальних даних.
   const dryRun = params.dry === "1" || params.dry === "true";
 
@@ -174,6 +179,9 @@ export const handler = async (event: HttpEvent) => {
       .eq("is_recurring", true)
       .eq("amount_varies", true)
       .is("event_type", null)
+      // Витрата з рахунком наступного місяця — лише в стадії billed (10-го),
+      // решта — лише в soft і final. Одна витрата не отримує двох нагадувань.
+      .eq("billed_next_month", stage === "billed")
       // «По потребі» (паливо, таксі, подарунки) у чекліст не йде: воно або
       // сталось, або ні — нагадувати про його відсутність нема сенсу.
       // Через `or` з `is.null`, бо голий neq відкидає ще й рядки з null.
@@ -272,8 +280,7 @@ export const handler = async (event: HttpEvent) => {
       byTeam.set(e.team_id, teamGroups);
     }
 
-    const monthNom = monthLabel(targetMonth, "nominative");
-    const monthGen = monthLabel(targetMonth, "genitive");
+    const monthNom = monthLabel(targetMonth);
     const pendingRows: PendingNotificationRow[] = [];
     const preview: Array<{ teamId: string; recipients: number; title: string; body: string }> = [];
 
@@ -291,9 +298,11 @@ export const handler = async (event: HttpEvent) => {
         .map(([group, names]) => `${group}: ${names.sort((x, y) => x.localeCompare(y, "uk")).join(", ")}`)
         .join("\n");
 
+      // Місяць — у заголовку прямо: «До кінця вересня не внесено» читали і як
+      // «за серпень», і як «за вересень» (REQ-314).
       const title =
         stage === "soft"
-          ? `До кінця ${monthGen} не внесено — ${pluralExpenses(count)}`
+          ? `За ${monthNom.toLowerCase()} ще не внесено — ${pluralExpenses(count)}`
           : `${monthNom} не закритий — ${pluralExpenses(count)}`;
 
       // «reminder=» у href обовʼязкове: частковий унікальний індекс, на якому
