@@ -8,7 +8,7 @@ import { Package } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 
 import { buildComposerImprint } from "./designComposerImprint";
-import { QuoteDesignTaskComposer } from "./QuoteDesignTaskComposer";
+import { QuoteDesignTaskComposer, type ComposerDesigner } from "./QuoteDesignTaskComposer";
 import { QuoteDesignTasksPanel, type QuoteDesignTaskCard } from "./QuoteDesignTasksPanel";
 import type { QuoteAttachment } from "./queries";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -58,6 +58,9 @@ export function QuoteDesignTabSection({
   onRemoveComposerFile,
   designTaskType,
   onDesignTaskTypeChange,
+  designAssigneeId,
+  onDesignAssigneeChange,
+  designers,
   designTaskSaving,
   designTaskError,
   designTaskLoading,
@@ -88,11 +91,16 @@ export function QuoteDesignTabSection({
   onRemoveComposerFile: (file: QuoteAttachment) => void;
   designTaskType: DesignTaskType | null;
   onDesignTaskTypeChange: (value: DesignTaskType) => void;
+  /** Виконавець зі стану сторінки: після завантаження — той, хто веде найновішу задачу. */
+  designAssigneeId: string | null;
+  onDesignAssigneeChange: (value: string | null) => void;
+  /** Діючі дизайнери команди — з них і лише з них обирають виконавця. */
+  designers: ComposerDesigner[];
   designTaskSaving?: boolean;
   designTaskError?: string | null;
   designTaskLoading?: boolean;
   canEditQuoteContent?: boolean;
-  onCreateDesignTask: (itemId: string | null, hasFiles: boolean) => void;
+  onCreateDesignTask: (itemId: string | null, hasFiles: boolean, assigneeId: string | null) => void;
   designTaskCards: QuoteDesignTaskCard[];
   renderBrief: (text: string) => React.ReactNode;
   designMaterials: QuoteAttachment[];
@@ -130,6 +138,15 @@ export function QuoteDesignTabSection({
     () => buildComposerImprint(items.find((item) => item.id === fallbackItemId), catalogTypes),
     [catalogTypes, fallbackItemId, items]
   );
+  /*
+    ВИКОНАВЕЦЬ ЗА ЗАМОВЧУВАННЯМ — той, хто веде найновішу задачу прорахунку:
+    сторінка тримає його в стані з моменту завантаження. Раніше форма віддавала
+    нову задачу саме йому, але мовчки — кнопки не було. Тепер це видно й
+    міняється до створення. Звільнений або не-дизайнер у виборі не стоїть,
+    тож замість нього «Без виконавця»: що на кнопці, те й поїде в задачу.
+  */
+  const composerAssigneeId =
+    designAssigneeId && designers.some((designer) => designer.id === designAssigneeId) ? designAssigneeId : null;
 
   return (
     <>
@@ -212,9 +229,12 @@ export function QuoteDesignTabSection({
           onRemoveFile={onRemoveComposerFile}
           taskType={designTaskType}
           onTaskTypeChange={onDesignTaskTypeChange}
+          assigneeId={composerAssigneeId}
+          onAssigneeChange={onDesignAssigneeChange}
+          designers={designers}
           saving={designTaskSaving}
           error={designTaskError}
-          onCreate={() => onCreateDesignTask(fallbackItemId, composerFiles.length > 0)}
+          onCreate={() => onCreateDesignTask(fallbackItemId, composerFiles.length > 0, composerAssigneeId)}
         />
       ) : null}
     </>

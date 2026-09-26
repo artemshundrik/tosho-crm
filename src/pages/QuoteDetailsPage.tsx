@@ -2704,7 +2704,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const modelName = override?.modelName ?? targetItem?.title ?? "Позиція";
       const methodsCount = override?.methodsCount ?? targetItem?.methods?.length ?? 0;
       const designDeadline = quote?.design_deadline_at ?? quote?.deadline_at ?? null;
-      const assigneeUserId = override?.assigneeUserId ?? designAssigneeId ?? null;
+      // Переданий `null` — свідоме «без виконавця», а не «візьми зі стану сторінки».
+      const assigneeUserId =
+        override && "assigneeUserId" in override ? override.assigneeUserId ?? null : designAssigneeId ?? null;
       const collaboratorUserIds = Array.from(
         new Set((override?.collaboratorUserIds ?? designCollaboratorIds).filter((value) => value && value !== assigneeUserId))
       );
@@ -2761,6 +2763,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (!created.ok) return fail(created.message);
 
       const meta = created.data.metadata;
+      // Одразу в список: без цього форма лишалась, товар писав «задачі ще немає», і другий клік заводив дубль.
+      setDesignTasks((prev) => [{ id: created.data.id, title: `Дизайн: ${modelName}`, metadata: meta, created_at: createdAtIso }, ...prev]);
       const nextAssignee = (meta as { assignee_user_id?: string | null }).assignee_user_id ?? assigneeUserId;
       const nextAssignedAt = (meta as { assigned_at?: string | null }).assigned_at ?? assignedAt;
       setDesignTask({
@@ -5890,15 +5894,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 onRemoveComposerFile={requestDeleteAttachment}
                 designTaskType={designTaskType}
                 onDesignTaskTypeChange={setDesignTaskType}
+                designAssigneeId={designAssigneeId}
+                onDesignAssigneeChange={setDesignAssigneeId}
+                designers={designerMembers}
                 designTaskSaving={designTaskSaving}
                 designTaskError={designTaskError}
                 designTaskLoading={designTaskLoading}
                 canEditQuoteContent={canEditQuoteContent}
-                onCreateDesignTask={(itemId, hasFiles) => {
+                onCreateDesignTask={(itemId, hasFiles, assigneeUserId) => {
                   if (itemId && itemId !== designTaskItemId) setDesignTaskItemId(itemId);
                   void createDesignTask({
                     designBrief: designComposerBrief.trim() || undefined,
                     hasFiles,
+                    // Що на кнопці, те й їде; співвиконавців ця форма не питає.
+                    assigneeUserId,
+                    collaboratorUserIds: [],
                   }).then(() => setDesignComposerBrief(""));
                 }}
                 designTaskCards={designTaskCards}

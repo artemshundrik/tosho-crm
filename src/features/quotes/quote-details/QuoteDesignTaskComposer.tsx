@@ -1,6 +1,7 @@
 import * as React from "react";
-import { Check, Loader2, Paperclip, X } from "@/components/icons/appIcons";
+import { Check, ChevronDown, Loader2, Paperclip, User, X } from "@/components/icons/appIcons";
 
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { DictationButton, DictationCapsule, isDictationActive } from "@/components/ui/dictation-capsule";
@@ -8,6 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
@@ -22,6 +24,7 @@ import {
   type DesignTaskType,
 } from "@/lib/designTaskType";
 
+import { getInitials } from "./config";
 import type { DesignComposerImprint } from "./designComposerImprint";
 import { QuoteImprintBadges } from "./QuoteImprintBadges";
 import type { QuoteAttachment } from "./queries";
@@ -53,9 +56,18 @@ import type { QuoteAttachment } from "./queries";
  * одним рухом. Прибрати поле зовсім було не можна — решта 27 задач місяця
  * (креатив, верстка, адаптація макету, презентація) заводяться далі, а тип
  * годує норми часу в дашборді дизайнерів і у звіті для СЕО.
+ *
+ * ВИКОНАВЦЯ ОБИРАЮТЬ ТУТ ЖЕ, поруч із кнопкою (REQ-312#p2). Форма вийшла без
+ * нього, і задача з вкладки «Дизайн» висіла нічиєю, хоч менеджер знав, кому
+ * її віддати: за 30 днів до 26.09.2026 дизайнера ще при створенні отримали
+ * 49 задач із 67 — там, де форма про нього питала. Кнопка, а не тихий рядок,
+ * як у типу: тип здебільшого лишають як є, а виконавця здебільшого обирають.
  */
 
 export type { DesignComposerImprint };
+
+/** Дизайнер у виборі виконавця — діючий, з посадою дизайнера. */
+export type ComposerDesigner = { id: string; label: string; avatarUrl?: string | null };
 
 export function QuoteDesignTaskComposer({
   brief,
@@ -68,6 +80,9 @@ export function QuoteDesignTaskComposer({
   onRemoveFile,
   taskType,
   onTaskTypeChange,
+  assigneeId,
+  onAssigneeChange,
+  designers,
   saving,
   error,
   disabled,
@@ -85,6 +100,10 @@ export function QuoteDesignTaskComposer({
   onRemoveFile?: (file: QuoteAttachment) => void;
   taskType: DesignTaskType | null;
   onTaskTypeChange: (value: DesignTaskType) => void;
+  /** Кому піде задача; `null` — «Без виконавця», дизайнер візьме її з дошки сам. */
+  assigneeId: string | null;
+  onAssigneeChange: (value: string | null) => void;
+  designers: ComposerDesigner[];
   saving?: boolean;
   error?: string | null;
   disabled?: boolean;
@@ -95,6 +114,7 @@ export function QuoteDesignTaskComposer({
      лишається можливим лише в старих шляхах, які цю форму не відкривають. */
   const effectiveType = taskType ?? DEFAULT_DESIGN_TASK_TYPE;
   const TypeIcon = DESIGN_TASK_TYPE_ICONS[effectiveType];
+  const assignee = designers.find((designer) => designer.id === assigneeId) ?? null;
   const briefRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   /*
@@ -247,10 +267,70 @@ export function QuoteDesignTaskComposer({
             </DropdownMenuContent>
           </DropdownMenu>
         </span>
-        <Button type="button" size="sm" disabled={disabled || busy} className="gap-2" onClick={onCreate}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Створити дизайн-задачу
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild disabled={disabled || busy}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label={`Виконавець: ${assignee?.label ?? "без виконавця"}`}
+                className="max-w-[240px]"
+              >
+                {assignee ? (
+                  <AvatarBase
+                    src={assignee.avatarUrl ?? null}
+                    name={assignee.label}
+                    fallback={getInitials(assignee.label)}
+                    size={18}
+                    className="shrink-0 text-3xs font-semibold"
+                  />
+                ) : (
+                  <User className="shrink-0 text-muted-foreground" />
+                )}
+                <span className="min-w-0 truncate">{assignee?.label ?? "Без виконавця"}</span>
+                <ChevronDown className="shrink-0 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>Виконавець</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => onAssigneeChange(null)} className="gap-2 text-sm">
+                {/* Коробка під розмір аватарки, щоб імена стояли одним стовпчиком. */}
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                </span>
+                <span className="flex-1">Без виконавця</span>
+                {assignee ? null : <Check className="h-3.5 w-3.5 shrink-0" />}
+              </DropdownMenuItem>
+              {designers.map((designer) => (
+                <DropdownMenuItem
+                  key={designer.id}
+                  onSelect={() => onAssigneeChange(designer.id)}
+                  className="gap-2 text-sm"
+                >
+                  <AvatarBase
+                    src={designer.avatarUrl ?? null}
+                    name={designer.label}
+                    fallback={getInitials(designer.label)}
+                    size={20}
+                    className="shrink-0 text-3xs font-semibold"
+                  />
+                  <span className="min-w-0 flex-1 truncate">{designer.label}</span>
+                  {designer.id === assignee?.id ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+                </DropdownMenuItem>
+              ))}
+              {designers.length === 0 ? (
+                <DropdownMenuItem disabled className="text-sm">
+                  У команді немає дизайнерів
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button type="button" size="sm" disabled={disabled || busy} className="gap-2" onClick={onCreate}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Створити дизайн-задачу
+          </Button>
+        </div>
       </div>
     </section>
   );
