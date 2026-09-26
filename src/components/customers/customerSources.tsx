@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Globe, Megaphone, PhoneCall, Presentation, ThumbsUp, UserCheck } from "@/components/icons/appIcons";
+import { Gavel, Globe, Megaphone, PhoneCall, Presentation, ThumbsUp, UserCheck } from "@/components/icons/appIcons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TikTokIcon } from "@/components/icons/TikTokIcon";
 import { ThreadsIcon } from "@/components/icons/ThreadsIcon";
@@ -26,6 +26,8 @@ export const CUSTOMER_LEAD_SOURCES: ReadonlyArray<{ value: string; label: string
   { value: "Реклама", label: "Реклама", Icon: Megaphone },
   { value: "Конференція", label: "Конференція", Icon: Presentation },
   { value: "Холодний дзвінок", label: "Холодний дзвінок", Icon: PhoneCall },
+  // Запит на участь у тендері — окреме джерело, а не «Сайт» чи «Реклама».
+  { value: "Тендер", label: "Тендер", Icon: Gavel },
   { value: "Існуючий клієнт", label: "Існуючий клієнт", Icon: UserCheck },
 ];
 
