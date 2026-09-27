@@ -39,9 +39,13 @@ import {
  * зникли контакти менеджера), а окремим `fixed`-вузлом не малює нічого. Ставити
  * замість нього статичну «01» не можна: на другій сторінці вона брехала б.
  *
- * НАСИЧЕНОСТЕЙ РІВНО ДВІ. Roboto зареєстрований як normal і bold (`pdfFonts`),
- * і проміжні 500/600 рушій не знайде — він упаде, а не підбере найближчу. Тому
- * все, що в макеті 600, тут bold.
+ * НАСИЧЕНОСТЕЙ РІВНО ДВІ. Фірмовий Mariupol і запасний Roboto зареєстровані як
+ * normal і bold (`pdfFonts`), і проміжні 500/600 рушій не знайде — він упаде, а
+ * не підбере найближчу. Тому все, що в макеті 600, тут bold.
+ *
+ * ШРИФТ ПРИХОДИТЬ ПАРАМЕТРОМ, а не стоїть у стилях: файли Mariupol живуть у
+ * сховищі, і коли вони не доїхали, `downloadCommercialPdf` складає документ
+ * самим Roboto замість того, щоб лишити менеджера без PDF.
  */
 
 const INK = "#0e0e10";
@@ -53,7 +57,6 @@ const ACCENT = "#b0136b";
 
 const styles = StyleSheet.create({
   page: {
-    fontFamily: "Roboto",
     fontSize: 10,
     color: INK,
     paddingTop: 40,
@@ -144,6 +147,16 @@ export type PdfImageMap = Record<string, string>;
 /** Ширини колонок таблиці тиражів — ті самі, що в HTML-виході. */
 const COL = { qty: "26%", unit: "24%", sum: "26%", gain: "24%" } as const;
 
+/**
+ * Число для PDF — зі звичайним пробілом між тисячами замість нерозривного.
+ *
+ * Intl ставить U+00A0, якого у фірмовому Mariupol немає. Запасний Roboto його
+ * домальовує, але клітинка з символом іншого шрифту сідає нижче сусідніх:
+ * «34 470 грн» стояв на півтора пункти нижче за «50 шт.». Переносу звичайний
+ * пробіл не відкриє — у клітинку вміщається навіть «99 999 999,99 грн».
+ */
+const pdfNumber = (text: string) => text.replace(/ /g, " ");
+
 function RunTable({ item, showGain }: { item: CommercialItemRow; showGain: boolean }) {
   return (
     <View>
@@ -158,10 +171,12 @@ function RunTable({ item, showGain }: { item: CommercialItemRow; showGain: boole
         return (
           <View key={run.id} style={styles.runsRow}>
             <Text style={[styles.qty, { width: COL.qty }]}>
-              {formatMoneyPlain(run.qty)} {item.unit}
+              {pdfNumber(formatMoneyPlain(run.qty))} {item.unit}
             </Text>
-            <Text style={[styles.unit, { width: COL.unit }]}>{formatMoneyPlain(run.unitPrice)} грн</Text>
-            <Text style={[styles.sum, { width: showGain ? COL.sum : "50%" }]}>{formatMoney(run.lineTotal)}</Text>
+            <Text style={[styles.unit, { width: COL.unit }]}>{pdfNumber(formatMoneyPlain(run.unitPrice))} грн</Text>
+            <Text style={[styles.sum, { width: showGain ? COL.sum : "50%" }]}>
+              {pdfNumber(formatMoney(run.lineTotal))}
+            </Text>
             {showGain ? (
               <Text style={[styles.gain, { width: COL.gain }]}>
                 {discount > 0 ? `−${discount} % за ${item.unit}` : "—"}
@@ -213,7 +228,15 @@ function ItemCard({
   );
 }
 
-export function OfferDocument({ doc, images }: { doc: CommercialDocument; images: PdfImageMap }) {
+export function OfferDocument({
+  doc,
+  images,
+  fontFamily,
+}: {
+  doc: CommercialDocument;
+  images: PdfImageMap;
+  fontFamily: string[];
+}) {
   const hasRunChoice = doc.sections.some((section) => section.items.some((item) => item.runs.length > 1));
   const showSectionHeads = doc.sections.length > 1;
   const quoteNumbers = doc.sections.map((section) => section.quoteNumber).filter(Boolean);
@@ -226,7 +249,7 @@ export function OfferDocument({ doc, images }: { doc: CommercialDocument; images
 
   return (
     <Document title={getCommercialDocName(doc)} author="ToSho">
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={[styles.page, { fontFamily }]}>
         <View style={styles.head}>
           {images[OFFER_LOCKUP_URL] ? (
             <Image src={images[OFFER_LOCKUP_URL]} style={styles.lockup} />

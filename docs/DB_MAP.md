@@ -509,6 +509,7 @@ generator refuses the marker if the table has no `BEFORE INSERT` trigger at all.
   - `attachments`
   - `avatars`
   - `public-assets`
+    - `public/brand/fonts/` — brand font Mariupol (Regular, Bold) for the commercial offer PDF/HTML. Uploaded by hand and deliberately not in git: the font EULA forbids redistributing the files and the repo is public (see `src/lib/brandFonts.ts`).
 
 - Internal storage tables referenced in docs/SQL tooling:
   - `storage.buckets`

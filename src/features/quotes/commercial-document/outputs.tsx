@@ -11,6 +11,8 @@
  * знадобився ще й у картці прорахунку (REQ-296#p2), копія поїхала б слідом.
  */
 
+import { BRAND_FONT_FAMILY } from "@/lib/brandFonts";
+
 import {
   buildCommercialSheetRows,
   COMMERCIAL_SHEET_COLUMNS,
@@ -37,9 +39,11 @@ export const downloadBlob = (filename: string, blob: Blob) => {
  *
  * Прихований iframe, а не `window.open`: нове вікно блокують спливаючі
  * блокувальники, а користувач бачив би порожню вкладку. Пауза в 120 мс перед
- * `print()` — щоб встигли стати на місце шрифти й картинки: без неї друк ловив
- * документ із порожніми фото. Прибирання через хвилину, а не одразу після
- * `print()`: діалог друку тримає документ, і зникнення iframe його обриває.
+ * `print()` — щоб встигли стати на місце картинки: без неї друк ловив документ
+ * із порожніми фото. Фірмовий шрифт чекаємо окремо: він їде з мережі
+ * (`brandFonts`), `onload` на нього не чекає, і паузи на нього не вистачає.
+ * Прибирання через хвилину, а не одразу після `print()`: діалог друку тримає
+ * документ, і зникнення iframe його обриває.
  */
 export const printCommercialHtml = (html: string) => {
   const iframe = document.createElement("iframe");
@@ -56,9 +60,15 @@ export const printCommercialHtml = (html: string) => {
     const printWindow = iframe.contentWindow;
     if (!printWindow) return;
     printWindow.focus();
-    window.setTimeout(() => {
-      printWindow.print();
-    }, 120);
+    // Не доїхав шрифт — друкуємо запасним, а не зависаємо без друку.
+    const { fonts } = printWindow.document;
+    void Promise.all([fonts.load(`400 1em ${BRAND_FONT_FAMILY}`), fonts.load(`700 1em ${BRAND_FONT_FAMILY}`)])
+      .catch(() => undefined)
+      .then(() => {
+        window.setTimeout(() => {
+          printWindow.print();
+        }, 120);
+      });
   };
   window.setTimeout(() => {
     iframe.remove();
@@ -188,13 +198,18 @@ const resolvePdfImages = async (doc: CommercialDocument) => {
  * потрібен він рівно в момент натискання.
  */
 export const downloadCommercialPdf = async (doc: CommercialDocument) => {
-  const [{ pdf }, { OfferDocument }, { ensurePdfFonts }] = await Promise.all([
-    import("@react-pdf/renderer"),
-    import("./pdf/OfferDocument"),
-    import("@/lib/pdfFonts"),
-  ]);
+  const [{ pdf }, { OfferDocument }, { ensurePdfFonts, OFFER_PDF_FONT_FAMILY, OFFER_PDF_FALLBACK_FONT_FAMILY }] =
+    await Promise.all([import("@react-pdf/renderer"), import("./pdf/OfferDocument"), import("@/lib/pdfFonts")]);
   ensurePdfFonts();
   const images = await resolvePdfImages(doc);
-  const blob = await pdf(<OfferDocument doc={doc} images={images} />).toBlob();
+  const render = (fontFamily: string[]) =>
+    pdf(<OfferDocument doc={doc} images={images} fontFamily={fontFamily} />).toBlob();
+  // Фірмовий шрифт їде зі сховища, а шрифт, що не завантажився, @react-pdf не
+  // пропускає — валить увесь документ. Тоді друга спроба самим Roboto: КП
+  // запасним шрифтом краще, ніж жодного.
+  const blob = await render(OFFER_PDF_FONT_FAMILY).catch((error: unknown) => {
+    console.warn("КП: PDF не склався з фірмовим шрифтом, складаю Roboto", error);
+    return render(OFFER_PDF_FALLBACK_FONT_FAMILY);
+  });
   downloadBlob(getCommercialDocFilename(doc, "pdf"), blob);
 };

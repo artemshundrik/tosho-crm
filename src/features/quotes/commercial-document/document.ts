@@ -4,7 +4,8 @@
  * ЧОТИРИ ВИХОДИ, і всі вони мусять показувати одні й ті самі числа:
  *   1. прев'ю на екрані — розмітка в `QuotesPage` (React), бере готовий `doc`;
  *   2. HTML для друку — `renderCommercialDocumentHtml`;
- *   3. PDF — той самий HTML, який браузер друкує в PDF;
+ *   3. PDF — окрема розмітка на @react-pdf (`pdf/OfferDocument.tsx`) з тими
+ *      самими числами й текстами;
  *   4. TSV для Excel — `buildCommercialExcelTsv`.
  *
  * ЧОМУ ОКРЕМИМ МОДУЛЕМ. Усе це жило в `QuotesPage.tsx` замиканнями всередині
@@ -15,6 +16,7 @@
  */
 
 import { getAgencyLogo, getAgencyLockup } from "@/lib/agencyAssets";
+import { BRAND_FONT_BOLD_URL, BRAND_FONT_FAMILY, BRAND_FONT_REGULAR_URL } from "@/lib/brandFonts";
 import type { QuoteItemExportRow } from "@/lib/toshoApi";
 import { moneyRangeOf, sumMoneyRanges, type MoneyRange } from "@/lib/moneyRange";
 
@@ -662,9 +664,13 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
 <title>${escapeHtml(getCommercialDocName(doc))}</title>
 <style>
   :root { color-scheme: light; }
-  /* Roboto першим — саме ним складається PDF, тож на машині зі шрифтом усі
-     чотири виходи збігаються до літери. */
-  body { margin: 0; font-family: "Roboto", "Inter", "Segoe UI", system-ui, sans-serif; color: #0e0e10; background: #ececed; }
+  /* Фірмовий Mariupol — той самий, яким складається PDF. Файл підключаємо самі:
+     у глядача цього шрифту немає. Накреслень два, як і в PDF: 500 браузер бере
+     з Regular, 600 — з Bold. Roboto — запасний, теж як у PDF: знаків, яких у
+     Mariupol бракує, браузер добере звідти. */
+  @font-face { font-family: "${BRAND_FONT_FAMILY}"; src: url("${BRAND_FONT_REGULAR_URL}") format("opentype"); font-weight: 400; }
+  @font-face { font-family: "${BRAND_FONT_FAMILY}"; src: url("${BRAND_FONT_BOLD_URL}") format("opentype"); font-weight: 700; }
+  body { margin: 0; font-family: "${BRAND_FONT_FAMILY}", "Roboto", "Inter", "Segoe UI", system-ui, sans-serif; color: #0e0e10; background: #ececed; }
   .page { max-width: 794px; min-height: 1123px; margin: 0 auto; padding: 36px 46px; background: #ffffff; box-sizing: border-box; display: flex; flex-direction: column; }
   .head { display: flex; align-items: flex-start; gap: 24px; }
   .lockup { height: 42px; width: auto; display: block; }
