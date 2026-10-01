@@ -234,6 +234,8 @@ const QUOTES_SEARCH_FETCH_PAGE_SIZE = 500;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
 const KANBAN_AUTOLOAD_LOCK_MS = 1200;
 const QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT = 5;
+/** Скільки перших рядків таблиці отримують прев'ю товару одним пакетом запитів. */
+const QUOTES_TABLE_PREVIEW_LIMIT = 200;
 const QUOTES_KANBAN_PREVIEW_SCROLL_STEP_PX = 260;
 const QUOTES_KANBAN_PREVIEW_BATCH_SIZE = 4;
 const QUOTES_PAGE_REFRESH_INDICATOR_DELAY_MS = 900;
@@ -2933,8 +2935,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [contentView, filteredAndSortedRows, quickAddTargetQuote, selectedRows, teamId]);
 
   useEffect(() => {
-    if (viewMode !== "kanban") return;
-    const quoteIds = filteredAndSortedRows.map((row) => row.id).filter(Boolean);
+    // Те саме прев'ю живить і канбан, і таблицю (стовпець «Що рахуємо»).
+    // Таблиця на вузькому екрані малює картки без товарів, тож там не вантажимо.
+    const previewsForTable = viewMode === "table" && !isNarrowViewport;
+    if (viewMode !== "kanban" && !previewsForTable) return;
+    const quoteIds = filteredAndSortedRows
+      .map((row) => row.id)
+      .filter(Boolean)
+      .slice(0, previewsForTable ? QUOTES_TABLE_PREVIEW_LIMIT : undefined);
     if (quoteIds.length === 0) {
       setKanbanProductByQuoteId({});
       fetchedKanbanPreviewQuoteIdsRef.current = new Set();
@@ -3171,7 +3179,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       cancelled = true;
       missingQuoteIds.forEach((quoteId) => inflightKanbanPreviewQuoteIdsRef.current.delete(quoteId));
     };
-  }, [attachmentCounts, cacheKey, filteredAndSortedRows, quoteMembershipByQuoteId, rows, teamId, viewMode]);
+  }, [attachmentCounts, cacheKey, filteredAndSortedRows, isNarrowViewport, quoteMembershipByQuoteId, rows, teamId, viewMode]);
 
   const bulkAddAvailableSets = useMemo(() => {
     if (!canRunGroupedActions || selectedRows.length === 0) return [] as QuoteSetListRow[];
@@ -5358,10 +5366,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ) : (
             /* overflow-x-auto знято: він був контейнером скролу й гасив липку шапку. */
             <div>
-              <Table variant="list" size="md" stickyHeader className="[&_th]:px-5 [&_td]:px-5">
+              <Table
+                variant="list"
+                size="md"
+                stickyHeader
+                className="table-fixed [&_th]:px-3 [&_td]:px-3 [&_th]:h-9 [&_td]:py-0 [&_tbody_tr]:h-10"
+              >
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-[44px]">
+                    <TableHead className="w-[40px]">
                       <Checkbox
                         checked={
                           selectedIds.size === 0
@@ -5374,7 +5387,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         aria-label="Вибрати всі"
                       />
                     </TableHead>
-                    <TableHead className="w-[140px] min-w-[140px]">
+                    <TableHead className="w-[140px]">
                       <button
                         type="button"
                         onClick={() => handleSort("number")}
@@ -5386,38 +5399,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         )}
                       </button>
                     </TableHead>
-                    <TableHead className="w-[160px]">
-                      <button
-                        type="button"
-                        onClick={() => handleSort("date")}
-                        className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps-tight hover:text-foreground transition-colors"
-                      >
-                        Дата
-                        {sortBy === "date" && (
-                          <ArrowUpDown className={cn("h-3.5 w-3.5 transition-transform", sortOrder === "asc" && "rotate-180")} />
-                        )}
-                      </button>
-                    </TableHead>
-                    <TableHead className="w-[220px]">
+                    <TableHead className="w-[180px]">
                       <div className="flex items-center font-semibold">
                         Замовник / Лід
                       </div>
                     </TableHead>
-                    <TableHead className="w-[200px]">
-                      <div className="flex items-center font-semibold">
-                        Менеджер
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[140px] font-semibold">
+                    <TableHead className="min-w-[160px]">Що рахуємо</TableHead>
+                    <TableHead className="w-[96px] text-right font-semibold">Сума</TableHead>
+                    <TableHead className="w-[156px] font-semibold">Статус</TableHead>
+                    <TableHead className="w-[100px] font-semibold">
                       Дедлайн
                     </TableHead>
-                    <TableHead className="w-[120px] font-semibold">Статус</TableHead>
-                    <TableHead className="w-[120px] font-semibold">
-                      <div className="flex items-center">
-                        Тип
-                      </div>
+                    <TableHead className="w-[64px] font-semibold">
+                      <div className="flex items-center justify-center">Менеджер</div>
                     </TableHead>
-                    <TableHead className="w-[60px]"></TableHead>
+                    <TableHead className="w-[44px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -5456,44 +5452,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             aria-label="Вибрати рядок"
                           />
                         </TableCell>
-                        <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px]">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
+                        <TableCell className="whitespace-nowrap text-sm">
+                          <div
+                            className="flex items-center gap-2"
+                            title={row.created_at ? `Створено ${formatListDateTime(row.created_at)}` : undefined}
+                          >
+                            <HoverCopyText
+                              value={row.number}
+                              textClassName="font-mono text-sm text-muted-foreground group-hover:text-foreground group-hover:underline underline-offset-2"
+                              successMessage="Номер прорахунку скопійовано"
+                              copyLabel="Скопіювати номер прорахунку"
+                            >
+                              {row.number ?? "Не вказано"}
+                            </HoverCopyText>
+                            {!canOpen ? (
                               <div
-                                className={cn(
-                                  "h-5 w-1.5 shrink-0 rounded-full",
-                                  membership?.kp_count
-                                    ? "quote-kind-stripe-kp"
-                                    : membership?.set_count
-                                    ? "quote-kind-stripe-set"
-                                    : "bg-transparent"
-                                )}
-                              />
-                              <HoverCopyText
-                                value={row.number}
-                                textClassName="font-mono font-semibold group-hover:underline underline-offset-2"
-                                successMessage="Номер прорахунку скопійовано"
-                                copyLabel="Скопіювати номер прорахунку"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground"
+                                title="Лише свої"
+                                aria-label="Лише свої"
                               >
-                                {row.number ?? "Не вказано"}
-                              </HoverCopyText>
-                              {!canOpen ? (
-                                <div
-                                  className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground"
-                                  title="Лише свої"
-                                  aria-label="Лише свої"
-                                >
-                                  <Lock className="h-3 w-3" />
-                                </div>
-                              ) : null}
-                            </div>
+                                <Lock className="h-3 w-3" />
+                              </div>
+                            ) : null}
                           </div>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm font-medium tabular-nums">
-                          {formatListDateTime(row.created_at)}
-                        </TableCell>
-                        <TableCell className="font-medium max-w-[260px]">
-                          <div className="flex items-center gap-3 min-w-0">
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2 min-w-0">
                             <PartyHoverCard
                               target={
                                 row.customer_id || row.lead_id
@@ -5512,48 +5496,112 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                 src={row.customer_logo_url ?? null}
                                 name={row.customer_name ?? "Замовник / Лід"}
                                 fallback={getInitials(row.customer_name)}
-                                size={36}
+                                size={24}
                               />
                             </PartyHoverCard>
                             <span className="truncate" title={row.customer_name ?? "Не вказано"}>
                               {row.customer_name ?? "Не вказано"}
                             </span>
+                            {membership?.kp_count ? (
+                              <Badge
+                                variant="outline"
+                                title={membership.kp_names.join(", ")}
+                                className="h-4 shrink-0 px-1 text-3xs quote-kind-badge-kp"
+                              >
+                                КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+                              </Badge>
+                            ) : null}
+                            {membership?.set_count ? (
+                              <Badge
+                                variant="outline"
+                                title={membership.set_names.join(", ")}
+                                className="h-4 shrink-0 px-1 text-3xs quote-kind-badge-set"
+                              >
+                                Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+                              </Badge>
+                            ) : null}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {(() => {
-                              const manager = resolveManagerMember(row.assigned_to);
-                              const managerLabel = getManagerLabel(row.assigned_to);
-                              const managerAvatar = (
-                                <AvatarBase
-                                  src={manager?.avatarUrl ?? null}
-                                  name={managerLabel}
-                                  fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
-                                  size={28}
-                                  className="text-3xs font-semibold"
-                                  availability={manager?.availabilityStatus ?? null}
-                                  absence={manager?.absence ?? null}
-                                  suppressNativeTitle
-                                  presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
-                                  inactive={isManagerInactive(row.assigned_to)}
-                                />
-                              );
-                              const managerCard = row.assigned_to ? buildPersonCard(row.assigned_to) : null;
-                              return (
-                                <>
-                                  {managerCard ? (
-                                    <PersonHoverCard person={managerCard}>{managerAvatar}</PersonHoverCard>
-                                  ) : (
-                                    managerAvatar
-                                  )}
-                                  <span className="truncate">
-                                    {managerLabel}
+                        <TableCell>
+                          {(() => {
+                            const preview = kanbanProductByQuoteId[row.id];
+                            const name = preview?.itemName || row.title?.trim() || null;
+                            const extra = preview && preview.itemCount > 1 ? preview.itemCount - 1 : 0;
+                            const qty = preview?.qtyLabel && preview.qtyLabel !== "Не вказано" ? preview.qtyLabel : null;
+                            const TypeIcon = quoteTypeIcon(row.quote_type);
+                            const FallbackIcon = quoteTypeIcon("merch");
+                            return (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <div className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md border border-border/60 bg-secondary text-muted-foreground/60">
+                                  {preview?.imageUrl ? (
+                                    <img
+                                      src={preview.imageUrl}
+                                      alt=""
+                                      loading="lazy"
+                                      decoding="async"
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : FallbackIcon ? (
+                                    <FallbackIcon className="h-3.5 w-3.5" />
+                                  ) : null}
+                                </div>
+                                <span
+                                  className={cn("truncate text-sm", !name && "text-muted-foreground")}
+                                  title={preview?.itemNames?.join(", ") || name || undefined}
+                                >
+                                  {name ?? "—"}
+                                </span>
+                                {extra > 0 ? (
+                                  <span className="shrink-0 text-xs text-muted-foreground">+{extra}</span>
+                                ) : null}
+                                {qty ? (
+                                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{qty}</span>
+                                ) : null}
+                                {row.quote_type && row.quote_type !== "merch" ? (
+                                  <span className="inline-flex h-4 shrink-0 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-1.5 text-3xs font-semibold text-muted-foreground">
+                                    {TypeIcon ? <TypeIcon className="h-3 w-3" /> : null}
+                                    {quoteTypeLabel(row.quote_type)}
                                   </span>
-                                </>
-                              );
-                            })()}
-                          </div>
+                                ) : null}
+                              </div>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-right text-sm tabular-nums">
+                          {typeof row.total === "number" && row.total > 0 ? (
+                            formatMoney(row.total)
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        {/*
+                          СТАТУС — БЕЗ ЗАЛИТОЇ ПІГУЛКИ. Рядок мав дві кольорові
+                          пігулки поспіль: дедлайн і статус. Дедлайн каже про
+                          ВИНЯТОК («прострочено»), і саме йому потрібна заливка;
+                          статус є в кожного рядка, тож колонка залитих пігулок
+                          нічого не виділяла — вона просто рябіла. Тон лишається
+                          на значку, як у шапці картки на дошці.
+
+                          Клік крізь клітинку більше не глушиться: пігулка була
+                          з `cursor-pointer`, але без обробника, і клітинка
+                          мовчки з'їдала клік, яким відкривають прорахунок.
+                        */}
+                        <TableCell>
+                          {(() => {
+                            const normalizedStatus = normalizeStatus(row.status);
+                            const Icon = statusIcons[normalizedStatus] ?? Clock;
+                            return (
+                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium">
+                                <Icon
+                                  className={cn(
+                                    "h-3.5 w-3.5 shrink-0",
+                                    statusColorClass[normalizedStatus] ?? "text-muted-foreground"
+                                  )}
+                                />
+                                {formatStatusLabel(normalizedStatus)}
+                              </span>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           {(() => {
@@ -5593,64 +5641,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             );
                           })()}
                         </TableCell>
-                        {/*
-                          СТАТУС — БЕЗ ЗАЛИТОЇ ПІГУЛКИ. Рядок мав дві кольорові
-                          пігулки поспіль: дедлайн і статус. Дедлайн каже про
-                          ВИНЯТОК («прострочено»), і саме йому потрібна заливка;
-                          статус є в кожного рядка, тож колонка залитих пігулок
-                          нічого не виділяла — вона просто рябіла. Тон лишається
-                          на значку, як у шапці картки на дошці.
-
-                          Клік крізь клітинку більше не глушиться: пігулка була
-                          з `cursor-pointer`, але без обробника, і клітинка
-                          мовчки з'їдала клік, яким відкривають прорахунок.
-                        */}
                         <TableCell>
                           {(() => {
-                            const normalizedStatus = normalizeStatus(row.status);
-                            const Icon = statusIcons[normalizedStatus] ?? Clock;
-                            return (
-                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium">
-                                <Icon
-                                  className={cn(
-                                    "h-3.5 w-3.5 shrink-0",
-                                    statusColorClass[normalizedStatus] ?? "text-muted-foreground"
-                                  )}
-                                />
-                                {formatStatusLabel(normalizedStatus)}
-                              </span>
+                            const manager = resolveManagerMember(row.assigned_to);
+                            const managerLabel = getManagerLabel(row.assigned_to);
+                            const managerAvatar = (
+                              <AvatarBase
+                                src={manager?.avatarUrl ?? null}
+                                name={managerLabel}
+                                fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
+                                size={24}
+                                className="text-3xs font-semibold"
+                                availability={manager?.availabilityStatus ?? null}
+                                absence={manager?.absence ?? null}
+                                suppressNativeTitle
+                                presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
+                                inactive={isManagerInactive(row.assigned_to)}
+                              />
                             );
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          {(() => {
-                            const Icon = quoteTypeIcon(row.quote_type);
+                            const managerCard = row.assigned_to ? buildPersonCard(row.assigned_to) : null;
                             return (
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
-                                  {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                                  {quoteTypeLabel(row.quote_type)}
-                                </div>
-                                {membership?.kp_count ? (
-                                  <Badge
-                                    variant="outline"
-                                    title={membership.kp_names.join(", ")}
-                                    className="h-6 px-2 text-3xs inline-flex items-center gap-1 quote-kind-badge-kp"
-                                  >
-                                    <FileText className="h-3 w-3" />
-                                    КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
-                                  </Badge>
-                                ) : null}
-                                {membership?.set_count ? (
-                                  <Badge
-                                    variant="outline"
-                                    title={membership.set_names.join(", ")}
-                                    className="h-6 px-2 text-3xs inline-flex items-center gap-1 quote-kind-badge-set"
-                                  >
-                                    <Layers className="h-3 w-3" />
-                                    Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
-                                  </Badge>
-                                ) : null}
+                              <div className="flex justify-center" title={managerLabel}>
+                                {managerCard ? (
+                                  <PersonHoverCard person={managerCard}>{managerAvatar}</PersonHoverCard>
+                                ) : (
+                                  managerAvatar
+                                )}
                               </div>
                             );
                           })()}
