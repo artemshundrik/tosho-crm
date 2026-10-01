@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CUSTOM_OPTION_VALUE,
   PRINT_SPEC_DIARY,
+  PRINT_SPEC_PACKAGE,
   PRINT_SPEC_PRESETS,
   buildPrintSpecRounds,
   buildPrintSpecSave,
@@ -16,7 +17,11 @@ import {
   formatPrintSpecSummary,
   getPrintSpecColumns,
   isPrintSpecFilled,
+  isPrintSpecFieldVisible,
+  listPrintSpecOptions,
   parsePrintSpecValues,
+  printSpecConditions,
+  reconcilePrintSpecValues,
   splitPrintSpecEntries,
   type PrintSpecPreset,
 } from "./printSpec";
@@ -43,18 +48,29 @@ describe("описи видів поліграфії", () => {
         expect(ids, `${preset.key}: у стрічці поле ${id}, якого немає`).toContain(id);
       }
 
-      for (const field of preset.fields) {
-        expect(preset.sections).toContain(field.section);
+      // Умови стоять і на полях, і на варіантах (пакет: 120 г лише крафт) —
+      // перевіряються однаково: поле існує, значення в ньому теж.
+      const conditioned = preset.fields.flatMap((field) => [
+        { owner: field.id, showIf: field.showIf },
+        ...(field.options ?? []).map((option) => ({ owner: `${field.id}=${option.value}`, showIf: option.showIf })),
+      ]);
 
-        const condition = field.showIf;
-        if (!condition) continue;
+      for (const field of preset.fields) expect(preset.sections).toContain(field.section);
 
-        const source = preset.fields.find((entry) => entry.id === condition.field);
-        expect(source, `${field.id}: умова на неіснуюче поле ${condition.field}`).toBeDefined();
+      for (const { owner, showIf } of conditioned) {
+        for (const condition of printSpecConditions(showIf)) {
+          const source = preset.fields.find((entry) => entry.id === condition.field);
+          expect(source, `${owner}: умова на неіснуюче поле ${condition.field}`).toBeDefined();
 
-        const target = condition.equals ?? condition.includes;
-        const known = source?.options?.some((option) => option.value === target);
-        expect(known, `${field.id}: умова на значення «${target}», якого немає в ${condition.field}`).toBe(true);
+          const targets = [condition.equals, condition.includes, condition.notEquals, ...(condition.oneOf ?? [])].filter(
+            (target): target is string => target !== undefined
+          );
+          expect(targets.length, `${owner}: умова без значення`).toBeGreaterThan(0);
+          for (const target of targets) {
+            const known = source?.options?.some((option) => option.value === target);
+            expect(known, `${owner}: умова на значення «${target}», якого немає в ${condition.field}`).toBe(true);
+          }
+        }
       }
     }
   );
@@ -411,5 +427,104 @@ describe("buildPrintSpecRounds", () => {
     expect(result.map((round) => round.label)).toEqual(["В1", "В2", "В3", "Зараз"]);
     expect(result[1].changes.map((change) => change.to)).toEqual(["Гнучка"]);
     expect(result[3].changes.map((change) => change.fieldId)).toEqual(["blockPrint"]);
+  });
+});
+
+/**
+ * Пакет — перший вид, у якого від іншого поля залежать не лише поля, а й
+ * ВАРІАНТИ (REQ-323#p4). Правила прийшли з `printPackageRules.ts` старого
+ * конфігуратора; там вони жили редюсером, тут — умовами в описі, і звіряє їх
+ * `reconcilePrintSpecValues`.
+ */
+describe("пакет: варіанти, що залежать від матеріалу й типу", () => {
+  const field = (id: string) => {
+    const found = PRINT_SPEC_PACKAGE.fields.find((entry) => entry.id === id);
+    if (!found) throw new Error(id);
+    return found;
+  };
+  const values = (over: PrintSpecValues): PrintSpecValues => ({ ...createEmptyPrintSpecValues(PRINT_SPEC_PACKAGE), ...over });
+  const optionValues = (id: string, over: PrintSpecValues) =>
+    listPrintSpecOptions(field(id), values(over)).map((option) => option.value);
+
+  it("120 г буває лише в крафта, 205 г — лише в картону", () => {
+    expect(optionValues("density", { paperType: "kraft" })).toContain("120");
+    expect(optionValues("density", { paperType: "kraft" })).not.toContain("205");
+    expect(optionValues("density", { paperType: "cardboard" })).toContain("205");
+    expect(optionValues("density", { paperType: "cardboard" })).not.toContain("120");
+    expect(optionValues("density", { paperType: "paper" })).toEqual(["90", "110", "125", "200", "250"]);
+  });
+
+  it("крафт змінили на картон — 120 г і паперові ручки стираються, решта лишається", () => {
+    const kraft = values({ paperType: "kraft", density: "120", handleType: "twisted_paper", orientation: "vertical" });
+    const reconciled = reconcilePrintSpecValues(PRINT_SPEC_PACKAGE, { ...kraft, paperType: "cardboard" });
+
+    expect(reconciled.density).toBe("");
+    expect(reconciled.handleType).toBe("");
+    expect(reconciled.orientation).toBe("vertical");
+  });
+
+  it("щільність, спільна для обох матеріалів, переживає зміну", () => {
+    const kraft = values({ paperType: "kraft", density: "250" });
+    expect(reconcilePrintSpecValues(PRINT_SPEC_PACKAGE, { ...kraft, paperType: "cardboard" }).density).toBe("250");
+  });
+
+  it("CMYK на готовий пакет не кладуть", () => {
+    expect(optionValues("printType", { packageType: "ready" })).not.toContain("cmyk");
+    expect(optionValues("printType", { packageType: "custom" })).toContain("cmyk");
+    // Тип ще не вибрали — CMYK видно: заборона лише для готового.
+    expect(optionValues("printType", {})).toContain("cmyk");
+
+    const custom = values({ packageType: "custom", printType: "cmyk" });
+    expect(reconcilePrintSpecValues(PRINT_SPEC_PACKAGE, { ...custom, packageType: "ready" }).printType).toBe("");
+  });
+
+  it("кількість пантонів питають і для Pantone, і для CMYK+Pantone", () => {
+    expect(isPrintSpecFieldVisible(field("pantoneCount"), values({ printType: "pantone" }))).toBe(true);
+    expect(isPrintSpecFieldVisible(field("pantoneCount"), values({ printType: "cmyk_pantone" }))).toBe(true);
+    expect(isPrintSpecFieldVisible(field("pantoneCount"), values({ printType: "uv_print" }))).toBe(false);
+  });
+
+  it("люверси — лише в індивідуального пакета не з крафта", () => {
+    const eyelets = field("eyelets");
+    expect(isPrintSpecFieldVisible(eyelets, values({ packageType: "custom", paperType: "cardboard" }))).toBe(true);
+    expect(isPrintSpecFieldVisible(eyelets, values({ packageType: "custom" }))).toBe(true);
+    expect(isPrintSpecFieldVisible(eyelets, values({ packageType: "custom", paperType: "kraft" }))).toBe(false);
+    expect(isPrintSpecFieldVisible(eyelets, values({ packageType: "ready", paperType: "cardboard" }))).toBe(false);
+  });
+
+  it("звірка повертає той самий обʼєкт, коли міняти нічого", () => {
+    const fine = values({ paperType: "kraft", density: "120" });
+    expect(reconcilePrintSpecValues(PRINT_SPEC_PACKAGE, fine)).toBe(fine);
+  });
+
+  it("збережене до правила значення стирається вже на читанні", () => {
+    const parsed = parsePrintSpecValues(PRINT_SPEC_PACKAGE, { paperType: "paper", density: "205" });
+    expect(parsed.density).toBe("");
+  });
+});
+
+describe("розмір у три виміри", () => {
+  const size = PRINT_SPEC_PACKAGE.fields.find((field) => field.id === "size");
+  const withSize = (depth: string): PrintSpecValues => ({
+    ...createEmptyPrintSpecValues(PRINT_SPEC_PACKAGE),
+    packageType: "custom",
+    size: [{ width: "290", height: "340", depth }],
+  });
+
+  it("глибина пишеться третьою і порівнюється як частина розміру", () => {
+    expect(size?.withDepth).toBe(true);
+    expect(formatPrintSpecEntries(PRINT_SPEC_PACKAGE, withSize("120"))).toContainEqual({
+      id: "size",
+      label: "Розмір (Ш × В × Г)",
+      value: "290 × 340 × 120 мм",
+    });
+    expect(diffPrintSpec(PRINT_SPEC_PACKAGE, withSize("120"), withSize("100")).map((change) => change.fieldId)).toEqual([
+      "size",
+    ]);
+  });
+
+  it("порожній вид розміру з глибиною — один, а не два", () => {
+    expect(createEmptyPrintSpecValues(PRINT_SPEC_PACKAGE).size).toEqual([{ width: "", height: "", depth: "" }]);
+    expect(parsePrintSpecValues(PRINT_SPEC_PACKAGE, {}).size).toEqual([{ width: "", height: "", depth: "" }]);
   });
 });

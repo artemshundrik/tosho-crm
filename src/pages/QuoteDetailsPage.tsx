@@ -55,7 +55,6 @@ import { HoverTip } from "@/components/ui/hover-tip";
 import {
   formatPrintProductSummary,
   getPrintProductConfig,
-  getPrintProductDetailSections,
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
 import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
@@ -4479,9 +4478,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       resolvedKindId,
                       resolvedModelId
                     );
+                    // Параметри старого пакета чи блокнота малює PrintSpecPanel (REQ-323#p4); їхнє
+                    // старе зведення лишилось лише в описі позиції — його ховаємо як дубль.
                     const printProductConfig = getPrintProductConfig(item.metadata);
                     const packageSummary = printProductConfig ? formatPrintProductSummary(printProductConfig) : [];
-                    const packageSections = printProductConfig ? getPrintProductDetailSections(printProductConfig) : [];
                     const catalogVariant =
                       item.metadata?.catalogVariant?.name.trim()
                         ? {
@@ -4532,7 +4532,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           }
                         : null,
                     ].filter((section): section is { title: string; fields: Array<{ label: string; value: string }> } => Boolean(section));
-                    const renderedSections = packageSections.length > 0 ? packageSections : defaultSpecSections;
 
                     return (
                       <div
@@ -4694,7 +4693,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               />
                             ) : null}
 
-                            <QuoteItemSpec sections={renderedSections} />
+                            <QuoteItemSpec sections={defaultSpecSections} />
 
                             {shouldShowDescription ? (
                               <div className="mt-5">

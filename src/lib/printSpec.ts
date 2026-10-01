@@ -1,5 +1,6 @@
 /**
- * Описові специфікації нових видів поліграфії.
+ * Описові специфікації видів поліграфії — механізм. Самі описи видів лежать у
+ * `printSpecPresets.ts` і реекспортуються звідси.
  *
  * Чому не так, як у `printPackage.ts`: там набір полів кожного виду захардкоджений
  * — плоский тип на 75 рядкових полів плюс окремий блок JSX на кожен вид (від 156
@@ -10,11 +11,31 @@
  * вручну»). Рядкове поле такого не виражає, а п'ять окремих блоків JSX означали б
  * п'ять власних реалізацій кожного типу.
  *
- * Тому новий вид тут — це ДАНІ: перелік полів із типом, опціями й залежностями.
- * Чотири наявні пресети (пакет, блокнот, блоки, сертифікат) свідомо лишаються на
- * старому механізмі: переписувати робоче заради однаковості означало б рискувати
- * збереженими позиціями прорахунків без жодної користі для замовника.
+ * Тому вид тут — це ДАНІ: перелік полів із типом, опціями й залежностями.
+ *
+ * Пакет, блокнот і блоки для записів переїхали сюди зі старого конфігуратора
+ * 01.10.2026 (REQ-323#p4): на ньому параметри заповнювались лише раз, у вікні
+ * створення, і не мали ні стовпчиків, ні підсвічення змін, ні версій. Старі
+ * позиції з `metadata.printProduct` читаються через `printSpecLegacy.ts`.
  */
+
+import { getPrintSpecPreset } from "@/lib/printSpecPresets";
+
+export {
+  PRINT_SPEC_BROCHURE,
+  PRINT_SPEC_CALENDAR_FLIP,
+  PRINT_SPEC_CALENDAR_HOUSE,
+  PRINT_SPEC_CALENDAR_QUARTERLY,
+  PRINT_SPEC_CERTIFICATE,
+  PRINT_SPEC_DIARY,
+  PRINT_SPEC_FLYER,
+  PRINT_SPEC_NOTEBOOK,
+  PRINT_SPEC_NOTE_BLOCKS,
+  PRINT_SPEC_PACKAGE,
+  PRINT_SPEC_PRESETS,
+  getPrintSpecPreset,
+  isPrintSpecPreset,
+} from "@/lib/printSpecPresets";
 
 /** Типи полів. Рівно ті, що потрібні описаним видам — не «на майбутнє». */
 export type PrintSpecFieldType =
@@ -26,25 +47,38 @@ export type PrintSpecFieldType =
   | "text"
   /** Число з одиницею: кількість пантонів, кількість сторінок. */
   | "number"
-  /** Кілька підписаних розмірів Ш×В в одному полі: три основи + топер. */
+  /** Кілька підписаних розмірів Ш×В (або Ш×В×Г) в одному полі: три основи + топер. */
   | "sizeRows";
 
-export type PrintSpecOption = { value: string; label: string };
+/**
+ * Варіант відповіді. `showIf` — коли варіант існує взагалі: у пакета щільність
+ * 120 г буває лише в крафта, а CMYK на готовий пакет не кладуть. Неіснуючий
+ * варіант не показується і стирається зі значень (`reconcilePrintSpecValues`).
+ */
+export type PrintSpecOption = { value: string; label: string; showIf?: PrintSpecShowIf };
 
 /**
- * Умова показу поля.
+ * Умова показу поля чи варіанта.
  *
- * Свідомо однорівнева: «поле X дорівнює» або «поле X містить». Складніші умови
- * ще ні разу не знадобились, а кожен зайвий вид умови — це гілка в рендерері й у
- * валідації, яку доведеться тримати правильною назавжди.
+ * Однорівнева: умова дивиться на одне поле. Складеної логіки «або» між полями
+ * немає — її ще ні разу не треба було; «і» дає масив умов (`PrintSpecShowIf`).
+ * Кожен зайвий вид умови — це гілка в рендерері й у перевірках, яку доведеться
+ * тримати правильною назавжди, тому видів рівно стільки, скільки просять описи.
  */
 export type PrintSpecCondition = {
   field: string;
   /** Для `single`/`text`: точний збіг значення. */
   equals?: string;
+  /** Для `single`: значення — один зі списку (кількість пантонів і для Pantone, і для CMYK+Pantone). */
+  oneOf?: string[];
+  /** Для `single`: будь-що, крім цього, — і порожнє теж (люверси питають, доки не вибрали крафт). */
+  notEquals?: string;
   /** Для `multi`: значення є серед вибраних. */
   includes?: string;
 };
+
+/** Одна умова або кілька, що мають виконуватись разом (люверси: індивідуальний пакет І не крафт). */
+export type PrintSpecShowIf = PrintSpecCondition | PrintSpecCondition[];
 
 export type PrintSpecField = {
   id: string;
@@ -56,6 +90,8 @@ export type PrintSpecField = {
   options?: PrintSpecOption[];
   /** `sizeRows`: підписи рядків. Кількість рядків задає саме він. */
   rows?: string[];
+  /** `sizeRows`: третій вимір, глибина — пакет має ширину, висоту й бокову складку. */
+  withDepth?: boolean;
   /** Підпис одиниці: «мм», «г/м²», «шт». */
   unit?: string;
   /**
@@ -66,7 +102,7 @@ export type PrintSpecField = {
    * вибрати неправильне замість написати правильне.
    */
   allowCustom?: boolean;
-  showIf?: PrintSpecCondition;
+  showIf?: PrintSpecShowIf;
   hint?: string;
 };
 
@@ -98,8 +134,8 @@ export type PrintSpecPreset = {
   columns?: PrintSpecColumn[];
 };
 
-/** Один підписаний розмір у полі `sizeRows`. Рядки — бо поле може бути порожнім. */
-export type PrintSpecSize = { width: string; height: string };
+/** Один підписаний розмір у полі `sizeRows`. Рядки — бо поле може бути порожнім. Глибина — лише з `withDepth`. */
+export type PrintSpecSize = { width: string; height: string; depth?: string };
 
 /**
  * Значення поля. `null` — поле не заповнене; порожній рядок і порожній масив
@@ -112,9 +148,9 @@ export type PrintSpecValues = Record<string, PrintSpecValue>;
 /**
  * Як конфігурація лежить у `quote_items.metadata`.
  *
- * Окремим ключем від `printProduct`/`printPackage`: старі позиції читаються старим
- * кодом і далі, нові — цим. Один ключ на два формати означав би, що кожен читач
- * мусить розрізняти їх сам.
+ * Окремим ключем від `printProduct`/`printPackage`: старий формат у базі не
+ * переписується, а перекладається сюди на читанні (`printSpecLegacy.ts`). Один
+ * ключ на два формати означав би, що кожен читач мусить розрізняти їх сам.
  */
 export type PrintSpecMetadata = {
   presetKey: string;
@@ -139,1318 +175,6 @@ export type PrintSpecVersion = {
 };
 
 // ---------------------------------------------------------------------------
-// Квартальний календар
-// ---------------------------------------------------------------------------
-
-/**
- * Джерело — список Татьяни від 11.08, а не файл специфікацій.
- *
- * Файл і список розійшлися: у файлі розмір сітки був вибором із трьох готових
- * (297×140/160/180), колір пружини — списком із чотирьох, і були кашировка,
- * кількість блоків сітки, віконце-бігунок та індивідуальний пакет. У списку тих,
- * хто прораховує, розмір і колір — вільні поля, а решти пунктів немає. Правдиве
- * джерело — другий: файл писали для замовника, а заповнювати це людям.
- *
- * Матеріал і метод друку свідомо БЕЗ обмежень і без правила за тиражем: «цей пункт
- * треба лишити за меною і Оленою». Правило, яке нам давали раніше («до 100 шт
- * цифровий друк на крейді 350»), виявилось неможливим — цифра 350 не друкує.
- */
-export const PRINT_SPEC_CALENDAR_QUARTERLY: PrintSpecPreset = {
-  key: "print_calendar_quarterly",
-  label: "Квартальний календар",
-  sections: ["Основи", "Календарна сітка", "Матеріал і друк", "Кріплення"],
-  columns: [
-    { title: "Основи", sections: ["Основи", "Матеріал і друк"] },
-    { title: "Календарна сітка", sections: ["Календарна сітка"] },
-    { title: "Кріплення", sections: ["Кріплення"] },
-  ],
-  summary: ["baseSizes", "material", "printMethod", "mount"],
-  fields: [
-    {
-      id: "baseSizes",
-      label: "Розміри",
-      type: "sizeRows",
-      section: "Основи",
-      rows: ["Основа 1", "Основа 2", "Основа 3", "Топер"],
-      unit: "мм",
-    },
-    {
-      id: "basePrint",
-      label: "Друк основ",
-      type: "single",
-      section: "Основи",
-      options: [
-        { value: "4_0", label: "4+0" },
-        { value: "pantone", label: "Пантони" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "basePantoneCount",
-      label: "Кількість пантонів",
-      type: "number",
-      section: "Основи",
-      unit: "шт",
-      showIf: { field: "basePrint", equals: "pantone" },
-    },
-    {
-      id: "baseFinishing",
-      label: "Оздоблення основ",
-      type: "multi",
-      section: "Основи",
-      options: [
-        { value: "lamination", label: "Ламінація" },
-        { value: "varnish", label: "Лак" },
-      ],
-      hint: "Можна обидва разом",
-    },
-    {
-      id: "gridSize",
-      label: "Розмір сітки",
-      type: "sizeRows",
-      section: "Календарна сітка",
-      rows: ["Сітка"],
-      unit: "мм",
-    },
-    {
-      id: "gridPaperDensity",
-      label: "Щільність паперу",
-      type: "single",
-      section: "Календарна сітка",
-      options: [
-        { value: "90", label: "90 г/м²" },
-        { value: "115", label: "115 г/м²" },
-        { value: "130", label: "130 г/м²" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "gridPrint",
-      label: "Друк сітки",
-      type: "single",
-      section: "Календарна сітка",
-      options: [
-        { value: "4_0", label: "4+0" },
-        { value: "2_0", label: "2+0" },
-        { value: "3_0", label: "3+0" },
-        { value: "pantone", label: "Пантони" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "gridPantoneCount",
-      label: "Кількість пантонів",
-      type: "number",
-      section: "Календарна сітка",
-      unit: "шт",
-      showIf: { field: "gridPrint", equals: "pantone" },
-    },
-    {
-      id: "material",
-      label: "Матеріал",
-      type: "single",
-      section: "Матеріал і друк",
-      options: [
-        { value: "coated_350", label: "Крейда 350 г" },
-        { value: "cardboard_350", label: "Картон односторонній 350 г" },
-      ],
-      allowCustom: true,
-      hint: "Вибір за тим, хто прораховує — обмежень немає",
-    },
-    {
-      id: "printMethod",
-      label: "Метод друку",
-      type: "single",
-      section: "Матеріал і друк",
-      options: [
-        { value: "offset", label: "Офсетний" },
-        { value: "digital", label: "Цифровий" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "spring",
-      label: "Колір пружини",
-      type: "single",
-      section: "Кріплення",
-      options: [
-        { value: "black", label: "Чорна" },
-        { value: "white", label: "Біла" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "mount",
-      label: "Кріплення",
-      type: "single",
-      section: "Кріплення",
-      options: [
-        { value: "eyelet", label: "Люверс" },
-        { value: "plastic_bar", label: "Планка пластикова" },
-      ],
-    },
-    {
-      id: "eyeletColor",
-      label: "Колір люверса",
-      type: "text",
-      section: "Кріплення",
-      showIf: { field: "mount", equals: "eyelet" },
-    },
-  ],
-};
-
-// ---------------------------------------------------------------------------
-// Перекидний календар
-// ---------------------------------------------------------------------------
-
-/**
- * Джерело — файл специфікацій CEO. Списку від тих, хто прораховує, ще немає:
- * Татьяна пообіцяла «решту зроблю інакше». Тому поля тут — те, що замовлено, а
- * не те, що звірене; після її правок цей опис зміниться, і саме тому він опис, а
- * не 260 рядків JSX.
- *
- * «Індивідуальний пакет» — галочка, а не окрема позиція прорахунку (CEO, 11.08).
- */
-export const PRINT_SPEC_CALENDAR_FLIP: PrintSpecPreset = {
-  key: "print_calendar_flip",
-  label: "Перекидний календар",
-  sections: ["Формат", "Обкладинка і підложка", "Блок", "Оздоблення", "Кріплення"],
-  columns: [
-    { title: "Обкладинка й підложка", sections: ["Формат", "Обкладинка і підложка"] },
-    { title: "Блок", sections: ["Блок"] },
-    { title: "Оздоблення й кріплення", sections: ["Оздоблення", "Кріплення"] },
-  ],
-  summary: ["format", "blockPages", "coverPaper", "blockPrint"],
-  fields: [
-    {
-      id: "format",
-      label: "Формат",
-      type: "single",
-      section: "Формат",
-      options: [
-        { value: "a2", label: "А2" },
-        { value: "a3", label: "А3" },
-        { value: "a4", label: "А4" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "orientation",
-      label: "Орієнтація",
-      type: "single",
-      section: "Формат",
-      options: [
-        { value: "horizontal", label: "Горизонтальний" },
-        { value: "vertical", label: "Вертикальний" },
-      ],
-    },
-    {
-      id: "coverPrint",
-      label: "Друк обкладинки",
-      type: "single",
-      section: "Обкладинка і підложка",
-      options: [
-        { value: "4_0", label: "4+0" },
-        { value: "4_4", label: "4+4" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "coverPaper",
-      label: "Папір обкладинки",
-      type: "single",
-      section: "Обкладинка і підложка",
-      options: [
-        { value: "250", label: "250 г" },
-        { value: "300", label: "300 г" },
-        { value: "350", label: "350 г" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "backingPrint",
-      label: "Друк підложки",
-      type: "single",
-      section: "Обкладинка і підложка",
-      options: [
-        { value: "4_0", label: "4+0" },
-        { value: "4_4", label: "4+4" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "blockPages",
-      label: "Сторінок у блоці",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "12", label: "12 стор" },
-        { value: "24", label: "24 стор" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "blockPrint",
-      label: "Друк блоку",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "4_0", label: "4+0" },
-        { value: "4_4", label: "4+4" },
-      ],
-      allowCustom: true,
-    },
-    { id: "blockPaper", label: "Папір блоку", type: "text", section: "Блок" },
-    {
-      id: "laminationType",
-      label: "Ламінація",
-      type: "single",
-      section: "Оздоблення",
-      options: [
-        { value: "matte", label: "Мат" },
-        { value: "gloss", label: "Глянець" },
-        { value: "none", label: "Без ламінації" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "laminationWhere",
-      label: "Де ламінація",
-      type: "multi",
-      section: "Оздоблення",
-      options: [
-        { value: "block", label: "Блок" },
-        { value: "cover", label: "Обкладинка" },
-      ],
-      hint: "Можна обидва разом",
-    },
-    {
-      id: "laminationSides",
-      label: "Схема ламінації",
-      type: "single",
-      section: "Оздоблення",
-      options: [
-        { value: "1_0", label: "1+0" },
-        { value: "1_1", label: "1+1" },
-      ],
-    },
-    {
-      id: "varnishType",
-      label: "Лак",
-      type: "single",
-      section: "Оздоблення",
-      options: [
-        { value: "none", label: "Немає" },
-        { value: "spot", label: "Вибірковий лак" },
-        { value: "hybrid", label: "Гібрид" },
-      ],
-    },
-    {
-      id: "varnishSides",
-      label: "Схема лаку",
-      type: "single",
-      section: "Оздоблення",
-      options: [
-        { value: "1_0", label: "1+0" },
-        { value: "1_1", label: "1+1" },
-      ],
-      showIf: { field: "varnishType", equals: "spot" },
-    },
-    {
-      id: "spring",
-      label: "Колір пружини",
-      type: "single",
-      section: "Кріплення",
-      options: [
-        { value: "black", label: "Чорна" },
-        { value: "white", label: "Біла" },
-        { value: "metal", label: "Метал" },
-        { value: "bronze", label: "Бронза (золото)" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "springSide",
-      label: "Сторона пружини",
-      type: "single",
-      section: "Кріплення",
-      options: [
-        { value: "short", label: "По короткій стороні" },
-        { value: "long", label: "По довгій стороні" },
-      ],
-    },
-    {
-      id: "individualBag",
-      label: "Індивідуальний пакет",
-      type: "multi",
-      section: "Кріплення",
-      options: [{ value: "yes", label: "Потрібен" }],
-    },
-  ],
-};
-
-// ---------------------------------------------------------------------------
-// Календар-хатинка
-// ---------------------------------------------------------------------------
-
-/** Джерело — файл CEO, як і в перекидного. Розмір виробу фіксований: 210×150×70 мм. */
-export const PRINT_SPEC_CALENDAR_HOUSE: PrintSpecPreset = {
-  key: "print_calendar_house",
-  label: "Календар-хатинка",
-  sections: ["Основа", "Блок", "Кріплення"],
-  columns: [
-    { title: "Основа", sections: ["Основа"] },
-    { title: "Блок", sections: ["Блок"] },
-    { title: "Кріплення", sections: ["Кріплення"] },
-  ],
-  summary: ["gridSize", "sheets", "blockPaper", "blockPrint"],
-  fields: [
-    {
-      id: "cashing",
-      label: "Кашировка",
-      type: "single",
-      section: "Основа",
-      options: [
-        { value: "with", label: "З кашировкою" },
-        { value: "without", label: "Без кашировки" },
-      ],
-    },
-    {
-      id: "basePrint",
-      label: "Друк основи",
-      type: "single",
-      section: "Основа",
-      options: [{ value: "4_0", label: "4+0" }],
-      allowCustom: true,
-    },
-    {
-      id: "baseLamination",
-      label: "Ламінація основи",
-      type: "single",
-      section: "Основа",
-      options: [
-        { value: "none", label: "Відсутня" },
-        { value: "matte", label: "Матова" },
-        { value: "gloss", label: "Глянець" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "gridSize",
-      label: "Розмір блоку",
-      type: "sizeRows",
-      section: "Блок",
-      rows: ["Сітка"],
-      unit: "мм",
-      hint: "Типово 210 × 120",
-    },
-    {
-      id: "blockPrint",
-      label: "Друк блоку",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "4_0", label: "4+0" },
-        { value: "4_4", label: "4+4" },
-      ],
-    },
-    {
-      id: "sheets",
-      label: "Сторінок з обкладинкою",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "7", label: "7 арк = 14 стор" },
-        { value: "13", label: "13 арк = 26 стор" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "blockPaper",
-      label: "Папір блоку",
-      type: "single",
-      section: "Блок",
-      options: [{ value: "250", label: "250 г" }],
-      allowCustom: true,
-    },
-    {
-      id: "blockLamination",
-      label: "Ламінація блоку",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "none", label: "Відсутня" },
-        { value: "matte", label: "Матова" },
-        { value: "gloss", label: "Глянець" },
-      ],
-    },
-    {
-      id: "blockLaminationSides",
-      label: "Схема ламінації блоку",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "1_0", label: "1+0" },
-        { value: "1_1", label: "1+1" },
-      ],
-    },
-    {
-      id: "spring",
-      label: "Колір пружини",
-      type: "single",
-      section: "Кріплення",
-      options: [
-        { value: "black", label: "Чорна" },
-        { value: "white", label: "Біла" },
-        { value: "metal", label: "Метал" },
-        { value: "bronze", label: "Бронза (золото)" },
-      ],
-      allowCustom: true,
-    },
-  ],
-};
-
-// ---------------------------------------------------------------------------
-// Брошура
-// ---------------------------------------------------------------------------
-
-/** Джерело — файл CEO. Колір пружини питаємо лише тоді, коли скріплення пружиною. */
-export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
-  key: "print_brochure",
-  label: "Брошура",
-  sections: ["Обкладинка", "Блок", "Скріплення"],
-  columns: [
-    { title: "Обкладинка", sections: ["Обкладинка"] },
-    { title: "Блок", sections: ["Блок"] },
-    { title: "Скріплення", sections: ["Скріплення"] },
-  ],
-  summary: ["format", "pageCount", "coverPaper", "binding"],
-  fields: [
-    {
-      id: "format",
-      label: "Формат (Ш×В)",
-      type: "single",
-      section: "Обкладинка",
-      options: [
-        { value: "a6", label: "А6" },
-        { value: "a5", label: "А5" },
-        { value: "a4", label: "А4" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "pageCount",
-      label: "Сторінок + обкладинка",
-      type: "number",
-      section: "Блок",
-      unit: "стор",
-      // Підказка, а не заборона: правило виробниче, і хто рахує — той його знає.
-      // Жорстку перевірку сюди не ставимо з тієї ж причини, що й правило за
-      // тиражем: рахують люди, і виняток буває раніше, ніж ми його передбачимо.
-      hint: "Термобіндер, пур клей, пружина — кратно 2. Нитка — кратно 2 або 4. Дві скоби — тільки кратно 4. Обкладинка — це ще 4 стор.",
-    },
-    {
-      id: "coverPaper",
-      label: "Папір обкладинки",
-      type: "single",
-      section: "Обкладинка",
-      options: [
-        { value: "coated_200", label: "Крейда 200 г/м²" },
-        { value: "coated_250", label: "Крейда 250 г/м²" },
-        { value: "coated_300", label: "Крейда 300 г/м²" },
-        { value: "coated_350", label: "Крейда 350 г/м²" },
-      ],
-      allowCustom: true,
-      hint: "Дизайнерський картон — «Інше» і вписати назву та щільність",
-    },
-    {
-      id: "blockPaper",
-      label: "Папір блоку",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "coated_90", label: "Крейда 90 г/м²" },
-        { value: "coated_115", label: "Крейда 115 г/м²" },
-        { value: "coated_130", label: "Крейда 130 г/м²" },
-        { value: "coated_150", label: "Крейда 150 г/м²" },
-        { value: "coated_170", label: "Крейда 170 г/м²" },
-        { value: "coated_200", label: "Крейда 200 г/м²" },
-        { value: "offset_80", label: "Офсет 80 г/м²" },
-        { value: "offset_90", label: "Офсет 90 г/м²" },
-        { value: "offset_100", label: "Офсет 100 г/м²" },
-        { value: "offset_110", label: "Офсет 110 г/м²" },
-      ],
-      allowCustom: true,
-      hint: "Дизайнерський папір — «Інше» і вписати назву та щільність",
-    },
-    {
-      id: "coverPrint",
-      label: "Друк обкладинки",
-      type: "single",
-      section: "Обкладинка",
-      options: [
-        { value: "4_0", label: "4+0" },
-        { value: "4_4", label: "4+4" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "blockPrint",
-      label: "Друк блоку",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "4_0", label: "4+0" },
-        { value: "4_4", label: "4+4" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "lamination",
-      label: "Ламінація",
-      type: "single",
-      section: "Обкладинка",
-      options: [
-        { value: "none", label: "Без ламінації" },
-        { value: "matte", label: "Мат" },
-        { value: "gloss", label: "Глянець" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "binding",
-      label: "Метод скріплення",
-      type: "single",
-      section: "Скріплення",
-      options: [
-        { value: "staples_2", label: "2 скоби" },
-        { value: "thermo", label: "Термобіндер" },
-        { value: "thread", label: "Нитка" },
-        { value: "pur", label: "ПУР клей" },
-        { value: "spring", label: "Пружина металева" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "spring",
-      label: "Колір пружини",
-      type: "single",
-      section: "Скріплення",
-      options: [
-        { value: "black", label: "Чорна" },
-        { value: "white", label: "Біла" },
-        { value: "metal", label: "Метал" },
-        { value: "bronze", label: "Бронза (золото)" },
-      ],
-      allowCustom: true,
-      showIf: { field: "binding", equals: "spring" },
-    },
-  ],
-};
-
-// ---------------------------------------------------------------------------
-// Листівка
-// ---------------------------------------------------------------------------
-
-/**
- * Джерело — файл CEO, і він на цьому виді ОБРИВАЄТЬСЯ: після «Пакування по»
- * тексту немає. Артем 11.08: «листівки ще не до кінця, їх доповнюватимуть,
- * робимо з тим, що є». Тому пакування тут поки немає взагалі.
- *
- * «Ламінація від 170 г» лишається підказкою, а не правилом: рішення про матеріал
- * узгоджено віддати тим, хто прораховує.
- */
-export const PRINT_SPEC_FLYER: PrintSpecPreset = {
-  key: "print_flyer",
-  label: "Листівка",
-  sections: ["Формат", "Папір"],
-  columns: [
-    { title: "Аркуш", sections: ["Формат", "Папір"] },
-  ],
-  summary: ["format", "paper", "lamination"],
-  fields: [
-    {
-      id: "format",
-      label: "Формат",
-      type: "single",
-      section: "Формат",
-      options: [
-        { value: "flyer", label: "Флаєр 99×210 мм" },
-        { value: "a6", label: "А6 (105×148)" },
-        { value: "a5", label: "А5 (148×210)" },
-        { value: "a4", label: "А4 (210×297)" },
-        { value: "a3", label: "А3 (297×420)" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "paper",
-      label: "Папір (крейда)",
-      type: "single",
-      section: "Папір",
-      options: [
-        { value: "90", label: "90 г" },
-        { value: "115", label: "115 г" },
-        { value: "130", label: "130 г" },
-        { value: "150", label: "150 г" },
-        { value: "170", label: "170 г" },
-        { value: "200", label: "200 г" },
-        { value: "250", label: "250 г" },
-        { value: "300", label: "300 г" },
-        { value: "350", label: "350 г" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "lamination",
-      label: "Ламінація",
-      type: "single",
-      section: "Папір",
-      options: [
-        { value: "none", label: "Без ламінації" },
-        { value: "matte", label: "Мат" },
-        { value: "gloss", label: "Глянець" },
-      ],
-      hint: "Доступна від 170 г",
-    },
-  ],
-};
-
-// ---------------------------------------------------------------------------
-// Сертифікат
-// ---------------------------------------------------------------------------
-
-/**
- * Перенесення старого пресета `print_certificates` на опис полями.
- *
- * Значення й підписи взяті один-в-один із `printPackage.ts` і
- * `PrintPackageConfigurator.tsx` — нічого не вигадано. Сенс переносу: старий
- * механізм заповнюється ОДИН раз, при створенні прорахунку, і на картці лише
- * читається. Той, хто рахує, не міг ні дозаповнити, ні виправити — а саме він і
- * заповнює параметри. Опис дає сертифікату те саме, що календарям: поля у вікні
- * створення і правки на картці.
- *
- * Перенести було безпечно: за весь час сертифікатом не скористались ані разу
- * (0 позицій), тож збереженого формату, який треба тягнути, просто немає.
- *
- * Дві свідомі спрощення проти старого:
- * — кольоровість одним списком із восьми схем замість двох списків, залежних від
- *   методу друку: умова показу тут однорівнева, а ділити список означало б
- *   ховати від людини те, що вона може захотіти;
- * — «вибірковий лак / фольгування / висічка / біговка» стали одним полем із
- *   галочками замість чотирьох «так/ні»: у старому вигляді це чотири рядки,
- *   у яких три завжди «ні».
- */
-export const PRINT_SPEC_CERTIFICATE: PrintSpecPreset = {
-  key: "print_certificate",
-  label: "Сертифікат",
-  sections: ["Формат", "Матеріал", "Друк", "Оздоблення"],
-  columns: [
-    { title: "Аркуш", sections: ["Формат", "Матеріал"] },
-    { title: "Друк", sections: ["Друк"] },
-    { title: "Оздоблення", sections: ["Оздоблення"] },
-  ],
-  summary: ["formatType", "material", "printMethod", "embossing"],
-  fields: [
-    {
-      id: "formatType",
-      label: "Формат",
-      type: "single",
-      section: "Формат",
-      options: [
-        { value: "standard", label: "Стандартний" },
-        { value: "custom", label: "Нестандартний" },
-      ],
-    },
-    {
-      id: "standardFormat",
-      label: "Стандартний формат",
-      type: "single",
-      section: "Формат",
-      options: [
-        { value: "a4", label: "A4" },
-        { value: "a5", label: "A5" },
-        { value: "a6", label: "A6" },
-      ],
-      allowCustom: true,
-      showIf: { field: "formatType", equals: "standard" },
-    },
-    {
-      id: "customSize",
-      label: "Розмір",
-      type: "sizeRows",
-      section: "Формат",
-      rows: ["Сертифікат"],
-      unit: "мм",
-      showIf: { field: "formatType", equals: "custom" },
-    },
-    {
-      id: "material",
-      label: "Матеріал",
-      type: "single",
-      section: "Матеріал",
-      options: [
-        { value: "coated_paper", label: "Крейдований папір" },
-        { value: "cardboard", label: "Картон" },
-        { value: "designer_cardboard", label: "Дизайнерський картон" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "coatedDensity",
-      label: "Щільність",
-      type: "single",
-      section: "Матеріал",
-      options: [
-        { value: "300", label: "300 г/м²" },
-        { value: "350", label: "350 г/м²" },
-      ],
-      allowCustom: true,
-      showIf: { field: "material", equals: "coated_paper" },
-    },
-    {
-      id: "cardboardDensity",
-      label: "Щільність картону",
-      type: "number",
-      section: "Матеріал",
-      unit: "г/м²",
-      showIf: { field: "material", equals: "cardboard" },
-    },
-    {
-      id: "designerName",
-      label: "Назва картону",
-      type: "text",
-      section: "Матеріал",
-      showIf: { field: "material", equals: "designer_cardboard" },
-    },
-    {
-      id: "designerDensity",
-      label: "Щільність картону",
-      type: "number",
-      section: "Матеріал",
-      unit: "г/м²",
-      showIf: { field: "material", equals: "designer_cardboard" },
-    },
-    {
-      id: "printMethod",
-      label: "Метод друку",
-      type: "single",
-      section: "Друк",
-      options: [
-        { value: "digital", label: "Цифровий (CMYK)" },
-        { value: "uv", label: "УФ друк" },
-        { value: "screen", label: "Шовкодрук" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "printScheme",
-      label: "Кольоровість",
-      type: "single",
-      section: "Друк",
-      options: [
-        { value: "1_0", label: "1+0" },
-        { value: "1_1", label: "1+1" },
-        { value: "2_0", label: "2+0" },
-        { value: "2_2", label: "2+2" },
-        { value: "3_0", label: "3+0" },
-        { value: "3_3", label: "3+3" },
-        { value: "4_0", label: "4+0" },
-        { value: "4_4", label: "4+4" },
-      ],
-      allowCustom: true,
-      hint: "У цифрі зазвичай 4+0 або 4+4",
-    },
-    {
-      id: "embossing",
-      label: "Тиснення",
-      type: "single",
-      section: "Оздоблення",
-      options: [
-        { value: "none", label: "Немає" },
-        { value: "blind", label: "Сліпе тиснення" },
-        { value: "foil", label: "Тиснення фольгою" },
-      ],
-    },
-    {
-      id: "embossingFoilColor",
-      label: "Колір фольги",
-      type: "text",
-      section: "Оздоблення",
-      showIf: { field: "embossing", equals: "foil" },
-    },
-    {
-      id: "embossingSize",
-      label: "Розмір тиснення",
-      type: "sizeRows",
-      section: "Оздоблення",
-      rows: ["Тиснення"],
-      unit: "мм",
-      hint: "Якщо тиснення є",
-    },
-    {
-      id: "finishing",
-      label: "Додаткове оздоблення",
-      type: "multi",
-      section: "Оздоблення",
-      options: [
-        { value: "spot_uv", label: "Вибірковий лак" },
-        { value: "foiling", label: "Фольгування" },
-        { value: "die_cutting", label: "Висічка" },
-        { value: "creasing", label: "Біговка" },
-      ],
-      hint: "Можна кілька разом",
-    },
-    {
-      id: "foilingColor",
-      label: "Колір фольгування",
-      type: "text",
-      section: "Оздоблення",
-      showIf: { field: "finishing", includes: "foiling" },
-    },
-    {
-      id: "coverageSides",
-      label: "Схема покриття",
-      type: "single",
-      section: "Оздоблення",
-      options: [
-        { value: "1_0", label: "1+0" },
-        { value: "1_1", label: "1+1" },
-      ],
-      hint: "Для лаку чи фольгування",
-    },
-    {
-      id: "coveragePercent",
-      label: "Площа покриття",
-      type: "single",
-      section: "Оздоблення",
-      options: [
-        { value: "20", label: "До 20%" },
-        { value: "40", label: "До 40%" },
-      ],
-      allowCustom: true,
-    },
-  ],
-};
-
-// ---------------------------------------------------------------------------
-// Щоденник
-// ---------------------------------------------------------------------------
-
-/**
- * Джерело — фірмовий паперовий «Чеклист · Щоденники», який менеджери надсилають
- * замовникам, плюс відповіді Тані від 04.09, 07.09 і 11.09 (REQ-36#p14, #p22…#p34).
- *
- * ЧОМУ ЦЕЙ ВИД ПЕРШИЙ: у прорахунках 312 товарних позицій і лише 5 із них
- * поліграфія — не тому, що її не продають, а тому, що для щоденника в CRM немає
- * куди вписати тридцять питань чекліста. Уся розмова про нього йде повз систему.
- *
- * ТРИ МІСЦЯ, ДЕ ОПИС РОЗХОДИТЬСЯ З ПАПЕРОМ, і всі три — за словами Тані:
- *
- * 1. Датування й розліновка — ОДНЕ поле `layout`, а не два. На папері стояли
- *    «Датований / Не датований» і «Клітинка / Лінія» незалежними галочками, і з
- *    них складалась неможлива пара: лінія і клітинка — це блок БЕЗ інфоблоку
- *    («має вигляд як блокнот»), тоді як датований і недатований завжди з ним.
- * 2. Кольоровість стандартного блока не питається взагалі: вона виведена з
- *    макета (2+2 бордовий+сірий, напівдатований 2+2 сірий+синій, лінія і
- *    клітинка 1+1 сірий). Питаємо її лише для індивідуального блока.
- * 3. Форзац і нахзац — одне поле на три значення замість «Стандарт/
- *    Індивідуальний» плюс уточнення: за замовчуванням карти, у лінії, клітинки
- *    й Moleskine — чисті.
- *
- * ЩО НАВМИСНО НЕ ВИРАЖЕНЕ МЕХАНІЗМОМ: «папір з друком» тягне за собою
- * обовʼязкові друк 4+0 і матову ламінацію 1+0, а поролонова обкладинка лишає
- * тільки резинку під ручку. Умова `showIf` однорівнева й такого не опише, тому
- * перше стоїть окремим полем з єдиним варіантом (щоб факт потрапив у
- * специфікацію, а не лишився знанням у голові), а друге — підказкою до резинки.
- * Складніші залежності підуть у механізм тоді, коли їх стане більше двох.
- */
-export const PRINT_SPEC_DIARY: PrintSpecPreset = {
-  key: "print_diary",
-  label: "Щоденник",
-  sections: ["Обкладинка", "Блок", "Кути й торець", "Вставки", "Ляссе", "Резинка й шильда", "Решта"],
-  columns: [
-    { title: "Обкладинка", sections: ["Обкладинка"] },
-    { title: "Блок", sections: ["Блок", "Кути й торець"] },
-    { title: "Комплектуючі", sections: ["Вставки", "Ляссе", "Резинка й шильда", "Решта"] },
-  ],
-  summary: ["format", "coverMaterial", "blockPages", "layout"],
-  fields: [
-    {
-      id: "format",
-      label: "Формат",
-      type: "single",
-      section: "Обкладинка",
-      options: [
-        { value: "a5", label: "А5" },
-        { value: "a4", label: "А4" },
-        { value: "moleskine", label: "Moleskine 130 × 210 мм" },
-      ],
-      allowCustom: true,
-      hint: "Нестандартний — «Інше» й розміри текстом",
-    },
-    {
-      id: "designNeeded",
-      label: "Дизайн",
-      type: "single",
-      section: "Решта",
-      options: [
-        { value: "by_us", label: "Розробляємо ми" },
-        { value: "by_customer", label: "Макет від замовника" },
-      ],
-    },
-    {
-      id: "coverType",
-      label: "Тип",
-      type: "single",
-      section: "Обкладинка",
-      options: [
-        { value: "flex", label: "Гнучка" },
-        { value: "hard", label: "Тверда" },
-        { value: "book", label: "Книжна" },
-      ],
-    },
-    {
-      id: "coverFoam",
-      label: "Поролон",
-      type: "single",
-      section: "Обкладинка",
-      options: [
-        { value: "yes", label: "З поролоном" },
-        { value: "no", label: "Без поролону" },
-      ],
-    },
-    {
-      id: "coverMaterial",
-      label: "Матеріал",
-      type: "single",
-      section: "Обкладинка",
-      options: [
-        { value: "leatherette", label: "Шкірзамінник" },
-        { value: "printed_paper", label: "Папір з друком" },
-        { value: "designer_paper", label: "Дизайнерський папір" },
-      ],
-      allowCustom: true,
-    },
-    {
-      id: "leatheretteName",
-      label: "Шкірзамінник — який саме",
-      type: "text",
-      section: "Обкладинка",
-      showIf: { field: "coverMaterial", equals: "leatherette" },
-      hint: "Balacron Nappa, темно-синій",
-    },
-    {
-      id: "leatheretteFinishing",
-      label: "Нанесення",
-      type: "multi",
-      section: "Обкладинка",
-      options: [
-        { value: "varnish", label: "Лак" },
-        { value: "uv_print", label: "УФ друк" },
-        { value: "embossing", label: "Тиснення" },
-        { value: "screen", label: "Шовкотрафарет" },
-      ],
-      showIf: { field: "coverMaterial", equals: "leatherette" },
-    },
-    {
-      id: "printedPaperBase",
-      label: "Друк і ламінація",
-      type: "single",
-      section: "Обкладинка",
-      options: [{ value: "4_0_matt", label: "4+0 + матова ламінація 1+0" }],
-      showIf: { field: "coverMaterial", equals: "printed_paper" },
-      hint: "Для паперу з друком це обовʼязково, інших варіантів немає",
-    },
-    {
-      id: "printedPaperFinishing",
-      label: "Оздоблення",
-      type: "multi",
-      section: "Обкладинка",
-      options: [
-        { value: "foil", label: "Тиснення фольгою" },
-        { value: "blind", label: "Сліпе тиснення" },
-        { value: "spot_uv", label: "Вибірковий УФ-лак" },
-      ],
-      showIf: { field: "coverMaterial", equals: "printed_paper" },
-    },
-    {
-      id: "designerPaperName",
-      label: "Дизайнерський папір — назва",
-      type: "text",
-      section: "Обкладинка",
-      showIf: { field: "coverMaterial", equals: "designer_paper" },
-      hint: "Назву обовʼязково вказати менеджеру",
-    },
-    {
-      id: "designerPaperFinishing",
-      label: "Оздоблення",
-      type: "multi",
-      section: "Обкладинка",
-      options: [
-        { value: "foil", label: "Тиснення фольгою" },
-        { value: "blind", label: "Сліпе тиснення" },
-        { value: "uv_print", label: "УФ друк" },
-      ],
-      showIf: { field: "coverMaterial", equals: "designer_paper" },
-      hint: "Дизайнерський папір — без ламінації",
-    },
-    {
-      id: "blockKind",
-      label: "Виконання блока",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "standard", label: "Стандартний" },
-        { value: "individual", label: "Індивідуальний" },
-      ],
-    },
-    {
-      id: "layout",
-      label: "Макет",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "dated", label: "Датований" },
-        { value: "semi_dated", label: "Напівдатований" },
-        { value: "undated", label: "Недатований" },
-        { value: "line", label: "Лінія" },
-        { value: "grid", label: "Клітинка" },
-      ],
-      hint: "Датований і недатований — 2+2 бордовий+сірий, напівдатований — 2+2 сірий+синій, лінія і клітинка — 1+1 сірий без інфоблоку",
-    },
-    {
-      id: "blockPaperColor",
-      label: "Колір паперу",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "white", label: "Білий" },
-        { value: "cream", label: "Кремовий" },
-      ],
-    },
-    {
-      id: "blockPages",
-      label: "Кількість сторінок",
-      type: "number",
-      section: "Блок",
-      unit: "стор",
-      hint: "Стандартно 352, Moleskine — 224. Кратність індивідуального блока: 70 г — 32, 80/90/100 г — 24",
-    },
-    {
-      id: "blockPaper",
-      label: "Папір блока",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "munken_cream", label: "Munken кремовий" },
-        { value: "offset_white", label: "Офсет білий" },
-      ],
-      allowCustom: true,
-      showIf: { field: "blockKind", equals: "individual" },
-    },
-    {
-      id: "blockDensity",
-      label: "Щільність паперу",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "80", label: "80 г/м²" },
-        { value: "90", label: "90 г/м²" },
-        { value: "100", label: "100 г/м²" },
-      ],
-      allowCustom: true,
-      showIf: { field: "blockKind", equals: "individual" },
-      hint: "Стандартний блок — 70 г/м²",
-    },
-    {
-      id: "blockPrint",
-      label: "Кольоровість друку",
-      type: "single",
-      section: "Блок",
-      options: [
-        { value: "1_1", label: "1+1" },
-        { value: "2_2", label: "2+2" },
-        { value: "3_3", label: "3+3" },
-        { value: "4_4", label: "4+4" },
-      ],
-      allowCustom: true,
-      showIf: { field: "blockKind", equals: "individual" },
-    },
-    {
-      id: "corners",
-      label: "Кути",
-      type: "single",
-      section: "Кути й торець",
-      options: [
-        { value: "round", label: "Заокруглені" },
-        { value: "straight", label: "Прямі" },
-      ],
-    },
-    {
-      id: "edge",
-      label: "Торець",
-      type: "single",
-      section: "Кути й торець",
-      options: [
-        { value: "painted", label: "Фарбований" },
-        { value: "plain", label: "Не фарбований" },
-      ],
-    },
-    {
-      id: "endpaper",
-      label: "Форзац",
-      type: "single",
-      section: "Вставки",
-      options: [
-        { value: "maps", label: "Карти" },
-        { value: "plain", label: "Чисті" },
-        { value: "individual", label: "Індивідуальний друк" },
-      ],
-      allowCustom: true,
-      hint: "За замовчуванням карти; у лінії, клітинки й Moleskine — чисті",
-    },
-    {
-      id: "backpaper",
-      label: "Нахзац",
-      type: "single",
-      section: "Вставки",
-      options: [
-        { value: "maps", label: "Карти" },
-        { value: "plain", label: "Чисті" },
-        { value: "individual", label: "Індивідуальний друк" },
-      ],
-      allowCustom: true,
-      hint: "Те саме правило, що й для форзаца",
-    },
-    {
-      id: "adInserts",
-      label: "Рекламні вставки",
-      type: "number",
-      section: "Вставки",
-      unit: "шт",
-      hint: "Кратне двом — вставка друкується з двох боків аркуша",
-    },
-    {
-      id: "ribbon",
-      label: "Вид ляссе",
-      type: "single",
-      section: "Ляссе",
-      options: [
-        { value: "standard", label: "Стандартне" },
-        { value: "individual", label: "Індивідуальне" },
-        { value: "none", label: "Без ляссе" },
-      ],
-    },
-    {
-      id: "ribbonColorStandard",
-      label: "Колір ляссе",
-      type: "text",
-      section: "Ляссе",
-      showIf: { field: "ribbon", equals: "standard" },
-      hint: "З наявних",
-    },
-    {
-      id: "ribbonOptions",
-      label: "Виконання",
-      type: "multi",
-      section: "Ляссе",
-      options: [
-        { value: "branding", label: "Брендування" },
-        { value: "single", label: "Одинарне" },
-        { value: "double", label: "Подвійне" },
-      ],
-      showIf: { field: "ribbon", equals: "individual" },
-    },
-    {
-      id: "ribbonWidth",
-      label: "Ширина ляссе",
-      type: "number",
-      section: "Ляссе",
-      unit: "мм",
-      showIf: { field: "ribbon", equals: "individual" },
-    },
-    {
-      id: "ribbonColor",
-      label: "Колір ляссе",
-      type: "text",
-      section: "Ляссе",
-      showIf: { field: "ribbon", equals: "individual" },
-      hint: "Pantone або опис",
-    },
-    {
-      id: "elastic",
-      label: "Резинка",
-      type: "single",
-      section: "Резинка й шильда",
-      options: [
-        { value: "yes", label: "Наявна" },
-        { value: "no", label: "Відсутня" },
-      ],
-    },
-    {
-      id: "elasticPosition",
-      label: "Розташування",
-      type: "single",
-      section: "Резинка й шильда",
-      options: [
-        { value: "vertical", label: "Вертикальна" },
-        { value: "horizontal", label: "Горизонтальна" },
-        { value: "pen_loop", label: "Під ручку" },
-      ],
-      showIf: { field: "elastic", equals: "yes" },
-      hint: "З поролоновою обкладинкою можлива лише резинка під ручку",
-    },
-    {
-      id: "elasticColor",
-      label: "Колір резинки",
-      type: "text",
-      section: "Резинка й шильда",
-      showIf: { field: "elastic", equals: "yes" },
-    },
-    {
-      id: "badge",
-      label: "Шильда",
-      type: "single",
-      section: "Резинка й шильда",
-      options: [
-        { value: "yes", label: "Наявна" },
-        { value: "no", label: "Відсутня" },
-      ],
-    },
-    {
-      id: "packing",
-      label: "Спосіб пакування",
-      type: "single",
-      section: "Решта",
-      options: [
-        { value: "standard", label: "Стандартне" },
-        { value: "split", label: "Сплітовка" },
-      ],
-      hint: "Сплітовка — окреме завдання логісту-пакувальнику",
-    },
-  ],
-};
-
-/** Реєстр описових пресетів. Новий вид додається сюди одним рядком. */
-export const PRINT_SPEC_PRESETS: PrintSpecPreset[] = [
-  PRINT_SPEC_CALENDAR_QUARTERLY,
-  PRINT_SPEC_CALENDAR_FLIP,
-  PRINT_SPEC_CALENDAR_HOUSE,
-  PRINT_SPEC_BROCHURE,
-  PRINT_SPEC_FLYER,
-  PRINT_SPEC_CERTIFICATE,
-  PRINT_SPEC_DIARY,
-];
-
-export const getPrintSpecPreset = (key: string | null | undefined): PrintSpecPreset | null =>
-  PRINT_SPEC_PRESETS.find((preset) => preset.key === key) ?? null;
-
-/** Чи описовий це пресет. Старі чотири лишаються на `printPackage.ts`. */
-export const isPrintSpecPreset = (key: string | null | undefined): boolean =>
-  getPrintSpecPreset(key) !== null;
-
-// ---------------------------------------------------------------------------
 // Значення
 // ---------------------------------------------------------------------------
 
@@ -1470,12 +194,16 @@ const asSizeRows = (value: PrintSpecValue): PrintSpecSize[] =>
     ? (value as PrintSpecSize[])
     : [];
 
+/** Порожній рядок розміру: глибина є лише в полів, що її питають, — щоб «пусто» не мало двох форм. */
+const emptySize = (field: PrintSpecField): PrintSpecSize =>
+  field.withDepth ? { width: "", height: "", depth: "" } : { width: "", height: "" };
+
 export const createEmptyPrintSpecValues = (preset: PrintSpecPreset): PrintSpecValues => {
   const values: PrintSpecValues = {};
   for (const field of preset.fields) {
     if (field.type === "multi") values[field.id] = [];
     else if (field.type === "sizeRows") {
-      values[field.id] = (field.rows ?? []).map(() => ({ width: "", height: "" }));
+      values[field.id] = (field.rows ?? []).map(() => emptySize(field));
     } else values[field.id] = "";
     if (field.allowCustom) values[customValueKey(field.id)] = "";
   }
@@ -1489,12 +217,80 @@ export const createEmptyPrintSpecValues = (preset: PrintSpecPreset): PrintSpecVa
  * лишалась би кількість пантонів після того, як друк перемкнули на 4+0.
  */
 export function isPrintSpecFieldVisible(field: PrintSpecField, values: PrintSpecValues): boolean {
-  const condition = field.showIf;
-  if (!condition) return true;
+  return matchesPrintSpecShowIf(field.showIf, values);
+}
+
+/** Умови як список: одна умова — це список з одного. */
+export const printSpecConditions = (showIf: PrintSpecShowIf | undefined): PrintSpecCondition[] =>
+  showIf === undefined ? [] : Array.isArray(showIf) ? showIf : [showIf];
+
+/**
+ * Поле, під яке вкладається умовне поле у формі, — те, на яке дивиться ПЕРША
+ * умова. У люверсів їх дві (тип пакета й матеріал), а вкластись можна лише під одне.
+ */
+export const printSpecParentFieldId = (field: PrintSpecField): string | null =>
+  printSpecConditions(field.showIf)[0]?.field ?? null;
+
+function matchesCondition(condition: PrintSpecCondition, values: PrintSpecValues): boolean {
   const source = values[condition.field] ?? null;
   if (condition.equals !== undefined) return asStringValue(source) === condition.equals;
+  if (condition.oneOf !== undefined) return condition.oneOf.includes(asStringValue(source));
+  if (condition.notEquals !== undefined) return asStringValue(source) !== condition.notEquals;
   if (condition.includes !== undefined) return asListValue(source).includes(condition.includes);
   return true;
+}
+
+function matchesPrintSpecShowIf(showIf: PrintSpecShowIf | undefined, values: PrintSpecValues): boolean {
+  return printSpecConditions(showIf).every((condition) => matchesCondition(condition, values));
+}
+
+/** Варіанти поля, які існують за поточних значень (без «Інше…» — воно є завжди, де дозволене). */
+export function listPrintSpecOptions(field: PrintSpecField, values: PrintSpecValues): PrintSpecOption[] {
+  const options = field.options ?? [];
+  return options.every((option) => !option.showIf)
+    ? options
+    : options.filter((option) => matchesPrintSpecShowIf(option.showIf, values));
+}
+
+/** Вибране значення — варіант, якого за поточних значень не існує. Невідоме опису значення не чіпаємо. */
+const isUnavailableOption = (field: PrintSpecField, value: string, values: PrintSpecValues): boolean => {
+  const option = field.options?.find((entry) => entry.value === value);
+  return option !== undefined && !matchesPrintSpecShowIf(option.showIf, values);
+};
+
+/**
+ * Прибирає вибір, якого за поточних значень не існує: крафт змінили на картон —
+ * щільність 120 г стирається, бо картону 120 г не буває.
+ *
+ * Це звірка ПЕРЕД показом, а не ефект після нього: форма проганяє її на кожній
+ * зміні, читання — на кожному розборі, тож проміжного кадру з неможливою
+ * комбінацією не існує (саме ефекти-санітайзери давали «поле відкочується саме»,
+ * REQ-245). Повертає ТОЙ САМИЙ об'єкт, коли міняти нічого.
+ *
+ * Сховане умовою ПОЛЕ лишається як є — це окреме правило: значення там
+ * повертається, щойно поле знову з'явиться. А неіснуючий варіант повертатись
+ * не має куди. Стирання може зробити неіснуючим ще щось, тому прохід повторюється.
+ */
+export function reconcilePrintSpecValues(preset: PrintSpecPreset, values: PrintSpecValues): PrintSpecValues {
+  let current = values;
+  for (let pass = 0; pass < preset.fields.length; pass += 1) {
+    let next: PrintSpecValues | null = null;
+    for (const field of preset.fields) {
+      if (!field.options?.some((option) => option.showIf)) continue;
+      const raw = current[field.id] ?? null;
+      if (field.type === "multi") {
+        const list = asListValue(raw);
+        const kept = list.filter((value) => !isUnavailableOption(field, value, current));
+        if (kept.length !== list.length) next = { ...(next ?? current), [field.id]: kept };
+      } else if (field.type === "single") {
+        const value = asStringValue(raw);
+        if (value && isUnavailableOption(field, value, current)) next = { ...(next ?? current), [field.id]: "" };
+      }
+    }
+    if (!next) return current;
+    current = next;
+  }
+  return current;
 }
 
 const optionLabel = (field: PrintSpecField, value: string): string =>
@@ -1533,7 +329,9 @@ export function formatPrintSpecFieldValue(field: PrintSpecField, values: PrintSp
       .map((rowLabel, index) => {
         const size = sizes[index];
         if (!size?.width.trim() || !size?.height.trim()) return null;
-        const value = `${size.width.trim()} × ${size.height.trim()}${field.unit ? ` ${field.unit}` : ""}`;
+        const depth = field.withDepth ? size.depth?.trim() ?? "" : "";
+        const dimensions = [size.width.trim(), size.height.trim(), depth].filter(Boolean).join(" × ");
+        const value = `${dimensions}${field.unit ? ` ${field.unit}` : ""}`;
         return rows.length === 1 ? value : `${rowLabel} ${value}`;
       })
       .filter(Boolean)
@@ -1619,7 +417,9 @@ export function isPrintSpecFieldFilled(field: PrintSpecField, values: PrintSpecV
   const raw = values[field.id] ?? null;
   if (field.type === "multi") return asListValue(raw).length > 0;
   if (field.type === "sizeRows") {
-    return asSizeRows(raw).some((size) => size.width.trim() !== "" || size.height.trim() !== "");
+    return asSizeRows(raw).some(
+      (size) => size.width.trim() !== "" || size.height.trim() !== "" || (size.depth ?? "").trim() !== ""
+    );
   }
   const value = asStringValue(raw).trim();
   if (value === CUSTOM_OPTION_VALUE) {
@@ -1742,12 +542,12 @@ export function parsePrintSpecValues(preset: PrintSpecPreset, raw: unknown): Pri
       const storedRows = Array.isArray(stored) ? stored : [];
       values[field.id] = rows.map((_, index) => {
         const entry = storedRows[index];
-        if (!entry || typeof entry !== "object") return { width: "", height: "" };
+        if (!entry || typeof entry !== "object") return emptySize(field);
         const record = entry as Record<string, unknown>;
-        return {
-          width: typeof record.width === "string" ? record.width : "",
-          height: typeof record.height === "string" ? record.height : "",
-        };
+        const text = (key: string) => (typeof record[key] === "string" ? (record[key] as string) : "");
+        return field.withDepth
+          ? { width: text("width"), height: text("height"), depth: text("depth") }
+          : { width: text("width"), height: text("height") };
       });
     } else if (typeof stored === "string") {
       values[field.id] = stored;
@@ -1759,7 +559,8 @@ export function parsePrintSpecValues(preset: PrintSpecPreset, raw: unknown): Pri
     }
   }
 
-  return values;
+  // Збережене могли записати до правила, яке тепер робить варіант неіснуючим.
+  return reconcilePrintSpecValues(preset, values);
 }
 
 // ---------------------------------------------------------------------------
@@ -1783,9 +584,10 @@ function normalizedFieldValue(field: PrintSpecField, values: PrintSpecValues): s
   if (field.type === "sizeRows") {
     const rows = (field.rows ?? []).map((_, index) => {
       const size = asSizeRows(raw)[index];
-      return `${size?.width.trim() ?? ""}x${size?.height.trim() ?? ""}`;
+      const parts = [size?.width, size?.height, ...(field.withDepth ? [size?.depth] : [])];
+      return parts.map((part) => (part ?? "").trim()).join("x");
     });
-    return rows.every((row) => row === "x") ? "" : rows.join("|");
+    return rows.every((row) => row.replaceAll("x", "") === "") ? "" : rows.join("|");
   }
   const value = asStringValue(raw).trim();
   if (field.type === "single" && value === CUSTOM_OPTION_VALUE) {

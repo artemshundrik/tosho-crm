@@ -40,4 +40,22 @@ describe("читання metadata позиції прорахунку", () => {
   it("невідомий статус дослідження не проходить", () => {
     expect(parseQuoteItemMetadata({ research: { status: "маємо надію", fetchedAt: "x" } })).toBeNull();
   });
+
+  it("стара позиція пакета дістає printSpec зі старого формату, а сам формат лишається", () => {
+    const metadata = parseQuoteItemMetadata({
+      configuratorPreset: "print_package",
+      sku: "  PKG-1  ",
+      supplierUrl: "javascript:alert(1)",
+      printProduct: { productKind: "package", packageType: "ready", supplierLink: "https://kraft.ua" },
+    });
+
+    expect(metadata?.printSpec?.presetKey).toBe("print_package");
+    expect(metadata?.printSpec?.values.packageType).toBe("ready");
+    expect(metadata?.configuratorPreset).toBe("print_package");
+    // Старий запис доповнено порожніми ключами — зведення старого формату читає кожен.
+    expect(metadata?.printProduct?.notebookFormat).toBe("");
+    // Раніше такі позиції віддавались сирими — повз чистку артикула й посилань.
+    expect(metadata?.sku).toBe("PKG-1");
+    expect(metadata?.supplierUrl).toBeUndefined();
+  });
 });

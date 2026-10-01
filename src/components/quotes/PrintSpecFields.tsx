@@ -10,6 +10,9 @@ import {
   diffPrintSpec,
   formatPrintSpecEntries,
   getPrintSpecColumns,
+  listPrintSpecOptions,
+  printSpecParentFieldId,
+  reconcilePrintSpecValues,
   type PrintSpecColumnInfo,
   type PrintSpecField,
   type PrintSpecPreset,
@@ -124,11 +127,19 @@ const LANE_GRID: Record<number, string> = {
 };
 
 export function PrintSpecFields({ preset, values, onChange, disabled, baseline }: PrintSpecFieldsProps) {
+  /*
+    Кожна зміна йде через звірку: вибрали картон — щільність 120 г, якої в
+    картону не буває, зникає в тому ж записі, а не наступним рендером.
+  */
+  const commit = React.useCallback(
+    (next: PrintSpecValues) => onChange(reconcilePrintSpecValues(preset, next)),
+    [onChange, preset]
+  );
   const setValue = React.useCallback(
     (fieldId: string, value: PrintSpecValue) => {
-      onChange({ ...values, [fieldId]: value });
+      commit({ ...values, [fieldId]: value });
     },
-    [onChange, values]
+    [commit, values]
   );
 
   const changes = React.useMemo(
@@ -141,7 +152,7 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
     if (!baseline) return;
     const next: PrintSpecValues = { ...values, [field.id]: baseline[field.id] ?? null };
     if (field.allowCustom) next[customValueKey(field.id)] = baseline[customValueKey(field.id)] ?? "";
-    onChange(next);
+    commit(next);
   };
 
   const renderControl = (field: PrintSpecField) => {
@@ -152,7 +163,7 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
       const selected = asList(raw);
       return (
         <div role="group" aria-label={field.label} className="flex flex-wrap gap-1.5">
-          {(field.options ?? []).map((option) => {
+          {listPrintSpecOptions(field, values).map((option) => {
             const checked = selected.includes(option.value);
             return (
               <OptionChip
@@ -185,15 +196,13 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
       const rows = field.rows ?? [];
       const sizes = asSizes(raw);
       const single = rows.length === 1;
+      const blank: PrintSpecSize = field.withDepth ? { width: "", height: "", depth: "" } : { width: "", height: "" };
       return (
         <div className="space-y-2">
           {rows.map((rowLabel, index) => {
-            const size = sizes[index] ?? { width: "", height: "" };
+            const size = sizes[index] ?? blank;
             const update = (patch: Partial<PrintSpecSize>) => {
-              const next = rows.map((_, rowIndex) => ({
-                width: sizes[rowIndex]?.width ?? "",
-                height: sizes[rowIndex]?.height ?? "",
-              }));
+              const next = rows.map((_, rowIndex) => ({ ...blank, ...sizes[rowIndex] }));
               next[index] = { ...next[index], ...patch };
               setValue(field.id, next);
             };
@@ -217,6 +226,19 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
                   className="w-16"
                   onChange={(event) => update({ height: sanitizeNumeric(event.target.value) })}
                 />
+                {field.withDepth ? (
+                  <>
+                    <span className="text-sm text-muted-foreground">×</span>
+                    <Input
+                      value={size.depth ?? ""}
+                      disabled={disabled}
+                      inputMode="numeric"
+                      placeholder="Г"
+                      className="w-16"
+                      onChange={(event) => update({ depth: sanitizeNumeric(event.target.value) })}
+                    />
+                  </>
+                ) : null}
                 {field.unit ? <span className="text-sm text-muted-foreground">{field.unit}</span> : null}
               </div>
             );
@@ -253,7 +275,7 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
     return (
       <>
         <div role="group" aria-label={field.label} className="flex flex-wrap gap-1.5">
-          {(field.options ?? []).map((option) => (
+          {listPrintSpecOptions(field, values).map((option) => (
             <OptionChip
               key={option.value}
               active={value === option.value}
@@ -297,13 +319,12 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
   */
   const renderTree = (fields: PrintSpecField[], parentId: string | null): React.ReactNode =>
     fields
-      .filter((field) =>
-        parentId === null
-          ? !field.showIf || !fields.some((entry) => entry.id === field.showIf?.field)
-          : field.showIf?.field === parentId
-      )
+      .filter((field) => {
+        const parent = printSpecParentFieldId(field);
+        return parentId === null ? !parent || !fields.some((entry) => entry.id === parent) : parent === parentId;
+      })
       .map((field) => {
-        const children = fields.some((entry) => entry.showIf?.field === field.id)
+        const children = fields.some((entry) => printSpecParentFieldId(entry) === field.id)
           ? renderTree(fields, field.id)
           : null;
         return (

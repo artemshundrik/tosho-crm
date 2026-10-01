@@ -49,6 +49,20 @@ describe("заміна товару в позиції", () => {
     });
   });
 
+  it("старий пакет зі старим форматом при зміні виду втрачає і його — інакше він воскресне на читанні", () => {
+    const patch = buildModelSwapPatch(suggestion(), {
+      currentKindId: "kind-package",
+      metadata: {
+        sku: "ART-1",
+        configuratorPreset: "print_package",
+        printProduct: { productKind: "package", packageType: "custom" } as never,
+        printSpec: { presetKey: "print_package", values: { packageType: "custom" } },
+      },
+    });
+
+    expect(patch.metadata).toEqual({ sku: "ART-1" });
+  });
+
   it("модель змінилась усередині того самого виду — не чіпаємо нічого зайвого", () => {
     const patch = buildModelSwapPatch(suggestion({ modelId: "model-other" }), {
       currentKindId: "kind-brochure",

@@ -1,6 +1,9 @@
 import type { CatalogSuggestion } from "@/features/quotes/quote-wizard/catalogSuggestions";
 import type { QuoteItemMetadata } from "@/lib/printPackage";
 
+/** Ключі метаданих, що описують виріб попереднього виду: нові параметри й старий формат. */
+const PRODUCT_PARAMETER_KEYS = ["printSpec", "printProduct", "printPackage", "configuratorPreset"] as const;
+
 /**
  * Що саме пишемо в позицію при заміні товару.
  *
@@ -11,6 +14,10 @@ import type { QuoteItemMetadata } from "@/lib/printPackage";
  * `metadata` повертаємо ЦІЛКОМ, без ключа `printSpec`, а не `{ printSpec: null }`:
  * колонка перезаписується повністю, тож решту ключів (артикул, колір, роль
  * варіанта) треба донести своїми руками.
+ *
+ * Разом із `printSpec` іде й старий формат пакета чи блокнота (`printProduct`,
+ * REQ-323#p4): картка перекладає його на опис полів при читанні, і лишений він
+ * воскресив би параметри пакета на щойно вибраному щоденнику.
  */
 export function buildModelSwapPatch(
   suggestion: Pick<CatalogSuggestion, "name" | "typeId" | "kindId" | "modelId" | "matched">,
@@ -31,12 +38,13 @@ export function buildModelSwapPatch(
   patch.methods = null;
   patch.print_position_id = null;
 
+  const metadata = context.metadata;
   // Параметрів не було — метадані не чіпаємо взагалі, щоб не переписувати
   // колонку заради нічого.
-  if (!context.metadata?.printSpec) return patch;
+  if (!metadata || !PRODUCT_PARAMETER_KEYS.some((key) => metadata[key] != null)) return patch;
 
-  const { printSpec: _dropped, ...rest } = context.metadata;
-  void _dropped;
+  const rest: QuoteItemMetadata = { ...metadata };
+  for (const key of PRODUCT_PARAMETER_KEYS) delete rest[key];
   patch.metadata = rest;
   return patch;
 }

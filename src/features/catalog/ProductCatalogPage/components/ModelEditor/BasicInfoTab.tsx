@@ -16,35 +16,6 @@ import { CheckCircle2, ChevronDown, ExternalLink, FileText, Image as ImageIcon, 
 import type { CatalogModelMetadata, CatalogModelVariant, CatalogType, ImageUploadMode } from "@/types/catalog";
 import { PRINT_SPEC_PRESETS } from "@/lib/printSpec";
 
-/**
- * Пресети старого механізму (`lib/printPackage.ts`) — пишуться в інший ключ.
- *
- * `print_certificates` тут лишається, щоб уже призначений старий сертифікат
- * читався, але у виборі його БІЛЬШЕ НЕ ПОКАЗУЄМО: сертифікат перенесений на опис
- * полями (`print_certificate` у printSpec.ts), і два однакові рядки в списку
- * означали б, що людина навмання вибирає між робочим і застарілим.
- *
- * ЗАМІРЯНО 11.09.2026: старого сертифіката не має ЖОДНА модель каталогу
- * (`print_note_blocks`, `print_notebook`, `print_package` — по одній моделі
- * кожен, сертифікат — нуль). Тобто читалка вище вже нічого не читає, і гілку
- * сертифіката в `PrintPackageConfigurator` можна прибрати цілком. Це окрема
- * робота з видаленням коду, і робити її наосліп у день заміру не варто —
- * рішення лишається за людиною.
- */
-const LEGACY_CONFIGURATOR_PRESETS = [
-  "print_package",
-  "print_notebook",
-  "print_note_blocks",
-  "print_certificates",
-] as const;
-
-/** Старі пресети, які ще можна вибрати руками. Сертифікат звідси свідомо прибраний. */
-const SELECTABLE_LEGACY_PRESETS: Array<{ value: string; label: string }> = [
-  { value: "print_package", label: "Паперовий пакет" },
-  { value: "print_notebook", label: "Блокнот" },
-  { value: "print_note_blocks", label: "Блоки для записів" },
-];
-
 interface BasicInfoTabProps {
   catalog: CatalogType[];
   draftTypeId: string;
@@ -453,19 +424,15 @@ export function BasicInfoTab({
               <Select
                 value={draftMetadata.specPreset ?? draftMetadata.configuratorPreset ?? "none"}
                 onValueChange={(value) => {
-                  // Два ключі, бо два механізми: описові види живуть у
-                  // `lib/printSpec.ts` і пишуться в specPreset, чотири старі —
-                  // у printPackage.ts і пишуться в configuratorPreset. Вибір
-                  // ОДИН, тому протилежний ключ завжди гасимо: інакше в моделі
-                  // лежали б два набори полів, і який із них покажеться,
-                  // залежало б від того, хто перший прочитає.
-                  const isLegacy = (LEGACY_CONFIGURATOR_PRESETS as readonly string[]).includes(value);
+                  // Механізм тепер один — опис полів (`lib/printSpecPresets.ts`),
+                  // і пишеться він у specPreset. Старий configuratorPreset гасимо
+                  // завжди: пакет, блокнот і блоки переїхали на опис під тими
+                  // самими ключами (REQ-323#p4), і модель із двома ключами
+                  // показувала б той набір, який хтось прочитає першим.
                   onMetadataChange({
                     ...draftMetadata,
-                    configuratorPreset: isLegacy
-                      ? (value as (typeof LEGACY_CONFIGURATOR_PRESETS)[number])
-                      : null,
-                    specPreset: isLegacy || value === "none" ? null : value,
+                    configuratorPreset: null,
+                    specPreset: value === "none" ? null : value,
                   });
                 }}
               >
@@ -476,11 +443,6 @@ export function BasicInfoTab({
                   <SelectItem value="none">Без набору полів</SelectItem>
                   {PRINT_SPEC_PRESETS.map((preset) => (
                     <SelectItem key={preset.key} value={preset.key}>
-                      {preset.label}
-                    </SelectItem>
-                  ))}
-                  {SELECTABLE_LEGACY_PRESETS.map((preset) => (
-                    <SelectItem key={preset.value} value={preset.value}>
                       {preset.label}
                     </SelectItem>
                   ))}

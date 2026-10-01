@@ -1,5 +1,10 @@
-import { isPrintPackageMetadata, type QuoteItemMetadata } from "@/lib/printPackage";
-import { parsePrintSpecMetadata } from "@/lib/printSpec";
+import {
+  createEmptyPrintPackageConfig,
+  isPrintPackageMetadata,
+  type PrintProductConfig,
+  type QuoteItemMetadata,
+} from "@/lib/printPackage";
+import { readQuoteItemPrintSpec } from "@/lib/printSpecLegacy";
 
 /**
  * Читання `quote_items.metadata`.
@@ -26,7 +31,6 @@ function safeHttpUrl(value: unknown): string | null {
 
 export function parseQuoteItemMetadata(value: unknown): QuoteItemMetadata | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  if (isPrintPackageMetadata(value)) return value;
 
   const record = value as Record<string, unknown>;
   const metadata: QuoteItemMetadata = {};
@@ -53,9 +57,25 @@ export function parseQuoteItemMetadata(value: unknown): QuoteItemMetadata | null
   // без цього рядка позначка зникала б на перезавантаженні сторінки, як свого
   // часу зникав `supplierUrl` (REQ-233).
 
-  // Параметри описових видів.
-  const printSpec = parsePrintSpecMetadata(record.printSpec);
+  // Параметри описових видів. Стара позиція пакета, блокнота чи блоків без
+  // `printSpec` дістає його з `printProduct` (REQ-323#p4) — картка показує її так
+  // само, як нову.
+  const printSpec = readQuoteItemPrintSpec(record);
   if (printSpec) metadata.printSpec = printSpec;
+
+  // Старий формат НЕ відкидаємо, хоч картка вже читає `printSpec`: з ним звіряється
+  // опис позиції (там лежить зведення старого конфігуратора), а заміна товару
+  // знімає його явно. Раніше такі позиції віддавались сирими цілком — повз білий
+  // список нижче, тобто й повз чистку посилань.
+  if (isPrintPackageMetadata(record)) metadata.configuratorPreset = record.configuratorPreset;
+  for (const key of ["printProduct", "printPackage"] as const) {
+    const legacy = record[key];
+    if (legacy && typeof legacy === "object" && !Array.isArray(legacy)) {
+      // Старі записи бувають без частини ключів (сертифікатних, наприклад), а
+      // зведення старого формату звертається до кожного як до рядка.
+      metadata[key] = { ...createEmptyPrintPackageConfig(), ...(legacy as Partial<PrintProductConfig>) };
+    }
+  }
 
   // Посилання чистимо НА ЧИТАННІ, а не лише на запису. Ці три поля йдуть прямо
   // в `href` кнопок «Постачальник» і «Аванпринт», а в metadata вони потрапляють

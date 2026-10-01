@@ -16,6 +16,11 @@ import type { PrintProductConfig, PrintProductKind } from "@/lib/printPackage";
  * Функція навмисно повертає ТОЙ САМИЙ об'єкт, коли міняти нічого — інакше
  * похідне значення оновлювалось би на кожен рендер і тягнуло за собою
  * перерахунок усього, що від нього залежить.
+ *
+ * З 01.10.2026 (REQ-323#p4) ЖИВІ правила пакета — умови на варіантах у
+ * `PRINT_SPEC_PACKAGE` (`printSpecPresets.ts`), звіряє їх `reconcilePrintSpecValues`.
+ * Цей файл обслуговує лише старий конфігуратор, до якого після переводу моделей
+ * каталогу на `specPreset` уже не дійти; міняти правило треба там, а не тут.
  */
 
 export type PrintPackageDensityOption = {

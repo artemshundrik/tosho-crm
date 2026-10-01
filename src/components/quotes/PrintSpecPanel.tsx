@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { PrintSpecFields } from "@/components/quotes/PrintSpecFields";
 import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
+import { readQuoteItemPrintSpec } from "@/lib/printSpecLegacy";
 import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import { toneBadgeClass } from "@/lib/statusTones";
 import {
@@ -229,10 +230,12 @@ export function PrintSpecPanel({
 
       const current = (data?.metadata ?? {}) as Record<string, unknown>;
       // `versions` беремо зі СВІЖОГО printSpec: пропс міг відстати, а запис
-      // printSpec цілком затер би знімки, зроблені з іншої вкладки.
+      // printSpec цілком затер би знімки, зроблені з іншої вкладки. Стара позиція
+      // без printSpec читається зі старого формату — інакше її перша правка
+      // вважалась би першим заповненням і не лишила версії, за яку бачили ціну.
       const built = buildPrintSpecSave({
         preset,
-        current: current.printSpec,
+        current: readQuoteItemPrintSpec(current),
         draft,
         quoteStatus,
         lastPricedAt,

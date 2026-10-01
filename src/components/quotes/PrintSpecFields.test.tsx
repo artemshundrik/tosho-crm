@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { PrintSpecFields } from "./PrintSpecFields";
 import {
   PRINT_SPEC_DIARY,
+  PRINT_SPEC_PACKAGE,
   createEmptyPrintSpecValues,
   getPrintSpecSections,
   type PrintSpecValues,
@@ -155,3 +156,63 @@ describe("чипи варіантів", () => {
     expect(chip("Нанесення", "Лак").getAttribute("aria-pressed")).toBe("false");
   });
 });
+
+/**
+ * Пакет (REQ-323#p4): від матеріалу й типу залежать не лише поля, а й ВАРІАНТИ
+ * — правила старого конфігуратора, тепер у описі. Перевіряється кліками з тієї ж
+ * причини, що й гілки щоденника: помилка в умові не ламає ні збірку, ні типи.
+ */
+function PackageHarness({ onValues }: { onValues?: (values: PrintSpecValues) => void }) {
+  const [values, setValues] = React.useState<PrintSpecValues>(() => createEmptyPrintSpecValues(PRINT_SPEC_PACKAGE));
+  return (
+    <PrintSpecFields
+      preset={PRINT_SPEC_PACKAGE}
+      values={values}
+      onChange={(next) => {
+        setValues(next);
+        onValues?.(next);
+      }}
+    />
+  );
+}
+
+describe("параметри пакета", () => {
+  it("матеріал міняє щільності, а вибір, якого більше немає, знімається тим самим кліком", async () => {
+    const user = userEvent.setup();
+    let latest: PrintSpecValues = {};
+    render(<PackageHarness onValues={(values) => (latest = values)} />);
+
+    expect(within(screen.getByRole("group", { name: "Щільність" })).queryByRole("button", { name: "120 г/м²" })).toBeNull();
+
+    await pick(user, "Матеріал", "Крафт");
+    await pick(user, "Щільність", "120 г/м²");
+    await pick(user, "Ручки", "Кручена паперова");
+    expect(chip("Щільність", "120 г/м²").getAttribute("aria-pressed")).toBe("true");
+
+    await pick(user, "Матеріал", "Картон");
+    expect(within(screen.getByRole("group", { name: "Щільність" })).queryByRole("button", { name: "120 г/м²" })).toBeNull();
+    expect(chip("Щільність", "205 г/м²")).toBeTruthy();
+    expect(within(screen.getByRole("group", { name: "Ручки" })).queryByRole("button", { name: "Кручена паперова" })).toBeNull();
+    expect(latest.density).toBe("");
+    expect(latest.handleType).toBe("");
+  });
+
+  it("готовий пакет: без CMYK, з посиланням постачальника; індивідуальний — розмір у три виміри й люверси", async () => {
+    const user = userEvent.setup();
+    render(<PackageHarness />);
+
+    await pick(user, "Тип пакета", "Готовий");
+    expect(within(screen.getByRole("group", { name: "Тип нанесення" })).queryByRole("button", { name: "CMYK" })).toBeNull();
+    expect(screen.getByText("Посилання постачальника")).toBeTruthy();
+    expect(screen.queryByText("Люверси")).toBeNull();
+
+    await pick(user, "Тип пакета", "Індивідуальний");
+    expect(chip("Тип нанесення", "CMYK")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Г")).toBeTruthy();
+    expect(screen.getByText("Люверси")).toBeTruthy();
+
+    await pick(user, "Матеріал", "Крафт");
+    expect(screen.queryByText("Люверси")).toBeNull();
+  });
+});
+
