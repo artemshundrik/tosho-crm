@@ -33,9 +33,20 @@ type Props = {
   onCancelReply: () => void;
 };
 
-/** Смужки еквалайзера під час запису: різна висота й зсув фази. */
-/** Стеля росту поля вводу — приблизно чотири рядки. */
-const MAX_INPUT_HEIGHT = 92;
+/**
+ * Поле росте разом із текстом до 45% висоти обговорення, але щонайменше до
+ * чотирьох рядків (92 px) — у низькому вікні стрічці й так лишається мало.
+ * Доти стеля стояла на чотирьох рядках завжди, і довгий коментар менеджер
+ * писав наосліп.
+ */
+const MIN_INPUT_CAP = 92;
+const AUTO_GROW_SHARE = 0.45;
+/** Ручкою можна розтягнути більше, ніж росте само, але стрічці щось лишаємо. */
+const DRAG_GROW_SHARE = 0.7;
+/** Нижче одного рядка поле ручкою не стискається. */
+const MIN_INPUT_HEIGHT = 30;
+/** З третього рядка текст забирає всю ширину, а значки йдуть під нього. */
+const EXPAND_AT_HEIGHT = 56;
 
 /**
  * Композер у стилі месенджера: одна капсула, іконки-привиди всередині,
@@ -59,6 +70,16 @@ export function ThreadComposer({
 }: Props) {
   const [body, setBody] = React.useState("");
   const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
+  /** Висота, яку задали ручкою; null — поле росте саме. Скидається після надсилання. */
+  const [manualHeight, setManualHeight] = React.useState<number | null>(null);
+  const [resizing, setResizing] = React.useState(false);
+  /**
+   * Розгорнуте поле: текст на всю ширину, скріпка, смайлик і надсилання —
+   * рядком під ним. У рядок зі значками високе поле лишало ліворуч порожню
+   * смугу на всю свою висоту, а текст тиснувся в решту.
+   */
+  const [expanded, setExpanded] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -98,6 +119,7 @@ export function ThreadComposer({
     onSend(text);
     setBody("");
     setMentionQuery(null);
+    setManualHeight(null);
   };
 
   const handleChange = (value: string) => {
@@ -106,15 +128,67 @@ export function ThreadComposer({
     setMentionQuery(match ? match[1] : null);
   };
 
-  // Поле росте разом із текстом до чотирьох рядків, далі — власний скрол.
-  // Саме так поводяться месенджери: один рядок не змушує гадати, скільки
-  // написано, а простирадло не з'їдає всю панель.
+  /** Висота самого обговорення: від неї рахуються обидві стелі поля. */
+  const threadHeight = () => rootRef.current?.parentElement?.clientHeight ?? 0;
+
+  // Поле росте разом із текстом до стелі, далі — власний скрол. Саме так
+  // поводяться месенджери: один рядок не змушує гадати, скільки написано, а
+  // простирадло не з'їдає всю панель. Висота з ручки — нижня межа: текст
+  // довший за неї росте далі до тієї ж стелі.
+  //
+  // Розгорнуте поле згортається лише разом із порожнім текстом: на всю ширину
+  // три рядки стають двома, і без цього вигляд перемикався б туди-сюди.
   React.useLayoutEffect(() => {
     const node = inputRef.current;
     if (!node) return;
+    const cap = Math.max(MIN_INPUT_CAP, Math.round(threadHeight() * AUTO_GROW_SHARE));
     node.style.height = "auto";
-    node.style.height = `${Math.min(node.scrollHeight, MAX_INPUT_HEIGHT)}px`;
-  }, [body]);
+    const fitted = Math.min(node.scrollHeight, cap);
+    node.style.height = `${manualHeight === null ? fitted : Math.max(manualHeight, fitted)}px`;
+    setExpanded(
+      resizing || manualHeight !== null || (body.length > 0 && (expanded || fitted > EXPAND_AT_HEIGHT))
+    );
+  }, [body, manualHeight, resizing, expanded, isRecording, isTranscribing]);
+
+  /**
+   * Ручка на верхньому краї: композер притиснутий до низу колонки, тож
+   * тягнуть угору, і стрічка повідомлень стискається. Системний куточок
+   * textarea (як у створенні дизайн-задачі) тут не годився: він став би
+   * впритул до кнопки надсилання й тягнувся б униз, де місця немає.
+   */
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    const node = inputRef.current;
+    if (event.button !== 0 || !node) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const startY = event.clientY;
+    const start = node.offsetHeight;
+    const cap = Math.max(MIN_INPUT_CAP, Math.round(threadHeight() * DRAG_GROW_SHARE));
+    let next = start;
+    setResizing(true);
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+
+    // Висоту під час руху пишемо прямо у вузол, стан — лише наприкінці.
+    const onMove = (move: PointerEvent) => {
+      next = Math.min(cap, Math.max(MIN_INPUT_HEIGHT, start + startY - move.clientY));
+      node.style.height = `${next}px`;
+    };
+    const onUp = () => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setResizing(false);
+      if (Math.abs(next - start) >= 1) setManualHeight(next);
+      node.focus();
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
+  };
 
   const matches = React.useMemo(() => {
     if (mentionQuery === null) return [];
@@ -133,7 +207,21 @@ export function ThreadComposer({
   };
 
   return (
-    <div className="border-t border-border/40 bg-card p-2.5">
+    <div ref={rootRef} className="group/composer relative border-t border-border/40 bg-card p-2.5">
+      {isRecording || isTranscribing ? null : (
+        <div
+          aria-hidden
+          title="Потягніть угору, щоб збільшити поле · двічі клацніть — як було"
+          data-resizing={resizing ? "" : undefined}
+          onPointerDown={startResize}
+          onDoubleClick={() => setManualHeight(null)}
+          className="group/grip absolute inset-x-0 -top-1 z-10 flex h-2.5 cursor-row-resize touch-none justify-center"
+        >
+          {/* Та сама капсула, що й на межі колонки, лише лежача: ледь видна, поки
+              миша над полем, і темнішає, коли взяв саме її. */}
+          <span className="mt-[3px] h-[5px] w-6 rounded-full bg-transparent transition-[background-color,width] duration-150 ease-out group-hover/composer:bg-foreground/15 group-hover/grip:w-9 group-hover/grip:bg-foreground/55 group-data-resizing/grip:w-10 group-data-resizing/grip:bg-foreground motion-reduce:transition-none" />
+        </div>
+      )}
       {replyTo ? (
         <div className="mb-2 flex items-start gap-2 rounded-xl border border-border/60 bg-muted/40 py-1.5 pl-2 pr-1.5">
           <span className="mt-0.5 h-full w-0.5 shrink-0 self-stretch rounded-full bg-foreground" />
@@ -200,7 +288,12 @@ export function ThreadComposer({
       {isRecording || isTranscribing ? (
         <DictationCapsule dictation={dictation} />
       ) : (
-      <div className="flex min-h-[38px] items-end gap-1 rounded-xl border border-border bg-muted/70 p-1 pl-1.5 transition-colors focus-within:border-foreground/40 focus-within:bg-card">
+      <div
+        className={cn(
+          "flex min-h-[38px] items-end gap-1 rounded-xl border border-border bg-muted/70 p-1 pl-1.5 transition-colors focus-within:border-foreground/40 focus-within:bg-card",
+          expanded && "flex-wrap"
+        )}
+      >
         <input
           ref={fileInputRef}
           type="file"
@@ -255,8 +348,10 @@ export function ThreadComposer({
               submit();
             }
           }}
-          style={{ maxHeight: MAX_INPUT_HEIGHT }}
-          className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-[7px] text-xs leading-snug outline-none placeholder:text-muted-foreground"
+          className={cn(
+            "min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-[7px] text-xs leading-snug outline-none placeholder:text-muted-foreground",
+            expanded && "order-first basis-full"
+          )}
         />
 
         {/*
@@ -277,7 +372,8 @@ export function ThreadComposer({
             aria-label="Надіслати"
             className={cn(
               "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full transition-colors",
-              sending ? "bg-muted text-muted-foreground" : "bg-foreground text-background hover:opacity-90"
+              sending ? "bg-muted text-muted-foreground" : "bg-foreground text-background hover:opacity-90",
+              expanded && "ml-auto"
             )}
           >
             <Send className="h-[18px] w-[18px]" />
@@ -287,7 +383,10 @@ export function ThreadComposer({
              одне місце, і різна форма читалась би як дві різні речі. */
           <DictationButton
             dictation={dictation}
-            className="bg-foreground text-background hover:bg-foreground hover:text-background hover:opacity-90"
+            className={cn(
+              "bg-foreground text-background hover:bg-foreground hover:text-background hover:opacity-90",
+              expanded && "ml-auto"
+            )}
           />
         )}
       </div>
