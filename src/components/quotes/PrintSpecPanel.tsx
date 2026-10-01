@@ -18,6 +18,7 @@ import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import { toneBadgeClass } from "@/lib/statusTones";
 import {
+  buildPrintSpecRounds,
   buildPrintSpecSave,
   createEmptyPrintSpecValues,
   diffPrintSpec,
@@ -30,6 +31,7 @@ import {
   needsPriceSnapshot,
   splitPrintSpecEntries,
   type PrintSpecChange,
+  type PrintSpecRound,
   type PrintSpecColumnInfo,
   type PrintSpecEntry,
   type PrintSpecMetadata,
@@ -101,6 +103,7 @@ export function PrintSpecPanel({
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<PrintSpecValues>({});
   const [saving, setSaving] = React.useState(false);
+  const [pickedRound, setPickedRound] = React.useState<string | null>(null);
 
   const savedValues = React.useMemo(
     () => (preset ? parsePrintSpecValues(preset, saved?.values ?? null) : {}),
@@ -108,19 +111,44 @@ export function PrintSpecPanel({
   );
 
   /*
-    ПОЗНАЧКИ ЗМІН ПІСЛЯ ЦІНИ. Знімок у `versions` — це версія, за яку бачили
-    ціну; щойно прорахунок перерахували, він застаріває (`resolvePriceBaseline`)
-    і позначки зникають. Нічого не пишемо в базу: це лише порівняння.
+    РАУНДИ (REQ-323#p6): кожен знімок у `versions` — версія, яку рахували (В1…),
+    плюс «Зараз» (ще не пораховано) або порахована поточна. Знімок застаріває,
+    щойно прорахунок перерахували (`resolvePriceBaseline`). Нічого не пишемо в базу.
   */
-  const changes = React.useMemo<PrintSpecChange[]>(() => {
-    if (!preset) return [];
-    const baseline = resolvePriceBaseline({ versions: saved?.versions, lastPricedAt });
-    return baseline ? diffPrintSpec(preset, baseline, savedValues) : [];
-  }, [preset, saved?.versions, lastPricedAt, savedValues]);
-  const marks = React.useMemo(
-    () => new Map<string, CardMark>(changes.map((change) => [change.fieldId, { tone: "warning", change }])),
-    [changes]
+  const rounds = React.useMemo<PrintSpecRound[]>(
+    () => (preset ? buildPrintSpecRounds(preset, saved?.versions, savedValues, lastPricedAt) : []),
+    [preset, saved?.versions, savedValues, lastPricedAt]
   );
+  const hasHistory = rounds.length >= 2;
+  const pickedIndex = hasHistory ? rounds.findIndex((round) => round.label === pickedRound) : -1;
+  const roundIndex = pickedIndex >= 0 ? pickedIndex : rounds.length - 1;
+  const viewingLast = !hasHistory || roundIndex === rounds.length - 1;
+  const displayValues = hasHistory ? rounds[roundIndex].values : savedValues;
+  const unpricedChanges = rounds.length > 0 && rounds[rounds.length - 1].unpriced ? rounds[rounds.length - 1].changes : [];
+
+  /*
+    Позначки на картці. Останній раунд: жовті — лише непорахована різниця;
+    поля, змінені в раніших раундах, мають сірий ярлик із номером ОСТАННЬОГО
+    раунду, де їх міняли. Минула версія: її власні зміни, нейтральним тоном —
+    жовте лишається за непорахованим.
+  */
+  const { marks, tags } = React.useMemo(() => {
+    const nextMarks = new Map<string, CardMark>();
+    const nextTags = new Map<string, string>();
+    if (!hasHistory) return { marks: nextMarks, tags: nextTags };
+    if (!viewingLast) {
+      for (const change of rounds[roundIndex].changes) nextMarks.set(change.fieldId, { tone: "muted", change });
+      return { marks: nextMarks, tags: nextTags };
+    }
+    rounds.forEach((round, index) => {
+      if (index === 0) return;
+      for (const change of round.changes) {
+        if (round.unpriced) nextMarks.set(change.fieldId, { tone: "warning", change });
+        else nextTags.set(change.fieldId, round.label);
+      }
+    });
+    return { marks: nextMarks, tags: nextTags };
+  }, [hasHistory, viewingLast, rounds, roundIndex]);
 
   /*
     ГОЛОВНЕ ВЕЛИКЕ, РЕШТА СІТКОЮ (вигляд В, обраний 11.09.2026 з чотирьох).
@@ -134,8 +162,8 @@ export function PrintSpecPanel({
     дизайн-задачі він лишається.
   */
   const entries = React.useMemo(
-    () => (preset && isPrintSpecFilled(preset, savedValues) ? formatPrintSpecEntries(preset, savedValues) : []),
-    [preset, savedValues]
+    () => (preset && isPrintSpecFilled(preset, displayValues) ? formatPrintSpecEntries(preset, displayValues) : []),
+    [preset, displayValues]
   );
   const { hero } = React.useMemo(
     () => (preset ? splitPrintSpecEntries(preset, entries) : { hero: [] }),
@@ -149,7 +177,7 @@ export function PrintSpecPanel({
     хто рахує, що є куди дозаповнити, а не оцінка: заповнили до кінця — і він
     зникає, бо «19 з 19» нічого не каже.
   */
-  const columns = React.useMemo(() => (preset ? getPrintSpecColumns(preset, savedValues) : []), [preset, savedValues]);
+  const columns = React.useMemo(() => (preset ? getPrintSpecColumns(preset, displayValues) : []), [preset, displayValues]);
   const progress = React.useMemo(() => {
     const total = columns.reduce((sum, column) => sum + column.total, 0);
     const done = columns.reduce((sum, column) => sum + column.filled, 0);
@@ -227,8 +255,8 @@ export function PrintSpecPanel({
   };
 
   const filled = entries.length > 0;
-  const warningCount = [...marks.values()].filter((mark) => mark.tone === "warning").length;
-  const cardColumns = buildCardColumns(preset, columns, entryById, heroIds, marks);
+  const warningCount = unpricedChanges.length;
+  const cardColumns = buildCardColumns(preset, columns, entryById, heroIds, marks, tags);
 
   return (
     <div className={cn("rounded-xl border border-border/50 p-4", className)}>
@@ -260,7 +288,9 @@ export function PrintSpecPanel({
         ) : null}
       </div>
 
-      {warningCount > 0 ? (
+      {hasHistory ? <RoundSwitcher rounds={rounds} active={roundIndex} onPick={setPickedRound} /> : null}
+
+      {warningCount > 0 && viewingLast ? (
         <div className="mt-2 text-xs leading-[17px] text-muted-foreground">
           Порівняно з версією, яку рахували{lastPricedAt ? ` ${formatDayMonth(lastPricedAt)}` : ""}. Позначки зникнуть,
           коли прорахунок перерахують.
@@ -269,7 +299,7 @@ export function PrintSpecPanel({
 
       {filled ? (
         <>
-          {hero.length > 0 ? <PrintSpecHero entries={hero} marks={marks} /> : null}
+          {hero.length > 0 ? <PrintSpecHero entries={hero} marks={marks} tags={tags} /> : null}
           {cardColumns.length > 0 ? (
             <div
               className={cn(
@@ -311,6 +341,8 @@ export function PrintSpecPanel({
           Параметри ще не заповнені{canEdit ? "" : " — їх заповнює той, хто прораховує"}.
         </div>
       )}
+
+      {hasHistory ? <RoundHistory preset={preset} rounds={rounds} /> : null}
 
       <Dialog open={open} onOpenChange={(next) => (saving ? null : setOpen(next))}>
         {/*
@@ -407,7 +439,15 @@ const HERO_COLUMNS: Record<number, string> = {
  * стрічка — це те, що читають з відстані, і два рядки в одній клітинці
  * зруйнували б лінію, на якій стоять решта.
  */
-function PrintSpecHero({ entries, marks }: { entries: PrintSpecEntry[]; marks: Map<string, CardMark> }) {
+function PrintSpecHero({
+  entries,
+  marks,
+  tags,
+}: {
+  entries: PrintSpecEntry[];
+  marks: Map<string, CardMark>;
+  tags: Map<string, string>;
+}) {
   return (
     <div className={cn("mt-3.5 grid grid-cols-2 gap-y-3", HERO_COLUMNS[Math.min(entries.length, 4)])}>
       {entries.map((entry, index) => (
@@ -422,9 +462,17 @@ function PrintSpecHero({ entries, marks }: { entries: PrintSpecEntry[]; marks: M
           <div className="truncate text-xl font-semibold leading-6 tracking-tight text-foreground" title={entry.value}>
             {entry.value}
           </div>
-          <div className="mt-0.5 text-xs text-muted-foreground">{entry.label}</div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            {entry.label}
+            {tags.get(entry.id) ? <VersionTag label={tags.get(entry.id) ?? ""} /> : null}
+          </div>
           {marks.get(entry.id) ? (
-            <div className="mt-0.5 truncate text-2xs text-warning-foreground">
+            <div
+              className={cn(
+                "mt-0.5 truncate text-2xs",
+                marks.get(entry.id)?.tone === "warning" ? "text-warning-foreground" : "text-muted-foreground"
+              )}
+            >
               було: {marks.get(entry.id)?.change.from || "—"}
             </div>
           ) : null}
@@ -437,7 +485,7 @@ function PrintSpecHero({ entries, marks }: { entries: PrintSpecEntry[]; marks: M
 /** Позначка зміни біля поля картки: колір лишається лише за непорахованими змінами. */
 type CardMark = { tone: "warning" | "muted"; change: PrintSpecChange };
 
-type CardRow = { id: string; label: string; value?: string; mark?: CardMark };
+type CardRow = { id: string; label: string; value?: string; mark?: CardMark; tag?: string };
 
 type CardColumn = { title: string; filled: number; total: number; warnings: number; rows: CardRow[] };
 
@@ -463,7 +511,8 @@ function buildCardColumns(
   columns: PrintSpecColumnInfo[],
   entryById: Map<string, PrintSpecEntry>,
   heroIds: Set<string>,
-  marks: Map<string, CardMark>
+  marks: Map<string, CardMark>,
+  tags: Map<string, string>
 ): CardColumn[] {
   const byTitle = new Map<string, CardColumn>();
   const shown = new Set(heroIds);
@@ -472,7 +521,13 @@ function buildCardColumns(
     for (const field of column.sections.flatMap((section) => section.fields)) {
       shown.add(field.id);
       if (heroIds.has(field.id)) continue;
-      rows.push({ id: field.id, label: field.label, value: entryById.get(field.id)?.value, mark: marks.get(field.id) });
+      rows.push({
+        id: field.id,
+        label: field.label,
+        value: entryById.get(field.id)?.value,
+        mark: marks.get(field.id),
+        tag: tags.get(field.id),
+      });
     }
     byTitle.set(column.title, { title: column.title, filled: column.filled, total: column.total, warnings: 0, rows });
   }
@@ -523,15 +578,107 @@ function PrintSpecCardRow({ row }: { row: CardRow }) {
           </span>
         </span>
       ) : (
-        <span
-          className={cn(
-            "min-w-0 text-right font-medium tabular-nums",
-            row.value ? "text-foreground" : "text-muted-foreground/70"
-          )}
-        >
-          {row.value ?? "—"}
+        <span className="inline-flex min-w-0 items-baseline justify-end gap-2 text-right">
+          <span
+            className={cn("min-w-0 font-medium tabular-nums", row.value ? "text-foreground" : "text-muted-foreground/70")}
+          >
+            {row.value ?? "—"}
+          </span>
+          {row.tag ? <VersionTag label={row.tag} /> : null}
         </span>
       )}
+    </div>
+  );
+}
+
+/** Сірий ярлик: у якій версії параметр змінили востаннє. */
+function VersionTag({ label }: { label: string }) {
+  return <span className="rounded bg-muted px-1.5 text-2xs font-semibold text-muted-foreground">{label}</span>;
+}
+
+const formatDayMonthTime = (iso: string): string =>
+  new Intl.DateTimeFormat("uk-UA", {
+    timeZone: "Europe/Kiev",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+
+/** Перемикач версій у шапці картки: «В1 24.09 · В2 27.09 · Зараз». */
+function RoundSwitcher({
+  rounds,
+  active,
+  onPick,
+}: {
+  rounds: PrintSpecRound[];
+  active: number;
+  onPick: (label: string) => void;
+}) {
+  return (
+    <div role="group" aria-label="Версії параметрів" className="mt-2.5 inline-flex flex-wrap gap-1 rounded-lg bg-muted/60 p-0.5">
+      {rounds.map((round, index) => (
+        <button
+          key={round.label}
+          type="button"
+          aria-pressed={index === active}
+          onClick={() => onPick(round.label)}
+          className={cn(
+            "inline-flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium tabular-nums transition-colors",
+            index === active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {round.unpriced ? <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-warning-solid" /> : null}
+          {round.label}
+          {round.pricedAt ? <span className="font-normal text-muted-foreground">{formatDayMonth(round.pricedAt)}</span> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Історія версій унизу панелі: найновіший раунд згори, праворуч — що змінили. */
+function RoundHistory({ preset, rounds }: { preset: PrintSpecPreset; rounds: PrintSpecRound[] }) {
+  const presetColumns = preset.columns ?? [{ title: preset.label, sections: preset.sections }];
+  const part = (section: string) => presetColumns.find((column) => column.sections.includes(section))?.title ?? section;
+  return (
+    <div className="mt-4 border-t border-border/50 pt-3">
+      <div className="mb-1.5 flex items-center gap-2 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+        Історія версій <span className="tabular-nums">({rounds.length})</span>
+      </div>
+      <div className="divide-y divide-border/40">
+        {[...rounds].reverse().map((round) => (
+          <div key={round.label} className="grid gap-x-4 gap-y-1 py-2 text-xs sm:grid-cols-[13rem_1fr]">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              {round.unpriced ? (
+                <>
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-warning-solid" />
+                  <span className="font-semibold text-foreground">Зараз</span>
+                  <span>не пораховано{round.at ? ` · ${formatDayMonthTime(round.at)}` : ""}</span>
+                </>
+              ) : (
+                <>
+                  <VersionTag label={round.label} />
+                  <span>Пораховано{round.pricedAt ? ` ${formatDayMonth(round.pricedAt)}` : ""}</span>
+                </>
+              )}
+            </div>
+            <div className="min-w-0 space-y-0.5 text-foreground">
+              {round.label === "В1" ? (
+                <div className="text-muted-foreground">Перша ціна</div>
+              ) : (
+                round.changes.map((change) => (
+                  <div key={change.fieldId}>
+                    {part(change.section)} · {change.label}:{" "}
+                    <span className="text-muted-foreground line-through">{change.from || "—"}</span> →{" "}
+                    <span className="font-medium">{change.to || "—"}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

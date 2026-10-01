@@ -1883,3 +1883,59 @@ export function buildPrintSpecSave({
     changedAfterPrice: changes.length > 0 && PRICED_QUOTE_STATUSES.has(quoteStatus ?? ""),
   };
 }
+
+/** Один підхід до параметрів: версія, яку рахували, або поточні значення. */
+export type PrintSpecRound = {
+  /** «В1», «В2», … або «Зараз». */
+  label: string;
+  /** Коли цю версію порахували; `null` — ще ні або невідомо. */
+  pricedAt: string | null;
+  /** Для «Зараз» — коли зроблено першу правку після ціни. */
+  at: string | null;
+  values: PrintSpecValues;
+  /** Поточні значення, за які ще не бачили ціни. */
+  unpriced: boolean;
+  /** Відносно попереднього раунду; у першого порожньо. */
+  changes: PrintSpecChange[];
+};
+
+/**
+ * Раунди для перемикача версій на картці. Без жодного знімка історії немає —
+ * параметри ще не мінялись після ціни.
+ */
+export function buildPrintSpecRounds(
+  preset: PrintSpecPreset,
+  versions: PrintSpecVersion[] | null | undefined,
+  currentValues: PrintSpecValues,
+  lastPricedAt: string | null | undefined
+): PrintSpecRound[] {
+  const list = versions ?? [];
+  if (list.length === 0) return [];
+
+  const rounds: Omit<PrintSpecRound, "changes">[] = list.map((version, index) => ({
+    label: `В${index + 1}`,
+    pricedAt: version.pricedAt,
+    at: version.at,
+    values: version.values,
+    unpriced: false,
+  }));
+
+  const last = list[list.length - 1];
+  if (resolvePriceBaseline({ versions: list, lastPricedAt }) !== null) {
+    rounds.push({ label: "Зараз", pricedAt: null, at: last.at, values: currentValues, unpriced: true });
+  } else if (diffPrintSpec(preset, last.values, currentValues).length > 0) {
+    // Після останнього знімка прорахунок уже перерахували: поточні значення — ще одна порахована версія.
+    rounds.push({
+      label: `В${list.length + 1}`,
+      pricedAt: lastPricedAt ?? null,
+      at: null,
+      values: currentValues,
+      unpriced: false,
+    });
+  }
+
+  return rounds.map((round, index) => ({
+    ...round,
+    changes: index === 0 ? [] : diffPrintSpec(preset, rounds[index - 1].values, round.values),
+  }));
+}

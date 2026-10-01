@@ -3,6 +3,7 @@ import {
   CUSTOM_OPTION_VALUE,
   PRINT_SPEC_DIARY,
   PRINT_SPEC_PRESETS,
+  buildPrintSpecRounds,
   buildPrintSpecSave,
   createEmptyPrintSpecValues,
   diffPrintSpec,
@@ -340,5 +341,60 @@ describe("buildPrintSpecSave", () => {
     const approved = buildPrintSpecSave({ preset: PRINT_SPEC_DIARY, current, draft: { ...base, coverType: "flex" }, quoteStatus: "approved" });
     expect(approved.printSpec.versions).toHaveLength(1);
     expect(approved.changedAfterPrice).toBe(false);
+  });
+});
+
+describe("buildPrintSpecRounds", () => {
+  const vals = (coverType: string, blockPrint = ""): PrintSpecValues => ({
+    ...createEmptyPrintSpecValues(PRINT_SPEC_DIARY),
+    coverType,
+    blockKind: "individual", // кольоровість блока видима лише для індивідуального
+    blockPrint,
+  });
+  const v = (at: string, pricedAt: string | null, coverType: string): PrintSpecVersion => ({
+    at,
+    pricedAt,
+    values: vals(coverType),
+  });
+  const rounds = (versions: PrintSpecVersion[], current: PrintSpecValues, lastPricedAt: string | null) =>
+    buildPrintSpecRounds(PRINT_SPEC_DIARY, versions, current, lastPricedAt);
+
+  it("без знімків історії немає", () => {
+    expect(rounds([], vals("flex"), "2026-09-24T10:00:00Z")).toEqual([]);
+  });
+
+  it("непорахована правка — останній раунд «Зараз» з різницею від знімка", () => {
+    const result = rounds([v("2026-09-25T10:00:00Z", "2026-09-24T10:00:00Z", "hard")], vals("flex"), "2026-09-24T10:00:00Z");
+    expect(result.map((round) => round.label)).toEqual(["В1", "Зараз"]);
+    expect(result[1].unpriced).toBe(true);
+    expect(result[0].changes).toEqual([]);
+    expect(result[1].changes.map((change) => [change.fieldId, change.from, change.to])).toEqual([
+      ["coverType", "Тверда", "Гнучка"],
+    ]);
+  });
+
+  it("після перерахунку відмінні поточні значення — ще одна порахована версія", () => {
+    const repriced = "2026-09-27T10:00:00Z";
+    const result = rounds([v("2026-09-25T10:00:00Z", "2026-09-24T10:00:00Z", "hard")], vals("flex"), repriced);
+    expect(result.map((round) => round.label)).toEqual(["В1", "В2"]);
+    expect(result[1]).toMatchObject({ unpriced: false, pricedAt: repriced });
+    expect(result[1].changes).toHaveLength(1);
+  });
+
+  it("після перерахунку без відмінностей нового раунду немає", () => {
+    const result = rounds([v("2026-09-25T10:00:00Z", "2026-09-24T10:00:00Z", "hard")], vals("hard"), "2026-09-27T10:00:00Z");
+    expect(result.map((round) => round.label)).toEqual(["В1"]);
+  });
+
+  it("чотири підходи — В1…В3 і «Зараз», зміни від попереднього", () => {
+    const versions = [
+      v("2026-09-25T10:00:00Z", "2026-09-24T10:00:00Z", "hard"),
+      v("2026-09-28T10:00:00Z", "2026-09-27T10:00:00Z", "flex"),
+      v("2026-09-30T10:00:00Z", "2026-09-29T10:00:00Z", "book"),
+    ];
+    const result = rounds(versions, vals("book", "2_2"), "2026-09-29T10:00:00Z");
+    expect(result.map((round) => round.label)).toEqual(["В1", "В2", "В3", "Зараз"]);
+    expect(result[1].changes.map((change) => change.to)).toEqual(["Гнучка"]);
+    expect(result[3].changes.map((change) => change.fieldId)).toEqual(["blockPrint"]);
   });
 });
