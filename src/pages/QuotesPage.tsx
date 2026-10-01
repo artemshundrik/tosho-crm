@@ -162,6 +162,7 @@ import {
   createPrintConfig,
   emptyDeliveryDetails,
   getErrorMessage,
+  ACTIVE_QUOTE_STATUSES,
   normalizeStatus,
   quoteTypeIcon,
   quoteTypeLabel,
@@ -197,6 +198,8 @@ import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/m
 import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
 import { isOffBoardStatus } from "@/lib/kanbanBoards";
+import { listQuoteStatusCounts } from "@/lib/quoteStatusCounts";
+import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
 import { computeQuoteListTotal } from "@/features/quotes/quotes-page/quoteListTotal";
 import { QUOTES_COLUMN_WIDTH } from "@/lib/kanbanColumnWidth";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
@@ -228,9 +231,17 @@ const ALL_MANAGERS_FILTER = "__all__";
 const QUOTES_TABLE_PAGE_SIZE = 50;
 const QUOTES_TABLE_PAGE_INCREMENT = 50;
 const QUOTES_KANBAN_INITIAL_PAGE_SIZE = 120;
-/** Статуси, у яких прорахунок ще в роботі — їх дошка мусить показувати всі. */
-const ACTIVE_QUOTE_STATUSES = ["estimating", "estimated", "awaiting_approval"] as const;
 const QUOTES_KANBAN_PAGE_INCREMENT = 60;
+/** Вкладки статусів над таблицею. `statuses` — з яких статусів складається лічильник; без нього — усі. */
+const QUOTE_STATUS_TABS: Array<{ value: string; label: string; statuses?: readonly string[] }> = [
+  { value: "active", label: "Активні", statuses: ACTIVE_QUOTE_STATUSES },
+  { value: "estimating", label: "На прорахунку", statuses: ["estimating"] },
+  { value: "estimated", label: "Пораховано", statuses: ["estimated"] },
+  { value: "awaiting_approval", label: "На погодженні", statuses: ["awaiting_approval"] },
+  { value: "approved", label: "Затверджено", statuses: ["approved"] },
+  { value: "cancelled", label: "Скасовані", statuses: ["cancelled"] },
+  { value: "all", label: "Усі" },
+];
 const QUOTES_SEARCH_FETCH_PAGE_SIZE = 500;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
 const KANBAN_AUTOLOAD_LOCK_MS = 1200;
@@ -501,7 +512,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    * ширше: він дивиться ще й у ТЗ та в артикул позиції (REQ-178#p8).
    */
   const [rowsSearchTerm, setRowsSearchTerm] = useState<string | null>(null);
-  const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "all");
+  const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "active");
   // Manager-filter default (see effect below) — role-agnostic, by ownership:
   //   • designer   → всі (they filter by designer, not manager)
   //   • sales-manager job role → себе immediately (definitely owns quotes)
@@ -577,6 +588,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [creating, setCreating] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [viewMode, setViewMode] = useState<"table" | "kanban">(() => initialViewMode);
+  /**
+   * «Активні» — лише вкладка таблиці. Дошка й телефонні чипи не мають такого
+   * пункту, тож там це те саме, що «Усі»; сам вибір у `status` не губиться,
+   * і повернення в таблицю відкриває ту саму вкладку.
+   */
+  const effectiveStatus = status === "active" && (viewMode === "kanban" || isNarrowViewport) ? "all" : status;
+  const neutralStatus = viewMode === "table" && !isNarrowViewport ? "active" : "all";
+  const statusIsNeutral = effectiveStatus === neutralStatus;
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
 
   const quotesKanbanAutoloadLockRef = useRef(false);
@@ -590,6 +609,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => Object.fromEntries(initialCache?.kanbanProductEntries ?? [])
   );
   const [kanbanPreviewsLoading, setKanbanPreviewsLoading] = useState(false);
+  /** Лічильники статусів з бази за поточним менеджером і пошуком (не залежать від вкладки). */
+  const [quoteStatusCounts, setQuoteStatusCounts] = useState<Record<string, number> | null>(null);
   const [kanbanPreviewVisibleCountByColumn, setKanbanPreviewVisibleCountByColumn] = useState<Record<string, number>>(
     () => Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
   );
@@ -1380,7 +1401,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         const data = await listQuotes({
           teamId,
           search,
-          status,
+          status: effectiveStatus === "active" ? undefined : effectiveStatus,
+          statuses: effectiveStatus === "active" ? [...ACTIVE_QUOTE_STATUSES] : undefined,
           managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
           limit: pageSize + 1,
           offset: nextOffset,
@@ -1405,7 +1427,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
        * архів. Завершені (approved/cancelled) лишаються пагінованими — саме
        * вони й забивали вікно (141 скасований на 248 усіх).
        */
-      if (!append && (!status || status === "all")) {
+      if (!append && (!effectiveStatus || effectiveStatus === "all")) {
         try {
           const activeRows = await listQuotes({
             teamId,
@@ -1548,7 +1570,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         setRefreshing(false);
       }
     }
-  }, [cacheKey, managerFilter, quotesFetchLimit, search, status, teamId, viewMode]);
+  }, [cacheKey, effectiveStatus, managerFilter, quotesFetchLimit, search, teamId, viewMode]);
 
   const loadQuoteSets = async () => {
     if (!teamId) return;
@@ -1631,12 +1653,40 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   useEffect(() => {
     if (!teamId) return;
+    let cancelled = false;
+    const id = window.setTimeout(() => {
+      void listQuoteStatusCounts({
+        teamId,
+        search,
+        managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
+      })
+        .then((raw) => {
+          if (cancelled) return;
+          const normalized: Record<string, number> = {};
+          Object.entries(raw).forEach(([key, count]) => {
+            const status = normalizeStatus(key);
+            normalized[status] = (normalized[status] ?? 0) + count;
+          });
+          setQuoteStatusCounts(normalized);
+        })
+        .catch(() => {
+          // Лічильники не критичні: без них вкладки просто без цифр.
+        });
+    }, search.trim() ? 350 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [teamId, search, managerFilter]);
+
+  useEffect(() => {
+    if (!teamId) return;
     const delay = search.trim() ? 350 : 0;
     const id = window.setTimeout(() => {
       void loadQuotes();
     }, delay);
     return () => window.clearTimeout(id);
-  }, [teamId, status, search, quotesFetchLimit, loadQuotes]);
+  }, [teamId, search, quotesFetchLimit, loadQuotes]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -1649,16 +1699,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const id = window.setTimeout(() => {
       void loadQuotes({
         fetchAll: true,
-        fullFetchKey: `search:${teamId}:${status}:${search.trim().toLowerCase()}`,
+        fullFetchKey: `search:${teamId}:${effectiveStatus}:${search.trim().toLowerCase()}`,
       });
     }, 350);
     return () => window.clearTimeout(id);
-  }, [hasMoreQuotes, loadQuotes, loading, refreshing, rows.length, search, status, teamId]);
+  }, [hasMoreQuotes, loadQuotes, loading, refreshing, rows.length, search, teamId, effectiveStatus]);
 
   useEffect(() => {
     if (!teamId) return;
     setQuotesFetchLimit(viewMode === "kanban" ? QUOTES_KANBAN_INITIAL_PAGE_SIZE : QUOTES_TABLE_PAGE_SIZE);
-  }, [managerFilter, search, status, teamId, viewMode]);
+  }, [managerFilter, search, effectiveStatus, teamId, viewMode]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -1799,7 +1849,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setKanbanPreviewVisibleCountByColumn(
       Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
     );
-  }, [managerFilter, rows.length, search, status, viewMode]);
+  }, [managerFilter, rows.length, search, effectiveStatus, viewMode]);
 
   const getCatalogAssetPayload = useCallback((storagePath: string) => {
     const originalUrl = supabase.storage.from(CATALOG_IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
@@ -2825,7 +2875,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     search,
     rowsSearchTerm,
     quickFilter,
-    status,
+    status: effectiveStatus,
+    neutralStatus,
     sortBy,
     sortOrder,
     quoteSets,
@@ -2860,17 +2911,23 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    * зламаною.
    */
   const mobileStatusCounts = useMemo(() => {
+    // Цифри з бази; поки вони не приїхали — з уже завантажених рядків.
+    if (quoteStatusCounts) return new Map(Object.entries(quoteStatusCounts));
     const counts = new Map<string, number>();
     filteredRowsByManager.forEach((row) => {
       const key = normalizeStatus(row.status);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
     return counts;
-  }, [filteredRowsByManager]);
+  }, [filteredRowsByManager, quoteStatusCounts]);
+  const mobileStatusTotal = useMemo(
+    () => (quoteStatusCounts ? Object.values(quoteStatusCounts).reduce((sum, count) => sum + count, 0) : filteredRowsByManager.length),
+    [filteredRowsByManager.length, quoteStatusCounts]
+  );
 
   const mobileStatusChips = useMemo(
     () => [
-      { key: "all", label: "Всі", count: filteredRowsByManager.length },
+      { key: "all", label: "Всі", count: mobileStatusTotal },
       ...KANBAN_COLUMNS.map((column) => ({
         key: column.id,
         label: column.label,
@@ -2878,16 +2935,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         count: mobileStatusCounts.get(column.id) ?? 0,
       })),
     ],
-    [filteredRowsByManager.length, mobileStatusCounts]
+    [mobileStatusCounts, mobileStatusTotal]
   );
 
   const mobileFilterCount = useMemo(() => {
     if (contentView === "sets") return quoteSetKindFilter !== "all" ? 1 : 0;
     let count = 0;
-    if (status !== "all") count += 1;
+    if (!statusIsNeutral) count += 1;
     if (managerFilter !== ALL_MANAGERS_FILTER) count += 1;
     return count;
-  }, [contentView, managerFilter, quoteSetKindFilter, status]);
+  }, [contentView, managerFilter, quoteSetKindFilter, statusIsNeutral]);
 
   useEffect(() => {
     const relevantIds = Array.from(
@@ -3260,7 +3317,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const clearFilters = useCallback(() => {
     setSearch("");
     setQuickFilter("all");
-    setStatusFilter("all");
+    setStatusFilter("active");
     setManagerFilter(ALL_MANAGERS_FILTER);
   }, []);
 
@@ -4523,20 +4580,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   на екрані, і «Скасовано» в ньому саме там, куди людина й
                   полізе, шукаючи скасований прорахунок.
                 */}
-                <ToolbarFilterSelect
-                  value={status}
-                  onValueChange={setStatusFilter}
-                  neutralValue="all"
-                  className="sm:w-[170px]"
-                  options={[
-                    { value: "all", label: "Всі статуси", icon: ListFilter },
-                    ...STATUS_OPTIONS.map((s) => ({
-                      value: s,
-                      label: formatStatusLabel(s),
-                      icon: statusIcons[s],
-                    })),
-                  ]}
-                />
+                {viewMode === "kanban" ? (
+                  <ToolbarFilterSelect
+                    value={effectiveStatus}
+                    onValueChange={setStatusFilter}
+                    neutralValue="all"
+                    className="sm:w-[170px]"
+                    options={[
+                      { value: "all", label: "Всі статуси", icon: ListFilter },
+                      ...STATUS_OPTIONS.map((s) => ({
+                        value: s,
+                        label: formatStatusLabel(s),
+                        icon: statusIcons[s],
+                      })),
+                    ]}
+                  />
+                ) : null}
                 {isManagerUser ? (
                   <div
                     className={cn(
@@ -4648,7 +4707,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     rows.length,
     search,
     showRefreshIndicator,
-    status,
+    effectiveStatus,
     viewMode,
     filteredQuoteSets.length,
   ]);
@@ -5166,6 +5225,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       {/* Views */}
       {contentView !== "sets" && (viewMode === "table" ? (
         <EstimatesTableCanvas>
+          {!isNarrowViewport ? (
+            <TabBar value={status} wrapperClassName="border-b border-border/60 px-2">
+              {QUOTE_STATUS_TABS.map((tab) => {
+                const count = quoteStatusCounts
+                  ? tab.statuses
+                    ? tab.statuses.reduce((sum, key) => sum + (quoteStatusCounts[key] ?? 0), 0)
+                    : Object.values(quoteStatusCounts).reduce((sum, value) => sum + value, 0)
+                  : null;
+                return (
+                  <TabBarItem key={tab.value} value={tab.value} onSelect={setStatusFilter}>
+                    {tab.label}
+                    {count !== null ? (
+                      <span className="font-mono text-2xs font-normal text-muted-foreground">{count}</span>
+                    ) : null}
+                  </TabBarItem>
+                );
+              })}
+            </TabBar>
+          ) : null}
           {boardSkeletonShown ? (
             <div
               data-deferred-body-skeleton
@@ -5204,7 +5282,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   доводилось шукати в аркуші фільтрів (картка 146). */}
               <MobileStatusChips
                 chips={mobileStatusChips}
-                activeKey={status}
+                activeKey={effectiveStatus}
                 onSelect={setStatusFilter}
                 className={MOBILE_CHIPS_ROW}
               />

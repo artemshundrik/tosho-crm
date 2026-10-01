@@ -25,6 +25,9 @@ export const STATUS_OPTIONS = [
   "cancelled",
 ];
 
+/** Статуси, у яких прорахунок ще в роботі — їх дошка мусить показувати всі. */
+export const ACTIVE_QUOTE_STATUSES = ["estimating", "estimated", "awaiting_approval"] as const;
+
 export const statusLabels: Record<string, string> = {
   // «Новий» більше не ставиться (REQ-299), але мітка лишається: на цей статус
   // посилається історія — 80+ переходів, які нікуди не поділись.

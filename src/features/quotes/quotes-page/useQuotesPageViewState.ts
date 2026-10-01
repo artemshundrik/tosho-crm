@@ -6,7 +6,7 @@ import type {
   QuoteSetMembershipInfo,
 } from "@/lib/toshoApi";
 import { quoteCustomerMatchKey } from "@/lib/toshoApi";
-import { normalizeStatus } from "@/features/quotes/quotes-page/config";
+import { ACTIVE_QUOTE_STATUSES, normalizeStatus } from "@/features/quotes/quotes-page/config";
 
 type SortBy = "date" | "number" | null;
 type SortOrder = "asc" | "desc";
@@ -24,6 +24,8 @@ type UseQuotesPageViewStateParams = {
   rowsSearchTerm?: string | null;
   quickFilter: QuickFilter;
   status: string;
+  /** Значення статусу, що не вважається фільтром (за замовчуванням «all»; у таблиці — «active»). */
+  neutralStatus?: string;
   sortBy: SortBy;
   sortOrder: SortOrder;
   quoteSets: QuoteSetListRow[];
@@ -60,6 +62,7 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
     rowsSearchTerm,
     quickFilter,
     status,
+    neutralStatus = "all",
     sortBy,
     sortOrder,
     quoteSets,
@@ -75,8 +78,8 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
   } = params;
 
   const hasActiveFilters = useMemo(
-    () => Boolean(search.trim()) || quickFilter !== "all" || status !== "all",
-    [search, quickFilter, status]
+    () => Boolean(search.trim()) || quickFilter !== "all" || status !== neutralStatus,
+    [search, quickFilter, status, neutralStatus]
   );
 
   const filteredAndSortedRows = useMemo(() => {
@@ -108,7 +111,11 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
       filtered = filtered.filter((row) => normalizeStatus(row.status) === "estimated");
     }
 
-    if (status && status !== "all") {
+    if (status === "active") {
+      filtered = filtered.filter((row) =>
+        (ACTIVE_QUOTE_STATUSES as readonly string[]).includes(normalizeStatus(row.status))
+      );
+    } else if (status && status !== "all") {
       filtered = filtered.filter((row) => normalizeStatus(row.status) === status);
     }
 

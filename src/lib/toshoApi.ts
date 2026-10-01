@@ -11,6 +11,7 @@ import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { findQuoteIdsByProductSku } from "@/lib/quoteSkuMatches";
+import { applyQuoteListFilters, escapePostgrestIlikeTerm } from "@/lib/quoteListFilters";
 import type { AvatarAbsence } from "@/lib/absenceIndicator";
 import { getCurrentUserId } from "./currentUser";
 import type { PrintConfiguratorPreset } from "@/lib/printPackage";
@@ -150,14 +151,6 @@ const QUOTE_RUN_SELECT =
   "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_model_vat,unit_price_print,logistics_cost,desired_manager_income,markup_rate,manager_rate,fixed_cost_rate,vat_rate,is_approved";
 const QUOTE_RUN_LEGACY_SELECT =
   "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost";
-
-function escapePostgrestIlikeTerm(value: string) {
-  return value
-    .trim()
-    .replace(/[(),]/g, " ")
-    .replace(/[%_]/g, (match) => `\\${match}`)
-    .replace(/\s+/g, " ");
-}
 
 export type QuoteStatusRow = {
   id: string;
@@ -492,24 +485,14 @@ export async function listQuotes(params: ListQuotesParams) {
         .order("updated_at", { ascending: false })
         .order("created_at", { ascending: false });
 
-      if (escapedSearch.length > 0) {
-        const searchFilters = variant.searchableColumns.map((column) => `${column}.ilike.%${escapedSearch}%`);
-        // Знайдене за артикулом іде ТИМ САМИМ фільтром, а не окремим добором:
-        // так сортування, статуси й посторінковість лишаються спільними, і
-        // прорахунок, знайдений за кодом товару, стоїть у списку на своєму місці.
-        if (skuQuoteIds.length > 0) searchFilters.push(`id.in.(${skuQuoteIds.join(",")})`);
-        query = query.or(searchFilters.join(","));
-      }
-
-      if (statuses && statuses.length > 0) {
-        query = query.in("status", statuses as Array<Database["tosho"]["Enums"]["quote_status"]>);
-      } else if (status && status !== "all") {
-        query = query.eq("status", status as Database["tosho"]["Enums"]["quote_status"]);
-      }
-
-      if (managerUserId?.trim()) {
-        query = query.eq("assigned_to", managerUserId.trim());
-      }
+      query = applyQuoteListFilters(query, {
+        escapedSearch,
+        skuQuoteIds,
+        searchableColumns: variant.searchableColumns,
+        status,
+        statuses,
+        managerUserId,
+      });
 
       if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
         const safeOffset = typeof offset === "number" && Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
