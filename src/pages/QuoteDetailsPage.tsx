@@ -2276,14 +2276,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         !resolvedModelId && item.attachment?.url && item.attachment.type.startsWith("image/")
           ? item.attachment.url
           : null;
+      // Порядок джерел — як у «Товарах»: свій губив фото з посилання, і «Дизайн» показував коробку.
+      const variantImageUrl = item.metadata?.catalogVariant?.imageUrl?.trim() || null;
+      const preview = pickProductPreview({ catalogImage, catalogZoomImage, variantImageUrl, attachmentImage });
 
       return {
         key: item.id,
         item,
         title: item.title || modelLabel || `Товар ${fallbackIndex + 1}`,
         meta: [typeLabel, kindLabel].filter(Boolean).join(" / "),
-        imageUrl: catalogImage ?? attachmentImage ?? null,
-        zoomImageUrl: catalogZoomImage ?? attachmentImage ?? catalogImage ?? null,
+        imageUrl: preview?.url ?? null,
+        zoomImageUrl: preview?.zoomUrl ?? null,
         runs: indexedRuns.filter(({ run }) =>
           run.quote_item_id ? run.quote_item_id === item.id : items.length === 1
         ),
