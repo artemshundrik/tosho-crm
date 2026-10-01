@@ -1757,21 +1757,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   /** Перечитати позиції після запису вибору — `loadItems` теж оголошений нижче. */
   const loadItemsRef = useRef<() => Promise<void>>(async () => {});
 
-  const itemChoicePricing = useCallback(
-    (item: { id: string }) => {
-      const run = getSelectedRunForItem(item.id);
-      if (!run) return { qty: 0, lineTotal: 0 };
-      return { qty: Number(run.quantity) || 0, lineTotal: getRunPricing(run).saleTotal };
-    },
-    [getRunPricing, getSelectedRunForItem]
-  );
-
   const itemChoice = useQuoteItemChoice({
     quoteId,
     teamId,
     userId,
     items,
-    pricingFor: itemChoicePricing,
+    runs,
+    getRunPricing,
+    onPickRun: (itemId, runId) => toggleApprovedRun(runId, itemId),
     onSaved: () => loadItemsRef.current(),
     onApprove: (note) => approveAfterItemChoiceRef.current(note),
     onError: (message) => {
@@ -6706,8 +6699,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         items={itemChoice.dialogItems}
         selectedIds={itemChoice.selectedIds}
         busy={itemChoice.busy}
+        canPickRun={canEditRuns}
         currencyFormatter={(value) => formatCurrency(value, quote?.currency)}
         onToggle={itemChoice.toggle}
+        onPickRun={itemChoice.pickRun}
         onCancel={itemChoice.cancel}
         onSubmit={() => void itemChoice.confirm()}
       />

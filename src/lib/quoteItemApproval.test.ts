@@ -5,6 +5,7 @@ import {
   hasQuoteItemChoice,
   isQuoteItemDeclined,
   isQuoteItemIncluded,
+  isQuoteItemPreselected,
   needsQuoteItemChoice,
   summarizeQuoteItemChoice,
 } from "./quoteItemApproval";
@@ -94,6 +95,36 @@ describe("needsQuoteItemChoice", () => {
 
   it("питає, коли позицій кілька", () => {
     expect(needsQuoteItemChoice([{ is_approved: null }, { is_approved: null }])).toBe(true);
+  });
+});
+
+describe("isQuoteItemPreselected", () => {
+  // Ознака «тиражів кілька, а погодженого нема» — `needsApprovedRunChoice`.
+  const runChosen = false;
+  const runPending = true;
+
+  /**
+   * Живий випадок TS-0926-0053 (REQ-317): футболка 500/100/1000 з позначеною
+   * тисячею і кепка 100/500/1000 без позначки. Галочка мала стояти лише на
+   * футболці — а стояла на обох.
+   */
+  it("не ставить галочку позиції, де тиражів кілька й жоден не погоджений", () => {
+    expect(isQuoteItemPreselected({ is_approved: null }, runChosen)).toBe(true);
+    expect(isQuoteItemPreselected({ is_approved: null }, runPending)).toBe(false);
+    expect(isQuoteItemPreselected({}, runPending)).toBe(false);
+  });
+
+  it("не воскрешає позицію, яку вже відхилили, навіть із погодженим тиражем", () => {
+    expect(isQuoteItemPreselected({ is_approved: false }, runChosen)).toBe(false);
+  });
+
+  /**
+   * Позицію колись узяли, а позначку тиражу потім зняли: клієнт уже не сказав,
+   * котрий тираж, тож і замовлення з неї не складеш — галочку знято.
+   */
+  it("слухає тиражі, а не стару відповідь, коли позначку тиражу зняли", () => {
+    expect(isQuoteItemPreselected({ is_approved: true }, runPending)).toBe(false);
+    expect(isQuoteItemPreselected({ is_approved: true }, runChosen)).toBe(true);
   });
 });
 

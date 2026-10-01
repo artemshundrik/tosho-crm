@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { supabase } from "@/lib/supabaseClient";
-import { filterIncludedQuoteItems } from "@/lib/quoteItemApproval";
+import { isQuoteItemPreselected } from "@/lib/quoteItemApproval";
+import { needsApprovedRunChoice, pickApprovedRun } from "@/lib/quoteRuns";
+import type { QuoteRun } from "@/lib/toshoApi";
 
 import { getErrorMessage } from "./config";
 import { logQuoteActivity } from "./queries";
@@ -24,6 +26,7 @@ export type QuoteItemChoiceInput = {
   unit: string;
   is_approved?: boolean | null;
 };
+
 
 /**
  * Записати вибір клієнта по позиціях прорахунку.
@@ -91,20 +94,51 @@ export function useQuoteItemChoice(params: {
   userId: string | null | undefined;
   items: QuoteItemChoiceInput[];
   /**
-   * Кількість і сума — з ОДНОГО тиражу позиції, а не з `qty × price` самої
-   * позиції. Разом, а не двома викликами: у прорахунку на 100 і 200 шт
-   * кількість позиції й сума тиражу — числа з різних рядків, і рядок вікна
-   * показував би «100 шт · 67 382 грн», де 67 382 це ціна двохсот. Рахує
-   * сторінка, бо там живе `getRunPricing`; хук лише питає.
+   * УСІ тиражі прорахунку, а не «вибраний». Раніше сторінка віддавала один
+   * тираж — той, що відкритий вкладкою, — і вікно «Що погодив клієнт»
+   * показувало «кепка 100 шт · 45 921 грн» лише тому, що менеджер дивилась на
+   * сотню, тоді як замовлення бере ПОГОДЖЕНИЙ тираж (REQ-317, TS-0926-0053).
+   * Тепер, який тираж у рядку, вирішує те саме правило, що й замовлення:
+   * `pickApprovedRun`.
    */
-  pricingFor: (item: QuoteItemChoiceInput) => { qty: number; lineTotal: number };
+  runs: QuoteRun[];
+  /** Сума тиражу — рахує сторінка (ставки компанії, ПДВ), хук лише питає. */
+  getRunPricing: (run: QuoteRun) => { saleTotal: number };
+  /**
+   * Позначити тираж «Погодив клієнт» просто з вікна — ТИМ САМИМ шляхом, що й
+   * кнопка на картці (стан тиражів + автозбереження). Окремого запису тут нема
+   * навмисно: друга дорога до тієї ж колонки розійшлася б із першою на
+   * частковому унікальному індексі (див. `upsertQuoteRuns`).
+   */
+  onPickRun: (itemId: string, runId: string) => void;
   /** Перечитати позиції, щоб картка показала приглушені. */
   onSaved: () => Promise<void>;
   /** Довести до кінця те, заради чого вікно й відкривали: сам запис статусу. */
   onApprove: (note: string) => Promise<void>;
   onError: (message: string) => void;
 }) {
-  const { quoteId, teamId, userId, items, pricingFor, onSaved, onApprove, onError } = params;
+  const { quoteId, teamId, userId, items, runs, getRunPricing, onPickRun, onSaved, onApprove, onError } =
+    params;
+
+  // Тираж без id ще не доїхав до бази: позначити його нема чим, і замовлення
+  // його не побачить. Позиція тут завжди своя — вікно питають лише тоді, коли
+  // позицій кілька, тож запасне «тираж без позиції = єдиної» не потрібне.
+  const runsFor = useCallback(
+    (item: { id: string }) =>
+      runs.flatMap((run) =>
+        run.id && run.quote_item_id === item.id
+          ? [
+              {
+                id: run.id,
+                qty: Number(run.quantity) || 0,
+                lineTotal: getRunPricing(run).saleTotal,
+                is_approved: run.is_approved,
+              },
+            ]
+          : []
+      ),
+    [getRunPricing, runs]
+  );
 
   const [open, setOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -118,7 +152,8 @@ export function useQuoteItemChoice(params: {
   const dialogItems = useMemo<QuoteItemChoiceRow[]>(
     () =>
       items.map((item, index) => {
-        const pricing = pricingFor(item);
+        const itemRuns = runsFor(item);
+        const approved = pickApprovedRun(itemRuns);
         return {
           id: item.id,
           // Номер попереду назви — бо назви повторюються (REQ-267#p1): у
@@ -126,29 +161,76 @@ export function useQuoteItemChoice(params: {
           // однаково, і відрізнити їх можна було лише за ціною. Номер той
           // самий, що в списку товарів на картці.
           title: `${item.position ?? index + 1}. ${item.title}`,
-          qty: pricing.qty,
           unit: item.unit,
-          lineTotal: pricing.lineTotal,
+          run: approved ? { id: approved.id, qty: approved.qty, lineTotal: approved.lineTotal } : null,
+          // Варіанти — лише коли є з чого вибирати. За кількістю, а не за
+          // порядком створення: це шкала «100 · 500 · 1000», і в порядку
+          // додавання (500 · 100 · 1000) її читали б навпомацки.
+          runOptions:
+            itemRuns.length > 1
+              ? [...itemRuns]
+                  .sort((a, b) => a.qty - b.qty)
+                  .map((run) => ({ id: run.id, qty: run.qty, lineTotal: run.lineTotal }))
+              : [],
+          needsRunChoice: needsApprovedRunChoice(itemRuns),
         };
       }),
-    [items, pricingFor]
+    [items, runsFor]
   );
 
-  /** Відкрити вікно, підставивши сьогоднішній стан вибору. */
+  /**
+   * Відкрити вікно, підставивши те, що вже погоджено на картці (REQ-317):
+   * галочка лише там, де тираж відомий. Див. `isQuoteItemPreselected`.
+   */
   const request = useCallback(
     (pendingNote: string) => {
-      setSelectedIds(filterIncludedQuoteItems(items).map((item) => item.id));
+      setSelectedIds(
+        items
+          .filter((item) => isQuoteItemPreselected(item, needsApprovedRunChoice(runsFor(item))))
+          .map((item) => item.id)
+      );
       setNote(pendingNote.trim());
       setOpen(true);
     },
-    [items]
+    [items, runsFor]
   );
 
-  const toggle = useCallback((itemId: string, checked: boolean) => {
-    setSelectedIds((prev) =>
-      checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId)
-    );
-  }, []);
+  /**
+   * Обрати тираж у вікні — це водночас і «позицію взяли»: клієнт не погоджує
+   * тираж товару, від якого відмовився. Тому галочка ставиться сама.
+   *
+   * Повторний клік по вже погодженому тиражу НІЧОГО не робить: на картці та
+   * сама дія знімає позначку, але тут перемикач — це вибір одного з кількох, і
+   * «зняти» в ньому означало б залишити позицію без тиражу посеред вікна, яке
+   * питає саме про тираж.
+   *
+   * Права (`canEditRuns`) стереже вікно — вимкненим перемикачем, як і кнопку на
+   * картці: на сторінці вони оголошені нижче за цей хук.
+   */
+  const pickRun = useCallback(
+    (itemId: string, runId: string) => {
+      const item = items.find((candidate) => candidate.id === itemId);
+      if (!item) return;
+      const target = runsFor(item).find((run) => run.id === runId);
+      if (!target) return;
+      if (target.is_approved !== true) onPickRun(itemId, runId);
+      setSelectedIds((prev) => Array.from(new Set([...prev, itemId])));
+    },
+    [items, onPickRun, runsFor]
+  );
+
+  const toggle = useCallback(
+    (itemId: string, checked: boolean) => {
+      // Позицію без погодженого тиражу галочкою не беруть: у замовлення їй нема
+      // з чим їхати, і рядок показав би суму, якої клієнт не бачив. Тираж
+      // обирають перемикачем — він галочку й ставить (`pickRun`).
+      if (checked && dialogItems.some((row) => row.id === itemId && row.needsRunChoice)) return;
+      setSelectedIds((prev) =>
+        checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId)
+      );
+    },
+    [dialogItems]
+  );
 
   const cancel = useCallback(() => {
     setOpen(false);
@@ -207,5 +289,5 @@ export function useQuoteItemChoice(params: {
     await onApprove(note);
   }, [items, note, onApprove, onError, onSaved, quoteId, selectedIds, teamId, userId]);
 
-  return { open, selectedIds, busy, dialogItems, request, toggle, cancel, confirm };
+  return { open, selectedIds, busy, dialogItems, request, toggle, pickRun, cancel, confirm };
 }
