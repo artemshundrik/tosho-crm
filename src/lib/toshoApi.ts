@@ -18,6 +18,7 @@ import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { findQuoteIdsByProductSku } from "@/lib/quoteSkuMatches";
 import { applyQuoteListFilters, escapePostgrestIlikeTerm } from "@/lib/quoteListFilters";
 import type { AvatarAbsence } from "@/lib/absenceIndicator";
+import type { CustomerFilterValue } from "@/lib/customerFilter";
 import { getCurrentUserId } from "./currentUser";
 import type { PrintConfiguratorPreset } from "@/lib/printPackage";
 
@@ -28,6 +29,7 @@ type ListQuotesParams = {
   /** Кілька статусів одразу — для добору активних прорахунків на дошку. */
   statuses?: string[];
   managerUserId?: string | null;
+  customer?: CustomerFilterValue | null;
   limit?: number;
   offset?: number;
 };
@@ -414,7 +416,7 @@ async function getNextQuoteSequence(teamId: string, monthCode: string) {
 }
 
 export async function listQuotes(params: ListQuotesParams) {
-  const { teamId, search, status, statuses, managerUserId, limit, offset } = params;
+  const { teamId, search, status, statuses, managerUserId, customer, limit, offset } = params;
   const q = search?.trim() ?? "";
   const escapedSearch = escapePostgrestIlikeTerm(q);
   const skuQuoteIds = escapedSearch.length > 0 ? await findQuoteIdsByProductSku(teamId, q) : [];
@@ -493,6 +495,7 @@ export async function listQuotes(params: ListQuotesParams) {
         status,
         statuses,
         managerUserId,
+        customer,
       });
 
       if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {

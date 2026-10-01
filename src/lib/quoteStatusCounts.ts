@@ -1,3 +1,4 @@
+import type { CustomerFilterValue } from "@/lib/customerFilter";
 import { supabase } from "@/lib/supabaseClient";
 import { findQuoteIdsByProductSku } from "@/lib/quoteSkuMatches";
 import { applyQuoteListFilters, countQuotesByStatus, escapePostgrestIlikeTerm } from "@/lib/quoteListFilters";
@@ -11,6 +12,7 @@ export async function listQuoteStatusCounts(params: {
   teamId: string;
   search?: string;
   managerUserId?: string | null;
+  customer?: CustomerFilterValue | null;
 }): Promise<Record<string, number>> {
   const q = params.search?.trim() ?? "";
   const escapedSearch = escapePostgrestIlikeTerm(q);
@@ -22,7 +24,7 @@ export async function listQuoteStatusCounts(params: {
   for (const searchableColumns of columnVariants) {
     const result = await applyQuoteListFilters(
       supabase.schema("tosho").from("quotes").select("status").eq("team_id", params.teamId),
-      { escapedSearch, skuQuoteIds, searchableColumns, managerUserId: params.managerUserId }
+      { escapedSearch, skuQuoteIds, searchableColumns, managerUserId: params.managerUserId, customer: params.customer }
     );
     if (!result.error) return countQuotesByStatus((result.data ?? []) as Array<{ status?: string | null }>);
     lastError = result.error;

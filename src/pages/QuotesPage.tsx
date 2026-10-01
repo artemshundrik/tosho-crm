@@ -150,6 +150,8 @@ import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { preloadQuoteDetailsRoute } from "@/routes/routePreload";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
+import { customerFilterKey, type CustomerFilterValue } from "@/lib/customerFilter";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import {
@@ -369,6 +371,7 @@ type QuotesPageFiltersState = {
   search?: string;
   status?: string;
   managerFilter?: string;
+  customerFilter?: CustomerFilterValue | null;
   viewMode?: "table" | "kanban";
   quickFilter?: "all" | "new" | "estimated";
   contentView?: "quotes" | "sets" | "all";
@@ -535,6 +538,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
     () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
   );
+  const [customerFilter, setCustomerFilter] = useState<CustomerFilterValue | null>(() => restoredFilters?.customerFilter ?? null);
+  const scopeFilterKey = `${managerFilter}|${customerFilterKey(customerFilter)}`;
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
   /** Повні рядки директорії — з них будується картка людини під курсором. */
@@ -1406,6 +1411,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       teamId,
       search,
       managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
+      customer: customerFilter,
     })
       .then((raw) => {
         if (requestId !== statusCountsRequestIdRef.current) return;
@@ -1419,13 +1425,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       .catch(() => {
         // Лічильники не критичні: без них вкладки просто без цифр.
       });
-  }, [managerFilter, search, teamId]);
+  }, [customerFilter, managerFilter, search, teamId]);
 
   const { rememberScope } = useQuotesScopeCache({
     fetchStatus,
     enabled: scopeCacheEnabled,
     teamId,
-    managerFilter,
+    managerFilter: scopeFilterKey,
     search,
     rowsRef,
     rowsSearchTerm,
@@ -1475,6 +1481,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           status: fetchStatus === "active" ? undefined : fetchStatus,
           statuses: fetchStatus === "active" ? [...ACTIVE_QUOTE_STATUSES] : undefined,
           managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
+          customer: customerFilter,
           limit: pageSize + 1,
           offset: nextOffset,
         });
@@ -1505,6 +1512,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             search,
             statuses: [...ACTIVE_QUOTE_STATUSES],
             managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
+            customer: customerFilter,
           });
           const seen = new Set(fetchedRows.map((row) => row.id));
           const extra = activeRows.filter((row) => !seen.has(row.id));
@@ -1601,7 +1609,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setQuoteMembershipByQuoteId(nextMembershipByQuoteId);
       rememberScope(
         teamId,
-        managerFilter,
+        scopeFilterKey,
         search,
         fetchStatus,
         mergedRows,
@@ -1650,7 +1658,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         setRefreshing(false);
       }
     }
-  }, [cacheKey, fetchStatus, managerFilter, quotesFetchLimit, refreshQuoteStatusCounts, rememberScope, search, teamId, viewMode]);
+  }, [cacheKey, customerFilter, fetchStatus, managerFilter, scopeFilterKey, quotesFetchLimit, refreshQuoteStatusCounts, rememberScope, search, teamId, viewMode]);
 
   const loadQuoteSets = async () => {
     if (!teamId) return;
@@ -1760,7 +1768,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   useEffect(() => {
     if (!teamId) return;
     setQuotesFetchLimit(viewMode === "kanban" ? QUOTES_KANBAN_INITIAL_PAGE_SIZE : QUOTES_TABLE_PAGE_SIZE);
-  }, [managerFilter, search, effectiveStatus, teamId, viewMode]);
+  }, [customerFilter, managerFilter, search, effectiveStatus, teamId, viewMode]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -1901,7 +1909,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setKanbanPreviewVisibleCountByColumn(
       Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
     );
-  }, [managerFilter, rows.length, search, effectiveStatus, viewMode]);
+  }, [customerFilter, managerFilter, rows.length, search, effectiveStatus, viewMode]);
 
   const getCatalogAssetPayload = useCallback((storagePath: string) => {
     const originalUrl = supabase.storage.from(CATALOG_IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
@@ -2948,7 +2956,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     itemCount: filteredAndSortedRows.length,
   });
 
-  const hasActiveFilters = hasActiveViewFilters || managerFilter !== ALL_MANAGERS_FILTER;
+  const hasActiveFilters = hasActiveViewFilters || managerFilter !== ALL_MANAGERS_FILTER || customerFilter !== null;
   // У таблиці число над списком — лічильник вибраної вкладки з бази, інакше
   // воно (50 завантажених) суперечило б вкладці «Активні 99».
   const selectedTabCount =
@@ -3001,9 +3009,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (contentView === "sets") return quoteSetKindFilter !== "all" ? 1 : 0;
     let count = 0;
     if (!statusIsNeutral) count += 1;
-    if (managerFilter !== ALL_MANAGERS_FILTER) count += 1;
+    count += (managerFilter !== ALL_MANAGERS_FILTER ? 1 : 0) + (customerFilter ? 1 : 0);
     return count;
-  }, [contentView, managerFilter, quoteSetKindFilter, statusIsNeutral]);
+  }, [contentView, customerFilter, managerFilter, quoteSetKindFilter, statusIsNeutral]);
 
   useEffect(() => {
     const relevantIds = Array.from(
@@ -3367,6 +3375,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setQuickFilter("all");
     setStatusFilter("active");
     setManagerFilter(ALL_MANAGERS_FILTER);
+    setCustomerFilter(null);
   }, []);
 
   useEffect(() => {
@@ -3377,6 +3386,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         search,
         status,
         managerFilter,
+        customerFilter,
         viewMode,
         quickFilter,
         contentView,
@@ -3392,6 +3402,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     search,
     status,
     managerFilter,
+    customerFilter,
     viewMode,
     quickFilter,
     contentView,
@@ -4688,6 +4699,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     ]}
                   />
                 )}
+                <CustomerFilterSelect teamId={teamId} value={customerFilter} onChange={setCustomerFilter} />
               </>
             ) : (
               <>
@@ -4751,6 +4763,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     loading,
     managerFilter,
     managerFilterOptions,
+    customerFilter,
+    teamId,
     mobileFilterCount,
     quoteSetKindFilter,
     quoteSetKpCount,
