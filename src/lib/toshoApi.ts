@@ -1,5 +1,10 @@
 import { supabase } from "@/lib/supabaseClient";
-import { normalizeQuoteRunModelPriceVat, type QuoteRunModelPriceVat } from "@/lib/quoteRuns";
+import {
+  normalizeQuoteRunModelPriceVat,
+  normalizeQuoteRunRow,
+  type QuoteRunModelPriceVat,
+  type QuoteRunRowInput,
+} from "@/lib/quoteRuns";
 import type { Database, Json } from "@/lib/database.types";
 import { removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import {
@@ -113,6 +118,7 @@ export type QuoteItemPreviewRow = {
   catalog_model_id?: string | null;
   unit_price?: number | null;
   line_total?: number | null;
+  is_approved?: boolean | null;
 };
 
 export type QuoteRunPreviewRow = {
@@ -240,11 +246,6 @@ function isMissingColumnLike(error: unknown, columnNames?: string[]) {
   if (!columnNames || columnNames.length === 0) return true;
 
   return columnNames.some((column) => message.includes(column.toLowerCase()));
-}
-
-function resolveNumericRate(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function getQuoteMonthCode(date = new Date()) {
@@ -1257,24 +1258,7 @@ export async function getQuoteRuns(quoteId: string) {
     ({ data, error } = await runQuery(true));
   }
   handleError(error);
-  return ((data as Array<Partial<QuoteRun>>) ?? []).map((run) => ({
-    id: run.id,
-    quote_id: run.quote_id,
-    quote_item_id: run.quote_item_id ?? null,
-    quantity: Number(run.quantity ?? 0) || 0,
-    unit_price_model: Number(run.unit_price_model ?? 0) || 0,
-    unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
-    unit_price_print: Number(run.unit_price_print ?? 0) || 0,
-    logistics_cost: Number(run.logistics_cost ?? 0) || 0,
-    desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-    // Дефолт той самий, що в колонки (DEFAULT_MARKUP_RATE): рядок без накрутки
-    // означав би ціну, рівну собівартості — саме той стан, який ми й прибрали.
-    markup_rate: resolveNumericRate(run.markup_rate, 40),
-    manager_rate: resolveNumericRate(run.manager_rate, 10),
-    fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
-    vat_rate: resolveNumericRate(run.vat_rate, 20),
-    is_approved: run.is_approved === true,
-  }));
+  return ((data as QuoteRunRowInput[]) ?? []).map(normalizeQuoteRunRow);
 }
 
 /**
@@ -1353,24 +1337,7 @@ export async function listQuoteRunsForQuotes(params: {
     const quoteId = run.quote_id;
     if (!quoteId) return;
     const list = byQuote.get(quoteId) ?? [];
-    list.push({
-      id: run.id,
-      quote_id: run.quote_id,
-      quote_item_id: run.quote_item_id ?? null,
-      quantity: Number(run.quantity ?? 0) || 0,
-      unit_price_model: Number(run.unit_price_model ?? 0) || 0,
-      unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
-      unit_price_print: Number(run.unit_price_print ?? 0) || 0,
-      logistics_cost: Number(run.logistics_cost ?? 0) || 0,
-      desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-      // Дефолт той самий, що в колонки (DEFAULT_MARKUP_RATE): рядок без накрутки
-      // означав би ціну, рівну собівартості — саме той стан, який ми й прибрали.
-      markup_rate: resolveNumericRate(run.markup_rate, 40),
-      manager_rate: resolveNumericRate(run.manager_rate, 10),
-      fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
-      vat_rate: resolveNumericRate(run.vat_rate, 20),
-      is_approved: run.is_approved === true,
-    });
+    list.push(normalizeQuoteRunRow(run));
     byQuote.set(quoteId, list);
   });
 
@@ -1450,24 +1417,7 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
       .select(QUOTE_RUN_LEGACY_SELECT));
   }
   handleError(error);
-  return ((data as Array<Partial<QuoteRun>>) ?? []).map((run) => ({
-    id: run.id,
-    quote_id: run.quote_id,
-    quote_item_id: run.quote_item_id ?? null,
-    quantity: Number(run.quantity ?? 0) || 0,
-    unit_price_model: Number(run.unit_price_model ?? 0) || 0,
-    unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
-    unit_price_print: Number(run.unit_price_print ?? 0) || 0,
-    logistics_cost: Number(run.logistics_cost ?? 0) || 0,
-    desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-    // Дефолт той самий, що в колонки (DEFAULT_MARKUP_RATE): рядок без накрутки
-    // означав би ціну, рівну собівартості — саме той стан, який ми й прибрали.
-    markup_rate: resolveNumericRate(run.markup_rate, 40),
-    manager_rate: resolveNumericRate(run.manager_rate, 10),
-    fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
-    vat_rate: resolveNumericRate(run.vat_rate, 20),
-    is_approved: run.is_approved === true,
-  }));
+  return ((data as QuoteRunRowInput[]) ?? []).map(normalizeQuoteRunRow);
 }
 
 export async function listStatusHistory(quoteId: string, teamId?: string | null) {
@@ -2261,8 +2211,8 @@ export async function listQuoteItemPreviewsForQuotes(params: {
     let query = quoteItemsTable
       .select(
         withMetadata
-          ? "id,quote_id,position,name,metadata,qty,unit,attachment,catalog_model_id,unit_price,line_total"
-          : "id,quote_id,position,name,qty,unit,attachment,catalog_model_id,unit_price,line_total"
+          ? "id,quote_id,position,name,metadata,qty,unit,attachment,catalog_model_id,unit_price,line_total,is_approved"
+          : "id,quote_id,position,name,qty,unit,attachment,catalog_model_id,unit_price,line_total,is_approved"
       )
       .in("quote_id", uniqueQuoteIds)
       .order("quote_id", { ascending: true })

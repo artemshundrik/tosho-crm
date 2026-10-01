@@ -39,4 +39,14 @@ describe("computeQuoteListTotal", () => {
     expect(computeQuoteListTotal([{ id: "i1", qty: 2, unit_price: 50, line_total: null }], [])?.amount).toBe(100);
     expect(computeQuoteListTotal(items, [])).toBeNull();
   });
+
+  it("позиція, від якої клієнт відмовився, у суму не входить; «не питали» — входить", () => {
+    const twoItems = [
+      { id: "i1", qty: 100, unit_price: 0, line_total: 0, is_approved: null },
+      { id: "i2", qty: 100, unit_price: 0, line_total: 0, is_approved: false },
+    ];
+    const runs = [run("a", 100), run("b", 100, { quote_item_id: "i2" })];
+    expect(computeQuoteListTotal(twoItems, runs)).toEqual({ amount: expect.closeTo(1500, 2), partial: false });
+    expect(computeQuoteListTotal([{ ...twoItems[1] }], [run("b", 100, { quote_item_id: "i2" })])).toBeNull();
+  });
 });

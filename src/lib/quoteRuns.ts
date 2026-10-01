@@ -463,3 +463,35 @@ export function mergeQuoteRunsWithExisting({
 
   return { payload, idsToDelete };
 }
+
+/** Рядок `quote_item_runs` як він приходить із бази: будь-яке поле може бути null. */
+export type QuoteRunRowInput = { [K in keyof QuoteRun]?: QuoteRun[K] | null };
+
+/**
+ * Один розбір рядка тиражу на всі читачі: картка прорахунку, пакетні вибірки й
+ * сума в таблиці прорахунків. Ставки без значення — дефолти колонок, а не нуль:
+ * нульова накрутка дала б ціну, рівну собівартості.
+ */
+function resolveRunRate(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export function normalizeQuoteRunRow(run: QuoteRunRowInput): QuoteRun {
+  return {
+    id: run.id ?? undefined,
+    quote_id: run.quote_id ?? undefined,
+    quote_item_id: run.quote_item_id ?? null,
+    quantity: Number(run.quantity ?? 0) || 0,
+    unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+    unit_price_model_vat: normalizeQuoteRunModelPriceVat(run.unit_price_model_vat),
+    unit_price_print: Number(run.unit_price_print ?? 0) || 0,
+    logistics_cost: Number(run.logistics_cost ?? 0) || 0,
+    desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+    markup_rate: resolveRunRate(run.markup_rate, 40),
+    manager_rate: resolveRunRate(run.manager_rate, 10),
+    fixed_cost_rate: resolveRunRate(run.fixed_cost_rate, 30),
+    vat_rate: resolveRunRate(run.vat_rate, 20),
+    is_approved: run.is_approved === true,
+  };
+}
