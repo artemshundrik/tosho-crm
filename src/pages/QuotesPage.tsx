@@ -2968,10 +2968,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     filteredAndSortedRows.forEach((row) => {
       if (row.id) versionByQuoteId.set(row.id, String(row.updated_at ?? ""));
     });
+    // Прев'ю з кешу сесії, зібране до появи суми в таблиці, поля `listTotal` не
+    // має взагалі (а не null) — без цієї умови такі рядки показували б «—», доки
+    // прорахунок не зміниться.
+    const isPreviewWithoutTotal = (quoteId: string) => {
+      const preview = kanbanProductByQuoteIdRef.current[quoteId];
+      return Boolean(preview) && preview.listTotal === undefined;
+    };
     const missingQuoteIds = quoteIds.filter(
       (quoteId) =>
         (!fetchedKanbanPreviewQuoteIdsRef.current.has(quoteId) ||
-          kanbanPreviewVersionByQuoteIdRef.current[quoteId] !== versionByQuoteId.get(quoteId)) &&
+          kanbanPreviewVersionByQuoteIdRef.current[quoteId] !== versionByQuoteId.get(quoteId) ||
+          isPreviewWithoutTotal(quoteId)) &&
         !inflightKanbanPreviewQuoteIdsRef.current.has(quoteId)
     );
     if (missingQuoteIds.length === 0) {
