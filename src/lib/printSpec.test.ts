@@ -329,6 +329,21 @@ describe("buildPrintSpecSave", () => {
     expect(result.changedAfterPrice).toBe(false);
   });
 
+  it("перше заповнення після ціни — без знімка й без повернення; часткове заповнення рахується як зміна", () => {
+    const common = { preset: PRINT_SPEC_DIARY, quoteStatus: "estimated", lastPricedAt: "2026-09-24T10:00:00Z", now };
+    const first = buildPrintSpecSave({ ...common, current: { presetKey: "print_diary", values: base }, draft: { ...base, coverType: "flex" } });
+    expect(first.printSpec.versions).toBeUndefined();
+    expect(first.changedAfterPrice).toBe(false);
+
+    const partial = buildPrintSpecSave({
+      ...common,
+      current: { presetKey: "print_diary", values: { ...base, coverType: "hard" } },
+      draft: { ...base, coverType: "hard", coverFoam: "no" },
+    });
+    expect(partial.printSpec.versions).toHaveLength(1);
+    expect(partial.changedAfterPrice).toBe(true);
+  });
+
   it("без змін або до ціни — без знімка; approved не повертається", () => {
     const current = { presetKey: "print_diary", values: { ...base, coverType: "hard" } };
     const same = buildPrintSpecSave({ preset: PRINT_SPEC_DIARY, current, draft: { ...base, coverType: "hard" }, quoteStatus: "estimated" });

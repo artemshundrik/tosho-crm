@@ -203,7 +203,9 @@ export function PrintSpecPanel({
   */
   const editorBaseline =
     resolvePriceBaseline({ versions: saved?.versions, lastPricedAt }) ??
-    (needsPriceSnapshot({ versions: saved?.versions, lastPricedAt, quoteStatus }) ? savedValues : null);
+    (isPrintSpecFilled(preset, savedValues) && needsPriceSnapshot({ versions: saved?.versions, lastPricedAt, quoteStatus })
+      ? savedValues
+      : null);
   const draftChangeCount = editorBaseline ? diffPrintSpec(preset, editorBaseline, draft).length : 0;
 
   const openEditor = () => {

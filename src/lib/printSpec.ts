@@ -1872,7 +1872,10 @@ export function buildPrintSpecSave({
   const saved = parsePrintSpecMetadata(current);
   const savedValues = parsePrintSpecValues(preset, saved?.values ?? null);
   const versions = [...(saved?.versions ?? [])];
-  const changes = diffPrintSpec(preset, savedValues, draft);
+  // Перше заповнення — не зміна після ціни: прорахунок рахували без чекліста, і
+  // знімок порожніх значень засвітив би жовтим усе, що людина вперше вписала.
+  const firstFill = !isPrintSpecFilled(preset, savedValues);
+  const changes = firstFill ? [] : diffPrintSpec(preset, savedValues, draft);
 
   if (changes.length > 0 && needsPriceSnapshot({ versions, lastPricedAt, quoteStatus })) {
     versions.push({ at: now.toISOString(), pricedAt: lastPricedAt ?? null, values: savedValues });
