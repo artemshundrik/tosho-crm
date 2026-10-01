@@ -1028,7 +1028,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return new Date(value);
   };
 
-  const getDeadlineBadge = (value?: string | null) => {
+  const getDeadlineBadge = (value?: string | null, status?: string | null) => {
     if (!value) return { label: "Не вказано", tone: "none" as const };
     const date = parseDateOnly(value);
     if (Number.isNaN(date.getTime())) {
@@ -1038,6 +1038,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const startOfDeadline = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const diffDays = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Затверджений чи скасований прорахунок уже нічого не винен: дату показуємо
+    // нейтрально, без «Прострочено» і без тривожних тонів.
+    const normalizedStatus = normalizeStatus(status);
+    if (normalizedStatus === "approved" || normalizedStatus === "cancelled") {
+      return { label: date.toLocaleDateString("uk-UA"), tone: "future" as const };
+    }
 
     if (diffDays < 0) {
       return {
@@ -4637,7 +4644,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    * колонки тягнуть зображення одразу, решта — коли з'являться в полі зору.
    */
   const renderQuoteKanbanCard = (row: QuoteListRow, columnId: string, index: number) => {
-    const badge = getDeadlineBadge(row.deadline_at ?? null);
+    const badge = getDeadlineBadge(row.deadline_at ?? null, row.status);
     const ColumnStatusIcon = statusIcons[columnId] ?? Clock;
     const Icon = quoteTypeIcon(row.quote_type);
     const membership = quoteMembershipByQuoteId.get(row.id);
@@ -5184,7 +5191,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 const membership = quoteMembershipByQuoteId.get(row.id);
                 const normalizedStatus = normalizeStatus(row.status);
                 const StatusIcon = statusIcons[normalizedStatus] ?? Clock;
-                const deadlineBadge = getDeadlineBadge(row.deadline_at ?? null);
+                const deadlineBadge = getDeadlineBadge(row.deadline_at ?? null, row.status);
                 const manager = resolveManagerMember(row.assigned_to);
                 const managerLabel = getManagerLabel(row.assigned_to);
                 const canOpen = canOpenQuoteRow(row);
@@ -5550,19 +5557,39 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         </TableCell>
                         <TableCell>
                           {(() => {
-                            const badge = getDeadlineBadge(row.deadline_at ?? null);
+                            const badge = getDeadlineBadge(row.deadline_at ?? null, row.status);
+                            if (!row.deadline_at) {
+                              return (
+                                <span className="text-sm text-muted-foreground" title="Дедлайн не задано">
+                                  —
+                                </span>
+                              );
+                            }
+                            const isTomorrow = badge.tone === "soon" && badge.label === "Завтра";
+                            const shortLabel = formatDeadlineShort(row.deadline_at);
+                            const text =
+                              badge.tone === "today"
+                                ? "сьогодні"
+                                : isTomorrow
+                                  ? "завтра"
+                                  : shortLabel ?? "—";
+                            const toneClass =
+                              badge.tone === "overdue"
+                                ? "text-danger-foreground"
+                                : badge.tone === "today" || isTomorrow
+                                  ? "text-warning-foreground"
+                                  : "text-muted-foreground";
                             const titleParts = [
-                              row.deadline_at
-                                ? `Дата: ${new Date(row.deadline_at).toLocaleDateString("uk-UA")}`
-                                : "Дедлайн не задано",
+                              badge.tone === "overdue" || badge.tone === "today" || badge.tone === "soon"
+                                ? badge.label
+                                : null,
+                              `Дата: ${new Date(row.deadline_at).toLocaleDateString("uk-UA")}`,
                               row.deadline_note ? `Коментар: ${row.deadline_note}` : null,
                             ].filter(Boolean);
                             return (
-                              <QuoteDeadlineBadge
-                                tone={badge.tone}
-                                label={badge.label}
-                                title={titleParts.join(" · ")}
-                              />
+                              <span className={cn("text-sm", toneClass)} title={titleParts.join(" · ")}>
+                                {text}
+                              </span>
                             );
                           })()}
                         </TableCell>
