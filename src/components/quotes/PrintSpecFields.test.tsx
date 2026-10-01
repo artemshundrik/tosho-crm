@@ -44,20 +44,20 @@ describe("параметри щоденника", () => {
     expect(screen.queryByText("Шовкотрафарет")).toBeNull();
 
     await pick(user, "Матеріал", "Папір з друком");
-    expect(screen.getByText("Друк і ламінація")).toBeTruthy();
+    expect(screen.getByText("Друк і ламінація", { selector: "span" })).toBeTruthy();
     expect(screen.getByText("Вибірковий УФ-лак")).toBeTruthy();
     expect(screen.queryByText("Шовкотрафарет")).toBeNull();
 
     await pick(user, "Матеріал", "Шкірзамінник");
     expect(screen.getByText("Шовкотрафарет")).toBeTruthy();
-    expect(screen.queryByText("Друк і ламінація")).toBeNull();
+    expect(screen.queryByText("Друк і ламінація", { selector: "span" })).toBeNull();
     expect(screen.queryByText("Вибірковий УФ-лак")).toBeNull();
 
     await pick(user, "Матеріал", "Дизайнерський папір");
-    expect(screen.getByText("Дизайнерський папір — назва")).toBeTruthy();
+    expect(screen.getByText("Дизайнерський папір — назва", { selector: "span" })).toBeTruthy();
     // Підказка гілки тепер під значком «і», тож перевіряємо саме його.
     expect(screen.getByRole("button", { name: "Підказка: Оздоблення" })).toBeTruthy();
-    expect(screen.queryByText("Друк і ламінація")).toBeNull();
+    expect(screen.queryByText("Друк і ламінація", { selector: "span" })).toBeNull();
   });
 
   it("щільність, папір і кольоровість питають лише для індивідуального блока", async () => {
@@ -65,15 +65,15 @@ describe("параметри щоденника", () => {
     render(<Harness />);
 
     await pick(user, "Виконання блока", "Стандартний");
-    expect(screen.queryByText("Щільність паперу")).toBeNull();
-    expect(screen.queryByText("Кольоровість друку")).toBeNull();
+    expect(screen.queryByText("Щільність паперу", { selector: "span" })).toBeNull();
+    expect(screen.queryByText("Кольоровість друку", { selector: "span" })).toBeNull();
     // Макет питають завжди — саме з нього виведена кольоровість стандартного.
-    expect(screen.getByText("Макет")).toBeTruthy();
+    expect(screen.getByText("Макет", { selector: "span" })).toBeTruthy();
 
     await pick(user, "Виконання блока", "Індивідуальний");
-    expect(screen.getByText("Щільність паперу")).toBeTruthy();
-    expect(screen.getByText("Папір блока")).toBeTruthy();
-    expect(screen.getByText("Кольоровість друку")).toBeTruthy();
+    expect(screen.getByText("Щільність паперу", { selector: "span" })).toBeTruthy();
+    expect(screen.getByText("Папір блока", { selector: "span" })).toBeTruthy();
+    expect(screen.getByText("Кольоровість друку", { selector: "span" })).toBeTruthy();
   });
 });
 
@@ -142,7 +142,7 @@ describe("чипи варіантів", () => {
 
     await user.click(chip("Матеріал", "Шкірзамінник"));
     const parent = screen.getByRole("group", { name: "Матеріал" }).closest("div.min-w-0")?.parentElement as HTMLElement;
-    expect(within(parent).getByText("Шкірзамінник — який саме")).toBeTruthy();
+    expect(within(parent).getByText("Шкірзамінник — який саме", { selector: "span" })).toBeTruthy();
   });
 
   it("«кілька зі списку» — чипи, що вмикаються незалежно", async () => {
@@ -205,16 +205,16 @@ describe("параметри пакета", () => {
 
     await pick(user, "Тип пакета", "Готовий");
     expect(within(screen.getByRole("group", { name: "Тип нанесення" })).queryByRole("button", { name: "CMYK" })).toBeNull();
-    expect(screen.getByText("Посилання постачальника")).toBeTruthy();
-    expect(screen.queryByText("Люверси")).toBeNull();
+    expect(screen.getByText("Посилання постачальника", { selector: "span" })).toBeTruthy();
+    expect(screen.queryByText("Люверси", { selector: "span" })).toBeNull();
 
     await pick(user, "Тип пакета", "Індивідуальний");
     expect(chip("Тип нанесення", "CMYK")).toBeTruthy();
     expect(screen.getByPlaceholderText("Г")).toBeTruthy();
-    expect(screen.getByText("Люверси")).toBeTruthy();
+    expect(screen.getByText("Люверси", { selector: "span" })).toBeTruthy();
 
     await pick(user, "Матеріал", "Крафт");
-    expect(screen.queryByText("Люверси")).toBeNull();
+    expect(screen.queryByText("Люверси", { selector: "span" })).toBeNull();
   });
 });
 
@@ -338,5 +338,65 @@ describe("значення за замовчуванням у формі", () =>
     await pick(user, "Макет", "Датований");
     expect(latest.endpaper).toBe("plain");
     expect(latest.backpaper).toBe("maps");
+  });
+});
+
+describe("що бракує", () => {
+  it("шапка стовпчика називає незаповнене чипами, клік веде до поля й фокусує його", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    const lane = within(screen.getByRole("region", { name: "Обкладинка" }));
+    expect(lane.getByText("Не заповнено:")).toBeTruthy();
+    await user.click(lane.getByRole("button", { name: "Матеріал" }));
+    expect(document.activeElement).toBe(chip("Матеріал", "Шкірзамінник"));
+  });
+
+  it("повністю заповнений стовпчик пише «Усе заповнено»", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const lane = () => within(screen.getByRole("region", { name: "Обкладинка" }));
+    expect(lane().queryByText("Усе заповнено")).toBeNull();
+
+    for (const [group, option] of [
+      ["Формат", "А5"],
+      ["Тип", "Гнучка"],
+      ["Поролон", "Без поролону"],
+      ["Матеріал", "Папір з друком"],
+      ["Друк і ламінація", "4+0 + матова ламінація 1+0"],
+    ] as const) {
+      await pick(user, group, option);
+    }
+    expect(lane().queryByText("Не заповнено:")).toBeTruthy();
+    await pick(user, "Оздоблення", "Сліпе тиснення");
+    expect(lane().getByText("Усе заповнено")).toBeTruthy();
+  });
+
+  it("поля зі стрічки «головне» мають тиху позначку «для ціни»", () => {
+    render(<Harness />);
+    const price = screen.getByText("Макет", { selector: "span" }).closest("div") as HTMLElement;
+    expect(within(price).getByText("для ціни")).toBeTruthy();
+    const noPrice = screen.getByText("Кути", { selector: "span" }).closest("div") as HTMLElement;
+    expect(within(noPrice).queryByText("для ціни")).toBeNull();
+  });
+
+  it("«Лише незаповнені» ховає лише те, що було заповнене на момент увімкнення", () => {
+    const hidden = new Set(["format"]);
+    const { rerender } = render(<Harness />);
+    expect(screen.getByText("Формат", { selector: "span" })).toBeTruthy();
+    rerender(<PrintSpecFields preset={PRINT_SPEC_DIARY} values={createEmptyPrintSpecValues(PRINT_SPEC_DIARY)} onChange={() => {}} hiddenIds={hidden} />);
+    expect(screen.queryByText("Формат", { selector: "span" })).toBeNull();
+    expect(screen.getByText("Тип", { selector: "span" })).toBeTruthy();
+  });
+
+  it("порожній стовпчик у режимі «Лише незаповнені» — «Усе заповнено»", () => {
+    const values = createEmptyPrintSpecValues(PRINT_SPEC_PACKAGE);
+    const all = new Set(PRINT_SPEC_PACKAGE.fields.map((field) => field.id));
+    render(<PrintSpecFields preset={PRINT_SPEC_PACKAGE} values={values} onChange={() => {}} hiddenIds={all} />);
+    for (const title of ["Корпус", "Друк і оздоблення", "Ручки й люверси"]) {
+      const lane = within(screen.getByRole("region", { name: title }));
+      expect(lane.getAllByText("Усе заповнено").length).toBeGreaterThan(0);
+      expect(lane.queryByRole("group")).toBeNull();
+    }
   });
 });

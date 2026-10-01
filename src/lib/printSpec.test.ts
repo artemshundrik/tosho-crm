@@ -10,6 +10,9 @@ import {
   confirmPrintSpecDefault,
   dropDisabledPrintSpecChoices,
   editPrintSpecDraft,
+  getFilledPrintSpecFieldIds,
+  getPrintSpecColumnMissing,
+  getPrintSpecMissingForPrice,
   getPrintSpecWarnings,
   isPrintSpecOptionDisabled,
   settlePrintSpecValues,
@@ -760,5 +763,49 @@ describe("попередження кратності", () => {
     }
     // Спосіб скріплення не вибрано — правила немає.
     expect(getPrintSpecWarnings(PRINT_SPEC_BROCHURE, brochure({ pageCount: "21" }))).toEqual([]);
+  });
+});
+
+describe("чого бракує для ціни", () => {
+  const diary = (patch: PrintSpecValues = {}) => ({ ...createEmptyPrintSpecValues(PRINT_SPEC_DIARY), ...patch });
+
+  it("це порожні поля зі стрічки «головне», у порядку стрічки", () => {
+    expect(getPrintSpecMissingForPrice(PRINT_SPEC_DIARY, diary()).map((field) => field.label)).toEqual([
+      "Формат",
+      "Матеріал",
+      "Кількість сторінок",
+      "Макет",
+    ]);
+    expect(
+      getPrintSpecMissingForPrice(PRINT_SPEC_DIARY, diary({ format: "a5", coverMaterial: "leatherette" })).map(
+        (field) => field.id
+      )
+    ).toEqual(["blockPages", "layout"]);
+  });
+
+  it("усе заповнено — порожньо; інші незаповнені поля ціни не стосуються", () => {
+    const filled = diary({ format: "a5", coverMaterial: "leatherette", blockPages: "352", layout: "dated" });
+    expect(getPrintSpecMissingForPrice(PRINT_SPEC_DIARY, filled)).toEqual([]);
+  });
+
+  it("«Інше…» без тексту — не заповнено", () => {
+    const values = diary({ format: CUSTOM_OPTION_VALUE, format__custom: "" });
+    expect(getPrintSpecMissingForPrice(PRINT_SPEC_DIARY, values).map((field) => field.id)).toContain("format");
+    expect(
+      getPrintSpecMissingForPrice(PRINT_SPEC_DIARY, { ...values, format__custom: "150 × 200" }).map((field) => field.id)
+    ).not.toContain("format");
+  });
+
+  it("приховане умовою поле ціни не бракує: розмір пакета питають лише в індивідуального", () => {
+    const base = createEmptyPrintSpecValues(PRINT_SPEC_PACKAGE);
+    expect(getPrintSpecMissingForPrice(PRINT_SPEC_PACKAGE, { ...base, packageType: "ready" }).map((f) => f.id)).not.toContain("size");
+    expect(getPrintSpecMissingForPrice(PRINT_SPEC_PACKAGE, { ...base, packageType: "custom" }).map((f) => f.id)).toContain("size");
+  });
+
+  it("незаповнене в стовпчику й знімок заповнених для «Лише незаповнені»", () => {
+    const values = diary({ format: "a5", coverType: "hard" });
+    const cover = getPrintSpecColumns(PRINT_SPEC_DIARY, values).find((column) => column.title === "Обкладинка");
+    expect(getPrintSpecColumnMissing(cover!, values).map((field) => field.id)).toEqual(["coverFoam", "coverMaterial"]);
+    expect([...getFilledPrintSpecFieldIds(PRINT_SPEC_DIARY, values)].sort()).toEqual(["coverType", "format"]);
   });
 });

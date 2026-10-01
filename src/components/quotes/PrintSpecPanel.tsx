@@ -13,7 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { InfoHint, PrintSpecFields } from "@/components/quotes/PrintSpecFields";
+import { InfoHint, PrintSpecFields, type PrintSpecFieldsHandle } from "@/components/quotes/PrintSpecFields";
+import { Switch } from "@/components/ui/switch";
 import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 import { readQuoteItemPrintSpec } from "@/lib/printSpecLegacy";
 import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
@@ -25,7 +26,9 @@ import {
   createEmptyPrintSpecValues,
   diffPrintSpec,
   formatPrintSpecEntries,
+  getFilledPrintSpecFieldIds,
   getPrintSpecColumns,
+  getPrintSpecMissingForPrice,
   getPrintSpecPreset,
   isPrintSpecFilled,
   parsePrintSpecValues,
@@ -107,6 +110,9 @@ export function PrintSpecPanel({
   /** Поля зі значенням за замовчуванням, ще не підтвердженим людиною: у перший запис їх не рахуємо правкою. */
   const [initialAuto, setInitialAuto] = React.useState<string[]>([]);
   const [draftAuto, setDraftAuto] = React.useState<string[]>([]);
+  /** «Лише незаповнені»: знімок заповнених на момент увімкнення, щоб поле не зникало посеред правки. */
+  const [hiddenIds, setHiddenIds] = React.useState<ReadonlySet<string> | null>(null);
+  const fieldsRef = React.useRef<PrintSpecFieldsHandle>(null);
   const [saving, setSaving] = React.useState(false);
   const [pickedRound, setPickedRound] = React.useState<string | null>(null);
 
@@ -211,6 +217,7 @@ export function PrintSpecPanel({
     (isPrintSpecFilled(preset, savedValues) && needsPriceSnapshot({ versions: saved?.versions, lastPricedAt, quoteStatus })
       ? savedValues
       : null);
+  const missingForPrice = getPrintSpecMissingForPrice(preset, draft);
   const draftChangeCount = editorBaseline
     ? diffPrintSpec(preset, editorBaseline, draft).filter((change) => !draftAuto.includes(change.fieldId)).length
     : 0;
@@ -225,6 +232,7 @@ export function PrintSpecPanel({
     setDraft(opened.values);
     setInitialAuto(opened.auto);
     setDraftAuto(opened.auto);
+    setHiddenIds(null);
     setOpen(true);
   };
 
@@ -411,8 +419,41 @@ export function PrintSpecPanel({
             </span>
           </DialogHeader>
 
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border/50 px-6 py-2 text-xs">
+            {missingForPrice.length > 0 ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-x-1 text-foreground">
+                <span className="font-medium">Для ціни бракує:</span>
+                {missingForPrice.map((field, index) => (
+                  <React.Fragment key={field.id}>
+                    <button
+                      type="button"
+                      onClick={() => fieldsRef.current?.focusField(field.id)}
+                      className="rounded px-0.5 font-semibold underline decoration-dotted underline-offset-2 hover:decoration-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+                    >
+                      {field.label}
+                    </button>
+                    {index < missingForPrice.length - 1 ? <span aria-hidden="true">,</span> : null}
+                  </React.Fragment>
+                ))}
+              </div>
+            ) : (
+              <span className="text-muted-foreground">Можна рахувати</span>
+            )}
+            <label className="ml-auto flex cursor-pointer items-center gap-2 text-muted-foreground">
+              Лише незаповнені
+              <Switch
+                size="sm"
+                label="Лише незаповнені"
+                checked={hiddenIds !== null}
+                onCheckedChange={(next) => setHiddenIds(next ? getFilledPrintSpecFieldIds(preset, draft) : null)}
+              />
+            </label>
+          </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto bg-muted/25 p-4">
             <PrintSpecFields
+              ref={fieldsRef}
+              hiddenIds={hiddenIds}
               preset={preset}
               values={draft}
               onChange={setDraft}

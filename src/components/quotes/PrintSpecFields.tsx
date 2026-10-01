@@ -11,7 +11,7 @@ import {
   customValueKey,
   diffPrintSpec,
   editPrintSpecDraft,
-  formatPrintSpecEntries,
+  getPrintSpecColumnMissing,
   getPrintSpecColumns,
   getPrintSpecWarnings,
   isPrintSpecOptionDisabled,
@@ -110,12 +110,15 @@ const FieldShell: React.FC<{
   change?: { was: string; onRevert: () => void };
   /** Значення поставлене за замовчуванням і ще не підтверджене: приглушена позначка, клік підтверджує. */
   onConfirmDefault?: () => void;
+  /** Поле з `preset.summary`: від нього залежить ціна. */
+  forPrice?: boolean;
   /** Попередження кратності й пояснення зняття неможливого вибору — під полем. */
   notes?: { text: string; tone: "warning" | "muted" }[];
-}> = ({ label, hint, children, change, onConfirmDefault, notes }) => (
+}> = ({ label, hint, children, change, onConfirmDefault, forPrice, notes }) => (
   <div className={cn("min-w-0 space-y-1.5", change && "-mx-2 rounded-lg bg-warning-soft/50 px-2 py-1.5")}>
     <div className="flex items-baseline gap-2 text-xs font-medium leading-4 text-muted-foreground">
       <span>{label}</span>
+      {forPrice ? <span className="text-2xs font-normal text-muted-foreground/70">для ціни</span> : null}
       {hint ? <InfoHint label={label} text={hint} /> : null}
       {onConfirmDefault ? (
         <button
@@ -181,7 +184,13 @@ export type PrintSpecFieldsProps = {
   initialAuto?: string[];
   /** Які поля зараз тримають значення за замовчуванням: це не «зміна після ціни». */
   onAutoChange?: (auto: string[]) => void;
+  /** «Лише незаповнені»: знімок полів, заповнених на момент увімкнення, — їх не показуємо. */
+  hiddenIds?: ReadonlySet<string> | null;
+  ref?: React.Ref<PrintSpecFieldsHandle>;
 };
+
+/** Що панель може попросити в форми: прокрутити до поля й сфокусувати його. */
+export type PrintSpecFieldsHandle = { focusField: (fieldId: string) => void };
 
 /** Скільки стовпчиків у ряд: клас мусить бути літералом, Tailwind не читає число з пропса. */
 const LANE_GRID: Record<number, string> = {
@@ -197,6 +206,19 @@ const LANE_SCROLL: Record<number, string> = {
   3: "@4xl:min-h-0 @4xl:overflow-y-auto @4xl:overscroll-contain",
 };
 
+/** Скільки чипів «не заповнено» у шапці стовпчика, решта — «ще N»: шапка липка й не має їсти пів екрана. */
+const MISSING_CHIPS = 4;
+
+const MissingChip: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex h-5 items-center rounded-md border border-border/70 bg-background px-1.5 text-2xs font-medium text-foreground/80 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+  >
+    {label}
+  </button>
+);
+
 export function PrintSpecFields({
   preset,
   values,
@@ -205,7 +227,20 @@ export function PrintSpecFields({
   baseline,
   initialAuto,
   onAutoChange,
+  hiddenIds,
+  ref,
 }: PrintSpecFieldsProps) {
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const focusField = React.useCallback((fieldId: string) => {
+    const target = rootRef.current?.querySelector<HTMLElement>(`[data-print-field="${fieldId}"]`);
+    if (!target) return;
+    target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    target
+      .querySelector<HTMLElement>("input:not([disabled]), button[aria-pressed]:not([disabled])")
+      ?.focus({ preventScroll: true });
+  }, []);
+  React.useImperativeHandle(ref, () => ({ focusField }), [focusField]);
+
   const [meta, setMeta] = React.useState<PrintSpecDraftMeta>({ auto: initialAuto ?? [], touched: [] });
   /** Пояснення, чому вибір знято: тримається біля поля, доки людина його знову не чіпає. */
   const [dropNotes, setDropNotes] = React.useState<Record<string, string>>({});
@@ -489,10 +524,11 @@ export function PrintSpecFields({
           ? renderTree(fields, field.id)
           : null;
         return (
-          <div key={field.id} className="min-w-0">
+          <div key={field.id} data-print-field={field.id} className="min-w-0 scroll-mt-28">
             <FieldShell
               label={field.label}
               hint={field.hint}
+              forPrice={preset.summary?.includes(field.id)}
               change={
                 changeById.has(field.id)
                   ? { was: changeById.get(field.id)?.from ?? "", onRevert: () => revert(field) }
@@ -514,16 +550,16 @@ export function PrintSpecFields({
       });
 
   const columns = getPrintSpecColumns(preset, values);
-  const entries = formatPrintSpecEntries(preset, values);
 
   const renderLane = (column: PrintSpecColumnInfo) => {
-    const ids = new Set(column.sections.flatMap((section) => section.fields.map((field) => field.id)));
-    const summary = entries
-      .filter((entry) => ids.has(entry.id))
-      .map((entry) => entry.value)
-      .join(" · ");
     const sectionTitles = new Set(column.sections.map((section) => section.title));
     const laneChanges = changes.filter((change) => sectionTitles.has(change.section)).length;
+    const missing = getPrintSpecColumnMissing(column, values);
+    const shownMissing = missing.slice(0, MISSING_CHIPS);
+    const restMissing = missing.slice(MISSING_CHIPS);
+    const sections = column.sections
+      .map((section) => ({ ...section, fields: section.fields.filter((field) => !hiddenIds?.has(field.id)) }))
+      .filter((section) => section.fields.length > 0);
     return (
       <section
         key={column.title}
@@ -545,27 +581,48 @@ export function PrintSpecFields({
               </span>
             ) : null}
           </div>
-          {summary ? <div className="line-clamp-2 text-xs leading-[18px] text-muted-foreground">{summary}</div> : null}
+          {missing.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+              <span className="mr-0.5">Не заповнено:</span>
+              {shownMissing.map((field) => (
+                <MissingChip key={field.id} label={field.label} onClick={() => focusField(field.id)} />
+              ))}
+              {restMissing.length > 0 ? (
+                <MissingChip label={`ще ${restMissing.length}`} onClick={() => focusField(restMissing[0].id)} />
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Check className="h-3 w-3" />
+              Усе заповнено
+            </div>
+          )}
         </div>
         <div className="space-y-4 p-4">
-        {column.sections.map((section) => (
-          <div key={section.title} className="space-y-3">
-            {/* Підзаголовок — лише коли розділ не збігається зі стовпчиком: інакше це дубль заголовка. */}
-            {section.title !== column.title ? (
-              <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
-                {section.title}
-              </div>
-            ) : null}
-            {renderTree(section.fields, null)}
-          </div>
-        ))}
+          {sections.length === 0 ? (
+            <div className="flex items-center justify-center gap-1.5 py-6 text-sm text-muted-foreground">
+              <Check className="h-4 w-4" />
+              Усе заповнено
+            </div>
+          ) : null}
+          {sections.map((section) => (
+            <div key={section.title} className="space-y-3">
+              {/* Підзаголовок — лише коли розділ не збігається зі стовпчиком: інакше це дубль заголовка. */}
+              {section.title !== column.title ? (
+                <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+                  {section.title}
+                </div>
+              ) : null}
+              {renderTree(section.fields, null)}
+            </div>
+          ))}
         </div>
       </section>
     );
   };
 
   return (
-    <div className="@container h-full">
+    <div ref={rootRef} className="@container h-full">
       <div className={cn("grid gap-3.5", LANE_GRID[Math.min(columns.length, 3)])}>
         {columns.map(renderLane)}
       </div>

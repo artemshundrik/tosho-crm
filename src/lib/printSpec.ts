@@ -660,6 +660,28 @@ export function getPrintSpecSections(preset: PrintSpecPreset, values: PrintSpecV
     .filter((section) => section.fields.length > 0);
 }
 
+/** Видимі заповнені поля — знімок для «Лише незаповнені». */
+export function getFilledPrintSpecFieldIds(preset: PrintSpecPreset, values: PrintSpecValues): Set<string> {
+  return new Set(
+    preset.fields
+      .filter((field) => isPrintSpecFieldVisible(field, values) && isPrintSpecFieldFilled(field, values))
+      .map((field) => field.id)
+  );
+}
+
+/**
+ * Чого бракує для ціни: видимі незаповнені поля зі стрічки «головне»
+ * (`preset.summary` — те, від чого залежить ціна), у порядку стрічки.
+ */
+export function getPrintSpecMissingForPrice(preset: PrintSpecPreset, values: PrintSpecValues): PrintSpecField[] {
+  return (preset.summary ?? [])
+    .map((id) => preset.fields.find((field) => field.id === id))
+    .filter(
+      (field): field is PrintSpecField =>
+        field !== undefined && isPrintSpecFieldVisible(field, values) && !isPrintSpecFieldFilled(field, values)
+    );
+}
+
 export type PrintSpecColumnInfo = {
   title: string;
   sections: PrintSpecSectionInfo[];
@@ -687,6 +709,11 @@ export function getPrintSpecColumns(preset: PrintSpecPreset, values: PrintSpecVa
       };
     })
     .filter((column) => column.total > 0);
+}
+
+/** Незаповнені видимі поля стовпчика в порядку форми. */
+export function getPrintSpecColumnMissing(column: PrintSpecColumnInfo, values: PrintSpecValues): PrintSpecField[] {
+  return column.sections.flatMap((section) => section.fields).filter((field) => !isPrintSpecFieldFilled(field, values));
 }
 
 /**
