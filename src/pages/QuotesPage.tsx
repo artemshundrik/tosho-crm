@@ -3409,6 +3409,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       // міняє рядок з умовою й повертає, чи справді щось змінилось (REQ-231).
       const statusChanged = await setQuoteStatus({ quoteId, status });
       if (statusChanged) {
+        refreshQuoteStatusCounts();
         try {
           await notifyQuoteInitiatorOnStatusChange({
             quoteId,
@@ -3459,6 +3460,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       try {
         const { status: nextStatus, label } = await restoreQuoteToBoard(quoteId, currentUserId ?? null);
         setRows((prev) => prev.map((row) => (row.id === quoteId ? { ...row, status: nextStatus } : row)));
+        refreshQuoteStatusCounts();
         toast.success(`Прорахунок повернуто в «${label}»`);
       } catch (e: unknown) {
         toast.error("Не вдалося повернути прорахунок", { description: getErrorMessage(e, "") });
@@ -3466,7 +3468,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         setRestoringQuoteId(null);
       }
     },
-    [currentUserId]
+    [currentUserId, refreshQuoteStatusCounts]
   );
 
   const toggleSelectAll = () => {
@@ -3949,6 +3951,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setDeleteTargetId(null);
     try {
       await deleteQuote(targetId, teamId);
+      refreshQuoteStatusCounts();
       toast.success("Прорахунок видалено");
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося видалити прорахунок.");
@@ -3989,6 +3992,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           );
         })
       );
+      refreshQuoteStatusCounts();
       toast.success(
         idsToChange.length > 0
           ? `Статус оновлено (${idsToChange.length})`
@@ -4008,6 +4012,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     try {
       await Promise.all(Array.from(selectedIds).map((id) => deleteQuote(id, teamId)));
       setRows((prev) => prev.filter((row) => !selectedIds.has(row.id)));
+      refreshQuoteStatusCounts();
       toast.success(`Видалено ${selectedIds.size}`);
       setSelectedIds(new Set());
     } catch (e: unknown) {
