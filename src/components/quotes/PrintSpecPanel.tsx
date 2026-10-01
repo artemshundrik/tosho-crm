@@ -21,6 +21,7 @@ import { toneBadgeClass } from "@/lib/statusTones";
 import {
   buildPrintSpecRounds,
   buildPrintSpecSave,
+  applyPrintSpecDefaults,
   createEmptyPrintSpecValues,
   diffPrintSpec,
   formatPrintSpecEntries,
@@ -103,6 +104,9 @@ export function PrintSpecPanel({
   );
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<PrintSpecValues>({});
+  /** Поля зі значенням за замовчуванням, ще не підтвердженим людиною: у перший запис їх не рахуємо правкою. */
+  const [initialAuto, setInitialAuto] = React.useState<string[]>([]);
+  const [draftAuto, setDraftAuto] = React.useState<string[]>([]);
   const [saving, setSaving] = React.useState(false);
   const [pickedRound, setPickedRound] = React.useState<string | null>(null);
 
@@ -207,10 +211,20 @@ export function PrintSpecPanel({
     (isPrintSpecFilled(preset, savedValues) && needsPriceSnapshot({ versions: saved?.versions, lastPricedAt, quoteStatus })
       ? savedValues
       : null);
-  const draftChangeCount = editorBaseline ? diffPrintSpec(preset, editorBaseline, draft).length : 0;
+  const draftChangeCount = editorBaseline
+    ? diffPrintSpec(preset, editorBaseline, draft).filter((change) => !draftAuto.includes(change.fieldId)).length
+    : 0;
 
   const openEditor = () => {
-    setDraft(isPrintSpecFilled(preset, savedValues) ? savedValues : createEmptyPrintSpecValues(preset));
+    // Значення за замовчуванням лише в чернетці вікна: збережені дані не чіпаємо.
+    const opened = applyPrintSpecDefaults(
+      preset,
+      isPrintSpecFilled(preset, savedValues) ? savedValues : createEmptyPrintSpecValues(preset),
+      { auto: [], touched: [] }
+    );
+    setDraft(opened.values);
+    setInitialAuto(opened.auto);
+    setDraftAuto(opened.auto);
     setOpen(true);
   };
 
@@ -239,6 +253,7 @@ export function PrintSpecPanel({
         draft,
         quoteStatus,
         lastPricedAt,
+        defaulted: draftAuto,
       });
       const nextMetadata = { ...current, printSpec: built.printSpec };
 
@@ -397,7 +412,15 @@ export function PrintSpecPanel({
           </DialogHeader>
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-muted/25 p-4">
-            <PrintSpecFields preset={preset} values={draft} onChange={setDraft} disabled={saving} baseline={editorBaseline} />
+            <PrintSpecFields
+              preset={preset}
+              values={draft}
+              onChange={setDraft}
+              disabled={saving}
+              baseline={editorBaseline}
+              initialAuto={initialAuto}
+              onAutoChange={setDraftAuto}
+            />
           </div>
 
           <DialogFooter className="border-t border-border/50 bg-muted/25 px-6 py-3.5 sm:items-center sm:justify-between">

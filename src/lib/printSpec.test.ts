@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   CUSTOM_OPTION_VALUE,
+  PRINT_SPEC_BROCHURE,
+  PRINT_SPEC_CALENDAR_HOUSE,
   PRINT_SPEC_DIARY,
+  PRINT_SPEC_FLYER,
   PRINT_SPEC_PACKAGE,
   PRINT_SPEC_PRESETS,
+  confirmPrintSpecDefault,
+  dropDisabledPrintSpecChoices,
+  editPrintSpecDraft,
+  getPrintSpecWarnings,
+  isPrintSpecOptionDisabled,
+  settlePrintSpecValues,
+  applyPrintSpecDefaults,
   buildPrintSpecRounds,
   buildPrintSpecSave,
   createEmptyPrintSpecValues,
@@ -526,5 +536,229 @@ describe("розмір у три виміри", () => {
   it("порожній вид розміру з глибиною — один, а не два", () => {
     expect(createEmptyPrintSpecValues(PRINT_SPEC_PACKAGE).size).toEqual([{ width: "", height: "", depth: "" }]);
     expect(parsePrintSpecValues(PRINT_SPEC_PACKAGE, {}).size).toEqual([{ width: "", height: "", depth: "" }]);
+  });
+});
+
+/**
+ * Правила REQ-326 теж ДАНІ, тож одрук у них мовчить: умова на неіснуюче поле
+ * просто ніколи не спрацює. Структурна перевірка йде по всіх видах одразу.
+ */
+describe("правила за замовчуванням, вимкнені варіанти й кратність: структура", () => {
+  it.each(PRINT_SPEC_PRESETS.map((preset) => [preset.label, preset] as const))("%s: умови ведуть на наявні поля", (_l, preset) => {
+    const ids = new Set(preset.fields.map((field) => field.id));
+    for (const field of preset.fields) {
+      const conditions = [
+        ...(field.defaults ?? []).flatMap((rule) => printSpecConditions(rule.when)),
+        ...(field.warnings ?? []).flatMap((warning) => printSpecConditions(warning.when)),
+        ...(field.options ?? []).flatMap((option) => (option.disabledWhen ? [option.disabledWhen] : [])),
+      ];
+      for (const condition of conditions) expect(ids.has(condition.field), `${field.id}: ${condition.field}`).toBe(true);
+      for (const option of field.options ?? []) {
+        if (option.disabledWhen) expect(option.reason, `${field.id}=${option.value}: без причини`).toBeTruthy();
+      }
+      if (field.presets || field.step) expect(field.type).toBe("number");
+    }
+  });
+});
+
+describe("значення за замовчуванням", () => {
+  const empty = () => createEmptyPrintSpecValues(PRINT_SPEC_DIARY);
+  const none = { auto: [], touched: [] };
+  const diary = (patch: PrintSpecValues = {}) => ({ ...empty(), ...patch });
+
+  it("порожні форзац і нахзац дістають карти й позначаються як поставлені правилом", () => {
+    const result = applyPrintSpecDefaults(PRINT_SPEC_DIARY, empty(), none);
+    expect(result.values.endpaper).toBe("maps");
+    expect(result.values.backpaper).toBe("maps");
+    expect(result.auto).toEqual(expect.arrayContaining(["endpaper", "backpaper"]));
+  });
+
+  it("лінія, клітинка й Moleskine дають чисті форзац і нахзац", () => {
+    for (const patch of [{ layout: "line" }, { layout: "grid" }, { format: "moleskine" }] as PrintSpecValues[]) {
+      const result = applyPrintSpecDefaults(PRINT_SPEC_DIARY, diary(patch), none);
+      expect(result.values.endpaper).toBe("plain");
+      expect(result.values.backpaper).toBe("plain");
+    }
+  });
+
+  it("Moleskine ставить 224 сторінки, а інший формат — нічого", () => {
+    expect(applyPrintSpecDefaults(PRINT_SPEC_DIARY, diary({ format: "moleskine" }), none).values.blockPages).toBe("224");
+    expect(applyPrintSpecDefaults(PRINT_SPEC_DIARY, diary({ format: "a5" }), none).values.blockPages).toBe("");
+  });
+
+  it("вибір людини не перетирається: ні збережений, ні стертий, ні підтверджений", () => {
+    const chosen = diary({ endpaper: "individual", layout: "line" });
+    expect(applyPrintSpecDefaults(PRINT_SPEC_DIARY, chosen, none).values.endpaper).toBe("individual");
+
+    const cleared = applyPrintSpecDefaults(PRINT_SPEC_DIARY, empty(), { auto: [], touched: ["endpaper"] });
+    expect(cleared.values.endpaper).toBe("");
+    expect(cleared.auto).not.toContain("endpaper");
+
+    const confirmed = confirmPrintSpecDefault({ auto: ["endpaper"], touched: [] }, "endpaper");
+    const after = applyPrintSpecDefaults(PRINT_SPEC_DIARY, diary({ endpaper: "maps", layout: "line" }), confirmed);
+    expect(after.values.endpaper).toBe("maps");
+  });
+
+  it("поставлене правилом значення йде за умовами, доки його не підтвердили", () => {
+    const first = settlePrintSpecValues(PRINT_SPEC_DIARY, empty(), none);
+    expect(first.values.endpaper).toBe("maps");
+    const second = editPrintSpecDraft(PRINT_SPEC_DIARY, first.values, first.meta, { layout: "grid" });
+    expect(second.values.endpaper).toBe("plain");
+    expect(second.meta.auto).toContain("endpaper");
+  });
+
+  it("правка людини знімає поле з «за замовчуванням» і більше воно правил не чує", () => {
+    const first = settlePrintSpecValues(PRINT_SPEC_DIARY, empty(), none);
+    const picked = editPrintSpecDraft(PRINT_SPEC_DIARY, first.values, first.meta, { endpaper: "individual" });
+    expect(picked.meta.auto).not.toContain("endpaper");
+    const relayout = editPrintSpecDraft(PRINT_SPEC_DIARY, picked.values, picked.meta, { layout: "line" });
+    expect(relayout.values.endpaper).toBe("individual");
+  });
+
+  it("єдиний можливий варіант обирається сам, але лише коли поле видиме", () => {
+    expect(applyPrintSpecDefaults(PRINT_SPEC_DIARY, empty(), none).values.printedPaperBase).toBe("");
+    const printed = applyPrintSpecDefaults(PRINT_SPEC_DIARY, diary({ coverMaterial: "printed_paper" }), none);
+    expect(printed.values.printedPaperBase).toBe("4_0_matt");
+    expect(printed.auto).toContain("printedPaperBase");
+  });
+
+  it("хатинка: розмір блоку 210 × 120", () => {
+    const result = applyPrintSpecDefaults(PRINT_SPEC_CALENDAR_HOUSE, createEmptyPrintSpecValues(PRINT_SPEC_CALENDAR_HOUSE), none);
+    expect(result.values.gridSize).toEqual([{ width: "210", height: "120" }]);
+  });
+
+  it("порожня чернетка без правил лишається тим самим обʼєктом", () => {
+    const values = createEmptyPrintSpecValues(PRINT_SPEC_FLYER);
+    expect(applyPrintSpecDefaults(PRINT_SPEC_FLYER, values, none).values).toBe(values);
+  });
+
+  it("значення за замовчуванням не стають зміною після ціни", () => {
+    const saved = { ...empty(), format: "a5", coverMaterial: "leatherette" };
+    const draft = applyPrintSpecDefaults(PRINT_SPEC_DIARY, { ...saved, blockPages: "300" }, none);
+    const result = buildPrintSpecSave({
+      preset: PRINT_SPEC_DIARY,
+      current: { presetKey: "print_diary", values: saved },
+      draft: draft.values,
+      quoteStatus: "estimated",
+      lastPricedAt: "2026-09-10T10:00:00.000Z",
+      defaulted: draft.auto,
+      now: new Date("2026-09-12T10:00:00.000Z"),
+    });
+    // Правка одна — сторінки; форзац і нахзац у знімок лягли вже «з картами».
+    const version = result.printSpec.versions?.[0];
+    expect(version?.values.endpaper).toBe("maps");
+    expect(diffPrintSpec(PRINT_SPEC_DIARY, version?.values ?? {}, result.printSpec.values).map((c) => c.fieldId)).toEqual([
+      "blockPages",
+    ]);
+    expect(result.changedAfterPrice).toBe(true);
+  });
+
+  it("лише значення за замовчуванням — це не правка: знімка і повернення на перерахунок немає", () => {
+    const saved = { ...empty(), format: "a5", coverMaterial: "leatherette" };
+    const draft = applyPrintSpecDefaults(PRINT_SPEC_DIARY, saved, none);
+    const result = buildPrintSpecSave({
+      preset: PRINT_SPEC_DIARY,
+      current: { presetKey: "print_diary", values: saved },
+      draft: draft.values,
+      quoteStatus: "estimated",
+      lastPricedAt: "2026-09-10T10:00:00.000Z",
+      defaulted: draft.auto,
+    });
+    expect(result.printSpec.versions).toBeUndefined();
+    expect(result.changedAfterPrice).toBe(false);
+    expect(result.printSpec.values.endpaper).toBe("maps");
+  });
+});
+
+describe("вимкнені варіанти", () => {
+  const diary = (patch: PrintSpecValues = {}) => ({ ...createEmptyPrintSpecValues(PRINT_SPEC_DIARY), ...patch });
+  const elastic = PRINT_SPEC_DIARY.fields.find((field) => field.id === "elasticPosition");
+  const option = (value: string) => elastic?.options?.find((entry) => entry.value === value);
+
+  it("з поролоном резинка лише під ручку", () => {
+    const foam = diary({ coverFoam: "yes", elastic: "yes" });
+    expect(isPrintSpecOptionDisabled(option("vertical")!, foam)).toBe(true);
+    expect(isPrintSpecOptionDisabled(option("horizontal")!, foam)).toBe(true);
+    expect(isPrintSpecOptionDisabled(option("pen_loop")!, foam)).toBe(false);
+    expect(isPrintSpecOptionDisabled(option("vertical")!, diary({ coverFoam: "no" }))).toBe(false);
+    expect(option("vertical")?.reason).toBe("З поролоновою обкладинкою можлива лише резинка під ручку");
+  });
+
+  it("вибрали поролон — уже вибрана неможлива резинка знімається з причиною", () => {
+    const before = diary({ elastic: "yes", elasticPosition: "vertical" });
+    const meta = { auto: [], touched: [] };
+    const after = editPrintSpecDraft(PRINT_SPEC_DIARY, before, meta, { coverFoam: "yes" });
+    expect(after.values.elasticPosition).toBe("");
+    expect(after.dropped).toEqual([
+      { fieldId: "elasticPosition", label: "Вертикальна", reason: "З поролоновою обкладинкою можлива лише резинка під ручку" },
+    ]);
+    // Можливе лишається.
+    const pen = editPrintSpecDraft(PRINT_SPEC_DIARY, diary({ elastic: "yes", elasticPosition: "pen_loop" }), meta, {
+      coverFoam: "yes",
+    });
+    expect(pen.values.elasticPosition).toBe("pen_loop");
+    expect(pen.dropped).toEqual([]);
+  });
+
+  it("листівка: ламінація лише від 170 г", () => {
+    const lamination = PRINT_SPEC_FLYER.fields.find((field) => field.id === "lamination");
+    const flyer = (paper: string) => ({ ...createEmptyPrintSpecValues(PRINT_SPEC_FLYER), paper });
+    for (const paper of ["90", "115", "130", "150"]) {
+      expect(isPrintSpecOptionDisabled(lamination!.options![1], flyer(paper))).toBe(true);
+      expect(isPrintSpecOptionDisabled(lamination!.options![2], flyer(paper))).toBe(true);
+    }
+    for (const paper of ["170", "300"]) expect(isPrintSpecOptionDisabled(lamination!.options![1], flyer(paper))).toBe(false);
+    // «Без ламінації» можлива завжди.
+    expect(isPrintSpecOptionDisabled(lamination!.options![0], flyer("90"))).toBe(false);
+
+    const dropped = dropDisabledPrintSpecChoices(PRINT_SPEC_FLYER, { ...flyer("90"), lamination: "matte" });
+    expect(dropped.values.lamination).toBe("");
+    expect(dropped.dropped[0]).toMatchObject({ fieldId: "lamination", label: "Мат", reason: "Доступна від 170 г" });
+  });
+
+  it("звірка не чіпає значення, коли нічого не вимкнено", () => {
+    const values = diary({ coverFoam: "no", elastic: "yes", elasticPosition: "vertical" });
+    expect(dropDisabledPrintSpecChoices(PRINT_SPEC_DIARY, values).values).toBe(values);
+  });
+});
+
+describe("попередження кратності", () => {
+  const diary = (patch: PrintSpecValues) => ({ ...createEmptyPrintSpecValues(PRINT_SPEC_DIARY), ...patch });
+  const brochure = (patch: PrintSpecValues) => ({ ...createEmptyPrintSpecValues(PRINT_SPEC_BROCHURE), ...patch });
+  const messages = (hits: { message: string }[]) => hits.map((hit) => hit.message);
+
+  it("рекламні вставки: непарне — «Кратне двом», парне й порожнє мовчать", () => {
+    expect(messages(getPrintSpecWarnings(PRINT_SPEC_DIARY, diary({ adInserts: "3" })))).toEqual(["Кратне двом"]);
+    expect(getPrintSpecWarnings(PRINT_SPEC_DIARY, diary({ adInserts: "4" }))).toEqual([]);
+    expect(getPrintSpecWarnings(PRINT_SPEC_DIARY, diary({ adInserts: "" }))).toEqual([]);
+  });
+
+  it("індивідуальний блок: 80/90/100 г — кратно 24", () => {
+    const individual = { blockKind: "individual", blockDensity: "90" };
+    expect(getPrintSpecWarnings(PRINT_SPEC_DIARY, diary({ ...individual, blockPages: "350" })).map((h) => h.fieldId)).toEqual([
+      "blockPages",
+    ]);
+    expect(getPrintSpecWarnings(PRINT_SPEC_DIARY, diary({ ...individual, blockPages: "336" }))).toEqual([]);
+    // Без щільності правила немає.
+    expect(getPrintSpecWarnings(PRINT_SPEC_DIARY, diary({ blockKind: "individual", blockPages: "350" }))).toEqual([]);
+  });
+
+  it("70 г (стандартний блок) — кратно 32: 352 і 224 проходять", () => {
+    expect(getPrintSpecWarnings(PRINT_SPEC_DIARY, diary({ blockKind: "standard", blockPages: "352" }))).toEqual([]);
+    expect(getPrintSpecWarnings(PRINT_SPEC_DIARY, diary({ blockKind: "standard", blockPages: "224" }))).toEqual([]);
+    expect(getPrintSpecWarnings(PRINT_SPEC_DIARY, diary({ blockKind: "standard", blockPages: "350" }))).toHaveLength(1);
+  });
+
+  it("брошура: дві скоби — кратно 4, решта — кратно 2", () => {
+    expect(messages(getPrintSpecWarnings(PRINT_SPEC_BROCHURE, brochure({ binding: "staples_2", pageCount: "22" })))).toEqual([
+      "Дві скоби — тільки кратно 4",
+    ]);
+    expect(getPrintSpecWarnings(PRINT_SPEC_BROCHURE, brochure({ binding: "staples_2", pageCount: "24" }))).toEqual([]);
+    for (const binding of ["thermo", "pur", "spring", "thread"]) {
+      expect(getPrintSpecWarnings(PRINT_SPEC_BROCHURE, brochure({ binding, pageCount: "21" }))).toHaveLength(1);
+      expect(getPrintSpecWarnings(PRINT_SPEC_BROCHURE, brochure({ binding, pageCount: "22" }))).toEqual([]);
+    }
+    // Спосіб скріплення не вибрано — правила немає.
+    expect(getPrintSpecWarnings(PRINT_SPEC_BROCHURE, brochure({ pageCount: "21" }))).toEqual([]);
   });
 });

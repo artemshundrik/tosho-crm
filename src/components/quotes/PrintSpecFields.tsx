@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Info } from "@/components/icons/appIcons";
+import { AlertTriangle, Check, Info, Minus, Plus } from "@/components/icons/appIcons";
 
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -7,13 +7,17 @@ import { HoverTip } from "@/components/ui/hover-tip";
 import { pluralUk } from "@/lib/lastSeen";
 import {
   CUSTOM_OPTION_VALUE,
+  confirmPrintSpecDefault,
   customValueKey,
   diffPrintSpec,
+  editPrintSpecDraft,
   formatPrintSpecEntries,
   getPrintSpecColumns,
+  getPrintSpecWarnings,
+  isPrintSpecOptionDisabled,
   listPrintSpecOptions,
   printSpecParentFieldId,
-  reconcilePrintSpecValues,
+  type PrintSpecDraftMeta,
   type PrintSpecColumnInfo,
   type PrintSpecField,
   type PrintSpecPreset,
@@ -44,31 +48,42 @@ const OptionChip: React.FC<{
   dashed?: boolean;
   /** Це був вибір у версії, яку рахували: пунктир тону warning і дрібне «було». */
   was?: boolean;
+  /** Варіант неможливий за поточних значень: сірий, не натискається, причина — на наведенні. */
+  locked?: string;
   children: React.ReactNode;
-}> = ({ active, onClick, disabled, dashed, was, children }) => (
-  <button
-    type="button"
-    aria-pressed={active}
-    disabled={disabled}
-    onClick={onClick}
-    className={cn(
-      "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border px-2.5 text-xs transition-colors",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-      "disabled:cursor-not-allowed disabled:opacity-60",
-      active
-        ? "border-foreground bg-foreground font-semibold text-background"
-        : was
-          ? "border-dashed border-warning-soft-border bg-background font-medium text-warning-foreground hover:bg-warning-soft"
-          : cn(
-              "bg-background font-medium hover:bg-muted",
-              dashed ? "border-dashed border-border text-muted-foreground" : "border-border/70 text-foreground/80"
-            )
-    )}
-  >
-    {children}
-    {was && !active ? <span className="text-2xs font-semibold uppercase">було</span> : null}
-  </button>
-);
+}> = ({ active, onClick, disabled, dashed, was, locked, children }) => {
+  // Уже вибраний неможливий варіант лишається натискним: його можна зняти.
+  const inert = Boolean(locked) && !active;
+  const chip = (
+    <button
+      type="button"
+      aria-pressed={active}
+      disabled={disabled || inert}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border px-2.5 text-xs transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        "disabled:cursor-not-allowed disabled:opacity-60",
+        inert && "border-border/40 bg-muted/50 text-muted-foreground/60 disabled:opacity-100",
+        active
+          ? "border-foreground bg-foreground font-semibold text-background"
+          : inert
+            ? "font-medium"
+            : was
+              ? "border-dashed border-warning-soft-border bg-background font-medium text-warning-foreground hover:bg-warning-soft"
+              : cn(
+                  "bg-background font-medium hover:bg-muted",
+                  dashed ? "border-dashed border-border text-muted-foreground" : "border-border/70 text-foreground/80"
+                )
+      )}
+    >
+      {children}
+      {was && !active ? <span className="text-2xs font-semibold uppercase">було</span> : null}
+    </button>
+  );
+  // Вимкнена кнопка подій наведення не віддає — підказка вішається на обгортку.
+  return locked ? <HoverTip label={locked}>{chip}</HoverTip> : chip;
+};
 
 /** Значок «і» з підказкою: наведення, фокус із клавіатури й дотик відкривають текст. */
 export const InfoHint: React.FC<{ label: string; text: string; className?: string }> = ({ label, text, className }) => (
@@ -93,11 +108,25 @@ const FieldShell: React.FC<{
   children: React.ReactNode;
   /** Поле змінене відносно версії, яку рахували: «було» і кнопка повернення. */
   change?: { was: string; onRevert: () => void };
-}> = ({ label, hint, children, change }) => (
+  /** Значення поставлене за замовчуванням і ще не підтверджене: приглушена позначка, клік підтверджує. */
+  onConfirmDefault?: () => void;
+  /** Попередження кратності й пояснення зняття неможливого вибору — під полем. */
+  notes?: { text: string; tone: "warning" | "muted" }[];
+}> = ({ label, hint, children, change, onConfirmDefault, notes }) => (
   <div className={cn("min-w-0 space-y-1.5", change && "-mx-2 rounded-lg bg-warning-soft/50 px-2 py-1.5")}>
     <div className="flex items-baseline gap-2 text-xs font-medium leading-4 text-muted-foreground">
       <span>{label}</span>
       {hint ? <InfoHint label={label} text={hint} /> : null}
+      {onConfirmDefault ? (
+        <button
+          type="button"
+          title="Підтвердити значення"
+          onClick={onConfirmDefault}
+          className="text-2xs font-normal text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline"
+        >
+          за замовчуванням
+        </button>
+      ) : null}
       {change ? (
         <>
           <span className="min-w-0 truncate font-normal text-warning-foreground">було: {change.was || "—"}</span>
@@ -112,6 +141,19 @@ const FieldShell: React.FC<{
       ) : null}
     </div>
     {children}
+    {notes?.map((note) => (
+      <div
+        key={note.text}
+        role={note.tone === "warning" ? "status" : undefined}
+        className={cn(
+          "flex items-start gap-1 text-xs leading-4",
+          note.tone === "warning" ? "text-warning-foreground" : "text-muted-foreground"
+        )}
+      >
+        {note.tone === "warning" ? <AlertTriangle className="mt-px h-3 w-3 shrink-0" /> : null}
+        {note.text}
+      </div>
+    ))}
   </div>
 );
 
@@ -135,6 +177,10 @@ export type PrintSpecFieldsProps = {
   disabled?: boolean;
   /** Версія, яку рахували: змінене відносно неї підсвічується з «повернути». */
   baseline?: PrintSpecValues | null;
+  /** Поля, у яких на початку стоїть значення за замовчуванням, ще не підтверджене людиною. */
+  initialAuto?: string[];
+  /** Які поля зараз тримають значення за замовчуванням: це не «зміна після ціни». */
+  onAutoChange?: (auto: string[]) => void;
 };
 
 /** Скільки стовпчиків у ряд: клас мусить бути літералом, Tailwind не читає число з пропса. */
@@ -151,33 +197,68 @@ const LANE_SCROLL: Record<number, string> = {
   3: "@4xl:min-h-0 @4xl:overflow-y-auto @4xl:overscroll-contain",
 };
 
-export function PrintSpecFields({ preset, values, onChange, disabled, baseline }: PrintSpecFieldsProps) {
+export function PrintSpecFields({
+  preset,
+  values,
+  onChange,
+  disabled,
+  baseline,
+  initialAuto,
+  onAutoChange,
+}: PrintSpecFieldsProps) {
+  const [meta, setMeta] = React.useState<PrintSpecDraftMeta>({ auto: initialAuto ?? [], touched: [] });
+  /** Пояснення, чому вибір знято: тримається біля поля, доки людина його знову не чіпає. */
+  const [dropNotes, setDropNotes] = React.useState<Record<string, string>>({});
+
   /*
-    Кожна зміна йде через звірку: вибрали картон — щільність 120 г, якої в
-    картону не буває, зникає в тому ж записі, а не наступним рендером.
+    Кожна зміна йде через звірку в одному записі: вибрали картон — щільність 120 г,
+    якої в картону не буває, зникає тут же, а не наступним рендером; вибрали
+    поролон — резинка «Вертикальна» знімається з поясненням; порожнім полям
+    підставляються значення за замовчуванням.
   */
   const commit = React.useCallback(
-    (next: PrintSpecValues) => onChange(reconcilePrintSpecValues(preset, next)),
-    [onChange, preset]
+    (patch: PrintSpecValues) => {
+      const settled = editPrintSpecDraft(preset, values, meta, patch);
+      const touchedIds = Object.keys(patch).map((key) => key.replace(/__custom$/, ""));
+      setMeta(settled.meta);
+      setDropNotes((prev) => {
+        const next = { ...prev };
+        for (const id of touchedIds) delete next[id];
+        for (const drop of settled.dropped) next[drop.fieldId] = `«${drop.label}» знято: ${drop.reason}`;
+        return next;
+      });
+      onChange(settled.values);
+      onAutoChange?.(settled.meta.auto);
+    },
+    [preset, values, meta, onChange, onAutoChange]
   );
   const setValue = React.useCallback(
-    (fieldId: string, value: PrintSpecValue) => {
-      commit({ ...values, [fieldId]: value });
-    },
-    [commit, values]
+    (fieldId: string, value: PrintSpecValue) => commit({ [fieldId]: value }),
+    [commit]
   );
+  const confirmDefault = (fieldId: string) => {
+    const next = confirmPrintSpecDefault(meta, fieldId);
+    setMeta(next);
+    onAutoChange?.(next.auto);
+  };
 
+  // Значення за замовчуванням — не правка після ціни, поки людина його не підтвердила.
   const changes = React.useMemo(
-    () => (baseline ? diffPrintSpec(preset, baseline, values) : []),
-    [preset, baseline, values]
+    () => (baseline ? diffPrintSpec(preset, baseline, values).filter((change) => !meta.auto.includes(change.fieldId)) : []),
+    [preset, baseline, values, meta.auto]
   );
+  const warningsById = React.useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const hit of getPrintSpecWarnings(preset, values)) map.set(hit.fieldId, [...(map.get(hit.fieldId) ?? []), hit.message]);
+    return map;
+  }, [preset, values]);
   const changeById = React.useMemo(() => new Map(changes.map((change) => [change.fieldId, change])), [changes]);
 
   const revert = (field: PrintSpecField) => {
     if (!baseline) return;
-    const next: PrintSpecValues = { ...values, [field.id]: baseline[field.id] ?? null };
-    if (field.allowCustom) next[customValueKey(field.id)] = baseline[customValueKey(field.id)] ?? "";
-    commit(next);
+    const patch: PrintSpecValues = { [field.id]: baseline[field.id] ?? null };
+    if (field.allowCustom) patch[customValueKey(field.id)] = baseline[customValueKey(field.id)] ?? "";
+    commit(patch);
   };
 
   const renderControl = (field: PrintSpecField) => {
@@ -195,6 +276,7 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
                 key={option.value}
                 active={checked}
                 was={Array.isArray(was) && (was as unknown[]).includes(option.value)}
+                locked={isPrintSpecOptionDisabled(option, values) ? (option.reason ?? "Недоступно") : undefined}
                 disabled={disabled}
                 onClick={() => {
                   const list = checked
@@ -273,15 +355,63 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
     }
 
     if (field.type === "number") {
+      const current = asString(raw);
+      const step = field.step;
+      const bump = (direction: 1 | -1) => {
+        if (!step) return;
+        const base = current === "" ? 0 : Number(current);
+        setValue(field.id, String(Math.max(0, base + direction * step)));
+      };
+      const stepButton = "grid h-(--control-h) w-7 shrink-0 place-items-center rounded-md border border-border/70 bg-background text-foreground/80 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-not-allowed disabled:opacity-50";
       return (
-        <div className="flex items-center gap-2">
-          <Input
-            value={asString(raw)}
-            disabled={disabled}
-            inputMode="numeric"
-            onChange={(event) => setValue(field.id, sanitizeNumeric(event.target.value))}
-          />
-          {field.unit ? <span className="text-sm text-muted-foreground">{field.unit}</span> : null}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div className="flex items-center gap-1.5">
+            {step ? (
+              <button
+                type="button"
+                aria-label={`${field.label}: менше на ${step}`}
+                disabled={disabled || current === "" || Number(current) === 0}
+                onClick={() => bump(-1)}
+                className={stepButton}
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+            ) : null}
+            <Input
+              value={current}
+              disabled={disabled}
+              inputMode="numeric"
+              aria-label={field.label}
+              className="w-16 px-2 text-center tabular-nums"
+              onChange={(event) => setValue(field.id, sanitizeNumeric(event.target.value))}
+            />
+            {step ? (
+              <button
+                type="button"
+                aria-label={`${field.label}: більше на ${step}`}
+                disabled={disabled}
+                onClick={() => bump(1)}
+                className={stepButton}
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            ) : null}
+            {field.unit ? <span className="text-sm text-muted-foreground">{field.unit}</span> : null}
+          </div>
+          {field.presets?.length ? (
+            <div role="group" aria-label={`${field.label}: швидкі значення`} className="flex flex-wrap gap-1.5">
+              {field.presets.map((preset) => (
+                <OptionChip
+                  key={preset}
+                  active={current === preset}
+                  disabled={disabled}
+                  onClick={() => setValue(field.id, current === preset ? "" : preset)}
+                >
+                  {preset}
+                </OptionChip>
+              ))}
+            </div>
+          ) : null}
         </div>
       );
     }
@@ -305,9 +435,15 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
               key={option.value}
               active={value === option.value}
               was={was === option.value}
+              locked={isPrintSpecOptionDisabled(option, values) ? (option.reason ?? "Недоступно") : undefined}
               disabled={disabled}
               // Повторний клік по вибраному знімає вибір: порожнє поле — робочий стан.
-              onClick={() => setValue(field.id, value === option.value ? "" : option.value)}
+              // Виняток — значення за замовчуванням: перший клік його підтверджує.
+              onClick={() =>
+                meta.auto.includes(field.id) && value === option.value
+                  ? confirmDefault(field.id)
+                  : setValue(field.id, value === option.value ? "" : option.value)
+              }
             >
               {option.label}
             </OptionChip>
@@ -362,6 +498,11 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
                   ? { was: changeById.get(field.id)?.from ?? "", onRevert: () => revert(field) }
                   : undefined
               }
+              onConfirmDefault={meta.auto.includes(field.id) ? () => confirmDefault(field.id) : undefined}
+              notes={[
+                ...(warningsById.get(field.id) ?? []).map((text) => ({ text, tone: "warning" as const })),
+                ...(dropNotes[field.id] ? [{ text: dropNotes[field.id], tone: "muted" as const }] : []),
+              ]}
             >
               {renderControl(field)}
             </FieldShell>

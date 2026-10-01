@@ -9,6 +9,7 @@ import {
   PRINT_SPEC_PACKAGE,
   createEmptyPrintSpecValues,
   getPrintSpecSections,
+  settlePrintSpecValues,
   type PrintSpecValues,
 } from "@/lib/printSpec";
 
@@ -241,5 +242,101 @@ describe("підказки під значком «і»", () => {
 
     fireEvent.focus(button);
     expect((await screen.findByRole("tooltip")).textContent).toContain(HINT);
+  });
+});
+
+/**
+ * REQ-326: підказки стали кнопками, неможливе вимкнене, типове підставляється.
+ * Усе перевіряється кліками: правила — це дані, і їх помилка видна лише у формі.
+ */
+function SettledHarness({ onValues }: { onValues?: (values: PrintSpecValues) => void }) {
+  const initial = React.useMemo(
+    () => settlePrintSpecValues(PRINT_SPEC_DIARY, createEmptyPrintSpecValues(PRINT_SPEC_DIARY), { auto: [], touched: [] }),
+    []
+  );
+  const [values, setValues] = React.useState<PrintSpecValues>(initial.values);
+  return (
+    <PrintSpecFields
+      preset={PRINT_SPEC_DIARY}
+      values={values}
+      initialAuto={initial.meta.auto}
+      onChange={(next) => {
+        setValues(next);
+        onValues?.(next);
+      }}
+    />
+  );
+}
+
+describe("кнопки замість підказок", () => {
+  it("пресети й крок числових полів ставлять значення", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    const pages = within(screen.getByRole("group", { name: "Кількість сторінок: швидкі значення" }));
+    await user.click(pages.getByRole("button", { name: "224" }));
+    expect((screen.getByLabelText("Кількість сторінок") as HTMLInputElement).value).toBe("224");
+    await user.click(pages.getByRole("button", { name: "352" }));
+    expect((screen.getByLabelText("Кількість сторінок") as HTMLInputElement).value).toBe("352");
+
+    await user.click(screen.getByRole("button", { name: "Рекламні вставки: більше на 2" }));
+    await user.click(screen.getByRole("button", { name: "Рекламні вставки: більше на 2" }));
+    expect((screen.getByLabelText("Рекламні вставки") as HTMLInputElement).value).toBe("4");
+    await user.click(screen.getByRole("button", { name: "Рекламні вставки: менше на 2" }));
+    expect((screen.getByLabelText("Рекламні вставки") as HTMLInputElement).value).toBe("2");
+  });
+
+  it("непарна кількість вставок — попередження, а не блок", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(screen.getByLabelText("Рекламні вставки"), "3");
+    expect(screen.getByText("Кратне двом")).toBeTruthy();
+    await user.type(screen.getByLabelText("Рекламні вставки"), "2");
+    expect(screen.queryByText("Кратне двом")).toBeNull();
+  });
+});
+
+describe("неможливе вимкнене", () => {
+  it("з поролоном вертикальна резинка сіра, а вже вибрана знімається з поясненням", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await pick(user, "Резинка", "Наявна");
+    await pick(user, "Розташування", "Вертикальна");
+    expect(chip("Розташування", "Вертикальна").getAttribute("aria-pressed")).toBe("true");
+
+    await pick(user, "Поролон", "З поролоном");
+    expect(chip("Розташування", "Вертикальна").getAttribute("aria-pressed")).toBe("false");
+    expect((chip("Розташування", "Вертикальна") as HTMLButtonElement).disabled).toBe(true);
+    expect((chip("Розташування", "Під ручку") as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      screen.getByText("«Вертикальна» знято: З поролоновою обкладинкою можлива лише резинка під ручку")
+    ).toBeTruthy();
+  });
+});
+
+describe("значення за замовчуванням у формі", () => {
+  it("позначка «за замовчуванням» тримається, доки значення не підтвердили чи не змінили", async () => {
+    const user = userEvent.setup();
+    let latest: PrintSpecValues = {};
+    render(<SettledHarness onValues={(values) => (latest = values)} />);
+
+    expect(chip("Форзац", "Карти").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getAllByText("за замовчуванням").length).toBe(2);
+
+    // Макет «Лінія» міняє типове, бо людина форзац ще не чіпала.
+    await pick(user, "Макет", "Лінія");
+    expect(chip("Форзац", "Чисті").getAttribute("aria-pressed")).toBe("true");
+    expect(latest.endpaper).toBe("plain");
+
+    // Клік по поставленому значенню його підтверджує, а не знімає.
+    await user.click(chip("Форзац", "Чисті"));
+    expect(chip("Форзац", "Чисті").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getAllByText("за замовчуванням").length).toBe(1);
+
+    // Підтверджене вже не міняється від макета.
+    await pick(user, "Макет", "Датований");
+    expect(latest.endpaper).toBe("plain");
+    expect(latest.backpaper).toBe("maps");
   });
 });

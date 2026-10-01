@@ -1,4 +1,4 @@
-import type { PrintSpecPreset } from "@/lib/printSpec";
+import type { PrintSpecDefaultRule, PrintSpecPreset } from "@/lib/printSpec";
 
 /**
  * Описи видів поліграфії — самі дані; механізм, що їх читає, у `printSpec.ts`.
@@ -44,6 +44,7 @@ export const PRINT_SPEC_CALENDAR_QUARTERLY: PrintSpecPreset = {
       section: "Основи",
       rows: ["Основа 1", "Основа 2", "Основа 3", "Топер"],
       unit: "мм",
+      hint: "Топер — верхня рекламна частина квартального календаря.",
     },
     {
       id: "basePrint",
@@ -385,6 +386,7 @@ export const PRINT_SPEC_CALENDAR_HOUSE: PrintSpecPreset = {
         { value: "with", label: "З кашировкою" },
         { value: "without", label: "Без кашировки" },
       ],
+      hint: "Обклеювання картонної основи надрукованим папером.",
     },
     {
       id: "basePrint",
@@ -414,6 +416,7 @@ export const PRINT_SPEC_CALENDAR_HOUSE: PrintSpecPreset = {
       rows: ["Сітка"],
       unit: "мм",
       hint: "Типово 210 × 120",
+      defaults: [{ value: [{ width: "210", height: "120" }] }],
     },
     {
       id: "blockPrint",
@@ -519,6 +522,14 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       // Жорстку перевірку сюди не ставимо з тієї ж причини, що й правило за
       // тиражем: рахують люди, і виняток буває раніше, ніж ми його передбачимо.
       hint: "Термобіндер, пур клей, пружина — кратно 2. Нитка — кратно 2 або 4. Дві скоби — тільки кратно 4. Обкладинка — це ще 4 стор.",
+      warnings: [
+        { when: { field: "binding", equals: "staples_2" }, multipleOf: 4, message: "Дві скоби — тільки кратно 4" },
+        {
+          when: { field: "binding", oneOf: ["thermo", "pur", "spring", "thread"] },
+          multipleOf: 2,
+          message: "Термобіндер, ПУР клей, пружина, нитка — кратно 2",
+        },
+      ],
     },
     {
       id: "coverPaper",
@@ -631,6 +642,12 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
  * «Ламінація від 170 г» лишається підказкою, а не правилом: рішення про матеріал
  * узгоджено віддати тим, хто прораховує.
  */
+/** Ламінація від 170 г: на тоншому папері «Мат» і «Глянець» вимкнені. */
+const FLYER_THIN_PAPER = {
+  disabledWhen: { field: "paper", oneOf: ["90", "115", "130", "150"] },
+  reason: "Доступна від 170 г",
+};
+
 export const PRINT_SPEC_FLYER: PrintSpecPreset = {
   key: "print_flyer",
   label: "Листівка",
@@ -679,8 +696,8 @@ export const PRINT_SPEC_FLYER: PrintSpecPreset = {
       section: "Папір",
       options: [
         { value: "none", label: "Без ламінації" },
-        { value: "matte", label: "Мат" },
-        { value: "gloss", label: "Глянець" },
+        { value: "matte", label: "Мат", ...FLYER_THIN_PAPER },
+        { value: "gloss", label: "Глянець", ...FLYER_THIN_PAPER },
       ],
       hint: "Доступна від 170 г",
     },
@@ -870,7 +887,7 @@ export const PRINT_SPEC_CERTIFICATE: PrintSpecPreset = {
         { value: "die_cutting", label: "Висічка" },
         { value: "creasing", label: "Біговка" },
       ],
-      hint: "Можна кілька разом",
+      hint: "Висічка — вирізання контуру штампом. Біговка — продавлена лінія для рівного згину. Можна кілька разом",
     },
     {
       id: "foilingColor",
@@ -929,13 +946,24 @@ export const PRINT_SPEC_CERTIFICATE: PrintSpecPreset = {
  *    Індивідуальний» плюс уточнення: за замовчуванням карти, у лінії, клітинки
  *    й Moleskine — чисті.
  *
- * ЩО НАВМИСНО НЕ ВИРАЖЕНЕ МЕХАНІЗМОМ: «папір з друком» тягне за собою
- * обовʼязкові друк 4+0 і матову ламінацію 1+0, а поролонова обкладинка лишає
- * тільки резинку під ручку. Умова `showIf` однорівнева й такого не опише, тому
- * перше стоїть окремим полем з єдиним варіантом (щоб факт потрапив у
- * специфікацію, а не лишився знанням у голові), а друге — підказкою до резинки.
- * Складніші залежності підуть у механізм тоді, коли їх стане більше двох.
+ * «Папір з друком» тягне за собою обовʼязкові друк 4+0 і матову ламінацію 1+0:
+ * це окреме поле з єдиним варіантом, і воно обирається само (щоб факт потрапив у
+ * специфікацію, а не лишився знанням у голові). Поролонова обкладинка лишає тільки
+ * резинку під ручку — інші положення вимкнені (`disabledWhen`, REQ-326#p4).
  */
+
+/** Форзац і нахзац: за замовчуванням карти; у лінії, клітинки й Moleskine — чисті. */
+const DIARY_ENDPAPER_DEFAULTS: PrintSpecDefaultRule[] = [
+  { when: { field: "layout", oneOf: ["line", "grid"] }, value: "plain" },
+  { when: { field: "format", equals: "moleskine" }, value: "plain" },
+  { value: "maps" },
+];
+
+/** Поролонова обкладинка лишає тільки резинку під ручку. */
+const ELASTIC_FOAM_LOCK = {
+  disabledWhen: { field: "coverFoam", equals: "yes" },
+  reason: "З поролоновою обкладинкою можлива лише резинка під ручку",
+};
 export const PRINT_SPEC_DIARY: PrintSpecPreset = {
   key: "print_diary",
   label: "Щоденник",
@@ -990,6 +1018,7 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
         { value: "yes", label: "З поролоном" },
         { value: "no", label: "Без поролону" },
       ],
+      hint: "М'який шар під обкладинкою.",
     },
     {
       id: "coverMaterial",
@@ -1107,6 +1136,19 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
       section: "Блок",
       unit: "стор",
       hint: "Стандартно 352, Moleskine — 224. Кратність індивідуального блока: 70 г — 32, 80/90/100 г — 24",
+      presets: ["352", "224"],
+      defaults: [{ when: { field: "format", equals: "moleskine" }, value: "224" }],
+      warnings: [
+        { when: { field: "blockKind", equals: "standard" }, multipleOf: 32, message: "70 г — кратно 32" },
+        {
+          when: [
+            { field: "blockKind", equals: "individual" },
+            { field: "blockDensity", oneOf: ["80", "90", "100"] },
+          ],
+          multipleOf: 24,
+          message: "80/90/100 г — кратно 24",
+        },
+      ],
     },
     {
       id: "blockPaper",
@@ -1167,6 +1209,7 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
         { value: "painted", label: "Фарбований" },
         { value: "plain", label: "Не фарбований" },
       ],
+      hint: "Зріз блоку, тобто краї сторінок; фарбований — у колір по всьому зрізу.",
     },
     {
       id: "endpaper",
@@ -1179,7 +1222,8 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
         { value: "individual", label: "Індивідуальний друк" },
       ],
       allowCustom: true,
-      hint: "За замовчуванням карти; у лінії, клітинки й Moleskine — чисті",
+      defaults: DIARY_ENDPAPER_DEFAULTS,
+      hint: "Аркуш, що скріплює блок із передньою кришкою обкладинки. За замовчуванням карти; у лінії, клітинки й Moleskine — чисті",
     },
     {
       id: "backpaper",
@@ -1192,7 +1236,8 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
         { value: "individual", label: "Індивідуальний друк" },
       ],
       allowCustom: true,
-      hint: "Те саме правило, що й для форзаца",
+      defaults: DIARY_ENDPAPER_DEFAULTS,
+      hint: "Те саме, що форзац, але біля задньої кришки. Те саме правило, що й для форзаца",
     },
     {
       id: "adInserts",
@@ -1201,6 +1246,8 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
       section: "Вставки",
       unit: "шт",
       hint: "Кратне двом — вставка друкується з двох боків аркуша",
+      step: 2,
+      warnings: [{ multipleOf: 2, message: "Кратне двом" }],
     },
     {
       id: "ribbon",
@@ -1212,6 +1259,7 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
         { value: "individual", label: "Індивідуальне" },
         { value: "none", label: "Без ляссе" },
       ],
+      hint: "Стрічка-закладка, вклеєна в корінець блоку.",
     },
     {
       id: "ribbonColorStandard",
@@ -1265,8 +1313,8 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
       type: "single",
       section: "Резинка й шильда",
       options: [
-        { value: "vertical", label: "Вертикальна" },
-        { value: "horizontal", label: "Горизонтальна" },
+        { value: "vertical", label: "Вертикальна", ...ELASTIC_FOAM_LOCK },
+        { value: "horizontal", label: "Горизонтальна", ...ELASTIC_FOAM_LOCK },
         { value: "pen_loop", label: "Під ручку" },
       ],
       showIf: { field: "elastic", equals: "yes" },
@@ -1288,6 +1336,7 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
         { value: "yes", label: "Наявна" },
         { value: "no", label: "Відсутня" },
       ],
+      hint: "Металева чи пластикова табличка з логотипом на обкладинці.",
     },
     {
       id: "packing",

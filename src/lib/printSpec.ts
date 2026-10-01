@@ -55,7 +55,18 @@ export type PrintSpecFieldType =
  * 120 г буває лише в крафта, а CMYK на готовий пакет не кладуть. Неіснуючий
  * варіант не показується і стирається зі значень (`reconcilePrintSpecValues`).
  */
-export type PrintSpecOption = { value: string; label: string; showIf?: PrintSpecShowIf };
+export type PrintSpecOption = {
+  value: string;
+  label: string;
+  showIf?: PrintSpecShowIf;
+  /**
+   * Варіант існує, але за поточних значень неможливий: чип сірий і не
+   * натискається, `reason` видно на наведенні. На відміну від `showIf` він не
+   * зникає з форми — людина бачить, що варіант є і чому його зараз не можна.
+   */
+  disabledWhen?: PrintSpecCondition;
+  reason?: string;
+};
 
 /**
  * Умова показу поля чи варіанта.
@@ -79,6 +90,15 @@ export type PrintSpecCondition = {
 
 /** Одна умова або кілька, що мають виконуватись разом (люверси: індивідуальний пакет І не крафт). */
 export type PrintSpecShowIf = PrintSpecCondition | PrintSpecCondition[];
+
+/**
+ * Значення за замовчуванням: перше правило, чия умова виконана (без `when` — завжди),
+ * ставить значення, коли поле ПОРОЖНЄ й людина його ще не чіпала.
+ */
+export type PrintSpecDefaultRule = { value: PrintSpecValue; when?: PrintSpecShowIf };
+
+/** Попередження під числовим полем: значення не кратне `multipleOf`. Не блокує збереження. */
+export type PrintSpecWarning = { multipleOf: number; message: string; when?: PrintSpecShowIf };
 
 export type PrintSpecField = {
   id: string;
@@ -104,6 +124,14 @@ export type PrintSpecField = {
   allowCustom?: boolean;
   showIf?: PrintSpecShowIf;
   hint?: string;
+  /** `number`: швидкі значення чипами поруч із полем. */
+  presets?: string[];
+  /** `number`: крок лічильника «−/+». */
+  step?: number;
+  /** Значення за замовчуванням; без правил одне можливе значення `single` без «Інше…» ставиться само. */
+  defaults?: PrintSpecDefaultRule[];
+  /** `number`: попередження кратності. */
+  warnings?: PrintSpecWarning[];
 };
 
 export type PrintSpecColumn = { title: string; sections: string[] };
@@ -198,13 +226,16 @@ const asSizeRows = (value: PrintSpecValue): PrintSpecSize[] =>
 const emptySize = (field: PrintSpecField): PrintSpecSize =>
   field.withDepth ? { width: "", height: "", depth: "" } : { width: "", height: "" };
 
+const emptyFieldValue = (field: PrintSpecField): PrintSpecValue => {
+  if (field.type === "multi") return [];
+  if (field.type === "sizeRows") return (field.rows ?? []).map(() => emptySize(field));
+  return "";
+};
+
 export const createEmptyPrintSpecValues = (preset: PrintSpecPreset): PrintSpecValues => {
   const values: PrintSpecValues = {};
   for (const field of preset.fields) {
-    if (field.type === "multi") values[field.id] = [];
-    else if (field.type === "sizeRows") {
-      values[field.id] = (field.rows ?? []).map(() => emptySize(field));
-    } else values[field.id] = "";
+    values[field.id] = emptyFieldValue(field);
     if (field.allowCustom) values[customValueKey(field.id)] = "";
   }
   return values;
@@ -291,6 +322,183 @@ export function reconcilePrintSpecValues(preset: PrintSpecPreset, values: PrintS
     current = next;
   }
   return current;
+}
+
+// ---------------------------------------------------------------------------
+// Неможливі варіанти, значення за замовчуванням, кратність (REQ-326)
+// ---------------------------------------------------------------------------
+
+/** Варіант вимкнений: існує, але за поточних значень неможливий (`disabledWhen`). */
+export const isPrintSpecOptionDisabled = (option: PrintSpecOption, values: PrintSpecValues): boolean =>
+  option.disabledWhen !== undefined && matchesCondition(option.disabledWhen, values);
+
+export type PrintSpecDropped = { fieldId: string; label: string; reason: string };
+
+/**
+ * Знімає вибір, який через нове значення став неможливим: поролон — і резинка
+ * «Вертикальна» зникає. Що саме знято й чому — у `dropped`, щоб форма пояснила.
+ * Повертає ТОЙ САМИЙ об'єкт, коли міняти нічого.
+ */
+export function dropDisabledPrintSpecChoices(
+  preset: PrintSpecPreset,
+  values: PrintSpecValues
+): { values: PrintSpecValues; dropped: PrintSpecDropped[] } {
+  let current = values;
+  const dropped: PrintSpecDropped[] = [];
+  for (const field of preset.fields) {
+    if (!field.options?.some((option) => option.disabledWhen)) continue;
+    const isDropped = (value: string): boolean => {
+      const option = field.options?.find((entry) => entry.value === value);
+      if (!option || !isPrintSpecOptionDisabled(option, current)) return false;
+      dropped.push({ fieldId: field.id, label: option.label, reason: option.reason ?? "" });
+      return true;
+    };
+    const raw = current[field.id] ?? null;
+    if (field.type === "multi") {
+      const kept = asListValue(raw).filter((value) => !isDropped(value));
+      if (kept.length !== asListValue(raw).length) current = { ...current, [field.id]: kept };
+    } else if (field.type === "single") {
+      const value = asStringValue(raw);
+      if (value && isDropped(value)) current = { ...current, [field.id]: "" };
+    }
+  }
+  return { values: current, dropped };
+}
+
+/** Яке значення за замовчуванням має поле зараз; `undefined` — жодного. */
+export function resolvePrintSpecDefault(field: PrintSpecField, values: PrintSpecValues): PrintSpecValue | undefined {
+  if (field.defaults) {
+    return field.defaults.find((rule) => matchesPrintSpecShowIf(rule.when, values))?.value;
+  }
+  if (field.type === "single" && !field.allowCustom) {
+    const options = listPrintSpecOptions(field, values);
+    if (options.length === 1 && !isPrintSpecOptionDisabled(options[0], values)) return options[0].value;
+  }
+  return undefined;
+}
+
+/**
+ * Які поля людина вже чіпала (`touched`) і які тримають значення за замовчуванням,
+ * ще не підтверджене нею (`auto`). Стан живе поруч із чернеткою вікна, а НЕ в
+ * збережених даних: збережене значення завжди чиєсь рішення.
+ */
+export type PrintSpecDraftMeta = { auto: string[]; touched: string[] };
+
+const sameValue = (a: PrintSpecValue, b: PrintSpecValue): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * Ставить значення за замовчуванням у ПОРОЖНІ й нечіпані поля. Вибір людини не
+ * перетирається ніколи: поле, у якому вона щось зробила (навіть стерла), у
+ * `touched` і правил більше не чує. Значення, поставлене правилом, переживає
+ * зміну умов — форзац «Карти» стає «Чисті», щойно макет став лінією, — доки
+ * людина його не підтвердила чи не змінила. Той самий об'єкт, коли міняти нічого.
+ */
+export function applyPrintSpecDefaults(
+  preset: PrintSpecPreset,
+  values: PrintSpecValues,
+  meta: PrintSpecDraftMeta
+): { values: PrintSpecValues; auto: string[] } {
+  let current = values;
+  let auto = meta.auto;
+  for (const field of preset.fields) {
+    if (!isPrintSpecFieldVisible(field, current)) continue;
+    const target = resolvePrintSpecDefault(field, current);
+    if (auto.includes(field.id)) {
+      if (target === undefined) {
+        current = { ...current, [field.id]: emptyFieldValue(field) };
+        auto = auto.filter((id) => id !== field.id);
+      } else if (!sameValue(current[field.id] ?? null, target)) {
+        current = { ...current, [field.id]: target };
+      }
+    } else if (
+      target !== undefined &&
+      !meta.touched.includes(field.id) &&
+      !isPrintSpecFieldFilled(field, current)
+    ) {
+      current = { ...current, [field.id]: target };
+      auto = [...auto, field.id];
+    }
+  }
+  return { values: current, auto };
+}
+
+export type PrintSpecSettled = { values: PrintSpecValues; meta: PrintSpecDraftMeta; dropped: PrintSpecDropped[] };
+
+/**
+ * Приводить чернетку до цілісного стану: неіснуючі варіанти стерті, неможливі
+ * зняті, порожнє заповнене значеннями за замовчуванням. Кілька проходів, бо одне
+ * може зробити можливим чи неможливим інше; закінчується, коли нічого не змінилось.
+ */
+export function settlePrintSpecValues(
+  preset: PrintSpecPreset,
+  values: PrintSpecValues,
+  meta: PrintSpecDraftMeta
+): PrintSpecSettled {
+  let current = values;
+  let auto = meta.auto;
+  const dropped: PrintSpecDropped[] = [];
+  for (let pass = 0; pass < 4; pass += 1) {
+    const before = current;
+    const beforeAuto = auto;
+    current = reconcilePrintSpecValues(preset, current);
+    const drop = dropDisabledPrintSpecChoices(preset, current);
+    current = drop.values;
+    dropped.push(...drop.dropped);
+    const defaults = applyPrintSpecDefaults(preset, current, { auto, touched: meta.touched });
+    current = defaults.values;
+    auto = defaults.auto;
+    if (current === before && auto === beforeAuto) break;
+  }
+  return { values: current, meta: { auto, touched: meta.touched }, dropped };
+}
+
+/** Службовий ключ власного значення → поле, якого воно стосується. */
+const ownerFieldId = (key: string): string => (key.endsWith("__custom") ? key.slice(0, -"__custom".length) : key);
+
+/**
+ * Правка людини: `patch` — нові значення полів. Поле, яке вона чіпала, більше не
+ * «за замовчуванням» і далі не отримує правил; решта чернетки сходиться наново.
+ */
+export function editPrintSpecDraft(
+  preset: PrintSpecPreset,
+  values: PrintSpecValues,
+  meta: PrintSpecDraftMeta,
+  patch: PrintSpecValues
+): PrintSpecSettled {
+  const ids = Object.keys(patch).map(ownerFieldId);
+  return settlePrintSpecValues(
+    preset,
+    { ...values, ...patch },
+    {
+      auto: meta.auto.filter((id) => !ids.includes(id)),
+      touched: [...new Set([...meta.touched, ...ids])],
+    }
+  );
+}
+
+/** Людина підтвердила значення за замовчуванням, нічого не змінюючи. */
+export const confirmPrintSpecDefault = (meta: PrintSpecDraftMeta, fieldId: string): PrintSpecDraftMeta => ({
+  auto: meta.auto.filter((id) => id !== fieldId),
+  touched: meta.touched.includes(fieldId) ? meta.touched : [...meta.touched, fieldId],
+});
+
+export type PrintSpecWarningHit = { fieldId: string; message: string };
+
+/** Попередження кратності для видимих заповнених числових полів. Збереження не блокують. */
+export function getPrintSpecWarnings(preset: PrintSpecPreset, values: PrintSpecValues): PrintSpecWarningHit[] {
+  const hits: PrintSpecWarningHit[] = [];
+  for (const field of preset.fields) {
+    if (!field.warnings || !isPrintSpecFieldVisible(field, values)) continue;
+    const raw = asStringValue(values[field.id] ?? null).trim();
+    if (!/^\d+$/.test(raw)) continue;
+    const count = Number(raw);
+    for (const warning of field.warnings) {
+      if (matchesPrintSpecShowIf(warning.when, values) && count % warning.multipleOf !== 0) {
+        hits.push({ fieldId: field.id, message: warning.message });
+      }
+    }
+  }
+  return hits;
 }
 
 const optionLabel = (field: PrintSpecField, value: string): string =>
@@ -661,12 +869,18 @@ export function buildPrintSpecSave({
   draft,
   quoteStatus,
   lastPricedAt,
+  defaulted = [],
   now = new Date(),
 }: {
   preset: PrintSpecPreset;
   /** Свіже `metadata.printSpec` з бази, не з пропса. */
   current: unknown;
   draft: PrintSpecValues;
+  /**
+   * Поля, у яких стоїть непідтверджене значення за замовчуванням. Вони пишуться
+   * як усі, але правкою після ціни не рахуються — ні для статусу, ні для знімка.
+   */
+  defaulted?: string[];
   quoteStatus?: string | null;
   lastPricedAt?: string | null;
   now?: Date;
@@ -677,10 +891,15 @@ export function buildPrintSpecSave({
   // Перше заповнення — не зміна після ціни: прорахунок рахували без чекліста, і
   // знімок порожніх значень засвітив би жовтим усе, що людина вперше вписала.
   const firstFill = !isPrintSpecFilled(preset, savedValues);
-  const changes = firstFill ? [] : diffPrintSpec(preset, savedValues, draft);
+  const changes = firstFill
+    ? []
+    : diffPrintSpec(preset, savedValues, draft).filter((change) => !defaulted.includes(change.fieldId));
 
   if (changes.length > 0 && needsPriceSnapshot({ versions, lastPricedAt, quoteStatus })) {
-    versions.push({ at: now.toISOString(), pricedAt: lastPricedAt ?? null, values: savedValues });
+    // У знімок лягають і значення за замовчуванням: версія, яку рахували, їх «мала».
+    const snapshot = { ...savedValues };
+    for (const id of defaulted) snapshot[id] = draft[id] ?? null;
+    versions.push({ at: now.toISOString(), pricedAt: lastPricedAt ?? null, values: snapshot });
   }
 
   return {
