@@ -443,7 +443,7 @@ export function PrintSpecPanel({
             DIALOG_WIDTH[Math.min(preset.columns?.length ?? 1, 3)]
           )}
         >
-          <DialogHeader className="flex-row items-center gap-4 border-b border-border/50 px-6 py-4">
+          <DialogHeader className="flex-row items-center gap-4 border-b border-border/50 py-4 pl-6 pr-14 sm:pr-6">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-muted/70 text-foreground/75">
               <PrintModelArt presetKey={preset.key} className="h-6 w-6" />
             </span>
