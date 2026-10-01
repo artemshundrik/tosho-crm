@@ -184,7 +184,7 @@ export function resolveQuoteMarkupGate(
  */
 export function markupGateMessage(dealType: QuoteDealType | null | undefined): string {
   return (
-    `Накрутка нижче дна ${formatRatePercent(minMarkupRateFor(dealType))} % — ` +
+    `Ціна нижче дна ${formatRatePercent(minMarkupRateFor(dealType))} % — ` +
     "спершу погодження СЕО або головного бухгалтера. " +
     "Рахувати й зберігати прорахунок це не заважає."
   );

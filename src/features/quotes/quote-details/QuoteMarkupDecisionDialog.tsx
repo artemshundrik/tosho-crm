@@ -51,8 +51,8 @@ export function QuoteMarkupDecisionDialog({
         <DialogHeader>
           <DialogTitle>
             {rejecting
-              ? "Відхилити накрутку"
-              : `Погодження накрутки нижче ${formatRatePercent(minMarkupRateFor(dealType))} %`}
+              ? "Відхилити ціну"
+              : `Погодження ціни нижче дна ${formatRatePercent(minMarkupRateFor(dealType))} %`}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
@@ -71,7 +71,7 @@ export function QuoteMarkupDecisionDialog({
               placeholder={
                 rejecting
                   ? "Не бачу причини для такої ціни на цьому клієнті…"
-                  : "Постійний клієнт, наступний тираж піде з нормальною накруткою…"
+                  : "Постійний клієнт, наступний тираж піде за звичайною ціною…"
               }
               className="min-h-[88px]"
             />

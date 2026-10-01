@@ -177,6 +177,48 @@ describe("стани погодження", () => {
   });
 });
 
+describe("погодження говорить ціною — тією самою, що й велике число (REQ-325)", () => {
+  // TS-0926-0050: 5000 ручок по 17,09 ₴, 6 % замість 20 %. Штука 18,1154 ₴
+  // округлюється до 18,12, тож сума — 90 600 ₴; множення без округлення дає
+  // 90 577 ₴, і саме його банер писав під великим «90 600 грн».
+  const cost = 85_450;
+  const live = computeRunSalePricingFromMarkup({
+    quantity: 5000,
+    costTotal: cost,
+    markupRate: 6,
+    managerRate: 10,
+    fixedCostRate: 30,
+    vatRate: 20,
+  });
+
+  it("кнопка й банер погоджувача називають суму з великого числа", () => {
+    const pending = approval({ markupRate: 6, costTotal: cost, decidedBy: null, decidedAt: null });
+    render(
+      <QuoteRunMarkupPanel
+        dealType={null}
+        view={QUOTE_MARKUP_VIEWS.seo}
+        state={resolveQuoteRunMarkupState({ dealType: null, costTotal: cost, markupRate: 6, approval: pending })}
+        pricing={live}
+        markupRate={6}
+        currency="UAH"
+        benchmark={null}
+        canEditMarkup
+        canApprove
+        managerName="Іван С."
+        onChangeMarkupRate={vi.fn()}
+        onRequestApproval={vi.fn()}
+        onDecide={vi.fn()}
+      />
+    );
+    expect(live.saleTotal).toBe(90_600);
+    expect(screen.getByRole("button", { name: /^Підтвердити 90\s600 грн$/ })).toBeTruthy();
+    expect(screen.getByText(/^Іван С\. просить ціну 90\s600 грн — 6 % замість 20 %\.$/)).toBeTruthy();
+    // Ціна на дні — теж за штукою: 20,508 → 20,51 ₴, тобто 102 550, а не 102 540.
+    expect(screen.getByText(/На дні було б 102\s550 грн, різниця 11\s950 грн/)).toBeTruthy();
+    expect(screen.queryByText(/90\s577/)).toBeNull();
+  });
+});
+
 describe("колір заливки несе стан дверей, а не «нижче дна»", () => {
   // Заливка — єдиний елемент рейки, ширина якого задана відсотком.
   const fillClass = (container: HTMLElement) =>

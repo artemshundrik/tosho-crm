@@ -24,14 +24,6 @@ type TeamMemberRoleRow = {
 
 const normalizeRole = (value?: string | null) => (value ?? "").trim().toLowerCase();
 
-/**
- * Відсоток у тексті сповіщення — округлений до сотих.
- *
- * У сховищі накрутка лежить без округлення (перенесені з історії значення на
- * кшталт 30,840579710144926), і сирим числом сповіщення виглядало б як збій.
- */
-const formatMarkupRate = (value: number) => String(Math.round((Number(value) || 0) * 100) / 100);
-
 async function resolveTeamMembers(teamId?: string | null): Promise<TeamMemberRoleRow[]> {
   if (!isUuid(teamId ?? null)) return [];
 
@@ -683,7 +675,12 @@ export async function notifyMarkupApprovalRequested(params: {
    * не можуть (REQ-182).
    */
   printApproverUserId?: string | null;
-  runs: Array<{ label: string; markupRate: number }>;
+  /**
+   * `price` — готовий рядок «90 600 грн (18,12 грн/шт., 6 %)»: погоджувач
+   * вирішує про гроші клієнта, тож лист називає суму, а відсоток іде в дужках
+   * (REQ-325). Рахує викликач — тут немає ні кількості, ні валюти.
+   */
+  runs: Array<{ label: string; price: string }>;
   actorUserId?: string | null;
 }) {
   if (params.runs.length === 0) return;
@@ -705,16 +702,17 @@ export async function notifyMarkupApprovalRequested(params: {
 
   const quoteRef = quoteNumber ? `#${quoteNumber}` : "прорахунку";
   const who = params.requesterName?.trim() || "Менеджер";
-  const list = params.runs
-    .map((run) => `${run.label} — ${formatMarkupRate(run.markupRate)} %`)
-    .join(", ");
-  const countLabel = pluralWordUk(params.runs.length, "тираж", "тиражі", "тиражів");
+  const list = params.runs.map((run) => `${run.label} — ${run.price}`).join(", ");
+  const countLabel = pluralWordUk(params.runs.length, "тиражу", "тиражів", "тиражів");
+  const what = params.runs.length === 1 ? "ціну" : `ціни ${params.runs.length} ${countLabel}`;
 
   await notifyUsers({
     userIds: Array.from(recipients),
-    title: "Накрутка нижче дна — потрібне рішення",
+    // «Ціна», а не «накрутка»: Влад після першого живого погодження
+    // (TS-0926-0050) попросив прибрати це слово з того, що він підписує.
+    title: "Ціна нижче дна — потрібне рішення",
     body:
-      `${who} просить погодити ${params.runs.length} ${countLabel} у ${quoteRef}: ${list}. ` +
+      `${who} просить підтвердити ${what} у ${quoteRef}: ${list}. ` +
       `Дно — ${formatRatePercent(minMarkupRateFor(params.dealType))} %.`,
     href: `/orders/estimates/${params.quoteId}`,
     type: "warning",
@@ -725,7 +723,8 @@ export async function notifyMarkupApprovalRequested(params: {
 export async function notifyMarkupApprovalDecided(params: {
   quoteId: string;
   decision: "approved" | "rejected";
-  markupRate: number;
+  /** Сума окремо для заголовка, повний рядок — для тіла (див. запит вище). */
+  price: { total: string; label: string };
   runLabel: string;
   requesterUserId?: string | null;
   deciderName?: string | null;
@@ -737,16 +736,15 @@ export async function notifyMarkupApprovalDecided(params: {
   const { quoteNumber } = await resolveQuoteInitiator(params.quoteId);
   const quoteRef = quoteNumber ? `#${quoteNumber}` : "прорахунку";
   const who = params.deciderName?.trim() || "Погоджувач";
-  const rate = formatMarkupRate(params.markupRate);
   const note = params.note?.trim();
   const approved = params.decision === "approved";
 
   await notifyUsers({
     userIds: [recipient],
-    title: approved ? `Накрутку ${rate} % погоджено` : `Накрутку ${rate} % відхилено`,
+    title: approved ? `Ціну ${params.price.total} підтверджено` : `Ціну ${params.price.total} відхилено`,
     body: approved
-      ? `${who} підтвердив(ла) ${rate} % на тиражі ${params.runLabel} у ${quoteRef}.${note ? ` Коментар: ${note}` : ""}`
-      : `${who} відхилив(ла) ${rate} % на тиражі ${params.runLabel} у ${quoteRef}. Число лишається як є — підніміть накрутку або надішліть запит із поясненням.${note ? ` Коментар: ${note}` : ""}`,
+      ? `${who} підтвердив(ла) ${params.price.label} на тиражі ${params.runLabel} у ${quoteRef}.${note ? ` Коментар: ${note}` : ""}`
+      : `${who} відхилив(ла) ${params.price.label} на тиражі ${params.runLabel} у ${quoteRef}. Число лишається як є — підніміть накрутку або надішліть запит із поясненням.${note ? ` Коментар: ${note}` : ""}`,
     href: `/orders/estimates/${params.quoteId}`,
     type: approved ? "success" : "warning",
     // Окрема категорія від запиту: вимкнути «чужі запити» не має заодно

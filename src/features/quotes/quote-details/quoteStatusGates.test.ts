@@ -43,7 +43,7 @@ describe("resolveQuoteStatusGate", () => {
 
   it("гейт накрутки лишається чинним сам собою", () => {
     const gate = resolveQuoteStatusGate("approved", true, DEAL, 0);
-    expect(gate?.title).toBe("Спершу погодження накрутки");
+    expect(gate?.title).toBe("Спершу погодження ціни");
   });
 
   it("кількість тиражів у тексті — з правильним відмінком", () => {

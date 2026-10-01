@@ -70,6 +70,12 @@ function resolveNumericRate(value: unknown, fallback: number) {
 }
 
 export type RunSalePricing = {
+  /**
+   * Кількість, з якою рахували. Потрібна тим, хто перераховує ціну на ІНШІЙ
+   * собівартості чи відсотку (погодження нижче дна, `saleAtMarkup`): без неї
+   * вони не можуть округлити штуку так само й показують інше число.
+   */
+  quantity: number;
   costTotal: number;
   costPerUnit: number | null;
   requiredGrossProfit: number;
@@ -121,6 +127,7 @@ export function computeRunSalePricing(params: {
   const saleTotal = saleUnitPrice === null ? costTotal + rawMarkupTotal : saleUnitPrice * quantity;
   const markupTotal = saleTotal - costTotal;
   return {
+    quantity,
     costTotal,
     costPerUnit,
     requiredGrossProfit,
@@ -131,6 +138,30 @@ export function computeRunSalePricing(params: {
     saleUnitPrice,
     managerIncome: requiredGrossProfit * (managerRate / 100),
   };
+}
+
+/**
+ * Ціна тиражу за відсотком на собівартість — лише сума й штука, без розкладу.
+ *
+ * ОКРЕМО, БО ЇЇ РАХУЮТЬ НЕ ТІЛЬКИ З ПОЛЯ. Погодження нижче дна називає ціну на
+ * дні й ціну за запитом — на собівартості, при якій просили. Банер рахував їх
+ * множенням без округлення штуки й показував 90 577 ₴ поруч із 90 600 ₴ над
+ * ним (TS-0926-0050): власник погоджує суму і бачить дві. Тепер обидва числа
+ * йдуть звідси, а `computeRunSalePricingFromMarkup` бере звідси ж свої.
+ */
+export function saleAtMarkup(params: {
+  quantity: number;
+  costTotal: number;
+  markupRate: number;
+}): { saleTotal: number; saleUnitPrice: number | null } {
+  const quantity = Math.max(0, Number(params.quantity) || 0);
+  const costTotal = Number(params.costTotal) || 0;
+  const markupRate = Math.max(0, Number(params.markupRate) || 0);
+  // Ціну веде ШТУКА: округлюємо її, а суму множимо назад — див. roundUnitPrice.
+  // Тираж без кількості ціни за штуку не має, тож там лишається сира сума.
+  const saleUnitPrice = quantity > 0 ? roundUnitPrice((costTotal * (1 + markupRate / 100)) / quantity) : null;
+  const saleTotal = saleUnitPrice === null ? costTotal * (1 + markupRate / 100) : saleUnitPrice * quantity;
+  return { saleTotal, saleUnitPrice };
 }
 
 /**
@@ -193,10 +224,7 @@ export function computeRunSalePricingFromMarkup(params: {
   const fixedCostRate = Math.max(0, Number(params.fixedCostRate) || 0);
   const vatRate = Math.max(0, Number(params.vatRate) || 0);
 
-  // Ціну веде ШТУКА: округлюємо її, а суму множимо назад — див. roundUnitPrice.
-  // Тираж без кількості ціни за штуку не має, тож там лишається сира сума.
-  const saleUnitPrice = quantity > 0 ? roundUnitPrice((costTotal * (1 + markupRate / 100)) / quantity) : null;
-  const saleTotal = saleUnitPrice === null ? costTotal * (1 + markupRate / 100) : saleUnitPrice * quantity;
+  const { saleTotal, saleUnitPrice } = saleAtMarkup({ quantity, costTotal, markupRate });
   // Накрутку беремо з ОКРУГЛЕНОЇ суми, інакше «собівартість + накрутка» на
   // екрані не дорівнювало б ціні на ті самі копійки.
   const markupTotal = saleTotal - costTotal;
@@ -205,6 +233,7 @@ export function computeRunSalePricingFromMarkup(params: {
   const vatAmount = (requiredGrossProfit + fixedCosts) * (vatRate / 100);
 
   return {
+    quantity,
     costTotal,
     costPerUnit,
     requiredGrossProfit,

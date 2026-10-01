@@ -44,7 +44,7 @@ export function resolveQuoteStatusGate(
     return { title: "Тираж не збережено", message: modelPriceVatGateMessage(unsavedRunCount) };
   }
   if (nextStatus === "approved" && markupBlocked) {
-    return { title: "Спершу погодження накрутки", message: markupGateMessage(dealType) };
+    return { title: "Спершу погодження ціни", message: markupGateMessage(dealType) };
   }
   return null;
 }

@@ -53,13 +53,13 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   },
   {
     key: "quote_markup_request",
-    label: "Запити на погодження накрутки",
-    description: "Менеджер просить накрутку нижче дна 20 % — потрібне рішення",
+    label: "Запити на погодження ціни",
+    description: "Менеджер просить ціну нижче дна — потрібне рішення",
   },
   {
     key: "quote_markup_decision",
-    label: "Рішення по накрутці",
-    description: "Вашу накрутку нижче дна підтвердили або відхилили",
+    label: "Рішення щодо ціни",
+    description: "Вашу ціну нижче дна підтвердили або відхилили",
   },
   {
     key: "design",

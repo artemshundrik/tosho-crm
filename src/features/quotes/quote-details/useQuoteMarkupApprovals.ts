@@ -10,7 +10,7 @@ import {
 } from "@/lib/quoteMarkupApproval";
 import { resolveMarkupBenchmark, type MarkupBenchmark } from "@/lib/quoteMarkupBenchmark";
 import type { QuoteDealType } from "@/lib/quoteDealType";
-import { needsMarkupApproval } from "@/lib/quoteRuns";
+import { needsMarkupApproval, saleAtMarkup } from "@/lib/quoteRuns";
 import type { QuoteRun } from "@/lib/toshoApi";
 import { normalizeUnitLabel } from "@/lib/units";
 import {
@@ -18,6 +18,7 @@ import {
   notifyMarkupApprovalRequested,
 } from "@/lib/workflowNotifications";
 
+import { formatCurrency } from "./config";
 import {
   decideMarkupApproval,
   fetchMarkupBenchmarkSamples,
@@ -57,6 +58,8 @@ export type UseQuoteMarkupApprovalsParams = {
   dealType: QuoteDealType | null | undefined;
   /** Кому йде запит на поліграфії — там правило іменне, а не за роллю. */
   printApproverUserId?: string | null;
+  /** Валюта прорахунку — сповіщення називають ціну, а не відсоток (REQ-325). */
+  currency?: string | null;
   /** Позиції прорахунку — по них рахується орієнтир. */
   items: BenchmarkSubject[];
   runs: QuoteRun[];
@@ -72,6 +75,7 @@ export function useQuoteMarkupApprovals({
   userId,
   dealType,
   printApproverUserId,
+  currency,
   items,
   runs,
   getRunPricing,
@@ -205,6 +209,29 @@ export function useQuoteMarkupApprovals({
     [items]
   );
 
+  /**
+   * Ціна для сповіщення: сума, а в дужках штука й відсоток (REQ-325).
+   *
+   * Погоджувач вирішує про гроші клієнта, і Влад після першого живого
+   * погодження попросив прибрати «накрутку» з того, що він підписує. Рахуємо
+   * тією самою `saleAtMarkup`, що й велике число на картці, — інакше в
+   * Telegram прийшла б сума, якої на екрані немає.
+   */
+  const priceOf = useCallback(
+    (run: QuoteRun, costTotal: number, markupRate: number) => {
+      const sale = saleAtMarkup({ quantity: Number(run.quantity) || 0, costTotal, markupRate });
+      const item = items.find((candidate) => candidate.id === run.quote_item_id);
+      const unit = normalizeUnitLabel(item?.unit ?? "шт");
+      // До сотих: у сховищі відсоток без округлення (30,840579…), і сирим
+      // числом лист виглядав би як збій.
+      const rate = `${(Math.round((Number(markupRate) || 0) * 100) / 100).toLocaleString("uk-UA")} %`;
+      const total = formatCurrency(sale.saleTotal, currency);
+      const perUnit = sale.saleUnitPrice === null ? "" : `${formatCurrency(sale.saleUnitPrice, currency)}/${unit}, `;
+      return { total, label: `${total} (${perUnit}${rate})` };
+    },
+    [currency, items]
+  );
+
   const viewerName = userId ? memberById.get(userId) ?? null : null;
 
   const submitRequest = async (runId: string, note: string) => {
@@ -236,7 +263,7 @@ export function useQuoteMarkupApprovals({
       dealType,
       printApproverUserId,
       requesterName: viewerName,
-      runs: [{ label: runLabel(run), markupRate: pricing.markupRate }],
+      runs: [{ label: runLabel(run), price: priceOf(run, pricing.costTotal, pricing.markupRate).label }],
       actorUserId: userId ?? null,
     }).then(
       () => true,
@@ -279,7 +306,8 @@ export function useQuoteMarkupApprovals({
     await notifyMarkupApprovalDecided({
       quoteId,
       decision,
-      markupRate: approval.markupRate,
+      // Ціна на собівартості, ПРИ ЯКІЙ просили: рішення стосується саме її.
+      price: priceOf(run, approval.costTotal, approval.markupRate),
       runLabel: runLabel(run),
       requesterUserId: approval.requestedBy,
       deciderName: viewerName,
@@ -288,7 +316,10 @@ export function useQuoteMarkupApprovals({
     }).catch((error: unknown) => {
       console.warn("Failed to notify markup requester", error);
     });
-    toast.success(decision === "approved" ? "Накрутку погоджено" : "Накрутку відхилено");
+    // «Підтверджено», а не «погоджено»: «На погодженні» в шапці — це статус
+    // прорахунку (чекаємо клієнта), і поруч із ним «погоджено» читалось так,
+    // ніби кнопка нічого не зробила (REQ-325).
+    toast.success(decision === "approved" ? "Ціну підтверджено" : "Ціну відхилено");
     setBusy(false);
   };
 

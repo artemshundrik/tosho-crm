@@ -20,7 +20,7 @@ import {
   QUOTE_DEAL_TYPES,
   type QuoteDealType,
 } from "@/lib/quoteDealType";
-import { type RunSalePricing } from "@/lib/quoteRuns";
+import { saleAtMarkup, type RunSalePricing } from "@/lib/quoteRuns";
 
 import { SplitBar, type SplitPart } from "@/components/app/bento";
 
@@ -126,6 +126,14 @@ const formatRate = (value: number) => {
   const rounded = Math.round((Number(value) || 0) * 100) / 100;
   return `${rounded.toLocaleString("uk-UA")} %`;
 };
+
+/**
+ * Ціна тиражу на іншій собівартості чи відсотку — ТІЄЮ Ж функцією, що й велике
+ * число над банером. Банер множив без округлення штуки й писав «впаде до
+ * 90 577 грн» під «90 600 грн» (TS-0926-0050, REQ-325).
+ */
+const saleAt = (pricing: RunSalePricing, costTotal: number, markupRate: number) =>
+  saleAtMarkup({ quantity: pricing.quantity, costTotal, markupRate }).saleTotal;
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "";
@@ -266,11 +274,11 @@ function markupNote(params: {
     const sent = formatDateTime(state.approval.requestedAt);
     // Ціну на дні й ціну запиту рахуємо тут-таки, щоб ніхто не тримав
     // арифметику в голові: рішення ухвалюють про гроші, а не про відсотки.
-    const floorSale = state.approval.costTotal * (1 + floorRate / 100);
-    const askedSale = state.approval.costTotal * (1 + state.approval.markupRate / 100);
+    const floorSale = saleAt(pricing, state.approval.costTotal, floorRate);
+    const askedSale = saleAt(pricing, state.approval.costTotal, state.approval.markupRate);
     const pendingDetails = [
       { label: "Просить", value: sent ? `${who} · ${sent}` : who },
-      { label: "Просить накрутку", value: `${formatRate(state.approval.markupRate)} замість ${floorLabel} %` },
+      { label: "Відсоток", value: `${formatRate(state.approval.markupRate)} замість ${floorLabel} %` },
       { label: "Ціна на дні", value: money(floorSale) },
       { label: "Ціна за запитом", value: `${money(askedSale)} · нижче на ${money(floorSale - askedSale)}` },
       { label: "Собівартість, при якій рахували", value: money(state.approval.costTotal) },
@@ -286,12 +294,13 @@ function markupNote(params: {
         details: pendingDetails,
         text: (
           <>
+            {/* Сума першою, відсоток другим: підписують гроші клієнта, а не
+                число в полі — так попросив Влад після першого погодження. */}
             <b className="font-semibold text-foreground">
-              {who} просить {formatRate(state.approval.markupRate)} замість {floorLabel} %.
+              {who} просить ціну {money(askedSale)} — {formatRate(state.approval.markupRate)} замість {floorLabel} %.
             </b>{" "}
             {sent ? `Надіслано ${sent}. ` : ""}
-            Ціна впаде з {formatCurrency(floorSale, currency)} до{" "}
-            {formatCurrency(state.approval.costTotal + state.approval.markupRate * state.approval.costTotal / 100, currency)}.
+            На дні було б {money(floorSale)}, різниця {money(floorSale - askedSale)}.
             {state.approval.requestNote ? ` Пояснення: «${state.approval.requestNote}»` : ""}
           </>
         ),
@@ -318,7 +327,10 @@ function markupNote(params: {
         ...(state.approval.decisionNote
           ? [{ label: "Причина", value: `«${state.approval.decisionNote}»` }]
           : []),
-        { label: "Просили", value: formatRate(state.approval.markupRate) },
+        {
+          label: "Просили",
+          value: `${money(saleAt(pricing, state.approval.costTotal, state.approval.markupRate))} · ${formatRate(state.approval.markupRate)}`,
+        },
         { label: "Число в тиражі", value: `Лишилось ${formatRate(markupRate)} — саме не відкотиться` },
         { label: "Замкнено", value: OPENS },
         { label: "Хто може підписати", value: WHO_SIGNS },
@@ -338,11 +350,15 @@ function markupNote(params: {
 
   if (state.kind === "approved") {
     const when = formatDateTime(state.approval.decidedAt);
+    // Ціна на собівартості, ПРИ ЯКІЙ підтверджували: собівартість після того
+    // могла піти вгору (рішення від цього чинне), і поточне велике число тоді
+    // вже не те, що підписали.
+    const approvedSale = saleAt(pricing, state.approval.costTotal, state.approval.markupRate);
     return {
       tone: "ok",
       details: [
         { label: "Підтвердив", value: when ? `${decider} · ${when}` : decider },
-        { label: "Погоджено накрутку", value: formatRate(state.approval.markupRate) },
+        { label: "Підтверджена ціна", value: `${money(approvedSale)} · ${formatRate(state.approval.markupRate)}` },
         { label: "При собівартості", value: money(state.approval.costTotal) },
         ...(state.approval.decisionNote
           ? [{ label: "Коментар", value: `«${state.approval.decisionNote}»` }]
@@ -353,7 +369,7 @@ function markupNote(params: {
       text: (
         <>
           Підтвердив {decider}
-          {when ? ` ${when}` : ""} на {formatRate(state.approval.markupRate)}.
+          {when ? ` ${when}` : ""} ціну {money(approvedSale)} ({formatRate(state.approval.markupRate)}).
           {state.approval.decisionNote ? ` «${state.approval.decisionNote}».` : ""} Зміна собівартості або
           накрутки вниз відкриє запит наново.
         </>
@@ -362,7 +378,7 @@ function markupNote(params: {
   }
 
   if (state.kind === "under") {
-    const floorSale = pricing.costTotal * (1 + floorRate / 100);
+    const floorSale = saleAt(pricing, pricing.costTotal, floorRate);
     const underDetails = [
       { label: "Накрутка зараз", value: `${formatRate(markupRate)} · дно ${floorLabel} %` },
       { label: "Ціна на дні", value: money(floorSale) },
@@ -881,7 +897,8 @@ export function QuoteRunMarkupPanel({
                   Відхилити
                 </Button>
                 <Button size="sm" className="shrink-0" disabled={busy} onClick={() => onDecide("approved")}>
-                  Підтвердити {formatRate(state.approval.markupRate)}
+                  {/* Кнопка називає те, що підписують, — суму (REQ-325). */}
+                  Підтвердити {formatCurrency(saleAt(pricing, state.approval.costTotal, state.approval.markupRate), currency)}
                 </Button>
               </>
             ) : null}

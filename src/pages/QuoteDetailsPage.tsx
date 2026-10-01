@@ -914,22 +914,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const getRunPricing = useCallback((run: QuoteRun | null) => {
     if (!run) {
-      return {
-        costTotal: 0,
-        costPerUnit: null as number | null,
-        desiredManagerIncome: 0,
-        managerIncome: 0,
+      // Порожній тираж рахує та сама функція на нулях: нулі ті самі, а нове
+      // поле ціни не доводиться дописувати сюди руками.
+      const rates = {
         markupRate: defaultMarkupRateFor(dealType),
         managerRate: currentManagerRate,
         fixedCostRate: companyRates.fixedCostRate,
         vatRate: companyRates.vatRate,
-        requiredGrossProfit: 0,
-        fixedCosts: 0,
-        vatAmount: 0,
-        markupTotal: 0,
-        saleTotal: 0,
-        saleUnitPrice: null as number | null,
       };
+      const empty = computeRunSalePricingFromMarkup({ quantity: 0, costTotal: 0, ...rates });
+      return { ...empty, ...rates, desiredManagerIncome: 0 };
     }
 
     const quantity = Math.max(0, Number(run.quantity) || 0);
@@ -1619,6 +1613,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     userId,
     dealType,
     printApproverUserId: companyRates.printMarkupApproverUserId,
+    currency: quote?.currency ?? null,
     items,
     runs,
     getRunPricing,
