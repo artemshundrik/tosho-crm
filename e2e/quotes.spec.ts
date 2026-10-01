@@ -28,11 +28,11 @@ test.describe("Прорахунки", () => {
      */
     await expect(page.locator(columns)).toHaveCount(4);
 
-    await page.getByRole("button", { name: "Список" }).click();
+    await page.getByRole("button", { name: "Таблиця" }).click();
     await expect(page.getByRole("table")).toBeVisible();
     await expect(page.locator(columns)).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Kanban" }).click();
+    await page.getByRole("button", { name: "Канбан" }).click();
     await expect(page.locator(columns)).toHaveCount(4);
   });
 
