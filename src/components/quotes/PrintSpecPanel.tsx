@@ -650,7 +650,7 @@ function RoundHistory({ preset, rounds }: { preset: PrintSpecPreset; rounds: Pri
       </div>
       <div className="divide-y divide-border/40">
         {[...rounds].reverse().map((round) => (
-          <div key={round.label} className="grid gap-x-4 gap-y-1 py-2 text-xs sm:grid-cols-[13rem_1fr]">
+          <div key={round.label} className="grid gap-x-4 gap-y-1 py-2 text-xs sm:grid-cols-[16rem_1fr]">
             <div className="flex items-center gap-2 text-muted-foreground">
               {round.unpriced ? (
                 <>
