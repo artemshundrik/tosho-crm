@@ -15,16 +15,25 @@ import {
 } from "@/components/ui/dialog";
 import { PrintSpecFields } from "@/components/quotes/PrintSpecFields";
 import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
+import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
+import { toneBadgeClass } from "@/lib/statusTones";
 import {
+  buildPrintSpecSave,
   createEmptyPrintSpecValues,
+  diffPrintSpec,
   formatPrintSpecEntries,
   getPrintSpecColumns,
   getPrintSpecPreset,
   isPrintSpecFilled,
   parsePrintSpecValues,
+  resolvePriceBaseline,
+  needsPriceSnapshot,
   splitPrintSpecEntries,
+  type PrintSpecChange,
+  type PrintSpecColumnInfo,
   type PrintSpecEntry,
   type PrintSpecMetadata,
+  type PrintSpecPreset,
   type PrintSpecValues,
 } from "@/lib/printSpec";
 
@@ -52,12 +61,26 @@ export type PrintSpecPanelProps = {
   /** Що вже збережено в `quote_items.metadata.printSpec`. */
   saved?: PrintSpecMetadata | null;
   canEdit: boolean;
-  onSaved: () => void;
+  /** Статус прорахунку (нормалізований): від нього залежить, чи правка повертає на перерахунок. */
+  quoteStatus?: string | null;
+  /** Коли прорахунок востаннє став «Пораховано» (ISO), якщо відомо. */
+  lastPricedAt?: string | null;
+  /** `changedAfterPrice` — параметри змінили, поки ціна була, і прорахунок треба повернути на перерахунок. */
+  onSaved: (result: { changedAfterPrice: boolean }) => void;
   /** Відступи задає той, хто ставить панель: вона тепер поверх картки, а не вставка. */
   className?: string;
 };
 
-export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved, className }: PrintSpecPanelProps) {
+export function PrintSpecPanel({
+  quoteItemId,
+  presetKey,
+  saved,
+  canEdit,
+  quoteStatus,
+  lastPricedAt,
+  onSaved,
+  className,
+}: PrintSpecPanelProps) {
   /*
     ПРЕСЕТ БЕРЕМО З МОДЕЛІ, А ЗБЕРЕЖЕНИЙ — ЛИШЕ ЯК ЗАПАСНИЙ. Було навпаки, і
     після заміни щоденника на брошуру панель далі малювала щоденник із його
@@ -82,6 +105,21 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
   const savedValues = React.useMemo(
     () => (preset ? parsePrintSpecValues(preset, saved?.values ?? null) : {}),
     [preset, saved?.values]
+  );
+
+  /*
+    ПОЗНАЧКИ ЗМІН ПІСЛЯ ЦІНИ. Знімок у `versions` — це версія, за яку бачили
+    ціну; щойно прорахунок перерахували, він застаріває (`resolvePriceBaseline`)
+    і позначки зникають. Нічого не пишемо в базу: це лише порівняння.
+  */
+  const changes = React.useMemo<PrintSpecChange[]>(() => {
+    if (!preset) return [];
+    const baseline = resolvePriceBaseline({ versions: saved?.versions, lastPricedAt });
+    return baseline ? diffPrintSpec(preset, baseline, savedValues) : [];
+  }, [preset, saved?.versions, lastPricedAt, savedValues]);
+  const marks = React.useMemo(
+    () => new Map<string, CardMark>(changes.map((change) => [change.fieldId, { tone: "warning", change }])),
+    [changes]
   );
 
   /*
@@ -130,6 +168,16 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
 
   if (!preset) return null;
 
+  /*
+    База редактора: версія, яку рахували. Якщо знімка ще немає, але ціна вже була,
+    базою стають збережені значення — перша ж правка стане «зміною після ціни»
+    (знімок запишеться при збереженні).
+  */
+  const editorBaseline =
+    resolvePriceBaseline({ versions: saved?.versions, lastPricedAt }) ??
+    (needsPriceSnapshot({ versions: saved?.versions, lastPricedAt, quoteStatus }) ? savedValues : null);
+  const draftChangeCount = editorBaseline ? diffPrintSpec(preset, editorBaseline, draft).length : 0;
+
   const openEditor = () => {
     setDraft(isPrintSpecFilled(preset, savedValues) ? savedValues : createEmptyPrintSpecValues(preset));
     setOpen(true);
@@ -150,10 +198,16 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
       if (readError) throw readError;
 
       const current = (data?.metadata ?? {}) as Record<string, unknown>;
-      const nextMetadata = {
-        ...current,
-        printSpec: { presetKey: preset.key, values: draft },
-      };
+      // `versions` беремо зі СВІЖОГО printSpec: пропс міг відстати, а запис
+      // printSpec цілком затер би знімки, зроблені з іншої вкладки.
+      const built = buildPrintSpecSave({
+        preset,
+        current: current.printSpec,
+        draft,
+        quoteStatus,
+        lastPricedAt,
+      });
+      const nextMetadata = { ...current, printSpec: built.printSpec };
 
       const { error: writeError } = await supabase
         .schema("tosho")
@@ -164,7 +218,7 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
 
       toast.success("Параметри виробу збережено");
       setOpen(false);
-      onSaved();
+      onSaved({ changedAfterPrice: built.changedAfterPrice });
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Не вдалося зберегти параметри виробу");
     } finally {
@@ -173,6 +227,8 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
   };
 
   const filled = entries.length > 0;
+  const warningCount = [...marks.values()].filter((mark) => mark.tone === "warning").length;
+  const cardColumns = buildCardColumns(preset, columns, entryById, heroIds, marks);
 
   return (
     <div className={cn("rounded-xl border border-border/50 p-4", className)}>
@@ -183,6 +239,7 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
               позиції на три рядки вище, і другий раз читалась як підпис до
               підпису. У вікні редагування вона лишається — там заголовка немає. */}
           <span>Параметри виробу</span>
+          {warningCount > 0 ? <ChangesChip count={warningCount} /> : null}
         </div>
         {filled && progress ? (
           <span className="ml-auto mr-2 flex items-center gap-2.5 text-xs tabular-nums text-muted-foreground">
@@ -203,18 +260,25 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
         ) : null}
       </div>
 
+      {warningCount > 0 ? (
+        <div className="mt-2 text-xs leading-[17px] text-muted-foreground">
+          Порівняно з версією, яку рахували{lastPricedAt ? ` ${formatDayMonth(lastPricedAt)}` : ""}. Позначки зникнуть,
+          коли прорахунок перерахують.
+        </div>
+      ) : null}
+
       {filled ? (
         <>
-          {hero.length > 0 ? <PrintSpecHero entries={hero} /> : null}
-          {columns.length > 0 ? (
+          {hero.length > 0 ? <PrintSpecHero entries={hero} marks={marks} /> : null}
+          {cardColumns.length > 0 ? (
             <div
               className={cn(
                 "grid gap-x-8 gap-y-5",
-                CARD_GRID[Math.min(columns.length, 3)],
+                CARD_GRID[Math.min(cardColumns.length, 3)],
                 hero.length > 0 ? "mt-4 border-t border-border/50 pt-3.5" : "mt-3"
               )}
             >
-              {columns.map((column) => (
+              {cardColumns.map((column) => (
                 <div key={column.title} className="min-w-0">
                   <div className="mb-1.5 flex items-center gap-2">
                     <span className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
@@ -228,27 +292,15 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
                     >
                       {column.filled}/{column.total}
                     </span>
+                    {column.warnings > 0 ? (
+                      <span className="ml-auto text-2xs font-semibold text-warning-foreground">
+                        {pluralUk(column.warnings, "зміна", "зміни", "змін")}
+                      </span>
+                    ) : null}
                   </div>
-                  {column.sections
-                    .flatMap((section) => section.fields)
-                    .map((field) => {
-                      const entry = entryById.get(field.id);
-                      // Те, що вже стоїть у стрічці «головне», вдруге не повторюємо.
-                      if (entry && heroIds.has(field.id)) return null;
-                      return (
-                        <div key={field.id} className="flex items-baseline justify-between gap-3.5 py-1 text-sm">
-                          <span className="min-w-0 text-muted-foreground">{field.label}</span>
-                          <span
-                            className={cn(
-                              "min-w-0 text-right font-medium tabular-nums",
-                              entry ? "text-foreground" : "text-muted-foreground/70"
-                            )}
-                          >
-                            {entry?.value ?? "—"}
-                          </span>
-                        </div>
-                      );
-                    })}
+                  {column.rows.map((row) => (
+                    <PrintSpecCardRow key={row.id} row={row} />
+                  ))}
                 </div>
               ))}
             </div>
@@ -279,7 +331,10 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
               <PrintModelArt presetKey={preset.key} className="h-6 w-6" />
             </span>
             <div className="min-w-0 flex-1">
-              <DialogTitle>Параметри виробу · {preset.label}</DialogTitle>
+              <DialogTitle className="flex flex-wrap items-center gap-2">
+                Параметри виробу · {preset.label}
+                {draftChangeCount > 0 ? <ChangesChip count={draftChangeCount} /> : null}
+              </DialogTitle>
               <DialogDescription>
                 Обмежень немає — якщо потрібного варіанта немає в списку, вибирайте «Інше…» і пишіть текстом.
               </DialogDescription>
@@ -300,7 +355,7 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
           </DialogHeader>
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-muted/25 p-4">
-            <PrintSpecFields preset={preset} values={draft} onChange={setDraft} disabled={saving} />
+            <PrintSpecFields preset={preset} values={draft} onChange={setDraft} disabled={saving} baseline={editorBaseline} />
           </div>
 
           <DialogFooter className="border-t border-border/50 bg-muted/25 px-6 py-3.5 sm:items-center sm:justify-between">
@@ -352,7 +407,7 @@ const HERO_COLUMNS: Record<number, string> = {
  * стрічка — це те, що читають з відстані, і два рядки в одній клітинці
  * зруйнували б лінію, на якій стоять решта.
  */
-function PrintSpecHero({ entries }: { entries: PrintSpecEntry[] }) {
+function PrintSpecHero({ entries, marks }: { entries: PrintSpecEntry[]; marks: Map<string, CardMark> }) {
   return (
     <div className={cn("mt-3.5 grid grid-cols-2 gap-y-3", HERO_COLUMNS[Math.min(entries.length, 4)])}>
       {entries.map((entry, index) => (
@@ -368,8 +423,115 @@ function PrintSpecHero({ entries }: { entries: PrintSpecEntry[] }) {
             {entry.value}
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">{entry.label}</div>
+          {marks.get(entry.id) ? (
+            <div className="mt-0.5 truncate text-2xs text-warning-foreground">
+              було: {marks.get(entry.id)?.change.from || "—"}
+            </div>
+          ) : null}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Позначка зміни біля поля картки: колір лишається лише за непорахованими змінами. */
+type CardMark = { tone: "warning" | "muted"; change: PrintSpecChange };
+
+type CardRow = { id: string; label: string; value?: string; mark?: CardMark };
+
+type CardColumn = { title: string; filled: number; total: number; warnings: number; rows: CardRow[] };
+
+/** DD.MM за київським часом — як у решті CRM (docs/DATETIME.md). */
+const formatDayMonth = (iso: string): string =>
+  new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kiev", day: "2-digit", month: "2-digit" }).format(new Date(iso));
+
+function ChangesChip({ count }: { count: number }) {
+  return (
+    <span className={cn("rounded-md border px-2 py-0.5 text-xs font-semibold", toneBadgeClass.warning)}>
+      {count} {pluralWordUk(count, "зміна", "зміни", "змін")} після ціни
+    </span>
+  );
+}
+
+/**
+ * Рядки стовпчиків картки. Поле зі стрічки «головне» тут не повторюється, а
+ * змінене поле, яке стало невидимим, лишається рядком зі старим значенням і «—»:
+ * інакше зміна просто зникла б з очей.
+ */
+function buildCardColumns(
+  preset: PrintSpecPreset,
+  columns: PrintSpecColumnInfo[],
+  entryById: Map<string, PrintSpecEntry>,
+  heroIds: Set<string>,
+  marks: Map<string, CardMark>
+): CardColumn[] {
+  const byTitle = new Map<string, CardColumn>();
+  const shown = new Set(heroIds);
+  for (const column of columns) {
+    const rows: CardRow[] = [];
+    for (const field of column.sections.flatMap((section) => section.fields)) {
+      shown.add(field.id);
+      if (heroIds.has(field.id)) continue;
+      rows.push({ id: field.id, label: field.label, value: entryById.get(field.id)?.value, mark: marks.get(field.id) });
+    }
+    byTitle.set(column.title, { title: column.title, filled: column.filled, total: column.total, warnings: 0, rows });
+  }
+
+  const presetColumns = preset.columns ?? [{ title: preset.label, sections: preset.sections }];
+  for (const mark of marks.values()) {
+    if (shown.has(mark.change.fieldId)) continue;
+    const title = presetColumns.find((column) => column.sections.includes(mark.change.section))?.title;
+    if (!title) continue;
+    const column = byTitle.get(title) ?? { title, filled: 0, total: 0, warnings: 0, rows: [] };
+    column.rows.push({ id: mark.change.fieldId, label: mark.change.label, mark });
+    byTitle.set(title, column);
+  }
+
+  return presetColumns
+    .map((column) => byTitle.get(column.title))
+    .filter((column): column is CardColumn => column !== undefined)
+    .map((column) => ({
+      ...column,
+      warnings: column.rows.filter((row) => row.mark?.tone === "warning").length,
+    }));
+}
+
+function PrintSpecCardRow({ row }: { row: CardRow }) {
+  const { mark } = row;
+  const warning = mark?.tone === "warning";
+  return (
+    <div className="flex items-baseline justify-between gap-3.5 py-1 text-sm">
+      <span className={cn("inline-flex min-w-0 items-center gap-1.5", mark ? "font-medium text-foreground" : "text-muted-foreground")}>
+        {mark ? (
+          <span
+            aria-hidden="true"
+            className={cn("h-1.5 w-1.5 shrink-0 rounded-full", warning ? "bg-warning-solid" : "bg-muted-foreground/50")}
+          />
+        ) : null}
+        {row.label}
+      </span>
+      {mark ? (
+        <span className="inline-flex min-w-0 flex-wrap items-baseline justify-end gap-2 text-right tabular-nums">
+          <span className="font-medium text-muted-foreground line-through">{mark.change.from || "—"}</span>
+          <span
+            className={cn(
+              "rounded-md px-2 py-0.5 font-semibold",
+              warning ? "bg-warning-soft text-warning-foreground" : "bg-muted text-foreground"
+            )}
+          >
+            {mark.change.to || "—"}
+          </span>
+        </span>
+      ) : (
+        <span
+          className={cn(
+            "min-w-0 text-right font-medium tabular-nums",
+            row.value ? "text-foreground" : "text-muted-foreground/70"
+          )}
+        >
+          {row.value ?? "—"}
+        </span>
+      )}
     </div>
   );
 }

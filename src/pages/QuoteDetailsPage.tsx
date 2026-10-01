@@ -130,6 +130,7 @@ import { QuoteItemChoiceDialog } from "@/features/quotes/quote-details/QuoteItem
 import { QuoteOfferSend } from "@/features/quotes/quote-details/QuoteOfferSend";
 import { QuoteItemDeclinedBanner } from "@/features/quotes/quote-details/QuoteItemDeclinedBanner";
 import { useQuoteItemChoice } from "@/features/quotes/quote-details/useQuoteItemChoice";
+import { usePrintSpecPanelProps } from "@/features/quotes/quote-details/usePrintSpecPanelProps";
 import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatGateMessage, MODEL_PRICE_VAT_ROW_HINT } from "@/features/quotes/quote-details/quoteRunModelPriceVat";
 import { QuoteDealTypeBadge } from "@/features/quotes/quote-details/QuoteDealTypeBadge";
 import { isMarkupFrozen } from "@/lib/quoteMarkupApproval";
@@ -3490,6 +3491,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   });
 
+  const printSpecProps = usePrintSpecPanelProps({ quoteId, status: currentStatus, reloadItems: loadItems, changeStatus: handleQuickStatusChange });
   const buildCancelNote = () => {
     const parts = [];
     if (cancelReason.trim()) parts.push(cancelReason.trim());
@@ -4724,11 +4726,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             мініатюри — 88 px порожнечі під двадцятьма парами
                             «підпис — значення». Тепер це поверх картки, як ярус тиражів. */}
                         <PrintSpecPanel
-                          quoteItemId={item.id}
-                          presetKey={modelSpecPreset}
-                          saved={item.metadata?.printSpec ?? null}
-                          canEdit={canEditPrintSpec}
-                          onSaved={() => void loadItems()}
+                          quoteItemId={item.id} presetKey={modelSpecPreset} saved={item.metadata?.printSpec ?? null}
+                          canEdit={canEditPrintSpec} {...printSpecProps}
                           className="mx-3 mb-3 sm:mx-4 sm:mb-4"
                         />
 

@@ -119,6 +119,23 @@ export type PrintSpecValues = Record<string, PrintSpecValue>;
 export type PrintSpecMetadata = {
   presetKey: string;
   values: PrintSpecValues;
+  /** Знімки значень, які рахували, — по одному на кожну правку після ціни (REQ-323). */
+  versions?: PrintSpecVersion[];
+};
+
+/**
+ * Знімок значень на момент, коли їх вперше змінили після ціни: це версія, за
+ * яку менеджер уже бачив ціну.
+ */
+export type PrintSpecVersion = {
+  /** Коли зроблено знімок (перша правка після ціни), ISO. */
+  at: string;
+  /**
+   * `lastPricedAt` на момент знімка — дата «Пораховано», за яку рахували цю
+   * версію. `null` — невідомо (старі знімки, історії статусів не було).
+   */
+  pricedAt: string | null;
+  values: PrintSpecValues;
 };
 
 // ---------------------------------------------------------------------------
@@ -1494,48 +1511,48 @@ export type PrintSpecEntry = { id: string; label: string; value: string };
  */
 export function formatPrintSpecEntries(preset: PrintSpecPreset, values: PrintSpecValues): PrintSpecEntry[] {
   const entries: PrintSpecEntry[] = [];
-
   for (const field of preset.fields) {
     if (!isPrintSpecFieldVisible(field, values)) continue;
-    const raw = values[field.id] ?? null;
-    const custom = asStringValue(values[customValueKey(field.id)] ?? null).trim();
+    const value = formatPrintSpecFieldValue(field, values);
+    if (value) entries.push({ id: field.id, label: field.label, value });
+  }
+  return entries;
+}
 
-    if (field.type === "sizeRows") {
-      const rows = field.rows ?? [];
-      const sizes = asSizeRows(raw);
-      const parts = rows
-        .map((rowLabel, index) => {
-          const size = sizes[index];
-          if (!size?.width.trim() || !size?.height.trim()) return null;
-          const value = `${size.width.trim()} × ${size.height.trim()}${field.unit ? ` ${field.unit}` : ""}`;
-          return rows.length === 1 ? value : `${rowLabel} ${value}`;
-        })
-        .filter(Boolean);
-      if (parts.length > 0) entries.push({ id: field.id, label: field.label, value: parts.join(", ") });
-      continue;
-    }
+/**
+ * Значення одного поля текстом, як його бачить людина; порожній рядок — не
+ * заповнено. Видимість НЕ перевіряється: це робить той, хто питає.
+ */
+export function formatPrintSpecFieldValue(field: PrintSpecField, values: PrintSpecValues): string {
+  const raw = values[field.id] ?? null;
 
-    if (field.type === "multi") {
-      const selected = asListValue(raw).map((value) => optionLabel(field, value));
-      if (selected.length > 0) entries.push({ id: field.id, label: field.label, value: selected.join(" + ") });
-      continue;
-    }
-
-    const value = asStringValue(raw).trim();
-    if (field.type === "single" && value === CUSTOM_OPTION_VALUE) {
-      if (custom) entries.push({ id: field.id, label: field.label, value: custom });
-      continue;
-    }
-    if (!value) continue;
-    const label = field.type === "single" ? optionLabel(field, value) : value;
-    entries.push({
-      id: field.id,
-      label: field.label,
-      value: `${label}${field.unit && field.type === "number" ? ` ${field.unit}` : ""}`,
-    });
+  if (field.type === "sizeRows") {
+    const rows = field.rows ?? [];
+    const sizes = asSizeRows(raw);
+    return rows
+      .map((rowLabel, index) => {
+        const size = sizes[index];
+        if (!size?.width.trim() || !size?.height.trim()) return null;
+        const value = `${size.width.trim()} × ${size.height.trim()}${field.unit ? ` ${field.unit}` : ""}`;
+        return rows.length === 1 ? value : `${rowLabel} ${value}`;
+      })
+      .filter(Boolean)
+      .join(", ");
   }
 
-  return entries;
+  if (field.type === "multi") {
+    return asListValue(raw)
+      .map((value) => optionLabel(field, value))
+      .join(" + ");
+  }
+
+  const value = asStringValue(raw).trim();
+  if (field.type === "single" && value === CUSTOM_OPTION_VALUE) {
+    return asStringValue(values[customValueKey(field.id)] ?? null).trim();
+  }
+  if (!value) return "";
+  const label = field.type === "single" ? optionLabel(field, value) : value;
+  return `${label}${field.unit && field.type === "number" ? ` ${field.unit}` : ""}`;
 }
 
 /**
@@ -1676,7 +1693,30 @@ export function parsePrintSpecMetadata(value: unknown): PrintSpecMetadata | null
   const presetKey = typeof record.presetKey === "string" ? record.presetKey : "";
   const preset = getPrintSpecPreset(presetKey);
   if (!preset) return null;
-  return { presetKey, values: parsePrintSpecValues(preset, record.values) };
+  const versions = parsePrintSpecVersions(preset, record.versions);
+  return {
+    presetKey,
+    values: parsePrintSpecValues(preset, record.values),
+    ...(versions.length > 0 ? { versions } : {}),
+  };
+}
+
+/** Валідні знімки; зіпсований запис відкидаємо, а не валимо всю картку. */
+function parsePrintSpecVersions(preset: PrintSpecPreset, raw: unknown): PrintSpecVersion[] {
+  if (!Array.isArray(raw)) return [];
+  const versions: PrintSpecVersion[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.at !== "string" || Number.isNaN(Date.parse(record.at))) continue;
+    if (!record.values || typeof record.values !== "object") continue;
+    versions.push({
+      at: record.at,
+      pricedAt: typeof record.pricedAt === "string" ? record.pricedAt : null,
+      values: parsePrintSpecValues(preset, record.values),
+    });
+  }
+  return versions;
 }
 
 /**
@@ -1720,4 +1760,126 @@ export function parsePrintSpecValues(preset: PrintSpecPreset, raw: unknown): Pri
   }
 
   return values;
+}
+
+// ---------------------------------------------------------------------------
+// Зміни після ціни (REQ-323)
+// ---------------------------------------------------------------------------
+
+export type PrintSpecChange = { fieldId: string; label: string; section: string; from: string; to: string };
+
+/** Статуси, у яких ціна вже є, але ще не затверджена: правка параметрів повертає на перерахунок. */
+export const PRICED_QUOTE_STATUSES: ReadonlySet<string> = new Set(["estimated", "awaiting_approval"]);
+
+/**
+ * Значення поля, зведене до порівнянного вигляду: порожнє — завжди `""`, а
+ * порядок вибору в «кількох зі списку» не важить. «Інше» порівнюється за
+ * вписаним текстом, а не за службовим маркером.
+ */
+function normalizedFieldValue(field: PrintSpecField, values: PrintSpecValues): string {
+  if (!isPrintSpecFieldVisible(field, values)) return "";
+  const raw = values[field.id] ?? null;
+  if (field.type === "multi") return [...asListValue(raw)].sort().join("|");
+  if (field.type === "sizeRows") {
+    const rows = (field.rows ?? []).map((_, index) => {
+      const size = asSizeRows(raw)[index];
+      return `${size?.width.trim() ?? ""}x${size?.height.trim() ?? ""}`;
+    });
+    return rows.every((row) => row === "x") ? "" : rows.join("|");
+  }
+  const value = asStringValue(raw).trim();
+  if (field.type === "single" && value === CUSTOM_OPTION_VALUE) {
+    const custom = asStringValue(values[customValueKey(field.id)] ?? null).trim();
+    return custom ? `${CUSTOM_OPTION_VALUE}:${custom}` : "";
+  }
+  return value;
+}
+
+/**
+ * Що змінилось між двома наборами значень — поля, видимі хоча б в одному з них.
+ * Поле, яке стало невидимим, дає зміну «було X → порожньо».
+ */
+export function diffPrintSpec(
+  preset: PrintSpecPreset,
+  from: PrintSpecValues,
+  to: PrintSpecValues
+): PrintSpecChange[] {
+  const changes: PrintSpecChange[] = [];
+  for (const field of preset.fields) {
+    if (normalizedFieldValue(field, from) === normalizedFieldValue(field, to)) continue;
+    changes.push({
+      fieldId: field.id,
+      label: field.label,
+      section: field.section,
+      from: isPrintSpecFieldVisible(field, from) ? formatPrintSpecFieldValue(field, from) : "",
+      to: isPrintSpecFieldVisible(field, to) ? formatPrintSpecFieldValue(field, to) : "",
+    });
+  }
+  return changes;
+}
+
+type PriceSnapshotInput = { versions?: PrintSpecVersion[] | null; lastPricedAt?: string | null };
+
+/**
+ * Значення версії, яку рахували, — якщо вона ще актуальна.
+ *
+ * Знімок = версія, за яку менеджер бачив ціну. Щойно прорахунок порахували
+ * знову (`lastPricedAt` пізніший за знімок), старий знімок застарів: ту ціну
+ * вже замінила нова, і позначки «змінено після ціни» мусять зникнути.
+ */
+export function resolvePriceBaseline({ versions, lastPricedAt }: PriceSnapshotInput): PrintSpecValues | null {
+  const last = versions?.[versions.length - 1];
+  if (!last) return null;
+  if (!lastPricedAt) return last.values;
+  return Date.parse(last.at) > Date.parse(lastPricedAt) ? last.values : null;
+}
+
+/**
+ * Чи треба зняти знімок перед збереженням правки: прорахунок уже рахували, а
+ * знімка, зробленого після останнього «Пораховано», ще немає.
+ */
+export function needsPriceSnapshot(
+  input: PriceSnapshotInput & { quoteStatus?: string | null }
+): boolean {
+  const priced =
+    Boolean(input.lastPricedAt) ||
+    PRICED_QUOTE_STATUSES.has(input.quoteStatus ?? "") ||
+    input.quoteStatus === "approved";
+  return priced && resolvePriceBaseline(input) === null;
+}
+
+/**
+ * Нові метадані `printSpec` для запису. Наявні `versions` не губляться (раніше
+ * запис перезаписував printSpec цілком), а знімок додається лише коли значення
+ * справді змінились і прорахунок уже мав ціну.
+ */
+export function buildPrintSpecSave({
+  preset,
+  current,
+  draft,
+  quoteStatus,
+  lastPricedAt,
+  now = new Date(),
+}: {
+  preset: PrintSpecPreset;
+  /** Свіже `metadata.printSpec` з бази, не з пропса. */
+  current: unknown;
+  draft: PrintSpecValues;
+  quoteStatus?: string | null;
+  lastPricedAt?: string | null;
+  now?: Date;
+}): { printSpec: PrintSpecMetadata; changedAfterPrice: boolean } {
+  const saved = parsePrintSpecMetadata(current);
+  const savedValues = parsePrintSpecValues(preset, saved?.values ?? null);
+  const versions = [...(saved?.versions ?? [])];
+  const changes = diffPrintSpec(preset, savedValues, draft);
+
+  if (changes.length > 0 && needsPriceSnapshot({ versions, lastPricedAt, quoteStatus })) {
+    versions.push({ at: now.toISOString(), pricedAt: lastPricedAt ?? null, values: savedValues });
+  }
+
+  return {
+    printSpec: { presetKey: preset.key, values: draft, ...(versions.length > 0 ? { versions } : {}) },
+    changedAfterPrice: changes.length > 0 && PRICED_QUOTE_STATUSES.has(quoteStatus ?? ""),
+  };
 }

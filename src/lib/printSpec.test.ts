@@ -3,7 +3,14 @@ import {
   CUSTOM_OPTION_VALUE,
   PRINT_SPEC_DIARY,
   PRINT_SPEC_PRESETS,
+  buildPrintSpecSave,
   createEmptyPrintSpecValues,
+  diffPrintSpec,
+  needsPriceSnapshot,
+  parsePrintSpecMetadata,
+  resolvePriceBaseline,
+  type PrintSpecValues,
+  type PrintSpecVersion,
   formatPrintSpecEntries,
   formatPrintSpecSummary,
   getPrintSpecColumns,
@@ -183,5 +190,155 @@ describe("стовпчики", () => {
     const after = getPrintSpecColumns(PRINT_SPEC_DIARY, { ...values, coverMaterial: "leatherette" });
     expect(after[0].total).toBe(cover.total + 2);
     expect(after[0].filled).toBe(1);
+  });
+});
+
+/** Зміни після ціни: що вважати зміною, а що — тим самим «порожньо» чи тим самим вибором. */
+describe("diffPrintSpec", () => {
+  const empty = () => createEmptyPrintSpecValues(PRINT_SPEC_DIARY);
+  const diff = (from: PrintSpecValues, to: PrintSpecValues) => diffPrintSpec(PRINT_SPEC_DIARY, from, to);
+
+  it("змінений вибір дає одну зміну зі старим і новим текстом", () => {
+    const changes = diff({ ...empty(), coverType: "hard" }, { ...empty(), coverType: "flex" });
+    expect(changes).toEqual([
+      { fieldId: "coverType", label: "Тип", section: "Обкладинка", from: "Тверда", to: "Гнучка" },
+    ]);
+  });
+
+  it("порожнє, null і порожній масив — те саме", () => {
+    expect(diff({ ...empty(), coverType: null, leatheretteFinishing: [] }, empty())).toEqual([]);
+  });
+
+  it("«Інше» з іншим текстом — зміна, з тим самим — ні", () => {
+    const a = { ...empty(), format: CUSTOM_OPTION_VALUE, format__custom: "150 × 200" };
+    expect(diff(a, { ...a, format__custom: "150 × 210" }).map((change) => change.fieldId)).toEqual(["format"]);
+    expect(diff(a, { ...a, format__custom: " 150 × 200 " })).toEqual([]);
+  });
+
+  it("кілька зі списку — множина: порядок не важить", () => {
+    const base = { ...empty(), coverMaterial: "leatherette" };
+    expect(
+      diff(
+        { ...base, leatheretteFinishing: ["varnish", "embossing"] },
+        { ...base, leatheretteFinishing: ["embossing", "varnish"] }
+      )
+    ).toEqual([]);
+    expect(
+      diff({ ...base, leatheretteFinishing: ["varnish"] }, { ...base, leatheretteFinishing: ["varnish", "screen"] })
+    ).toHaveLength(1);
+  });
+
+  it("поле, що стало невидимим, — зміна «було → порожньо»", () => {
+    const from = { ...empty(), coverMaterial: "leatherette", leatheretteName: "Vienna" };
+    const to = { ...empty(), coverMaterial: "printed_paper", leatheretteName: "Vienna" };
+    const gone = diff(from, to).find((change) => change.fieldId === "leatheretteName");
+    expect(gone).toMatchObject({ from: "Vienna", to: "" });
+  });
+});
+
+describe("версії, яку рахували", () => {
+  const values = (coverType: string): PrintSpecValues => ({ ...createEmptyPrintSpecValues(PRINT_SPEC_DIARY), coverType });
+  const snap = (at: string, coverType: string, pricedAt: string | null = null): PrintSpecVersion => ({
+    at,
+    pricedAt,
+    values: values(coverType),
+  });
+
+  it("до першої ціни знімка не треба", () => {
+    expect(needsPriceSnapshot({ versions: [], lastPricedAt: null, quoteStatus: "estimating" })).toBe(false);
+    expect(needsPriceSnapshot({ versions: [], lastPricedAt: null, quoteStatus: "new" })).toBe(false);
+  });
+
+  it("після ціни перша правка робить знімок, друга до перерахунку — ні", () => {
+    const priced = "2026-09-24T10:00:00Z";
+    expect(needsPriceSnapshot({ versions: [], lastPricedAt: priced, quoteStatus: "estimated" })).toBe(true);
+    // Статус без історії: рахували, але дати невідомі.
+    expect(needsPriceSnapshot({ versions: [], lastPricedAt: null, quoteStatus: "approved" })).toBe(true);
+
+    const versions = [snap("2026-09-25T10:00:00Z", "hard", priced)];
+    expect(needsPriceSnapshot({ versions, lastPricedAt: priced, quoteStatus: "estimating" })).toBe(false);
+    expect(resolvePriceBaseline({ versions, lastPricedAt: priced })?.coverType).toBe("hard");
+  });
+
+  it("після перерахунку знімок застарів і потрібен новий", () => {
+    const versions = [snap("2026-09-25T10:00:00Z", "hard", "2026-09-24T10:00:00Z")];
+    const repriced = "2026-09-27T10:00:00Z";
+    expect(resolvePriceBaseline({ versions, lastPricedAt: repriced })).toBeNull();
+    expect(needsPriceSnapshot({ versions, lastPricedAt: repriced, quoteStatus: "estimated" })).toBe(true);
+  });
+
+  it("дата перерахунку невідома, а знімок є — він і є базою", () => {
+    const versions = [snap("2026-09-25T10:00:00Z", "hard")];
+    expect(resolvePriceBaseline({ versions, lastPricedAt: null })).not.toBeNull();
+  });
+
+  it("parse зберігає валідні versions, зокрема без pricedAt, і відкидає зіпсовані", () => {
+    const parsed = parsePrintSpecMetadata({
+      presetKey: "print_diary",
+      values: { coverType: "flex" },
+      versions: [
+        { at: "2026-09-25T10:00:00Z", pricedAt: "2026-09-24T10:00:00Z", values: { coverType: "hard" } },
+        { at: "2026-09-26T10:00:00Z", values: { coverType: "book" } },
+        { at: "не дата", values: {} },
+        "сміття",
+      ],
+    });
+    expect(parsed?.versions).toHaveLength(2);
+    expect(parsed?.versions?.[0].pricedAt).toBe("2026-09-24T10:00:00Z");
+    expect(parsed?.versions?.[1].pricedAt).toBeNull();
+    expect(parsed?.versions?.[1].values.coverType).toBe("book");
+  });
+});
+
+describe("buildPrintSpecSave", () => {
+  const base = createEmptyPrintSpecValues(PRINT_SPEC_DIARY);
+  const now = new Date("2026-09-28T09:00:00Z");
+
+  it("знімає знімок із pricedAt і просить повернути на перерахунок, коли рахували", () => {
+    const result = buildPrintSpecSave({
+      preset: PRINT_SPEC_DIARY,
+      current: { presetKey: "print_diary", values: { ...base, coverType: "hard" } },
+      draft: { ...base, coverType: "flex" },
+      quoteStatus: "estimated",
+      lastPricedAt: "2026-09-24T10:00:00Z",
+      now,
+    });
+    expect(result.changedAfterPrice).toBe(true);
+    expect(result.printSpec.values.coverType).toBe("flex");
+    expect(result.printSpec.versions).toHaveLength(1);
+    expect(result.printSpec.versions?.[0]).toMatchObject({
+      at: now.toISOString(),
+      pricedAt: "2026-09-24T10:00:00Z",
+    });
+    expect(result.printSpec.versions?.[0].values.coverType).toBe("hard");
+  });
+
+  it("не губить наявні versions і не дублює знімок до перерахунку", () => {
+    const existing: PrintSpecVersion = { at: "2026-09-25T10:00:00Z", pricedAt: "2026-09-24T10:00:00Z", values: base };
+    const result = buildPrintSpecSave({
+      preset: PRINT_SPEC_DIARY,
+      current: { presetKey: "print_diary", values: { ...base, coverType: "hard" }, versions: [existing] },
+      draft: { ...base, coverType: "book" },
+      quoteStatus: "estimating",
+      lastPricedAt: "2026-09-24T10:00:00Z",
+      now,
+    });
+    expect(result.printSpec.versions).toHaveLength(1);
+    expect(result.printSpec.versions?.[0].at).toBe(existing.at);
+    expect(result.changedAfterPrice).toBe(false);
+  });
+
+  it("без змін або до ціни — без знімка; approved не повертається", () => {
+    const current = { presetKey: "print_diary", values: { ...base, coverType: "hard" } };
+    const same = buildPrintSpecSave({ preset: PRINT_SPEC_DIARY, current, draft: { ...base, coverType: "hard" }, quoteStatus: "estimated" });
+    expect(same.printSpec.versions).toBeUndefined();
+    expect(same.changedAfterPrice).toBe(false);
+
+    const early = buildPrintSpecSave({ preset: PRINT_SPEC_DIARY, current, draft: { ...base, coverType: "flex" }, quoteStatus: "estimating" });
+    expect(early.printSpec.versions).toBeUndefined();
+
+    const approved = buildPrintSpecSave({ preset: PRINT_SPEC_DIARY, current, draft: { ...base, coverType: "flex" }, quoteStatus: "approved" });
+    expect(approved.printSpec.versions).toHaveLength(1);
+    expect(approved.changedAfterPrice).toBe(false);
   });
 });
