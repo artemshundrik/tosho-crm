@@ -232,6 +232,12 @@ const QUOTES_TABLE_PAGE_SIZE = 50;
 const QUOTES_TABLE_PAGE_INCREMENT = 50;
 const QUOTES_KANBAN_INITIAL_PAGE_SIZE = 120;
 const QUOTES_KANBAN_PAGE_INCREMENT = 60;
+const getStatusTabCount = (counts: Record<string, number> | null, tab: { statuses?: readonly string[] }) => {
+  if (!counts) return null;
+  return tab.statuses
+    ? tab.statuses.reduce((sum, key) => sum + (counts[key] ?? 0), 0)
+    : Object.values(counts).reduce((sum, value) => sum + value, 0);
+};
 /** Вкладки статусів над таблицею. `statuses` — з яких статусів складається лічильник; без нього — усі. */
 const QUOTE_STATUS_TABS: Array<{ value: string; label: string; statuses?: readonly string[] }> = [
   { value: "active", label: "Активні", statuses: ACTIVE_QUOTE_STATUSES },
@@ -611,6 +617,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [kanbanPreviewsLoading, setKanbanPreviewsLoading] = useState(false);
   /** Лічильники статусів з бази за поточним менеджером і пошуком (не залежать від вкладки). */
   const [quoteStatusCounts, setQuoteStatusCounts] = useState<Record<string, number> | null>(null);
+  const statusCountsRequestIdRef = useRef(0);
   const [kanbanPreviewVisibleCountByColumn, setKanbanPreviewVisibleCountByColumn] = useState<Record<string, number>>(
     () => Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
   );
@@ -1372,6 +1379,33 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     };
   }, [createOpen, editDialogOpen, teamId]);
 
+  /**
+   * Лічильники вкладок їдуть разом з кожним оновленням списку (у т.ч. тихим):
+   * зміна статусу, видалення, дублювання, створення — усе це кінчається
+   * `loadQuotes`, тож окремої підписки на ці дії не треба.
+   */
+  const refreshQuoteStatusCounts = useCallback(() => {
+    if (!teamId) return;
+    const requestId = ++statusCountsRequestIdRef.current;
+    void listQuoteStatusCounts({
+      teamId,
+      search,
+      managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
+    })
+      .then((raw) => {
+        if (requestId !== statusCountsRequestIdRef.current) return;
+        const normalized: Record<string, number> = {};
+        Object.entries(raw).forEach(([key, count]) => {
+          const status = normalizeStatus(key);
+          normalized[status] = (normalized[status] ?? 0) + count;
+        });
+        setQuoteStatusCounts(normalized);
+      })
+      .catch(() => {
+        // Лічильники не критичні: без них вкладки просто без цифр.
+      });
+  }, [managerFilter, search, teamId]);
+
   const loadQuotes = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     if (!teamId) return;
     if (options?.fetchAll && !options?.append && options.fullFetchKey && fullFetchCompletedKeyRef.current === options.fullFetchKey) {
@@ -1380,6 +1414,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const requestId = ++quotesLoadRequestIdRef.current;
     const append = !!options?.append;
     const fetchAll = !!options?.fetchAll && !append;
+    if (!append && !fetchAll) refreshQuoteStatusCounts();
     const basePageSize = append
       ? (viewMode === "kanban" ? QUOTES_KANBAN_PAGE_INCREMENT : QUOTES_TABLE_PAGE_INCREMENT)
       : quotesFetchLimit;
@@ -1570,7 +1605,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         setRefreshing(false);
       }
     }
-  }, [cacheKey, effectiveStatus, managerFilter, quotesFetchLimit, search, teamId, viewMode]);
+  }, [cacheKey, effectiveStatus, managerFilter, quotesFetchLimit, refreshQuoteStatusCounts, search, teamId, viewMode]);
 
   const loadQuoteSets = async () => {
     if (!teamId) return;
@@ -1650,34 +1685,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setKanbanProductByQuoteId({});
     setLoading(true);
   }, [cacheKey, teamId]);
-
-  useEffect(() => {
-    if (!teamId) return;
-    let cancelled = false;
-    const id = window.setTimeout(() => {
-      void listQuoteStatusCounts({
-        teamId,
-        search,
-        managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
-      })
-        .then((raw) => {
-          if (cancelled) return;
-          const normalized: Record<string, number> = {};
-          Object.entries(raw).forEach(([key, count]) => {
-            const status = normalizeStatus(key);
-            normalized[status] = (normalized[status] ?? 0) + count;
-          });
-          setQuoteStatusCounts(normalized);
-        })
-        .catch(() => {
-          // Лічильники не критичні: без них вкладки просто без цифр.
-        });
-    }, search.trim() ? 350 : 0);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(id);
-    };
-  }, [teamId, search, managerFilter]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -2897,6 +2904,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   });
 
   const hasActiveFilters = hasActiveViewFilters || managerFilter !== ALL_MANAGERS_FILTER;
+  // У таблиці число над списком — лічильник вибраної вкладки з бази, інакше
+  // воно (50 завантажених) суперечило б вкладці «Активні 99».
+  const selectedTabCount =
+    viewMode === "table" && !isNarrowViewport
+      ? getStatusTabCount(quoteStatusCounts, QUOTE_STATUS_TABS.find((tab) => tab.value === status) ?? {})
+      : null;
+  const toolbarCount = selectedTabCount ?? foundCount;
 
   /**
    * Скільки фільтрів застосовано — бейдж на кнопці «Фільтри» в мобільному
@@ -4676,7 +4690,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }
         meta={
           <ToolbarMeta
-            count={loading && rows.length === 0 ? "…" : foundCount}
+            count={loading && rows.length === 0 ? "…" : toolbarCount}
             onReset={clearFilters}
             showReset={hasActiveFilters}
             loading={loading || showRefreshIndicator}
@@ -4688,7 +4702,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     contentView,
     currentUserId,
     currentUserManagerLabel,
-    foundCount,
+    toolbarCount,
     getManagerAvatar,
     getManagerLabel,
     hasActiveFilters,
@@ -5228,11 +5242,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           {!isNarrowViewport ? (
             <TabBar value={status} wrapperClassName="border-b border-border/60 px-2">
               {QUOTE_STATUS_TABS.map((tab) => {
-                const count = quoteStatusCounts
-                  ? tab.statuses
-                    ? tab.statuses.reduce((sum, key) => sum + (quoteStatusCounts[key] ?? 0), 0)
-                    : Object.values(quoteStatusCounts).reduce((sum, value) => sum + value, 0)
-                  : null;
+                const count = getStatusTabCount(quoteStatusCounts, tab);
                 return (
                   <TabBarItem key={tab.value} value={tab.value} onSelect={setStatusFilter}>
                     {tab.label}
@@ -5496,7 +5506,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       </div>
                     </TableHead>
                     <TableHead className="min-w-[160px]">Що рахуємо</TableHead>
-                    <TableHead className="w-[128px] text-right font-semibold">Сума</TableHead>
+                    <TableHead className="w-[128px] !pr-6 text-right font-semibold">Сума</TableHead>
                     <TableHead className="w-[140px] font-semibold">Статус</TableHead>
                     <TableHead className="w-[100px] font-semibold">
                       Дедлайн
@@ -5658,7 +5668,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             );
                           })()}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-right text-sm tabular-nums">
+                        <TableCell className="whitespace-nowrap !pr-6 text-right text-sm tabular-nums">
                           {(() => {
                             const preview = kanbanProductByQuoteId[row.id];
                             if (preview?.listTotal === undefined && kanbanPreviewsLoading) {
@@ -5666,10 +5676,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             }
                             const total = preview?.listTotal ?? null;
                             if (!total) return <span className="text-muted-foreground">—</span>;
+                            const exact = formatMoney(total.amount);
+                            const rounded = formatMoney(Math.round(total.amount));
                             return total.partial ? (
-                              <span title="Кілька тиражів, клієнт ще не обрав">від {formatMoney(total.amount)}</span>
+                              <span title={`від ${exact} · Кілька тиражів, клієнт ще не обрав`}>від {rounded}</span>
                             ) : (
-                              formatMoney(total.amount)
+                              <span title={exact}>{rounded}</span>
                             );
                           })()}
                         </TableCell>
