@@ -5392,7 +5392,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         aria-label="Вибрати всі"
                       />
                     </TableHead>
-                    <TableHead className="w-[140px]">
+                    <TableHead className="w-[124px]">
                       <button
                         type="button"
                         onClick={() => handleSort("number")}
@@ -5404,14 +5404,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         )}
                       </button>
                     </TableHead>
-                    <TableHead className="w-[180px]">
+                    <TableHead className="w-[172px]">
                       <div className="flex items-center font-semibold">
                         Замовник / Лід
                       </div>
                     </TableHead>
                     <TableHead className="min-w-[160px]">Що рахуємо</TableHead>
-                    <TableHead className="w-[96px] text-right font-semibold">Сума</TableHead>
-                    <TableHead className="w-[156px] font-semibold">Статус</TableHead>
+                    <TableHead className="w-[128px] text-right font-semibold">Сума</TableHead>
+                    <TableHead className="w-[140px] font-semibold">Статус</TableHead>
                     <TableHead className="w-[100px] font-semibold">
                       Дедлайн
                     </TableHead>
