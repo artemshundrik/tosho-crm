@@ -47,6 +47,7 @@ import { QuoteStatusControl } from "@/features/quotes/quote-details/QuoteStatusC
 import { threadKeyForQuote } from "@/lib/taskThread";
 import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
 import { ThreadDock, ThreadDockButton, ThreadDockProvider, type ThreadDockHandle } from "@/features/taskChat/ThreadDock";
+import { RecordRailResizer } from "@/components/app/RecordRailResizer";
 import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
 import {
   getAttachmentDisplayFileName,
@@ -4137,7 +4138,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           if (mode === "split") setActiveQuoteTab((tab) => (tab === "details" ? "products" : tab));
         }}
       >
-      <div className="grid grid-cols-1 [--record-rail-w:21.25rem] record-wide:[--record-rail-w:23.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1fr)_var(--record-rail-w)] record-split:overflow-hidden">
+      <div className="grid grid-cols-1 record-split:relative [--record-rail-w:21.25rem] record-wide:[--record-rail-w:23.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1fr)_var(--record-rail-w)] record-split:overflow-hidden">
         <div className="flex min-w-0 flex-col record-split:h-full record-split:min-h-0 record-split:overflow-hidden">
       {/* Без власної риски (REQ-175#p47): одразу під шапкою йде смуга вкладок,
           і в неї своя нижня межа. Дві горизонтальні лінії за 40 px одна від
@@ -6093,6 +6094,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             ) : null}
           </div>
         </aside>
+        <RecordRailResizer storageKey="tosho_quote_rail_width" />
       </div>
       </ThreadDockProvider>
 

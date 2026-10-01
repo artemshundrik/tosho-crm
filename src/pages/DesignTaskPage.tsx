@@ -87,6 +87,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
 import { ThreadDock, ThreadDockButton, ThreadDockProvider } from "@/features/taskChat/ThreadDock";
+import { RecordRailResizer } from "@/components/app/RecordRailResizer";
 import { threadKeys } from "@/features/taskChat/queries";
 import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
 import { quoteIdFromRef, threadKeyForQuote } from "@/lib/taskThread";
@@ -9676,7 +9677,7 @@ export default function DesignTaskPage() {
       {/* Дві колонки — коли їх вміщає СТОРІНКА, а не вікно (`record-split`,
           REQ-294). Вужче рейка обговорення йде в шторку. */}
       <ThreadDockProvider>
-      <div className="grid grid-cols-1 [--record-rail-w:21.25rem] record-wide:[--record-rail-w:25.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1.75fr)_var(--record-rail-w)] record-split:items-start record-split:overflow-hidden">
+      <div className="grid grid-cols-1 record-split:relative [--record-rail-w:21.25rem] record-wide:[--record-rail-w:25.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1.75fr)_var(--record-rail-w)] record-split:items-start record-split:overflow-hidden">
         <div className="min-w-0 space-y-4 record-split:min-h-0 record-split:h-full record-split:overflow-y-auto">
       <EntityHeader
         className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 sm:px-5 md:px-6 xl:px-8"
@@ -12055,6 +12056,7 @@ export default function DesignTaskPage() {
           ) : null}
           </div>
         </aside>
+        <RecordRailResizer storageKey="tosho_design_task_rail_width" />
       </div>
       </ThreadDockProvider>
 
