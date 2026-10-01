@@ -6,6 +6,7 @@ import {
   createEmptyPrintSpecValues,
   formatPrintSpecEntries,
   formatPrintSpecSummary,
+  getPrintSpecColumns,
   isPrintSpecFilled,
   parsePrintSpecValues,
   splitPrintSpecEntries,
@@ -147,5 +148,40 @@ describe("стрічка «головне» на картці", () => {
       "Виріб: Щоденник",
       ...entries.map((entry) => `${entry.label}: ${entry.value}`),
     ]);
+  });
+});
+
+/**
+ * Стовпчики вікна: розділ, якого немає в жодному стовпчику, тихо зникає з форми
+ * і з картки — помилку не видно ні збірці, ні типам.
+ */
+describe("стовпчики", () => {
+  it.each(PRINT_SPEC_PRESETS.map((preset) => [preset.label, preset] as const))(
+    "%s: кожен розділ стоїть рівно в одному стовпчику",
+    (_label, preset) => {
+      const columns = preset.columns ?? [{ title: preset.label, sections: preset.sections }];
+      const used = columns.flatMap((column) => column.sections);
+      expect(new Set(used).size).toBe(used.length);
+      expect([...used].sort()).toEqual([...preset.sections].sort());
+      for (const field of preset.fields) expect(preset.sections).toContain(field.section);
+    }
+  );
+
+  it("формат щоденника — першим полем «Обкладинки»", () => {
+    const format = PRINT_SPEC_DIARY.fields.find((field) => field.id === "format");
+    expect(format?.section).toBe("Обкладинка");
+    const columns = getPrintSpecColumns(PRINT_SPEC_DIARY, createEmptyPrintSpecValues(PRINT_SPEC_DIARY));
+    expect(columns[0].title).toBe("Обкладинка");
+    expect(columns[0].sections[0].fields[0].id).toBe("format");
+  });
+
+  it("у стовпчик потрапляють лише видимі поля, і порожній стовпчик зникає", () => {
+    const values = createEmptyPrintSpecValues(PRINT_SPEC_DIARY);
+    const before = getPrintSpecColumns(PRINT_SPEC_DIARY, values);
+    expect(before.map((column) => column.title)).toEqual(["Обкладинка", "Блок", "Комплектуючі"]);
+    const cover = before[0];
+    const after = getPrintSpecColumns(PRINT_SPEC_DIARY, { ...values, coverMaterial: "leatherette" });
+    expect(after[0].total).toBe(cover.total + 2);
+    expect(after[0].filled).toBe(1);
   });
 });

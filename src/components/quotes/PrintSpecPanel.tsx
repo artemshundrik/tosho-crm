@@ -13,12 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PrintSpecFields, getPrintSpecSections } from "@/components/quotes/PrintSpecFields";
-import { PrintSpecSectionRail } from "@/features/quotes/quote-details/PrintSpecSectionRail";
+import { PrintSpecFields } from "@/components/quotes/PrintSpecFields";
 import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 import {
   createEmptyPrintSpecValues,
   formatPrintSpecEntries,
+  getPrintSpecColumns,
   getPrintSpecPreset,
   isPrintSpecFilled,
   parsePrintSpecValues,
@@ -99,64 +99,39 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
     () => (preset && isPrintSpecFilled(preset, savedValues) ? formatPrintSpecEntries(preset, savedValues) : []),
     [preset, savedValues]
   );
-  const { hero, rest } = React.useMemo(
-    () => (preset ? splitPrintSpecEntries(preset, entries) : { hero: [], rest: [] }),
+  const { hero } = React.useMemo(
+    () => (preset ? splitPrintSpecEntries(preset, entries) : { hero: [] }),
     [preset, entries]
   );
+  const heroIds = React.useMemo(() => new Set(hero.map((entry) => entry.id)), [hero]);
+  const entryById = React.useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
 
   /*
     Лічильник «17 з 19» у заголовку — лише поки є порожні поля. Це підказка тому,
     хто рахує, що є куди дозаповнити, а не оцінка: заповнили до кінця — і він
-    зникає, бо «19 з 19» нічого не каже. Той самий рахунок, що в рейці вікна.
+    зникає, бо «19 з 19» нічого не каже.
   */
+  const columns = React.useMemo(() => (preset ? getPrintSpecColumns(preset, savedValues) : []), [preset, savedValues]);
   const progress = React.useMemo(() => {
-    if (!preset) return null;
-    const sections = getPrintSpecSections(preset, savedValues);
-    const total = sections.reduce((sum, section) => sum + section.fields.length, 0);
-    const done = sections.reduce((sum, section) => sum + section.filled, 0);
+    const total = columns.reduce((sum, column) => sum + column.total, 0);
+    const done = columns.reduce((sum, column) => sum + column.filled, 0);
     return total > 0 && done < total ? { done, total } : null;
-  }, [preset, savedValues]);
+  }, [columns]);
 
-  /*
-    Розділи рахуються з ЧЕРНЕТКИ, а не зі збереженого: умовні поля з'являються й
-    зникають від вибору («Кількість пантонів» — лише при пантонах), тож лічильники
-    рейки мусять міняти й знаменник теж, поки людина клікає.
-  */
-  const sections = React.useMemo(() => (preset ? getPrintSpecSections(preset, draft) : []), [preset, draft]);
-
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const [activeSection, setActiveSection] = React.useState(0);
-
-  const scrollToSection = React.useCallback((index: number) => {
-    const container = scrollRef.current;
-    const target = container?.querySelector<HTMLElement>(`[data-spec-section="${index}"]`);
-    if (!container || !target) return;
-    // scrollIntoView тут не годиться: він крутить і зовнішню сторінку теж,
-    // а вікно стоїть поверх неї. Рахуємо зсув усередині самого контейнера.
-    container.scrollTo({ top: target.offsetTop - container.offsetTop - 8, behavior: "smooth" });
-  }, []);
-
-  /*
-    Активний розділ — останній, чий заголовок уже проїхав верх колонки. Поріг у
-    24 px, щоб розділ ставав активним, коли його заголовок ТІЛЬКИ підійшов, а не
-    коли вже зник: інакше рейка відстає на один рядок від того, що видно.
-  */
-  const handleScroll = React.useCallback(() => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const marks = container.querySelectorAll<HTMLElement>("[data-spec-section]");
-    let next = 0;
-    marks.forEach((mark, index) => {
-      if (mark.offsetTop - container.offsetTop - container.scrollTop <= 24) next = index;
-    });
-    setActiveSection(next);
-  }, []);
+  /* Лічильник у шапці вікна рахується з ЧЕРНЕТКИ: умовні поля з'являються й зникають від вибору. */
+  const draftProgress = React.useMemo(() => {
+    if (!preset) return { done: 0, total: 0 };
+    const draftColumns = getPrintSpecColumns(preset, draft);
+    return {
+      done: draftColumns.reduce((sum, column) => sum + column.filled, 0),
+      total: draftColumns.reduce((sum, column) => sum + column.total, 0),
+    };
+  }, [preset, draft]);
 
   if (!preset) return null;
 
   const openEditor = () => {
     setDraft(isPrintSpecFilled(preset, savedValues) ? savedValues : createEmptyPrintSpecValues(preset));
-    setActiveSection(0);
     setOpen(true);
   };
 
@@ -231,17 +206,49 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
       {filled ? (
         <>
           {hero.length > 0 ? <PrintSpecHero entries={hero} /> : null}
-          {rest.length > 0 ? (
+          {columns.length > 0 ? (
             <div
               className={cn(
-                "grid gap-x-7 sm:grid-cols-2 xl:grid-cols-3",
-                hero.length > 0 ? "mt-4 border-t border-border/50 pt-3" : "mt-3"
+                "grid gap-x-8 gap-y-5",
+                CARD_GRID[Math.min(columns.length, 3)],
+                hero.length > 0 ? "mt-4 border-t border-border/50 pt-3.5" : "mt-3"
               )}
             >
-              {rest.map((entry) => (
-                <div key={entry.id} className="flex items-baseline justify-between gap-4 py-1 text-sm">
-                  <span className="min-w-0 text-muted-foreground">{entry.label}</span>
-                  <span className="min-w-0 text-right font-medium tabular-nums text-foreground">{entry.value}</span>
+              {columns.map((column) => (
+                <div key={column.title} className="min-w-0">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+                      {column.title}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-2xs tabular-nums",
+                        column.filled === column.total ? "text-foreground" : "text-muted-foreground"
+                      )}
+                    >
+                      {column.filled}/{column.total}
+                    </span>
+                  </div>
+                  {column.sections
+                    .flatMap((section) => section.fields)
+                    .map((field) => {
+                      const entry = entryById.get(field.id);
+                      // Те, що вже стоїть у стрічці «головне», вдруге не повторюємо.
+                      if (entry && heroIds.has(field.id)) return null;
+                      return (
+                        <div key={field.id} className="flex items-baseline justify-between gap-3.5 py-1 text-sm">
+                          <span className="min-w-0 text-muted-foreground">{field.label}</span>
+                          <span
+                            className={cn(
+                              "min-w-0 text-right font-medium tabular-nums",
+                              entry ? "text-foreground" : "text-muted-foreground/70"
+                            )}
+                          >
+                            {entry?.value ?? "—"}
+                          </span>
+                        </div>
+                      );
+                    })}
                 </div>
               ))}
             </div>
@@ -255,18 +262,18 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
 
       <Dialog open={open} onOpenChange={(next) => (saving ? null : setOpen(next))}>
         {/*
-          ТРИ ЧАСТИНИ СТОЯТЬ, ЇДЕ ЛИШЕ СЕРЕДИНА (варіант А, Артем 11.09.2026).
+          ШАПКА Й ФУТЕР СТОЯТЬ, ПРОКРУЧУЄТЬСЯ ЛИШЕ ТІЛО: у щоденника двадцять
+          полів, і при прокрутці всім вікном зникали і назва виду, і «Зберегти».
 
-          Було одне вікно з `overflow-y-auto` на всьому: у щоденника — вісім
-          розділів і двадцять полів, і при прокрутці зникали і назва виду, і
-          «Зберегти». Людина дописувала останнє поле й мусила гортати назад,
-          щоб зберегти.
-
-          Тепер шапка, рейка й футер прибиті, а прокручується тільки колонка
-          полів. Ширина 960, а не 768: рейка з'їдає 240, і без цього поля в
-          двох колонках стали б вужчі за нинішні.
+          Ширина за кількістю стовпчиків (3 — 1232, 2 — 880, 1 — 560): стовпчик
+          вужчий за ~380 px ламає чипи на два рядки без потреби.
         */}
-        <DialogContent className="flex h-[min(88vh,46rem)] max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0 sm:max-w-[960px]">
+        <DialogContent
+          className={cn(
+            "flex h-[min(88vh,46rem)] max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0",
+            DIALOG_WIDTH[Math.min(preset.columns?.length ?? 1, 3)]
+          )}
+        >
           <DialogHeader className="flex-row items-center gap-4 border-b border-border/50 px-6 py-4">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-muted/70 text-foreground/75">
               <PrintModelArt presetKey={preset.key} className="h-6 w-6" />
@@ -274,20 +281,26 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
             <div className="min-w-0 flex-1">
               <DialogTitle>Параметри виробу · {preset.label}</DialogTitle>
               <DialogDescription>
-                Обмежень немає — якщо потрібного варіанта немає в списку, вибирайте «Інше» і пишіть текстом.
+                Обмежень немає — якщо потрібного варіанта немає в списку, вибирайте «Інше…» і пишіть текстом.
               </DialogDescription>
             </div>
+            <span className="mr-8 hidden shrink-0 items-center gap-2.5 text-sm tabular-nums text-muted-foreground sm:flex">
+              <span>
+                <span className="font-semibold text-foreground">{draftProgress.done}</span> з {draftProgress.total}
+              </span>
+              <span className="h-1 w-20 overflow-hidden rounded-full bg-border/60">
+                <span
+                  className="block h-full bg-foreground"
+                  style={{
+                    width: `${draftProgress.total === 0 ? 0 : Math.round((draftProgress.done / draftProgress.total) * 100)}%`,
+                  }}
+                />
+              </span>
+            </span>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-1">
-            {/* Рейка — від трьох розділів: на двох вона нічого не додає до форми. */}
-            {sections.length >= 3 ? (
-              <PrintSpecSectionRail sections={sections} activeIndex={activeSection} onPick={scrollToSection} />
-            ) : null}
-
-            <div ref={scrollRef} onScroll={handleScroll} className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
-              <PrintSpecFields preset={preset} values={draft} onChange={setDraft} disabled={saving} />
-            </div>
+          <div className="min-h-0 flex-1 overflow-y-auto bg-muted/25 p-4">
+            <PrintSpecFields preset={preset} values={draft} onChange={setDraft} disabled={saving} />
           </div>
 
           <DialogFooter className="border-t border-border/50 bg-muted/25 px-6 py-3.5 sm:items-center sm:justify-between">
@@ -308,6 +321,20 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
     </div>
   );
 }
+
+/** Ширина вікна за кількістю стовпчиків; клас мусить бути літералом. */
+const DIALOG_WIDTH: Record<number, string> = {
+  1: "sm:max-w-[560px]",
+  2: "sm:max-w-[880px]",
+  3: "sm:max-w-[1232px]",
+};
+
+/** Стовпчики картки в ряд. */
+const CARD_GRID: Record<number, string> = {
+  1: "",
+  2: "sm:grid-cols-2",
+  3: "sm:grid-cols-2 xl:grid-cols-3",
+};
 
 /** Скільки клітинок у ряд стрічки: сітка Tailwind не читає число з пропса. */
 const HERO_COLUMNS: Record<number, string> = {

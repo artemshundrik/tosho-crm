@@ -1,13 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { describe, expect, it } from "vitest";
 
-import { PrintSpecFields, getPrintSpecSections } from "./PrintSpecFields";
+import { PrintSpecFields } from "./PrintSpecFields";
 import {
   PRINT_SPEC_DIARY,
-  PRINT_SPEC_FLYER,
   createEmptyPrintSpecValues,
+  getPrintSpecSections,
   type PrintSpecValues,
 } from "@/lib/printSpec";
 
@@ -24,11 +24,12 @@ function Harness() {
   return <PrintSpecFields preset={PRINT_SPEC_DIARY} values={values} onChange={setValues} />;
 }
 
+/** Чип варіанта всередині групи поля: імена варіантів повторюються між полями («Стандартне»). */
+const chip = (fieldLabel: string, optionLabel: string) =>
+  within(screen.getByRole("group", { name: fieldLabel })).getByRole("button", { name: optionLabel });
+
 const pick = async (user: ReturnType<typeof userEvent.setup>, fieldLabel: string, optionLabel: string) => {
-  const label = screen.getByText(fieldLabel);
-  const trigger = label.parentElement?.querySelector("button");
-  await user.click(trigger as HTMLElement);
-  await user.click(await screen.findByRole("button", { name: optionLabel }));
+  await user.click(chip(fieldLabel, optionLabel));
 };
 
 describe("параметри щоденника", () => {
@@ -74,24 +75,24 @@ describe("параметри щоденника", () => {
 });
 
 /**
- * Лічильники рейки розділів (варіант А). Вони показують «3/5», і знаменник тут
+ * Лічильники розділів і стовпчиків. Вони показують «3/5», і знаменник тут
  * не сталий: умовні поля з'являються й зникають від вибору. Якщо рахувати ВСІ
  * поля пресету, щоденник показував би «5 з 33» назавжди — тобто прогрес, який
  * ніколи не дійде до кінця, хоч усе заповнено.
  */
-describe("розділи для рейки", () => {
+describe("лічильники розділів", () => {
   it("знаменник рахує лише видимі поля й росте разом із розгалуженням", () => {
     const values = createEmptyPrintSpecValues(PRINT_SPEC_DIARY);
 
     const before = getPrintSpecSections(PRINT_SPEC_DIARY, values);
     const cover = before.find((section) => section.title === "Обкладинка");
-    expect(cover?.fields.length).toBe(3);
+    expect(cover?.fields.length).toBe(4); // + формат, що тепер у «Обкладинці»
     expect(cover?.filled).toBe(0);
 
     // Шкірзамінник відкриває ще два питання — і знаменник мусить це врахувати.
     const after = getPrintSpecSections(PRINT_SPEC_DIARY, { ...values, coverMaterial: "leatherette" });
     const coverAfter = after.find((section) => section.title === "Обкладинка");
-    expect(coverAfter?.fields.length).toBe(5);
+    expect(coverAfter?.fields.length).toBe(6);
     expect(coverAfter?.filled).toBe(1);
   });
 
@@ -102,9 +103,55 @@ describe("розділи для рейки", () => {
     expect(titles).toContain("Ляссе");
     expect(titles.length).toBe(PRINT_SPEC_DIARY.sections.length);
   });
+});
 
-  it("у листівки розділів менше трьох — рейка там не малюється", () => {
-    const sections = getPrintSpecSections(PRINT_SPEC_FLYER, createEmptyPrintSpecValues(PRINT_SPEC_FLYER));
-    expect(sections.length).toBe(2);
+/** Поведінка чипів: кожен варіант видно одразу, без випадного списку. */
+describe("чипи варіантів", () => {
+  it("клік ставить значення, повторний знімає", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const a5 = () => chip("Формат", "А5");
+
+    expect(a5().getAttribute("aria-pressed")).toBe("false");
+    await user.click(a5());
+    expect(a5().getAttribute("aria-pressed")).toBe("true");
+    expect(chip("Формат", "А4").getAttribute("aria-pressed")).toBe("false");
+    await user.click(a5());
+    expect(a5().getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("«Інше…» відкриває поле вводу, повторний клік ховає його", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    expect(screen.queryByPlaceholderText("Вкажіть своє")).toBeNull();
+    await user.click(chip("Формат", "Інше…"));
+    const input = screen.getByPlaceholderText("Вкажіть своє");
+    await user.type(input, "150 × 200");
+    expect((input as HTMLInputElement).value).toBe("150 × 200");
+    await user.click(chip("Формат", "Інше…"));
+    expect(screen.queryByPlaceholderText("Вкажіть своє")).toBeNull();
+  });
+
+  it("дочірнє поле з'являється під батьківським, у тому ж блоці", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.click(chip("Матеріал", "Шкірзамінник"));
+    const parent = screen.getByRole("group", { name: "Матеріал" }).closest("div.min-w-0")?.parentElement as HTMLElement;
+    expect(within(parent).getByText("Шкірзамінник — який саме")).toBeTruthy();
+  });
+
+  it("«кілька зі списку» — чипи, що вмикаються незалежно", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.click(chip("Матеріал", "Шкірзамінник"));
+    await user.click(chip("Нанесення", "Лак"));
+    await user.click(chip("Нанесення", "Тиснення"));
+    expect(chip("Нанесення", "Лак").getAttribute("aria-pressed")).toBe("true");
+    expect(chip("Нанесення", "Тиснення").getAttribute("aria-pressed")).toBe("true");
+    await user.click(chip("Нанесення", "Лак"));
+    expect(chip("Нанесення", "Лак").getAttribute("aria-pressed")).toBe("false");
   });
 });

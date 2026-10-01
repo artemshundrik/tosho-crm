@@ -70,6 +70,8 @@ export type PrintSpecField = {
   hint?: string;
 };
 
+export type PrintSpecColumn = { title: string; sections: string[] };
+
 export type PrintSpecPreset = {
   key: string;
   label: string;
@@ -89,6 +91,11 @@ export type PrintSpecPreset = {
    * хто прораховує, ще не звірені — правити тут, без коду.
    */
   summary?: string[];
+  /**
+   * Стовпчики вікна й картки: стовпчик — частина виробу, що складається з
+   * одного чи кількох розділів. Без `columns` — один стовпчик з усіма розділами.
+   */
+  columns?: PrintSpecColumn[];
 };
 
 /** Один підписаний розмір у полі `sizeRows`. Рядки — бо поле може бути порожнім. */
@@ -135,6 +142,11 @@ export const PRINT_SPEC_CALENDAR_QUARTERLY: PrintSpecPreset = {
   key: "print_calendar_quarterly",
   label: "Квартальний календар",
   sections: ["Основи", "Календарна сітка", "Матеріал і друк", "Кріплення"],
+  columns: [
+    { title: "Основи", sections: ["Основи", "Матеріал і друк"] },
+    { title: "Календарна сітка", sections: ["Календарна сітка"] },
+    { title: "Кріплення", sections: ["Кріплення"] },
+  ],
   summary: ["baseSizes", "material", "printMethod", "mount"],
   fields: [
     {
@@ -286,6 +298,11 @@ export const PRINT_SPEC_CALENDAR_FLIP: PrintSpecPreset = {
   key: "print_calendar_flip",
   label: "Перекидний календар",
   sections: ["Формат", "Обкладинка і підложка", "Блок", "Оздоблення", "Кріплення"],
+  columns: [
+    { title: "Обкладинка й підложка", sections: ["Формат", "Обкладинка і підложка"] },
+    { title: "Блок", sections: ["Блок"] },
+    { title: "Оздоблення й кріплення", sections: ["Оздоблення", "Кріплення"] },
+  ],
   summary: ["format", "blockPages", "coverPaper", "blockPrint"],
   fields: [
     {
@@ -464,6 +481,11 @@ export const PRINT_SPEC_CALENDAR_HOUSE: PrintSpecPreset = {
   key: "print_calendar_house",
   label: "Календар-хатинка",
   sections: ["Основа", "Блок", "Кріплення"],
+  columns: [
+    { title: "Основа", sections: ["Основа"] },
+    { title: "Блок", sections: ["Блок"] },
+    { title: "Кріплення", sections: ["Кріплення"] },
+  ],
   summary: ["gridSize", "sheets", "blockPaper", "blockPrint"],
   fields: [
     {
@@ -579,14 +601,19 @@ export const PRINT_SPEC_CALENDAR_HOUSE: PrintSpecPreset = {
 export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
   key: "print_brochure",
   label: "Брошура",
-  sections: ["Формат", "Папір", "Друк", "Скріплення"],
+  sections: ["Обкладинка", "Блок", "Скріплення"],
+  columns: [
+    { title: "Обкладинка", sections: ["Обкладинка"] },
+    { title: "Блок", sections: ["Блок"] },
+    { title: "Скріплення", sections: ["Скріплення"] },
+  ],
   summary: ["format", "pageCount", "coverPaper", "binding"],
   fields: [
     {
       id: "format",
       label: "Формат (Ш×В)",
       type: "single",
-      section: "Формат",
+      section: "Обкладинка",
       options: [
         { value: "a6", label: "А6" },
         { value: "a5", label: "А5" },
@@ -598,7 +625,7 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       id: "pageCount",
       label: "Сторінок + обкладинка",
       type: "number",
-      section: "Формат",
+      section: "Блок",
       unit: "стор",
       // Підказка, а не заборона: правило виробниче, і хто рахує — той його знає.
       // Жорстку перевірку сюди не ставимо з тієї ж причини, що й правило за
@@ -609,7 +636,7 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       id: "coverPaper",
       label: "Папір обкладинки",
       type: "single",
-      section: "Папір",
+      section: "Обкладинка",
       options: [
         { value: "coated_200", label: "Крейда 200 г/м²" },
         { value: "coated_250", label: "Крейда 250 г/м²" },
@@ -623,7 +650,7 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       id: "blockPaper",
       label: "Папір блоку",
       type: "single",
-      section: "Папір",
+      section: "Блок",
       options: [
         { value: "coated_90", label: "Крейда 90 г/м²" },
         { value: "coated_115", label: "Крейда 115 г/м²" },
@@ -643,7 +670,7 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       id: "coverPrint",
       label: "Друк обкладинки",
       type: "single",
-      section: "Друк",
+      section: "Обкладинка",
       options: [
         { value: "4_0", label: "4+0" },
         { value: "4_4", label: "4+4" },
@@ -654,7 +681,7 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       id: "blockPrint",
       label: "Друк блоку",
       type: "single",
-      section: "Друк",
+      section: "Блок",
       options: [
         { value: "4_0", label: "4+0" },
         { value: "4_4", label: "4+4" },
@@ -665,7 +692,7 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       id: "lamination",
       label: "Ламінація",
       type: "single",
-      section: "Друк",
+      section: "Обкладинка",
       options: [
         { value: "none", label: "Без ламінації" },
         { value: "matte", label: "Мат" },
@@ -720,6 +747,9 @@ export const PRINT_SPEC_FLYER: PrintSpecPreset = {
   key: "print_flyer",
   label: "Листівка",
   sections: ["Формат", "Папір"],
+  columns: [
+    { title: "Аркуш", sections: ["Формат", "Папір"] },
+  ],
   summary: ["format", "paper", "lamination"],
   fields: [
     {
@@ -732,7 +762,7 @@ export const PRINT_SPEC_FLYER: PrintSpecPreset = {
         { value: "a6", label: "А6 (105×148)" },
         { value: "a5", label: "А5 (148×210)" },
         { value: "a4", label: "А4 (210×297)" },
-        { value: "a3", label: "А3 (297×320)" },
+        { value: "a3", label: "А3 (297×420)" },
       ],
       allowCustom: true,
     },
@@ -798,6 +828,11 @@ export const PRINT_SPEC_CERTIFICATE: PrintSpecPreset = {
   key: "print_certificate",
   label: "Сертифікат",
   sections: ["Формат", "Матеріал", "Друк", "Оздоблення"],
+  columns: [
+    { title: "Аркуш", sections: ["Формат", "Матеріал"] },
+    { title: "Друк", sections: ["Друк"] },
+    { title: "Оздоблення", sections: ["Оздоблення"] },
+  ],
   summary: ["formatType", "material", "printMethod", "embossing"],
   fields: [
     {
@@ -1016,14 +1051,19 @@ export const PRINT_SPEC_CERTIFICATE: PrintSpecPreset = {
 export const PRINT_SPEC_DIARY: PrintSpecPreset = {
   key: "print_diary",
   label: "Щоденник",
-  sections: ["Загальне", "Обкладинка", "Блок", "Кути й торець", "Вставки", "Ляссе", "Резинка й шильда", "Пакування"],
+  sections: ["Обкладинка", "Блок", "Кути й торець", "Вставки", "Ляссе", "Резинка й шильда", "Решта"],
+  columns: [
+    { title: "Обкладинка", sections: ["Обкладинка"] },
+    { title: "Блок", sections: ["Блок", "Кути й торець"] },
+    { title: "Комплектуючі", sections: ["Вставки", "Ляссе", "Резинка й шильда", "Решта"] },
+  ],
   summary: ["format", "coverMaterial", "blockPages", "layout"],
   fields: [
     {
       id: "format",
       label: "Формат",
       type: "single",
-      section: "Загальне",
+      section: "Обкладинка",
       options: [
         { value: "a5", label: "А5" },
         { value: "a4", label: "А4" },
@@ -1036,7 +1076,7 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
       id: "designNeeded",
       label: "Дизайн",
       type: "single",
-      section: "Загальне",
+      section: "Решта",
       options: [
         { value: "by_us", label: "Розробляємо ми" },
         { value: "by_customer", label: "Макет від замовника" },
@@ -1365,7 +1405,7 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
       id: "packing",
       label: "Спосіб пакування",
       type: "single",
-      section: "Пакування",
+      section: "Решта",
       options: [
         { value: "standard", label: "Стандартне" },
         { value: "split", label: "Сплітовка" },
@@ -1569,6 +1609,59 @@ export function isPrintSpecFieldFilled(field: PrintSpecField, values: PrintSpecV
     return asStringValue(values[customValueKey(field.id)] ?? null).trim() !== "";
   }
   return value !== "";
+}
+
+export type PrintSpecSectionInfo = {
+  title: string;
+  fields: PrintSpecField[];
+  /** На скільки полів розділу вже відповіли. */
+  filled: number;
+};
+
+/**
+ * Видимі розділи з лічильниками — одне джерело і для форми, і для картки.
+ *
+ * Розділ без жодного видимого поля не існує: у щоденнику «Ляссе» без вибраного
+ * виду ляссе — це один порожній заголовок.
+ */
+export function getPrintSpecSections(preset: PrintSpecPreset, values: PrintSpecValues): PrintSpecSectionInfo[] {
+  return preset.sections
+    .map((title) => {
+      const fields = preset.fields.filter(
+        (field) => field.section === title && isPrintSpecFieldVisible(field, values)
+      );
+      return { title, fields, filled: fields.filter((field) => isPrintSpecFieldFilled(field, values)).length };
+    })
+    .filter((section) => section.fields.length > 0);
+}
+
+export type PrintSpecColumnInfo = {
+  title: string;
+  sections: PrintSpecSectionInfo[];
+  /** Видимих полів у стовпчику. */
+  total: number;
+  /** На скільки з них уже відповіли. */
+  filled: number;
+};
+
+/**
+ * Стовпчики вікна й картки — лише з видимими полями; стовпчик без жодного
+ * видимого поля не існує. Без `columns` у пресеті — один стовпчик з усіма розділами.
+ */
+export function getPrintSpecColumns(preset: PrintSpecPreset, values: PrintSpecValues): PrintSpecColumnInfo[] {
+  const sections = getPrintSpecSections(preset, values);
+  const columns: PrintSpecColumn[] = preset.columns ?? [{ title: preset.label, sections: preset.sections }];
+  return columns
+    .map((column) => {
+      const own = sections.filter((section) => column.sections.includes(section.title));
+      return {
+        title: column.title,
+        sections: own,
+        total: own.reduce((sum, section) => sum + section.fields.length, 0),
+        filled: own.reduce((sum, section) => sum + section.filled, 0),
+      };
+    })
+    .filter((column) => column.total > 0);
 }
 
 /**
