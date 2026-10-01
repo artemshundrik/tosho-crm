@@ -1,8 +1,9 @@
 import * as React from "react";
-import { Check } from "@/components/icons/appIcons";
+import { Check, Info } from "@/components/icons/appIcons";
 
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { pluralUk } from "@/lib/lastSeen";
 import {
   CUSTOM_OPTION_VALUE,
@@ -69,6 +70,23 @@ const OptionChip: React.FC<{
   </button>
 );
 
+/** Значок «і» з підказкою: наведення, фокус із клавіатури й дотик відкривають текст. */
+export const InfoHint: React.FC<{ label: string; text: string; className?: string }> = ({ label, text, className }) => (
+  <HoverTip asChild label={text}>
+    <button
+      type="button"
+      aria-label={`Підказка: ${label}`}
+      className={cn(
+        "inline-grid h-4 w-4 shrink-0 place-items-center self-center rounded-full text-muted-foreground/60 transition-colors hover:text-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        className
+      )}
+    >
+      <Info className="h-3.5 w-3.5" />
+    </button>
+  </HoverTip>
+);
+
 const FieldShell: React.FC<{
   label: string;
   hint?: string;
@@ -79,6 +97,7 @@ const FieldShell: React.FC<{
   <div className={cn("min-w-0 space-y-1.5", change && "-mx-2 rounded-lg bg-warning-soft/50 px-2 py-1.5")}>
     <div className="flex items-baseline gap-2 text-xs font-medium leading-4 text-muted-foreground">
       <span>{label}</span>
+      {hint ? <InfoHint label={label} text={hint} /> : null}
       {change ? (
         <>
           <span className="min-w-0 truncate font-normal text-warning-foreground">було: {change.was || "—"}</span>
@@ -93,7 +112,6 @@ const FieldShell: React.FC<{
       ) : null}
     </div>
     {children}
-    {hint ? <div className="text-xs text-muted-foreground/80">{hint}</div> : null}
   </div>
 );
 
@@ -122,8 +140,15 @@ export type PrintSpecFieldsProps = {
 /** Скільки стовпчиків у ряд: клас мусить бути літералом, Tailwind не читає число з пропса. */
 const LANE_GRID: Record<number, string> = {
   1: "",
-  2: "@xl:grid-cols-2",
-  3: "@xl:grid-cols-2 @4xl:grid-cols-3",
+  2: "@xl:h-full @xl:grid-cols-2 @xl:grid-rows-[minmax(0,1fr)]",
+  3: "@xl:grid-cols-2 @4xl:h-full @4xl:grid-cols-3 @4xl:grid-rows-[minmax(0,1fr)]",
+};
+
+/** Стовпчик гортається сам лише тоді, коли всі стоять в один ряд; інакше гортається тіло вікна. */
+const LANE_SCROLL: Record<number, string> = {
+  1: "",
+  2: "@xl:min-h-0 @xl:overflow-y-auto @xl:overscroll-contain",
+  3: "@4xl:min-h-0 @4xl:overflow-y-auto @4xl:overscroll-contain",
 };
 
 export function PrintSpecFields({ preset, values, onChange, disabled, baseline }: PrintSpecFieldsProps) {
@@ -362,9 +387,12 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
       <section
         key={column.title}
         aria-label={column.title}
-        className="min-w-0 space-y-4 rounded-xl border border-border/50 bg-background p-4"
+        className={cn(
+          "min-w-0 rounded-xl border border-border/50 bg-background",
+          LANE_SCROLL[Math.min(columns.length, 3)]
+        )}
       >
-        <div className="space-y-1.5 border-b border-border/40 pb-3">
+        <div className="sticky top-0 z-10 space-y-1.5 border-b border-border/40 bg-background px-4 pb-3 pt-4">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-foreground">{column.title}</h3>
             <span className="text-xs font-medium tabular-nums text-foreground">
@@ -378,6 +406,7 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
           </div>
           {summary ? <div className="line-clamp-2 text-xs leading-[18px] text-muted-foreground">{summary}</div> : null}
         </div>
+        <div className="space-y-4 p-4">
         {column.sections.map((section) => (
           <div key={section.title} className="space-y-3">
             {/* Підзаголовок — лише коли розділ не збігається зі стовпчиком: інакше це дубль заголовка. */}
@@ -389,13 +418,14 @@ export function PrintSpecFields({ preset, values, onChange, disabled, baseline }
             {renderTree(section.fields, null)}
           </div>
         ))}
+        </div>
       </section>
     );
   };
 
   return (
-    <div className="@container">
-      <div className={cn("grid items-start gap-3.5", LANE_GRID[Math.min(columns.length, 3)])}>
+    <div className="@container h-full">
+      <div className={cn("grid gap-3.5", LANE_GRID[Math.min(columns.length, 3)])}>
         {columns.map(renderLane)}
       </div>
     </div>

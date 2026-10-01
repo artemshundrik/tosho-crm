@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PrintSpecFields } from "@/components/quotes/PrintSpecFields";
+import { InfoHint, PrintSpecFields } from "@/components/quotes/PrintSpecFields";
 import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 import { readQuoteItemPrintSpec } from "@/lib/printSpecLegacy";
 import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
@@ -358,6 +358,12 @@ export function PrintSpecPanel({
           вужчий за ~380 px ламає чипи на два рядки без потреби.
         */}
         <DialogContent
+          // Перший, кого б сфокусувало вікно, — значок «і» в заголовку, і підказка
+          // відкривалась би сама. Фокус лишаємо на самому вікні.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            (event.target as HTMLElement).focus();
+          }}
           className={cn(
             "flex h-[min(88vh,46rem)] max-h-[88vh] flex-col overflow-hidden !gap-0 !p-0",
             DIALOG_WIDTH[Math.min(preset.columns?.length ?? 1, 3)]
@@ -370,11 +376,10 @@ export function PrintSpecPanel({
             <div className="min-w-0 flex-1">
               <DialogTitle className="flex flex-wrap items-center gap-2">
                 Параметри виробу · {preset.label}
+                <InfoHint label="Параметри виробу" text={DIALOG_HINT} />
                 {draftChangeCount > 0 ? <ChangesChip count={draftChangeCount} /> : null}
               </DialogTitle>
-              <DialogDescription>
-                Обмежень немає — якщо потрібного варіанта немає в списку, вибирайте «Інше…» і пишіть текстом.
-              </DialogDescription>
+              <DialogDescription className="sr-only">{DIALOG_HINT}</DialogDescription>
             </div>
             <span className="mr-8 hidden shrink-0 items-center gap-2.5 text-sm tabular-nums text-muted-foreground sm:flex">
               <span>
@@ -413,6 +418,8 @@ export function PrintSpecPanel({
     </div>
   );
 }
+
+const DIALOG_HINT = "Обмежень немає — якщо потрібного варіанта немає в списку, вибирайте «Інше…» і пишіть текстом.";
 
 /** Ширина вікна за кількістю стовпчиків; клас мусить бути літералом. */
 const DIALOG_WIDTH: Record<number, string> = {

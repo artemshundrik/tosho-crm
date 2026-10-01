@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { describe, expect, it } from "vitest";
@@ -54,7 +54,8 @@ describe("параметри щоденника", () => {
 
     await pick(user, "Матеріал", "Дизайнерський папір");
     expect(screen.getByText("Дизайнерський папір — назва")).toBeTruthy();
-    expect(screen.getByText("Дизайнерський папір — без ламінації")).toBeTruthy();
+    // Підказка гілки тепер під значком «і», тож перевіряємо саме його.
+    expect(screen.getByRole("button", { name: "Підказка: Оздоблення" })).toBeTruthy();
     expect(screen.queryByText("Друк і ламінація")).toBeNull();
   });
 
@@ -216,3 +217,29 @@ describe("параметри пакета", () => {
   });
 });
 
+
+/** Підказки поля живуть під значком «і»: у розкладці їх тексту немає, доки не наведуть чи не сфокусують. */
+describe("підказки під значком «і»", () => {
+  const HINT = "Нестандартний — «Інше» й розміри текстом";
+  const preset = PRINT_SPEC_DIARY;
+  const values = createEmptyPrintSpecValues(PRINT_SPEC_DIARY);
+
+  it("текст підказки не видно, а в кнопки-значка є aria-label", () => {
+    render(<PrintSpecFields preset={preset} values={values} onChange={() => {}} />);
+    expect(screen.queryByText(HINT)).toBeNull();
+    const button = screen.getByRole("button", { name: "Підказка: Формат" });
+    expect(button.getAttribute("type")).toBe("button");
+  });
+
+  it("наведення й фокус показують підказку", async () => {
+    render(<PrintSpecFields preset={preset} values={values} onChange={() => {}} />);
+    const button = screen.getByRole("button", { name: "Підказка: Формат" });
+
+    fireEvent.mouseEnter(button);
+    expect((await screen.findByRole("tooltip")).textContent).toContain(HINT);
+    fireEvent.mouseLeave(button);
+
+    fireEvent.focus(button);
+    expect((await screen.findByRole("tooltip")).textContent).toContain(HINT);
+  });
+});
