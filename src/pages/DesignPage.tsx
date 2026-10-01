@@ -72,6 +72,9 @@ import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
+import { listCustomerDesignTaskActivityRows, useCustomerQuoteIds } from "@/features/design/customerTaskRows";
+import { customerFilterKey, taskMatchesCustomerFilter, type CustomerFilterValue } from "@/lib/customerFilter";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanCardList, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard } from "@/components/kanban";
@@ -245,6 +248,7 @@ type DesignPageFiltersState = {
   statusFilter?: DesignStatus | "all";
   designerFilter?: string;
   managerFilter?: string;
+  customerFilter?: CustomerFilterValue | null;
   assigneeSpotlight?: string;
   completedPeriod?: DesignCompletedPeriod;
   cachedAt?: number;
@@ -1127,6 +1131,8 @@ export default function DesignPage() {
   const [managerFilter, setManagerFilter] = useState<string>(
     () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
   );
+  const [customerFilter, setCustomerFilter] = useState<CustomerFilterValue | null>(() => restoredFilters?.customerFilter ?? null);
+  const customerQuoteIds = useCustomerQuoteIds(effectiveTeamId, customerFilter);
   const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(
     () => (restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER) !== ALL_DESIGNERS_FILTER
   );
@@ -1725,6 +1731,8 @@ export default function DesignPage() {
       let nextHasMoreTasks = false;
       let limitedRows: DesignTaskListActivityRow[] = [];
 
+      // Задач одного замовника — десятки: з фільтром вантажимо їх усі, без сторінок.
+      const loadsAll = fetchAll || !!customerFilter;
       if (serverFilters.managerUserId) {
         const managerRowsResult = await listManagerDesignTaskActivityRows({
           teamId: effectiveTeamId,
@@ -1732,10 +1740,16 @@ export default function DesignPage() {
           status: serverFilters.status,
           offset,
           pageSize,
-          fetchAll,
+          fetchAll: loadsAll,
         });
         limitedRows = managerRowsResult.rows;
         nextHasMoreTasks = managerRowsResult.hasMore;
+      } else if (customerFilter) {
+        limitedRows = await listCustomerDesignTaskActivityRows({
+          teamId: effectiveTeamId,
+          customer: customerFilter,
+          status: serverFilters.status,
+        });
       } else {
         const fetchedRows: DesignTaskListActivityRow[] = [];
         let nextOffset = offset;
@@ -1780,7 +1794,7 @@ export default function DesignPage() {
        * додаємо ДО спільного мапінгу, щоб вони пройшли те саме збагачення
        * замовниками, номерами й логотипами, що й решта.
        */
-      if (!append) {
+      if (!append && !customerFilter) {
         const activeStatuses = serverFilters.status
           ? (ACTIVE_DESIGN_STATUSES as string[]).includes(serverFilters.status)
             ? [serverFilters.status]
@@ -1813,7 +1827,7 @@ export default function DesignPage() {
         }
       }
 
-      setHasMoreTasks(fetchAll ? false : nextHasMoreTasks);
+      setHasMoreTasks(loadsAll ? false : nextHasMoreTasks);
       if (!append) {
         fullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
       }
@@ -2261,6 +2275,7 @@ export default function DesignPage() {
       setRefreshing(false);
     }
   }, [
+    customerFilter,
     effectiveTeamId,
     isManagerUser,
     managerFilter,
@@ -2301,13 +2316,13 @@ export default function DesignPage() {
     // client-side over `tasks`, so the full dataset only needs to be fetched
     // once per filter set. Including the query here made every keystroke a fresh
     // full-table fetch. loadTasks() dedups on this key, so repeats are no-ops.
-    const fullFetchKey = `search-full:${effectiveTeamId ?? ""}:${statusFilter}:${managerFilter}:${isManagerUser ? userId ?? "" : ""}`;
+    const fullFetchKey = `search-full:${effectiveTeamId ?? ""}:${statusFilter}:${managerFilter}:${customerFilterKey(customerFilter)}:${isManagerUser ? userId ?? "" : ""}`;
     if (!deferredSearch.trim()) return;
     if (!effectiveTeamId) return;
     if (loading || refreshing) return;
     if (!hasMoreTasks && tasks.length < DESIGN_PAGE_CACHE_LIMIT) return;
     void loadTasks({ force: true, fetchAll: true, fullFetchKey });
-  }, [deferredSearch, effectiveTeamId, hasMoreTasks, isManagerUser, loadTasks, loading, managerFilter, refreshing, statusFilter, tasks.length, userId]);
+  }, [customerFilter, deferredSearch, effectiveTeamId, hasMoreTasks, isManagerUser, loadTasks, loading, managerFilter, refreshing, statusFilter, tasks.length, userId]);
 
   useEffect(() => {
     if (!effectiveTeamId) return;
@@ -2629,23 +2644,27 @@ export default function DesignPage() {
         return false;
       }
 
+      if (customerFilter && !taskMatchesCustomerFilter(task, customerFilter, customerQuoteIds)) return false;
+
       if (!query) return true;
 
       return (indexed?.haystack ?? "").includes(query);
     });
-  }, [contentView, deferredSearch, effectiveDesignerFilter, isManagerUser, managerFilter, statusFilter, taskSearchIndex, visibleTasks]);
+  }, [contentView, customerFilter, customerQuoteIds, deferredSearch, effectiveDesignerFilter, isManagerUser, managerFilter, statusFilter, taskSearchIndex, visibleTasks]);
 
   const hasActiveFilters =
     search.trim().length > 0 ||
     statusFilter !== "all" ||
     effectiveDesignerFilter !== ALL_DESIGNERS_FILTER ||
-    (!isManagerUser && managerFilter !== ALL_MANAGERS_FILTER);
+    (!isManagerUser && managerFilter !== ALL_MANAGERS_FILTER) ||
+    customerFilter !== null;
 
   const clearFilters = useCallback(() => {
     setSearch("");
     setStatusFilter("all");
     setDesignerFilter(ALL_DESIGNERS_FILTER);
     setManagerFilter(ALL_MANAGERS_FILTER);
+    setCustomerFilter(null);
     // Re-arm the role-appropriate defaults (designer → self, manager → self if
     // they own tasks) instead of hardcoding a stale "managers only → self" rule.
     setDefaultDesignerFilterApplied(false);
@@ -2661,6 +2680,7 @@ export default function DesignPage() {
       statusFilter,
       designerFilter,
       managerFilter,
+      customerFilter,
       assigneeSpotlight,
       completedPeriod,
       cachedAt: Date.now(),
@@ -2673,6 +2693,7 @@ export default function DesignPage() {
     statusFilter,
     designerFilter,
     managerFilter,
+    customerFilter,
     assigneeSpotlight,
     completedPeriod,
   ]);
@@ -4818,7 +4839,8 @@ export default function DesignPage() {
         mobileFilterCount={
           (statusFilter !== "all" ? 1 : 0) +
           (designerFilter !== ALL_DESIGNERS_FILTER ? 1 : 0) +
-          (managerFilter !== ALL_MANAGERS_FILTER ? 1 : 0)
+          (managerFilter !== ALL_MANAGERS_FILTER ? 1 : 0) +
+          (customerFilter ? 1 : 0)
         }
         mobileViewSwitch={
           <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full")}>
@@ -5010,7 +5032,7 @@ export default function DesignPage() {
                 ]}
               />
             )}
-
+            <CustomerFilterSelect teamId={effectiveTeamId} value={customerFilter} onChange={setCustomerFilter} />
           </>
         }
         meta={
@@ -5041,6 +5063,8 @@ export default function DesignPage() {
       loading,
       managerFilter,
       managerFilterOptions,
+      customerFilter,
+      effectiveTeamId,
       refreshing,
       renderDesignerFilterValue,
       renderManagerFilterValue,
