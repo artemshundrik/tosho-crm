@@ -197,6 +197,7 @@ import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/m
 import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
 import { isOffBoardStatus } from "@/lib/kanbanBoards";
+import { computeQuoteListTotal } from "@/features/quotes/quotes-page/quoteListTotal";
 import { QUOTES_COLUMN_WIDTH } from "@/lib/kanbanColumnWidth";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { getCurrentUserId } from "@/lib/currentUser";
@@ -3132,6 +3133,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             imageUrl: primaryProduct.imageUrl,
             zoomImageUrl: primaryProduct.zoomImageUrl,
             products,
+            listTotal: computeQuoteListTotal(
+              quoteItems,
+              [...quoteItems.flatMap((item) => runsByItemId.get(item.id) ?? []), ...(sharedRunsByQuoteId.get(quoteId) ?? [])]
+            ),
           };
         });
 
@@ -5568,11 +5573,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           })()}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-right text-sm tabular-nums">
-                          {typeof row.total === "number" && row.total > 0 ? (
-                            formatMoney(row.total)
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
+                          {(() => {
+                            const preview = kanbanProductByQuoteId[row.id];
+                            if (preview?.listTotal === undefined && kanbanPreviewsLoading) {
+                              return <Skeleton className="ml-auto h-4 w-16" />;
+                            }
+                            const total = preview?.listTotal ?? null;
+                            if (!total) return <span className="text-muted-foreground">—</span>;
+                            return total.partial ? (
+                              <span title="Кілька тиражів, клієнт ще не обрав">від {formatMoney(total.amount)}</span>
+                            ) : (
+                              formatMoney(total.amount)
+                            );
+                          })()}
                         </TableCell>
                         {/*
                           СТАТУС — БЕЗ ЗАЛИТОЇ ПІГУЛКИ. Рядок мав дві кольорові

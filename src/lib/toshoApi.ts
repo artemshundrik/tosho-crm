@@ -110,6 +110,8 @@ export type QuoteItemPreviewRow = {
   unit?: string | null;
   attachment?: unknown;
   catalog_model_id?: string | null;
+  unit_price?: number | null;
+  line_total?: number | null;
 };
 
 export type QuoteRunPreviewRow = {
@@ -118,6 +120,14 @@ export type QuoteRunPreviewRow = {
   quote_item_id?: string | null;
   quantity?: number | null;
   created_at?: string | null;
+  unit_price_model?: number | null;
+  unit_price_print?: number | null;
+  logistics_cost?: number | null;
+  markup_rate?: number | null;
+  manager_rate?: number | null;
+  fixed_cost_rate?: number | null;
+  vat_rate?: number | null;
+  is_approved?: boolean | null;
 };
 
 export type CatalogModelLookupRow = {
@@ -2268,8 +2278,8 @@ export async function listQuoteItemPreviewsForQuotes(params: {
     let query = quoteItemsTable
       .select(
         withMetadata
-          ? "id,quote_id,position,name,metadata,qty,unit,attachment,catalog_model_id"
-          : "id,quote_id,position,name,qty,unit,attachment,catalog_model_id"
+          ? "id,quote_id,position,name,metadata,qty,unit,attachment,catalog_model_id,unit_price,line_total"
+          : "id,quote_id,position,name,qty,unit,attachment,catalog_model_id,unit_price,line_total"
       )
       .in("quote_id", uniqueQuoteIds)
       .order("quote_id", { ascending: true })
@@ -2330,7 +2340,9 @@ export async function listQuoteRunPreviewsForQuotes(params: {
 
     const quoteRunsTable = supabase.schema("tosho").from("quote_item_runs") as unknown as QuoteRunsTable;
     return await quoteRunsTable
-      .select("id,quote_id,quote_item_id,quantity,created_at")
+      .select(
+        "id,quote_id,quote_item_id,quantity,created_at,unit_price_model,unit_price_print,logistics_cost,markup_rate,manager_rate,fixed_cost_rate,vat_rate,is_approved"
+      )
       .in("quote_id", ids)
       .order("quote_id", { ascending: true })
       .order("created_at", { ascending: true });
