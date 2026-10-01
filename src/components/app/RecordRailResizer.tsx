@@ -1,5 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
+import { readStoredWidth, writeStoredWidth } from "@/lib/storedWidth";
 
 /** Найвужча колонка обговорення — трохи вужча за стандартні 21.25rem. */
 const RAIL_MIN_REM = 18.75;
@@ -19,24 +20,6 @@ const GRIP_EDGE = 28;
  */
 const railWidthValue = (px: number) =>
   `clamp(${RAIL_MIN_REM}rem, ${Math.round(px)}px, 100cqw - ${MIDDLE_MIN_REM}rem)`;
-
-function readStoredWidth(key: string): number | null {
-  try {
-    const value = Number(window.localStorage.getItem(key));
-    return Number.isFinite(value) && value > 0 ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredWidth(key: string, px: number | null) {
-  try {
-    if (px === null) window.localStorage.removeItem(key);
-    else window.localStorage.setItem(key, String(Math.round(px)));
-  } catch {
-    // приватний режим — просто не запам'ятовуємо
-  }
-}
 
 type Bounds = { now: number; min: number; max: number };
 

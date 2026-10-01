@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeQuoteListTotal } from "./quoteListTotal";
+import { computeQuoteListBreakdown, computeQuoteListTotal } from "./quoteListTotal";
 
 // Собівартість 1000, накрутка 50 %, ставки нульові ⇒ ціна 1500.
 const run = (id: string, quantity: number, extra: Record<string, unknown> = {}) => ({
@@ -48,5 +48,28 @@ describe("computeQuoteListTotal", () => {
     const runs = [run("a", 100), run("b", 100, { quote_item_id: "i2" })];
     expect(computeQuoteListTotal(twoItems, runs)).toEqual({ amount: expect.closeTo(1500, 2), partial: false });
     expect(computeQuoteListTotal([{ ...twoItems[1] }], [run("b", 100, { quote_item_id: "i2" })])).toBeNull();
+  });
+
+  it("рядки по позиціях: погоджений тираж, «від» для кількох, відмовлена без ціни", () => {
+    const threeItems = [
+      { id: "i1", unit: "шт.", qty: 100, unit_price: 0, line_total: 0 },
+      { id: "i2", unit: "шт.", qty: 50, unit_price: 0, line_total: 0 },
+      { id: "i3", unit: "шт.", qty: 10, unit_price: 0, line_total: 0, is_approved: false },
+    ];
+    const runs = [
+      run("a", 100),
+      run("b", 200, { is_approved: true }),
+      run("c", 300, { quote_item_id: "i2" }),
+      run("d", 100, { quote_item_id: "i2" }),
+      run("e", 100, { quote_item_id: "i3" }),
+    ];
+    const { total, lines } = computeQuoteListBreakdown(threeItems, runs);
+    expect(lines.map((line) => line.id)).toEqual(["i1", "i2", "i3"]);
+    expect(lines[0]).toMatchObject({ declined: false, quantity: 200, partial: false, unit: "шт." });
+    expect(lines[0].amount).toBeCloseTo(3000, 2);
+    expect(lines[1]).toMatchObject({ declined: false, quantity: 100, partial: true });
+    expect(lines[1].amount).toBeCloseTo(1500, 2);
+    expect(lines[2]).toMatchObject({ declined: true, amount: null, quantity: null });
+    expect(total).toEqual({ amount: expect.closeTo(4500, 2), partial: true });
   });
 });

@@ -200,7 +200,12 @@ import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote"
 import { isOffBoardStatus } from "@/lib/kanbanBoards";
 import { listQuoteStatusCounts } from "@/lib/quoteStatusCounts";
 import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
-import { computeQuoteListTotal } from "@/features/quotes/quotes-page/quoteListTotal";
+import { computeQuoteListBreakdown } from "@/features/quotes/quotes-page/quoteListTotal";
+import { useQuotesScopeCache } from "@/features/quotes/quotes-page/useQuotesScopeCache";
+import { QuoteItemsCellContent, QuoteTotalCellContent } from "@/features/quotes/quotes-page/QuoteListCells";
+import { ResizableHead } from "@/features/quotes/quotes-page/ColumnResizeHandle";
+import { QuotesTableSkeleton } from "@/features/quotes/quotes-page/QuotesTableSkeleton";
+import { useQuotesTableColumns } from "@/features/quotes/quotes-page/useQuotesTableColumns";
 import { QUOTES_COLUMN_WIDTH } from "@/lib/kanbanColumnWidth";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { getCurrentUserId } from "@/lib/currentUser";
@@ -602,6 +607,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const effectiveStatus = status === "active" && (viewMode === "kanban" || isNarrowViewport) ? "all" : status;
   const neutralStatus = viewMode === "table" && !isNarrowViewport ? "active" : "all";
   const statusIsNeutral = effectiveStatus === neutralStatus;
+  /**
+   * Що саме тягнемо з сервера. Три підвкладки («На прорахунку», «Пораховано»,
+   * «На погодженні») — підмножини «Активних», тож вантажимо їх разом і ріжемо
+   * в браузері: перемикання між ними не чекає мережі.
+   */
+  const fetchStatus = (ACTIVE_QUOTE_STATUSES as readonly string[]).includes(effectiveStatus)
+    ? "active"
+    : effectiveStatus;
+  const scopeCacheEnabled = viewMode === "table" && !isNarrowViewport;
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
 
   const quotesKanbanAutoloadLockRef = useRef(false);
@@ -617,6 +631,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [kanbanPreviewsLoading, setKanbanPreviewsLoading] = useState(false);
   /** Лічильники статусів з бази за поточним менеджером і пошуком (не залежать від вкладки). */
   const [quoteStatusCounts, setQuoteStatusCounts] = useState<Record<string, number> | null>(null);
+  const quotesColumns = useQuotesTableColumns();
   const statusCountsRequestIdRef = useRef(0);
   const [kanbanPreviewVisibleCountByColumn, setKanbanPreviewVisibleCountByColumn] = useState<Record<string, number>>(
     () => Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
@@ -1406,6 +1421,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       });
   }, [managerFilter, search, teamId]);
 
+  const { rememberScope } = useQuotesScopeCache({
+    fetchStatus,
+    enabled: scopeCacheEnabled,
+    teamId,
+    managerFilter,
+    search,
+    rowsRef,
+    rowsSearchTerm,
+    membership: quoteMembershipByQuoteId,
+    hasMore: hasMoreQuotes,
+    fetchedMembershipIdsRef: fetchedQuoteMembershipIdsRef,
+    setRows,
+    setRowsSearchTerm,
+    setMembership: setQuoteMembershipByQuoteId,
+    setHasMore: setHasMoreQuotes,
+    setLoading,
+    setError,
+  });
+
   const loadQuotes = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     if (!teamId) return;
     if (options?.fetchAll && !options?.append && options.fullFetchKey && fullFetchCompletedKeyRef.current === options.fullFetchKey) {
@@ -1417,7 +1451,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (!append && !fetchAll) refreshQuoteStatusCounts();
     const basePageSize = append
       ? (viewMode === "kanban" ? QUOTES_KANBAN_PAGE_INCREMENT : QUOTES_TABLE_PAGE_INCREMENT)
-      : quotesFetchLimit;
+      : fetchStatus === "active"
+        ? Math.max(quotesFetchLimit, QUOTES_SEARCH_FETCH_PAGE_SIZE)
+        : quotesFetchLimit;
     const pageSize = Math.max(1, fetchAll ? QUOTES_SEARCH_FETCH_PAGE_SIZE : basePageSize);
     const offset = append ? rowsRef.current.length : 0;
     const isBlockingLoad = !append && rowsRef.current.length === 0;
@@ -1436,8 +1472,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         const data = await listQuotes({
           teamId,
           search,
-          status: effectiveStatus === "active" ? undefined : effectiveStatus,
-          statuses: effectiveStatus === "active" ? [...ACTIVE_QUOTE_STATUSES] : undefined,
+          status: fetchStatus === "active" ? undefined : fetchStatus,
+          statuses: fetchStatus === "active" ? [...ACTIVE_QUOTE_STATUSES] : undefined,
           managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
           limit: pageSize + 1,
           offset: nextOffset,
@@ -1462,7 +1498,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
        * архів. Завершені (approved/cancelled) лишаються пагінованими — саме
        * вони й забивали вікно (141 скасований на 248 усіх).
        */
-      if (!append && (!effectiveStatus || effectiveStatus === "all")) {
+      if (!append && (!fetchStatus || fetchStatus === "all")) {
         try {
           const activeRows = await listQuotes({
             teamId,
@@ -1563,6 +1599,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setRows(mergedRows);
       setRowsSearchTerm(search.trim().toLowerCase());
       setQuoteMembershipByQuoteId(nextMembershipByQuoteId);
+      rememberScope(
+        teamId,
+        managerFilter,
+        search,
+        fetchStatus,
+        mergedRows,
+        nextMembershipByQuoteId,
+        fetchAll ? false : nextHasMore
+      );
       setAttachmentCounts({});
 
       try {
@@ -1605,7 +1650,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         setRefreshing(false);
       }
     }
-  }, [cacheKey, effectiveStatus, managerFilter, quotesFetchLimit, refreshQuoteStatusCounts, search, teamId, viewMode]);
+  }, [cacheKey, fetchStatus, managerFilter, quotesFetchLimit, refreshQuoteStatusCounts, rememberScope, search, teamId, viewMode]);
 
   const loadQuoteSets = async () => {
     if (!teamId) return;
@@ -1706,11 +1751,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const id = window.setTimeout(() => {
       void loadQuotes({
         fetchAll: true,
-        fullFetchKey: `search:${teamId}:${effectiveStatus}:${search.trim().toLowerCase()}`,
+        fullFetchKey: `search:${teamId}:${fetchStatus}:${search.trim().toLowerCase()}`,
       });
     }, 350);
     return () => window.clearTimeout(id);
-  }, [hasMoreQuotes, loadQuotes, loading, refreshing, rows.length, search, teamId, effectiveStatus]);
+  }, [hasMoreQuotes, loadQuotes, loading, refreshing, rows.length, search, teamId, fetchStatus]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -3015,25 +3060,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       .map((row) => row.id)
       .filter(Boolean)
       .slice(0, previewsForTable ? QUOTES_TABLE_PREVIEW_LIMIT : undefined);
+    // Прев'ю НЕ чистимо при зміні вкладки: вони живуть за id прорахунку, і повернення
+    // на вкладку з кешу має показати товари й суми одразу, а не знову їх збирати.
     if (quoteIds.length === 0) {
-      setKanbanProductByQuoteId({});
-      fetchedKanbanPreviewQuoteIdsRef.current = new Set();
-      inflightKanbanPreviewQuoteIdsRef.current = new Set();
       setKanbanPreviewsLoading(false);
       return;
     }
 
-    const quoteIdSet = new Set(quoteIds);
-    setKanbanProductByQuoteId((current) => {
-      const next = Object.fromEntries(Object.entries(current).filter(([quoteId]) => quoteIdSet.has(quoteId)));
-      const currentKeys = Object.keys(current);
-      const nextKeys = Object.keys(next);
-      const hasSameKeys = currentKeys.length === nextKeys.length && currentKeys.every((quoteId) => quoteIdSet.has(quoteId));
-      return hasSameKeys ? current : next;
-    });
-    fetchedKanbanPreviewQuoteIdsRef.current = new Set(
-      Array.from(fetchedKanbanPreviewQuoteIdsRef.current).filter((quoteId) => quoteIdSet.has(quoteId))
-    );
     // Версія прорахунку в списку: змінилась — прев'ю застаріле, збираємо заново.
     const versionByQuoteId = new Map<string, string>();
     filteredAndSortedRows.forEach((row) => {
@@ -3044,7 +3077,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     // прорахунок не зміниться.
     const isPreviewWithoutTotal = (quoteId: string) => {
       const preview = kanbanProductByQuoteIdRef.current[quoteId];
-      return Boolean(preview) && preview.listTotal === undefined;
+      return Boolean(preview) && (preview.listTotal === undefined || preview.listLines === undefined);
     };
     const missingQuoteIds = quoteIds.filter(
       (quoteId) =>
@@ -3204,6 +3237,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           const products = quoteItems.map(toProductPreview);
           const primaryProduct = products[0] ?? toProductPreview(firstItem);
 
+          const breakdown = computeQuoteListBreakdown(
+            quoteItems,
+            [...quoteItems.flatMap((item) => runsByItemId.get(item.id) ?? []), ...(sharedRunsByQuoteId.get(quoteId) ?? [])]
+          );
+
           nextMap[quoteId] = {
             itemCount,
             itemName: primaryProduct.name,
@@ -3212,10 +3250,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             imageUrl: primaryProduct.imageUrl,
             zoomImageUrl: primaryProduct.zoomImageUrl,
             products,
-            listTotal: computeQuoteListTotal(
-              quoteItems,
-              [...quoteItems.flatMap((item) => runsByItemId.get(item.id) ?? []), ...(sharedRunsByQuoteId.get(quoteId) ?? [])]
-            ),
+            listTotal: breakdown.total,
+            listLines: breakdown.lines,
           };
         });
 
@@ -3225,10 +3261,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             kanbanPreviewVersionByQuoteIdRef.current[quoteId] = versionByQuoteId.get(quoteId) ?? "";
           });
           setKanbanProductByQuoteId((current) => {
-            const mergedMap = {
-              ...Object.fromEntries(Object.entries(current).filter(([quoteId]) => quoteIdSet.has(quoteId))),
-              ...nextMap,
-            };
+            const mergedMap = { ...current, ...nextMap };
+            const rowIdSet = new Set(rows.map((row) => row.id));
             try {
               sessionStorage.setItem(
                 cacheKey,
@@ -3236,7 +3270,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   rows,
                   attachmentCounts,
                   quoteMembershipEntries: Array.from(quoteMembershipByQuoteId.entries()),
-                  kanbanProductEntries: Object.entries(mergedMap),
+                  kanbanProductEntries: Object.entries(mergedMap).filter(([quoteId]) => rowIdSet.has(quoteId)),
                   kanbanProductVersions: { ...kanbanPreviewVersionByQuoteIdRef.current },
                   cachedAt: Date.now(),
                 })
@@ -5267,7 +5301,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 !skeletonOpaque && "opacity-0"
               )}
             >
-              <AppSectionLoader label="Завантаження прорахунків..." variant="table" />
+              {isNarrowViewport ? (
+                <AppSectionLoader label="Завантаження прорахунків..." variant="table" />
+              ) : (
+                <div ref={quotesColumns.containerRef}>
+                  <QuotesTableSkeleton />
+                </div>
+              )}
             </div>
           ) : error ? (
             <div className="p-12 text-center">
@@ -5471,7 +5511,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </div>
             ) : (
             /* overflow-x-auto знято: він був контейнером скролу й гасив липку шапку. */
-            <div>
+            <div ref={quotesColumns.containerRef}>
               <Table
                 variant="list"
                 size="md"
@@ -5493,7 +5533,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         aria-label="Вибрати всі"
                       />
                     </TableHead>
-                    <TableHead className="w-[124px]">
+                    <ResizableHead columnId="number" controller={quotesColumns}>
                       <button
                         type="button"
                         onClick={() => handleSort("number")}
@@ -5504,18 +5544,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           <ArrowUpDown className={cn("h-3.5 w-3.5 transition-transform", sortOrder === "asc" && "rotate-180")} />
                         )}
                       </button>
-                    </TableHead>
-                    <TableHead className="w-[172px]">
-                      <div className="flex items-center font-semibold">
-                        Замовник / Лід
-                      </div>
-                    </TableHead>
-                    <TableHead className="min-w-[160px]">Що рахуємо</TableHead>
-                    <TableHead className="w-[128px] !pr-6 text-right font-semibold">Сума</TableHead>
-                    <TableHead className="w-[140px] font-semibold">Статус</TableHead>
-                    <TableHead className="w-[100px] font-semibold">
-                      Дедлайн
-                    </TableHead>
+                    </ResizableHead>
+                    <ResizableHead columnId="customer" controller={quotesColumns} className="font-semibold" />
+                    <TableHead>Що рахуємо</TableHead>
+                    <ResizableHead columnId="total" controller={quotesColumns} className="!pr-6 text-right font-semibold" />
+                    <ResizableHead columnId="status" controller={quotesColumns} className="font-semibold" />
+                    <ResizableHead columnId="deadline" controller={quotesColumns} className="font-semibold" />
                     <TableHead className="w-[64px] font-semibold">
                       <div className="flex items-center justify-center">Менеджер</div>
                     </TableHead>
@@ -5629,66 +5663,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {(() => {
-                            const preview = kanbanProductByQuoteId[row.id];
-                            const name = preview?.itemName || row.title?.trim() || null;
-                            const extra = preview && preview.itemCount > 1 ? preview.itemCount - 1 : 0;
-                            const qty = preview?.qtyLabel && preview.qtyLabel !== "Не вказано" ? preview.qtyLabel : null;
-                            const TypeIcon = quoteTypeIcon(row.quote_type);
-                            const FallbackIcon = quoteTypeIcon("merch");
-                            return (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <div className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md border border-border/60 bg-secondary text-muted-foreground/60">
-                                  {preview?.imageUrl ? (
-                                    <img
-                                      src={preview.imageUrl}
-                                      alt=""
-                                      loading="lazy"
-                                      decoding="async"
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : FallbackIcon ? (
-                                    <FallbackIcon className="h-3.5 w-3.5" />
-                                  ) : null}
-                                </div>
-                                <span
-                                  className={cn("truncate text-sm", !name && "text-muted-foreground")}
-                                  title={preview?.itemNames?.join(", ") || name || undefined}
-                                >
-                                  {name ?? "—"}
-                                </span>
-                                {extra > 0 ? (
-                                  <span className="shrink-0 text-xs text-muted-foreground">+{extra}</span>
-                                ) : null}
-                                {qty ? (
-                                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{qty}</span>
-                                ) : null}
-                                {row.quote_type && row.quote_type !== "merch" ? (
-                                  <span className="inline-flex h-4 shrink-0 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-1.5 text-3xs font-semibold text-muted-foreground">
-                                    {TypeIcon ? <TypeIcon className="h-3 w-3" /> : null}
-                                    {quoteTypeLabel(row.quote_type)}
-                                  </span>
-                                ) : null}
-                              </div>
-                            );
-                          })()}
+                          <QuoteItemsCellContent
+                            quoteId={row.id}
+                            title={row.title}
+                            quoteType={row.quote_type}
+                            preview={kanbanProductByQuoteId[row.id]}
+                          />
                         </TableCell>
                         <TableCell className="whitespace-nowrap !pr-6 text-right text-sm tabular-nums">
-                          {(() => {
-                            const preview = kanbanProductByQuoteId[row.id];
-                            if (preview?.listTotal === undefined && kanbanPreviewsLoading) {
-                              return <Skeleton className="ml-auto h-4 w-16" />;
-                            }
-                            const total = preview?.listTotal ?? null;
-                            if (!total) return <span className="text-muted-foreground">—</span>;
-                            const exact = formatMoney(total.amount);
-                            const rounded = formatMoney(Math.round(total.amount));
-                            return total.partial ? (
-                              <span title={`від ${exact} · Кілька тиражів, клієнт ще не обрав`}>від {rounded}</span>
-                            ) : (
-                              <span title={exact}>{rounded}</span>
-                            );
-                          })()}
+                          <QuoteTotalCellContent
+                            preview={kanbanProductByQuoteId[row.id]}
+                            previewsLoading={kanbanPreviewsLoading}
+                          />
                         </TableCell>
                         {/*
                           СТАТУС — БЕЗ ЗАЛИТОЇ ПІГУЛКИ. Рядок мав дві кольорові

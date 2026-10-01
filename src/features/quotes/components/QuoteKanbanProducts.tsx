@@ -4,7 +4,7 @@ import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { QuoteListTotal } from "@/features/quotes/quotes-page/quoteListTotal";
+import type { QuoteListLine, QuoteListTotal } from "@/features/quotes/quotes-page/quoteListTotal";
 
 export type QuoteKanbanProduct = {
   id: string;
@@ -34,6 +34,8 @@ export type QuoteKanbanProductPreview = {
   products?: QuoteKanbanProduct[];
   /** Сума з тиражів для таблиці прорахунків; `null` — даних немає. */
   listTotal?: QuoteListTotal | null;
+  /** Рядки по позиціях для картки при наведенні в таблиці прорахунків. */
+  listLines?: QuoteListLine[];
 };
 
 /**
