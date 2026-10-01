@@ -1,4 +1,12 @@
-import { QuoteItemImprints, type QuoteItemMethodInput } from "./QuoteItemImprints";
+import * as React from "react";
+
+import { guessKindFromTitle } from "@/features/quotes/quote-wizard/catalogSuggestions";
+import type { QuoteItemMetadata } from "@/lib/printPackage";
+import type { CatalogType } from "@/types/catalog";
+
+import { ensureCatalogModel } from "./catalogModelBinding";
+import type { KindOption } from "./KindChip";
+import { QuoteItemImprints, type QuoteItemKindPicker, type QuoteItemMethodInput } from "./QuoteItemImprints";
 
 /**
  * Смуга нанесення в картці позиції — разом із умовою, за якої вона взагалі є.
@@ -16,6 +24,11 @@ import { QuoteItemImprints, type QuoteItemMethodInput } from "./QuoteItemImprint
  * У ПОЛІГРАФІЇ СМУГИ НЕМАЄ. Там нанесення не питають: оздоблення живе в
  * параметрах виробу (тиснення, лак, УФ), тож вид із власним пресетом виробу
  * цю секцію не показує зовсім.
+ *
+ * ПОЗИЦІЯ БЕЗ ВИДУ ТЕПЕР ТЕЖ МАЄ СМУГУ (REQ-324#p1) — із чипом виду попереду.
+ * Тут збирається все, що для цього треба: список видів каталогу, здогад із
+ * назви й прив'язка до каталогу з тим самим паспортом товару (фото, сайти,
+ * артикул), з яким модель заводить «Створити» у вікні нового прорахунку.
  */
 export function QuoteItemImprintsSection({
   teamId,
@@ -29,6 +42,8 @@ export function QuoteItemImprintsSection({
   color,
   imageUrl,
   specPreset,
+  catalogTypes,
+  metadata,
   disabled,
   onSaved,
 }: {
@@ -44,27 +59,60 @@ export function QuoteItemImprintsSection({
   imageUrl: string | null;
   /** `metadata.specPreset` моделі — вид, який ми виробляємо самі. */
   specPreset: string | null | undefined;
+  /** Каталог сторінки — з нього список видів для позиції без виду. */
+  catalogTypes: CatalogType[];
+  /** Метадані позиції — сайти постачальника для рядка каталогу. */
+  metadata: QuoteItemMetadata | null;
   disabled?: boolean;
   onSaved: () => void;
 }) {
-  if (!teamId || !kindId || specPreset) return null;
+  const kinds = React.useMemo<KindOption[]>(
+    () =>
+      catalogTypes.flatMap((type) =>
+        type.kinds.map((kind) => ({ kindId: kind.id, kindName: kind.name, typeId: type.id, typeName: type.name }))
+      ),
+    [catalogTypes]
+  );
+
+  if (!teamId || specPreset) return null;
+  // Без виду смуга — це питання «що за товар». Хто не може правити позицію,
+  // відповісти на нього не може, тож питання йому й не ставимо.
+  if (!kindId && (disabled || kinds.length === 0)) return null;
+
+  const name = itemTitle || modelLabel || "Позиція";
+  const kindPicker: QuoteItemKindPicker | undefined = kindId
+    ? undefined
+    : {
+        options: kinds,
+        guess: guessKindFromTitle(kinds, itemTitle),
+        bind: async (kind) => ({
+          catalog_type_id: kind.typeId,
+          catalog_kind_id: kind.kindId,
+          catalog_model_id: await ensureCatalogModel({
+            teamId,
+            kindId: kind.kindId,
+            // Лише справжня назва: модель «Позиція» в каталозі нікому не потрібна.
+            name: itemTitle ?? "",
+            imageUrl,
+            supplierUrl: metadata?.supplierUrl ?? null,
+            avantprintUrl: metadata?.avantprintUrl ?? null,
+            sku,
+          }),
+        }),
+      };
 
   return (
     <div className="mt-4 border-t border-border/50 pt-3">
       <QuoteItemImprints
         teamId={teamId}
         itemId={itemId}
-        kindId={kindId}
+        kindId={kindId ?? null}
         kindName={kindName}
-        product={{
-          name: itemTitle || modelLabel || "Позиція",
-          sku,
-          color,
-          imageUrl,
-        }}
+        product={{ name, sku, color, imageUrl }}
         methods={methods}
         disabled={disabled}
         onSaved={onSaved}
+        kindPicker={kindPicker}
       />
     </div>
   );

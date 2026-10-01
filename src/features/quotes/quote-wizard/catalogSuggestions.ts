@@ -218,8 +218,29 @@ const wordsOf = (value: string) =>
  * раніше: «Худі з кишенею» — це худі, а не кишеня. Синоніми («бейсболка» →
  * кепка) сюди не входять: не вгадали — людина клацне вид сама, і це чесніше
  * за впевнену помилку моделі.
+ *
+ * СКЛАДЕНІ СЛОВА (REQ-324#p3). Вид «Термо» не знаходив ані «Термокружку»,
+ * ані «Термостакан», ані «Термос»: основа «терм» — лише початок цих слів, а
+ * не їхня основа. Так само «Плед» не давав «Пледи», а «Ліхтарик» — «Ліхтарики»
+ * (у виду основа довша за саме слово). Тому однослівний вид ще й ПОЧИНАЄ
+ * слово назви — але обережно, бо початок слова збігається частіше, ніж слово:
+ * - основа виду щонайменше з чотирьох літер: «Поло» («пол») інакше знайшов би
+ *   «Поліетилен», а «Ніж» — «Ніжний»;
+ * - лише в перших двох словах назви, де стоїть сам товар: у «Килимок для миші
+ *   з подушкою» й «Опадомір з тримачем» вид не «Подушка» й не «Тримачі»;
+ * - збіг за початком — запасний: точний збіг основи перемагає його будь-де в
+ *   назві. «Термосумка» — це «Термосумки», а не «Термо», а «Плед-подушка» —
+ *   «Подушка», хоч «плед» і стоїть раніше.
+ * Прогнано на назвах позицій за чотири місяці (01.10.2026). Серед позицій без
+ * виду вид з'явився в десяти: «Термокружка», «Термостакан», «Термопляшка»,
+ * «Термочашка», «Плед», «Тримач для телефону», «Флісова жилетка»,
+ * «Шоколадна плитка». Серед позицій із видом нове правило дало ще 23 збіги,
+ * і всі — той самий вид, що поставила людина.
  */
-export function guessKindFromTitle(kinds: CatalogKindOption[], title: string | null | undefined): CatalogKindOption | null {
+export function guessKindFromTitle<K extends Pick<CatalogKindOption, "kindName">>(
+  kinds: K[],
+  title: string | null | undefined
+): K | null {
   const words = wordsOf(title ?? "");
   if (words.length === 0) return null;
   /*
@@ -234,19 +255,39 @@ export function guessKindFromTitle(kinds: CatalogKindOption[], title: string | n
   const stem = (word: string) => (word.length < 3 ? word : word.slice(0, word.length - 1));
   const titleStems = words.map(stem);
 
-  let best: { kind: CatalogKindOption; position: number; length: number } | null = null;
+  let best: { kind: K; position: number; exact: boolean; words: number; letters: number } | null = null;
   for (const kind of kinds) {
     const kindWords = wordsOf(kind.kindName);
     if (kindWords.length === 0) continue;
     const kindStems = kindWords.map(stem);
     // Усі слова виду мають стояти в назві підряд («Записна книжка»).
-    const position = titleStems.findIndex((_, index) =>
+    let position = titleStems.findIndex((_, index) =>
       kindStems.every((kindStem, offset) => titleStems[index + offset] === kindStem)
     );
-    if (position < 0) continue;
-    if (!best || position < best.position || (position === best.position && kindStems.length > best.length)) {
-      best = { kind, position, length: kindStems.length };
+    let exact = true;
+    if (position < 0 && kindStems.length === 1 && kindStems[0].length >= PREFIX_MIN_STEM) {
+      const prefix = kindStems[0];
+      position = words.slice(0, PREFIX_TITLE_WORDS).findIndex((word) => word.startsWith(prefix));
+      exact = false;
     }
+    if (position < 0) continue;
+    const candidate = { kind, position, exact, words: kindStems.length, letters: kindStems.join("").length };
+    if (!best || isBetterKindMatch(candidate, best)) best = candidate;
   }
   return best?.kind ?? null;
+}
+
+/** Основа однослівного виду, коротша за це, за початком слова не шукається. */
+const PREFIX_MIN_STEM = 4;
+/** За початком слова шукаємо лише в перших словах назви — там стоїть сам товар. */
+const PREFIX_TITLE_WORDS = 2;
+
+type KindMatch = { position: number; exact: boolean; words: number; letters: number };
+
+/** Точний збіг основи → раніше в назві → більше слів виду → довша основа. */
+function isBetterKindMatch(candidate: KindMatch, best: KindMatch): boolean {
+  if (candidate.exact !== best.exact) return candidate.exact;
+  if (candidate.position !== best.position) return candidate.position < best.position;
+  if (candidate.words !== best.words) return candidate.words > best.words;
+  return candidate.letters > best.letters;
 }

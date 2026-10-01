@@ -698,7 +698,11 @@ export function QuoteWizardDialog({
         // сайт думав, тому назва лягає лише в порожнє поле.
         // Вид — припущення з назви сторінки (REQ-182#p18): «Кепка 5-панельна…»
         // → Кепка. Лише якщо людина ще не поставила вид сама.
-        const guess = guessKindFromTitle(catalog.kinds, title);
+        // Посилання, яке впізнав пул, несе й категорію постачальника — вона
+        // надійніша за назву, тож іде першою, як і для товару з пошуку в пулі
+        // (REQ-324#p3). Раніше посилання її мовчки губило.
+        const poolCategory = preview.status !== "pending" ? preview.pool?.product.category : null;
+        const guess = guessKindFromTitle(catalog.kinds, poolCategory) ?? guessKindFromTitle(catalog.kinds, title);
         setDrafts((prev) =>
           prev.map((draft) => {
             if (draft.key !== entry.draft.key) return draft;

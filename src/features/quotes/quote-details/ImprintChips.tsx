@@ -86,6 +86,7 @@ export function ImprintChips({
   sheet,
   product,
   directory,
+  autoOpen = false,
 }: {
   imprints: QuoteImportDraftImprint[];
   methods: Array<{ id: string; name: string }>;
@@ -101,8 +102,24 @@ export function ImprintChips({
    * більше не глухий кут. Не задано — лише методи виду, як раніше.
    */
   directory?: MethodDirectorySource;
+  /**
+   * Відкрити вибір методу одразу, щойно смуга з'явилась (REQ-324#p2): людина
+   * натиснула «+ нанесення» в позиції без виду, обрала вид — і чекає на
+   * методи, а не на ще один клік. Читається лише на появі смуги, тож
+   * перемальовування його не відкриває вдруге.
+   */
+  autoOpen?: boolean;
 }) {
-  const [listOpen, setListOpen] = React.useState(false);
+  // Відкривати є що, лише поки нанесень немає: інакше смуга вже показує відповідь.
+  const openOnMount = autoOpen && imprints.length === 0;
+  /*
+    Список відкриваємо, лише коли він щось додає: два методи виду й так стоять
+    чипами поруч, тож розгортати там довідник «інших» було б не відповіддю, а
+    відволіканням. Вид без методів — інша річ: там довідник і є вибір.
+  */
+  const [listOpen, setListOpen] = React.useState(
+    openOnMount && !(sheet && product) && (methods.length > VISIBLE_METHODS || methods.length === 0)
+  );
   /** Панель списку показує довідник, а не методи виду. Скидається на відкритті. */
   const [directoryView, setDirectoryView] = React.useState(false);
   const closeList = React.useCallback(() => setListOpen(false), []);
@@ -141,6 +158,7 @@ export function ImprintChips({
         methodName={methodName}
         onRemove={remove}
         directory={directory}
+        openOnMount={openOnMount}
       />
     );
   }
@@ -515,6 +533,7 @@ function SheetChips({
   methodName,
   onRemove,
   directory,
+  openOnMount = false,
 }: {
   imprints: QuoteImportDraftImprint[];
   methods: Array<{ id: string; name: string }>;
@@ -526,8 +545,9 @@ function SheetChips({
   methodName: (methodId: string) => string;
   onRemove: (key: string) => void;
   directory?: MethodDirectorySource;
+  openOnMount?: boolean;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(openOnMount);
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label="Нанесення">

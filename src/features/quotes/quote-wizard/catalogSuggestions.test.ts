@@ -243,6 +243,55 @@ describe("guessKindFromTitle", () => {
     expect(guessKindFromTitle(withTool, "Ліхтарик мультикам тактичний")).toBeNull();
   });
 
+  /**
+   * Складені слова (REQ-324#p3). Вид «Термо» не знаходив «Термокружку» —
+   * а саме така позиція з Eney лягла без виду й без нанесення. Назви нижче —
+   * справжні назви позицій із проду.
+   */
+  describe("складені слова й вид, коротший за слово", () => {
+    const real = buildCatalogKinds({
+      ...source,
+      typeRows: [...source.typeRows, { id: "t-dish", name: "Посуд", quote_type: "merch" }],
+      kindRows: [
+        ...source.kindRows,
+        { id: "k-thermo", type_id: "t-dish", name: "Термо" },
+        { id: "k-thermobag", type_id: "t-dish", name: "Термосумки" },
+        { id: "k-plaid", type_id: "t-cloth", name: "Пледи" },
+        { id: "k-pillow", type_id: "t-cloth", name: "Подушка" },
+        { id: "k-holder", type_id: "t-cloth", name: "Тримачі" },
+        { id: "k-polo", type_id: "t-cloth", name: "Поло" },
+      ],
+    });
+    const guess = (title: string) => guessKindFromTitle(real, title)?.kindName ?? null;
+
+    it("вид на початку складеного слова знаходиться", () => {
+      expect(guess("TOPAZ, Термокружка з подвійними стінками, 350 мл")).toBe("Термо");
+      expect(guess("CO, Термостакан двостінний з корковою основою")).toBe("Термо");
+      expect(guess("Термос для їжі Klein, TM Discover")).toBe("Термо");
+    });
+
+    it("вид, чия основа довша за слово, знаходить однину", () => {
+      expect(guess("Плед Malone, TM Discover")).toBe("Пледи");
+      expect(guess("Тримач для телефону Buddy, TM TEG")).toBe("Тримачі");
+    });
+
+    it("точний збіг основи важливіший за початок слова — навіть якщо стоїть далі", () => {
+      expect(guess("Термосумка Coolerbag XL")).toBe("Термосумки");
+      expect(guess("Плед-подушка з флісу Warm")).toBe("Подушка");
+    });
+
+    it("за початком слова — лише в перших двох словах: далі вже не сам товар", () => {
+      expect(guess("Килимок для миші з подушкою")).toBeNull();
+      expect(guess("Опадомір з тримачем та індикатором")).toBeNull();
+    });
+
+    it("коротка основа за початком слова не шукається", () => {
+      // «Поло» → «пол»: інакше «Поліетиленовий пакет» ставав би поло.
+      expect(guess("Поліетиленовий пакет 30×40")).toBeNull();
+      expect(guess("Поло Star 200, TM Roly")).toBe("Поло");
+    });
+  });
+
   it("не вгадує без збігу й на порожній назві", () => {
     expect(guessKindFromTitle(kinds, "Реглан LENNY")).toBeNull();
     expect(guessKindFromTitle(kinds, null)).toBeNull();

@@ -1,12 +1,10 @@
 import { resolveImprintPlaces, type PlaceCache } from "@/features/quotes/quote-details/imprintPlaces";
+import { ensureCatalogModel } from "@/features/quotes/quote-details/catalogModelBinding";
 import { ITEM_VISUAL_BUCKET } from "@/features/quotes/quote-details/config";
 import {
-  findCatalogModelByKindAndName,
-  insertCatalogModelRow,
   insertQuoteItemRow,
   persistQuoteRuns,
   setQuoteRunCostFromPool,
-  updateCatalogModelImage,
   uploadQuoteAttachmentFile,
 } from "@/features/quotes/quote-details/queries";
 import { insertThreadMessage, notifyThreadMessage } from "@/features/taskChat/queries";
@@ -155,60 +153,19 @@ export async function parseImportFile(
 async function bindCatalogModel(draft: QuoteImportDraftItem, teamId: string): Promise<QuoteImportDraftItem> {
   const catalog = draft.catalog;
   if (!catalog || catalog.modelId || !draft.name.trim()) return draft;
-  const supplierUrl = draft.supplierUrl ?? draft.links[0] ?? null;
-  const avantprintUrl = draft.avantprintUrl ?? null;
-  const sku = draft.sku?.trim() || null;
-  const name = draft.name.trim().slice(0, 160);
-
-  // ТОЙ САМИЙ ТОВАР УДРУГЕ — це та сама модель, а не друга з тією ж назвою.
-  // На `catalog_models` стоїть унікальний індекс (kind_id, name), тож повторна
-  // вставка просто падала, а `bindCatalogModel` мовчки віддавав позицію БЕЗ
-  // моделі — і в картці зникали фото з назвою товару, хоч посилання й артикул
-  // лишались. Симптом читався як «фото не працює», а причина була в тому, що
-  // цю кепку вже додавали годину тому.
-  const existing = await findCatalogModelByKindAndName(catalog.kindId, name);
-  if (existing) {
-    // Фото добираємо ЛИШЕ В ПОРОЖНЄ — тим самим правилом, що й фонова
-    // розвідка: знімок, який хтось поставив руками, головніший за фід.
-    if (!existing.image_url && catalog.imageUrl) {
-      await updateCatalogModelImage(existing.id, catalog.imageUrl);
-    }
-    return { ...draft, catalog: { ...catalog, modelId: existing.id, guessed: false } };
-  }
-
-  const inserted = await insertCatalogModelRow({
-    team_id: teamId,
-    kind_id: catalog.kindId,
-    name,
-    // ФОТО, ЯКЩО ВОНО ВЖЕ Є. Раніше тут стояв безумовний `null` із розрахунку
-    // «доставить фонова розвідка»: для голого посилання інакше й не можна —
-    // сторінку ще не читали. Але товар із пулу приходить із готовою адресою
-    // знімка, і викидати її означало показувати сірий квадрат замість того, що
-    // менеджер щойно бачив у підказці (Артем, 08.09.2026).
-    image_url: catalog.imageUrl ?? null,
-    metadata: {
-      source: { vendor: "link", url: supplierUrl, importedAt: new Date().toISOString() },
-      ...(supplierUrl ? { supplierUrl } : {}),
-      // Друга кнопка картки. Модель живе довше за прорахунок, тож посилання
-      // лягає і сюди — інакше наступний прорахунок із цією ж моделлю знову
-      // почався б із сірої кнопки.
-      ...(avantprintUrl ? { avantprintUrl } : {}),
-      // Артикул у КАТАЛОЗІ, а не лише в позиції (REQ-247): каталог живе довше
-      // за прорахунок, і пошук моделі по SKU на сторінці каталогу читає саме
-      // `metadata.sku`. Без цього товар, доданий посиланням, лишався б у
-      // каталозі безіменним кодом.
-      ...(sku ? { sku } : {}),
-    },
+  // Ядро спільне з карткою позиції (REQ-324#p1): той самий товар із двох
+  // входів мусить ставати тією самою моделлю.
+  const modelId = await ensureCatalogModel({
+    teamId,
+    kindId: catalog.kindId,
+    name: draft.name,
+    imageUrl: catalog.imageUrl ?? null,
+    supplierUrl: draft.supplierUrl ?? draft.links[0] ?? null,
+    avantprintUrl: draft.avantprintUrl ?? null,
+    sku: draft.sku ?? null,
   });
-  if (!inserted.ok) {
-    // Гонка: між пошуком і вставкою модель завів хтось інший (або сусідня
-    // чернетка цього ж заїзду). Питаємо ще раз, перш ніж лишати позицію без
-    // моделі — мовчазна втрата фото коштувала дорожче за зайвий запит.
-    const raced = await findCatalogModelByKindAndName(catalog.kindId, name);
-    if (!raced) return draft;
-    return { ...draft, catalog: { ...catalog, modelId: raced.id, guessed: false } };
-  }
-  return { ...draft, catalog: { ...catalog, modelId: inserted.data.id, guessed: false } };
+  if (!modelId) return draft;
+  return { ...draft, catalog: { ...catalog, modelId, guessed: false } };
 }
 
 /** Чернетка + місця нанесення, заведені в довідник виду (REQ-182#p24). */

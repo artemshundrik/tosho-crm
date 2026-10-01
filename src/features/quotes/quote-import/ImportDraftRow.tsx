@@ -1,9 +1,7 @@
 import * as React from "react";
-import { Check, ChevronDown, ChevronRight, ExternalLink, ImageOff, Plus, Search, Tag, Trash2, X } from "@/components/icons/appIcons";
+import { ChevronDown, ChevronRight, ExternalLink, ImageOff, Plus, Trash2, X } from "@/components/icons/appIcons";
 
 import { Checkbox } from "@/components/ui/checkbox";
-import { Chip } from "@/components/ui/chip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { KidsBadge } from "@/components/catalog/SupplierPoolRow";
 import { SupplierVariantTiles } from "@/components/catalog/SupplierVariantTiles";
 import type { SupplierPoolProduct, SupplierPoolVariant } from "@/lib/supplierPoolRows";
@@ -20,10 +18,10 @@ import type { PoolCandidates } from "@/features/quotes/quote-wizard/usePoolCandi
 import { formatImprintHint } from "./mapping";
 import { ImprintChips, type PlaceOption } from "@/features/quotes/quote-details/ImprintChips";
 import { getImprintSheet } from "@/features/quotes/quote-details/imprintSheets";
+import { KindChip, KindImprintDoor, type KindOption } from "@/features/quotes/quote-details/KindChip";
 import type { MethodDirectorySource } from "@/features/quotes/quote-details/useKindImprintOptions";
 
 import type {
-  QuoteImportDraftCatalog,
   QuoteImportDraftImprint,
   QuoteImportDraftItem,
   QuoteImportFlag,
@@ -33,7 +31,7 @@ import type {
 export type { PlaceOption };
 
 /** Вид товару для вибору в рядку: те саме, що `CatalogKindOption` у візарді. */
-export type DraftKindOption = Pick<QuoteImportDraftCatalog, "kindId" | "kindName" | "typeId" | "typeName">;
+export type DraftKindOption = KindOption;
 
 /**
  * Один рядок прев'ю імпорту — той самий у вікні «Імпорт з файлу» й у візарді
@@ -209,7 +207,8 @@ export function ImportDraftRow({
   /**
    * Методи й місця нанесення цього виду — смугою під назвою (REQ-182#p24).
    * Не задано — смуги немає: в імпорті з файлу виду ще не знають, а без виду
-   * методу нема на що вказувати.
+   * методу нема на що вказувати. Якщо ж вид можна обрати (`kindOptions`), на
+   * місці смуги стоїть «+ нанесення», яке веде через вибір виду (REQ-324#p2).
    */
   imprintOptions?: {
     methods: Array<{ id: string; name: string }>;
@@ -302,12 +301,40 @@ export function ImportDraftRow({
   */
   const isPrintModel = Boolean(draft.catalog?.specPreset);
 
+  /*
+    ВИД, ОБРАНИЙ ЧЕРЕЗ «+ НАНЕСЕННЯ» (REQ-324#p2). Людина прийшла по
+    нанесення, а не по вид, тож щойно методи виду завантажились, смуга сама
+    відкриває їх. Вид, обраний чипом виду, — інша відповідь: там смуга чекає.
+  */
+  const [imprintsAfterKind, setImprintsAfterKind] = React.useState<string | null>(null);
+
   const kindChip =
     kindOptions && onChangeKind && !draft.catalog?.modelId ? (
-      <KindChip value={draft.catalog ?? null} options={kindOptions} disabled={disabled} onChange={onChangeKind} />
+      <KindChip
+        value={draft.catalog ?? null}
+        options={kindOptions}
+        disabled={disabled}
+        onChange={(kind) => {
+          setImprintsAfterKind(null);
+          onChangeKind(kind);
+        }}
+      />
     ) : draft.catalog ? (
       // Позиція з каталогу: вид — факт, а не вибір, тож це підпис, а не кнопка.
       <CatalogPlaceChip label={catalogPlace(draft.catalog.kindName, draft.catalog.typeName)} />
+    ) : null;
+
+  // Без виду методам нема на що вказувати — тож двері до нанесення ведуть через вид.
+  const imprintDoor =
+    kindOptions && onChangeKind && !draft.catalog ? (
+      <KindImprintDoor
+        options={kindOptions}
+        disabled={disabled}
+        onPick={(kind) => {
+          setImprintsAfterKind(kind.kindId);
+          onChangeKind(kind);
+        }}
+      />
     ) : null;
 
   const price = draft.poolPrice ?? null;
@@ -550,6 +577,9 @@ export function ImportDraftRow({
           {kindChip}
           {imprintOptions && onChangeImprints ? (
             <ImprintChips
+              // Новий вид — нова смуга: `autoOpen` читається лише на появі.
+              key={draft.catalog?.kindId}
+              autoOpen={imprintsAfterKind !== null && imprintsAfterKind === draft.catalog?.kindId}
               imprints={draft.imprints}
               methods={imprintOptions.methods}
               places={imprintOptions.places}
@@ -566,7 +596,9 @@ export function ImportDraftRow({
                 imageUrl: preview?.status === "done" ? preview.imageUrl : null,
               }}
             />
-          ) : null}
+          ) : (
+            imprintDoor
+          )}
         </div>
         {/*
           Комірки стоять без підписів «тиражі» й «шт» (Артем, 08.09.2026):
@@ -715,130 +747,6 @@ function RequirementsToggle({
         </div>
       ) : null}
     </div>
-  );
-}
-
-/**
- * Чип виду для рядка без моделі (REQ-182#p18). Вгаданий вид підписаний
- * «припущення» і стоїть пунктиром: це не факт, а здогад з назви сторінки, і
- * від нього залежать методи нанесення — тому виправити його має бути так само
- * легко, як клацнути чип.
- */
-function KindChip({
-  value,
-  options,
-  disabled,
-  onChange,
-}: {
-  value: QuoteImportDraftCatalog | null;
-  options: DraftKindOption[];
-  disabled?: boolean;
-  onChange: (kind: DraftKindOption | null) => void;
-}) {
-  const [open, setOpen] = React.useState(false);
-  /**
-   * Пошук по видах. Їх 92 — гортати стільки, щоб знайти «Поло», людина не буде
-   * (скарга Артема 05.09). Фільтр чисто на клієнті: список уже в пам'яті, тож
-   * ні запиту, ні витрат.
-   *
-   * Шукаємо і по виду, і по ТИПУ: серед 92 є однойменні види в різних типах
-   * («Антистрес» двічі), і без типу вибір із двох однакових рядків — лотерея.
-   */
-  const [search, setSearch] = React.useState("");
-  const needle = search.trim().toLowerCase();
-
-  React.useEffect(() => {
-    if (!open) setSearch("");
-  }, [open]);
-
-  const groups = React.useMemo(() => {
-    const byType = new Map<string, { typeName: string; kinds: DraftKindOption[] }>();
-    for (const option of options) {
-      if (needle && !`${option.kindName} ${option.typeName}`.toLowerCase().includes(needle)) continue;
-      const group = byType.get(option.typeId) ?? { typeName: option.typeName, kinds: [] };
-      group.kinds.push(option);
-      byType.set(option.typeId, group);
-    }
-    return [...byType.values()];
-  }, [options, needle]);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Chip
-          size="sm"
-          disabled={disabled}
-          icon={<Tag />}
-          aria-label={value ? `Вид товару: ${value.kindName}${value.guessed ? ", припущення" : ""}` : "Вид товару"}
-          className={cn(!value || value.guessed ? "border-dashed" : undefined, value && !value.guessed && "bg-muted")}
-        >
-          {value ? (
-            /*
-              БЕЗ СЛОВА «ПРИПУЩЕННЯ» (Артем, 08.09.2026). Те саме вже сказано
-              двічі: пунктирна рамка чипа й підпис «додасться в базу» під
-              назвою. Третій раз забирав ширину в смуги нанесення. Здогад
-              лишається здогадом — про це каже пунктир, і виправити його
-              однаково один клік.
-            */
-            value.kindName
-          ) : (
-            "Вид товару?"
-          )}
-        </Chip>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-1.5">
-        <div className="relative mb-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input controlSize="sm"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Пошук виду"
-            className="rounded-full pl-8 text-sm"
-            autoFocus
-          />
-        </div>
-        <div className="max-h-72 overflow-y-auto">
-        {groups.length === 0 ? (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">Такого виду немає</p>
-        ) : null}
-        {groups.map((group) => (
-          <div key={group.typeName} className="mb-1 last:mb-0">
-            <div className="px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {group.typeName}
-            </div>
-            {group.kinds.map((kind) => (
-              <button
-                key={kind.kindId}
-                type="button"
-                role="option"
-                aria-selected={value?.kindId === kind.kindId}
-                onClick={() => {
-                  onChange(kind);
-                  setOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60"
-              >
-                <span className="min-w-0 flex-1 truncate">{kind.kindName}</span>
-                {value?.kindId === kind.kindId ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
-              </button>
-            ))}
-          </div>
-        ))}
-        </div>
-        {value ? (
-          <button
-            type="button"
-            onClick={() => {
-              onChange(null);
-              setOpen(false);
-            }}
-            className="mt-1 flex w-full items-center rounded-md border-t border-border/60 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
-          >
-            Без виду — в каталог не записувати
-          </button>
-        ) : null}
-      </PopoverContent>
-    </Popover>
   );
 }
 

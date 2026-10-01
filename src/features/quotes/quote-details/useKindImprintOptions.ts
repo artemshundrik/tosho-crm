@@ -187,24 +187,28 @@ export function useKindImprintOptions(teamId: string, kindIds: string[]) {
   const [directoryFailed, setDirectoryFailed] = React.useState(false);
   const directoryRequested = React.useRef(false);
 
+  /*
+    ВІДПОВІДЬ НЕ ВИКИДАЄМО, НАВІТЬ ЯКЩО СПИСОК ВИДІВ ПОМІНЯВСЯ (REQ-324#p2).
+    Тут стояв прапорець `alive`, який глушив відповідь після перезапуску
+    ефекту. Але перезапуск — не «вже не треба»: у вікні створення список
+    видів росте з кожним дочитаним посиланням, тож вид першої позиції
+    вантажився, друга позиція міняла список — і відповідь для першої
+    викидалась, а `requested` уже пам'ятав її як запитану. Позиція навіки
+    лишалась із чипом виду й без жодного методу. Методи виду не залежать від
+    того, хто ще в списку, тож зайвий рядок у `byKind` нічого не ламає.
+  */
   React.useEffect(() => {
     if (!teamId) return;
-    let alive = true;
     for (const kindId of wanted.split(" ").filter(Boolean)) {
       if (requested.current.has(kindId)) continue;
       requested.current.add(kindId);
       void loadKindOptions(teamId, kindId)
-        .then((options) => {
-          if (alive) setByKind((prev) => ({ ...prev, [kindId]: options }));
-        })
+        .then((options) => setByKind((prev) => ({ ...prev, [kindId]: options })))
         .catch(() => {
           // Наступна позиція того ж виду спробує ще раз — може, це був збій мережі.
           requested.current.delete(kindId);
         });
     }
-    return () => {
-      alive = false;
-    };
   }, [teamId, wanted]);
 
   const requestDirectory = React.useCallback(() => {

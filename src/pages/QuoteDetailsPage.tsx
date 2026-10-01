@@ -4675,6 +4675,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   : catalogVariant?.imageUrl ?? null
                               }
                               specPreset={modelSpecPreset}
+                              catalogTypes={catalogTypes}
+                              metadata={item.metadata ?? null}
                               disabled={!canManageItems}
                               onSaved={() => void loadItems()}
                             />

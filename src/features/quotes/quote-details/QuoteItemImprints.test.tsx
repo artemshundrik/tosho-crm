@@ -38,6 +38,15 @@ vi.mock("./useKindImprintOptions", () => ({
         ],
         places: [{ id: "place-chest", label: "Груди" }],
       },
+      // Три методи — щоб третій жив за «ще 1» і список мав що розгортати.
+      "k-thermo": {
+        methods: [
+          { id: "m-decal", name: "Деколь" },
+          { id: "m-engrave", name: "Гравіювання" },
+          { id: "m-uv", name: "УФ" },
+        ],
+        places: [],
+      },
     },
     reset: () => {},
     // «Інші методи…» (REQ-292) тут не перевіряються — лише щоб смуга рендерилась.
@@ -127,5 +136,87 @@ describe("Нанесення в картці товару", () => {
         methods: [{ method_id: "m-dtf", print_position_id: "place-new", print_position_label: "під горловиною" }],
       })
     );
+  });
+});
+
+/**
+ * Позиція без виду (REQ-324#p1). Товар за посиланням, чий вид не вгадався,
+ * лягав без виду — і смуги нанесення в картці не було зовсім: менеджер писав
+ * нанесення в коментар. Тепер вид обирається тут же, а нанесення пишеться
+ * разом із ним, бо метод без виду ніхто не прочитає.
+ */
+describe("Нанесення позиції без виду", () => {
+  const thermo = { kindId: "k-thermo", kindName: "Термо", typeId: "t-dish", typeName: "Посуд" };
+  const cap = { kindId: "k-cap", kindName: "Кепка", typeId: "t-cloth", typeName: "Одяг" };
+  const bind = vi.fn(async (kind: typeof thermo) => ({
+    catalog_type_id: kind.typeId,
+    catalog_kind_id: kind.kindId,
+    catalog_model_id: `model-${kind.kindId}`,
+  }));
+  const renderKindless = (guess: typeof thermo | null) =>
+    render(
+      <QuoteItemImprints
+        teamId="team-1"
+        itemId="item-1"
+        kindId={null}
+        methods={[]}
+        kindPicker={{ options: [thermo, cap], guess, bind }}
+      />
+    );
+
+  beforeEach(() => {
+    updateQuoteItemRow.mockClear();
+    bind.mockClear();
+  });
+
+  it("здогад стоїть пунктиром, і перший метод пише вид і нанесення одним записом", async () => {
+    const user = userEvent.setup();
+    renderKindless(thermo);
+
+    expect(screen.getByRole("button", { name: "Вид товару: Термо, припущення" })).toBeInTheDocument();
+    const group = screen.getByRole("group", { name: "Нанесення" });
+    await user.click(within(group).getByRole("button", { name: "Деколь" }));
+
+    await waitFor(() => expect(updateQuoteItemRow).toHaveBeenCalledTimes(1));
+    expect(bind).toHaveBeenCalledWith(thermo);
+    expect(updateQuoteItemRow.mock.calls[0][1]).toMatchObject({
+      catalog_type_id: "t-dish",
+      catalog_kind_id: "k-thermo",
+      catalog_model_id: "model-k-thermo",
+      methods: [{ method_id: "m-decal" }],
+    });
+  });
+
+  it("без здогаду «+ нанесення» веде через вид: вид пишеться одразу, методи розгортаються самі", async () => {
+    const user = userEvent.setup();
+    renderKindless(null);
+
+    // Методів без виду немає — смуга не вдає, що вони є.
+    expect(screen.queryByRole("group", { name: "Нанесення" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Додати нанесення" }));
+    await user.click(await screen.findByRole("option", { name: "Термо" }));
+
+    await waitFor(() => expect(updateQuoteItemRow).toHaveBeenCalledTimes(1));
+    expect(updateQuoteItemRow.mock.calls[0][1]).toEqual({
+      catalog_type_id: "t-dish",
+      catalog_kind_id: "k-thermo",
+      catalog_model_id: "model-k-thermo",
+    });
+    // Людина прийшла по нанесення — список методів уже відкритий, третій теж видно.
+    expect(await screen.findByRole("option", { name: "УФ" })).toBeInTheDocument();
+  });
+
+  it("чужий здогад виправляється чипом виду — і тоді методи не розгортаються", async () => {
+    const user = userEvent.setup();
+    renderKindless(thermo);
+
+    await user.click(screen.getByRole("button", { name: "Вид товару: Термо, припущення" }));
+    await user.click(await screen.findByRole("option", { name: "Кепка" }));
+
+    await waitFor(() => expect(updateQuoteItemRow).toHaveBeenCalledTimes(1));
+    expect(updateQuoteItemRow.mock.calls[0][1]).toMatchObject({ catalog_kind_id: "k-cap" });
+    expect(screen.getByRole("button", { name: "Вид товару: Кепка" })).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Нанесення" })).getByRole("button", { name: "ДТФ" })).toBeInTheDocument();
+    expect(screen.queryByRole("option")).toBeNull();
   });
 });

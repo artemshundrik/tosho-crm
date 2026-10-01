@@ -1,3 +1,4 @@
+import * as React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -221,5 +222,71 @@ describe("ImportDraftRow — підпис нанесення з ТЗ", () => {
       />
     );
     expect(screen.queryByText("Нанесення з ТЗ: Вишивка · груди ліворуч")).toBeNull();
+  });
+});
+
+/**
+ * «+ нанесення» без виду (REQ-324#p2). Раніше без виду смуга мовчала: поруч
+ * стояв чип «Вид товару?», але ніщо не казало, що саме він відмикає
+ * нанесення. Тепер двері до нанесення є завжди й ведуть через вид, а щойно
+ * методи виду приїхали — список розгортається сам.
+ */
+describe("ImportDraftRow — нанесення без виду", () => {
+  const thermo = { kindId: "k-thermo", kindName: "Термо", typeId: "t-dish", typeName: "Посуд" };
+  const methods = [
+    { id: "m-decal", name: "Деколь" },
+    { id: "m-engrave", name: "Гравіювання" },
+    { id: "m-uv", name: "УФ" },
+  ];
+
+  /** Вікно створення в мініатюрі: вид лягає в чернетку, методи приходять уже для нього. */
+  function WizardRow() {
+    const [current, setCurrent] = React.useState(draft({ name: "TOPAZ, Термокружка", sku: null }));
+    return (
+      <ImportDraftRow
+        draft={current}
+        preview={undefined}
+        onPatch={noop}
+        onPatchRun={noop}
+        kindOptions={[thermo]}
+        onChangeKind={(kind) =>
+          setCurrent((prev) => ({
+            ...prev,
+            catalog: kind ? { ...kind, modelId: null, imageUrl: null, guessed: false } : null,
+          }))
+        }
+        imprintOptions={current.catalog ? { methods, places: [] } : undefined}
+        onChangeImprints={current.catalog ? noop : undefined}
+      />
+    );
+  }
+
+  it("без виду стоять і «Вид товару?», і «+ нанесення»", () => {
+    render(<WizardRow />);
+    expect(screen.getByRole("button", { name: "Вид товару" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Додати нанесення" })).toBeInTheDocument();
+  });
+
+  it("«+ нанесення» веде через вид, і методи розгортаються самі", async () => {
+    const user = userEvent.setup();
+    render(<WizardRow />);
+
+    await user.click(screen.getByRole("button", { name: "Додати нанесення" }));
+    expect(screen.getByText("Спершу вид товару — від нього залежать методи нанесення.")).toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Термо" }));
+
+    expect(await screen.findByRole("option", { name: "УФ" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Додати нанесення" })).toBeNull();
+  });
+
+  it("вид, обраний чипом виду, методів не розгортає — людина прийшла не по них", async () => {
+    const user = userEvent.setup();
+    render(<WizardRow />);
+
+    await user.click(screen.getByRole("button", { name: "Вид товару" }));
+    await user.click(screen.getByRole("option", { name: "Термо" }));
+
+    expect(screen.getByRole("button", { name: "Деколь" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "УФ" })).toBeNull();
   });
 });
