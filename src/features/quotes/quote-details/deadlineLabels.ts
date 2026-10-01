@@ -197,3 +197,19 @@ export const formatDeadlineLabel = (value?: string | null) => {
     minute: "2-digit",
   })}`;
 };
+
+export type DeadlineBadgeTone = "none" | "future" | "soon" | "today" | "overdue";
+
+/**
+ * Скільки лишилось до дедлайну — словом і тоном. Один на картку прорахунку:
+ * ним говорять і доріжка дедлайнів збоку, і вкладка «Дедлайни».
+ */
+export const getDeadlineBadge = (value?: string | null): { label: string; tone: DeadlineBadgeTone } => {
+  const date = parseDeadlineDate(value);
+  if (!value || !date) return { label: "Без дедлайну", tone: "none" };
+  const diffDays = deadlineDiffDays(value) ?? 0;
+  if (diffDays < 0) return { label: `Прострочено (${Math.abs(diffDays)} дн.)`, tone: "overdue" };
+  if (diffDays === 0) return { label: "Сьогодні", tone: "today" };
+  if (diffDays <= 2) return { label: diffDays === 1 ? "Завтра" : `Через ${diffDays} дн.`, tone: "soon" };
+  return { label: date.toLocaleDateString("uk-UA"), tone: "future" };
+};

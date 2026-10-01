@@ -87,6 +87,7 @@ export function QuoteDesignTaskComposer({
   error,
   disabled,
   onCreate,
+  embedded = false,
 }: {
   brief: string;
   onBriefChange: (value: string) => void;
@@ -108,6 +109,8 @@ export function QuoteDesignTaskComposer({
   error?: string | null;
   disabled?: boolean;
   onCreate: () => void;
+  /** Форма в рядку товару на вкладці «Дизайн»: рамку й поля дає сам рядок. */
+  embedded?: boolean;
 }) {
   const busy = Boolean(saving || uploading);
   /* Тип завжди має значення: сторінка ставить його за замовчуванням, а `null`
@@ -133,7 +136,7 @@ export function QuoteDesignTaskComposer({
   });
 
   return (
-    <section className="space-y-4 rounded-xl border border-border/60 p-4">
+    <section className={embedded ? "space-y-4" : "space-y-4 rounded-xl border border-border/60 p-4"}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="text-sm font-semibold">Нова дизайн-задача</h3>
         <p className="text-xs text-muted-foreground">Напишіть ТЗ і прикріпіть файли замовника.</p>
@@ -145,18 +148,21 @@ export function QuoteDesignTaskComposer({
         людина дивиться на неї до створення чи після. Ставлять нанесення при
         створенні прорахунку, розмір дизайнер бере з ТЗ.
       */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {imprint.length > 0 ? (
-          <>
-            <QuoteImprintBadges imprint={imprint} />
-            <span className="text-2xs text-muted-foreground/70">— з товару, змінюється у вкладці «Товари»</span>
-          </>
-        ) : (
-          <p className="text-2xs text-muted-foreground">
-            У цій позиції нанесення не вказано — його ставлять у товарі, при створенні прорахунку.
-          </p>
-        )}
-      </div>
+      {/* У рядку товару нанесення вже стоїть пігулками поруч із назвою. */}
+      {embedded ? null : (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {imprint.length > 0 ? (
+            <>
+              <QuoteImprintBadges imprint={imprint} />
+              <span className="text-2xs text-muted-foreground/70">— з товару, змінюється у вкладці «Товари»</span>
+            </>
+          ) : (
+            <p className="text-2xs text-muted-foreground">
+              У цій позиції нанесення не вказано — його ставлять у товарі, при створенні прорахунку.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">

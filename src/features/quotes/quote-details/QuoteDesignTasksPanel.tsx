@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  ChevronDown,
   ExternalLink,
   FileText,
   Image as ImageIcon,
@@ -15,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { getAttachmentDisplayFileName } from "@/lib/attachmentPreview";
 import { DESIGN_STATUS_LABELS, type DesignStatus } from "@/lib/designTaskStatus";
-import { designStatusTone, toneDotClass, toneTextClass } from "@/lib/statusTones";
+import { designStatusTone, toneBadgeClass, toneDotClass } from "@/lib/statusTones";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { cn } from "@/lib/utils";
 
@@ -26,24 +27,17 @@ import { QuoteImprintBadges } from "./QuoteImprintBadges";
 import type { QuoteAttachment } from "./queries";
 
 /**
- * Вкладка «Дизайн» будується ВІД ЗАДАЧІ (REQ-155 p4).
+ * Вкладка «Дизайн» будується ВІД ЗАДАЧІ (REQ-155 p4), а показується мовою
+ * «Товарів» (REQ-226#p1).
  *
- * БУЛО: три підвкладки — «ТЗ», «Візуалізації», «Задача», — і кожна показувала
- * ЩОСЬ ОДНЕ з усіх задач прорахунку. ТЗ бралось із самого прорахунку (спільне),
- * візуалізації — з файлів прорахунку (теж спільні), а задача була найновіша з
- * усіх. На прорахунку з двома товарами це означало, що ТЗ до першої задачі
- * стоїть поруч із візуалом другої, і ніде на екрані не сказано, що це різні
- * справи.
+ * Одиниця показу — задача: у кожної ЇЇ ТЗ і ЇЇ візуали. Доти ТЗ бралось зі
+ * спільного поля прорахунку, а візуали — зі спільних файлів, і на прорахунку з
+ * двома товарами ТЗ першої задачі стояло поруч із візуалом другої.
  *
- * СТАЛО: одиниця показу — задача. Згори пігулки (коли задач більше однієї),
- * усередині обраної — ЇЇ ТЗ і ЇЇ візуали. Задача на прорахунку створюється по
- * одній на товар із нанесенням, тож пігулки збігаються з товарами.
- *
- * ЧОМУ ПІГУЛКИ, А НЕ СПИСОК ЛІВОРУЧ І НЕ СТОС. Обидва варіанти були в
- * прототипі (Д2, Д3) і відхилені: список ліворуч з'їдає 246 px ширини заради
- * двох-трьох рядків, а стос показує все одразу й тим ховає, що задачі різні.
- * Від чотирьох задач пігулки тіснішають і переносяться в другий ряд — ховати їх
- * за прокруткою не можна: непомічена задача = незроблений дизайн.
+ * БУЛО ДАЛІ: пігулки товарів угорі й одна відкрита задача під ними. На
+ * прорахунку з тринадцяти товарів, щоб дізнатись стан дизайну, треба було
+ * клікнути тринадцять разів. СТАЛО: усі задачі одразу, картками як на
+ * «Товарах», над ними смуга стану, під ними товари без задачі списком.
  */
 
 export type QuoteDesignTaskCard = {
@@ -312,326 +306,445 @@ function VisualCard({
   );
 }
 
-export function QuoteDesignTasksPanel({
+
+/** ТЗ одним абзацом — для двох рядків у згорнутій картці; розмітку видно в розгорнутій. */
+const plainBrief = (text: string) =>
+  text
+    .replace(/^#+\s*/gm, "")
+    .replace(/^\s*[-•]\s+/gm, "")
+    .replace(/[*_`>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const isPreviewable = (file: QuoteAttachment) => {
+  const extension = getFileExtension(getAttachmentDisplayFileName(file.name, file.storagePath, file.mimeType));
+  return (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) && Boolean(file.storageBucket && file.storagePath);
+};
+
+/** Скільки візуалів видно в згорнутій картці; решта — за «+N». */
+const MINI_VISUALS = 4;
+
+/** Порядок статусів у смузі й легенді: від погодженого до щойно заведеного. */
+const STATUS_ORDER: DesignStatus[] = ["approved", "client_review", "pm_review", "changes", "in_progress", "new", "cancelled"];
+
+/**
+ * Смуга стану дизайну над списком (REQ-226#p1): велике число й смуга, як
+ * домовлено про мову інтерфейсу. Відповідає на питання, з яким відкривають
+ * вкладку, — «скільки товарів уже в дизайні й що з ними», — не прокручуючи
+ * тринадцять карток.
+ */
+export function QuoteDesignStatusStrip({
   tasks,
-  activeTaskId,
+  itemCount,
+  untaskedCount,
+}: {
+  tasks: QuoteDesignTaskCard[];
+  itemCount: number;
+  untaskedCount: number;
+}) {
+  const rank = (status: string | null) => {
+    const index = STATUS_ORDER.indexOf(status as DesignStatus);
+    return index === -1 ? STATUS_ORDER.length : index;
+  };
+  const sorted = [...tasks].sort((a, b) => rank(a.status) - rank(b.status));
+  const legend = STATUS_ORDER.map((status) => ({
+    status,
+    count: tasks.filter((task) => task.status === status).length,
+  })).filter((entry) => entry.count > 0);
+
+  return (
+    <section
+      className="flex flex-col gap-4 rounded-xl border border-border/50 bg-card p-4 sm:flex-row sm:items-center sm:gap-6"
+      aria-label="Стан дизайну"
+    >
+      <div className="shrink-0">
+        <div className="text-3xl font-semibold leading-none tracking-tight tabular-nums text-foreground">
+          {itemCount - untaskedCount}
+          <span className="text-lg font-medium text-muted-foreground"> з {itemCount}</span>
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">товарів у дизайні</div>
+      </div>
+      <div className="min-w-0 flex-1 space-y-2.5">
+        <div className="flex h-2.5 gap-[3px]" aria-hidden>
+          {sorted.map((task) => (
+            <span key={task.id} className={cn("flex-1 rounded-[3px]", toneDotClass[designStatusTone(task.status)])} />
+          ))}
+          {untaskedCount > 0 ? (
+            <span className="rounded-[3px] bg-muted" style={{ flexGrow: untaskedCount }} />
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          {legend.map((entry) => (
+            <span key={entry.status} className="inline-flex items-center gap-1.5 text-foreground">
+              <span className={cn("h-1.5 w-1.5 rounded-full", toneDotClass[designStatusTone(entry.status)])} aria-hidden />
+              {DESIGN_STATUS_LABELS[entry.status]} <span className="tabular-nums text-muted-foreground">{entry.count}</span>
+            </span>
+          ))}
+          {untaskedCount > 0 ? (
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" aria-hidden />
+              Без задачі <span className="tabular-nums">{untaskedCount}</span>
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MiniVisual({
+  file,
+  selected,
+  onPreview,
+  onDownload,
+}: {
+  file: QuoteAttachment;
+  selected: boolean;
+  onPreview: (file: QuoteAttachment) => void;
+  onDownload: (file: QuoteAttachment) => void;
+}) {
+  const displayName = getAttachmentDisplayFileName(file.name, file.storagePath, file.mimeType);
+  const previewable = isPreviewable(file);
+  return (
+    <button
+      type="button"
+      onClick={() => (previewable ? onPreview(file) : onDownload(file))}
+      aria-label={previewable ? `Переглянути ${displayName}` : `Завантажити ${displayName}`}
+      className={cn(
+        "relative flex h-[54px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        selected ? "border-success-soft-border ring-2 ring-success-soft-border/60" : "border-border/50"
+      )}
+    >
+      {previewable ? (
+        <StorageObjectImage
+          bucket={file.storageBucket}
+          path={file.storagePath}
+          alt={displayName}
+          variant="thumb"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="text-3xs font-bold uppercase text-muted-foreground">
+          {getFileExtension(displayName) ?? "файл"}
+        </span>
+      )}
+      {selected ? (
+        <span className="tone-success absolute bottom-1 left-1 rounded border px-1 text-3xs font-semibold leading-4">
+          обрано
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/**
+ * Картка задачі на вкладці «Дизайн» (REQ-226#p1) — мовою «Товарів»: фото
+ * ліворуч, паспорт товару, стан задачі праворуч, нижче коротко ТЗ і мініатюри
+ * візуалів. Обраний візуал іде першим і обведений: саме він потрапляє в КП.
+ *
+ * ТЗ ПОВНІСТЮ Й УСІ ВІЗУАЛИ — ЗА РОЗГОРТАННЯМ. Тринадцять товарів на
+ * прорахунку — звичайна справа, і повні картки на кожен давали б кілька
+ * екранів прокрутки. Згорнута картка відповідає «що з цим товаром»,
+ * розгорнута — «що саме намалювали».
+ */
+export function QuoteDesignTaskCardView({
+  task,
+  imprint,
+  expanded,
+  onToggle,
   renderBrief,
-  materials,
-  materialsUploading,
-  canAddMaterials,
   onOpenTask,
   onPreviewVisual,
   onDownloadVisual,
-  imprint,
-  onAddMaterials,
 }: {
-  tasks: QuoteDesignTaskCard[];
-  activeTaskId: string | null;
-  /**
-   * Нанесення позиції, на яку заведено задачу (REQ-157): пігулки «метод ·
-   * місце» стоять у рядку назви — там, де раніше була плашка типу задачі.
-   */
+  task: QuoteDesignTaskCard;
   imprint: DesignComposerImprint[];
+  expanded: boolean;
+  onToggle: () => void;
   /** Розмітка ТЗ — та сама, що в редакторі: заголовки, списки, жирний. */
   renderBrief: (text: string) => ReactNode;
-  /** Вкладення прорахунку з `audience=design` — вхідні матеріали для дизайнера. */
-  materials: QuoteAttachment[];
-  materialsUploading?: boolean;
-  canAddMaterials?: boolean;
   onOpenTask: (taskId: string) => void;
   onPreviewVisual: (file: QuoteAttachment) => void;
   onDownloadVisual: (file: QuoteAttachment) => void;
-  onAddMaterials: (files: FileList | File[] | null) => void;
 }) {
-  const active = tasks.find((task) => task.id === activeTaskId) ?? tasks[0] ?? null;
-  if (!active) return null;
-  const activeStatus = statusOf(active.status);
+  const status = statusOf(task.status);
+  const deadline = formatWhen(task.deadline);
+  const minis = task.visuals.slice(0, MINI_VISUALS);
+  const extra = task.visuals.length - minis.length;
 
   return (
-    <div>
-      {/*
-        ШАПКА Ш1 (REQ-155 p6). Три яруси, і кожен відповідає на своє питання:
-        ЩО ЦЕ (номер і статус) → ПРО ЩО (товар і тип) → ХТО Й КОЛИ (позиція,
-        тираж, виконавець, дедлайн).
-
-        Статус — крапкою біля НОМЕРА, тобто там, де ідентичність задачі, а не
-        окремим бейджем праворуч: праворуч живе дія, і бейдж поруч із кнопкою
-        читався як друга кнопка. Виконавець — ФАКТОМ у мета-рядку, а не
-        випадайкою: раніше тут стояв повноцінний вибір дизайнера, через який
-        призначення мінялось повз сторінку задачі, де в нього своя історія й
-        сповіщення. Праворуч лишилась одна дія — «Відкрити».
-
-        Прототип пропонував ще дві шапки: Ш2 зі смужкою статусу на краю картки
-        й Ш3 зі службовим у підвалі. Обидві відхилені: смужка не має підпису й
-        читається як прикраса, а підвал відсуває стан задачі за екран, коли
-        візуалів багато.
-      */}
-      <div className="overflow-hidden rounded-xl border border-border/60 bg-background">
-        <div className="flex items-start gap-3 p-4">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted/30">
-            {active.imageUrl ? (
-              <img src={active.imageUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <Package className="h-5 w-5 text-muted-foreground/60" />
-            )}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              {active.number ? (
-                <span className="tabular-nums text-2xs text-muted-foreground">{active.number}</span>
-              ) : null}
-              {activeStatus ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <span className={cn("h-1.5 w-1.5 rounded-full", toneDotClass[activeStatus.tone])} aria-hidden />
-                  <span className={cn("text-2xs font-semibold", toneTextClass[activeStatus.tone])}>
-                    {activeStatus.label}
-                  </span>
-                </span>
-              ) : null}
-            </div>
-            {/*
-              ТИП ЗАДАЧІ ЗВІЛЬНИВ ЦЕЙ СЛОТ (REQ-157). Плашка «Візуалізація/
-              адаптація» стояла на 64 % карток і не казала нічого нового —
-              натомість тут те, що дизайнеру треба знати про роботу: чим і де
-              наносимо. Тип лишається в даних (норми часу, звіти) і видно його
-              на самій задачі.
-            */}
-            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <span className="text-base font-semibold tracking-tight text-foreground">{active.title}</span>
-              <QuoteImprintBadges imprint={imprint} />
-            </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              {active.itemMeta ? (
-                <>
-                  <span>{active.itemMeta}</span>
-                  <MetaDot />
-                </>
-              ) : null}
-              {active.assignee ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <AvatarBase
-                    src={active.assignee.avatarUrl}
-                    name={active.assignee.name}
-                    size={18}
-                    className="text-3xs font-semibold"
-                  />
-                  {active.assignee.name}
-                </span>
-              ) : (
-                <span>без виконавця</span>
-              )}
-              <MetaDot />
-              <span>
-                дедлайн{" "}
-                <span className="font-semibold tabular-nums text-foreground">
-                  {formatWhen(active.deadline) ?? "не заданий"}
-                </span>
-              </span>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => onOpenTask(active.id)}>
-            Відкрити
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-
-        <div className="border-t border-border/40 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-semibold text-foreground">ТЗ задачі</span>
-            {/*
-              РЕДАГУВАННЯ ЖИВЕ В ЗАДАЧІ, А НЕ ТУТ, і це не лінь.
-              ТЗ задачі — це не просто текст: у метаданих поруч лежать його
-              версії (`design_brief_versions`), активна версія й прив'язка до
-              раунду правок. Другий редактор, який пише саме поле повз версії,
-              зробив би історію ТЗ брехливою — активна версія перестала б
-              збігатися з текстом.
-
-              Той редактор, що стояв тут раніше, писав узагалі не сюди: він
-              зберігав `quotes.design_brief`, спільний на весь прорахунок, а
-              задача читає його лише як ЗАПАСНИЙ варіант. Щойно дизайнер
-              торкався ТЗ у задачі, правки з картки прорахунку переставали бути
-              видимими — тихо, без жодного попередження.
-            */}
-            <Button variant="outline" size="sm" className="gap-1.5 text-2xs" onClick={() => onOpenTask(active.id)}>
-              <Pencil className="h-3 w-3" />
-              {active.brief ? "Редагувати" : "Написати ТЗ"}
-            </Button>
-          </div>
-          {active.brief ? (
-            <div className="mt-2.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-              {renderBrief(active.brief)}
-            </div>
+    <article className="overflow-hidden rounded-xl border border-border/50 bg-card">
+      <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
+        <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/50 bg-muted/20">
+          {task.imageUrl ? (
+            <img src={task.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
           ) : (
-            <div className="mt-2.5 flex items-center gap-2.5 rounded-xl border border-dashed border-border/60 px-3.5 py-3 text-sm text-muted-foreground">
-              <Pencil className="h-4 w-4 shrink-0" />
-              <span>ТЗ ще не написане — поки його немає, дизайнер не візьме задачу в роботу</span>
-            </div>
+            <Package className="h-6 w-6 text-muted-foreground/50" />
           )}
-        </div>
+        </span>
 
-        <div className="border-t border-border/40 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-semibold text-foreground">
-              Візуалізації
-              {active.visuals.length ? (
-                <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">
-                  {active.visuals.length}
-                </span>
-              ) : null}
-            </span>
-          </div>
-          {active.visuals.length > 0 ? (
-            /* Щільність як у прототипі: скільки влізе по 170 px, а не жорсткі
-               дві колонки. На задачі з чотирнадцятьма файлами (а такі є) дві
-               колонки давали сім екранів прокрутки. */
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))]">
-              {active.visuals.map((file) => (
-                <VisualCard
-                  key={file.id}
-                  file={file}
-                  selected={file.id === active.selectedVisualId}
-                  onPreview={onPreviewVisual}
-                  onDownload={onDownloadVisual}
-                />
-              ))}
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-foreground">{task.title}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                {task.number ? <span className="tabular-nums">{task.number}</span> : null}
+                {task.number && task.itemMeta ? <MetaDot /> : null}
+                {task.itemMeta ? <span>{task.itemMeta}</span> : null}
+                <QuoteImprintBadges imprint={imprint} />
+              </div>
             </div>
-          ) : (
-            <div className="mt-2.5 flex items-center gap-2.5 rounded-xl border border-dashed border-border/60 px-3.5 py-3 text-sm text-muted-foreground">
-              <ImageIcon className="h-4 w-4 shrink-0" />
-              <span>Візуалів ще немає — дизайнер вивантажить їх у задачі</span>
-            </div>
-          )}
-        </div>
-
-        {/*
-          ВИХІДНІ МАТЕРІАЛИ (REQ-155 p7) — те, з чого дизайнер починає: логотипи,
-          макети, фото минулого тиражу. Лежали вони за другою підвкладкою
-          «Обговорення», хоч за заміром на проді 477 із 484 вкладень (98,6 %)
-          позначені `audience=design`. Тобто вкладення прорахунку — це майже
-          завжди матеріали дизайну, і їхнє місце поруч із ТЗ, а не в розмові.
-
-          ФАЙЛ ПРИВʼЯЗАНИЙ ДО ПРОРАХУНКУ, А НЕ ДО ЗАДАЧІ, і поки що інакше не
-          буває: у `quote_attachments` є `quote_id` і `audience`, задачі немає.
-          Тому на прорахунку з кількома задачами той самий перелік стоїть у
-          кожній, і про це сказано словами — вигадувати належність, якої немає в
-          даних, гірше, ніж чесно назвати список спільним.
-        */}
-        {materials.length > 0 || canAddMaterials ? (
-          <div className="border-t border-border/40 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-sm font-semibold text-foreground">
-                Вихідні матеріали
-                {materials.length ? (
-                  <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">
-                    {materials.length}
-                  </span>
-                ) : null}
-                {tasks.length > 1 ? (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">спільні для прорахунку</span>
-                ) : null}
-              </span>
-              {canAddMaterials && materials.length > 0 ? (
-                <label
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {status ? (
+                <span
                   className={cn(
-                    "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-border/60 px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
-                    materialsUploading && "pointer-events-none opacity-60"
+                    "inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-xs font-medium",
+                    toneBadgeClass[status.tone]
                   )}
                 >
-                  <Upload className="h-3 w-3" />
-                  {materialsUploading ? "Завантаження..." : "Додати"}
-                  <input
-                    type="file"
-                    multiple
-                    className="sr-only"
-                    onChange={(event) => {
-                      onAddMaterials(event.target.files);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
+                  <span className={cn("h-1.5 w-1.5 rounded-full", toneDotClass[status.tone])} aria-hidden />
+                  {status.label}
+                </span>
               ) : null}
+              <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-muted px-2 pl-0.5 text-xs text-muted-foreground">
+                {task.assignee ? (
+                  <>
+                    <AvatarBase
+                      src={task.assignee.avatarUrl}
+                      name={task.assignee.name}
+                      size={20}
+                      className="text-3xs font-semibold"
+                    />
+                    {task.assignee.name}
+                  </>
+                ) : (
+                  <span className="pl-1.5">без виконавця</span>
+                )}
+              </span>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onOpenTask(task.id)}>
+                Відкрити задачу
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
             </div>
+          </div>
 
-            {materials.length > 0 ? (
-              <div className="mt-2">
-                {materials.map((file) => {
-                  const displayName = getAttachmentDisplayFileName(file.name, file.storagePath, file.mimeType);
-                  const extension = getFileExtension(displayName);
-                  // Та сама мініатюра з розкриттям під курсором, що й у «Файлах
-                  // справи»: обидва списки показують ті самі `quote_attachments`,
-                  // і впізнавати файл в одному з них по хвостику назви — дивно.
-                  const previewable =
-                    (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
-                    Boolean(file.storageBucket && file.storagePath);
-                  return (
-                    <div
-                      key={file.id}
-                      className="flex items-center gap-3 border-b border-border/40 py-2.5 last:border-b-0"
-                    >
-                      {previewable ? (
-                        <StorageObjectImage
-                          bucket={file.storageBucket}
-                          path={file.storagePath}
-                          alt={displayName}
-                          variant="thumb"
-                          hoverPreview
-                          className="h-9 w-9 shrink-0 rounded-lg border border-border/60 bg-muted/30"
-                        />
-                      ) : (
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">
-                          {extension ?? <Paperclip className="h-4 w-4" />}
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-foreground" title={displayName}>
-                          {displayName}
-                        </div>
-                        <div className="truncate text-2xs text-muted-foreground">
-                          {[file.size, formatWhen(file.created_at), file.uploadedByLabel]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </div>
-                      </div>
-                      {file.storageBucket && file.storagePath ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="shrink-0 px-2 text-2xs text-muted-foreground"
-                          onClick={() => onDownloadVisual(file)}
-                        >
-                          Завантажити
-                        </Button>
-                      ) : null}
-                    </div>
-                  );
-                })}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-5">
+            <div className="min-w-0 flex-1 space-y-1">
+              {deadline ? (
+                <div className="text-xs text-muted-foreground">
+                  дедлайн <span className="font-semibold tabular-nums text-foreground">{deadline}</span>
+                </div>
+              ) : null}
+              {task.brief ? (
+                <p className="line-clamp-2 text-sm leading-relaxed text-foreground/85">{plainBrief(task.brief)}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  ТЗ ще не написане — поки його немає, дизайнер не візьме задачу в роботу
+                </p>
+              )}
+            </div>
+            {minis.length > 0 ? (
+              <div className="flex shrink-0 gap-2">
+                {minis.map((file) => (
+                  <MiniVisual
+                    key={file.id}
+                    file={file}
+                    selected={file.id === task.selectedVisualId}
+                    onPreview={onPreviewVisual}
+                    onDownload={onDownloadVisual}
+                  />
+                ))}
+                {extra > 0 ? (
+                  <button
+                    type="button"
+                    onClick={onToggle}
+                    className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-xs font-semibold tabular-nums text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                    aria-label={`Показати ще ${extra} візуалів`}
+                  >
+                    +{extra}
+                  </button>
+                ) : null}
               </div>
             ) : (
-              /*
-                ПУНКТИРНА СМУЖКА ТЕПЕР СПРАВЖНЯ (REQ-175#p78). Доти вона лише
-                виглядала як місце для кидка: пунктир, скріпка, «додають сюди» —
-                а файл, кинутий на неї, не робив нічого. Додати можна було
-                тільки кнопкою в шапці блоку. Тепер це той самий `FileDropZone`,
-                що в решті місць, рядком — під висоту, яку смужка й мала.
-
-                Порожній стан НЕ БУВАЄ без права додавати: блок узагалі
-                показується лише за `materials.length > 0 || canAddMaterials`,
-                тож сюди можна дійти тільки з правом.
-              */
-              <FileDropZone
-                busy={materialsUploading}
-                className="mt-2.5"
-                hint="Логотипи, макети й фото — з них дизайнер починає"
-                label="Додати вихідні матеріали"
-                multiple
-                onFiles={onAddMaterials}
-                size="row"
-                title="Перетягніть або клікніть"
-              />
+              <div className="flex h-[54px] shrink-0 items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 text-xs text-muted-foreground">
+                <ImageIcon className="h-3.5 w-3.5" />
+                Візуалів ще немає
+              </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="flex w-full items-center justify-center gap-1.5 border-t border-border/40 py-1.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20"
+      >
+        {expanded ? "Згорнути" : "ТЗ повністю й усі візуали"}
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+      </button>
+
+      {expanded ? (
+        <div className="space-y-5 border-t border-border/40 p-4">
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-foreground">ТЗ задачі</span>
+              {/*
+                РЕДАГУВАННЯ ЖИВЕ В ЗАДАЧІ, А НЕ ТУТ. Поруч із текстом ТЗ у
+                метаданих лежать його версії й прив'язка до раунду правок;
+                другий редактор, що пише саме поле повз версії, зробив би
+                історію ТЗ брехливою.
+              */}
+              <Button variant="outline" size="sm" className="gap-1.5 text-2xs" onClick={() => onOpenTask(task.id)}>
+                <Pencil className="h-3 w-3" />
+                {task.brief ? "Редагувати" : "Написати ТЗ"}
+              </Button>
+            </div>
+            {task.brief ? (
+              <div className="mt-2.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {renderBrief(task.brief)}
+              </div>
+            ) : null}
+          </div>
+          {task.visuals.length > 0 ? (
+            <div>
+              <span className="text-sm font-semibold text-foreground">
+                Візуалізації
+                <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">{task.visuals.length}</span>
+              </span>
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))]">
+                {task.visuals.map((file) => (
+                  <VisualCard
+                    key={file.id}
+                    file={file}
+                    selected={file.id === task.selectedVisualId}
+                    onPreview={onPreviewVisual}
+                    onDownload={onDownloadVisual}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+/**
+ * ВИХІДНІ МАТЕРІАЛИ (REQ-155 p7) — те, з чого дизайнер починає: логотипи,
+ * макети, фото минулого тиражу. За заміром на проді 98,6 % вкладень прорахунку
+ * позначені `audience=design`, тож їхнє місце тут, а не в розмові.
+ *
+ * ФАЙЛ ПРИВʼЯЗАНИЙ ДО ПРОРАХУНКУ, А НЕ ДО ЗАДАЧІ: у `quote_attachments` задачі
+ * немає. Тому блок один на вкладку, під усіма картками, і названий спільним —
+ * вигадувати належність, якої немає в даних, гірше, ніж чесно назвати список
+ * спільним.
+ */
+export function QuoteDesignMaterials({
+  materials,
+  uploading,
+  canAdd,
+  onAdd,
+  onDownload,
+}: {
+  materials: QuoteAttachment[];
+  uploading?: boolean;
+  canAdd?: boolean;
+  onAdd: (files: FileList | File[] | null) => void;
+  onDownload: (file: QuoteAttachment) => void;
+}) {
+  if (materials.length === 0 && !canAdd) return null;
+  return (
+    <section className="rounded-xl border border-border/50 bg-card p-4" aria-label="Вихідні матеріали">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-foreground">
+            Вихідні матеріали
+            {materials.length ? (
+              <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">{materials.length}</span>
+            ) : null}
+          </div>
+          <div className="text-xs text-muted-foreground">Спільні для всіх задач прорахунку: логотипи, брендбук, фото</div>
+        </div>
+        {canAdd && materials.length > 0 ? (
+          <label
+            className={cn(
+              "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-border/60 px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
+              uploading && "pointer-events-none opacity-60"
+            )}
+          >
+            <Upload className="h-3 w-3" />
+            {uploading ? "Завантаження..." : "Додати"}
+            <input
+              type="file"
+              multiple
+              className="sr-only"
+              onChange={(event) => {
+                onAdd(event.target.files);
+                event.target.value = "";
+              }}
+            />
+          </label>
         ) : null}
       </div>
-    </div>
+
+      {materials.length > 0 ? (
+        <div className="mt-2">
+          {materials.map((file) => {
+            const displayName = getAttachmentDisplayFileName(file.name, file.storagePath, file.mimeType);
+            const extension = getFileExtension(displayName);
+            return (
+              <div key={file.id} className="flex items-center gap-3 border-b border-border/40 py-2.5 last:border-b-0">
+                {isPreviewable(file) ? (
+                  <StorageObjectImage
+                    bucket={file.storageBucket}
+                    path={file.storagePath}
+                    alt={displayName}
+                    variant="thumb"
+                    hoverPreview
+                    className="h-9 w-9 shrink-0 rounded-lg border border-border/60 bg-muted/30"
+                  />
+                ) : (
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">
+                    {extension ?? <Paperclip className="h-4 w-4" />}
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-foreground" title={displayName}>
+                    {displayName}
+                  </div>
+                  <div className="truncate text-2xs text-muted-foreground">
+                    {[file.size, formatWhen(file.created_at), file.uploadedByLabel].filter(Boolean).join(" · ")}
+                  </div>
+                </div>
+                {file.storageBucket && file.storagePath ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="shrink-0 px-2 text-2xs text-muted-foreground"
+                    onClick={() => onDownload(file)}
+                  >
+                    Завантажити
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <FileDropZone
+          busy={uploading}
+          className="mt-2.5"
+          hint="Логотипи, макети й фото — з них дизайнер починає"
+          label="Додати вихідні матеріали"
+          multiple
+          onFiles={onAdd}
+          size="row"
+          title="Перетягніть або клікніть"
+        />
+      )}
+    </section>
   );
 }

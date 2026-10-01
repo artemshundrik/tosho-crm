@@ -3,21 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageLoading } from "@/components/app/page-loading";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import { TimeInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
-import { Calendar as CalendarPicker } from "@/components/ui/calendar";
-import { DateQuickActions } from "@/components/ui/date-quick-actions";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
@@ -38,9 +31,10 @@ import {
   combineWallClockValue,
   deadlineDiffDays,
   formatDeadlineLabel,
+  getDeadlineBadge,
   parseDeadlineDate,
-  toLocalDate,
 } from "@/features/quotes/quote-details/deadlineLabels";
+import { QuoteDeadlinesTab } from "@/features/quotes/quote-details/QuoteDeadlinesTab";
 import { QuotePartyCard } from "@/features/quotes/quote-details/QuotePartyCard";
 import { QuotePriceSummary } from "@/features/quotes/quote-details/QuotePriceSummary";
 import { QuoteStatusControl } from "@/features/quotes/quote-details/QuoteStatusControl";
@@ -159,7 +153,6 @@ import {
   buildQuoteDesignTaskCards,
 } from "@/features/quotes/quote-details/QuoteDesignTasksPanel";
 import { QuoteDesignTabSection } from "@/features/quotes/quote-details/QuoteDesignTabSection";
-import { QuoteDeadlineOrderWarning } from "@/features/quotes/quote-details/QuoteDeadlineOrderWarning";
 import { QuoteFeed } from "@/features/quotes/quote-details/QuoteFeed";
 import { describeRunChanges } from "@/features/quotes/quote-details/quoteRunChanges";
 import { buildQuoteFeed } from "@/features/quotes/quote-details/quoteFeedEvents";
@@ -234,7 +227,6 @@ import {
   formatStatusLabel,
   getErrorMessage,
   getInitials,
-  minutesAgo,
   normalizeStatus,
   statusIcons,
 } from "@/features/quotes/quote-details/config";
@@ -280,10 +272,7 @@ import {
   type CatalogModelRowRaw,
 } from "@/features/quotes/quote-details/queries";
 import { QuoteTypeBadge } from "@/features/quotes/components/QuoteTypeBadge";
-import {
-  QuoteDeadlineBadge,
-  type QuoteDeadlineTone,
-} from "@/features/quotes/components/QuoteDeadlineBadge";
+import type { QuoteDeadlineTone } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { CustomerLeadQuickViewDialog } from "@/components/customers";
@@ -345,8 +334,6 @@ function sanitizeQuoteSummaryForCache(quote: QuoteSummaryRow): QuoteSummaryRow {
 }
 
 const DEFAULT_DEADLINE_TIME = "09:00";
-const DEADLINE_FIELD_LABEL_CLASS =
-  "text-2xs font-medium uppercase tracking-wide text-muted-foreground";
 const DEFAULT_MANAGER_RATE = 10;
 const DEADLINE_REMINDER_OPTIONS = [
   { value: "none", label: "Без сповіщення" },
@@ -665,7 +652,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    */
   const [designTasks, setDesignTasks] = useState<DesignTaskRow[]>([]);
     /** Підвкладка «Дедлайнів». Керована, щоб попередження вміло привести до потрібної дати. */
-  const [deadlineSubTab, setDeadlineSubTab] = useState("internal");
   const [designTaskLoading, setDesignTaskLoading] = useState(false);
   const [designTaskError, setDesignTaskError] = useState<string | null>(null);
   const [designTaskSaving, setDesignTaskSaving] = useState(false);
@@ -726,9 +712,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [deadlineReminderComment, setDeadlineReminderComment] = useState("");
   const [deadlineSaving, setDeadlineSaving] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
-  const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
-  const [customerDeadlinePopoverOpen, setCustomerDeadlinePopoverOpen] = useState(false);
-  const [designDeadlinePopoverOpen, setDesignDeadlinePopoverOpen] = useState(false);
 
   // Inline editing for quantity
   const [editingQty, setEditingQty] = useState<string | null>(null);
@@ -1340,7 +1323,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     де такі уточнення й живуть.
   */
 
-  const updatedMinutes = minutesAgo(quote?.updated_at ?? null);
 
   /** Що рахується в гроші: усе, крім відхиленого клієнтом (REQ-267#p1). */
   const includedItems = useMemo(() => filterIncludedQuoteItems(items), [items]);
@@ -1533,24 +1515,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const combineDeadlineValue = (date?: string | null, time?: string | null) =>
     combineWallClockValue(date, time, DEFAULT_DEADLINE_TIME);
 
-  const formatDateInput = (value?: Date | null) => {
-    if (!value) return "";
-    const y = value.getFullYear();
-    const m = String(value.getMonth() + 1).padStart(2, "0");
-    const d = String(value.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  };
-
-  const formatDeadlineDateOnlyLabel = (value?: string | null) => {
-    const date = parseDeadlineDate(value);
-    if (!date) return "Без дедлайну";
-    return date.toLocaleDateString("uk-UA", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  };
-
   const formatShortDeadlineLabel = (value?: string | null) => {
     const date = parseDeadlineDate(value);
     if (!date) return "Не вказано";
@@ -1564,48 +1528,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       hour: "2-digit",
       minute: "2-digit",
     })}`;
-  };
-
-  /**
-   * Підпис вкладки «Дедлайни» — знак і число, і більше нічого.
-   *
-   * ЩО БУЛО НЕ ТАК. Підпис збирався з повного бейджа й часу, і виходило
-   * «Прострочено (24 дн.) · 10:00» — 159 px у коробку завширшки 96. Обрізало
-   * рівно там, де починалась інформація: слово лишалось, ЧИСЛО зникало, і на
-   * вкладці висіло «Прострочено (…».
-   *
-   * ДРУГА ВАДА БУЛА ГІРША ЗА ОБРІЗАННЯ. Підпис говорив чотирма мовами залежно
-   * від стану: словом («Сьогодні»), лічильником («Через 2 дн.»), датою
-   * («05.09.2026») і сумішшю з часом. Одне місце на вкладці щоразу відповідало
-   * на інше питання, і прочитати його з розгону було неможливо.
-   *
-   * ТЕПЕР ОДНА МОВА НА ВСІ СТАНИ: «−24 дн», «Сьогодні», «+1 дн», «+11 дн».
-   * Найдовше — п'ять знаків замість двадцяти восьми. Час прибрано: він з'їдав
-   * майже половину коробки, а вирішує рідко — повна дата з часом лишається під
-   * курсором у доріжці дедлайнів збоку.
-   *
-   * Дедлайну немає — підпису теж немає: про це вже говорить червона крапка
-   * «потребує уваги», і слово «Не вказано» поруч із нею лише повторювало її.
-   */
-  const buildDeadlineBadgePreview = (value?: string | null) => {
-    if (!value) {
-      return {
-        tone: "none" as QuoteDeadlineTone,
-        label: "Без дедлайну",
-        title: "Без дедлайну",
-      };
-    }
-    const badge = getDeadlineBadge(value);
-    const parsed = parseDeadlineDate(value);
-    const hasTime = /T\d{2}:\d{2}/.test(value);
-    const timeLabel = parsed && hasTime
-      ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
-      : null;
-    return {
-      tone: badge.tone,
-      label: timeLabel ? `${badge.label} · ${timeLabel}` : badge.label,
-      title: formatDeadlineLabel(value),
-    };
   };
 
   /**
@@ -1634,16 +1556,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               ? date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })
               : badge.label;
     return { label, short, tone: badge.tone, title: `${label}: ${formatDeadlineLabel(value)}` };
-  };
-
-  const resolveDeadlinePreviewValue = (
-    date?: string | null,
-    time?: string | null,
-    fallback?: string | null
-  ) => {
-    const normalizedDate = (date ?? "").trim();
-    if (!normalizedDate) return fallback ?? null;
-    return combineDeadlineValue(normalizedDate, time);
   };
 
   const formatDeliveryLabel = (value?: string | null) => {
@@ -1683,40 +1595,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (reminder) extras.push({ label: "Нагадування", value: reminder });
     return extras;
   }, [quote?.delivery_type, quote?.print_type, quote?.deadline_reminder_offset_minutes]);
-
-  const getDeadlineBadge = (value?: string | null) => {
-    if (!value) {
-      return { label: "Без дедлайну", tone: "none" as QuoteDeadlineTone };
-    }
-    const date = parseDeadlineDate(value);
-    if (!date) {
-      return { label: "Без дедлайну", tone: "none" as QuoteDeadlineTone };
-    }
-    const diffDays = deadlineDiffDays(value) ?? 0;
-
-    if (diffDays < 0) {
-      return {
-        label: `Прострочено (${Math.abs(diffDays)} дн.)`,
-        tone: "overdue" as QuoteDeadlineTone,
-      };
-    }
-    if (diffDays === 0) {
-      return {
-        label: "Сьогодні",
-        tone: "today" as QuoteDeadlineTone,
-      };
-    }
-    if (diffDays <= 2) {
-      return {
-        label: diffDays === 1 ? "Завтра" : `Через ${diffDays} дн.`,
-        tone: "soon" as QuoteDeadlineTone,
-      };
-    }
-    return {
-      label: date.toLocaleDateString("uk-UA"),
-      tone: "future" as QuoteDeadlineTone,
-    };
-  };
 
   const memberById = useMemo(
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
@@ -3301,14 +3179,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     reminderOffset?: string;
     reminderComment?: string;
   }) => {
-    if (!quote) return;
+    if (!quote) return false;
     const nextDatePart = (overrides?.date ?? deadlineDate) || "";
     const nextTimePart = (overrides?.time ?? deadlineTime) || DEFAULT_DEADLINE_TIME;
     if (!nextDatePart) {
       const message = "Дедлайн прорахунку є обов'язковим.";
       setDeadlineError(message);
       toast.error(message);
-      return;
+      return false;
     }
     setDeadlineSaving(true);
     setDeadlineError(null);
@@ -3350,7 +3228,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (!saved.ok) {
         setDeadlineError(saved.message);
         setDeadlineSaving(false);
-        return;
+        return false;
       }
       const updatedQuote = saved.data;
       setQuote((prev) =>
@@ -3400,14 +3278,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         if (!logged.ok) {
           setDeadlineError(logged.message);
           setDeadlineSaving(false);
-          return;
+          return false;
         }
         await loadActivityLog();
       }
     }
     setDeadlineSaving(false);
+    return true;
   };
-
   const handleSaveSecondaryDeadline = async (
     field: "customer_deadline_at" | "design_deadline_at",
     options: {
@@ -3419,7 +3297,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       nextTime?: string;
     }
   ) => {
-    if (!quote) return;
+    if (!quote) return false;
     const nextDatePart = options.nextDate ?? options.date;
     const nextTimePart = options.nextTime ?? options.time ?? DEFAULT_DEADLINE_TIME;
     const nextValue = nextDatePart ? combineDeadlineValue(nextDatePart, nextTimePart) : null;
@@ -3427,7 +3305,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       field === "customer_deadline_at"
         ? quote.customer_deadline_at ?? null
         : quote.design_deadline_at ?? null;
-    if ((prevValue ?? null) === (nextValue ?? null)) return;
+    if ((prevValue ?? null) === (nextValue ?? null)) return true;
 
     setDeadlineSaving(true);
     setDeadlineError(null);
@@ -3444,7 +3322,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (!saved.ok) {
         setDeadlineError(saved.message);
         setDeadlineSaving(false);
-        return;
+        return false;
       }
       const updatedQuote = saved.data;
       setQuote((prev) =>
@@ -3488,11 +3366,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (!logged.ok) {
         setDeadlineError(logged.message);
         setDeadlineSaving(false);
-        return;
+        return false;
       }
       await loadActivityLog();
     }
     setDeadlineSaving(false);
+    return true;
   };
 
   // Quick status change
@@ -4042,16 +3921,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }
 
   const deadlineTabBadge = buildDeadlineTabBadge(quote.deadline_at);
-
-  // Дві дати для попередження про порядок дедлайнів (REQ-155 p8). Беремо
-  // ЧЕРНЕТКУ — значення в полях: попередження має спрацювати в мить, коли дату
-  // набрали, а не після «Зберегти». Саме правило — у `deadlineLabels`.
-  const answerDeadlineValue = resolveDeadlinePreviewValue(deadlineDate, deadlineTime, quote.deadline_at);
-  const designDeadlineValue = resolveDeadlinePreviewValue(
-    designDeadlineDate,
-    designDeadlineTime,
-    quote.design_deadline_at
-  );
 
   const discussionCount = comments.length + attachments.length;
   const designBadge = designTask
@@ -5450,413 +5319,29 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </details>
 
             <section className={cn("tab-panel py-2", activeQuoteTab !== "deadlines" && "hidden")}>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
-                    <Calendar className="h-4 w-4" />
-                  </div>
-                  <div className="text-base font-semibold tracking-tight text-foreground">Дедлайни та задача</div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="peer flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                      aria-label="Інформація про дедлайни та задачу"
-                      onClick={(event) => event.preventDefault()}
-                    >
-                      <CircleHelp className="h-3.5 w-3.5" />
-                    </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                      Ключові дати прорахунку, нагадування і постановка задачі для дизайну.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <QuoteDeadlineOrderWarning
-                designDeadline={designDeadlineValue}
-                answerDeadline={answerDeadlineValue}
-                designLabel={formatShortDeadlineLabel(designDeadlineValue)}
-                answerLabel={formatShortDeadlineLabel(answerDeadlineValue)}
-                onFix={() => setDeadlineSubTab("design")}
+              <QuoteDeadlinesTab
+                drafts={{
+                  design: { saved: quote.design_deadline_at ?? null, date: designDeadlineDate, time: designDeadlineTime, setDate: setDesignDeadlineDate, setTime: setDesignDeadlineTime },
+                  answer: { saved: quote.deadline_at ?? null, date: deadlineDate, time: deadlineTime, setDate: setDeadlineDate, setTime: setDeadlineTime },
+                  customer: { saved: quote.customer_deadline_at ?? null, date: customerDeadlineDate, time: customerDeadlineTime, setDate: setCustomerDeadlineDate, setTime: setCustomerDeadlineTime },
+                }}
+                reminder={{ offset: deadlineReminderOffset, setOffset: setDeadlineReminderOffset, comment: deadlineReminderComment, setComment: setDeadlineReminderComment, note: deadlineNote, setNote: setDeadlineNote, options: DEADLINE_REMINDER_OPTIONS }}
+                defaultTime={DEFAULT_DEADLINE_TIME}
+                saving={deadlineSaving}
+                error={deadlineError}
+                onSave={(key, override) => {
+                  if (key === "answer") return handleSaveDeadline(override);
+                  const design = key === "design";
+                  return handleSaveSecondaryDeadline(design ? "design_deadline_at" : "customer_deadline_at", {
+                    date: design ? designDeadlineDate : customerDeadlineDate,
+                    time: design ? designDeadlineTime : customerDeadlineTime,
+                    nextDate: override?.date,
+                    nextTime: override?.time,
+                    title: design ? "Дедлайн дизайну" : "Дедлайн Замовника",
+                    action: design ? "змінив дедлайн дизайну" : "змінив дедлайн замовника",
+                  });
+                }}
               />
-
-              <div className="space-y-4">
-                <Tabs value={deadlineSubTab} onValueChange={setDeadlineSubTab} className="w-full">
-                  <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
-                  <TabsList className="grid h-auto w-full grid-cols-1 gap-2 border-0 bg-transparent p-0">
-                    <TabsTrigger
-                      value="customer"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
-                    >
-                      <div className="relative flex items-center gap-2">
-                        <div className="text-sm font-semibold text-foreground">Дедлайн замовника</div>
-                        <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
-                          <CircleHelp className="h-3.5 w-3.5" />
-                        </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100">
-                          Готовність до відвантаження.
-                        </div>
-                      </div>
-                      <div>
-                        {resolveDeadlinePreviewValue(
-                          customerDeadlineDate,
-                          customerDeadlineTime,
-                          quote?.customer_deadline_at ?? null
-                        ) ? (
-                          (() => {
-                            const preview = buildDeadlineBadgePreview(
-                              resolveDeadlinePreviewValue(
-                                customerDeadlineDate,
-                                customerDeadlineTime,
-                                quote.customer_deadline_at
-                              )
-                            );
-                            return (
-                              <QuoteDeadlineBadge
-                                tone={preview.tone}
-                                label={preview.label}
-                                title={preview.title}
-                                compact
-                              />
-                            );
-                          })()
-                        ) : (
-                          <Badge variant="outline" className="h-6 px-2 text-2xs quote-neutral-badge">
-                            Не вказано
-                          </Badge>
-                        )}
-                      </div>
-                    </TabsTrigger>
-
-                    <TabsTrigger
-                      value="internal"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
-                    >
-                      <div className="relative flex items-center gap-2">
-                        <div className="text-sm font-semibold text-foreground">Внутрішній дедлайн</div>
-                        <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
-                          <CircleHelp className="h-3.5 w-3.5" />
-                        </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100">
-                          Відповідь замовнику.
-                        </div>
-                      </div>
-                      <div>
-                        {(() => {
-                          const preview = buildDeadlineBadgePreview(
-                            resolveDeadlinePreviewValue(deadlineDate, deadlineTime, quote?.deadline_at ?? null)
-                          );
-                          return (
-                            <QuoteDeadlineBadge
-                              tone={preview.tone}
-                              label={preview.label}
-                              title={preview.title}
-                              compact
-                            />
-                          );
-                        })()}
-                      </div>
-                    </TabsTrigger>
-
-                    <TabsTrigger
-                      value="design"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
-                    >
-                      <div className="relative flex items-center gap-2">
-                        <div className="text-sm font-semibold text-foreground">Дедлайн дизайну</div>
-                        <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
-                          <CircleHelp className="h-3.5 w-3.5" />
-                        </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100">
-                          Погодити макет.
-                        </div>
-                      </div>
-                      <div>
-                        {resolveDeadlinePreviewValue(
-                          designDeadlineDate,
-                          designDeadlineTime,
-                          quote?.design_deadline_at ?? null
-                        ) ? (
-                          (() => {
-                            const preview = buildDeadlineBadgePreview(
-                              resolveDeadlinePreviewValue(
-                                designDeadlineDate,
-                                designDeadlineTime,
-                                quote.design_deadline_at
-                              )
-                            );
-                            return (
-                              <QuoteDeadlineBadge
-                                tone={preview.tone}
-                                label={preview.label}
-                                title={preview.title}
-                                compact
-                              />
-                            );
-                          })()
-                        ) : (
-                          <Badge variant="outline" className="h-6 px-2 text-2xs quote-neutral-badge">
-                            Не вказано
-                          </Badge>
-                        )}
-                      </div>
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <div className="rounded-xl border border-border/40 bg-muted/[0.02] p-4 md:p-5">
-                    <TabsContent value="customer" className="mt-0">
-                      <div className="space-y-4">
-                        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
-                          <div className="space-y-1.5">
-                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Дата</div>
-                            <Popover open={customerDeadlinePopoverOpen} onOpenChange={setCustomerDeadlinePopoverOpen}>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  className="w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
-                                  onClick={() => setCustomerDeadlinePopoverOpen(true)}
-                                >
-                                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                                  {customerDeadlineDate
-                                    ? formatDeadlineDateOnlyLabel(customerDeadlineDate)
-                                    : "Оберіть день"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
-                                <CalendarPicker
-                                  mode="single"
-                                  selected={toLocalDate(customerDeadlineDate)}
-                                  onSelect={(date) => {
-                                    const nextDate = formatDateInput(date ?? null);
-                                    setCustomerDeadlineDate(nextDate);
-                                    setCustomerDeadlinePopoverOpen(false);
-                                  }}
-                                              />
-                                <DateQuickActions
-                                  onSelect={(date) => {
-                                    const nextDate = formatDateInput(date ?? null);
-                                    setCustomerDeadlineDate(nextDate);
-                                    setCustomerDeadlinePopoverOpen(false);
-                                  }}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Час</div>
-                            <TimeInput
-                              controlSize="md"
-                          className="w-full border-border/40 bg-muted/[0.03]"
-                              value={customerDeadlineTime}
-                              onChange={(e) => setCustomerDeadlineTime(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex justify-end">
-                          <Button
-                            variant="outline"
-                            className="gap-2 border-border/40 bg-muted/[0.03]"
-                            onClick={() =>
-                              void handleSaveSecondaryDeadline("customer_deadline_at", {
-                                date: customerDeadlineDate,
-                                time: customerDeadlineTime,
-                                title: "Дедлайн Замовника",
-                                action: "змінив дедлайн замовника",
-                              })
-                            }
-                            disabled={deadlineSaving || !customerDeadlineDate}
-                          >
-                            {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                            Зберегти
-                          </Button>
-                        </div>
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="internal" className="mt-0">
-                      <div className="space-y-4">
-                        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
-                          <div className="space-y-1.5">
-                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Дата</div>
-                            <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  className="w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
-                                  onClick={() => setDeadlinePopoverOpen(true)}
-                                >
-                                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                                  {deadlineDate
-                                    ? formatDeadlineDateOnlyLabel(deadlineDate)
-                                    : "Оберіть день"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
-                                <CalendarPicker
-                                  mode="single"
-                                  selected={toLocalDate(deadlineDate)}
-                                  onSelect={(date) => {
-                                    const nextDate = formatDateInput(date ?? null);
-                                    setDeadlineDate(nextDate);
-                                    setDeadlinePopoverOpen(false);
-                                  }}
-                                              />
-                                <DateQuickActions
-                                  onSelect={(date) => {
-                                    const nextDate = formatDateInput(date ?? null);
-                                    setDeadlineDate(nextDate);
-                                    setDeadlinePopoverOpen(false);
-                                  }}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Час</div>
-                            <TimeInput
-                              controlSize="md"
-                          className="w-full border-border/40 bg-muted/[0.03]"
-                              value={deadlineTime}
-                              onChange={(e) => setDeadlineTime(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div className="space-y-1.5">
-                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Нагадування</div>
-                            <Select
-                              value={deadlineReminderOffset}
-                              onValueChange={(value) => {
-                                setDeadlineReminderOffset(value);
-                                void handleSaveDeadline({ reminderOffset: value });
-                              }}
-                            >
-                              <SelectTrigger
-                          controlSize="md"
-                          className="w-full border-border/40 bg-muted/[0.03]">
-                                <SelectValue placeholder="Коли нагадати" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {DEADLINE_REMINDER_OPTIONS.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Текст нагадування</div>
-                            <Input
-                              controlSize="md"
-                          className="w-full border-border/40 bg-muted/[0.03]"
-                              placeholder="Напр. передзвонити клієнту"
-                              value={deadlineReminderComment}
-                              onChange={(e) => setDeadlineReminderComment(e.target.value)}
-                              maxLength={200}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <div className={DEADLINE_FIELD_LABEL_CLASS}>Коментар</div>
-                          <Input
-                            controlSize="md"
-                          className="w-full border-border/40 bg-muted/[0.03]"
-                            placeholder="Внутрішня примітка до дедлайну"
-                            value={deadlineNote}
-                            onChange={(e) => setDeadlineNote(e.target.value)}
-                            maxLength={200}
-                          />
-                        </div>
-                        <div className="flex justify-end">
-                          <Button
-                            variant="outline"
-                            className="gap-2 border-border/40 bg-muted/[0.03]"
-                            onClick={() => void handleSaveDeadline()}
-                            disabled={deadlineSaving}
-                          >
-                            {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                            Зберегти
-                          </Button>
-                        </div>
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="design" className="mt-0">
-                      <div className="space-y-4">
-                        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
-                          <div className="space-y-1.5">
-                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Дата</div>
-                            <Popover open={designDeadlinePopoverOpen} onOpenChange={setDesignDeadlinePopoverOpen}>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  className="w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
-                                  onClick={() => setDesignDeadlinePopoverOpen(true)}
-                                >
-                                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                                  {designDeadlineDate
-                                    ? formatDeadlineDateOnlyLabel(designDeadlineDate)
-                                    : "Оберіть день"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
-                                <CalendarPicker
-                                  mode="single"
-                                  selected={toLocalDate(designDeadlineDate)}
-                                  onSelect={(date) => {
-                                    const nextDate = formatDateInput(date ?? null);
-                                    setDesignDeadlineDate(nextDate);
-                                    setDesignDeadlinePopoverOpen(false);
-                                  }}
-                                              />
-                                <DateQuickActions
-                                  onSelect={(date) => {
-                                    const nextDate = formatDateInput(date ?? null);
-                                    setDesignDeadlineDate(nextDate);
-                                    setDesignDeadlinePopoverOpen(false);
-                                  }}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Час</div>
-                            <TimeInput
-                              controlSize="md"
-                          className="w-full border-border/40 bg-muted/[0.03]"
-                              value={designDeadlineTime}
-                              onChange={(e) => setDesignDeadlineTime(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex justify-end">
-                          <Button
-                            variant="outline"
-                            className="gap-2 border-border/40 bg-muted/[0.03]"
-                            onClick={() =>
-                              void handleSaveSecondaryDeadline("design_deadline_at", {
-                                date: designDeadlineDate,
-                                time: designDeadlineTime,
-                                title: "Дедлайн дизайну",
-                                action: "змінив дедлайн дизайну",
-                              })
-                            }
-                            disabled={deadlineSaving || !designDeadlineDate}
-                          >
-                            {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                            Зберегти
-                          </Button>
-                        </div>
-                      </div>
-                    </TabsContent>
-                  </div>
-                  </div>
-                </Tabs>
-              </div>
-
-              {deadlineError && <div className="mt-4 text-xs text-destructive">{deadlineError}</div>}
-              {updatedMinutes !== null && <></>}
             </section>
 
             <section className={cn("tab-panel py-2", activeQuoteTab !== "design" && "hidden")}>
@@ -5932,11 +5417,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </section>
 
             <section className={cn("tab-panel py-2", activeQuoteTab !== "discussion" && "hidden")}>
-              <div className="mb-4 flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
-                  <Clock className="h-4 w-4" />
-                </div>
+              <div className="mb-4">
                 <div className="text-base font-semibold tracking-tight text-foreground">Стрічка</div>
+                <div className="text-xs text-muted-foreground">Усе, що сталося з прорахунком, — по днях</div>
               </div>
 
               <QuoteFeed
@@ -5968,6 +5451,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 }}
                 onDeleteFile={requestDeleteAttachment}
                 onOpenThread={() => threadDockRef.current?.open()}
+                avatarOf={(actorId) => memberAvatarById.get(actorId) ?? null}
                 canLoadMore={!activityLoadedAll}
                 loadingMore={activityLoading}
                 onLoadMore={() => void loadActivityLog({ full: true })}

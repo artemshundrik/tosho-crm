@@ -10,6 +10,7 @@ import {
   Upload,
 } from "@/components/icons/appIcons";
 
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatActivityClock, formatActivityDayLabel } from "@/lib/activity";
@@ -62,11 +63,28 @@ const FEED_FILTERS: Array<{ key: QuoteFeedKind | "all"; label: string }> = [
   { key: "event", label: "Події" },
 ];
 
+/** «Сьогодні» й «Вчора» не кажуть, яке це число; поруч ставимо дату. */
+const relativeDayDate = (label: string, iso: string) => {
+  if (label !== "Сьогодні" && label !== "Вчора") return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? null
+    : date.toLocaleDateString("uk-UA", { weekday: "short", day: "numeric", month: "long" });
+};
+
+/**
+ * Рядок стрічки мовою «Товарів» (REQ-226#p3): ХТО — аватаром, ЩО СТАЛОСЬ —
+ * значком на його краю, далі текст, «було → стало» чипами й репліка
+ * бульбашкою. Значок події не зникає за аватаром: кружечок і далі каже, що
+ * це — гроші, файл чи статус, просто тепер поруч видно й людину.
+ */
 function FeedRow({
   event,
+  avatarOf,
   onDownload,
 }: {
   event: QuoteFeedEvent;
+  avatarOf?: (actorId: string) => string | null;
   onDownload: (file: QuoteAttachment) => void;
 }) {
   const Icon = event.icon;
@@ -77,52 +95,63 @@ function FeedRow({
   const attachmentExtension = getFileExtension(attachmentName);
   const attachmentThumb =
     canPreviewImage(attachmentExtension) || canPreviewDocumentThumb(attachmentExtension);
+  const accent = event.accentClass ?? "border-border bg-muted/20 text-muted-foreground";
 
   return (
-    <div className="flex items-start gap-3 py-3">
-      <span
-        className={cn(
-          "grid h-8 w-8 shrink-0 place-items-center rounded-full border",
-          event.accentClass ?? "border-border bg-muted/20 text-muted-foreground"
-        )}
-        aria-hidden
-      >
-        <Icon className="h-3.5 w-3.5" />
-      </span>
+    <div className="flex items-start gap-3 px-3 py-3 sm:px-4">
+      {event.actorId ? (
+        <span className="relative mt-0.5 shrink-0">
+          <AvatarBase
+            src={avatarOf?.(event.actorId) ?? null}
+            name={event.actorLabel}
+            size={32}
+            className="text-2xs font-semibold"
+          />
+          <span
+            className={cn("absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full border ring-2 ring-card", accent)}
+            aria-hidden
+          >
+            <Icon className="h-2.5 w-2.5" />
+          </span>
+        </span>
+      ) : (
+        <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full border", accent)} aria-hidden>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+      )}
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-sm font-semibold text-foreground">{event.actorLabel}</span>
-          {/* У репліці підпис «Написав у справі» зайвий: текст нижче і так
-              видно. У решті подій підпис — це і є подія. */}
-          {isTalk ? null : <span className="text-sm text-muted-foreground">{event.title}</span>}
-          <span className="ml-auto shrink-0 text-2xs tabular-nums text-muted-foreground">
+        <div className="flex items-baseline gap-3">
+          <div className="min-w-0 flex-1 text-sm">
+            <span className="font-semibold text-foreground">{event.actorLabel}</span>
+            {/* У репліці підпис «Написав у справі» зайвий: текст нижче і так
+                видно. У решті подій підпис — це і є подія. */}
+            {isTalk ? null : <span className="text-muted-foreground"> {event.title}</span>}
+          </div>
+          <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
             {formatActivityClock(event.createdAt)}
           </span>
         </div>
         {isTalk && event.body ? (
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{event.body}</p>
+          <p className="mt-1.5 max-w-[640px] whitespace-pre-wrap rounded-[4px_12px_12px_12px] border border-border/50 bg-muted/30 px-3 py-2 text-sm leading-relaxed text-foreground">
+            {event.body}
+          </p>
         ) : null}
         {event.to ? (
-          /* «Було → стало». Старе значення закреслене й приглушене, нове —
-             моношрифтом на підкладці: у стрічці з двадцяти рядків саме нове
-             число шукають очима, і воно має чіплятись першим. */
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          /* «Було → стало». Старе — закреслене на сірому, нове — на тоні: у
+             стрічці з двадцяти рядків саме нове число шукають очима. */
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             {event.from ? (
-              <span className="text-muted-foreground line-through decoration-border">{event.from}</span>
+              <span className="rounded-md bg-muted px-1.5 py-0.5 tabular-nums text-muted-foreground line-through decoration-muted-foreground/50">
+                {event.from}
+              </span>
             ) : null}
             {event.from ? <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden /> : null}
-            <span className="rounded-md bg-muted px-1.5 py-0.5 tabular-nums font-semibold text-foreground">
-              {event.to}
-            </span>
+            <span className="tone-info rounded-md border px-1.5 py-0.5 font-semibold tabular-nums">{event.to}</span>
           </div>
         ) : null}
-        {event.meta ? <p className="mt-0.5 text-xs text-muted-foreground">{event.meta}</p> : null}
+        {event.meta ? <p className="mt-1 text-xs text-muted-foreground">{event.meta}</p> : null}
         {event.attachment && event.attachment.storageBucket && event.attachment.storagePath ? (
-          /* Мініатюра поруч із «Завантажити», а не замість значка події:
-             кружечок ліворуч каже, ЩО сталося, і підміна його картинкою
-             зламала б мову стрічки. Файл упізнають по самій картинці — тож
-             вона стоїть у рядку дії, з тим самим розкриттям під курсором. */
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-2 flex max-w-sm items-center gap-2.5 rounded-lg border border-border/50 p-1.5 pr-2">
             {attachmentThumb ? (
               <StorageObjectImage
                 bucket={event.attachment.storageBucket}
@@ -130,13 +159,20 @@ function FeedRow({
                 alt={attachmentName}
                 variant="thumb"
                 hoverPreview
-                className="h-9 w-9 shrink-0 rounded-lg border border-border/60 bg-muted/30"
+                className="h-9 w-9 shrink-0 rounded-md border border-border/60 bg-muted/30"
               />
-            ) : null}
+            ) : (
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted/40 text-3xs font-bold uppercase text-muted-foreground">
+                {attachmentExtension ?? <Paperclip className="h-4 w-4" />}
+              </span>
+            )}
+            <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground" title={attachmentName}>
+              {attachmentName}
+            </span>
             <Button
               size="sm"
               variant="ghost"
-              className="px-2 text-2xs text-muted-foreground"
+              className="shrink-0 px-2 text-2xs text-muted-foreground"
               onClick={() => onDownload(event.attachment as QuoteAttachment)}
             >
               Завантажити
@@ -172,7 +208,7 @@ function FilesRegister({
   const designCount = files.filter((file) => file.audience === "design").length;
 
   return (
-    <div className="rounded-xl border border-border/50">
+    <div className="rounded-xl border border-border/50 bg-card">
       <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5">
         <button
           type="button"
@@ -188,6 +224,23 @@ function FilesRegister({
             {designCount} для дизайнера · {files.length - designCount} по справі
           </span>
         </button>
+        {/* Згорнутий реєстр не мовчить: перші назви видно одразу, щоб не
+            розгортати його заради питання «а логотип клієнт уже надіслав?». */}
+        {!open && files.length > 0 ? (
+          <span className="hidden min-w-0 flex-[2] items-center gap-1.5 overflow-hidden sm:flex">
+            {files.slice(0, 3).map((file) => (
+              <span
+                key={file.id}
+                className="max-w-[180px] shrink truncate rounded-md bg-muted px-2 py-0.5 text-2xs text-muted-foreground"
+              >
+                {getAttachmentDisplayFileName(file.name, file.storagePath, file.mimeType)}
+              </span>
+            ))}
+            {files.length > 3 ? (
+              <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">+{files.length - 3}</span>
+            ) : null}
+          </span>
+        ) : null}
         <label
           className={cn(
             "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-border/60 px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
@@ -308,6 +361,7 @@ export function QuoteFeed({
   loadingMore,
   onLoadMore,
   onOpenThread,
+  avatarOf,
 }: {
   events: QuoteFeedEvent[];
   files: QuoteAttachment[];
@@ -327,6 +381,8 @@ export function QuoteFeed({
   onLoadMore?: () => void;
   /** Відкрити розмову справи — потрібне лише там, де права колонка схована. */
   onOpenThread: () => void;
+  /** Аватар автора події — з довідника команди сторінки. */
+  avatarOf?: (actorId: string) => string | null;
 }) {
   const [filter, setFilter] = useState<QuoteFeedKind | "all">("all");
   const [onlyImportant, setOnlyImportant] = useState(false);
@@ -345,11 +401,11 @@ export function QuoteFeed({
     (event) => (filter === "all" || event.kind === filter) && (!onlyImportant || event.important)
   );
 
-  const groups: Array<{ label: string; items: QuoteFeedEvent[] }> = [];
+  const groups: Array<{ label: string; date: string | null; items: QuoteFeedEvent[] }> = [];
   shown.forEach((event) => {
     const label = formatActivityDayLabel(event.createdAt);
     const last = groups[groups.length - 1];
-    if (!last || last.label !== label) groups.push({ label, items: [event] });
+    if (!last || last.label !== label) groups.push({ label, date: relativeDayDate(label, event.createdAt), items: [event] });
     else last.items.push(event);
   });
 
@@ -374,31 +430,34 @@ export function QuoteFeed({
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        {FEED_FILTERS.map((entry) => {
-          const count = counts.get(entry.key) ?? 0;
-          const on = filter === entry.key;
-          return (
-            <button
-              key={entry.key}
-              type="button"
-              onClick={() => setFilter(entry.key)}
-              className={cn(
-                "inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                on
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border/60 text-muted-foreground hover:bg-muted/40"
-              )}
-            >
-              {entry.label}
-              {count > 0 ? (
-                <span className={cn("tabular-nums", on ? "opacity-70" : "opacity-60")}>{count}</span>
-              ) : null}
-            </button>
-          );
-        })}
+        <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-[3px]" role="radiogroup" aria-label="Що показати">
+          {FEED_FILTERS.map((entry) => {
+            const count = counts.get(entry.key) ?? 0;
+            const on = filter === entry.key;
+            return (
+              <button
+                key={entry.key}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => setFilter(entry.key)}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                  on
+                    ? "border-border bg-card text-foreground shadow-none"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {entry.label}
+                {count > 0 ? <span className="tabular-nums opacity-60">{count}</span> : null}
+              </button>
+            );
+          })}
+        </div>
         <button
           type="button"
           onClick={() => setOnlyImportant((value) => !value)}
+          aria-pressed={onlyImportant}
           className={cn(
             "ml-auto inline-flex h-7 items-center rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
             onlyImportant
@@ -447,16 +506,17 @@ export function QuoteFeed({
       ) : (
         <div className="space-y-5">
           {groups.map((group) => (
-            <div key={group.label}>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-caps text-muted-foreground">
-                {group.label}
+            <section key={group.label} aria-label={group.label}>
+              <div className="mb-2 flex items-baseline gap-2 px-0.5">
+                <span className="text-sm font-semibold text-foreground">{group.label}</span>
+                {group.date ? <span className="text-xs text-muted-foreground">{group.date}</span> : null}
               </div>
-              <div className="divide-y divide-border/40">
+              <div className="divide-y divide-border/40 overflow-hidden rounded-xl border border-border/50 bg-card">
                 {group.items.map((event) => (
-                  <FeedRow key={event.id} event={event} onDownload={onDownloadFile} />
+                  <FeedRow key={event.id} event={event} avatarOf={avatarOf} onDownload={onDownloadFile} />
                 ))}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
