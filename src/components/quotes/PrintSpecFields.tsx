@@ -182,6 +182,8 @@ export type PrintSpecFieldsProps = {
   baseline?: PrintSpecValues | null;
   /** Поля, у яких на початку стоїть значення за замовчуванням, ще не підтверджене людиною. */
   initialAuto?: string[];
+  /** Поля, до яких значення за замовчуванням уже не торкаються (після відновлення чернетки чи «як минулого разу»). */
+  initialTouched?: string[];
   /** Які поля зараз тримають значення за замовчуванням: це не «зміна після ціни». */
   onAutoChange?: (auto: string[]) => void;
   /** «Лише незаповнені»: знімок полів, заповнених на момент увімкнення, — їх не показуємо. */
@@ -226,6 +228,7 @@ export function PrintSpecFields({
   disabled,
   baseline,
   initialAuto,
+  initialTouched,
   onAutoChange,
   hiddenIds,
   ref,
@@ -241,7 +244,7 @@ export function PrintSpecFields({
   }, []);
   React.useImperativeHandle(ref, () => ({ focusField }), [focusField]);
 
-  const [meta, setMeta] = React.useState<PrintSpecDraftMeta>({ auto: initialAuto ?? [], touched: [] });
+  const [meta, setMeta] = React.useState<PrintSpecDraftMeta>({ auto: initialAuto ?? [], touched: initialTouched ?? [] });
   /** Пояснення, чому вибір знято: тримається біля поля, доки людина його знову не чіпає. */
   const [dropNotes, setDropNotes] = React.useState<Record<string, string>>({});
 

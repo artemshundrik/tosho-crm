@@ -990,3 +990,116 @@ export function buildPrintSpecRounds(
     changes: index === 0 ? [] : diffPrintSpec(preset, rounds[index - 1].values, round.values),
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Незбережена чернетка вікна (REQ-326#p10) і «як минулого разу» (REQ-326#p1)
+// ---------------------------------------------------------------------------
+
+export type PrintSpecStoredDraft = { values: PrintSpecValues; at: string };
+
+type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+/** `localStorage`, або `null`, коли його немає чи доступ заборонено (приватний режим, політики). */
+const browserStorage = (): DraftStorage | null => {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
+export const printSpecDraftKey = (quoteItemId: string): string => `printSpecDraft:${quoteItemId}`;
+
+/** Чернетка вікна; будь-яка помилка сховища чи зіпсований запис — це «чернетки немає». */
+export function readPrintSpecDraft(
+  preset: PrintSpecPreset,
+  quoteItemId: string,
+  storage: DraftStorage | null = browserStorage()
+): PrintSpecStoredDraft | null {
+  try {
+    const raw = storage?.getItem(printSpecDraftKey(quoteItemId));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const record = parsed as Record<string, unknown>;
+    if (typeof record.at !== "string" || Number.isNaN(Date.parse(record.at))) return null;
+    if (!record.values || typeof record.values !== "object") return null;
+    return { values: parsePrintSpecValues(preset, record.values), at: record.at };
+  } catch {
+    return null;
+  }
+}
+
+export function writePrintSpecDraft(
+  quoteItemId: string,
+  values: PrintSpecValues,
+  now: Date = new Date(),
+  storage: DraftStorage | null = browserStorage()
+): void {
+  try {
+    storage?.setItem(printSpecDraftKey(quoteItemId), JSON.stringify({ values, at: now.toISOString() }));
+  } catch {
+    // Сховище повне чи заборонене: чернетка — зручність, а не умова збереження.
+  }
+}
+
+export function clearPrintSpecDraft(quoteItemId: string, storage: DraftStorage | null = browserStorage()): void {
+  try {
+    storage?.removeItem(printSpecDraftKey(quoteItemId));
+  } catch {
+    // див. writePrintSpecDraft
+  }
+}
+
+/**
+ * Чернетка, яку варто запропонувати відновити: вона є і відрізняється від того,
+ * що вікно показало б само (`opened` — збережене разом зі значеннями за замовчуванням).
+ */
+export function pickRestorableDraft(
+  preset: PrintSpecPreset,
+  stored: PrintSpecStoredDraft | null,
+  opened: PrintSpecValues
+): PrintSpecStoredDraft | null {
+  return stored && diffPrintSpec(preset, opened, stored.values).length > 0 ? stored : null;
+}
+
+/** Позиція чужого прорахунку того самого замовника — кандидат у джерела для «як минулого разу». */
+export type PrintSpecSourceCandidate = {
+  quoteId: string;
+  quoteNumber: string;
+  /** Коли заведено прорахунок, ISO. */
+  quoteDate: string;
+  quoteStatus: string | null;
+  itemCreatedAt: string;
+  /** Параметри позиції, уже прочитані (`readQuoteItemPrintSpec`). */
+  spec: PrintSpecMetadata | null;
+};
+
+export type PrintSpecSource = { quoteNumber: string; quoteDate: string; values: PrintSpecValues };
+
+const CANCELLED_QUOTE_STATUSES: ReadonlySet<string> = new Set(["cancelled", "canceled"]);
+
+/**
+ * Звідки взяти «як минулого разу»: найсвіжіша за часом заведення ПОЗИЦІЯ з тим
+ * самим видом в іншому, не скасованому прорахунку. Порожня конфігурація джерелом
+ * не буває — переносити з неї нічого.
+ */
+export function pickPrintSpecSource(
+  candidates: PrintSpecSourceCandidate[],
+  preset: PrintSpecPreset,
+  currentQuoteId: string
+): PrintSpecSource | null {
+  const usable = candidates
+    .filter(
+      (candidate) =>
+        candidate.quoteId !== currentQuoteId &&
+        !CANCELLED_QUOTE_STATUSES.has(candidate.quoteStatus ?? "") &&
+        candidate.spec?.presetKey === preset.key &&
+        isPrintSpecFilled(preset, candidate.spec.values)
+    )
+    .sort((a, b) => Date.parse(b.itemCreatedAt) - Date.parse(a.itemCreatedAt));
+  const best = usable[0];
+  return best?.spec
+    ? { quoteNumber: best.quoteNumber, quoteDate: best.quoteDate, values: best.spec.values }
+    : null;
+}

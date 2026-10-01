@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Pencil, Settings2 } from "@/components/icons/appIcons";
+import { History, Pencil, Settings2 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { InfoHint, PrintSpecFields, type PrintSpecFieldsHandle } from "@/components/quotes/PrintSpecFields";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { Switch } from "@/components/ui/switch";
 import { PrintModelArt } from "@/features/quotes/quote-wizard/printModelArt";
 import { readQuoteItemPrintSpec } from "@/lib/printSpecLegacy";
@@ -22,6 +23,7 @@ import { toneBadgeClass } from "@/lib/statusTones";
 import {
   buildPrintSpecRounds,
   buildPrintSpecSave,
+  clearPrintSpecDraft,
   applyPrintSpecDefaults,
   createEmptyPrintSpecValues,
   diffPrintSpec,
@@ -32,15 +34,22 @@ import {
   getPrintSpecPreset,
   isPrintSpecFilled,
   parsePrintSpecValues,
+  pickPrintSpecSource,
+  pickRestorableDraft,
+  readPrintSpecDraft,
   resolvePriceBaseline,
   needsPriceSnapshot,
   splitPrintSpecEntries,
+  writePrintSpecDraft,
   type PrintSpecChange,
   type PrintSpecRound,
   type PrintSpecColumnInfo,
   type PrintSpecEntry,
   type PrintSpecMetadata,
   type PrintSpecPreset,
+  type PrintSpecSource,
+  type PrintSpecSourceCandidate,
+  type PrintSpecStoredDraft,
   type PrintSpecValues,
 } from "@/lib/printSpec";
 
@@ -113,6 +122,19 @@ export function PrintSpecPanel({
   /** «Лише незаповнені»: знімок заповнених на момент увімкнення, щоб поле не зникало посеред правки. */
   const [hiddenIds, setHiddenIds] = React.useState<ReadonlySet<string> | null>(null);
   const fieldsRef = React.useRef<PrintSpecFieldsHandle>(null);
+  /** Значення, з якими вікно відкрилось: чернетка в сховищі цікава, лише коли від них відрізняється. */
+  const [openedValues, setOpenedValues] = React.useState<PrintSpecValues>({});
+  /** Незбережене з минулого разу, яке пропонуємо відновити. */
+  const [restoreOffer, setRestoreOffer] = React.useState<PrintSpecStoredDraft | null>(null);
+  /** Форму перемонтовуємо, коли чернетку замінено ззовні: вона тримає власний стан «за замовчуванням». */
+  const [fieldsKey, setFieldsKey] = React.useState(0);
+  const [initialTouched, setInitialTouched] = React.useState<string[]>([]);
+  /** «Як минулого разу» застосовано: звідки й що було до того — для «Відмінити». */
+  const [sourceNote, setSourceNote] = React.useState<{
+    from: PrintSpecSource;
+    previous: { values: PrintSpecValues; auto: string[] };
+  } | null>(null);
+  const lastTime = usePrintSpecSource(open, quoteItemId, preset);
   const [saving, setSaving] = React.useState(false);
   const [pickedRound, setPickedRound] = React.useState<string | null>(null);
 
@@ -230,10 +252,36 @@ export function PrintSpecPanel({
       { auto: [], touched: [] }
     );
     setDraft(opened.values);
+    setOpenedValues(opened.values);
     setInitialAuto(opened.auto);
     setDraftAuto(opened.auto);
+    setInitialTouched([]);
     setHiddenIds(null);
+    setSourceNote(null);
+    setRestoreOffer(pickRestorableDraft(preset, readPrintSpecDraft(preset, quoteItemId), opened.values));
     setOpen(true);
+  };
+
+  /** Правка людини: чернетка пишеться в сховище браузера, поки не збережена (або не повернута до початкового). */
+  const changeDraft = (next: PrintSpecValues) => {
+    setDraft(next);
+    setRestoreOffer(null);
+    persistDraft(next);
+  };
+  const persistDraft = (values: PrintSpecValues) => {
+    if (diffPrintSpec(preset, openedValues, values).length === 0) clearPrintSpecDraft(quoteItemId);
+    else writePrintSpecDraft(quoteItemId, values);
+  };
+
+  /** Чернетку замінено цілком (відновлення, «як минулого разу», «Відмінити»): значення вважаємо свідомими. */
+  const replaceDraft = (values: PrintSpecValues, auto: string[], touchedAll: boolean) => {
+    setDraft(values);
+    setInitialAuto(auto);
+    setDraftAuto(auto);
+    setInitialTouched(touchedAll ? preset.fields.map((field) => field.id) : []);
+    setHiddenIds(null);
+    setFieldsKey((key) => key + 1);
+    persistDraft(values);
   };
 
   const save = async () => {
@@ -272,6 +320,7 @@ export function PrintSpecPanel({
         .eq("id", quoteItemId);
       if (writeError) throw writeError;
 
+      clearPrintSpecDraft(quoteItemId);
       toast.success("Параметри виробу збережено");
       setOpen(false);
       onSaved({ changedAfterPrice: built.changedAfterPrice });
@@ -439,7 +488,24 @@ export function PrintSpecPanel({
             ) : (
               <span className="text-muted-foreground">Можна рахувати</span>
             )}
-            <label className="ml-auto flex cursor-pointer items-center gap-2 text-muted-foreground">
+            {lastTime ? (
+              <HoverTip label={`Беремо з ${lastTime.quoteNumber} від ${formatDayMonth(lastTime.quoteDate)}`}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto"
+                  disabled={saving}
+                  onClick={() => {
+                    setSourceNote({ from: lastTime, previous: { values: draft, auto: draftAuto } });
+                    replaceDraft(lastTime.values, [], true);
+                  }}
+                >
+                  <History className="mr-1.5 h-3.5 w-3.5" />
+                  Як минулого разу
+                </Button>
+              </HoverTip>
+            ) : null}
+            <label className={cn("flex cursor-pointer items-center gap-2 text-muted-foreground", !lastTime && "ml-auto")}>
               Лише незаповнені
               <Switch
                 size="sm"
@@ -450,16 +516,62 @@ export function PrintSpecPanel({
             </label>
           </div>
 
+          {restoreOffer ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-warning-soft-border bg-warning-soft/60 px-6 py-2 text-xs text-warning-foreground">
+              <span>Є незбережені зміни від {formatTime(restoreOffer.at)}</span>
+              <button
+                type="button"
+                className="font-semibold underline-offset-2 hover:underline"
+                onClick={() => {
+                  replaceDraft(restoreOffer.values, [], true);
+                  setRestoreOffer(null);
+                }}
+              >
+                Відновити
+              </button>
+              <span aria-hidden="true">·</span>
+              <button
+                type="button"
+                className="font-semibold underline-offset-2 hover:underline"
+                onClick={() => {
+                  clearPrintSpecDraft(quoteItemId);
+                  setRestoreOffer(null);
+                }}
+              >
+                Відкинути
+              </button>
+            </div>
+          ) : null}
+          {sourceNote ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/50 bg-muted/40 px-6 py-2 text-xs text-foreground">
+              <span>
+                Взято з {sourceNote.from.quoteNumber} від {formatDayMonth(sourceNote.from.quoteDate)} — перевірте
+              </span>
+              <button
+                type="button"
+                className="font-semibold underline-offset-2 hover:underline"
+                onClick={() => {
+                  replaceDraft(sourceNote.previous.values, sourceNote.previous.auto, false);
+                  setSourceNote(null);
+                }}
+              >
+                Відмінити
+              </button>
+            </div>
+          ) : null}
+
           <div className="min-h-0 flex-1 overflow-y-auto bg-muted/25 p-4">
             <PrintSpecFields
+              key={fieldsKey}
               ref={fieldsRef}
               hiddenIds={hiddenIds}
               preset={preset}
               values={draft}
-              onChange={setDraft}
+              onChange={changeDraft}
               disabled={saving}
               baseline={editorBaseline}
               initialAuto={initialAuto}
+              initialTouched={initialTouched}
               onAutoChange={setDraftAuto}
             />
           </div>
@@ -481,6 +593,82 @@ export function PrintSpecPanel({
       </Dialog>
     </div>
   );
+}
+
+const formatTime = (iso: string): string =>
+  new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kiev", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+
+type SourceRow = {
+  created_at: string;
+  metadata: unknown;
+  quotes: { id: string; number: string; status: string | null; created_at: string } | null;
+};
+
+/**
+ * «Як минулого разу»: найсвіжіша позиція того самого виду в ІНШОМУ прорахунку
+ * того самого замовника. Запит лінивий — на відкриття вікна, а не картки; без
+ * замовника (`quotes.customer_id`) чи збігу відповідь `null`, і кнопки немає.
+ * Скасовані прорахунки й порожні конфігурації відсіює `pickPrintSpecSource`.
+ */
+function usePrintSpecSource(open: boolean, quoteItemId: string, preset: PrintSpecPreset | null): PrintSpecSource | null {
+  const [source, setSource] = React.useState<PrintSpecSource | null>(null);
+  const presetKey = preset?.key ?? null;
+
+  React.useEffect(() => {
+    if (!open || !preset || !presetKey) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const items = supabase.schema("tosho").from("quote_items");
+        const own = await items
+          .select("quote_id, quotes!inner(customer_id)")
+          .eq("id", quoteItemId)
+          .maybeSingle();
+        const ownRow = own.data as unknown as { quote_id: string; quotes: { customer_id: string | null } | null } | null;
+        const customerId = ownRow?.quotes?.customer_id;
+        if (!ownRow || !customerId) {
+          if (!cancelled) setSource(null);
+          return;
+        }
+
+        // Старі позиції пакета, блокнота й блоків зберігають вид у `configuratorPreset` — той самий ключ.
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("quote_items")
+          .select("created_at, metadata, quotes!inner(id, number, status, created_at)")
+          .eq("quotes.customer_id", customerId)
+          .neq("quote_id", ownRow.quote_id)
+          .or(`metadata->printSpec->>presetKey.eq.${presetKey},metadata->>configuratorPreset.eq.${presetKey}`)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        if (error) throw error;
+
+        const candidates: PrintSpecSourceCandidate[] = ((data ?? []) as unknown as SourceRow[]).flatMap((row) =>
+          row.quotes
+            ? [
+                {
+                  quoteId: row.quotes.id,
+                  quoteNumber: row.quotes.number,
+                  quoteDate: row.quotes.created_at,
+                  quoteStatus: row.quotes.status,
+                  itemCreatedAt: row.created_at,
+                  spec: readQuoteItemPrintSpec(row.metadata),
+                },
+              ]
+            : []
+        );
+        if (!cancelled) setSource(pickPrintSpecSource(candidates, preset, ownRow.quote_id));
+      } catch {
+        // Підказка-зручність: без неї вікно працює, тож помилку не показуємо.
+        if (!cancelled) setSource(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, quoteItemId, preset, presetKey]);
+
+  return source;
 }
 
 const DIALOG_HINT = "Обмежень немає — якщо потрібного варіанта немає в списку, вибирайте «Інше…» і пишіть текстом.";

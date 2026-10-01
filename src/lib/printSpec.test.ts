@@ -10,7 +10,13 @@ import {
   confirmPrintSpecDefault,
   dropDisabledPrintSpecChoices,
   editPrintSpecDraft,
+  clearPrintSpecDraft,
   getFilledPrintSpecFieldIds,
+  pickPrintSpecSource,
+  pickRestorableDraft,
+  readPrintSpecDraft,
+  writePrintSpecDraft,
+  type PrintSpecSourceCandidate,
   getPrintSpecColumnMissing,
   getPrintSpecMissingForPrice,
   getPrintSpecWarnings,
@@ -807,5 +813,93 @@ describe("чого бракує для ціни", () => {
     const cover = getPrintSpecColumns(PRINT_SPEC_DIARY, values).find((column) => column.title === "Обкладинка");
     expect(getPrintSpecColumnMissing(cover!, values).map((field) => field.id)).toEqual(["coverFoam", "coverMaterial"]);
     expect([...getFilledPrintSpecFieldIds(PRINT_SPEC_DIARY, values)].sort()).toEqual(["coverType", "format"]);
+  });
+});
+
+describe("вибір джерела «як минулого разу»", () => {
+  const filled = (patch: PrintSpecValues = {}) => ({ ...createEmptyPrintSpecValues(PRINT_SPEC_DIARY), format: "a5", ...patch });
+  const candidate = (patch: Partial<PrintSpecSourceCandidate> & { values?: PrintSpecValues; presetKey?: string }): PrintSpecSourceCandidate => ({
+    quoteId: "q1",
+    quoteNumber: "TS-0926-0001",
+    quoteDate: "2026-09-01T10:00:00.000Z",
+    quoteStatus: "estimated",
+    itemCreatedAt: "2026-09-01T10:00:00.000Z",
+    spec: { presetKey: patch.presetKey ?? "print_diary", values: patch.values ?? filled() },
+    ...patch,
+  });
+  const pick = (list: PrintSpecSourceCandidate[]) => pickPrintSpecSource(list, PRINT_SPEC_DIARY, "current");
+
+  it("бере найсвіжішу позицію за часом заведення", () => {
+    const result = pick([
+      candidate({ quoteId: "a", quoteNumber: "TS-A", itemCreatedAt: "2026-08-01T00:00:00.000Z" }),
+      candidate({ quoteId: "b", quoteNumber: "TS-B", itemCreatedAt: "2026-09-05T00:00:00.000Z", values: filled({ format: "a4" }) }),
+    ]);
+    expect(result?.quoteNumber).toBe("TS-B");
+    expect(result?.values.format).toBe("a4");
+  });
+
+  it("пропускає скасовані, той самий прорахунок, інший вид і порожні конфігурації", () => {
+    expect(
+      pick([
+        candidate({ quoteId: "x", quoteStatus: "cancelled" }),
+        candidate({ quoteId: "current" }),
+        candidate({ quoteId: "y", presetKey: "print_flyer", values: createEmptyPrintSpecValues(PRINT_SPEC_FLYER) }),
+        candidate({ quoteId: "z", values: createEmptyPrintSpecValues(PRINT_SPEC_DIARY) }),
+        candidate({ quoteId: "w", spec: null }),
+      ])
+    ).toBeNull();
+    expect(pick([])).toBeNull();
+  });
+});
+
+describe("чернетка вікна в сховищі", () => {
+  const store = () => {
+    const data = new Map<string, string>();
+    return {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => void data.set(key, value),
+      removeItem: (key: string) => void data.delete(key),
+    };
+  };
+  const values = { ...createEmptyPrintSpecValues(PRINT_SPEC_DIARY), format: "a5" };
+
+  it("пишеться під ключем позиції, читається і чиститься", () => {
+    const storage = store();
+    writePrintSpecDraft("item-1", values, new Date("2026-09-20T10:15:00.000Z"), storage);
+    const read = readPrintSpecDraft(PRINT_SPEC_DIARY, "item-1", storage);
+    expect(read?.at).toBe("2026-09-20T10:15:00.000Z");
+    expect(read?.values.format).toBe("a5");
+    expect(readPrintSpecDraft(PRINT_SPEC_DIARY, "item-2", storage)).toBeNull();
+    clearPrintSpecDraft("item-1", storage);
+    expect(readPrintSpecDraft(PRINT_SPEC_DIARY, "item-1", storage)).toBeNull();
+  });
+
+  it("зламане сховище чи сміття — це «чернетки немає», а не помилка", () => {
+    const broken = {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+      removeItem: () => {
+        throw new Error("denied");
+      },
+    };
+    expect(readPrintSpecDraft(PRINT_SPEC_DIARY, "i", broken)).toBeNull();
+    expect(() => writePrintSpecDraft("i", values, new Date(), broken)).not.toThrow();
+    expect(() => clearPrintSpecDraft("i", broken)).not.toThrow();
+    const junk = store();
+    junk.setItem("printSpecDraft:i", "{не json");
+    expect(readPrintSpecDraft(PRINT_SPEC_DIARY, "i", junk)).toBeNull();
+    junk.setItem("printSpecDraft:i", JSON.stringify({ values: {}, at: "ні" }));
+    expect(readPrintSpecDraft(PRINT_SPEC_DIARY, "i", junk)).toBeNull();
+  });
+
+  it("пропонується відновити лише чернетку, що відрізняється від відкритого", () => {
+    const stored = { values: { ...values, blockPages: "300" }, at: "2026-09-20T10:15:00.000Z" };
+    expect(pickRestorableDraft(PRINT_SPEC_DIARY, stored, values)).toBe(stored);
+    expect(pickRestorableDraft(PRINT_SPEC_DIARY, { ...stored, values }, values)).toBeNull();
+    expect(pickRestorableDraft(PRINT_SPEC_DIARY, null, values)).toBeNull();
   });
 });
