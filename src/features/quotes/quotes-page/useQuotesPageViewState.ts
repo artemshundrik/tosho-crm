@@ -167,34 +167,6 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
 
   const foundCount = contentView === "sets" ? filteredQuoteSets.length : filteredAndSortedRows.length;
 
-  const groupedQuotesView = useMemo(() => {
-    const groups = new Map<
-      string,
-      { id: string; name: string; kind: "set" | "kp"; rows: QuoteListRow[] }
-    >();
-    const ungrouped: QuoteListRow[] = [];
-
-    filteredAndSortedRows.forEach((row) => {
-      const refs = quoteMembershipByQuoteId.get(row.id)?.refs ?? [];
-      if (refs.length === 0) {
-        ungrouped.push(row);
-        return;
-      }
-      refs.forEach((ref) => {
-        const current = groups.get(ref.id) ?? { id: ref.id, name: ref.name, kind: ref.kind, rows: [] };
-        current.rows.push(row);
-        groups.set(ref.id, current);
-      });
-    });
-
-    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === "kp" ? -1 : 1;
-      return a.name.localeCompare(b.name, "uk-UA");
-    });
-
-    return { groups: sortedGroups, ungrouped };
-  }, [filteredAndSortedRows, quoteMembershipByQuoteId]);
-
   const groupedByStatus = useMemo(() => {
     const buckets: Record<string, QuoteListRow[]> = {
       new: [],
@@ -309,7 +281,6 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
     filteredQuoteSets,
     foundCount,
     groupedByStatus,
-    groupedQuotesView,
     hasActiveFilters,
     quickAddAvailableSets,
     quoteSetKpCount,

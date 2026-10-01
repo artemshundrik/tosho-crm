@@ -347,7 +347,6 @@ type QuotesPageFiltersState = {
   viewMode?: "table" | "kanban";
   quickFilter?: "all" | "new" | "estimated";
   contentView?: "quotes" | "sets" | "all";
-  quoteListMode?: "flat" | "grouped";
   quoteSetSearch?: string;
   quoteSetKindFilter?: "all" | "kp" | "set";
   sortBy?: "date" | "number" | null;
@@ -613,9 +612,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   );
   const [contentView, setContentView] = useState<"quotes" | "sets" | "all">(
     () => restoredFilters?.contentView ?? "quotes"
-  );
-  const [quoteListMode, setQuoteListMode] = useState<"flat" | "grouped">(
-    () => restoredFilters?.quoteListMode ?? "flat"
   );
 
   useEffect(() => {
@@ -2808,7 +2804,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     filteredQuoteSets,
     foundCount,
     groupedByStatus,
-    groupedQuotesView,
     hasActiveFilters: hasActiveViewFilters,
     quickAddAvailableSets,
     quoteSetKpCount,
@@ -3252,7 +3247,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         viewMode,
         quickFilter,
         contentView,
-        quoteListMode,
         quoteSetSearch,
         quoteSetKindFilter,
         sortBy,
@@ -3268,7 +3262,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     viewMode,
     quickFilter,
     contentView,
-    quoteListMode,
     quoteSetSearch,
     quoteSetKindFilter,
     sortBy,
@@ -3296,12 +3289,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   }, [viewMode]);
 
-
-  useEffect(() => {
-    if (quoteListMode === "grouped" && selectedIds.size > 0) {
-      setSelectedIds(new Set());
-    }
-  }, [quoteListMode, selectedIds.size]);
 
   const handleDropToStatus = async (quoteId: string, status: string) => {
     // КИНУЛИ ТУДИ, ДЕ Й БУЛО — НІЧОГО НЕ РОБИМО.
@@ -4561,28 +4548,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     ]}
                   />
                 )}
-                {viewMode === "table" ? (
-                  <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={quoteListMode === "flat"}
-                      onClick={() => setQuoteListMode("flat")}
-                      className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
-                    >
-                      Список
-                    </Button>
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={quoteListMode === "grouped"}
-                      onClick={() => setQuoteListMode("grouped")}
-                      className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
-                    >
-                      Групи
-                    </Button>
-                  </SegmentedGroup>
-                ) : null}
               </>
             ) : (
               <>
@@ -4647,7 +4612,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     managerFilter,
     managerFilterOptions,
     mobileFilterCount,
-    quoteListMode,
     quoteSetKindFilter,
     quoteSetKpCount,
     quoteSetSearch,
@@ -5202,128 +5166,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   Створити прорахунок
                 </Button>
               )}
-            </div>
-          ) : quoteListMode === "grouped" ? (
-            <div className="p-5 space-y-4">
-              {groupedQuotesView.groups.map((group) => (
-                <div key={group.id} className="overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border/50">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div
-                        className={cn(
-                          "h-7 w-1.5 rounded-full",
-                          group.kind === "kp" ? "quote-kind-stripe-kp" : "quote-kind-stripe-set"
-                        )}
-                      />
-                      <QuoteKindBadge kind={group.kind} />
-                      <div className="truncate text-sm font-semibold">{group.name}</div>
-                    </div>
-                    <Badge variant="outline" className="font-semibold">{group.rows.length}</Badge>
-                  </div>
-                  <div className="divide-y divide-border/50">
-                    {group.rows.map((row) => (
-                      (() => {
-                        const canOpen = canOpenQuoteRow(row);
-                        return (
-                      <div
-                        key={`${group.id}-${row.id}`}
-                        className={cn(
-                          "px-5 py-3 flex items-center justify-between gap-3 transition-colors",
-                          canOpen ? "hover:bg-muted/10 cursor-pointer" : "cursor-not-allowed opacity-70"
-                        )}
-                        onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
-                        onMouseEnter={preloadQuoteDetailsRoute}
-                        onTouchStart={preloadQuoteDetailsRoute}
-                      >
-                        <div className="min-w-0">
-                          <HoverCopyText
-                            value={row.number}
-                            textClassName="font-mono font-semibold"
-                            successMessage="Номер прорахунку скопійовано"
-                            copyLabel="Скопіювати номер прорахунку"
-                          >
-                            {row.number ?? "Не вказано"}
-                          </HoverCopyText>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
-                            <span className="truncate">
-                              {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
-                            </span>
-                            {!canOpen ? (
-                              <div
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground"
-                                title="Лише свої"
-                                aria-label="Лише свої"
-                              >
-                                <Lock className="h-3 w-3" />
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge className={cn("border", statusPillClasses(row.status))} variant="outline">
-                            {formatStatusLabel(row.status)}
-                          </Badge>
-                        </div>
-                      </div>
-                        );
-                      })()
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {groupedQuotesView.ungrouped.length > 0 ? (
-                <div className="overflow-hidden">
-                  <div className="px-5 py-4 border-b border-border/50 text-sm font-semibold">Без групи</div>
-                  <div className="divide-y divide-border/50">
-                    {groupedQuotesView.ungrouped.map((row) => (
-                      (() => {
-                        const canOpen = canOpenQuoteRow(row);
-                        return (
-                      <div
-                        key={`ungrouped-${row.id}`}
-                        className={cn(
-                          "px-5 py-3 flex items-center justify-between gap-3 transition-colors",
-                          canOpen ? "hover:bg-muted/10 cursor-pointer" : "cursor-not-allowed opacity-70"
-                        )}
-                        onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
-                        onMouseEnter={preloadQuoteDetailsRoute}
-                        onTouchStart={preloadQuoteDetailsRoute}
-                      >
-                        <div className="min-w-0">
-                          <HoverCopyText
-                            value={row.number}
-                            textClassName="font-mono font-semibold"
-                            successMessage="Номер прорахунку скопійовано"
-                            copyLabel="Скопіювати номер прорахунку"
-                          >
-                            {row.number ?? "Не вказано"}
-                          </HoverCopyText>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
-                            <span className="truncate">
-                              {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
-                            </span>
-                            {!canOpen ? (
-                              <div
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground"
-                                title="Лише свої"
-                                aria-label="Лише свої"
-                              >
-                                <Lock className="h-3 w-3" />
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                        <Badge className={cn("border", statusPillClasses(row.status))} variant="outline">
-                          {formatStatusLabel(row.status)}
-                        </Badge>
-                      </div>
-                        );
-                      })()
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </div>
           ) : (
             <>
