@@ -603,6 +603,11 @@ const renderItemCard = (item: CommercialItemRow, showGain: boolean) => {
  *
  * КЕГЛЬ РАХОВАНИЙ ПІД ПАПІР: сторінка A4 має ширину 794 px, тобто один піксель =
  * 0,75 pt. Текст у 12 px — це 9 pt, дрібно для друку; основний тут 13 px (≈10 pt).
+ *
+ * ВІЗУАЛИ — 16:9, БЕЗ ОБРІЗАННЯ. Дизайнери верстають їх на 16:9 (заміряно 01.10.2026:
+ * 86 файлів з 88, від 1701×957 до 8002×4502). Рамка стояла 1,41:1 з `cover`, і з
+ * візуала зрізало боки — разом із першим ракурсом товару. `contain` тримає й
+ * рідкісний інший формат цілим, лише з полями.
  */
 export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   const hasRunChoice = documentHasRunChoice(doc);
@@ -686,7 +691,7 @@ export const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
   .section-head { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6c72; margin: 18px 0 0 0; }
   .visual-group { margin-top: 14px; }
   .visual-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-  .visual-thumb { width: 150px; height: 106px; object-fit: cover; border-radius: 4px; border: 1px solid #e6e6e1; }
+  .visual-thumb { width: 188px; height: 106px; object-fit: contain; border-radius: 4px; border: 1px solid #e6e6e1; }
   .items { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
   .item { display: flex; gap: 16px; align-items: flex-start; border: 1px solid #dcdcd6; border-radius: 16px; padding: 12px; }
   .photo { width: 134px; height: 134px; flex-shrink: 0; box-sizing: border-box; border: 1px solid #e6e6e1; border-radius: 4px; object-fit: cover; background: #ffffff; }

@@ -81,7 +81,9 @@ const styles = StyleSheet.create({
   intro: { fontSize: 10, color: MUTE, marginTop: 8, lineHeight: 1.6, maxWidth: 380 },
   sectionHead: { fontSize: 8, fontWeight: "bold", letterSpacing: 0.7, textTransform: "uppercase", color: MUTE, marginTop: 14 },
   visuals: { flexDirection: "row", flexWrap: "wrap", marginTop: 6 },
-  visual: { width: 112, height: 79, objectFit: "cover", borderRadius: 3, borderWidth: 1, borderColor: "#e6e6e1", marginRight: 6, marginBottom: 6 },
+  // 16:9 і `contain`: візуали верстають на 16:9, рамка 1,41:1 зрізала їм боки
+  // (чому саме так — у renderCommercialDocumentHtml).
+  visual: { width: 140, height: 79, objectFit: "contain", borderRadius: 3, borderWidth: 1, borderColor: "#e6e6e1", marginRight: 6, marginBottom: 6 },
   item: {
     flexDirection: "row",
     alignItems: "flex-start",
