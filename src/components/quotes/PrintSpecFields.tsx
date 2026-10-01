@@ -3,6 +3,8 @@ import { AlertTriangle, Check, Info, Minus, Plus } from "@/components/icons/appI
 
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { pluralUk } from "@/lib/lastSeen";
 import {
@@ -211,6 +213,9 @@ const LANE_SCROLL: Record<number, string> = {
 /** Скільки чипів «не заповнено» у шапці стовпчика, решта — «ще N»: шапка липка й не має їсти пів екрана. */
 const MISSING_CHIPS = 4;
 
+/** Нижче цієї ширини форми (~@xl) стовпчики не стають у ряд. */
+const NARROW_WIDTH = 576;
+
 const MissingChip: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => (
   <button
     type="button"
@@ -234,15 +239,41 @@ export function PrintSpecFields({
   ref,
 }: PrintSpecFieldsProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
-  const focusField = React.useCallback((fieldId: string) => {
-    const target = rootRef.current?.querySelector<HTMLElement>(`[data-print-field="${fieldId}"]`);
-    if (!target) return;
-    target.scrollIntoView?.({ block: "center", behavior: "smooth" });
-    target
-      .querySelector<HTMLElement>("input:not([disabled]), button[aria-pressed]:not([disabled])")
-      ?.focus({ preventScroll: true });
+  /** Ширина форми: коли стовпчики не вміщаються в ряд, лишається один за раз із перемикачем частин. */
+  const [width, setWidth] = React.useState<number | null>(null);
+  const [activeLane, setActiveLane] = React.useState<string | null>(null);
+  React.useLayoutEffect(() => {
+    const node = rootRef.current;
+    if (!node) return;
+    const measure = () => setWidth(node.clientWidth);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
-  React.useImperativeHandle(ref, () => ({ focusField }), [focusField]);
+  const columns = getPrintSpecColumns(preset, values);
+  const narrow = columns.length > 1 && width !== null && width > 0 && width < NARROW_WIDTH;
+  const shownLane = columns.find((column) => column.title === activeLane) ?? columns[0];
+
+  const focusField = (fieldId: string) => {
+    const reveal = () => {
+      const target = rootRef.current?.querySelector<HTMLElement>(`[data-print-field="${fieldId}"]`);
+      if (!target) return;
+      target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+      target
+        .querySelector<HTMLElement>("input:not([disabled]), button[aria-pressed]:not([disabled])")
+        ?.focus({ preventScroll: true });
+    };
+    const owner = columns.find((column) =>
+      column.sections.some((section) => section.fields.some((field) => field.id === fieldId))
+    );
+    if (narrow && owner && owner.title !== shownLane?.title) {
+      setActiveLane(owner.title);
+      requestAnimationFrame(reveal);
+    } else reveal();
+  };
+  React.useImperativeHandle(ref, () => ({ focusField }));
 
   const [meta, setMeta] = React.useState<PrintSpecDraftMeta>({ auto: initialAuto ?? [], touched: initialTouched ?? [] });
   /** Пояснення, чому вибір знято: тримається біля поля, доки людина його знову не чіпає. */
@@ -552,11 +583,13 @@ export function PrintSpecFields({
         );
       });
 
-  const columns = getPrintSpecColumns(preset, values);
+  const laneChangeCount = (column: PrintSpecColumnInfo): number => {
+    const sectionTitles = new Set(column.sections.map((section) => section.title));
+    return changes.filter((change) => sectionTitles.has(change.section)).length;
+  };
 
   const renderLane = (column: PrintSpecColumnInfo) => {
-    const sectionTitles = new Set(column.sections.map((section) => section.title));
-    const laneChanges = changes.filter((change) => sectionTitles.has(change.section)).length;
+    const laneChanges = laneChangeCount(column);
     const missing = getPrintSpecColumnMissing(column, values);
     const shownMissing = missing.slice(0, MISSING_CHIPS);
     const restMissing = missing.slice(MISSING_CHIPS);
@@ -569,10 +602,10 @@ export function PrintSpecFields({
         aria-label={column.title}
         className={cn(
           "min-w-0 rounded-xl border border-border/50 bg-background",
-          LANE_SCROLL[Math.min(columns.length, 3)]
+          !narrow && LANE_SCROLL[Math.min(columns.length, 3)]
         )}
       >
-        <div className="sticky top-0 z-10 space-y-1.5 border-b border-border/40 bg-background px-4 pb-3 pt-4">
+        <div className={cn("space-y-1.5 border-b border-border/40 bg-background px-4 pb-3 pt-4", !narrow && "sticky top-0 z-10")}>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-foreground">{column.title}</h3>
             <span className="text-xs font-medium tabular-nums text-foreground">
@@ -625,10 +658,42 @@ export function PrintSpecFields({
   };
 
   return (
-    <div ref={rootRef} className="@container h-full">
-      <div className={cn("grid gap-3.5", LANE_GRID[Math.min(columns.length, 3)])}>
-        {columns.map(renderLane)}
-      </div>
+    <div ref={rootRef} className={cn("@container", !narrow && "h-full")}>
+      {narrow && shownLane ? (
+        <>
+          {/* Липкий перемикач частин: на вузькому екрані стовпчики не вміщаються в ряд, і «одне під одним» — це прокрутка на п'ять екранів. */}
+          <div className="sticky top-0 z-20 -mx-1 bg-muted px-1 pb-2">
+            <SegmentedGroup role="group" aria-label="Частини виробу" className={cn(SEGMENTED_GROUP_SM, "flex h-auto w-full")}>
+              {columns.map((column) => {
+                const active = column.title === shownLane.title;
+                return (
+                  <button
+                    key={column.title}
+                    type="button"
+                    aria-pressed={active}
+                    data-state={active ? "active" : "inactive"}
+                    onClick={() => setActiveLane(column.title)}
+                    className={cn(SEGMENTED_TRIGGER_SM, "min-w-0 flex-1 flex-col gap-0 py-1")}
+                  >
+                    <span className="flex max-w-full items-center gap-1">
+                      <span className="truncate">{column.title}</span>
+                      {laneChangeCount(column) > 0 ? (
+                        <span aria-label="Є зміни після ціни" className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning-solid" />
+                      ) : null}
+                    </span>
+                    <span className="text-2xs font-normal tabular-nums text-muted-foreground">
+                      {column.filled}/{column.total}
+                    </span>
+                  </button>
+                );
+              })}
+            </SegmentedGroup>
+          </div>
+          {renderLane(shownLane)}
+        </>
+      ) : (
+        <div className={cn("grid gap-3.5", LANE_GRID[Math.min(columns.length, 3)])}>{columns.map(renderLane)}</div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as React from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { PrintSpecFields } from "./PrintSpecFields";
 import {
@@ -398,5 +398,37 @@ describe("що бракує", () => {
       expect(lane.getAllByText("Усе заповнено").length).toBeGreaterThan(0);
       expect(lane.queryByRole("group")).toBeNull();
     }
+  });
+});
+
+describe("вузький екран: частини виробу вкладками", () => {
+  const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  afterEach(() => {
+    if (original) Object.defineProperty(HTMLElement.prototype, "clientWidth", original);
+    else Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+  });
+  const squeeze = (px: number) =>
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => px });
+
+  it("показує лише вибрану частину, а клік по сегменту перемикає", async () => {
+    squeeze(360);
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    const tabs = within(screen.getByRole("group", { name: "Частини виробу" }));
+    expect(screen.getByRole("region", { name: "Обкладинка" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Блок" })).toBeNull();
+    expect(tabs.getByRole("button", { name: /Блок/ })).toBeTruthy();
+
+    await user.click(tabs.getByRole("button", { name: /Блок/ }));
+    expect(screen.getByRole("region", { name: "Блок" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Обкладинка" })).toBeNull();
+  });
+
+  it("на широкому екрані перемикача немає, усі стовпчики в ряд", () => {
+    squeeze(1200);
+    render(<Harness />);
+    expect(screen.queryByRole("group", { name: "Частини виробу" })).toBeNull();
+    expect(screen.getAllByRole("region").length).toBe(3);
   });
 });
