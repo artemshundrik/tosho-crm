@@ -33,6 +33,7 @@ import {
   getPrintSpecMissingForPrice,
   getPrintSpecPreset,
   isPrintSpecFilled,
+  isPrintSpecPriced,
   parsePrintSpecValues,
   pickPrintSpecSource,
   pickRestorableDraft,
@@ -239,6 +240,7 @@ export function PrintSpecPanel({
     (isPrintSpecFilled(preset, savedValues) && needsPriceSnapshot({ versions: saved?.versions, lastPricedAt, quoteStatus })
       ? savedValues
       : null);
+  const priced = isPrintSpecPriced({ lastPricedAt, quoteStatus });
   const missingForPrice = getPrintSpecMissingForPrice(preset, draft);
   const draftChangeCount = editorBaseline
     ? diffPrintSpec(preset, editorBaseline, draft).filter((change) => !draftAuto.includes(change.fieldId)).length
@@ -249,7 +251,7 @@ export function PrintSpecPanel({
     const opened = applyPrintSpecDefaults(
       preset,
       isPrintSpecFilled(preset, savedValues) ? savedValues : createEmptyPrintSpecValues(preset),
-      { auto: [], touched: [] }
+      { auto: [], touched: [], priced }
     );
     setDraft(opened.values);
     setOpenedValues(opened.values);
@@ -572,6 +574,7 @@ export function PrintSpecPanel({
               baseline={editorBaseline}
               initialAuto={initialAuto}
               initialTouched={initialTouched}
+              priced={priced}
               onAutoChange={setDraftAuto}
             />
           </div>

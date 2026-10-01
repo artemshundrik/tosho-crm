@@ -12,6 +12,7 @@ import {
   editPrintSpecDraft,
   clearPrintSpecDraft,
   getFilledPrintSpecFieldIds,
+  isPrintSpecPriced,
   pickPrintSpecSource,
   pickRestorableDraft,
   readPrintSpecDraft,
@@ -901,5 +902,45 @@ describe("чернетка вікна в сховищі", () => {
     expect(pickRestorableDraft(PRINT_SPEC_DIARY, stored, values)).toBe(stored);
     expect(pickRestorableDraft(PRINT_SPEC_DIARY, { ...stored, values }, values)).toBeNull();
     expect(pickRestorableDraft(PRINT_SPEC_DIARY, null, values)).toBeNull();
+  });
+});
+
+describe("значення за замовчуванням після ціни", () => {
+  const empty = () => createEmptyPrintSpecValues(PRINT_SPEC_DIARY);
+
+  it("що вважається «вже рахували»", () => {
+    expect(isPrintSpecPriced({})).toBe(false);
+    expect(isPrintSpecPriced({ quoteStatus: "estimating" })).toBe(false);
+    expect(isPrintSpecPriced({ lastPricedAt: "2026-09-10T10:00:00.000Z" })).toBe(true);
+    for (const quoteStatus of ["estimated", "awaiting_approval", "approved"]) {
+      expect(isPrintSpecPriced({ quoteStatus })).toBe(true);
+    }
+  });
+
+  it("після ціни порожні поля лишаються порожніми", () => {
+    const result = applyPrintSpecDefaults(
+      PRINT_SPEC_DIARY,
+      { ...empty(), format: "moleskine" },
+      { auto: [], touched: [], priced: true }
+    );
+    expect(result.values.endpaper).toBe("");
+    expect(result.values.blockPages).toBe("");
+    expect(result.auto).toEqual([]);
+    const settled = settlePrintSpecValues(PRINT_SPEC_DIARY, empty(), { auto: [], touched: [], priced: true });
+    expect(settled.values.endpaper).toBe("");
+    expect(settled.meta.priced).toBe(true);
+  });
+
+  it("єдиний можливий варіант обирається і після ціни", () => {
+    const result = applyPrintSpecDefaults(
+      PRINT_SPEC_DIARY,
+      { ...empty(), coverMaterial: "printed_paper" },
+      { auto: [], touched: [], priced: true }
+    );
+    expect(result.values.printedPaperBase).toBe("4_0_matt");
+  });
+
+  it("до ціни правила працюють як раніше", () => {
+    expect(applyPrintSpecDefaults(PRINT_SPEC_DIARY, empty(), { auto: [], touched: [] }).values.endpaper).toBe("maps");
   });
 });

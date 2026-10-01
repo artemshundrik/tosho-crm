@@ -366,8 +366,14 @@ export function dropDisabledPrintSpecChoices(
 }
 
 /** Яке значення за замовчуванням має поле зараз; `undefined` — жодного. */
-export function resolvePrintSpecDefault(field: PrintSpecField, values: PrintSpecValues): PrintSpecValue | undefined {
+export function resolvePrintSpecDefault(
+  field: PrintSpecField,
+  values: PrintSpecValues,
+  priced = false
+): PrintSpecValue | undefined {
   if (field.defaults) {
+    // Після ціни порожнє лишається порожнім: типове тихо стало б «зміною після ціни».
+    if (priced) return undefined;
     return field.defaults.find((rule) => matchesPrintSpecShowIf(rule.when, values))?.value;
   }
   if (field.type === "single" && !field.allowCustom) {
@@ -382,7 +388,22 @@ export function resolvePrintSpecDefault(field: PrintSpecField, values: PrintSpec
  * ще не підтверджене нею (`auto`). Стан живе поруч із чернеткою вікна, а НЕ в
  * збережених даних: збережене значення завжди чиєсь рішення.
  */
-export type PrintSpecDraftMeta = { auto: string[]; touched: string[] };
+export type PrintSpecDraftMeta = {
+  auto: string[];
+  touched: string[];
+  /** Прорахунок уже рахували: правила `defaults` мовчать, діє лише єдиний можливий варіант. */
+  priced?: boolean;
+};
+
+/** Прорахунок уже рахували: є дата «Пораховано» або статус із ціною. */
+export const isPrintSpecPriced = ({
+  lastPricedAt,
+  quoteStatus,
+}: {
+  lastPricedAt?: string | null;
+  quoteStatus?: string | null;
+}): boolean =>
+  Boolean(lastPricedAt) || PRICED_QUOTE_STATUSES.has(quoteStatus ?? "") || quoteStatus === "approved";
 
 const sameValue = (a: PrintSpecValue, b: PrintSpecValue): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -402,7 +423,7 @@ export function applyPrintSpecDefaults(
   let auto = meta.auto;
   for (const field of preset.fields) {
     if (!isPrintSpecFieldVisible(field, current)) continue;
-    const target = resolvePrintSpecDefault(field, current);
+    const target = resolvePrintSpecDefault(field, current, meta.priced);
     if (auto.includes(field.id)) {
       if (target === undefined) {
         current = { ...current, [field.id]: emptyFieldValue(field) };
@@ -444,12 +465,12 @@ export function settlePrintSpecValues(
     const drop = dropDisabledPrintSpecChoices(preset, current);
     current = drop.values;
     dropped.push(...drop.dropped);
-    const defaults = applyPrintSpecDefaults(preset, current, { auto, touched: meta.touched });
+    const defaults = applyPrintSpecDefaults(preset, current, { ...meta, auto });
     current = defaults.values;
     auto = defaults.auto;
     if (current === before && auto === beforeAuto) break;
   }
-  return { values: current, meta: { auto, touched: meta.touched }, dropped };
+  return { values: current, meta: { ...meta, auto }, dropped };
 }
 
 /** Службовий ключ власного значення → поле, якого воно стосується. */
@@ -470,6 +491,7 @@ export function editPrintSpecDraft(
     preset,
     { ...values, ...patch },
     {
+      ...meta,
       auto: meta.auto.filter((id) => !ids.includes(id)),
       touched: [...new Set([...meta.touched, ...ids])],
     }
@@ -478,6 +500,7 @@ export function editPrintSpecDraft(
 
 /** Людина підтвердила значення за замовчуванням, нічого не змінюючи. */
 export const confirmPrintSpecDefault = (meta: PrintSpecDraftMeta, fieldId: string): PrintSpecDraftMeta => ({
+  ...meta,
   auto: meta.auto.filter((id) => id !== fieldId),
   touched: meta.touched.includes(fieldId) ? meta.touched : [...meta.touched, fieldId],
 });
