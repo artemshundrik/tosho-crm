@@ -66,7 +66,9 @@ export function resolveStatusBlockReason(params: {
 }): string | null {
   if (!params.canEditContent) return "Змінювати статус може менеджер цього прорахунку або керівник.";
   if (params.lockedByOther) {
-    return `${params.lockHolderName ?? "Інший користувач"} зараз редагує прорахунок — статус зміниться, коли редагування завершиться.`;
+    // Не «статус зміниться, коли…»: так читалось, ніби він зміниться сам, і
+    // людина чекала, не знаючи, що можна попросити (кнопка — під цим текстом).
+    return `${params.lockHolderName ?? "Інший користувач"} зараз редагує прорахунок — змінити статус можна буде, коли редагування звільниться.`;
   }
   if (params.requirements.length > 0) return `Спершу заповніть: ${params.requirements.join(", ")}.`;
   if (params.unsavedRunCount > 0) return modelPriceVatGateMessage(params.unsavedRunCount);

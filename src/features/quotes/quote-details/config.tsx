@@ -169,13 +169,31 @@ export const statusIcons: Record<string, AppIcon> = {
   cancelled: XCircle,
 };
 
-export const getErrorMessage = (error: unknown, fallback: string) => {
+/**
+ * Відмова блокування — тим самим рядком, що бачить людина.
+ *
+ * База каже це англійською («Quote is locked by another user», тригери
+ * `trg_quote_lock_*` на прорахунку, позиціях, тиражах, файлах і коментарях).
+ * 02.10.2026 так чотири рази відмовили проєктному менеджеру, який вписував
+ * ціни в прорахунок, відкритий у керівника: тост показав внутрішній текст, а
+ * що робити — не сказав. Переклад тут, бо крізь цю функцію йдуть усі записи
+ * сторінки прорахунку, і жоден із них не мусить повторювати його сам.
+ */
+export const QUOTE_LOCKED_BY_OTHER_MESSAGE = "Прорахунок зараз редагує інша людина — зміни не збережено.";
+
+const rawErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "object" && error !== null) {
     const record = error as Record<string, unknown>;
     if (typeof record.message === "string" && record.message) return record.message;
   }
-  return fallback;
+  return "";
+};
+
+export const getErrorMessage = (error: unknown, fallback: string) => {
+  const message = rawErrorMessage(error);
+  if (/quote is locked by another user/i.test(message)) return QUOTE_LOCKED_BY_OTHER_MESSAGE;
+  return message || fallback;
 };
 
 export const STATUS_FLOW: string[] = ["estimating", "estimated", "awaiting_approval", "approved"];

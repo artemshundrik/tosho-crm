@@ -95,9 +95,9 @@ import { catalogPlaceSlash } from "@/features/quotes/quote-wizard/catalogPlace";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import { LiveCursorsLayer } from "@/components/app/LiveCursorsLayer";
-import { useEntityLock } from "@/hooks/useEntityLock";
 import { useRecordPageHeight } from "@/hooks/useRecordPageHeight";
 import { EntityLockBanner } from "@/components/app/EntityLockBanner";
+import { isQuoteLockedMessage, useQuoteLock } from "@/features/quotes/quote-details/useQuoteLock";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import {
@@ -1113,6 +1113,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     requirements: quoteRequirements, unsavedRunCount: runIdsNeedingModelPriceVat.size,
   });
 
+  const notifyQuoteLockedRef = useRef<() => void>(() => undefined); // лок береться нижче — див. useQuoteLock
   const saveRuns = async (nextRuns?: QuoteRun[] | unknown, options?: { silent?: boolean }) => {
     const silent = options?.silent === true;
     if (quoteRequirements.length > 0) {
@@ -1165,7 +1166,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         const reason = /record\s+"new"\s+has\s+no\s+field\s+"team_id"/i.test(message)
           ? "Потрібно оновити SQL hotfix для блокувань (scripts/entity-locks-hotfix-quote-child-team-id.sql)."
           : message;
-        if (silent) {
+        // Чужий лок — не збій, а зайнятий прорахунок: тост із «Попросити
+        // звільнити» замість червоного рядка, що з'їв би набрані числа.
+        if (isQuoteLockedMessage(message)) notifyQuoteLockedRef.current();
+        else if (silent) {
           /* АВТОЗБЕРЕЖЕННЯ МОВЧИТЬ ПРО УСПІХ, А НЕ ПРО ВІДМОВУ (REQ-178#p12):
              кнопки «Зберегти» ніхто не тиснув, тож тост — єдиний спосіб узнати,
              що база відмовила («Накрутку задає менеджер прорахунку»).
@@ -1682,13 +1686,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!userId) return "Не вказано";
     return memberById.get(userId) ?? userId;
   };
-  const quoteLock = useEntityLock({
-    teamId,
-    entityType: "quote",
-    entityId: quoteId,
-    userId,
-    userLabel: userId ? memberById.get(userId) ?? null : null,
-    enabled: !!teamId && !!quoteId && !!userId,
+  const { lock: quoteLock, statusAction: quoteLockStatusAction } = useQuoteLock({
+    teamId, quoteId, userId, userLabel: userId ? memberById.get(userId) ?? null : null,
+    notifyLockedRef: notifyQuoteLockedRef,
   });
   const quoteLockedByOther = quoteLock.lockedByOther;
 
@@ -4120,6 +4120,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 onPickStatus={(status) => void handleQuickStatusChange(status, "")}
                 onOpenStatusDialog={openStatusDialog}
                 onOpenCancelDialog={() => setCancelDialogOpen(true)}
+                blockAction={quoteLockStatusAction(canEditQuoteContent)}
               />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

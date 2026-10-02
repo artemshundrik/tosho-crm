@@ -72,6 +72,15 @@ export type EntityLockState = {
 
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel"] as const;
 
+/**
+ * Скільки простою до автозвільнення за замовчуванням.
+ *
+ * Експортовано, бо це число обіцяють людям у тексті: той, кого не пустили,
+ * має знати, що чекати доведеться не вічно. Текст і таймер мусять брати його
+ * з одного місця, інакше розійдуться при першій же зміні.
+ */
+export const ENTITY_LOCK_IDLE_RELEASE_MS = 5 * 60_000;
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "object" && error !== null) {
@@ -100,7 +109,7 @@ export function useEntityLock({
   enabled = true,
   heartbeatMs = 30000,
   ttlSeconds = 180,
-  idleReleaseMs = 5 * 60_000,
+  idleReleaseMs = ENTITY_LOCK_IDLE_RELEASE_MS,
   idleWarningMs = 60_000,
   onBeforeRelease,
 }: UseEntityLockParams): EntityLockState {

@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { AlertTriangle, Check, ChevronDown, Clock, Loader2, Pencil, XCircle } from "@/components/icons/appIcons";
+import { AlertTriangle, BellRing, Check, ChevronDown, Clock, Loader2, Pencil, XCircle } from "@/components/icons/appIcons";
 
 import {
   DropdownMenu,
@@ -36,6 +36,15 @@ type QuoteStatusControlProps = {
   onPickStatus: (status: string) => void;
   onOpenStatusDialog: () => void;
   onOpenCancelDialog: () => void;
+  /**
+   * Що людина може зробити з причиною блокування просто тут.
+   *
+   * Зараз це лише «Попросити звільнити» при чужому локу: 02.10.2026 проєктний
+   * менеджер прийшов у меню статусу поставити «Пораховано», прочитав, що
+   * прорахунок редагує керівник, — і не знайшов кнопки, бо вона жила лише в
+   * банері вгорі сторінки, давно прокрученому. `pending` — запит уже пішов.
+   */
+  blockAction?: { label: string; onSelect: () => void; pending?: boolean } | null;
 };
 
 export function QuoteStatusControl({
@@ -48,6 +57,7 @@ export function QuoteStatusControl({
   onPickStatus,
   onOpenStatusDialog,
   onOpenCancelDialog,
+  blockAction = null,
 }: QuoteStatusControlProps) {
   return (
     <DropdownMenu>
@@ -75,11 +85,23 @@ export function QuoteStatusControl({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[268px]">
         {blockReason ? (
-          // Текст стану замість мертвої кнопки: людина бачить, чого саме бракує.
-          <div className="tone-warning-subtle m-1 flex items-start gap-2 rounded-lg px-2.5 py-2 text-xs leading-relaxed">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span>{blockReason}</span>
-          </div>
+          <>
+            {/* Текст стану замість мертвої кнопки: людина бачить, чого саме бракує. */}
+            <div className="tone-warning-subtle m-1 flex items-start gap-2 rounded-lg px-2.5 py-2 text-xs leading-relaxed">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>{blockReason}</span>
+            </div>
+            {blockAction ? (
+              <DropdownMenuItem
+                disabled={blockAction.pending}
+                className="font-medium"
+                onSelect={() => blockAction.onSelect()}
+              >
+                <BellRing className="mr-2 h-4 w-4 text-muted-foreground" />
+                <span className="truncate">{blockAction.label}</span>
+              </DropdownMenuItem>
+            ) : null}
+          </>
         ) : nextStatus ? (
           <>
             <DropdownMenuLabel className="text-3xs uppercase tracking-caps text-muted-foreground">
