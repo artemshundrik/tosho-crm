@@ -500,8 +500,8 @@ generator refuses the marker if the table has no `BEFORE INSERT` trigger at all.
 - `public.assert_quote_lock_from_quote_id()`
   - quote lock helper: refuses a write with `Quote is locked by another user` while another
     user holds `entity_locks` for the quote. Wired as `trg_quote_lock_*` BEFORE triggers on
-    `quotes`, `quote_items`, `quote_item_runs`, `quote_status_history` (insert/update/delete)
-    and `quote_attachments` (**update/delete only**).
+    `quote_items`, `quote_item_runs`, `quote_status_history` (insert/update/delete), and on
+    `quotes` (via `assert_quote_lock_from_id()`) and `quote_attachments` — **update/delete only**.
   - **Not** on `quote_comments` since 02.10.2026 (`scripts/quote-discussion-ignores-lock.sql`):
     the discussion stays writable while a colleague edits the quote — a message overwrites
     nothing, and blocking it cut people off exactly when they needed to talk. Adding a file is
