@@ -1,6 +1,6 @@
 import { useEffect, type MutableRefObject } from "react";
 import { toast } from "sonner";
-import { ENTITY_LOCK_IDLE_RELEASE_MS, useEntityLock } from "@/hooks/useEntityLock";
+import { ENTITY_LOCK_REQUESTED_IDLE_RELEASE_MS, useEntityLock } from "@/hooks/useEntityLock";
 import { QUOTE_LOCKED_BY_OTHER_MESSAGE, getErrorMessage } from "./config";
 
 /**
@@ -42,6 +42,9 @@ export function useQuoteLock(params: {
     enabled: !!teamId && !!quoteId && !!userId,
   });
   const holder = lock.holderName ?? "Інша людина";
+  // «Хвилину» — з того ж числа, що й таймер у тримача, щоб текст не збрехав.
+  const waitMinutes = Math.round(ENTITY_LOCK_REQUESTED_IDLE_RELEASE_MS / 60_000);
+  const handover = `щойно в людини мине ${waitMinutes} хв без дій, редагування перейде до вас`;
 
   // `action: undefined` явно: тост із тим самим id ЗЛИВАЄТЬСЯ з попереднім
   // (sonner робить {...старий, ...новий}), і без цього «Запит надіслано»
@@ -52,7 +55,7 @@ export function useQuoteLock(params: {
       .then(() =>
         toast.success("Запит надіслано", {
           id: TOAST_ID,
-          description: `${holder} побачить його в себе на екрані.`,
+          description: `${holder} побачить його в себе на екрані, а ${handover}.`,
           action: undefined,
         })
       )
@@ -68,12 +71,11 @@ export function useQuoteLock(params: {
   // Один id на всі відмови: автозбереження б'ється в лок на кожному полі, і
   // без нього тости складались би стосом.
   const notifyLocked = () => {
-    const idleMinutes = Math.round(ENTITY_LOCK_IDLE_RELEASE_MS / 60_000);
     toast.error(`${holder} зараз редагує прорахунок`, {
       id: TOAST_ID,
       description: lock.releaseRequestSent
-        ? "Зміни не збережено. Запит на звільнення вже надіслано — очікуємо."
-        : `Зміни не збережено. Редагування звільниться саме, щойно там мине ${idleMinutes} хв без дій, — або попросіть звільнити зараз.`,
+        ? `Зміни не збережено. Запит уже надіслано: ${handover}.`
+        : `Зміни не збережено. Попросіть звільнити: ${handover}.`,
       action: lock.releaseRequestSent ? undefined : { label: "Попросити звільнити", onClick: requestRelease },
     });
   };

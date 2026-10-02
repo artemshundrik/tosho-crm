@@ -36,6 +36,10 @@ type UseEntityLockParams = {
   idleReleaseMs?: number;
   /** За скільки до автозвільнення почати попереджати. */
   idleWarningMs?: number;
+  /** Скільки простою досить, коли хтось попросив звільнити. */
+  requestedIdleReleaseMs?: number;
+  /** Відлік після прохання — коротший, інакше він ішов би з першої ж секунди. */
+  requestedIdleWarningMs?: number;
   /**
    * Зберегти роботу ПЕРЕД тим, як віддати лок.
    *
@@ -81,6 +85,29 @@ const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel"] as const;
  */
 export const ENTITY_LOCK_IDLE_RELEASE_MS = 5 * 60_000;
 
+/**
+ * Скільки простою досить, коли хтось ЧЕКАЄ — тобто натиснув «Попросити звільнити».
+ *
+ * ЗВІДКИ ЦЕ (02.10.2026, TS-0926-0051). Керівник лишив прорахунок відкритим і
+ * пішов на обід. Прохання звільнити лише малювало йому банер, якого не було
+ * кому побачити, тож проєктний менеджер чекав повні 5 хв. Одна хвилина для
+ * всіх не годиться: дією рахуються клік, клавіша й колесо, а читання — ні, і
+ * людина, що хвилину вчитується в прорахунок, втрачала б його посеред роботи.
+ * Коротке очікування чесне лише тоді, коли хтось справді чекає.
+ */
+export const ENTITY_LOCK_REQUESTED_IDLE_RELEASE_MS = 60_000;
+
+type IdleLimits = { releaseMs: number; warningMs: number };
+
+/** Межі простою: звичайні або «хтось чекає». Окремо від хука, щоб їх можна було перевірити. */
+export function resolveIdleLimits(
+  releaseRequested: boolean,
+  normal: IdleLimits,
+  requested: IdleLimits
+): IdleLimits {
+  return releaseRequested ? requested : normal;
+}
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "object" && error !== null) {
@@ -111,6 +138,8 @@ export function useEntityLock({
   ttlSeconds = 180,
   idleReleaseMs = ENTITY_LOCK_IDLE_RELEASE_MS,
   idleWarningMs = 60_000,
+  requestedIdleReleaseMs = ENTITY_LOCK_REQUESTED_IDLE_RELEASE_MS,
+  requestedIdleWarningMs = 30_000,
   onBeforeRelease,
 }: UseEntityLockParams): EntityLockState {
   const [state, setState] = useState({
@@ -128,6 +157,10 @@ export function useEntityLock({
   const [paused, setPaused] = useState(false);
 
   const hasLockRef = useRef(false);
+  // Тікер живе в ефекті й прохання бачить лише через ref: зі стану він
+  // перезапускав би весь цикл блокування разом із heartbeat і підпискою. Ref
+  // пишеться там само, де приходить відповідь, а не ефектом після рендера.
+  const releaseRequestedRef = useRef(false);
   const disabledAfterErrorRef = useRef(false);
   const lastActivityRef = useRef(Date.now());
   // Колбек у ref: інакше він потрапляє в залежності ефекту й перезапускає
@@ -162,6 +195,12 @@ export function useEntityLock({
 
     let alive = true;
     disabledAfterErrorRef.current = false;
+    const currentIdleLimits = () =>
+      resolveIdleLimits(
+        releaseRequestedRef.current,
+        { releaseMs: idleReleaseMs, warningMs: idleWarningMs },
+        { releaseMs: requestedIdleReleaseMs, warningMs: requestedIdleWarningMs }
+      );
     lastActivityRef.current = Date.now();
 
     const markActivity = () => {
@@ -185,6 +224,7 @@ export function useEntityLock({
         });
         if (!alive) return;
         hasLockRef.current = result.acquired;
+        releaseRequestedRef.current = result.acquired && !!result.releaseRequestedByName;
         setState({
           loading: false,
           acquired: result.acquired,
@@ -238,7 +278,7 @@ export function useEntityLock({
     const heartbeat = window.setInterval(() => {
       if (disabledAfterErrorRef.current) return;
       // Простій — не продовжуємо. Хай TTL добиває, якщо відлік не спрацював.
-      if (Date.now() - lastActivityRef.current >= idleReleaseMs) return;
+      if (Date.now() - lastActivityRef.current >= currentIdleLimits().releaseMs) return;
       void attemptAcquire();
     }, heartbeatMs);
 
@@ -246,13 +286,16 @@ export function useEntityLock({
     // рідкий, а робити його частішим означало б бити по базі щосекунди.
     const ticker = window.setInterval(() => {
       if (!hasLockRef.current) return;
+      // Прохання приходить і тоді, коли тримач уже давно без дій (пішов на
+      // обід): тоді leftMs одразу від'ємний, і лок іде просячому за секунду.
+      const { releaseMs, warningMs } = currentIdleLimits();
       const idleMs = Date.now() - lastActivityRef.current;
-      const leftMs = idleReleaseMs - idleMs;
+      const leftMs = releaseMs - idleMs;
       if (leftMs <= 0) {
         void releaseNow("idle");
         return;
       }
-      setIdleSecondsLeft(leftMs <= idleWarningMs ? Math.ceil(leftMs / 1000) : null);
+      setIdleSecondsLeft(leftMs <= warningMs ? Math.ceil(leftMs / 1000) : null);
     }, 1000);
 
     // Realtime замість опитування: «звільнилось» і «просять звільнити» доходять
@@ -271,6 +314,7 @@ export function useEntityLock({
             void readEntityLock({ teamId, entityType, entityId })
               .then((row) => {
                 if (!alive || !row) return;
+                releaseRequestedRef.current = !!row.releaseRequestedByName;
                 setState((prev) => ({ ...prev, releaseRequestedByName: row.releaseRequestedByName }));
               })
               .catch(() => undefined);
@@ -297,6 +341,8 @@ export function useEntityLock({
     idleReleaseMs,
     idleWarningMs,
     isEnabled,
+    requestedIdleReleaseMs,
+    requestedIdleWarningMs,
     teamId,
     ttlSeconds,
     userId,

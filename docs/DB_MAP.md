@@ -498,7 +498,17 @@ generator refuses the marker if the table has no `BEFORE INSERT` trigger at all.
     numbers can never drift from the rows they describe
 
 - `public.assert_quote_lock_from_quote_id()`
-  - quote lock helper
+  - quote lock helper: refuses a write with `Quote is locked by another user` while another
+    user holds `entity_locks` for the quote. Wired as `trg_quote_lock_*` BEFORE triggers on
+    `quotes`, `quote_items`, `quote_item_runs`, `quote_status_history` (insert/update/delete)
+    and `quote_attachments` (**update/delete only**).
+  - **Not** on `quote_comments` since 02.10.2026 (`scripts/quote-discussion-ignores-lock.sql`):
+    the discussion stays writable while a colleague edits the quote — a message overwrites
+    nothing, and blocking it cut people off exactly when they needed to talk. Adding a file is
+    allowed for the same reason (chat attachments land in `quote_attachments`); changing or
+    deleting one is still locked.
+  - Handover timing lives in the client (`src/hooks/useEntityLock.ts`): the holder gives the
+    lock up after 5 min idle, or after 1 min idle once someone pressed «Попросити звільнити».
 
 - `next_design_task_number(...)`
   - RPC used by design task number generation
