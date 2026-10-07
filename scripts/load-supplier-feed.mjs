@@ -53,6 +53,14 @@ import { join } from "node:path";
 import * as XLSX from "xlsx";
 
 import {
+  cscartListingExtras,
+  exactTag,
+  horoshopCategoryPaths,
+  param,
+  tag,
+  unesc,
+} from "./lib/feedXml.mjs";
+import {
   midoceanImageUrl,
   midoceanModel,
   midoceanSkuFromArticle,
@@ -731,17 +739,7 @@ if (!dbUrl && !dry) {
 }
 
 // ── розбір ──────────────────────────────────────────────────────────────────
-function unesc(s) {
-  return s
-    .replace(/^<!\[CDATA\[|\]\]>$/g, "")
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'").replace(/&apos;/g, "'").replace(/&amp;/g, "&")
-    .trim();
-}
-function tag(block, name) {
-  const m = block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`));
-  return m ? unesc(m[1].trim()) : "";
-}
+// `unesc`, `tag`, `exactTag`, `param` живуть у scripts/lib/feedXml.mjs.
 
 function parseProm(xml) {
   // Ціни тут роздрібні: наша лежить за логіном і приїжджає окремим проходом
@@ -772,22 +770,6 @@ function parseProm(xml) {
     });
   }
   return rows;
-}
-
-/**
- * Точна пара тегів, без атрибутів. Навмисно НЕ `tag()`: той бере `<price[^>]*>`
- * і в CS-Cart чіпляє `<price_type>Базова ціна</price_type>`, який стоїть ВИЩЕ
- * за `<price>`. Ціна тоді дорівнює рядку «Базова ціна» — і мовчки стає null
- * при `::numeric`. Видно лише на живому фіді, тому окремий помічник.
- */
-function exactTag(block, name) {
-  const m = block.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`));
-  return m ? unesc(m[1].trim()) : "";
-}
-
-function param(block, name) {
-  const m = block.match(new RegExp(`<param name="${name}">([\\s\\S]*?)</param>`));
-  return m ? unesc(m[1].trim()) : "";
 }
 
 /**
@@ -874,6 +856,10 @@ function parseCscart(xml, cfg) {
         price: applyPriceRule(cfg.priceRule, s.price, { priceType, section }).price,
       }));
     }
+    // Для чернетки картки сайту (REQ-311#p3): новинка, текстиль, опис і ВСІ
+    // параметри. Ключі не перетинаються з тими, що вище, — на тих уже стоять
+    // читачі (пошук пулу, правило ціни).
+    Object.assign(attrs, cscartListingExtras(b));
 
     rows.push({
       external_key: (m[1].match(/\bid="([^"]+)"/) || [])[1] || exactTag(b, "url"),
@@ -1059,6 +1045,9 @@ function parseHoroshop(xml, cfg) {
   for (const m of xml.matchAll(/<category id="(\d+)"[^>]*>([\s\S]*?)<\/category>/g)) {
     cats[m[1]] = unesc(m[2].trim());
   }
+  // Повний шлях «Батьківський/Дочірній» — для поля «Раздел» файлу імпорту
+  // (REQ-311#p3): назви листків у дереві сайту бувають однакові.
+  const categoryPaths = horoshopCategoryPaths(xml);
   const num = (v) => {
     const n = Number.parseFloat(v);
     return Number.isFinite(n) && n > 0 ? n : null;
@@ -1115,13 +1104,16 @@ function parseHoroshop(xml, cfg) {
     // 10234); решті атрибут просто не пише. Тому дивимось на присутність
     // «true», а не шукаємо "false" — його у фіді немає взагалі.
     attrs.available = /\bavailable="true"/.test(m[1]);
+    const categoryId = exactTag(b, "categoryId");
+    const categoryPath = categoryPaths.get(categoryId);
+    if (categoryPath) attrs.categoryPath = categoryPath;
 
     rows.push({
       external_key: url,
       article: exactTag(b, "vendorCode") || null,
       name,
       vendor: exactTag(b, "vendor") || null,
-      category: cats[exactTag(b, "categoryId")] || null,
+      category: cats[categoryId] || null,
       price: cfg?.priceIsReference ? null : listed,
       currency: exactTag(b, "currencyId") || "UAH",
       url,
