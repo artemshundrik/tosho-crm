@@ -390,6 +390,12 @@ These tables together power the product catalog and quote item configuration.
     supplier), `site_listing_commit_batch(...)` (all-or-nothing), `site_listing_site_categories()`,
     `site_listing_draft_context(p_item_id)` (one call: model rows, brand colour pairs,
     category votes, 3–5 style examples, site categories).
+  - Reads go through the covering index `supplier_products_listing_idx`
+    (`(supplier_slug, article) include (name, is_active, team_id, vendor, category)`):
+    pool rows are wide (~1.5 kB, the shop description lives in `attrs`), and the first,
+    cold call of the queue took 8.3 s on 07.10.2026 — over the 8 s ceiling of the app
+    role, i.e. a 500. Wide rows are read only for new models / matched pairs; the full
+    list of site categories is computed only when no category votes exist.
   - ⚠️ Re-applying the file recreates the storage policies, which takes an exclusive lock on
     `storage.objects` for the whole transaction — never test it inside a long-lived
     transaction on prod (a hung probe held it ~1 min on 07.10.2026); use `lock_timeout`.

@@ -166,10 +166,24 @@ revoke all on table tosho.site_listing_items, tosho.site_listing_batches from pu
 grant select, insert, update, delete on table tosho.site_listing_items, tosho.site_listing_batches to authenticated;
 
 -- ── черга ───────────────────────────────────────────────────────────────────
+-- Покривний покажчик пулу: артикул, назва, марка, підрозділ і все, що треба
+-- RLS (team_id) і фільтру (is_active), — без читання самих рядків.
+--
+-- НАВІЩО. Рядок пулу широкий (у avanprint ~1,5 кБ: опис сайту в attrs), а
+-- черзі з десяти тисяч рядків сайту потрібні лише артикули. Перша, холодна
+-- відповідь черги на проді 07.10.2026 була 8,3 с — це понад стелю ролі
+-- застосунку (8 с), тобто 500 замість черги; тепла — 0,13 с. Читання з диска,
+-- а не обчислення: дані ті самі, просто з покажчика їх у десятки разів менше.
+create index if not exists supplier_products_listing_idx
+  on tosho.supplier_products (supplier_slug, article)
+  include (name, is_active, team_id, vendor, category)
+  where article is not null;
+
 -- Моделі постачальника без жодного артикула на сайті + рішення за перетином
 -- артикулів. `attrs` цілком не віддаємо (DB_MAP: 9,5 МБ на пул) — лише ключі,
--- які малює рядок. security invoker: пул і так читає вся команда, а рішення
--- закриває RLS — у кого доступу немає, той бачить чергу без рішень.
+-- які малює рядок, і лише для нових моделей. security invoker: пул і так читає
+-- вся команда, а рішення закриває RLS — у кого доступу немає, той бачить
+-- чергу без рішень.
 create or replace function tosho.site_listing_candidates(p_supplier text)
 returns table (
   model_name         text,
@@ -200,13 +214,33 @@ stable
 security invoker
 set search_path = tosho, public
 as $$
+  -- `article is not null` дослівно — інакше планувальник не візьме частковий
+  -- покажчик supplier_products_listing_idx.
   with site as (
     select distinct upper(btrim(s.article)) as a
     from tosho.supplier_products s
     where s.supplier_slug = 'avanprint.ua'
+      and s.article is not null
       and s.is_active
-      and nullif(btrim(s.article), '') is not null
+      and btrim(s.article) <> ''
   ),
+  supplier_keys as (
+    select p.name, upper(btrim(p.article)) as a
+    from tosho.supplier_products p
+    where p.supplier_slug = p_supplier
+      and p.article is not null
+      and p.is_active
+      and btrim(p.article) <> ''
+  ),
+  -- Через з'єднання, а не `a in (select … from site)` усередині bool_or: так
+  -- планувальник робив підзапит на КОЖЕН рядок (3150 × 10 тис.), і черга
+  -- відкривалась 4,5 с. Хеш-з'єднання дає те саме за долі секунди (07.10.2026).
+  on_site as (
+    select distinct k.name
+    from supplier_keys k
+    join site on site.a = k.a
+  ),
+  -- Широкі рядки (attrs, фото) — лише нових моделей: ~500 рядків із 3150.
   supplier_rows as (
     select p.name,
            upper(btrim(p.article)) as a,
@@ -220,16 +254,10 @@ as $$
            (p.attrs->>'sitePrice')::numeric as site_price
     from tosho.supplier_products p
     where p.supplier_slug = p_supplier
+      and p.article is not null
       and p.is_active
-      and nullif(btrim(p.article), '') is not null
-  ),
-  -- Через з'єднання, а не `a in (select … from site)` усередині bool_or: так
-  -- планувальник робив підзапит на КОЖЕН рядок (3150 × 10 тис.), і черга
-  -- відкривалась 4,5 с. Хеш-з'єднання дає те саме за долі секунди (07.10.2026).
-  on_site as (
-    select distinct r.name
-    from supplier_rows r
-    join site on site.a = r.a
+      and btrim(p.article) <> ''
+      and p.name not in (select on_site.name from on_site)
   ),
   models as (
     select r.name,
@@ -246,7 +274,6 @@ as $$
            min(r.vendor) as vendor,
            min(r.created_at) as first_seen_at
     from supplier_rows r
-    where r.name not in (select on_site.name from on_site)
     group by r.name
   )
   select m.name, m.articles, m.colors, m.priced_colors, m.price_min, m.price_max,
@@ -421,8 +448,15 @@ $$;
 -- Усе, що фоновій функції треба знати про модель, одним запитом: рядки моделі,
 -- пари «колір постачальника → колір сайту» тієї самої марки, голоси розділів
 -- від моделей того самого підрозділу, 3–5 прикладів «опис постачальника →
--- опис сайту» і перелік розділів сайту. Один виклик замість п'яти — і без
--- переліків артикулів у адресі запиту (стеля PostgREST ~24 кБ).
+-- опис сайту» і, коли голосів немає зовсім, перелік розділів сайту. Один
+-- виклик замість п'яти — і без переліків артикулів у адресі запиту (стеля
+-- PostgREST ~24 кБ).
+--
+-- ШИРОКІ РЯДКИ САЙТУ ЧИТАЄМО ЛИШЕ ДЛЯ ПОТРІБНИХ ПАР. Артикули сайту — з
+-- покажчика; опис, колір і шлях розділу (усе в attrs, ~1,5 кБ на рядок) — лише
+-- для моделей тієї ж марки, підрозділу чи розділу, що вже є на сайті. Функцію
+-- кличе PostgREST під стелею ролі 8 с, і холодне читання всіх 10 тис. рядків
+-- сайту в неї не вкладалось би.
 --
 -- Рядок рішення читається під RLS: без доступу функція поверне null.
 create or replace function tosho.site_listing_draft_context(p_item_id uuid)
@@ -437,19 +471,17 @@ as $$
     from tosho.site_listing_items i
     where i.id = p_item_id
   ),
-  site as (
-    select upper(btrim(s.article)) as a,
-           nullif(btrim(s.attrs->>'color'), '') as color,
-           coalesce(nullif(s.attrs->>'categoryPath', ''), s.category) as path,
-           s.name,
-           nullif(btrim(s.attrs->>'description'), '') as description
+  site_keys as (
+    select s.id, upper(btrim(s.article)) as a
     from tosho.supplier_products s
     where s.supplier_slug = 'avanprint.ua'
+      and s.article is not null
       and s.is_active
-      and nullif(btrim(s.article), '') is not null
+      and btrim(s.article) <> ''
   ),
   sup as (
-    select p.name,
+    select p.id,
+           p.name,
            upper(btrim(p.article)) as a,
            btrim(p.article) as article,
            p.vendor,
@@ -478,12 +510,29 @@ as $$
   head as (
     select * from model_rows order by a limit 1
   ),
-  pairs as (
-    select distinct sup.name as model, sup.vendor, sup.category, sup.color,
-           site.color as site_color, site.path
+  related as (
+    select sup.*, sk.id as site_id
     from sup
-    join site on site.a = sup.a
+    join site_keys sk on sk.a = sup.a
     where sup.name not in (select name from model_rows)
+      and (sup.vendor is not distinct from (select vendor from head)
+           or sup.category = (select category from head)
+           or sup.section = (select section from head))
+  ),
+  site_rows as (
+    select s.id,
+           nullif(btrim(s.attrs->>'color'), '') as color,
+           coalesce(nullif(s.attrs->>'categoryPath', ''), s.category) as path,
+           s.name,
+           nullif(btrim(s.attrs->>'description'), '') as description
+    from tosho.supplier_products s
+    where s.id in (select site_id from related)
+  ),
+  pairs as (
+    select distinct r.name as model, r.vendor, r.category, r.color,
+           st.color as site_color, st.path
+    from related r
+    join site_rows st on st.id = r.site_id
   ),
   model_votes as (
     select distinct on (x.model) x.model, x.path
@@ -506,20 +555,19 @@ as $$
       and site_color is not null
   ),
   example_pairs as (
-    select distinct on (sup.name)
-           sup.name as supplier_name,
-           sup.description as supplier_description,
-           sup.params,
-           site.name as site_name,
-           site.description as site_description,
-           sup.category = (select category from head) as same_category,
-           site.description ilike '%Тип нанесення%' as styled
-    from sup
-    join site on site.a = sup.a
-    where sup.name not in (select name from model_rows)
-      and length(site.description) > 80
-      and (sup.category = (select category from head) or sup.section = (select section from head))
-    order by sup.name, site.name
+    select distinct on (r.name)
+           r.name as supplier_name,
+           r.description as supplier_description,
+           r.params,
+           st.name as site_name,
+           st.description as site_description,
+           r.category = (select category from head) as same_category,
+           st.description ilike '%Тип нанесення%' as styled
+    from related r
+    join site_rows st on st.id = r.site_id
+    where length(st.description) > 80
+      and (r.category = (select category from head) or r.section = (select section from head))
+    order by r.name, st.name
   ),
   examples as (
     select * from example_pairs
@@ -568,12 +616,23 @@ as $$
                'supplierDescription', e.supplier_description,
                'params', e.params,
                'siteName', e.site_name,
-               'siteDescription', e.site_description))
+               'siteDescription', e.site_description)
+             order by e.same_category desc, e.styled desc, e.supplier_name)
       from examples e
     ), '[]'::jsonb),
-    'siteCategories', coalesce((
-      select jsonb_agg(distinct site.path) from site where site.path is not null
-    ), '[]'::jsonb)
+    -- Повний перелік розділів потрібен моделі, лише коли голосів немає зовсім
+    -- (prepareDraft бере його тільки тоді), а коштує він читання всіх рядків
+    -- сайту. CASE не виконує підзапит, коли гілка не потрібна.
+    'siteCategories', case
+      when exists (select 1 from votes) then '[]'::jsonb
+      else coalesce((
+        select jsonb_agg(distinct coalesce(nullif(s.attrs->>'categoryPath', ''), s.category))
+        from tosho.supplier_products s
+        where s.supplier_slug = 'avanprint.ua'
+          and s.is_active
+          and coalesce(nullif(s.attrs->>'categoryPath', ''), s.category) is not null
+      ), '[]'::jsonb)
+    end
   )
   where exists (select 1 from item);
 $$;
