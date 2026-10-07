@@ -42,6 +42,8 @@ export const MUTATING_RPCS = [
   "release_entity_lock",
   "request_entity_lock_release",
   "set_quote_status",
+  "site_listing_commit_batch",
+  "site_listing_decide",
 ] as const;
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

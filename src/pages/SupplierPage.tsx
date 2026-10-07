@@ -1,13 +1,17 @@
 import { ChevronLeft, ExternalLink, KeyRound } from "@/components/icons/appIcons";
 import { Link, useParams } from "react-router-dom";
 
+import { useAuth } from "@/auth/AuthProvider";
 import { EntityAvatar } from "@/components/app/avatar-kit";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { INTEGRATIONS_SUPPLIERS } from "@/components/app/IntegrationsTabs";
 import { faviconUrl } from "@/lib/brandFavicon";
+import { hasSiteListingAccess } from "@/lib/moduleAccess";
 
+import { SiteListingQueue } from "@/features/siteListing/SiteListingQueue";
+import { SITE_LISTING_SUPPLIERS } from "@/features/siteListing/siteListingState";
 import { contractorForSupplier, useSupplierContractors, useSupplierPoolSummary } from "@/features/suppliers/queries";
 import { SupplierPassport } from "@/features/suppliers/SupplierPassport";
 import { SupplierProducts } from "@/features/suppliers/SupplierProducts";
@@ -29,6 +33,7 @@ export default function SupplierPage() {
   const definition = id ? supplierById(id) : null;
   const summary = useSupplierPoolSummary();
   const contractors = useSupplierContractors();
+  const { teamId, accessRole, jobRole } = useAuth();
 
   if (!definition) {
     return (
@@ -45,6 +50,9 @@ export default function SupplierPage() {
   const status = supplierStatus(definition, row, new Date(), { unavailable: summary.isError });
   const contractor = contractorForSupplier(definition, row, contractors.data);
   const StateIcon = SUPPLIER_STATE_ICON[status.state];
+  // Блок «На сайт» (REQ-311): лише для постачальників, яких автоперенесення
+  // вже стосується, і лише тим, кого пустить RLS черги.
+  const showSiteListing = SITE_LISTING_SUPPLIERS.has(definition.slug) && hasSiteListingAccess(accessRole, jobRole);
 
   return (
     <div className="pb-10">
@@ -99,6 +107,10 @@ export default function SupplierPage() {
           <SupplierPassport definition={definition} status={status} contractor={contractor} />
         </div>
       )}
+
+      {!definition.planned && showSiteListing ? (
+        <SiteListingQueue className="mt-8" slug={definition.slug} supplierName={definition.name} teamId={teamId} />
+      ) : null}
 
       {!definition.planned ? (
         <section className="mt-8">

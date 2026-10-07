@@ -642,6 +642,10 @@ export default defineConfig(({ command, mode }) => {
                 import("./netlify/functions/quote-import-research-background"),
               "/.netlify/functions/quote-import-link-preview": () =>
                 import("./netlify/functions/quote-import-link-preview"),
+              // Чернетка картки сайту (REQ-311#p5) — та сама причина: черга
+              // «На сайт» перевіряється очима лише під живою сесією.
+              "/.netlify/functions/site-listing-draft-background": () =>
+                import("./netlify/functions/site-listing-draft-background"),
             };
             server.middlewares.use(async (req, res, next) => {
               const load = routes[req.url?.split("?")[0] ?? ""];
