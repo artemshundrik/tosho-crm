@@ -38,6 +38,17 @@
 - **Прання**: модель повертає поле `care` («Рекомендоване прання …») лише для текстилю, код загортає його курсивом; «До текстилю допустиме коливання…» дописує код за прапорцем `<textile>Y</textile>` фіду, який завантажувач тепер зберігає (`attrs.textile`).
 - **До пушу крон фідів (10:00 і 17:00, з `origin/main`) затирає нові поля `attrs`** старим кодом. Для живої перевірки завантажувач проганяємо локально безпосередньо перед нею (задача 1, крок 6).
 
+## Що змінилось під час реалізації (07.10.2026)
+
+Код нижче — остаточний, перегенерований із файлів репо після реалізації.
+
+- **Стан `running`.** Рецензія функції (агент `function-reviewer`) знайшла подвійну оплату: статус лишався `pending` усю генерацію, і другий виклик теж ішов у модель. Тепер функція захоплює рядок умовним записом `pending → running` перед платним викликом, а результат пише лише поверх свого `running`. Там же: тексти помилок бази людині не показуються, без команди для обліку модель не кличеться.
+- **Покривний покажчик `supplier_products_listing_idx`.** Після заливу нових полів перша (холодна) відповідь черги стала 8,3 с — понад стелю ролі застосунку 8 с, тобто 500. Причина — читання широких рядків пулу з диска (опис сайту в `attrs`), хоча черзі потрібні лише артикули й назви. Покажчик `(supplier_slug, article) include (name, is_active, team_id, vendor, category)`; широкі рядки — лише нових моделей і потрібних пар; повний перелік розділів сайту — лише коли голосів немає. Відповіді черги звірені зі старими: 116 з 116 без розбіжностей. Окремий коміт.
+- **Проба SQL у довгій транзакції тримає ексклюзивний лок на `storage.objects`** (через політики кошика): зависла проба 07.10 тримала сховище прода ~1 хв. Будь-яку пробу цього файлу — з `lock_timeout` і `statement_timeout`.
+- **Два «читачі» нових RPC, що пишуть:** `MUTATING_RPCS` у `src/lib/viewOnlyGuard.ts` (режим перегляду) і `e2e/writeGuard.ts` (сторож наскрізних перевірок) — `site_listing_decide`, `site_listing_commit_batch`.
+- **Жива перевірка.** `netlify dev` із харнесом не стартує (Vite бере `PORT=8888`), тому функцію підключено до дев-сервера Vite, як і функції імпорту ексельки (`vite.config.ts`), а виклик із фронту — «вистрілив і забув» (у дев-сервері функція виконується синхронно). Сценарій — тимчасовий Playwright-spec на зібраному застосунку (4173) під тестовим акаунтом (СЕО): запит функції переадресовано на дев-сервер 5199, записи — через власний вузький фільтр на основі `classifyRequest` (сторож фікстури глушить запис фізично, `allowWrite` лише знімає претензію). Чернетка «Поло Estrella woman» — ~20 с, $0,0085.
+- **Рішення власника 07.10 по Midocean** (поза планом): множник 1,70 — записано у відкриті питання спеки.
+
 ## Карта файлів
 
 | Файл | Відповідальність |
@@ -67,7 +78,7 @@
 **Interfaces:**
 - Produces: `attrs.isNew: true`, `attrs.textile: true`, `attrs.description: string`, `attrs.params: Record<string,string>` у рядках Тотобі; `attrs.categoryPath: "Батьківський/Дочірній"` у рядках avanprint. SQL задачі 2 читає їх через `coalesce` — до першого прогону працює і без них.
 
-- [ ] **Step 1: Тест на нові помічники**
+- [x] **Step 1: Тест на нові помічники**
 
 `scripts/lib/feedXml.test.mjs`:
 
@@ -145,12 +156,12 @@ describe("Хорошоп: повні шляхи розділів", () => {
 });
 ```
 
-- [ ] **Step 2: Прогнати — падає, модуля ще немає**
+- [x] **Step 2: Прогнати — падає, модуля ще немає**
 
 Run: `npx vitest run scripts/lib/feedXml.test.mjs`
 Expected: FAIL — `Failed to load url ./feedXml.mjs`.
 
-- [ ] **Step 3: Модуль помічників**
+- [x] **Step 3: Модуль помічників**
 
 `unesc`, `tag`, `exactTag`, `param` переїжджають сюди ДОСЛІВНО (разом із коментарем до `exactTag`), поруч — нове.
 
@@ -274,7 +285,7 @@ export function horoshopCategoryPaths(xml) {
 }
 ```
 
-- [ ] **Step 4: Завантажувач бере помічники з модуля й пише нові поля**
+- [x] **Step 4: Завантажувач бере помічники з модуля й пише нові поля**
 
 У `scripts/load-supplier-feed.mjs`:
 
@@ -317,12 +328,12 @@ import {
     if (categoryPath) attrs.categoryPath = categoryPath;
 ```
 
-- [ ] **Step 5: Тести й суха проба на живих фідах**
+- [x] **Step 5: Тести й суха проба на живих фідах**
 
 Run: `npx vitest run scripts/lib/feedXml.test.mjs && set -a; . ./.env.backup; set +a; node scripts/load-supplier-feed.mjs totobi --dry && node scripts/load-supplier-feed.mjs avanprint --dry`
 Expected: тести PASS; у перших трьох рядках Тотобі в `attrs` є `params` (і `description`, де він є), у avanprint — `categoryPath`.
 
-- [ ] **Step 6: Залити Тотобі й avanprint у пул**
+- [x] **Step 6: Залити Тотобі й avanprint у пул**
 
 Це прод-запис (той самий, що робить крон). Якщо класифікатор не пускає — віддати команду людині окремим `bash`-блоком.
 
@@ -342,7 +353,7 @@ from tosho.supplier_products where supplier_slug = 'avanprint.ua' and is_active;
 
 ⚠️ До пушу крон о 10:00 і 17:00 зіллє фід старим кодом із `origin/main` і ці поля зникнуть — перед живою перевіркою (задачі 4–5) прогін повторити.
 
-- [ ] **Step 7: Коміт**
+- [x] **Step 7: Коміт**
 
 ```bash
 git add scripts/lib/feedXml.mjs scripts/lib/feedXml.test.mjs scripts/load-supplier-feed.mjs
@@ -377,7 +388,7 @@ EOF
 - Produces RPC: `tosho.site_listing_candidates(p_supplier text)` → рядки з полями типу `SiteListingCandidate` (задача 4); `tosho.site_listing_decide(p_team_id uuid, p_supplier text, p_model_name text, p_articles text[], p_decision text)` → рядок `site_listing_items`; `tosho.site_listing_commit_batch(p_team_id uuid, p_file_path text, p_item_ids uuid[])` → `uuid`; `tosho.site_listing_site_categories()` → `(path text, products int)`; `tosho.site_listing_draft_context(p_item_id uuid)` → `jsonb` формою `DraftContext` (задача 3); `tosho.has_site_listing_access(_team_id uuid)` → `boolean`.
 - Produces TS: `hasSiteListingAccess(accessRole?: string | null, jobRole?: string | null): boolean`.
 
-- [ ] **Step 1: Міграція**
+- [x] **Step 1: Міграція**
 
 `scripts/site-listing.sql`:
 
@@ -472,9 +483,17 @@ create table if not exists tosho.site_listing_items (
   constraint site_listing_items_decision_check
     check (decision is null or decision in ('take', 'skip')),
   constraint site_listing_items_draft_status_check
-    check (draft_status in ('none', 'pending', 'ready', 'failed')),
+    check (draft_status in ('none', 'pending', 'running', 'ready', 'failed')),
   constraint site_listing_items_articles_check check (cardinality(articles) > 0)
 );
+
+-- «running» — функція вже взяла чернетку в роботу й платить за модель.
+-- Окремий стан, а не «pending» до кінця: інакше подвійний клік чи повторний
+-- виклик бачили б «pending» обидва й платили двічі (рецензія 07.10.2026).
+-- Таблиця вже могла існувати без нього — переставляємо перевірку явно.
+alter table tosho.site_listing_items drop constraint if exists site_listing_items_draft_status_check;
+alter table tosho.site_listing_items add constraint site_listing_items_draft_status_check
+  check (draft_status in ('none', 'pending', 'running', 'ready', 'failed'));
 
 create index if not exists site_listing_items_team_supplier_idx
   on tosho.site_listing_items (team_id, supplier_slug);
@@ -542,10 +561,24 @@ revoke all on table tosho.site_listing_items, tosho.site_listing_batches from pu
 grant select, insert, update, delete on table tosho.site_listing_items, tosho.site_listing_batches to authenticated;
 
 -- ── черга ───────────────────────────────────────────────────────────────────
+-- Покривний покажчик пулу: артикул, назва, марка, підрозділ і все, що треба
+-- RLS (team_id) і фільтру (is_active), — без читання самих рядків.
+--
+-- НАВІЩО. Рядок пулу широкий (у avanprint ~1,5 кБ: опис сайту в attrs), а
+-- черзі з десяти тисяч рядків сайту потрібні лише артикули. Перша, холодна
+-- відповідь черги на проді 07.10.2026 була 8,3 с — це понад стелю ролі
+-- застосунку (8 с), тобто 500 замість черги; тепла — 0,13 с. Читання з диска,
+-- а не обчислення: дані ті самі, просто з покажчика їх у десятки разів менше.
+create index if not exists supplier_products_listing_idx
+  on tosho.supplier_products (supplier_slug, article)
+  include (name, is_active, team_id, vendor, category)
+  where article is not null;
+
 -- Моделі постачальника без жодного артикула на сайті + рішення за перетином
 -- артикулів. `attrs` цілком не віддаємо (DB_MAP: 9,5 МБ на пул) — лише ключі,
--- які малює рядок. security invoker: пул і так читає вся команда, а рішення
--- закриває RLS — у кого доступу немає, той бачить чергу без рішень.
+-- які малює рядок, і лише для нових моделей. security invoker: пул і так читає
+-- вся команда, а рішення закриває RLS — у кого доступу немає, той бачить
+-- чергу без рішень.
 create or replace function tosho.site_listing_candidates(p_supplier text)
 returns table (
   model_name         text,
@@ -576,13 +609,33 @@ stable
 security invoker
 set search_path = tosho, public
 as $$
+  -- `article is not null` дослівно — інакше планувальник не візьме частковий
+  -- покажчик supplier_products_listing_idx.
   with site as (
     select distinct upper(btrim(s.article)) as a
     from tosho.supplier_products s
     where s.supplier_slug = 'avanprint.ua'
+      and s.article is not null
       and s.is_active
-      and nullif(btrim(s.article), '') is not null
+      and btrim(s.article) <> ''
   ),
+  supplier_keys as (
+    select p.name, upper(btrim(p.article)) as a
+    from tosho.supplier_products p
+    where p.supplier_slug = p_supplier
+      and p.article is not null
+      and p.is_active
+      and btrim(p.article) <> ''
+  ),
+  -- Через з'єднання, а не `a in (select … from site)` усередині bool_or: так
+  -- планувальник робив підзапит на КОЖЕН рядок (3150 × 10 тис.), і черга
+  -- відкривалась 4,5 с. Хеш-з'єднання дає те саме за долі секунди (07.10.2026).
+  on_site as (
+    select distinct k.name
+    from supplier_keys k
+    join site on site.a = k.a
+  ),
+  -- Широкі рядки (attrs, фото) — лише нових моделей: ~500 рядків із 3150.
   supplier_rows as (
     select p.name,
            upper(btrim(p.article)) as a,
@@ -596,16 +649,10 @@ as $$
            (p.attrs->>'sitePrice')::numeric as site_price
     from tosho.supplier_products p
     where p.supplier_slug = p_supplier
+      and p.article is not null
       and p.is_active
-      and nullif(btrim(p.article), '') is not null
-  ),
-  -- Через з'єднання, а не `a in (select … from site)` усередині bool_or: так
-  -- планувальник робив підзапит на КОЖЕН рядок (3150 × 10 тис.), і черга
-  -- відкривалась 4,5 с. Хеш-з'єднання дає те саме за долі секунди (07.10.2026).
-  on_site as (
-    select distinct r.name
-    from supplier_rows r
-    join site on site.a = r.a
+      and btrim(p.article) <> ''
+      and p.name not in (select on_site.name from on_site)
   ),
   models as (
     select r.name,
@@ -622,7 +669,6 @@ as $$
            min(r.vendor) as vendor,
            min(r.created_at) as first_seen_at
     from supplier_rows r
-    where r.name not in (select on_site.name from on_site)
     group by r.name
   )
   select m.name, m.articles, m.colors, m.priced_colors, m.price_min, m.price_max,
@@ -797,8 +843,15 @@ $$;
 -- Усе, що фоновій функції треба знати про модель, одним запитом: рядки моделі,
 -- пари «колір постачальника → колір сайту» тієї самої марки, голоси розділів
 -- від моделей того самого підрозділу, 3–5 прикладів «опис постачальника →
--- опис сайту» і перелік розділів сайту. Один виклик замість п'яти — і без
--- переліків артикулів у адресі запиту (стеля PostgREST ~24 кБ).
+-- опис сайту» і, коли голосів немає зовсім, перелік розділів сайту. Один
+-- виклик замість п'яти — і без переліків артикулів у адресі запиту (стеля
+-- PostgREST ~24 кБ).
+--
+-- ШИРОКІ РЯДКИ САЙТУ ЧИТАЄМО ЛИШЕ ДЛЯ ПОТРІБНИХ ПАР. Артикули сайту — з
+-- покажчика; опис, колір і шлях розділу (усе в attrs, ~1,5 кБ на рядок) — лише
+-- для моделей тієї ж марки, підрозділу чи розділу, що вже є на сайті. Функцію
+-- кличе PostgREST під стелею ролі 8 с, і холодне читання всіх 10 тис. рядків
+-- сайту в неї не вкладалось би.
 --
 -- Рядок рішення читається під RLS: без доступу функція поверне null.
 create or replace function tosho.site_listing_draft_context(p_item_id uuid)
@@ -813,19 +866,17 @@ as $$
     from tosho.site_listing_items i
     where i.id = p_item_id
   ),
-  site as (
-    select upper(btrim(s.article)) as a,
-           nullif(btrim(s.attrs->>'color'), '') as color,
-           coalesce(nullif(s.attrs->>'categoryPath', ''), s.category) as path,
-           s.name,
-           nullif(btrim(s.attrs->>'description'), '') as description
+  site_keys as (
+    select s.id, upper(btrim(s.article)) as a
     from tosho.supplier_products s
     where s.supplier_slug = 'avanprint.ua'
+      and s.article is not null
       and s.is_active
-      and nullif(btrim(s.article), '') is not null
+      and btrim(s.article) <> ''
   ),
   sup as (
-    select p.name,
+    select p.id,
+           p.name,
            upper(btrim(p.article)) as a,
            btrim(p.article) as article,
            p.vendor,
@@ -854,12 +905,29 @@ as $$
   head as (
     select * from model_rows order by a limit 1
   ),
-  pairs as (
-    select distinct sup.name as model, sup.vendor, sup.category, sup.color,
-           site.color as site_color, site.path
+  related as (
+    select sup.*, sk.id as site_id
     from sup
-    join site on site.a = sup.a
+    join site_keys sk on sk.a = sup.a
     where sup.name not in (select name from model_rows)
+      and (sup.vendor is not distinct from (select vendor from head)
+           or sup.category = (select category from head)
+           or sup.section = (select section from head))
+  ),
+  site_rows as (
+    select s.id,
+           nullif(btrim(s.attrs->>'color'), '') as color,
+           coalesce(nullif(s.attrs->>'categoryPath', ''), s.category) as path,
+           s.name,
+           nullif(btrim(s.attrs->>'description'), '') as description
+    from tosho.supplier_products s
+    where s.id in (select site_id from related)
+  ),
+  pairs as (
+    select distinct r.name as model, r.vendor, r.category, r.color,
+           st.color as site_color, st.path
+    from related r
+    join site_rows st on st.id = r.site_id
   ),
   model_votes as (
     select distinct on (x.model) x.model, x.path
@@ -882,20 +950,19 @@ as $$
       and site_color is not null
   ),
   example_pairs as (
-    select distinct on (sup.name)
-           sup.name as supplier_name,
-           sup.description as supplier_description,
-           sup.params,
-           site.name as site_name,
-           site.description as site_description,
-           sup.category = (select category from head) as same_category,
-           site.description ilike '%Тип нанесення%' as styled
-    from sup
-    join site on site.a = sup.a
-    where sup.name not in (select name from model_rows)
-      and length(site.description) > 80
-      and (sup.category = (select category from head) or sup.section = (select section from head))
-    order by sup.name, site.name
+    select distinct on (r.name)
+           r.name as supplier_name,
+           r.description as supplier_description,
+           r.params,
+           st.name as site_name,
+           st.description as site_description,
+           r.category = (select category from head) as same_category,
+           st.description ilike '%Тип нанесення%' as styled
+    from related r
+    join site_rows st on st.id = r.site_id
+    where length(st.description) > 80
+      and (r.category = (select category from head) or r.section = (select section from head))
+    order by r.name, st.name
   ),
   examples as (
     select * from example_pairs
@@ -944,12 +1011,23 @@ as $$
                'supplierDescription', e.supplier_description,
                'params', e.params,
                'siteName', e.site_name,
-               'siteDescription', e.site_description))
+               'siteDescription', e.site_description)
+             order by e.same_category desc, e.styled desc, e.supplier_name)
       from examples e
     ), '[]'::jsonb),
-    'siteCategories', coalesce((
-      select jsonb_agg(distinct site.path) from site where site.path is not null
-    ), '[]'::jsonb)
+    -- Повний перелік розділів потрібен моделі, лише коли голосів немає зовсім
+    -- (prepareDraft бере його тільки тоді), а коштує він читання всіх рядків
+    -- сайту. CASE не виконує підзапит, коли гілка не потрібна.
+    'siteCategories', case
+      when exists (select 1 from votes) then '[]'::jsonb
+      else coalesce((
+        select jsonb_agg(distinct coalesce(nullif(s.attrs->>'categoryPath', ''), s.category))
+        from tosho.supplier_products s
+        where s.supplier_slug = 'avanprint.ua'
+          and s.is_active
+          and coalesce(nullif(s.attrs->>'categoryPath', ''), s.category) is not null
+      ), '[]'::jsonb)
+    end
   )
   where exists (select 1 from item);
 $$;
@@ -1018,7 +1096,7 @@ create policy site_listing_exports_insert on storage.objects
 --   select id, public, file_size_limit from storage.buckets where id = 'site-listing-exports';
 ```
 
-- [ ] **Step 2: Суха проба з приміркою ролей у транзакції з відкатом**
+- [x] **Step 2: Суха проба з приміркою ролей у транзакції з відкатом**
 
 Скрипт проби лежить поза репо (scratchpad): `begin; \i scripts/site-listing.sql;` далі під `set local role authenticated` + `request.jwt.claims`:
 - власник (`438b2643-…`): `site_listing_candidates('totobi.com.ua')` → 116 моделей; `site_listing_decide(…, 'take')` → рядок `pending`; повторний виклик на ту саму модель → той самий `id`; `site_listing_draft_context(id)` → `model`, `variants`, `brandColors`, `categoryVotes`, `examples`, `siteCategories`; партія без готової чернетки → помилка «лягло 0 моделей із 1»; чужий шлях файлу → помилка; `insert into storage.objects` у свою теку → є, у чужу й без `teams/` → `violates row-level security`;
@@ -1028,16 +1106,16 @@ create policy site_listing_exports_insert on storage.objects
 
 Expected: усе як описано (прогнано 07.10.2026). `rollback`.
 
-- [ ] **Step 3: Застосувати**
+- [x] **Step 3: Застосувати**
 
 Run: `set -a; . ./.env.backup; set +a; npm run db:apply scripts/site-listing.sql`
 Expected: «Готово: scripts/site-listing.sql застосовано й записано в журнал».
 
-- [ ] **Step 4: Примірка ролей агентом**
+- [x] **Step 4: Примірка ролей агентом**
 
 Агент `rls-verifier`: таблиці `tosho.site_listing_items`, `tosho.site_listing_batches`, кошик `site-listing-exports`; ролі anon, менеджер, дизайнер, СЕО, власник, заблокований — хто бачить і хто пише. Розбіжність зі Step 2 — зупинитись і розібратись.
 
-- [ ] **Step 5: Дзеркало доступу в інтерфейсі — тест**
+- [x] **Step 5: Дзеркало доступу в інтерфейсі — тест**
 
 У `src/lib/moduleAccess.test.ts` (імпорт `hasSiteListingAccess` додати до наявного з `./moduleAccess`), після `describe("доступ до «Виплат команді»"…)`:
 
@@ -1065,7 +1143,7 @@ describe("доступ до черги «На сайт»", () => {
 Run: `npx vitest run src/lib/moduleAccess.test.ts`
 Expected: FAIL — `hasSiteListingAccess is not a function`.
 
-- [ ] **Step 6: Дзеркало доступу**
+- [x] **Step 6: Дзеркало доступу**
 
 У `src/lib/moduleAccess.ts` після `hasPayrollAccess`:
 
@@ -1086,7 +1164,7 @@ export function hasSiteListingAccess(accessRole?: string | null, jobRole?: strin
 Run: `npx vitest run src/lib/moduleAccess.test.ts`
 Expected: PASS.
 
-- [ ] **Step 7: Типи таблиць і RPC**
+- [x] **Step 7: Типи таблиць і RPC**
 
 У `src/lib/database.types.ts`, блок `tosho` → `Tables`, за абеткою (після `sample_stock_movements`):
 
@@ -1259,7 +1337,7 @@ Expected: PASS.
 Run: `npm run typecheck`
 Expected: 0 помилок.
 
-- [ ] **Step 8: DB_MAP**
+- [x] **Step 8: DB_MAP**
 
 У `docs/DB_MAP.md` одразу після пункту `supplier_products`:
 
@@ -1287,7 +1365,7 @@ Expected: 0 помилок.
     ([scripts/site-listing.sql](/Users/artem/Projects/tosho-crm/scripts/site-listing.sql))
 ```
 
-- [ ] **Step 9: Перевірки й коміт**
+- [x] **Step 9: Перевірки й коміт**
 
 Run: `npm run check:fast && set -a; . ./.env.backup; set +a; node scripts/check-rpc-contracts.mjs && node scripts/check-db-guards.mjs`
 Expected: усе зелене; «захист БД» без нових записів.
@@ -1325,7 +1403,7 @@ EOF
 - Consumes: `tosho.site_listing_draft_context` і `tosho.has_site_listing_access` (задача 2).
 - Produces: `SiteListingDraft` у `site_listing_items.draft`; `siteListingPrice(n)`, `renderDescriptionHtml(draft)`, `buildImportRows(models)`, `IMPORT_COLUMNS`, `IMPORT_SHEET_NAME`, `TEXTILE_NOTE`, `colorsSentence(n)` — для задач 4–5. Функція приймає `POST {"itemId": uuid}` з `Authorization: Bearer <jwt>`.
 
-- [ ] **Step 1: Тести чистої логіки**
+- [x] **Step 1: Тести чистої логіки**
 
 `src/lib/siteListing/price.test.ts`:
 
@@ -1661,7 +1739,7 @@ describe("файл імпорту", () => {
 Run: `npx vitest run src/lib/siteListing`
 Expected: FAIL — модулів ще немає.
 
-- [ ] **Step 2: Типи**
+- [x] **Step 2: Типи**
 
 `src/lib/siteListing/types.ts`:
 
@@ -1775,7 +1853,7 @@ export type DraftContext = {
 };
 ```
 
-- [ ] **Step 3: Ціна й речення про кольори**
+- [x] **Step 3: Ціна й речення про кольори**
 
 `src/lib/siteListing/price.ts`:
 
@@ -1853,7 +1931,7 @@ export function colorsSentence(count: number): string | null {
 }
 ```
 
-- [ ] **Step 4: Кольори й розділ**
+- [x] **Step 4: Кольори й розділ**
 
 `src/lib/siteListing/colors.ts`:
 
@@ -2016,7 +2094,7 @@ export function voteCategory(votes: CategoryVote[]): { category: string | null; 
 }
 ```
 
-- [ ] **Step 5: Опис і файл імпорту**
+- [x] **Step 5: Опис і файл імпорту**
 
 `src/lib/siteListing/description.ts`:
 
@@ -2166,7 +2244,7 @@ export function buildImportRows(models: ImportModel[]): Array<Array<string | num
 }
 ```
 
-- [ ] **Step 6: Збирання чернетки**
+- [x] **Step 6: Збирання чернетки**
 
 `src/lib/siteListing/draft.ts`:
 
@@ -2331,7 +2409,7 @@ export function assembleDraft(input: {
 Run: `npx vitest run src/lib/siteListing`
 Expected: PASS.
 
-- [ ] **Step 7: Таблиця розмірів зі сторінки Тотобі**
+- [x] **Step 7: Таблиця розмірів зі сторінки Тотобі**
 
 `netlify/functions/_lib/totobiSizeTable.test.ts`:
 
@@ -2480,7 +2558,7 @@ export function parseTotobiSizeTable(html: string): SizeTable | null {
 }
 ```
 
-- [ ] **Step 8: Запит до мовної моделі**
+- [x] **Step 8: Запит до мовної моделі**
 
 `netlify/functions/_lib/siteListingPrompt.test.ts`:
 
@@ -2640,7 +2718,7 @@ export function buildDraftUserMessage(context: DraftContext, prepared: PreparedD
 Run: `npx vitest run netlify/functions/_lib/totobiSizeTable.test.ts netlify/functions/_lib/siteListingPrompt.test.ts`
 Expected: PASS.
 
-- [ ] **Step 9: Фонова функція**
+- [x] **Step 9: Фонова функція**
 
 `netlify/functions/site-listing-draft-background.ts`:
 
@@ -2720,11 +2798,14 @@ async function writeResult(
   itemId: string,
   patch: { draft?: SiteListingDraft; draft_status: "ready" | "failed"; draft_error: string | null }
 ) {
+  // Лише поверх «running» цього ж виклику: якщо людина тим часом натиснула
+  // «Спробувати ще», новий виклик пише сам, а цей не затирає його результат.
   const { data, error } = await client
     .schema("tosho")
     .from("site_listing_items")
     .update(patch)
     .eq("id", itemId)
+    .eq("draft_status", "running")
     .select("id");
   if (error) console.error("site-listing-draft: запис не ліг", error.message);
   else if (!data?.length) console.error("site-listing-draft: запис не ліг — RLS не пустила");
@@ -2775,20 +2856,43 @@ export const handler = async (event: HttpEvent) => {
     .select("id, team_id, decision, draft_status")
     .eq("id", itemId)
     .maybeSingle<{ id: string; team_id: string; decision: string | null; draft_status: string }>();
-  if (itemError) return jsonResponse(500, { error: itemError.message });
+  if (itemError) {
+    console.error("site-listing-draft: рядок не прочитався", itemError.message);
+    return jsonResponse(500, { error: "Не вдалося перевірити доступ." });
+  }
   if (!item) return jsonResponse(403, { error: "Модель недоступна." });
 
   // І окремо — саме право (спека §4): та сама функція, що стоїть у RLS.
   const { data: allowed, error: accessError } = await userClient
     .schema("tosho")
     .rpc("has_site_listing_access", { _team_id: item.team_id });
-  if (accessError) return jsonResponse(500, { error: accessError.message });
+  if (accessError) {
+    console.error("site-listing-draft: перевірка доступу впала", accessError.message);
+    return jsonResponse(500, { error: "Не вдалося перевірити доступ." });
+  }
   if (allowed !== true) return jsonResponse(403, { error: "Немає доступу до автоперенесення." });
 
-  // Чернетку пишемо лише на «Беремо» і лише раз на запит: подвійний клік або
-  // повторний виклик не мають платити за модель удруге.
-  if (item.decision !== "take" || item.draft_status !== "pending") {
+  if (item.decision !== "take") {
     return jsonResponse(409, { error: "Чернетка для цієї моделі зараз не замовлена." });
+  }
+
+  // ЗАХОПЛЕННЯ ДО ОПЛАТИ: «pending» → «running» одним умовним записом. Два
+  // виклики поспіль (подвійний клік, повтор запиту) обидва бачили б «pending»
+  // і обидва платили б за модель; так проходить лише перший, другий отримує
+  // нуль рядків. Зразок — dev-news-background.
+  const { data: claimed, error: claimError } = await userClient
+    .schema("tosho")
+    .from("site_listing_items")
+    .update({ draft_status: "running", draft_error: null })
+    .eq("id", itemId)
+    .eq("draft_status", "pending")
+    .select("id");
+  if (claimError) {
+    console.error("site-listing-draft: захоплення не вдалося", claimError.message);
+    return jsonResponse(500, { error: "Не вдалося почати чернетку." });
+  }
+  if (!claimed?.length) {
+    return jsonResponse(409, { error: "Чернетка для цієї моделі зараз не замовлена або вже готується." });
   }
 
   const apiKey = (process.env.OPENAI_API_KEY ?? "").trim();
@@ -2808,7 +2912,10 @@ export const handler = async (event: HttpEvent) => {
     const { data: contextData, error: contextError } = await userClient
       .schema("tosho")
       .rpc("site_listing_draft_context", { p_item_id: itemId });
-    if (contextError) throw new Error(`Дані моделі не прочитались: ${contextError.message}`);
+    if (contextError) {
+      console.error("site-listing-draft: контекст не прочитався", contextError.message);
+      throw new DraftInputError("Дані моделі не прочитались — спробуйте ще раз.");
+    }
     const context = contextData as DraftContext | null;
     if (!context) throw new DraftInputError("Моделі вже немає в пулі постачальника.");
 
@@ -2828,6 +2935,9 @@ export const handler = async (event: HttpEvent) => {
       .eq("user_id", user.id)
       .limit(1);
     const workspaceId = ((membershipRows ?? []) as Array<{ workspace_id?: string | null }>)[0]?.workspace_id ?? null;
+    // Без команди витрату нікуди записати — і платний виклик не робимо, як і
+    // quote-import-parse.
+    if (!workspaceId) throw new DraftInputError("Не знайдено команду для обліку витрат — перезайдіть у CRM.");
 
     const startedAt = Date.now();
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -2851,27 +2961,25 @@ export const handler = async (event: HttpEvent) => {
     // Облік — і на невдалій відповіді: токени вона однаково з'їла.
     const usage = extractUsage(payload);
     const { costUsd, priceKnown } = chatCostUsd(model, usage.inputTokens, usage.outputTokens, usage.cachedInputTokens);
-    if (workspaceId) {
-      await logAiUsage(adminClient, {
-        workspaceId,
-        userId: user.id,
-        actorName: actorLabel(user),
-        kind: "chat",
-        model,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-        totalTokens: usage.totalTokens,
-        costUsd,
-        metadata: {
-          source: "site-listing-draft",
-          itemId,
-          latencyMs: Date.now() - startedAt,
-          ok: response.ok,
-          cachedInputTokens: usage.cachedInputTokens,
-          priceKnown,
-        },
-      });
-    }
+    await logAiUsage(adminClient, {
+      workspaceId,
+      userId: user.id,
+      actorName: actorLabel(user),
+      kind: "chat",
+      model,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+      costUsd,
+      metadata: {
+        source: "site-listing-draft",
+        itemId,
+        latencyMs: Date.now() - startedAt,
+        ok: response.ok,
+        cachedInputTokens: usage.cachedInputTokens,
+        priceKnown,
+      },
+    });
 
     if (!response.ok) throw new Error(`Мовна модель відповіла ${response.status}. Спробуйте ще раз.`);
     const rawText = extractResponseOutputText(payload);
@@ -2887,12 +2995,11 @@ export const handler = async (event: HttpEvent) => {
     await writeResult(userClient, itemId, { draft, draft_status: "ready", draft_error: null });
     return jsonResponse(200, { ok: true });
   } catch (error) {
-    const message =
-      error instanceof DraftInputError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : "Чернетка не вдалася.";
+    // Людині — лише наші тексти: DraftInputError і відповідь моделі з кодом.
+    // Чуже повідомлення (мережа, PostgREST) іде в журнал функції, не в чергу.
+    const ours = error instanceof DraftInputError || (error instanceof Error && error.message.startsWith("Мовна модель"));
+    if (!ours) console.error("site-listing-draft: чернетка впала", error instanceof Error ? error.message : error);
+    const message = ours && error instanceof Error ? error.message : "Чернетка не вдалася — спробуйте ще раз.";
     await writeResult(userClient, itemId, { draft_status: "failed", draft_error: message.slice(0, 500) });
     return jsonResponse(502, { error: message });
   }
@@ -2904,13 +3011,13 @@ export const handler = async (event: HttpEvent) => {
 Run: `npm run typecheck:functions && npm run check:functions`
 Expected: 0 помилок; «Імена функцій Netlify чисті».
 
-- [ ] **Step 10: Звірка функції з чеклістом безпеки**
+- [x] **Step 10: Звірка функції з чеклістом безпеки**
 
 Агент `function-reviewer` на дифф функції (JWT, авторизація дії, службовий ключ лише на `ai_usage`, коди відповідей, схема тіла). Далі `/security-review` на всю зміну (SQL задачі 2 + функція). Знахідки — полагодити тут же.
 
-- [ ] **Step 11: Живий прогін на одній моделі**
+- [x] **Step 11: Живий прогін на одній моделі**
 
-Підняти `netlify` з `.claude/launch.json` (порт 8888), увійти, на одній моделі «Беремо» → через ≤ 1 хв рядок `ready`. Звірка:
+Живий прогін функції зроблено разом із прев'ю черги (задача 4, крок 9): на одній моделі «Беремо» → через ≤ 1 хв рядок `ready`. Звірка:
 
 ```sql
 select draft_status, draft_error, draft->>'title', draft->>'category', jsonb_array_length(draft->'variants')
@@ -2920,7 +3027,7 @@ select cost_usd, metadata->>'latencyMs' from tosho.ai_usage where metadata->>'so
 
 Expected: `ready`, назва формату «Тип «МОДЕЛЬ» …», ціна запиту 2–3 центи. Модель після перевірки повернути в «Нові» (рішення null), як була.
 
-- [ ] **Step 12: Коміт**
+- [x] **Step 12: Коміт**
 
 ```bash
 git add src/lib/siteListing netlify/functions/_lib/totobiSizeTable.ts netlify/functions/_lib/totobiSizeTable.test.ts netlify/functions/_lib/siteListingPrompt.ts netlify/functions/_lib/siteListingPrompt.test.ts netlify/functions/site-listing-draft-background.ts netlify/functions/tsconfig.json
@@ -2950,13 +3057,13 @@ EOF
 
 **Files:**
 - Create: `src/features/siteListing/siteListingState.ts`, `siteListingState.test.ts`, `queries.ts`, `importBatch.ts`, `SiteListingRow.tsx`, `SiteListingBatch.tsx`, `SiteListingQueue.tsx`
-- Modify: `src/pages/SupplierPage.tsx`
+- Modify: `src/pages/SupplierPage.tsx`, `vite.config.ts` (функція в дев-сервері), `src/lib/viewOnlyGuard.ts` і `e2e/writeGuard.ts` (`MUTATING_RPCS`)
 
 **Interfaces:**
 - Consumes: RPC задачі 2 (`site_listing_candidates`, `site_listing_decide`, `site_listing_commit_batch`, `site_listing_site_categories`), кошик `site-listing-exports`; `SiteListingDraft`, `siteListingPrice`, `TEXTILE_NOTE`, `buildImportRows`, `IMPORT_SHEET_NAME` (задача 3); функція `site-listing-draft-background` (задача 3).
 - Produces: `<SiteListingQueue slug supplierName teamId className? />`, `SITE_LISTING_SUPPLIERS`, `buildImportBatch(...)`, `signedUrlForBatch(batchId)`.
 
-- [ ] **Step 1: Тест стану черги**
+- [x] **Step 1: Тест стану черги**
 
 `src/features/siteListing/siteListingState.test.ts`:
 
@@ -3029,6 +3136,13 @@ describe("чернетка", () => {
     expect(hasPendingDrafts([stale], NOW)).toBe(false);
   });
 
+  it("«running» — функція вже працює: для людини це теж «готується»", () => {
+    const running = candidate({ decision: "take", draft_status: "running", item_updated_at: "2026-10-07T11:59:00Z" });
+    expect(draftView(running, NOW)).toBe("pending");
+    expect(hasPendingDrafts([running], NOW)).toBe(true);
+    expect(draftView({ ...running, item_updated_at: "2026-10-07T11:00:00Z" }, NOW)).toBe("failed");
+  });
+
   it("у файл іде лише готова чернетка з розділом; ручний розділ важливіший", () => {
     const ready = candidate({ decision: "take", draft_status: "ready", draft });
     expect(readyForFile(ready, NOW)).toBe(true);
@@ -3056,7 +3170,7 @@ describe("рядок моделі", () => {
 Run: `npx vitest run src/features/siteListing/siteListingState.test.ts`
 Expected: FAIL — модуля немає.
 
-- [ ] **Step 2: Стан черги**
+- [x] **Step 2: Стан черги**
 
 `src/features/siteListing/siteListingState.ts`:
 
@@ -3085,7 +3199,8 @@ export type SiteListingCandidate = {
   first_seen_at: string | null;
   item_id: string | null;
   decision: "take" | "skip" | null;
-  draft_status: "none" | "pending" | "ready" | "failed" | null;
+  /** «running» — фонова функція вже взяла чернетку в роботу. */
+  draft_status: "none" | "pending" | "running" | "ready" | "failed" | null;
   draft_error: string | null;
   draft: SiteListingDraft | null;
   category_override: string | null;
@@ -3123,7 +3238,7 @@ export type DraftView = "none" | "pending" | "ready" | "failed";
 
 export function draftView(candidate: SiteListingCandidate, now: number): DraftView {
   if (candidate.draft_status === "ready" && candidate.draft) return "ready";
-  if (candidate.draft_status === "pending") {
+  if (candidate.draft_status === "pending" || candidate.draft_status === "running") {
     const updated = candidate.item_updated_at ? Date.parse(candidate.item_updated_at) : Number.NaN;
     return Number.isFinite(updated) && now - updated > DRAFT_STALE_MS ? "failed" : "pending";
   }
@@ -3132,7 +3247,9 @@ export function draftView(candidate: SiteListingCandidate, now: number): DraftVi
 }
 
 export function draftErrorText(candidate: SiteListingCandidate): string {
-  if (candidate.draft_status === "pending") return "Чернетка готується понад 10 хвилин — схоже, виклик обірвався.";
+  if (candidate.draft_status === "pending" || candidate.draft_status === "running") {
+    return "Чернетка готується понад 10 хвилин — схоже, виклик обірвався.";
+  }
   return candidate.draft_error?.trim() || "Чернетка не вдалася.";
 }
 
@@ -3177,7 +3294,7 @@ export function priceLabel(candidate: SiteListingCandidate): string | null {
 Run: `npx vitest run src/features/siteListing/siteListingState.test.ts`
 Expected: PASS.
 
-- [ ] **Step 3: Запити**
+- [x] **Step 3: Запити**
 
 `src/features/siteListing/queries.ts`:
 
@@ -3245,18 +3362,20 @@ export function useSiteCategories(enabled: boolean) {
 
 /**
  * Замовити чернетку у фонової функції. Відповідь не чекаємо й не читаємо:
- * результат функція кладе в рядок, а черга його перепитає. Помилка мережі тут
- * означає лише, що рядок постоїть «готується» 10 хвилин і стане «не вдалося».
+ * результат функція кладе в рядок, а черга його перепитає. На проді фонова
+ * функція й так відповідає 202 одразу, а в дев-сервері вона виконується
+ * синхронно — і кнопка висіла б пів хвилини. Помилка мережі тут означає лише,
+ * що рядок постоїть «готується» 10 хвилин і стане «не вдалося».
  */
 export async function requestSiteListingDraft(itemId: string): Promise<void> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("Сесія застаріла — перезайдіть у CRM.");
-  await fetch("/.netlify/functions/site-listing-draft-background", {
+  void fetch("/.netlify/functions/site-listing-draft-background", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ itemId }),
-  });
+  }).catch(() => undefined);
 }
 
 /** «Беремо» / «Не беремо» / «Повернути в нові» (decision = null). */
@@ -3320,7 +3439,7 @@ export function useSiteListingPatch(slug: string) {
 }
 ```
 
-- [ ] **Step 4: Збирання й вивантаження партії**
+- [x] **Step 4: Збирання й вивантаження партії**
 
 `src/features/siteListing/importBatch.ts`:
 
@@ -3419,7 +3538,7 @@ export async function buildImportBatch(input: {
 }
 ```
 
-- [ ] **Step 5: Рядок моделі**
+- [x] **Step 5: Рядок моделі**
 
 `src/features/siteListing/SiteListingRow.tsx`:
 
@@ -3636,7 +3755,7 @@ function CategoryPicker({ itemId, onPick }: { itemId: string; onPick: (itemId: s
     <div className="flex flex-wrap items-center gap-2 px-2 pb-2 pl-15">
       <span className="text-xs text-warning-foreground">Розділ сайту не визначено — без нього модель у файл не йде.</span>
       <Select onValueChange={(value) => onPick(itemId, value)}>
-        <SelectTrigger className="h-7 w-72 text-xs" aria-label="Розділ сайту">
+        <SelectTrigger controlSize="sm" className="w-72 text-xs" aria-label="Розділ сайту">
           <SelectValue placeholder={categories.isPending ? "Завантажую розділи…" : "Вибрати розділ"} />
         </SelectTrigger>
         <SelectContent>
@@ -3723,7 +3842,7 @@ function DraftView({ draft, category }: { draft: SiteListingDraft; category: str
 }
 ```
 
-- [ ] **Step 6: Кнопка «Зібрати файл», посилання й інструкція**
+- [x] **Step 6: Кнопка «Зібрати файл», посилання й інструкція**
 
 `src/features/siteListing/SiteListingBatch.tsx`:
 
@@ -3734,6 +3853,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 import { buildImportBatch, type BuiltBatch } from "./importBatch";
 import { siteListingKeys } from "./queries";
@@ -3803,12 +3923,13 @@ export function SiteListingBatch({
             Файл зібрано: моделей {built.models}, рядків {built.rows}. Вони перейшли в «У файлі».
           </p>
           <div className="flex items-center gap-2">
-            <input
+            <Input
               readOnly
+              controlSize="sm"
               value={built.url}
               aria-label="Посилання на файл імпорту"
               onFocus={(event) => event.currentTarget.select()}
-              className="h-7 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-xs"
+              className="min-w-0 flex-1 text-xs"
             />
             <Button size="xs" variant="outline" onClick={() => void copy()}>
               <Copy aria-hidden="true" />
@@ -3827,7 +3948,7 @@ export function SiteListingBatch({
 }
 ```
 
-- [ ] **Step 7: Блок черги**
+- [x] **Step 7: Блок черги**
 
 `src/features/siteListing/SiteListingQueue.tsx`:
 
@@ -3968,7 +4089,7 @@ export function SiteListingQueue({
 }
 ```
 
-- [ ] **Step 8: Блок на сторінці постачальника**
+- [x] **Step 8: Блок на сторінці постачальника**
 
 У `src/pages/SupplierPage.tsx`:
 
@@ -4011,15 +4132,15 @@ import { hasSiteListingAccess } from "@/lib/moduleAccess";
 Run: `npm run check:fast`
 Expected: зелено.
 
-- [ ] **Step 9: Прев'ю живцем**
+- [x] **Step 9: Прев'ю живцем**
 
-Перед цим — повторити задачу 1, крок 6 (крон міг затерти поля). Підняти `netlify` (8888), відкрити `/integrations/suppliers/totobi` під власником. Проклацати: вкладки з лічильниками; «Беремо» на одній моделі → «Готується…» → «Чернетка» розгортається (назва, опис, розділ, кольори з цінами); якщо розділу немає — вибір розділу; «Не беремо» → модель у «Не беремо» → «Повернути» → знову «Нові». Стан моделі вернути як був. Без доказу очима — у звіті «у браузері не перевіряв».
+Перед цим — повторити задачу 1, крок 6 (крон міг затерти поля). Як це зроблено 07.10 — див. «Що змінилось під час реалізації»: тимчасовий Playwright-spec під тестовим акаунтом (СЕО), функція — через дев-сервер, записи — лише черги. Відкрити `/integrations/suppliers/totobi`. Проклацати: вкладки з лічильниками; «Беремо» на одній моделі → «Готується…» → «Чернетка» розгортається (назва, опис, розділ, кольори з цінами); якщо розділу немає — вибір розділу; «Не беремо» → модель у «Не беремо» → «Повернути» → знову «Нові». Стан моделі вернути як був. Без доказу очима — у звіті «у браузері не перевіряв».
 
-- [ ] **Step 10: Файл — без запису в прод**
+- [x] **Step 10: Файл — без запису в прод**
 
 Тимчасовим тестом (не комітити) зібрати `buildImportRows` із двох справжніх чернеток, записати XLSX у scratchpad і прочитати назад SheetJS: аркуш «Товари», 12 колонок у порядку `IMPORT_COLUMNS`, рядок на колір, `Отображать` = «Ні», `Цена` — число. «Зібрати файл» живцем (кошик, підписане посилання, імпорт у Хорошопі) перевіряє перша справжня партія 5–10 моделей, а не прев'ю (спека §8).
 
-- [ ] **Step 11: Коміт**
+- [x] **Step 11: Коміт**
 
 ```bash
 git add src/features/siteListing src/pages/SupplierPage.tsx
@@ -4052,16 +4173,16 @@ EOF
 **Files:**
 - Modify: `docs/superpowers/specs/2026-10-01-site-autolisting-design.md`, `docs/superpowers/plans/2026-10-07-site-autolisting.md`
 
-- [ ] **Step 1: Спека — рішення з реалізації**
+- [x] **Step 1: Спека — рішення з реалізації**
 
 Статус — «реалізовано локально, чекає пушу»; приклад ціни «837,93 → 837» замінити на «846,40 → 837»; у розділ 4 — шовкодрук теж стає шовкотрафаретом (код, `normalizeMethods`), прання — поле моделі `care` лише для текстилю, підпис замірів таблиці розмірів — «Довжина / ширина, см» за силуетом A/B Тотобі.
 
-- [ ] **Step 2: Повна перевірка**
+- [x] **Step 2: Повна перевірка**
 
 Run: `npm run check`
 Expected: усі перевірки зелені.
 
-- [ ] **Step 3: Коміт документації**
+- [x] **Step 3: Коміт документації**
 
 ```bash
 git add docs/superpowers/specs/2026-10-01-site-autolisting-design.md docs/superpowers/plans/2026-10-07-site-autolisting.md
