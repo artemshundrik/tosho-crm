@@ -369,6 +369,31 @@ These tables together power the product catalog and quote item configuration.
     ([scripts/catalog-supplier-products.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-supplier-products.sql),
     [scripts/supplier-pool-search.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-search.sql),
     [scripts/supplier-pool-page.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-page.sql))
+- `site_listing_items`, `site_listing_batches`
+  - REQ-311, new supplier models → avanprint.ua (spec
+    `docs/superpowers/specs/2026-10-01-site-autolisting-design.md`). The queue itself
+    is NOT stored: `tosho.site_listing_candidates(p_supplier)` computes it from the pool
+    (a model = supplier `name`; "new" = none of its normalised articles is on an active
+    `avanprint.ua` row), so a model leaves the queue by itself once the shop enables it.
+  - `site_listing_items` holds a decision only for models someone touched, bound by an
+    articles snapshot (`articles && …`, GIN), plus the draft (`draft` jsonb,
+    `draft_status` none/pending/running/ready/failed) written by
+    `netlify/functions/site-listing-draft-background.ts` with the user's token; the
+    function claims `pending → running` before paying for the model.
+    `site_listing_batches` = built import files (`file_path` in the private bucket
+    `site-listing-exports`, path `teams/<team_id>/site-listing/…`).
+  - RLS on both, all four actions: `tosho.has_site_listing_access(team_id)` — team member,
+    not blocked, owner or job_role `seo`/`it_specialist`; mirrored by
+    `hasSiteListingAccess` in `src/lib/moduleAccess.ts`. Storage policies resolve the team
+    from the path via `tosho.site_listing_path_team(name)`.
+  - RPCs (`security invoker`): `site_listing_decide(...)` (take/skip/null, advisory lock per
+    supplier), `site_listing_commit_batch(...)` (all-or-nothing), `site_listing_site_categories()`,
+    `site_listing_draft_context(p_item_id)` (one call: model rows, brand colour pairs,
+    category votes, 3–5 style examples, site categories).
+  - ⚠️ Re-applying the file recreates the storage policies, which takes an exclusive lock on
+    `storage.objects` for the whole transaction — never test it inside a long-lived
+    transaction on prod (a hung probe held it ~1 min on 07.10.2026); use `lock_timeout`.
+    ([scripts/site-listing.sql](/Users/artem/Projects/tosho-crm/scripts/site-listing.sql))
 
 ## Sample Stock / Warehouse Samples
 

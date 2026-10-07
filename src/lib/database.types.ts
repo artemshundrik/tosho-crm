@@ -4467,6 +4467,95 @@ export type Database = {
         }
         Relationships: []
       }
+      site_listing_batches: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          file_path: string
+          id: string
+          item_count: number
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          file_path: string
+          id?: string
+          item_count?: number
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          file_path?: string
+          id?: string
+          item_count?: number
+          team_id?: string
+        }
+        Relationships: []
+      }
+      site_listing_items: {
+        Row: {
+          articles: string[]
+          batch_id: string | null
+          category_override: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string | null
+          draft: Json | null
+          draft_error: string | null
+          draft_status: string
+          id: string
+          model_name: string
+          supplier_slug: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          articles: string[]
+          batch_id?: string | null
+          category_override?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          draft?: Json | null
+          draft_error?: string | null
+          draft_status?: string
+          id?: string
+          model_name: string
+          supplier_slug: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          articles?: string[]
+          batch_id?: string | null
+          category_override?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          draft?: Json | null
+          draft_error?: string | null
+          draft_status?: string
+          id?: string
+          model_name?: string
+          supplier_slug?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_listing_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "site_listing_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stack_versions: {
         Row: {
           advisories: Json
@@ -5726,6 +5815,7 @@ export type Database = {
       }
       has_finance_access: { Args: { _team_id: string }; Returns: boolean }
       has_payroll_access: { Args: { _team_id: string }; Returns: boolean }
+      has_site_listing_access: { Args: { _team_id: string }; Returns: boolean }
       invite_account_state: { Args: { _email: string }; Returns: Json }
       is_last_owner: {
         Args: { p_user_id: string; p_workspace_id: string }
@@ -5833,6 +5923,74 @@ export type Database = {
           p_quote_id: string
         }
         Returns: boolean
+      }
+      site_listing_candidates: {
+        Args: { p_supplier: string }
+        Returns: {
+          articles: string[]
+          batch_created_at: string | null
+          batch_id: string | null
+          category: string | null
+          category_override: string | null
+          colors: number
+          decision: string | null
+          draft: Json | null
+          draft_error: string | null
+          draft_status: string | null
+          first_seen_at: string | null
+          image_url: string | null
+          is_new: boolean
+          item_id: string | null
+          item_updated_at: string | null
+          model_name: string
+          priced_colors: number
+          section: string | null
+          supplier_price_max: number | null
+          supplier_price_min: number | null
+          supplier_url: string | null
+          vendor: string | null
+        }[]
+      }
+      site_listing_commit_batch: {
+        Args: { p_file_path: string; p_item_ids: string[]; p_team_id: string }
+        Returns: string
+      }
+      site_listing_decide: {
+        Args: {
+          p_articles: string[]
+          p_decision: string | null
+          p_model_name: string
+          p_supplier: string
+          p_team_id: string
+        }
+        Returns: {
+          articles: string[]
+          batch_id: string | null
+          category_override: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string | null
+          draft: Json | null
+          draft_error: string | null
+          draft_status: string
+          id: string
+          model_name: string
+          supplier_slug: string
+          team_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "site_listing_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      site_listing_draft_context: { Args: { p_item_id: string }; Returns: Json }
+      site_listing_site_categories: {
+        Args: never
+        Returns: { path: string; products: number }[]
       }
       supplier_pool_categories: {
         Args: { p_slug: string }

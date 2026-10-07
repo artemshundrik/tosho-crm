@@ -6,6 +6,7 @@ import {
   hasDefaultFinanceAccess,
   hasModuleAccess,
   hasPayrollAccess,
+  hasSiteListingAccess,
   isModuleVisibleInMenu,
   MODULE_DEFINITIONS,
   MODULE_GROUPS,
@@ -370,6 +371,25 @@ describe("доступ до «Виплат команді»", () => {
   it("решта команди — ні", () => {
     expect(hasPayrollAccess("member", "manager")).toBe(false);
     expect(hasPayrollAccess("admin", "pm")).toBe(false);
+  });
+});
+
+/**
+ * Автоперенесення на сайт — той самий круг, що бачить «Інтеграції».
+ * Дзеркало `tosho.has_site_listing_access` (scripts/site-listing.sql).
+ */
+describe("доступ до черги «На сайт»", () => {
+  it("власник, СЕО й IT — так", () => {
+    expect(hasSiteListingAccess("owner", "it_specialist")).toBe(true);
+    expect(hasSiteListingAccess("admin", "seo")).toBe(true);
+    expect(hasSiteListingAccess("member", "it_specialist")).toBe(true);
+  });
+
+  it("менеджер, дизайнер, бухгалтер — ні", () => {
+    expect(hasSiteListingAccess("member", "manager")).toBe(false);
+    expect(hasSiteListingAccess("member", "designer")).toBe(false);
+    expect(hasSiteListingAccess("member", "accountant")).toBe(false);
+    expect(hasSiteListingAccess(null, null)).toBe(false);
   });
 });
 

@@ -481,6 +481,18 @@ export function hasPayrollAccess(accessRole?: string | null, jobRole?: string | 
 }
 
 /**
+ * Черга «На сайт» (REQ-311): власник, СЕО й IT — той самий круг, що бачить
+ * «Інтеграції». Окремого модуля в «Ролях і доступах» немає (рішення
+ * 01.10.2026). Дзеркало `tosho.has_site_listing_access`
+ * (scripts/site-listing.sql): розійдуться — людина побачить блок, у якому
+ * кожен запис падає, або має право, а блоку не бачить.
+ */
+export function hasSiteListingAccess(accessRole?: string | null, jobRole?: string | null) {
+  const role = (jobRole ?? "").trim().toLowerCase();
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "seo" || role === "it_specialist";
+}
+
+/**
  * Що показати біля перемикача модуля в «Ролях і доступах».
  *
  * НАВІЩО ОКРЕМА ФУНКЦІЯ. Сторінка доступів роками показувала перемикачі, які
