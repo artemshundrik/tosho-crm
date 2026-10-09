@@ -6,7 +6,7 @@ with the service-role key (notification spam + `activity-log-retention` DoS). Th
 no-op until `CRON_SHARED_SECRET` is set in the Netlify env, so nothing breaks before activation.
 
 **Gated functions:** `customer-lead-reminders`, `quote-deadline-reminders`, `contractor-reminders`,
-`team-events-reminders`, `probation-reminders`, `activity-log-retention`.
+`quote-markup-reminders`, `team-events-reminders`, `probation-reminders`, `activity-log-retention`.
 
 ## Current status (2026-07-12)
 

@@ -1,4 +1,4 @@
-// Один POST замість трьох: усі нагадування «за розкладом» в одній інвокації.
+// Один POST замість кількох: усі нагадування «за розкладом» в одній інвокації.
 //
 // НАВІЩО. Джоб `reminders-minute` будив три функції ТРЬОМА окремими
 // net.http_post — і кожен з них Netlify рахував окремою інвокацією. При
@@ -25,6 +25,7 @@ import { assertCronAuthorized } from "./_cronAuth";
 import { handler as contractorReminders } from "./contractor-reminders";
 import { handler as customerLeadReminders } from "./customer-lead-reminders";
 import { handler as quoteDeadlineReminders } from "./quote-deadline-reminders";
+import { handler as quoteMarkupReminders } from "./quote-markup-reminders";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -42,6 +43,9 @@ const JOBS: ReadonlyArray<readonly [string, (event: HttpEvent) => Promise<unknow
   ["customer-lead-reminders", customerLeadReminders],
   ["quote-deadline-reminders", quoteDeadlineReminders],
   ["contractor-reminders", contractorReminders],
+  // REQ-328: запит на ціну нижче дна, що висить з учора. Четвертий обробник
+  // тут, а не окремий джоб — з тієї ж причини, з якої диспетчер з'явився.
+  ["quote-markup-reminders", quoteMarkupReminders],
 ];
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {

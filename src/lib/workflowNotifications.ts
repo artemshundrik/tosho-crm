@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import { formatRatePercent, minMarkupRateFor, type QuoteDealType } from "@/lib/quoteDealType";
+import { resolveMarkupApproverIds } from "@/lib/quoteMarkupNotice";
 import { boardColumnStatuses } from "@/lib/kanbanBoards";
 
 const isUuid = (value?: string | null) =>
@@ -85,37 +86,6 @@ function pickOwnerAndSeoUserIds(rows: TeamMemberRoleRow[]) {
 // Approver pool for contract revisions: access_role='owner' OR job_role='seo'.
 // CEO users act as alternate contract approvers per project rule.
 const pickContractApproverUserIds = pickOwnerAndSeoUserIds;
-
-/**
- * Хто отримує запит на погодження накрутки нижче дна — НА МЕРЧІ (REQ-149).
- *
- * Рішення СЕО 30.08.2026: двоє СЕО і головний бухгалтер; підтвердити або
- * відхилити може будь-хто з них. Власник тут не як окрема роль погоджувача, а
- * як наскрізний доступ — він і так бачить усе.
- *
- * На ПОЛІГРАФІЇ перелік інший і вужчий — див. виклик нижче (REQ-182).
- *
- * Дзеркала цього переліку: canApproveQuoteMarkup (src/lib/permissions.ts) і
- * tosho.is_quote_markup_approver у базі.
- */
-function pickMarkupApproverUserIds(rows: TeamMemberRoleRow[]) {
-  return rows
-    .filter((row) => {
-      const access = normalizeRole(row.access_role);
-      const job = normalizeRole(row.job_role);
-      return access === "owner" || job === "seo" || job === "chief_accountant";
-    })
-    .map((row) => row.user_id)
-    .filter((value): value is string => !!value);
-}
-
-/** Лише посада СЕО — запасні погоджувачі поліграфії (REQ-182). */
-function pickSeoUserIds(rows: TeamMemberRoleRow[]) {
-  return rows
-    .filter((row) => normalizeRole(row.job_role) === "seo")
-    .map((row) => row.user_id)
-    .filter((value): value is string => !!value);
-}
 
 function pickDesignerUserIds(rows: TeamMemberRoleRow[]) {
   return rows
@@ -686,16 +656,13 @@ export async function notifyMarkupApprovalRequested(params: {
   if (params.runs.length === 0) return;
   const { teamId, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
   const members = await resolveTeamMembers(teamId);
-  // На поліграфії адресат вужчий: призначений погоджувач, а якщо його не
-  // призначили — СЕО. Падати на загальний перелік не можна: у ньому головбух,
-  // а він поліграфію не затверджує (вимога Артема 01.09.2026), тож лист про
-  // рішення, якого він не може ухвалити, був би просто шумом.
+  // Той самий перелік читає щоденне нагадування (REQ-328) — див. quoteMarkupNotice.
   const recipients = new Set(
-    params.dealType
-      ? params.printApproverUserId
-        ? [params.printApproverUserId]
-        : pickSeoUserIds(members)
-      : pickMarkupApproverUserIds(members)
+    resolveMarkupApproverIds({
+      members,
+      isPrint: Boolean(params.dealType),
+      printApproverUserId: params.printApproverUserId,
+    })
   );
   if (params.actorUserId) recipients.delete(params.actorUserId);
   if (recipients.size === 0) return;

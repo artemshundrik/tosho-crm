@@ -18,10 +18,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const customerLead = vi.fn();
 const quoteDeadline = vi.fn();
 const contractor = vi.fn();
+const quoteMarkup = vi.fn();
 
 vi.mock("../customer-lead-reminders", () => ({ handler: (event: unknown) => customerLead(event) }));
 vi.mock("../quote-deadline-reminders", () => ({ handler: (event: unknown) => quoteDeadline(event) }));
 vi.mock("../contractor-reminders", () => ({ handler: (event: unknown) => contractor(event) }));
+vi.mock("../quote-markup-reminders", () => ({ handler: (event: unknown) => quoteMarkup(event) }));
 
 const { handler } = await import("../reminders-dispatch");
 
@@ -42,6 +44,7 @@ beforeEach(() => {
   customerLead.mockReset().mockResolvedValue(ok());
   quoteDeadline.mockReset().mockResolvedValue(ok());
   contractor.mockReset().mockResolvedValue(ok());
+  quoteMarkup.mockReset().mockResolvedValue(ok());
 });
 
 afterEach(() => {
@@ -49,20 +52,21 @@ afterEach(() => {
 });
 
 describe("reminders-dispatch", () => {
-  it("проганяє всі три нагадування за один виклик", async () => {
+  it("проганяє всі нагадування за один виклик", async () => {
     const response = await handler(authorized);
     const body = parse(response);
 
     expect(response.statusCode).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.ran).toBe(3);
+    expect(body.ran).toBe(4);
     expect(body.failed).toBe(0);
     expect(customerLead).toHaveBeenCalledTimes(1);
     expect(quoteDeadline).toHaveBeenCalledTimes(1);
     expect(contractor).toHaveBeenCalledTimes(1);
+    expect(quoteMarkup).toHaveBeenCalledTimes(1);
   });
 
-  it("падіння одного нагадування не глушить два інші", async () => {
+  it("падіння одного нагадування не глушить решту", async () => {
     quoteDeadline.mockRejectedValue(new Error("Supabase впала"));
 
     const response = await handler(authorized);
@@ -71,6 +75,7 @@ describe("reminders-dispatch", () => {
     // Головне: решта ВІДПРАЦЮВАЛА. Саме це забрав би Promise.all.
     expect(customerLead).toHaveBeenCalledTimes(1);
     expect(contractor).toHaveBeenCalledTimes(1);
+    expect(quoteMarkup).toHaveBeenCalledTimes(1);
 
     expect(body.success).toBe(false);
     expect(body.failed).toBe(1);
@@ -98,6 +103,7 @@ describe("reminders-dispatch", () => {
     expect(customerLead).not.toHaveBeenCalled();
     expect(quoteDeadline).not.toHaveBeenCalled();
     expect(contractor).not.toHaveBeenCalled();
+    expect(quoteMarkup).not.toHaveBeenCalled();
   });
 
   it("передає подію обробникам як є — їхні власні гейти мають бачити той самий ключ", async () => {
@@ -106,6 +112,7 @@ describe("reminders-dispatch", () => {
     expect(customerLead).toHaveBeenCalledWith(authorized);
     expect(quoteDeadline).toHaveBeenCalledWith(authorized);
     expect(contractor).toHaveBeenCalledWith(authorized);
+    expect(quoteMarkup).toHaveBeenCalledWith(authorized);
   });
 
   it("не приймає чужі методи", async () => {

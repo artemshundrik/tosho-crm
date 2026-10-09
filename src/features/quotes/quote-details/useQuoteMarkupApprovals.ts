@@ -10,15 +10,14 @@ import {
 } from "@/lib/quoteMarkupApproval";
 import { resolveMarkupBenchmark, type MarkupBenchmark } from "@/lib/quoteMarkupBenchmark";
 import type { QuoteDealType } from "@/lib/quoteDealType";
-import { needsMarkupApproval, saleAtMarkup } from "@/lib/quoteRuns";
+import { formatMarkupPrice, formatMarkupRunLabel } from "@/lib/quoteMarkupNotice";
+import { needsMarkupApproval } from "@/lib/quoteRuns";
 import type { QuoteRun } from "@/lib/toshoApi";
-import { normalizeUnitLabel } from "@/lib/units";
 import {
   notifyMarkupApprovalDecided,
   notifyMarkupApprovalRequested,
 } from "@/lib/workflowNotifications";
 
-import { formatCurrency } from "./config";
 import {
   decideMarkupApproval,
   fetchMarkupBenchmarkSamples,
@@ -202,32 +201,16 @@ export function useQuoteMarkupApprovals({
   const runLabel = useCallback(
     (run: QuoteRun) => {
       const item = items.find((candidate) => candidate.id === run.quote_item_id);
-      const qty = Math.max(0, Number(run.quantity) || 0);
-      const unit = normalizeUnitLabel(item?.unit ?? "шт");
-      return item?.title ? `${item.title} · ${qty} ${unit}` : `${qty} ${unit}`;
+      return formatMarkupRunLabel({ itemTitle: item?.title, quantity: Number(run.quantity) || 0, unit: item?.unit });
     },
     [items]
   );
 
-  /**
-   * Ціна для сповіщення: сума, а в дужках штука й відсоток (REQ-325).
-   *
-   * Погоджувач вирішує про гроші клієнта, і Влад після першого живого
-   * погодження попросив прибрати «накрутку» з того, що він підписує. Рахуємо
-   * тією самою `saleAtMarkup`, що й велике число на картці, — інакше в
-   * Telegram прийшла б сума, якої на екрані немає.
-   */
+  /** Ціна для сповіщення — та сама, що на картці (див. formatMarkupPrice). */
   const priceOf = useCallback(
     (run: QuoteRun, costTotal: number, markupRate: number) => {
-      const sale = saleAtMarkup({ quantity: Number(run.quantity) || 0, costTotal, markupRate });
       const item = items.find((candidate) => candidate.id === run.quote_item_id);
-      const unit = normalizeUnitLabel(item?.unit ?? "шт");
-      // До сотих: у сховищі відсоток без округлення (30,840579…), і сирим
-      // числом лист виглядав би як збій.
-      const rate = `${(Math.round((Number(markupRate) || 0) * 100) / 100).toLocaleString("uk-UA")} %`;
-      const total = formatCurrency(sale.saleTotal, currency);
-      const perUnit = sale.saleUnitPrice === null ? "" : `${formatCurrency(sale.saleUnitPrice, currency)}/${unit}, `;
-      return { total, label: `${total} (${perUnit}${rate})` };
+      return formatMarkupPrice({ quantity: Number(run.quantity) || 0, costTotal, markupRate, unit: item?.unit, currency });
     },
     [currency, items]
   );
