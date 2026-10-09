@@ -17,7 +17,6 @@ import {
   type ProfileSource,
   type TeamMemberRow,
 } from "./_lib/teamMembers";
-import { hasSiteListingAccess } from "../../src/lib/moduleAccess";
 import { pickSiteListingRecipients } from "../../src/lib/siteListing/recipients";
 
 /**
@@ -30,10 +29,9 @@ import { pickSiteListingRecipients } from "../../src/lib/siteListing/recipients"
  * кожні п'ять хвилин), а сама вона працює раз на годину в робочий час.
  *
  * Адресати — люди, вибрані в шапці блоку «На сайт» (tosho.site_listing_settings,
- * REQ-311#p18); вибору немає — лише власник. Вибір однаково перетинається з
- * кругом, що бачить блок (hasSiteListingAccess, дзеркало
- * tosho.has_site_listing_access), а звільнених відсіює isDeliverable: сервісний
- * ключ бачить у memberships_view усіх.
+ * REQ-311#p18); вибору немає — лише власник. Вибирати можна будь-кого з
+ * команди, не лише круг блоку (рішення власника 09.10.2026). Звільнених
+ * відсіює isDeliverable: сервісний ключ бачить у memberships_view усіх.
  *
  * ?dry=1 — повернути, що було б надіслано, нічого не пишучи й не чекаючи
  * потрібної години.
@@ -77,7 +75,7 @@ function normalizeCandidate(row: Record<string, unknown>): AnnounceCandidate {
 
 /**
  * Хто отримує: вибраний у блоці «На сайт» (або власник, якщо вибору немає),
- * має доступ до блоку й досі працює. Вибір — на команду, тож і збираємо по
+ * член цієї команди й досі працює. Вибір — на команду, тож і збираємо по
  * командах.
  */
 async function loadRecipients(adminClient: SupabaseClient): Promise<string[]> {
@@ -106,9 +104,9 @@ async function loadRecipients(adminClient: SupabaseClient): Promise<string[]> {
 
   const eligibleByTeam = new Map<string, TeamMemberRow[]>();
   for (const member of members) {
-    // Без команди людина не бачить і самого блоку: has_site_listing_access
-    // першою умовою питає членство в team_members.
-    if (!member.teamId || !isDeliverable(member) || !hasSiteListingAccess(member.accessRole, member.jobRole)) continue;
+    // Вибір належить команді: без членства в team_members людині з нього не
+    // шлемо, навіть якщо її id туди потрапив.
+    if (!member.teamId || !isDeliverable(member)) continue;
     const list = eligibleByTeam.get(member.teamId) ?? [];
     list.push(member);
     eligibleByTeam.set(member.teamId, list);

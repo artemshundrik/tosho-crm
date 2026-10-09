@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { hasSiteListingAccess } from "@/lib/moduleAccess";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
@@ -169,9 +168,10 @@ export function useSiteListingNotifyIds(teamId: string | null) {
 }
 
 /**
- * З кого вибирати: ті, хто бачить блок і досі працює — той самий круг, з яким
- * функція site-listing-reminders перетинає вибір. Довідник модульно
- * кешований, тож окремого запиту до бази тут зазвичай немає.
+ * З кого вибирати: уся команда, крім звільнених, — кому слати, вирішує власник
+ * (09.10.2026), а не посада. Функція site-listing-reminders так само відсіює
+ * лише звільнених. Довідник модульно кешований, тож окремого запиту до бази
+ * тут зазвичай немає.
  */
 export function useSiteListingAudience(userId: string | null) {
   return useQuery({
@@ -182,12 +182,7 @@ export function useSiteListingAudience(userId: string | null) {
       const workspaceId = await resolveWorkspaceId(userId as string);
       if (!workspaceId) return [];
       const members = await listWorkspaceMembersForDisplay(workspaceId);
-      return members.filter(
-        (member) =>
-          hasSiteListingAccess(member.accessRole, member.jobRole) &&
-          member.employmentStatus !== "inactive" &&
-          member.employmentStatus !== "rejected"
-      );
+      return members.filter((member) => member.employmentStatus !== "inactive" && member.employmentStatus !== "rejected");
     },
   });
 }

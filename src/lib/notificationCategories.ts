@@ -165,9 +165,10 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     case "dev_news":
       return access === "owner";
     // Нові моделі постачальника для сайту — той самий круг, що бачить блок «На
-    // сайт» (hasSiteListingAccess у moduleAccess.ts): власник, CEO, IT. Хто з
-    // них отримує взагалі, вибирають у шапці блоку (REQ-311#p18), а цей
-    // перемикач — щоб вибраний міг вимкнути собі.
+    // сайт» (hasSiteListingAccess у moduleAccess.ts): власник, CEO, IT. Хто
+    // отримує взагалі, вибирають у шапці блоку (REQ-311#p18) — з усієї
+    // команди; вибраний поза цим кругом перемикача не бачить, його вимикає той,
+    // хто вибирав.
     case "supplier_new_models":
       return access === "owner" || job === "seo" || job === "it_specialist";
     // Дизайн-задачі — дизайнери + ті, хто з прорахунками/дизайном.

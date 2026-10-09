@@ -75,12 +75,14 @@ export function SiteListingQueue({
 
   return (
     <section className={className}>
-      <h2 className="text-sm font-semibold text-foreground">На сайт</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-foreground">На сайт</h2>
+        <SiteListingRecipients teamId={teamId} />
+      </div>
       <p className="mt-0.5 text-2xs text-muted-foreground">
         Моделі {supplierName}, яких ще немає на avanprint.ua. «Беремо» готує чернетку картки, зібраний файл
         імпортують у Хорошопі прихованим.
       </p>
-      <SiteListingRecipients teamId={teamId} />
 
       <div className="mt-3 rounded-section border border-border/60 bg-card">
         <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
