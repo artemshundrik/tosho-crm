@@ -6,6 +6,7 @@ import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { useNow } from "@/hooks/useNow";
 
 import { SiteListingBatch } from "./SiteListingBatch";
+import { SiteListingGuide } from "./SiteListingGuide";
 import { SiteListingRecipients } from "./SiteListingRecipients";
 import { SiteListingRow, type SiteListingRowActions } from "./SiteListingRow";
 import {
@@ -77,11 +78,13 @@ export function SiteListingQueue({
     <section className={className}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-foreground">На сайт</h2>
-        <SiteListingRecipients teamId={teamId} />
+        <span className="flex items-center gap-1">
+          <SiteListingGuide />
+          <SiteListingRecipients teamId={teamId} />
+        </span>
       </div>
       <p className="mt-0.5 text-2xs text-muted-foreground">
-        Моделі {supplierName}, яких ще немає на avanprint.ua. «Беремо» готує чернетку картки, зібраний файл
-        імпортують у Хорошопі прихованим.
+        Моделі {supplierName}, яких ще немає на avanprint.ua.
       </p>
 
       <div className="mt-3 rounded-section border border-border/60 bg-card">

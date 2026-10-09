@@ -7,24 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { buildImportBatch, type BuiltBatch } from "./importBatch";
+import { SiteListingHoroshopSteps } from "./SiteListingHoroshopSteps";
 import { siteListingKeys } from "./queries";
 import type { SiteListingCandidate } from "./siteListingState";
 
 /**
  * «Зібрати файл (N)» над станом «Беремо» і результат: посилання з кнопкою
- * «Скопіювати» та інструкція для Хорошопа (REQ-311#p9, спека §5).
- *
- * Інструкція — ДОСЛІВНО за пробною пачкою: кожен пункт там коштував
- * окремого кола (колонки фото Хорошоп сам не ставить ніколи; «Відсутні
- * товари» з будь-чим, крім «Нічого не робити», зачепить увесь каталог).
+ * «Скопіювати» та кроки для Хорошопа (REQ-311#p9, спека §5). Кроки —
+ * SiteListingHoroshopSteps, ті самі, що у вікні «Як це працює».
  */
 
-export const IMPORT_STEPS = [
-  "У Хорошопі: «Товари → Імпорт», вставити посилання.",
-  "Над колонками з посиланнями на фото вибрати «Фото» і «Галерея»: Хорошоп сам їх не ставить ніколи. Звірити, що «Название модификации (UA)» стала на своє поле.",
-  "«Імпортувати», далі у вікні «Операції з товарами»: «Існуючі товари» — «Не оновлювати» (у першій пробі пункт звався «Пропустити»; за замовчуванням стоїть «Оновити»). «Відсутні товари» — лишити «Нічого не робити»: будь-що інше зачепить увесь каталог. «Фотографии» — байдуже, товари нові.",
-  "Після імпорту товари приховані: вичитати й увімкнути «Відображати» всім модифікаціям. Поки вони приховані, у «Виберіть колір» на сторінці видно лише колір самої сторінки — це не поломка.",
-] as const;
 
 export function SiteListingBatch({
   slug,
@@ -87,11 +79,7 @@ export function SiteListingBatch({
               Скопіювати
             </Button>
           </div>
-          <ol className="list-decimal space-y-1 pl-4 text-foreground">
-            {IMPORT_STEPS.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
+          <SiteListingHoroshopSteps />
         </div>
       ) : null}
     </div>
