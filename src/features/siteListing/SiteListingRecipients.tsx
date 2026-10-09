@@ -23,6 +23,9 @@ import { useSiteListingAudience, useSiteListingNotifyIds, useSiteListingSaveNoti
 
 const STACK = 4;
 
+// Аватарка — avatarDisplayUrl, а не голий avatarUrl: у кого фото лежить у
+// сховищі шляхом (avatarPath), avatarUrl порожній, і замість фото були ініціали.
+
 const firstName = (member: { firstName: string; label: string }) => member.firstName.trim() || member.label;
 
 export function SiteListingRecipients({ teamId }: { teamId: string | null }) {
@@ -80,7 +83,7 @@ export function SiteListingRecipients({ teamId }: { teamId: string | null }) {
                     {selected.slice(0, STACK).map((member) => (
                       <span key={member.userId} className="relative">
                         <AvatarBase
-                          src={member.avatarUrl}
+                          src={member.avatarDisplayUrl ?? member.avatarUrl}
                           name={member.label}
                           fallback={member.initials}
                           size={22}
@@ -113,7 +116,7 @@ export function SiteListingRecipients({ teamId }: { teamId: string | null }) {
                   {/* eager: у порталі поповера ледаче завантаження аватарки
                       не спрацьовує — як у вікні «Дивитись як». */}
                   <AvatarBase
-                    src={member.avatarUrl}
+                    src={member.avatarDisplayUrl ?? member.avatarUrl}
                     name={member.label}
                     fallback={member.initials}
                     size={24}
