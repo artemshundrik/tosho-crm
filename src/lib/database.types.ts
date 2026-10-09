@@ -4580,6 +4580,27 @@ export type Database = {
           },
         ]
       }
+      site_listing_settings: {
+        Row: {
+          notify_user_ids: string[]
+          team_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          notify_user_ids?: string[]
+          team_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          notify_user_ids?: string[]
+          team_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       stack_versions: {
         Row: {
           advisories: Json

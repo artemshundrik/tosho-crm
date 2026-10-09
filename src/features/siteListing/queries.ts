@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { hasSiteListingAccess } from "@/lib/moduleAccess";
 import { supabase } from "@/lib/supabaseClient";
+import { resolveWorkspaceId } from "@/lib/workspace";
+import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 
 import { hasPendingDrafts, type SiteListingCandidate } from "./siteListingState";
 
@@ -13,6 +16,8 @@ import { hasPendingDrafts, type SiteListingCandidate } from "./siteListingState"
 export const siteListingKeys = {
   candidates: (slug: string) => ["site-listing", "candidates", slug] as const,
   siteCategories: ["site-listing", "site-categories"] as const,
+  notifyIds: (teamId: string) => ["site-listing", "notify-ids", teamId] as const,
+  audience: (userId: string) => ["site-listing", "audience", userId] as const,
 };
 
 const toNumber = (value: unknown): number => (typeof value === "number" ? value : Number(value ?? 0));
@@ -137,5 +142,92 @@ export function useSiteListingPatch(slug: string) {
       if (!data?.length) throw new Error("Рядок не оновився — можливо, немає доступу.");
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: siteListingKeys.candidates(slug) }),
+  });
+}
+
+/**
+ * Кому сповіщення про нові моделі (REQ-311#p18): збережений вибір команди.
+ * null — вибору ще не робили, і тоді сповіщення йде лише власнику
+ * (src/lib/siteListing/recipients.ts).
+ */
+export function useSiteListingNotifyIds(teamId: string | null) {
+  return useQuery({
+    queryKey: siteListingKeys.notifyIds(teamId ?? "none"),
+    enabled: Boolean(teamId),
+    staleTime: 60_000,
+    queryFn: async (): Promise<string[] | null> => {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("site_listing_settings")
+        .select("notify_user_ids")
+        .eq("team_id", teamId as string)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? (data.notify_user_ids ?? []) : null;
+    },
+  });
+}
+
+/**
+ * З кого вибирати: ті, хто бачить блок і досі працює — той самий круг, з яким
+ * функція site-listing-reminders перетинає вибір. Довідник модульно
+ * кешований, тож окремого запиту до бази тут зазвичай немає.
+ */
+export function useSiteListingAudience(userId: string | null) {
+  return useQuery({
+    queryKey: siteListingKeys.audience(userId ?? "none"),
+    enabled: Boolean(userId),
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const workspaceId = await resolveWorkspaceId(userId as string);
+      if (!workspaceId) return [];
+      const members = await listWorkspaceMembersForDisplay(workspaceId);
+      return members.filter(
+        (member) =>
+          hasSiteListingAccess(member.accessRole, member.jobRole) &&
+          member.employmentStatus !== "inactive" &&
+          member.employmentStatus !== "rejected"
+      );
+    },
+  });
+}
+
+const SAVE_NOTIFY_IDS = ["site-listing", "save-notify-ids"] as const;
+
+/**
+ * Зберегти вибір. Галочка відгукується одразу (оптимістично), а записи йдуть
+ * по черзі (`scope`): два швидкі кліки не мають приїхати в базу навпаки й
+ * лишити попередній стан. Перечитуємо лише після останнього запису — інакше
+ * відповідь першого на мить повернула б галочку, яку вже зняли другим.
+ */
+export function useSiteListingSaveNotifyIds(teamId: string | null) {
+  const queryClient = useQueryClient();
+  const key = siteListingKeys.notifyIds(teamId ?? "none");
+  return useMutation({
+    mutationKey: SAVE_NOTIFY_IDS,
+    scope: { id: "site-listing-notify-ids" },
+    mutationFn: async (userIds: string[]) => {
+      if (!teamId) throw new Error("Команду не визначено — перезайдіть у CRM.");
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("site_listing_settings")
+        .upsert({ team_id: teamId, notify_user_ids: userIds }, { onConflict: "team_id" })
+        .select("team_id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Вибір не зберігся — можливо, немає доступу.");
+    },
+    onMutate: async (userIds) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<string[] | null>(key);
+      queryClient.setQueryData(key, userIds);
+      return { previous };
+    },
+    onError: (_error, _userIds, context) => {
+      if (context) queryClient.setQueryData(key, context.previous ?? null);
+    },
+    onSettled: () =>
+      queryClient.isMutating({ mutationKey: SAVE_NOTIFY_IDS }) === 1
+        ? queryClient.invalidateQueries({ queryKey: key })
+        : undefined,
   });
 }

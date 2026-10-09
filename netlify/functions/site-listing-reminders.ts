@@ -10,8 +10,15 @@ import {
   type AnnounceCandidate,
   type AnnouncedRow,
 } from "./_lib/siteListingAnnounce";
-import { isDeliverable, mergeTeamMembers, type MembershipSource, type ProfileSource } from "./_lib/teamMembers";
+import {
+  isDeliverable,
+  mergeTeamMembers,
+  type MembershipSource,
+  type ProfileSource,
+  type TeamMemberRow,
+} from "./_lib/teamMembers";
 import { hasSiteListingAccess } from "../../src/lib/moduleAccess";
+import { pickSiteListingRecipients } from "../../src/lib/siteListing/recipients";
 
 /**
  * Сповіщення про нові моделі Тотобі, яких немає на avanprint.ua (REQ-311#p17).
@@ -22,9 +29,11 @@ import { hasSiteListingAccess } from "../../src/lib/moduleAccess";
  * Розкладу немає: функцію будить reminders-dispatch (джоб reminders-minute,
  * кожні п'ять хвилин), а сама вона працює раз на годину в робочий час.
  *
- * Адресати — той самий круг, що бачить блок «На сайт»: власник, СЕО, IT
- * (hasSiteListingAccess, дзеркало tosho.has_site_listing_access). Звільнених
- * відсіює isDeliverable: сервісний ключ бачить у memberships_view усіх.
+ * Адресати — люди, вибрані в шапці блоку «На сайт» (tosho.site_listing_settings,
+ * REQ-311#p18); вибору немає — лише власник. Вибір однаково перетинається з
+ * кругом, що бачить блок (hasSiteListingAccess, дзеркало
+ * tosho.has_site_listing_access), а звільнених відсіює isDeliverable: сервісний
+ * ключ бачить у memberships_view усіх.
  *
  * ?dry=1 — повернути, що було б надіслано, нічого не пишучи й не чекаючи
  * потрібної години.
@@ -66,31 +75,52 @@ function normalizeCandidate(row: Record<string, unknown>): AnnounceCandidate {
   };
 }
 
-/** Хто отримує: має доступ до блоку «На сайт» і досі працює. */
+/**
+ * Хто отримує: вибраний у блоці «На сайт» (або власник, якщо вибору немає),
+ * має доступ до блоку й досі працює. Вибір — на команду, тож і збираємо по
+ * командах.
+ */
 async function loadRecipients(adminClient: SupabaseClient): Promise<string[]> {
-  const [membershipsResult, profilesResult, teamLinksResult] = await Promise.all([
+  const [membershipsResult, profilesResult, teamLinksResult, settingsResult] = await Promise.all([
     adminClient.schema("tosho").from("memberships_view").select("user_id,workspace_id,access_role,job_role"),
     adminClient.schema("tosho").from("team_member_profiles").select("user_id,employment_status,first_name,last_name"),
     adminClient.from("team_members").select("team_id,user_id"),
+    adminClient.schema("tosho").from("site_listing_settings").select("team_id,notify_user_ids"),
   ]);
   if (membershipsResult.error) throw membershipsResult.error;
   if (profilesResult.error) throw profilesResult.error;
   if (teamLinksResult.error) throw teamLinksResult.error;
+  if (settingsResult.error) throw settingsResult.error;
 
   const members = mergeTeamMembers({
     memberships: (membershipsResult.data ?? []) as MembershipSource[],
     profiles: (profilesResult.data ?? []) as ProfileSource[],
     teamLinks: (teamLinksResult.data ?? []) as Array<{ team_id: string | null; user_id: string | null }>,
   });
-  return Array.from(
-    new Set(
-      members
-        // Без команди людина не бачить і самого блоку: has_site_listing_access
-        // першою умовою питає членство в team_members.
-        .filter((member) => member.teamId && isDeliverable(member) && hasSiteListingAccess(member.accessRole, member.jobRole))
-        .map((member) => member.userId)
-    )
+  const savedByTeam = new Map(
+    ((settingsResult.data ?? []) as Array<{ team_id: string; notify_user_ids: string[] | null }>).map((row) => [
+      row.team_id,
+      row.notify_user_ids ?? [],
+    ])
   );
+
+  const eligibleByTeam = new Map<string, TeamMemberRow[]>();
+  for (const member of members) {
+    // Без команди людина не бачить і самого блоку: has_site_listing_access
+    // першою умовою питає членство в team_members.
+    if (!member.teamId || !isDeliverable(member) || !hasSiteListingAccess(member.accessRole, member.jobRole)) continue;
+    const list = eligibleByTeam.get(member.teamId) ?? [];
+    list.push(member);
+    eligibleByTeam.set(member.teamId, list);
+  }
+
+  const recipients = new Set<string>();
+  for (const [teamId, eligible] of eligibleByTeam) {
+    for (const member of pickSiteListingRecipients(eligible, savedByTeam.get(teamId) ?? null)) {
+      recipients.add(member.userId);
+    }
+  }
+  return Array.from(recipients);
 }
 
 export const handler = async (event: HttpEvent) => {

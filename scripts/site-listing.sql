@@ -752,7 +752,61 @@ where not exists (
 )
 on conflict do nothing;
 
+-- ── хто отримує сповіщення (REQ-311#p18) ────────────────────────────────────
+-- Вибір людей у шапці блоку «На сайт», рядок на команду. Рядка немає — лише
+-- власник (src/lib/siteListing/recipients.ts), а не всі з доступом: інакше
+-- перший же пуш пішов би обом СЕО, які цього не просили. Порожній масив — уже
+-- вибір «нікому».
+--
+-- Доступ людей зі списку тут не перевіряється: site-listing-reminders сама
+-- перетинає його з тими, хто має доступ до блоку й досі працює, тож звільнений
+-- випадає без чистки масиву. Міняти вибір може кожен, хто бачить блок.
+create table if not exists tosho.site_listing_settings (
+  team_id         uuid primary key,
+  notify_user_ids uuid[] not null default '{}',
+  updated_by      uuid,
+  updated_at      timestamptz not null default now(),
+  constraint site_listing_settings_notify_size check (cardinality(notify_user_ids) <= 50)
+);
+
+-- Хто й коли змінив — ставить тригер: фронт пише рядок напряму upsert-ом, і
+-- довіряти тілу запиту, хто автор, не можна.
+create or replace function tosho.stamp_site_listing_settings()
+returns trigger
+language plpgsql
+set search_path = pg_catalog
+as $$
+begin
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$;
+
+drop trigger if exists site_listing_settings_stamp on tosho.site_listing_settings;
+create trigger site_listing_settings_stamp
+  before insert or update on tosho.site_listing_settings
+  for each row execute function tosho.stamp_site_listing_settings();
+
+alter table tosho.site_listing_settings enable row level security;
+drop policy if exists site_listing_settings_select on tosho.site_listing_settings;
+drop policy if exists site_listing_settings_insert on tosho.site_listing_settings;
+drop policy if exists site_listing_settings_update on tosho.site_listing_settings;
+create policy site_listing_settings_select on tosho.site_listing_settings
+  for select using (tosho.has_site_listing_access(team_id));
+create policy site_listing_settings_insert on tosho.site_listing_settings
+  for insert with check (tosho.has_site_listing_access(team_id));
+create policy site_listing_settings_update on tosho.site_listing_settings
+  for update using (tosho.has_site_listing_access(team_id))
+  with check (tosho.has_site_listing_access(team_id));
+
+-- Видаляти рядок нема чого: «нікому» — порожній масив, а не відсутній рядок.
+revoke all on table tosho.site_listing_settings from public, anon, authenticated;
+grant select, insert, update on table tosho.site_listing_settings to authenticated;
+grant select on table tosho.site_listing_settings to service_role;
+
 -- Перевірка після застосування:
 --   select count(*), count(*) filter (where is_new) from tosho.site_listing_candidates('totobi.com.ua');
 --   select takeable, count(*) from tosho.site_listing_announcements group by 1;
+--   select team_id, notify_user_ids, updated_by, updated_at from tosho.site_listing_settings;
 --   select id, public, file_size_limit from storage.buckets where id = 'site-listing-exports';

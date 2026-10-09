@@ -369,7 +369,7 @@ These tables together power the product catalog and quote item configuration.
     ([scripts/catalog-supplier-products.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-supplier-products.sql),
     [scripts/supplier-pool-search.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-search.sql),
     [scripts/supplier-pool-page.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-page.sql))
-- `site_listing_items`, `site_listing_batches`, `site_listing_announcements`
+- `site_listing_items`, `site_listing_batches`, `site_listing_announcements`, `site_listing_settings`
   - REQ-311, new supplier models → avanprint.ua (spec
     `docs/superpowers/specs/2026-10-01-site-autolisting-design.md`). The queue itself
     is NOT stored: `tosho.site_listing_candidates(p_supplier)` computes it from the pool
@@ -398,6 +398,11 @@ These tables together power the product catalog and quote item configuration.
     announced and in which state (new without a price / takeable). RLS on, no policies, grants
     only to `service_role`. Seeded with the whole queue on first apply (only when empty), so the
     backlog never becomes a notification; the function refuses to run on an empty table.
+  - `site_listing_settings` (`team_id` PK, `notify_user_ids uuid[]`, `updated_by`/`updated_at`
+    stamped by trigger) — who gets the new-models notification, picked in the «На сайт» block
+    header (REQ-311#p18). No row = owner only (`src/lib/siteListing/recipients.ts`), empty array =
+    nobody. RLS select/insert/update `has_site_listing_access(team_id)`, no delete; the function
+    reads it with the service key and still intersects it with access + `isDeliverable`.
   - Reads go through the covering index `supplier_products_listing_idx`
     (`(supplier_slug, article) include (name, is_active, team_id, vendor, category)`):
     pool rows are wide (~1.5 kB, the shop description lives in `attrs`), and the first,

@@ -6,6 +6,7 @@ import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { useNow } from "@/hooks/useNow";
 
 import { SiteListingBatch } from "./SiteListingBatch";
+import { SiteListingRecipients } from "./SiteListingRecipients";
 import { SiteListingRow, type SiteListingRowActions } from "./SiteListingRow";
 import {
   useSiteListingCandidates,
@@ -79,6 +80,7 @@ export function SiteListingQueue({
         Моделі {supplierName}, яких ще немає на avanprint.ua. «Беремо» готує чернетку картки, зібраний файл
         імпортують у Хорошопі прихованим.
       </p>
+      <SiteListingRecipients teamId={teamId} />
 
       <div className="mt-3 rounded-section border border-border/60 bg-card">
         <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
