@@ -122,6 +122,7 @@ import {
   syncDesignOutputFilesToQuoteAttachments,
 } from "@/lib/designTaskOutputSync";
 import { fetchDesignTaskMetadata } from "@/lib/designTaskMetadata";
+import { countQuoteDesignTasksSafe, quoteBriefFallback } from "@/lib/designTaskQuoteBrief";
 import {
   applyDesignOutputVersion,
   parseDesignOutputVersion,
@@ -2130,6 +2131,8 @@ export default function DesignTaskPage() {
         );
 
         // quote basics
+        // Скільки задач на прорахунку — від цього залежить, чи можна взяти ТЗ прорахунку (REQ-330).
+        const quoteTaskCountPromise = isUuid(quoteId) ? countQuoteDesignTasksSafe(effectiveTeamId, quoteId) : Promise.resolve(0);
         let quote: {
           number?: string | null;
           customer_id?: string | null;
@@ -2186,6 +2189,7 @@ export default function DesignTaskPage() {
           }
         }
 
+        const quoteTaskCount = await quoteTaskCountPromise;
         let customerName: string | null =
           (typeof meta.customer_name === "string" && meta.customer_name.trim() ? meta.customer_name.trim() : null) ??
           (typeof quote?.customer_name === "string" && quote.customer_name.trim() ? quote.customer_name.trim() : null) ??
@@ -2454,9 +2458,7 @@ export default function DesignTaskPage() {
           designBrief:
             activeBriefVersion?.brief ??
             (typeof meta.design_brief === "string" && meta.design_brief.trim() ? meta.design_brief.trim() : null) ??
-            quote?.design_brief ??
-            quote?.comment ??
-            null,
+            quoteBriefFallback({ quoteTaskCount, quoteBrief: quote?.design_brief, quoteComment: quote?.comment }),
           createdAt: rowCreatedAt ?? (quote?.created_at as string | null),
         };
         const nextQuoteItem = item ?? null;
@@ -5924,7 +5926,8 @@ export default function DesignTaskPage() {
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
 
-      if (isUuid(task.quoteId)) {
+      // У прорахунок — лише ТЗ єдиної задачі: інакше ТЗ однієї позиції стає ТЗ усіх (REQ-330).
+      if (isUuid(task.quoteId) && (await countQuoteDesignTasksSafe(effectiveTeamId, task.quoteId)) === 1) {
         const { error: quoteBriefError } = await supabase
           .schema("tosho")
           .from("quotes")
