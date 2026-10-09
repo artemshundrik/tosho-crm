@@ -18,7 +18,8 @@ export type NotificationCategoryKey =
   | "finance_month_close"
   | "admin_digest"
   | "business_digest"
-  | "dev_news";
+  | "dev_news"
+  | "supplier_new_models";
 
 export type NotificationCategory = {
   key: NotificationCategoryKey;
@@ -43,6 +44,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "admin_digest", label: "Системний дайджест" },
   { key: "business_digest", label: "Бізнес-дайджест" },
   { key: "dev_news", label: "Підбірка для розробки" },
+  { key: "supplier_new_models", label: "Нові моделі для сайту" },
 ];
 
 // Видимість категорій за роллю — копія src/lib/notificationCategories.ts (тримати синхронно).
@@ -73,6 +75,9 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // Підбірка для розробки — лише власник (див. src/lib/notificationCategories.ts).
     case "dev_news":
       return access === "owner";
+    // Нові моделі для сайту — власник, CEO, IT (див. src/lib/notificationCategories.ts).
+    case "supplier_new_models":
+      return access === "owner" || job === "seo" || job === "it_specialist";
     case "design":
       return isQuoteWorker || isDesigner;
     // Нові прорахунки: власник, адміністратор, CEO і PM

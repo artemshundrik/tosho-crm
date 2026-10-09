@@ -26,6 +26,7 @@ import { handler as contractorReminders } from "./contractor-reminders";
 import { handler as customerLeadReminders } from "./customer-lead-reminders";
 import { handler as quoteDeadlineReminders } from "./quote-deadline-reminders";
 import { handler as quoteMarkupReminders } from "./quote-markup-reminders";
+import { handler as siteListingReminders } from "./site-listing-reminders";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -46,6 +47,9 @@ const JOBS: ReadonlyArray<readonly [string, (event: HttpEvent) => Promise<unknow
   // REQ-328: запит на ціну нижче дна, що висить з учора. Четвертий обробник
   // тут, а не окремий джоб — з тієї ж причини, з якої диспетчер з'явився.
   ["quote-markup-reminders", quoteMarkupReminders],
+  // REQ-311#p17: нові моделі Тотобі для сайту. Працює раз на годину — решта
+  // тіків закінчується на годиннику, без жодного запиту.
+  ["site-listing-reminders", siteListingReminders],
 ];
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {

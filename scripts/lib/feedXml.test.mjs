@@ -41,6 +41,18 @@ describe("Тотобі: те, що потрібно чернетці картк�
     expect(extras).toEqual({ textile: true });
   });
 
+  it("очікуване надходження: кількість і київська дата (рядок «Повербанк Plato» 09.10.2026)", () => {
+    expect(cscartListingExtras("<wait>2000</wait><date_delivery>1794693600</date_delivery><price>0.00</price>")).toEqual({
+      awaited: 2000,
+      awaitedAt: "2026-11-15",
+    });
+  });
+
+  it("без кількості дату не пишемо, без дати — лише кількість", () => {
+    expect(cscartListingExtras("<wait>0</wait><date_delivery>1794693600</date_delivery>")).toEqual({});
+    expect(cscartListingExtras("<wait>3000</wait><date_delivery>0</date_delivery>")).toEqual({ awaited: 3000 });
+  });
+
   it("параметри без значення відкидаються", () => {
     expect(feedParams('<param name="A"> </param><param name="B">1</param>')).toEqual({ B: "1" });
   });

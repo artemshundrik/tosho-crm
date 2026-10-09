@@ -20,7 +20,8 @@ export type NotificationCategoryKey =
   | "finance_month_close"
   | "admin_digest"
   | "business_digest"
-  | "dev_news";
+  | "dev_news"
+  | "supplier_new_models";
 
 export type NotificationCategory = {
   key: NotificationCategoryKey;
@@ -119,6 +120,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     description: "Нові версії наших пакетів, релізи Claude і те, що варте уваги",
     telegramOnly: true,
   },
+  {
+    key: "supplier_new_models",
+    label: "Нові моделі для сайту",
+    description: "У Тотобі з'явились моделі, яких немає на avanprint.ua, або очікувана модель отримала ціну",
+  },
 ];
 
 // Видимість категорій за роллю. Чиста функція від рядків ролей —
@@ -158,6 +164,10 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // інструменти, якими її пишуть: усім іншим у команді воно ні до чого.
     case "dev_news":
       return access === "owner";
+    // Нові моделі постачальника для сайту — той самий круг, що бачить блок «На
+    // сайт» (hasSiteListingAccess у moduleAccess.ts): власник, CEO, IT.
+    case "supplier_new_models":
+      return access === "owner" || job === "seo" || job === "it_specialist";
     // Дизайн-задачі — дизайнери + ті, хто з прорахунками/дизайном.
     case "design":
       return isQuoteWorker || isDesigner;

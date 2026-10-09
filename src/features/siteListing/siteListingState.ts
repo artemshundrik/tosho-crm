@@ -1,3 +1,4 @@
+import { awaitedHint, awaitedShort } from "@/lib/siteListing/awaited";
 import { siteListingPrice } from "@/lib/siteListing/price";
 import type { SiteListingDraft } from "@/lib/siteListing/types";
 
@@ -30,6 +31,9 @@ export type SiteListingCandidate = {
   batch_id: string | null;
   batch_created_at: string | null;
   item_updated_at: string | null;
+  /** Очікуване надходження (REQ-311#p16): скільки штук їде й коли. */
+  awaited_qty: number | null;
+  awaited_at: string | null;
 };
 
 export type SiteListingTab = "new" | "take" | "file" | "skip";
@@ -81,6 +85,18 @@ export function canTake(candidate: SiteListingCandidate): boolean {
   return candidate.colors > 0 && candidate.priced_colors === candidate.colors;
 }
 
+/**
+ * Чому «Беремо» неактивне — словами постачальника, а не голим «немає ціни».
+ * null, коли взяти можна.
+ */
+export function takeBlockedReason(candidate: SiteListingCandidate): string | null {
+  if (canTake(candidate)) return null;
+  if (candidate.priced_colors > 0) {
+    return `Ціна є лише в ${candidate.priced_colors} з ${candidate.colors} кольорів — для решти нашу не порахувати.`;
+  }
+  return awaitedHint(candidate) ?? "У постачальника немає ціни — нашу не порахувати.";
+}
+
 /** Розділ для файлу: вибраний у CRM руками важливіший за чернетку. */
 export function fileCategory(candidate: SiteListingCandidate): string | null {
   return candidate.category_override?.trim() || candidate.draft?.category?.trim() || null;
@@ -102,6 +118,14 @@ export function hasPendingDrafts(candidates: SiteListingCandidate[], now: number
 }
 
 const money = (value: number) => value.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Клітинка ціни: ціна, а без неї — що каже постачальник («очікується 15.11»).
+ * «немає ціни» лишається для моделей, у яких нічого й не їде.
+ */
+export function priceCellText(candidate: SiteListingCandidate): string {
+  return priceLabel(candidate) ?? awaitedShort(candidate) ?? "немає ціни";
+}
 
 /** «357,59 → 354 грн» або «від 134,00 → від 132 грн», коли кольори різні за ціною. */
 export function priceLabel(candidate: SiteListingCandidate): string | null {

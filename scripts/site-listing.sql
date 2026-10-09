@@ -184,7 +184,14 @@ create index if not exists supplier_products_listing_idx
 -- які малює рядок, і лише для нових моделей. security invoker: пул і так читає
 -- вся команда, а рішення закриває RLS — у кого доступу немає, той бачить
 -- чергу без рішень.
-create or replace function tosho.site_listing_candidates(p_supplier text)
+--
+-- `awaited_qty` / `awaited_at` (09.10.2026, REQ-311#p16) — очікуване
+-- надходження з фіду: новинку не на складі Тотобі віддає без ціни, і замість
+-- «немає ціни» черга каже «очікується 15.11». Нові колонки змінюють тип
+-- результату, а `create or replace` цього не вміє — звідси drop; гранти
+-- повертає блок наприкінці файлу.
+drop function if exists tosho.site_listing_candidates(text);
+create function tosho.site_listing_candidates(p_supplier text)
 returns table (
   model_name         text,
   articles           text[],
@@ -207,7 +214,9 @@ returns table (
   category_override  text,
   batch_id           uuid,
   batch_created_at   timestamptz,
-  item_updated_at    timestamptz
+  item_updated_at    timestamptz,
+  awaited_qty        integer,
+  awaited_at         date
 )
 language sql
 stable
@@ -251,7 +260,13 @@ as $$
            p.category,
            p.attrs->>'section' as section,
            coalesce((p.attrs->>'isNew')::boolean, false) as is_new,
-           (p.attrs->>'sitePrice')::numeric as site_price
+           (p.attrs->>'sitePrice')::numeric as site_price,
+           -- Перевірка форми перед приведенням: криве значення в attrs дало б
+           -- помилку на всю чергу, а не порожню клітинку в одному рядку.
+           case when jsonb_typeof(p.attrs->'awaited') = 'number'
+                then (p.attrs->>'awaited')::numeric::integer end as awaited,
+           case when p.attrs->>'awaitedAt' ~ '^\d{4}-\d{2}-\d{2}$'
+                then (p.attrs->>'awaitedAt')::date end as awaited_at
     from tosho.supplier_products p
     where p.supplier_slug = p_supplier
       and p.article is not null
@@ -272,14 +287,16 @@ as $$
            min(r.section) as section,
            min(r.category) as category,
            min(r.vendor) as vendor,
-           min(r.created_at) as first_seen_at
+           min(r.created_at) as first_seen_at,
+           sum(r.awaited)::int as awaited_qty,
+           min(r.awaited_at) as awaited_at
     from supplier_rows r
     group by r.name
   )
   select m.name, m.articles, m.colors, m.priced_colors, m.price_min, m.price_max,
          m.image_url, m.url, m.is_new, m.section, m.category, m.vendor, m.first_seen_at,
          i.id, i.decision, i.draft_status, i.draft_error, i.draft, i.category_override,
-         i.batch_id, b.created_at, i.updated_at
+         i.batch_id, b.created_at, i.updated_at, m.awaited_qty, m.awaited_at
   from models m
   left join lateral (
     select si.id, si.decision, si.draft_status, si.draft_error, si.draft,
@@ -695,7 +712,47 @@ create policy site_listing_exports_insert on storage.objects
     and tosho.has_site_listing_access(tosho.site_listing_path_team(name))
   );
 
+-- ── сповіщення про нові моделі (REQ-311#p17) ────────────────────────────────
+-- Пам'ять сповіщень: про яку модель і в якому стані вже сказали. Пише й читає
+-- лише функція site-listing-reminders сервісним ключем — людям ця таблиця ні
+-- до чого, тож RLS увімкнено без жодної політики, а гранти знято з усіх.
+--
+-- ЧОМУ ТАБЛИЦЯ, А НЕ ДАТА СТВОРЕННЯ РЯДКА ПУЛУ. Сповіщень два: «з'явилась нова
+-- модель» і «в очікуваної моделі з'явилась ціна — можна брати». Друге не має
+-- жодної мітки часу в пулі (ціна просто стає не порожньою), тож без пам'яті
+-- його не відрізнити від ціни, що була завжди.
+--
+-- `takeable` — стан, про який сповістили: false — «нова, ціни ще немає», true —
+-- «можна брати». Ключ — назва моделі, як і картка пулу: перейменування
+-- постачальником сповістить ще раз, і це чесно — для черги це інша модель.
+create table if not exists tosho.site_listing_announcements (
+  supplier_slug text not null,
+  model_name    text not null,
+  articles      text[] not null,
+  takeable      boolean not null,
+  announced_at  timestamptz not null default now(),
+  primary key (supplier_slug, model_name)
+);
+
+alter table tosho.site_listing_announcements enable row level security;
+revoke all on table tosho.site_listing_announcements from public, anon, authenticated;
+grant select, insert, update on table tosho.site_listing_announcements to service_role;
+-- Сервісний ключ кличе чергу сам (security invoker, RLS для нього не діє).
+grant execute on function tosho.site_listing_candidates(text) to service_role;
+
+-- Точка відліку: усе, що в черзі вже зараз (116 моделей 09.10.2026), відоме й
+-- сповіщенням не стане — інакше перший тік розіслав би весь беклог. Лише коли
+-- таблиця порожня: повторне застосування файлу не має тихо «відмічати»
+-- моделі, що з'явились після першого.
+insert into tosho.site_listing_announcements (supplier_slug, model_name, articles, takeable)
+select 'totobi.com.ua', c.model_name, c.articles, c.colors > 0 and c.priced_colors = c.colors
+from tosho.site_listing_candidates('totobi.com.ua') c
+where not exists (
+  select 1 from tosho.site_listing_announcements a where a.supplier_slug = 'totobi.com.ua'
+)
+on conflict do nothing;
 
 -- Перевірка після застосування:
 --   select count(*), count(*) filter (where is_new) from tosho.site_listing_candidates('totobi.com.ua');
+--   select takeable, count(*) from tosho.site_listing_announcements group by 1;
 --   select id, public, file_size_limit from storage.buckets where id = 'site-listing-exports';

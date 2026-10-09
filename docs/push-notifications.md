@@ -13,6 +13,7 @@
   - `netlify/functions/customer-lead-reminders.ts`
   - `netlify/functions/contractor-reminders.ts`
   - `netlify/functions/quote-markup-reminders.ts`
+  - `netlify/functions/site-listing-reminders.ts`
   - `netlify/functions/team-events-reminders-background.ts`
 
 ## Local/frontend env
@@ -79,6 +80,7 @@ Copy:
 - `netlify/functions/quote-deadline-reminders.ts` runs every minute for quote deadlines
 - quote deadline reminders use a 30-day catch-up window and scan upcoming deadlines so “за 1 день” reminders are not skipped
 - `netlify/functions/quote-markup-reminders.ts` (REQ-328) — once a working day (Mon–Fri, first tick after 08:00 Kyiv) reminds price approvers about a below-floor request pending since yesterday or longer; one reminder per quote per approver, same recipients and price text as the first ping (`src/lib/quoteMarkupNotice.ts`)
+- `netlify/functions/site-listing-reminders.ts` (REQ-311#p17) — first tick of each working hour (Mon–Fri, 08:00–21:00 Kyiv) tells owner/CEO/IT (`hasSiteListingAccess`) about Totobi models that appeared in the «На сайт» queue or got a price after being awaited; one message per tick, memory in `tosho.site_listing_announcements`, category `supplier_new_models`
 - `netlify/functions/customer-lead-reminders.ts` runs every minute
 - sends due reminders from customer and lead communication tabs to the assigned manager
 - reminders are deduped by event key in notification `href`

@@ -19,11 +19,13 @@ const customerLead = vi.fn();
 const quoteDeadline = vi.fn();
 const contractor = vi.fn();
 const quoteMarkup = vi.fn();
+const siteListing = vi.fn();
 
 vi.mock("../customer-lead-reminders", () => ({ handler: (event: unknown) => customerLead(event) }));
 vi.mock("../quote-deadline-reminders", () => ({ handler: (event: unknown) => quoteDeadline(event) }));
 vi.mock("../contractor-reminders", () => ({ handler: (event: unknown) => contractor(event) }));
 vi.mock("../quote-markup-reminders", () => ({ handler: (event: unknown) => quoteMarkup(event) }));
+vi.mock("../site-listing-reminders", () => ({ handler: (event: unknown) => siteListing(event) }));
 
 const { handler } = await import("../reminders-dispatch");
 
@@ -45,6 +47,7 @@ beforeEach(() => {
   quoteDeadline.mockReset().mockResolvedValue(ok());
   contractor.mockReset().mockResolvedValue(ok());
   quoteMarkup.mockReset().mockResolvedValue(ok());
+  siteListing.mockReset().mockResolvedValue(ok());
 });
 
 afterEach(() => {
@@ -58,12 +61,13 @@ describe("reminders-dispatch", () => {
 
     expect(response.statusCode).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.ran).toBe(4);
+    expect(body.ran).toBe(5);
     expect(body.failed).toBe(0);
     expect(customerLead).toHaveBeenCalledTimes(1);
     expect(quoteDeadline).toHaveBeenCalledTimes(1);
     expect(contractor).toHaveBeenCalledTimes(1);
     expect(quoteMarkup).toHaveBeenCalledTimes(1);
+    expect(siteListing).toHaveBeenCalledTimes(1);
   });
 
   it("падіння одного нагадування не глушить решту", async () => {
@@ -104,6 +108,7 @@ describe("reminders-dispatch", () => {
     expect(quoteDeadline).not.toHaveBeenCalled();
     expect(contractor).not.toHaveBeenCalled();
     expect(quoteMarkup).not.toHaveBeenCalled();
+    expect(siteListing).not.toHaveBeenCalled();
   });
 
   it("передає подію обробникам як є — їхні власні гейти мають бачити той самий ключ", async () => {
@@ -113,6 +118,7 @@ describe("reminders-dispatch", () => {
     expect(quoteDeadline).toHaveBeenCalledWith(authorized);
     expect(contractor).toHaveBeenCalledWith(authorized);
     expect(quoteMarkup).toHaveBeenCalledWith(authorized);
+    expect(siteListing).toHaveBeenCalledWith(authorized);
   });
 
   it("не приймає чужі методи", async () => {

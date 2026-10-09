@@ -369,7 +369,7 @@ These tables together power the product catalog and quote item configuration.
     ([scripts/catalog-supplier-products.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-supplier-products.sql),
     [scripts/supplier-pool-search.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-search.sql),
     [scripts/supplier-pool-page.sql](/Users/artem/Projects/tosho-crm/scripts/supplier-pool-page.sql))
-- `site_listing_items`, `site_listing_batches`
+- `site_listing_items`, `site_listing_batches`, `site_listing_announcements`
   - REQ-311, new supplier models → avanprint.ua (spec
     `docs/superpowers/specs/2026-10-01-site-autolisting-design.md`). The queue itself
     is NOT stored: `tosho.site_listing_candidates(p_supplier)` computes it from the pool
@@ -390,6 +390,14 @@ These tables together power the product catalog and quote item configuration.
     supplier), `site_listing_commit_batch(...)` (all-or-nothing), `site_listing_site_categories()`,
     `site_listing_draft_context(p_item_id)` (one call: model rows, brand colour pairs,
     category votes, 3–5 style examples, site categories).
+  - `site_listing_candidates` also returns `awaited_qty` / `awaited_at` (sum / earliest of
+    `attrs.awaited` / `attrs.awaitedAt` — Totobi `<wait>` / `<date_delivery>`): an awaited
+    novelty comes without a price, and the queue says «очікується 15.11» instead of «немає ціни».
+  - `site_listing_announcements` (`supplier_slug, model_name` PK, `articles`, `takeable`,
+    `announced_at`) — memory of `netlify/functions/site-listing-reminders.ts`: which model was
+    announced and in which state (new without a price / takeable). RLS on, no policies, grants
+    only to `service_role`. Seeded with the whole queue on first apply (only when empty), so the
+    backlog never becomes a notification; the function refuses to run on an empty table.
   - Reads go through the covering index `supplier_products_listing_idx`
     (`(supplier_slug, article) include (name, is_active, team_id, vendor, category)`):
     pool rows are wide (~1.5 kB, the shop description lives in `attrs`), and the first,

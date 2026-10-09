@@ -1,14 +1,15 @@
 import * as React from "react";
-import { ChevronDown, ExternalLink, Link as LinkIcon, Loader2, RotateCcw } from "@/components/icons/appIcons";
+import { ChevronDown, ExternalLink, Link as LinkIcon, Loader2, Package, RotateCcw } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { PoolPhoto } from "@/components/catalog/SupplierPoolRow";
+import { KanbanImageZoomPreview } from "@/components/kanban";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { pluralUk } from "@/lib/lastSeen";
 import { TEXTILE_NOTE } from "@/lib/siteListing/description";
-import type { SiteListingDraft } from "@/lib/siteListing/types";
+import type { DraftVariant, SiteListingDraft } from "@/lib/siteListing/types";
 import { cn } from "@/lib/utils";
 
 import { signedUrlForBatch } from "./importBatch";
@@ -19,7 +20,9 @@ import {
   draftErrorText,
   draftView,
   fileCategory,
+  priceCellText,
   priceLabel,
+  takeBlockedReason,
   type SiteListingCandidate,
 } from "./siteListingState";
 
@@ -59,6 +62,7 @@ export function SiteListingRow({
   const busy = actions.busyItem !== null && actions.busyItem === (candidate.item_id ?? candidate.model_name);
   const price = priceLabel(candidate);
   const takeable = canTake(candidate);
+  const blockedReason = takeBlockedReason(candidate);
 
   const copyBatchLink = async () => {
     if (!candidate.batch_id) return;
@@ -74,9 +78,18 @@ export function SiteListingRow({
   return (
     <div className="rounded-lg transition-colors hover:bg-muted/40">
       <div className="flex flex-wrap items-center gap-3 px-2 py-2">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50">
-          <PoolPhoto url={candidate.image_url} className="h-4 w-4" />
-        </span>
+        {candidate.image_url ? (
+          <KanbanImageZoomPreview
+            imageUrl={candidate.image_url}
+            alt={candidate.model_name}
+            className="h-10 w-10 rounded-md border-border/50 bg-muted/50"
+            imageClassName="object-cover"
+          />
+        ) : (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50">
+            <PoolPhoto url={null} className="h-4 w-4" />
+          </span>
+        )}
 
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5">
@@ -110,8 +123,11 @@ export function SiteListingRow({
           </span>
         </span>
 
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground" title="Роздріб постачальника → наша ціна (−1%, вниз до гривні)">
-          {price ?? "немає ціни"}
+        <span
+          className="shrink-0 text-xs tabular-nums text-muted-foreground"
+          title={price ? "Роздріб постачальника → наша ціна (−1%, вниз до гривні)" : blockedReason ?? undefined}
+        >
+          {priceCellText(candidate)}
         </span>
 
         <span className="flex shrink-0 items-center gap-1.5">
@@ -121,7 +137,7 @@ export function SiteListingRow({
                 size="xs"
                 variant="primary"
                 disabled={!takeable || busy}
-                title={takeable ? undefined : "У постачальника немає ціни — нашу не порахувати"}
+                title={blockedReason ?? undefined}
                 onClick={() => actions.decide(candidate, "take")}
               >
                 Беремо
@@ -225,6 +241,42 @@ function CategoryPicker({ itemId, onPick }: { itemId: string; onPick: (itemId: s
   );
 }
 
+/**
+ * Колір чернетки: перше фото (воно стане «Фото» в Хорошопі), назва кольору
+ * сайту й ціна. Наведення збільшує фото — той самий KanbanImageZoomPreview, що
+ * в прорахунках і дизайн-задачах. «N фото» — скільки піде в «Галерею» разом із
+ * головним.
+ */
+function DraftVariantTile({ title, variant }: { title: string; variant: DraftVariant }) {
+  const photo = variant.images[0] ?? null;
+  return (
+    <div
+      className="flex w-48 items-center gap-2 rounded-md border border-border/50 bg-background/60 p-1.5"
+      title={`${variant.color} · ${variant.article}`}
+    >
+      {photo ? (
+        <KanbanImageZoomPreview
+          imageUrl={photo}
+          alt={`${title}, ${variant.color}`}
+          className="h-10 w-10 rounded-md border-border/50 bg-muted/30"
+          imageClassName="object-cover"
+        />
+      ) : (
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/50 bg-muted/30">
+          <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        </span>
+      )}
+      <span className="min-w-0">
+        <span className="block truncate font-medium text-foreground">{variant.color}</span>
+        <span className="block tabular-nums text-muted-foreground">
+          {variant.price} грн
+          {variant.images.length > 1 ? ` · ${variant.images.length} фото` : null}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 /** Чернетка тими самими блоками, що й опис на сайті, але розміткою CRM. */
 function DraftView({ draft, category }: { draft: SiteListingDraft; category: string | null }) {
   return (
@@ -277,11 +329,9 @@ function DraftView({ draft, category }: { draft: SiteListingDraft; category: str
           <span className="font-semibold">Тип нанесення:</span> {draft.methods}
         </p>
       ) : null}
-      <div className="flex flex-wrap gap-1.5 pt-1">
+      <div className="flex flex-wrap gap-2 pt-1">
         {draft.variants.map((variant) => (
-          <Badge key={variant.article} tone="neutral" size="sm" title={variant.article}>
-            {variant.color} · {variant.price} грн
-          </Badge>
+          <DraftVariantTile key={variant.article} title={draft.title} variant={variant} />
         ))}
       </div>
       {draft.noSupplierDescription || draft.warnings.length > 0 ? (

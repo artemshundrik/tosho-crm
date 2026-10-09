@@ -29,6 +29,9 @@ export async function fetchSiteListingCandidates(slug: string): Promise<SiteList
     priced_colors: toNumber(row.priced_colors),
     supplier_price_min: toNullableNumber(row.supplier_price_min),
     supplier_price_max: toNullableNumber(row.supplier_price_max),
+    // `?? null`: до застосування SQL черга цих колонок не віддає зовсім.
+    awaited_qty: toNullableNumber(row.awaited_qty ?? null),
+    awaited_at: row.awaited_at ?? null,
   }));
 }
 

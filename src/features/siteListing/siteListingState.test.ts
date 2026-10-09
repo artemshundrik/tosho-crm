@@ -9,8 +9,10 @@ import {
   draftView,
   fileCategory,
   hasPendingDrafts,
+  priceCellText,
   priceLabel,
   readyForFile,
+  takeBlockedReason,
   type SiteListingCandidate,
 } from "./siteListingState";
 
@@ -39,6 +41,8 @@ const candidate = (patch: Partial<SiteListingCandidate> = {}): SiteListingCandid
   batch_id: null,
   batch_created_at: null,
   item_updated_at: null,
+  awaited_qty: null,
+  awaited_at: null,
   ...patch,
 });
 
@@ -93,5 +97,27 @@ describe("рядок моделі", () => {
       "від 134,00 → від 132 грн"
     );
     expect(priceLabel(candidate({ supplier_price_min: null }))).toBeNull();
+  });
+
+  it("без ціни — що каже постачальник, а «немає ціни» лише коли нічого не їде", () => {
+    const awaited = { supplier_price_min: null, supplier_price_max: null, priced_colors: 0 };
+    expect(priceCellText(candidate())).toBe("336,40 → 333 грн");
+    expect(priceCellText(candidate({ ...awaited, awaited_qty: 2000, awaited_at: "2026-11-15" }))).toBe(
+      "очікується 15.11"
+    );
+    expect(priceCellText(candidate(awaited))).toBe("немає ціни");
+  });
+
+  it("чому «Беремо» неактивне — словами постачальника", () => {
+    expect(takeBlockedReason(candidate())).toBeNull();
+    expect(takeBlockedReason(candidate({ priced_colors: 1 }))).toBe(
+      "Ціна є лише в 1 з 2 кольорів — для решти нашу не порахувати."
+    );
+    expect(
+      takeBlockedReason(candidate({ priced_colors: 0, awaited_qty: 2000, awaited_at: "2026-11-15" }))
+    ).toMatch(/^Товару ще немає на складі — очікується 2\s000 шт на 15\.11\.2026/);
+    expect(takeBlockedReason(candidate({ priced_colors: 0 }))).toBe(
+      "У постачальника немає ціни — нашу не порахувати."
+    );
   });
 });

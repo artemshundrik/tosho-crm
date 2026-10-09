@@ -79,7 +79,36 @@ export function cscartListingExtras(block) {
   if (description) extras.description = description;
   const params = feedParams(block);
   if (Object.keys(params).length) extras.params = params;
+  Object.assign(extras, cscartAwaited(block));
   return extras;
+}
+
+/**
+ * Очікуване надходження: `<wait>` — скільки штук їде, `<date_delivery>` — коли
+ * (unix-секунди, опівніч за Києвом). Сайт Тотобі показує те саме: «Очікується:
+ * 2000 На дату: 15-11-2026».
+ *
+ * НАВІЩО. Новинку, якої ще немає на складі, Тотобі віддає з `<price>0.00`, і в
+ * черзі «На сайт» вона стояла з голим «немає ціни» (35 із 36 таких моделей
+ * 09.10.2026). З датою видно, що ціна не загубилась, а прийде разом із товаром.
+ *
+ * Дата — київська «YYYY-MM-DD», а не мітка часу: 1794693600 — це 22:00 UTC
+ * 14.11, і `toISOString().slice(0, 10)` дав би день, на який Тотобі не писав.
+ */
+export function cscartAwaited(block) {
+  const qty = Number.parseInt(exactTag(block, "wait"), 10);
+  if (!Number.isFinite(qty) || qty <= 0) return {};
+  const out = { awaited: qty };
+  const seconds = Number.parseInt(exactTag(block, "date_delivery"), 10);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    out.awaitedAt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Kyiv",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(seconds * 1000));
+  }
+  return out;
 }
 
 /**

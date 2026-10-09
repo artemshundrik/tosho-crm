@@ -4467,6 +4467,30 @@ export type Database = {
         }
         Relationships: []
       }
+      site_listing_announcements: {
+        Row: {
+          announced_at: string
+          articles: string[]
+          model_name: string
+          supplier_slug: string
+          takeable: boolean
+        }
+        Insert: {
+          announced_at?: string
+          articles: string[]
+          model_name: string
+          supplier_slug: string
+          takeable: boolean
+        }
+        Update: {
+          announced_at?: string
+          articles?: string[]
+          model_name?: string
+          supplier_slug?: string
+          takeable?: boolean
+        }
+        Relationships: []
+      }
       site_listing_batches: {
         Row: {
           created_at: string
@@ -5928,6 +5952,8 @@ export type Database = {
         Args: { p_supplier: string }
         Returns: {
           articles: string[]
+          awaited_at: string | null
+          awaited_qty: number | null
           batch_created_at: string | null
           batch_id: string | null
           category: string | null
