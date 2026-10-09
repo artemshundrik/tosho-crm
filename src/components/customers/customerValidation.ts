@@ -45,7 +45,10 @@ export function validateCustomerForm(
     if (!contacts.some((contact) => contact.phone.trim())) {
       errors.contactPhone = "Потрібен мобільний номер — без нього не оформити договір.";
     }
-    if (!contacts.some((contact) => contact.email.trim())) {
+    // Готівка — без пошти: документів на юрособу не буде, і форма так і пише
+    // «Готівка — email і реквізити необовʼязкові» (те саме правило, що в
+    // useCustomerLeadCreate і при переведенні ліда, REQ-329).
+    if (form.paymentType !== "cash" && !contacts.some((contact) => contact.email.trim())) {
       errors.contactEmail = "Потрібна пошта — на неї підуть документи.";
     }
   }

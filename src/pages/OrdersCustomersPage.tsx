@@ -3008,6 +3008,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
         const customerPayload: Record<string, unknown> = {
           team_id: teamId,
           name: leadForm.companyName.trim(),
+          // Спосіб оплати й джерело їдуть із ліда (REQ-329). Без них лід на
+          // «Готівці» ставав замовником «Рахунок», а замовника без джерела
+          // форма потім не давала зберегти навіть після правки однієї літери.
+          payment_type: leadForm.paymentType,
+          source: leadForm.source.trim() || null,
           legal_name: primaryLegalEntity?.legal_name ?? null,
           manager: selectedManagerLabel || currentManagerLabel || defaultManagerName || null,
           manager_user_id: selectedManagerUserId,

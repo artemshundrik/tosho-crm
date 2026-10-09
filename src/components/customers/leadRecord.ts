@@ -95,15 +95,25 @@ export const getFallbackLeadColumnsVariant = (variant: LeadColumnsVariant, messa
  * Чого бракує, щоб лід став замовником. Телефон тут лишається ОБОВʼЯЗКОВИМ і
  * після REQ-298: послаблення «телефон або Telegram» стосується самого ліда, а
  * замовнику номер потрібен на договір, документи й доставку.
+ *
+ * ГОТІВКА — БЕЗ РЕКВІЗИТІВ І ПОШТИ (REQ-329). Форма ліда так і пише:
+ * «Готівка — реквізити необовʼязкові», і замовника з готівкою CRM створює без
+ * них. А це правило про спосіб оплати не знало: 09.10.2026 менеджерка не
+ * змогла перевести ліда, який заплатив як фізособа, — CRM вимагала ЄДРПОУ,
+ * адресу й підписанта навіть на «Готівці». Договору й рахунку на юрособу там
+ * не буде, тож і питати про них нема чого. Телефон лишається: доставка й звʼязок.
  */
 export const getLeadConversionMissingFields = (form: LeadFormState, phones: string[]) => {
+  const cash = form.paymentType === "cash";
   const missing: string[] = [];
-  if (!form.ownershipType.trim()) missing.push("форма власності");
-  if (!form.taxId.trim()) missing.push(form.ownershipType === "fop" ? "ІПН" : "ЄДРПОУ / ІПН");
-  if (!form.legalAddress.trim()) missing.push(form.ownershipType === "fop" ? "прописка" : "юридична адреса");
-  if (!form.iban.trim()) missing.push("IBAN");
-  if (!form.signatoryPosition.trim()) missing.push("посада підписанта");
+  if (!cash) {
+    if (!form.ownershipType.trim()) missing.push("форма власності");
+    if (!form.taxId.trim()) missing.push(form.ownershipType === "fop" ? "ІПН" : "ЄДРПОУ / ІПН");
+    if (!form.legalAddress.trim()) missing.push(form.ownershipType === "fop" ? "прописка" : "юридична адреса");
+    if (!form.iban.trim()) missing.push("IBAN");
+    if (!form.signatoryPosition.trim()) missing.push("посада підписанта");
+  }
   if (!phones.length) missing.push("телефон");
-  if (!form.email.trim()) missing.push("email");
+  if (!cash && !form.email.trim()) missing.push("email");
   return missing;
 };
