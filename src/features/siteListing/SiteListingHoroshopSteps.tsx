@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { Info } from "@/components/icons/appIcons";
+import { ExternalLink, Info } from "@/components/icons/appIcons";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,29 @@ import { cn } from "@/lib/utils";
  * Хорошоп сам не ставить ніколи; «Відсутні товари» з будь-чим, крім «Нічого
  * не робити», зачепить увесь каталог), але читати їх щоразу — полотно.
  */
+
+/**
+ * Те саме для контент-менеджерки, у якої CRM може не бути: окрема сторінка
+ * без входу, зі схемами екранів Хорошопа (public/guides/horoshop-import.html).
+ */
+export const HOROSHOP_GUIDE_PATH = "/guides/horoshop-import.html";
+
+export function HoroshopGuideLink({ className }: { className?: string }) {
+  return (
+    <a
+      href={HOROSHOP_GUIDE_PATH}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        "inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline",
+        className
+      )}
+    >
+      Для контент-менеджера
+      <ExternalLink className="h-3 w-3" aria-hidden="true" />
+    </a>
+  );
+}
 
 const Ui = ({ children }: { children: React.ReactNode }) => (
   <span className="whitespace-nowrap rounded bg-muted px-1 py-px font-medium text-foreground">{children}</span>

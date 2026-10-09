@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { HoverTip } from "@/components/ui/hover-tip";
 
-import { SiteListingHoroshopSteps } from "./SiteListingHoroshopSteps";
+import { HoroshopGuideLink, SiteListingHoroshopSteps } from "./SiteListingHoroshopSteps";
 
 /**
  * «Як це працює» в шапці блоку «На сайт» (REQ-311#p19): чотири кроки від
@@ -144,8 +144,9 @@ export function SiteListingGuide() {
                 <StepCaption index={STEPS.length} title="Хорошоп">
                   імпорт прихованими
                 </StepCaption>
-                <div className="flex min-h-28 items-center rounded-lg bg-muted/40 px-3 py-3">
+                <div className="flex min-h-28 flex-col justify-center gap-2 rounded-lg bg-muted/40 px-3 py-3">
                   <SiteListingHoroshopSteps />
+                  <HoroshopGuideLink className="ml-5" />
                 </div>
               </li>
             </ol>

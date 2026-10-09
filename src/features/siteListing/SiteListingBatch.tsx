@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { buildImportBatch, type BuiltBatch } from "./importBatch";
-import { SiteListingHoroshopSteps } from "./SiteListingHoroshopSteps";
+import { HoroshopGuideLink, SiteListingHoroshopSteps } from "./SiteListingHoroshopSteps";
 import { siteListingKeys } from "./queries";
 import type { SiteListingCandidate } from "./siteListingState";
 
@@ -80,6 +80,7 @@ export function SiteListingBatch({
             </Button>
           </div>
           <SiteListingHoroshopSteps />
+          <HoroshopGuideLink className="ml-5" />
         </div>
       ) : null}
     </div>
