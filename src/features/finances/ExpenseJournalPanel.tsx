@@ -278,6 +278,7 @@ function JournalEntryRow({
   entry,
   currency,
   rates,
+  fxRate,
   busy,
   vendorOptions,
   hideDate,
@@ -287,6 +288,8 @@ function JournalEntryRow({
   entry: ExpenseEntry;
   currency: FxCurrency;
   rates: FxRates;
+  /** Курс самої витрати (свій або зафіксований); null = поточний НБУ. */
+  fxRate: number | null;
   busy: boolean;
   vendorOptions: string[];
   /** У згрупованому за датою режимі дата вже є в заголовку групи. */
@@ -295,7 +298,7 @@ function JournalEntryRow({
   onDelete: () => void;
 }) {
   const [editing, setEditing] = React.useState(false);
-  const uah = currency === "UAH" ? null : convertToUah(entry.amount, currency, rates, null);
+  const uah = currency === "UAH" ? null : convertToUah(entry.amount, currency, rates, fxRate);
 
   if (editing) {
     return (
@@ -374,6 +377,7 @@ export function ExpenseJournalPanel({
   currentKey,
   currency,
   rates,
+  fxRate = null,
   entries,
   busy,
   vendorOptions,
@@ -387,6 +391,8 @@ export function ExpenseJournalPanel({
   currentKey: string;
   currency: FxCurrency;
   rates: FxRates;
+  /** Курс самої витрати (свій або зафіксований); без нього — поточний НБУ. */
+  fxRate?: number | null;
   entries: ExpenseEntry[]; // лише за цей місяць
   busy: boolean;
   vendorOptions: string[];
@@ -478,6 +484,7 @@ export function ExpenseJournalPanel({
                       entry={entry}
                       currency={currency}
                       rates={rates}
+                      fxRate={fxRate}
                       busy={busy}
                       vendorOptions={vendorOptions}
                       hideDate
@@ -497,6 +504,7 @@ export function ExpenseJournalPanel({
                 entry={entry}
                 currency={currency}
                 rates={rates}
+                fxRate={fxRate}
                 busy={busy}
                 vendorOptions={vendorOptions}
                 hideDate={isEvent}
