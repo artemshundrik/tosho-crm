@@ -20,6 +20,7 @@ export type NotificationCategoryKey =
   | "finance_month_close"
   | "admin_digest"
   | "business_digest"
+  | "team_activity"
   | "dev_news"
   | "supplier_new_models";
 
@@ -115,6 +116,12 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     telegramOnly: true,
   },
   {
+    key: "team_activity",
+    label: "Робота команди в CRM",
+    description: "Щоранку: хто коли працював у CRM учора, скільки активно, перерви й кількість змін",
+    telegramOnly: true,
+  },
+  {
     key: "dev_news",
     label: "Підбірка для розробки",
     description: "Нові версії наших пакетів, релізи Claude і те, що варте уваги",
@@ -160,6 +167,10 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // Бізнес-дайджест — власник/адмін + CEO.
     case "business_digest":
       return isPrivileged;
+    // Робота команди в CRM — той самий круг, що бачить «Пульс команди»
+    // (RLS user_activity_daily): власник і CEO. Адмінові-не-CEO не йде.
+    case "team_activity":
+      return access === "owner" || job === "seo";
     // Підбірка для розробки — лише власник. Це не звіт про CRM, а читво про
     // інструменти, якими її пишуть: усім іншим у команді воно ні до чого.
     case "dev_news":

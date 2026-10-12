@@ -99,6 +99,8 @@
     "_lib/supplierPoolLookup.test.ts",
     "_lib/supplierPoolLookup.ts",
     "_lib/systemHealth.test.ts",
+    "_lib/teamActivityDigest.test.ts",
+    "_lib/teamActivityDigest.ts",
     "_lib/teamAssistantPresence.test.ts",
     "_lib/teamEventsAudience.test.ts",
     "_lib/teamMembers.test.ts",

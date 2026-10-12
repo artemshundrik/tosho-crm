@@ -525,42 +525,60 @@ export function useWorkspacePresenceState({
     return () => window.clearInterval(id);
   }, [dbUnavailable, realtimeDisabled, teamId, upsertPresenceRow, userId]);
 
-  // Team Pulse: record one "active minute" per visible minute. Idempotent per
-  // minute server-side (record_activity_minute in scripts/user-activity.sql).
+  // Пульс команди: хвилина рахується, лише коли в CRM був РУХ — мишка,
+  // клавіатура, прокрутка, дотик — і не частіше разу на хвилину. Раніше вона
+  // йшла щохвилини, поки вкладка видима, і відкрита CRM, від якої людина пішла
+  // на обід, рахувалась як робота (REQ-331).
+  //
+  // Правило «≤ 10 хв без руху — ще робота, більше — перерва» живе в базі
+  // (record_activity_minute, scripts/user-activity-sessions.sql): вона добирає
+  // проміжок заднім числом, коли рух повернувся. Тут лише сигнал «рух був».
   useEffect(() => {
     if (!teamId || !userId) return;
     let cancelled = false;
     let warned = false;
+    let workspaceId: string | null = null;
+    // Не 60 000: інакше рух о 10:00:59 після запису о 10:00:00 пропускав би
+    // хвилину 10:00 → 10:01 і рвав би суцільний відрізок на дрібні проміжки.
+    const MIN_RECORD_INTERVAL_MS = 50_000;
+    let lastRecordAt = 0;
 
-    const start = async () => {
-      const workspaceId = await resolveWorkspaceId(userId);
-      if (cancelled || !workspaceId) return;
-
-      const recordMinute = async () => {
-        if (cancelled || !isDocumentVisible()) return;
-        const { error } = await callToshoRpc("record_activity_minute", {
-          p_team_id: teamId,
-          p_workspace_id: workspaceId,
-          p_actor_name: selfDisplayName ?? null,
-        });
+    const recordMinute = () => {
+      if (cancelled || !workspaceId || !isDocumentVisible()) return;
+      const now = Date.now();
+      if (now - lastRecordAt < MIN_RECORD_INTERVAL_MS) return;
+      lastRecordAt = now;
+      void callToshoRpc("record_activity_minute", {
+        p_team_id: teamId,
+        p_workspace_id: workspaceId,
+        p_actor_name: selfDisplayName ?? null,
+      }).then(({ error }) => {
         // Never spam, but never fail silently either: a broken heartbeat used to
         // look exactly like "nobody was active".
         if (error && !warned) {
           warned = true;
           console.warn("[pulse] record_activity_minute failed", error);
         }
-      };
-
-      void recordMinute();
-      intervalId = window.setInterval(() => void recordMinute(), 60_000);
+      });
     };
 
-    let intervalId: number | undefined;
-    void start();
+    // pointermove летить десятками на секунду, але обробник — одне порівняння
+    // чисел, а запит іде щонайбільше раз на 50 с. scroll не спливає, тому capture.
+    const events = ["pointermove", "pointerdown", "keydown", "wheel", "touchstart"] as const;
+    for (const name of events) window.addEventListener(name, recordMinute, { passive: true });
+    window.addEventListener("scroll", recordMinute, { passive: true, capture: true });
+
+    void resolveWorkspaceId(userId).then((id) => {
+      if (cancelled || !id) return;
+      workspaceId = id;
+      // Сторінку щойно відкрили — це вже дія, не чекаємо першого руху.
+      recordMinute();
+    });
 
     return () => {
       cancelled = true;
-      if (intervalId) window.clearInterval(intervalId);
+      for (const name of events) window.removeEventListener(name, recordMinute);
+      window.removeEventListener("scroll", recordMinute, { capture: true });
     };
   }, [teamId, userId, selfDisplayName]);
 

@@ -39,6 +39,12 @@ import {
   summarizeInbox,
   todayLine,
 } from "./_lib/devRequestsDigest";
+import {
+  SERVICE_ACCOUNT_IDS,
+  loadTeamActivity,
+  renderTeamActivity,
+  type PersonDay,
+} from "./_lib/teamActivityDigest";
 import { loadWorkSchedules, scheduleRowsForDates } from "./_lib/workSchedules";
 import {
   TONE_EMOJI,
@@ -53,6 +59,7 @@ import {
 //   ?kind=tech              — системний звіт (owner/admin), ранок
 //   ?kind=business_morning  — «що сьогодні» (owner/admin + CEO), ранок
 //   ?kind=business_evening  — «що сталося» (owner/admin + CEO), вечір
+//   ?kind=team_activity     — «хто як працював у CRM учора» (owner + CEO), ранок
 //   ?dry=1                  — відрендерити й повернути текст, нічого не слати
 //   ?force=1                — проігнорувати захист «раз на добу»
 //   ?only=<email>           — надіслати лише одній людині (звужує коло, не
@@ -69,7 +76,7 @@ type HttpEvent = {
   queryStringParameters?: Record<string, string | undefined> | null;
 };
 
-type DigestKind = "tech" | "business_morning" | "business_evening";
+type DigestKind = "tech" | "business_morning" | "business_evening" | "team_activity";
 
 // ГОТЧА, підтверджена на проді: ролі лежать у tosho.memberships_view, а НЕ в
 // team_member_profiles (там їх просто немає). А workspace_id ≠ team_id:
@@ -1141,9 +1148,75 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
   };
 }
 
+// --- Робота в CRM за вчора (REQ-331) ----------------------------------------
+
+async function buildTeamActivityDigest(admin: AdminClient, members: MemberRow[], todayKey: string) {
+  const dayKey = shiftDays(todayKey, -1);
+  const bounds = kievDayBounds(dayKey);
+  const byUser = new Map(members.filter((m) => !SERVICE_ACCOUNT_IDS.has(m.userId)).map((m) => [m.userId, m]));
+  const team = Array.from(byUser.values());
+  const workspaceIds = Array.from(new Set(team.map((m) => m.workspaceId)));
+
+  const [{ changes, minutesByUser }, absences, exceptions] = await Promise.all([
+    loadTeamActivity(admin, team, dayKey, bounds),
+    admin
+      .schema("tosho")
+      .from("team_absences")
+      .select("user_id,kind")
+      .in("workspace_id", workspaceIds)
+      .eq("status", "approved")
+      .lte("start_date", dayKey)
+      .gte("end_date", dayKey)
+      .limit(200),
+    admin.schema("tosho").from("ua_workday_exceptions").select("is_workday").in("workspace_id", workspaceIds).eq("day", dayKey),
+  ]);
+
+  const nameOf = (m: MemberRow) => (m.fullName ?? "").trim() || (m.email ?? "").split("@")[0] || "—";
+
+  const people: PersonDay[] = [];
+  const idle: MemberRow[] = [];
+  for (const member of team) {
+    const minutes = minutesByUser.get(member.userId);
+    const changeCount = changes.get(member.userId) ?? 0;
+    if (!minutes && changeCount === 0) {
+      idle.push(member);
+      continue;
+    }
+    people.push({
+      name: nameOf(member),
+      spans: minutes?.spans ?? [],
+      activeMinutes: minutes?.activeMinutes ?? 0,
+      changes: changeCount,
+    });
+  }
+  if (people.length === 0) return null;
+
+  // «Не заходили» має сенс лише в робочий день: у суботу це вся команда.
+  const weekday = new Date(`${dayKey}T12:00:00Z`).getUTCDay();
+  const exception = ((exceptions.data ?? []) as Array<{ is_workday?: boolean | null }>)[0];
+  const isWorkday = exception ? exception.is_workday === true : weekday >= 1 && weekday <= 5;
+  const absenceByUser = new Map(
+    ((absences.data ?? []) as Array<{ user_id?: string | null; kind?: string | null }>)
+      .filter((r) => r.user_id)
+      .map((r) => [r.user_id as string, (r.kind ?? "other").trim()])
+  );
+  const absent = isWorkday
+    ? idle.map((m) => {
+        const kind = absenceByUser.get(m.userId);
+        return { name: nameOf(m), reason: kind ? (ABSENCE_KIND_LABELS[kind] ?? "Відсутність").toLowerCase() : null };
+      })
+    : [];
+
+  return {
+    tone: "good" as Tone,
+    text: renderTeamActivity({ dayLabel: formatDayLabel(dayKey), people, absent }),
+    keyboard: [[{ text: "Пульс команди", url: `${APP_URL}/settings/members?tab=pulse` }]],
+  };
+}
+
 // --- Handler ----------------------------------------------------------------
 
-const VALID_KINDS: DigestKind[] = ["tech", "business_morning", "business_evening"];
+const VALID_KINDS: DigestKind[] = ["tech", "business_morning", "business_evening", "team_activity"];
 
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method Not Allowed" });
@@ -1176,7 +1249,8 @@ export const handler = async (event: HttpEvent) => {
   try {
     const now = new Date();
     const todayKey = todayKeyInKiev(now);
-    const category = kind === "tech" ? "admin_digest" : "business_digest";
+    const category =
+      kind === "tech" ? "admin_digest" : kind === "team_activity" ? "team_activity" : "business_digest";
 
     const members = await loadMembers(admin);
     let recipients = members.filter((m) =>
@@ -1200,7 +1274,13 @@ export const handler = async (event: HttpEvent) => {
         ? await buildTechDigest(admin, now, todayKey, resolveTeamIds(members))
         : kind === "business_morning"
           ? await buildBusinessMorning(admin, members, now, todayKey)
-          : await buildBusinessEvening(admin, members, now, todayKey);
+          : kind === "business_evening"
+            ? await buildBusinessEvening(admin, members, now, todayKey)
+            : await buildTeamActivityDigest(admin, members, todayKey);
+
+    // Звіт про день, у який ніхто не працював (вихідні), не шлемо: список
+    // «не заходили» з усієї команди нічого не каже.
+    if (!digest) return jsonResponse(200, { success: true, skipped: "no-activity", kind, date: todayKey });
 
     if (dryRun) {
       return jsonResponse(200, {
