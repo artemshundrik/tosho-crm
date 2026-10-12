@@ -83,7 +83,7 @@ export function ExpenseMonthAmount({
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next) setValue(monthly === null ? "" : String(Math.round(monthly * 100) / 100));
+        if (next) setValue(monthly === null ? "" : String(Math.round(monthly * 100) / 100).replace(".", ","));
         setOpen(next);
       }}
     >
@@ -129,7 +129,9 @@ export function ExpenseMonthAmount({
         </form>
         {calculated !== null ? (
           <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-            <span>За курсом НБУ: {formatOrderMoney(calculated, "UAH")}</span>
+            <span>
+              {expense.currency === "UAH" ? "Звичайна сума" : "За курсом НБУ"}: {formatOrderMoney(calculated, "UAH")}
+            </span>
             {override !== null ? (
               <Button type="button" size="xs" variant="ghost" disabled={saving} onClick={() => void save(null)}>
                 Повернути розрахункову
