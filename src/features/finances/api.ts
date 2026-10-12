@@ -672,7 +672,7 @@ export async function deleteExpenseCategory(teamId: string, id: string): Promise
 // ---------------------------------------------------------------------------
 
 const EXPENSE_COLUMNS =
-  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,billed_next_month,object_group,reminder_lead_days,vendor_options,event_type,next_charge_date,vendor_key,logo_url,archived_at,notes,file,entered_by,created_at,updated_at";
+  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,billed_next_month,object_group,reminder_lead_days,vendor_options,event_type,month_uah_overrides,next_charge_date,vendor_key,logo_url,archived_at,notes,file,entered_by,created_at,updated_at";
 
 type ExpenseRow = {
   id: string;
@@ -694,6 +694,7 @@ type ExpenseRow = {
   reminder_lead_days: number | null;
   vendor_options: string[] | null;
   event_type: string | null;
+  month_uah_overrides: Record<string, unknown> | null;
   next_charge_date: string | null;
   vendor_key: string | null;
   logo_url: string | null;
@@ -719,6 +720,16 @@ const normalizeAllocation = (row: AllocationRow): FinanceExpenseAllocation => ({
   amount: toNumber(row.amount),
 });
 
+// Лише «YYYY-MM» → скінченне число: сміття в jsonb не має ламати підсумки.
+const normalizeMonthOverrides = (raw: Record<string, unknown> | null): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw ?? {})) {
+    const num = typeof value === "number" ? value : Number(value);
+    if (/^\d{4}-\d{2}$/.test(key) && Number.isFinite(num) && num >= 0) out[key] = num;
+  }
+  return out;
+};
+
 const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation[]): FinanceExpense => ({
   id: row.id,
   teamId: row.team_id,
@@ -739,6 +750,7 @@ const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation
   reminderLeadDays: row.reminder_lead_days ?? null,
   vendorOptions: row.vendor_options ?? [],
   eventType: row.event_type ?? null,
+  monthUahOverrides: normalizeMonthOverrides(row.month_uah_overrides),
   nextChargeDate: row.next_charge_date ?? null,
   vendorKey: row.vendor_key ?? null,
   logoUrl: row.logo_url ?? null,
@@ -889,6 +901,37 @@ export async function updateExpense(teamId: string, id: string, input: ExpenseIn
     .eq("id", id);
   if (error) throw error;
   await replaceAllocations(teamId, id, input.allocations);
+}
+
+/**
+ * Поправити суму сталої витрати на один місяць (null — прибрати поправку).
+ * Пише ЛИШЕ month_uah_overrides і перед записом перечитує мапу з бази, щоб не
+ * затерти поправку іншого місяця, внесену з іншої вкладки.
+ */
+export async function setExpenseMonthOverride(
+  teamId: string,
+  id: string,
+  monthKey: string,
+  uah: number | null
+): Promise<void> {
+  const { data, error: readError } = await supabase
+    .schema("tosho")
+    .from("finance_expenses")
+    .select("month_uah_overrides")
+    .eq("team_id", teamId)
+    .eq("id", id)
+    .single();
+  if (readError) throw readError;
+  const next = normalizeMonthOverrides((data as { month_uah_overrides: Record<string, unknown> | null }).month_uah_overrides);
+  if (uah === null) delete next[monthKey];
+  else next[monthKey] = uah;
+  const { error } = await supabase
+    .schema("tosho")
+    .from("finance_expenses")
+    .update({ month_uah_overrides: next })
+    .eq("team_id", teamId)
+    .eq("id", id);
+  if (error) throw error;
 }
 
 /**

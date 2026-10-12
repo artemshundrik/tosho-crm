@@ -86,6 +86,7 @@ import {
   uahHint,
 } from "./expenseFormat";
 import { OrderPickerInline } from "./OrderPickerInline";
+import { ExpenseMonthAmount } from "./ExpenseMonthAmount";
 import {
   createExpense,
   createExpenseCategory,
@@ -94,6 +95,7 @@ import {
   deleteExpense,
   deleteExpenseEntry,
   setExpenseArchived,
+  setExpenseMonthOverride,
   updateExpense,
   updateExpenseEntry,
   type ExpenseAllocationInput,
@@ -1046,14 +1048,16 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                 />
               </button>
             ) : (
-              <div className="text-right">
-                <div className="text-sm font-semibold tabular-nums text-foreground">
-                  {monthly === null ? "—" : formatOrderMoney(monthly, "UAH")}
-                </div>
-                <div className="text-3xs text-muted-foreground">
-                  {monthly === null ? "курс невідомий" : "на місяць"}
-                </div>
-              </div>
+              <ExpenseMonthAmount
+                expense={expense}
+                cost={cost}
+                monthKey={selectedMonth}
+                monthText={monthLabel(selectedMonth).toLowerCase()}
+                onSave={async (uah) => {
+                  if (teamId) await setExpenseMonthOverride(teamId, expense.id, selectedMonth, uah);
+                  await reload();
+                }}
+              />
             )}
             {rowActions(expense)}
           </div>

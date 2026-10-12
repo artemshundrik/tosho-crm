@@ -1,6 +1,7 @@
 import { convertToUah, type FxRates } from "@/lib/fxRates";
 import {
   expectsMonthlyEntry,
+  expenseMonthOverride,
   expenseMonthlyUah,
   expenseUahAmount,
   type ExpenseEntry,
@@ -92,10 +93,13 @@ export function expenseMonthCost(
   currentMonthKey: string
 ): MonthCost {
   if (!expense.amountVaries) {
+    // Сума з рахунку за цей місяць (оренда за курсом власниці) сильніша за суму × НБУ.
+    // Розрахункову лишаємо в estimateUah — рядок покаже, від чого відійшли.
+    const override = expenseMonthOverride(expense, monthKey);
     return {
-      uah: expenseMonthlyUah(expense, rates),
+      uah: override ?? expenseMonthlyUah(expense, rates),
       kind: "fact",
-      estimateUah: null,
+      estimateUah: override === null ? null : expenseMonthlyUah(expense, rates),
       entriesCount: 0,
     };
   }

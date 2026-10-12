@@ -16,6 +16,7 @@ import { FinanceBentoSummary } from "./FinanceBentoSummary";
 import {
   BILLING_PERIOD_LABELS,
   billingPeriodOf,
+  expenseMonthOverride,
   expenseUahAmount,
   formatLegalEntityLabel,
   TAX_TYPE_LABELS,
@@ -139,7 +140,11 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
           getSubscriptionBrand(subscription.vendorKey)?.label ||
           "Підписка",
         subtitle: BILLING_PERIOD_LABELS[period],
-        amount: expenseUahAmount(subscription, rates) ?? 0,
+        // Виправлена сума місяця списання (оренда за курсом власниці) — та сама, що в «Витратах».
+        amount:
+          expenseMonthOverride(subscription, subscription.nextChargeDate.slice(0, 7)) ??
+          expenseUahAmount(subscription, rates) ??
+          0,
         nativeAmountLabel:
           subscription.currency === "UAH"
             ? null

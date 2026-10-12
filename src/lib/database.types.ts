@@ -2286,6 +2286,7 @@ export type Database = {
           is_recurring: boolean
           legal_entity_id: string | null
           logo_url: string | null
+          month_uah_overrides: Json
           next_charge_date: string | null
           notes: string | null
           object_group: string | null
@@ -2316,6 +2317,7 @@ export type Database = {
           is_recurring?: boolean
           legal_entity_id?: string | null
           logo_url?: string | null
+          month_uah_overrides?: Json
           next_charge_date?: string | null
           notes?: string | null
           object_group?: string | null
@@ -2346,6 +2348,7 @@ export type Database = {
           is_recurring?: boolean
           legal_entity_id?: string | null
           logo_url?: string | null
+          month_uah_overrides?: Json
           next_charge_date?: string | null
           notes?: string | null
           object_group?: string | null

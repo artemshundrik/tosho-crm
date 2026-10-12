@@ -297,6 +297,12 @@ export type FinanceExpense = {
   vendorOptions: string[];
   /** Тип події («Корпоратив», «День народження»). Не null = ця витрата є подією. */
   eventType: string | null;
+  /**
+   * Фактична сума в гривнях за окремі місяці: {"2026-10": 41500}. Оренду власниця
+   * щомісяця рахує за своїм курсом, тож у цих місяцях сума × НБУ поступається
+   * сумі з рахунку. Решта місяців — як завжди. Див. `expenseMonthOverride`.
+   */
+  monthUahOverrides: Record<string, number>;
   nextChargeDate: string | null;
   vendorKey: string | null;
   logoUrl: string | null;
@@ -322,6 +328,19 @@ export const expenseUahAmount = (expense: FinanceExpense, rates: FxRates): numbe
  * Скільки ця стала витрата коштує на місяць у гривні.
  * Річний платіж ділиться на 12, квартальний — на 3 (див. п.9 побажань CEO).
  */
+/**
+ * Поправка суми на місяць — лише для сталої щомісячної витрати: у журнальної факт
+ * і так ведеться записами, а річну підписку «за жовтень» виправляти безглуздо.
+ */
+export const canOverrideMonth = (expense: FinanceExpense): boolean =>
+  expense.isRecurring && !expense.amountVaries && !expense.eventType && billingPeriodOf(expense) === "monthly";
+
+export const expenseMonthOverride = (expense: FinanceExpense, monthKey: string): number | null => {
+  if (!canOverrideMonth(expense)) return null;
+  const value = expense.monthUahOverrides[monthKey];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
 export const expenseMonthlyUah = (expense: FinanceExpense, rates: FxRates): number | null => {
   const uah = expenseUahAmount(expense, rates);
   if (uah === null) return null;

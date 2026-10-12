@@ -30,6 +30,7 @@ const expense = (over: Partial<FinanceExpense> = {}): FinanceExpense => ({
   reminderLeadDays: null,
   vendorOptions: [],
   eventType: null,
+  monthUahOverrides: {},
   nextChargeDate: null,
   vendorKey: null,
   logoUrl: null,
@@ -94,6 +95,25 @@ describe("expenseMonthCost", () => {
     const usd = expense({ currency: "USD" });
     const cost = expenseMonthCost(usd, [entry("2026-08-03", 10)], "2026-08", RATES, NOW);
     expect(cost.uah).toBe(410);
+  });
+
+  it("сума з рахунку за місяць перекриває суму × НБУ лише в цьому місяці", () => {
+    // Оренда $1 000: власниця в серпні виставила 39 800 грн за своїм курсом.
+    const rent = expense({
+      amountVaries: false,
+      currency: "USD",
+      amount: 1000,
+      monthUahOverrides: { "2026-08": 39800 },
+    });
+    const august = expenseMonthCost(rent, [], "2026-08", RATES, NOW);
+    expect(august.uah).toBe(39800);
+    expect(august.estimateUah).toBe(41000);
+    expect(expenseMonthCost(rent, [], "2026-09", RATES, NOW).uah).toBe(41000);
+  });
+
+  it("поправка місяця не діє на річну підписку — там сума розкладена на 12", () => {
+    const yearly = expense({ amountVaries: false, recurrence: "yearly", amount: 12000, monthUahOverrides: { "2026-08": 5 } });
+    expect(expenseMonthCost(yearly, [], "2026-08", RATES, NOW).uah).toBe(1000);
   });
 });
 

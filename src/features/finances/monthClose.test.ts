@@ -26,6 +26,7 @@ const journal = (id: string, over: Partial<FinanceExpense> = {}): FinanceExpense
   reminderLeadDays: null,
   vendorOptions: [],
   eventType: null,
+  monthUahOverrides: {},
   nextChargeDate: null,
   vendorKey: null,
   logoUrl: null,
