@@ -23,7 +23,6 @@ import {
   type AppIcon,
 } from "@/components/icons/appIcons";
 import { ActionButton, EditIconButton, DeleteIconButton } from "./financeRowActions";
-import { ExpenseRateLine, useExpenseFxRate } from "./ExpenseRateLine";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/picker-input";
@@ -54,6 +53,7 @@ import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { SubscriptionLogo } from "./SubscriptionLogo";
 import {
   convertToUah,
+  fxRateFor,
   useFxRates,
   type FxCurrency,
 } from "@/lib/fxRates";
@@ -1065,7 +1065,6 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
             currentKey={currentKey}
             currency={expense.currency}
             rates={rates}
-            fxRate={expense.fxRate}
             entries={monthEntries}
             busy={busyExpenses.has(expense.id)}
             vendorOptions={expense.vendorOptions}
@@ -1457,7 +1456,6 @@ function ExpenseDialog({
   const [categoryId, setCategoryId] = React.useState(editing?.categoryId ?? "");
   const [amount, setAmount] = React.useState(editing ? String(editing.amount) : "");
   const [currency, setCurrency] = React.useState<FxCurrency>(editing?.currency ?? "UAH");
-  const fx = useExpenseFxRate({ initialRate: editing?.fxRate ?? null, currency, setCurrency, rates });
   const [supplierName, setSupplierName] = React.useState(editing?.supplierName ?? "");
   const [vendorKey, setVendorKey] = React.useState(editing?.vendorKey ?? "");
   const [expenseDate, setExpenseDate] = React.useState(editing?.expenseDate ?? todayISO());
@@ -1521,8 +1519,9 @@ function ExpenseDialog({
   const allocatedNum = allocations.reduce((sum, a) => sum + amountNumber(a.amount), 0);
   const remaining = Math.round((amountNum - allocatedNum) * 100) / 100;
 
-  const uahValue = convertToUah(amountNum, currency, rates, fx.ownRate);
+  const uahValue = convertToUah(amountNum, currency, rates);
   const monthlyUah = uahValue === null ? null : uahValue / BILLING_PERIOD_MONTHS[billingPeriod];
+  const currentRate = fxRateFor(currency, rates);
 
   // Вибір сервісу підставляє назву й типову валюту. Назву перетираємо тільки тоді,
   // коли вона порожня або лишилась від попереднього бренду — введене руками не чіпаємо.
@@ -1533,7 +1532,7 @@ function ExpenseDialog({
     if (!brand) return;
     const typedByHand = supplierName.trim() && supplierName.trim() !== previous?.label;
     if (!typedByHand) setSupplierName(brand.label);
-    if (!editing) fx.changeCurrency(brand.currency);
+    if (!editing) setCurrency(brand.currency);
   };
 
   const usedQuoteIds = React.useMemo(
@@ -1564,7 +1563,6 @@ function ExpenseDialog({
       toast.error("Вкажіть коректну суму витрати.");
       return;
     }
-    if (!fx.ensureValid()) return;
     // Назва-число означає, що суму вписали не в те поле: у списку така витрата
     // так і зветься числом, і зрозуміти, за що платили, вже неможливо.
     if (looksLikeAmount(supplierName)) {
@@ -1599,9 +1597,9 @@ function ExpenseDialog({
       categoryId: categoryId || eventCategoryId || null,
       amount: amountNum,
       currency,
-      // Свій курс (оренда за курсом власниці) — завжди; без свого разова фіксує курс дня,
-      // щоб історія не «пливла», а регулярна рахується за поточним НБУ.
-      fxRate: fx.rateToSave(isRecurring),
+      // Для разової валютної витрати фіксуємо курс дня — щоб історія не «пливла».
+      // Для підписки курс не фіксуємо: план має рахуватись за поточним.
+      fxRate: !isRecurring && currency !== "UAH" ? currentRate : null,
       supplierName,
       // Бренд і лого лишаються тільки в сервісів — інакше оренда офісу поїхала б
       // у групу «Сервіси та підписки».
@@ -2034,7 +2032,7 @@ function ExpenseDialog({
                     autoFocus={!editing}
                     className="text-base font-semibold tabular-nums"
                   />
-                  <Select value={currency} onValueChange={(v) => fx.changeCurrency(v as FxCurrency)}>
+                  <Select value={currency} onValueChange={(v) => setCurrency(v as FxCurrency)}>
                     <SelectTrigger className="w-[92px] shrink-0">
                       <SelectValue />
                     </SelectTrigger>
@@ -2053,7 +2051,13 @@ function ExpenseDialog({
               </div>
 
               {/* FX — на всю ширину, тому наступні рядки не зсуваються */}
-              <ExpenseRateLine {...fx.lineProps} uahValue={uahValue} />
+              <p className="-mt-2 min-h-[16px] text-2xs leading-4 text-muted-foreground sm:col-span-2">
+                {currency !== "UAH"
+                  ? currentRate
+                    ? `≈ ${formatOrderMoney(uahValue ?? 0, "UAH")} за курсом ${currentRate.toFixed(2)}`
+                    : "Курс ще не завантажився — гривневий еквівалент з'явиться пізніше."
+                  : ""}
+              </p>
 
               {/* Сума змінна: у списку зʼявиться журнал — кожна оплата з датою й коментарем. */}
               {isRecurring && !isEvent ? (
