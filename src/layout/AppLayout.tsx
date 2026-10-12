@@ -41,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserMenu } from "@/components/app/UserMenu";
 import { ThemeSwitcher } from "@/components/app/ThemeSwitcher";
-import { TelegramPromoModal } from "@/components/app/TelegramPromoModal";
+import { AppLayoutOverlays } from "@/components/app/AppLayoutOverlays";
 
 /** Плаваюча кнопка AI-помічника: приховано візуально, функціонал лишається. */
 const SHOW_AI_LAUNCHER = false;
@@ -2652,7 +2652,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       />
       </Suspense>
       ) : null}
-      <TelegramPromoModal />
+      <AppLayoutOverlays />
       </div>
     </WorkspacePresenceProvider>
   );
