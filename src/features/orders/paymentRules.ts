@@ -77,3 +77,28 @@ export const getMinimumPrepaymentError = (input: {
   if (advance === null || advance >= CASH_MIN_PREPAYMENT_PCT) return null;
   return `На готівці передоплата не менше ${CASH_MIN_PREPAYMENT_PCT}%: 50/50, 70/30 або 100%.`;
 };
+
+/**
+ * Відтермінування доплати рахують у робочих або календарних днях від дати ВН
+ * (СЕО, 14.10.2026). Порожнє значення — старі замовлення, у яких договір і СП
+ * завжди казали «робочих днів».
+ */
+export type BalanceDaysKind = "working" | "calendar";
+
+export const BALANCE_DAYS_KIND_LABELS: Record<BalanceDaysKind, string> = {
+  working: "робочих",
+  calendar: "календарних",
+};
+
+export const normalizeBalanceDaysKind = (value?: string | null): BalanceDaysKind =>
+  value === "calendar" ? "calendar" : "working";
+
+/** «протягом N …»: 1, 21, 31 — однина родового відмінка, решта — множина. */
+export const formatBalanceDaysTerm = (days: number, kind: BalanceDaysKind) => {
+  const singular = days % 10 === 1 && days % 100 !== 11;
+  const adjective = kind === "calendar" ? (singular ? "календарного" : "календарних") : singular ? "робочого" : "робочих";
+  return `${days} ${adjective} ${singular ? "дня" : "днів"}`;
+};
+
+export const formatBalanceDaysShort = (days: number, kind: BalanceDaysKind) =>
+  `${days} ${kind === "calendar" ? "к.д." : "р.д."}`;

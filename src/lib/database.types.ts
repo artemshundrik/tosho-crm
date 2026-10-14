@@ -3194,6 +3194,7 @@ export type Database = {
       orders: {
         Row: {
           balance_days_after_shipment: number | null
+          balance_days_kind: string | null
           balance_pct: number | null
           balance_timing: string | null
           blockers: Json
@@ -3256,6 +3257,7 @@ export type Database = {
         }
         Insert: {
           balance_days_after_shipment?: number | null
+          balance_days_kind?: string | null
           balance_pct?: number | null
           balance_timing?: string | null
           blockers?: Json
@@ -3318,6 +3320,7 @@ export type Database = {
         }
         Update: {
           balance_days_after_shipment?: number | null
+          balance_days_kind?: string | null
           balance_pct?: number | null
           balance_timing?: string | null
           blockers?: Json

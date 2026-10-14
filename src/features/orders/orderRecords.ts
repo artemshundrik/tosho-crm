@@ -26,8 +26,10 @@ import { collectRunsForItem, getRunLineTotal, getRunUnitPrice } from "@/features
 import { formatQuoteItemMethodsSummary } from "@/features/orders/quoteItemMethodsSummary";
 import {
   PAYMENT_METHOD_LABELS,
+  type BalanceDaysKind,
   customerRequiresDocuments,
   isCashlessPaymentMethod,
+  normalizeBalanceDaysKind,
   normalizePaymentMethodId,
   resolveOrderPaymentMethod,
 } from "./paymentRules";
@@ -199,6 +201,7 @@ type InheritedContract = {
   balancePct: number | null;
   balanceTiming: "before_shipment" | "after_shipment" | null;
   balanceDaysAfterShipment: number | null;
+  balanceDaysKind: BalanceDaysKind | null;
   autoProlongation: boolean;
 };
 
@@ -227,6 +230,7 @@ const buildContractByCustomerId = (orders: StoredOrderRow[]) => {
       balancePct: parseNullableNumber(order.balance_pct),
       balanceTiming: parseBalanceTiming(order.balance_timing),
       balanceDaysAfterShipment: parseNullableNumber(order.balance_days_after_shipment),
+      balanceDaysKind: order.balance_days_kind ? normalizeBalanceDaysKind(order.balance_days_kind) : null,
       autoProlongation: order.contract_auto_prolongation === true,
     };
     const current = byCustomerId.get(customerId);
@@ -341,6 +345,8 @@ export type DerivedOrderRecord = {
   balanceTiming: "before_shipment" | "after_shipment" | null;
   /** Через скільки робочих днів після відвантаження має бути доплата. Релевантно лише для balanceTiming='after_shipment'. */
   balanceDaysAfterShipment: number | null;
+  /** Робочі чи календарні дні у відтермінуванні. Старі замовлення — робочі. */
+  balanceDaysKind: BalanceDaysKind;
   incotermsCode: string;
   incotermsPlace: string | null;
   orderStatus: string;
@@ -431,6 +437,7 @@ type StoredOrderRow = {
   balance_pct?: number | string | null;
   balance_timing?: string | null;
   balance_days_after_shipment?: number | string | null;
+  balance_days_kind?: string | null;
   incoterms_code?: string | null;
   incoterms_place?: string | null;
   order_status?: string | null;
@@ -733,7 +740,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -1151,6 +1158,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       balancePct: null,
       balanceTiming: null,
       balanceDaysAfterShipment: null,
+      balanceDaysKind: "working",
       incotermsCode: DEFAULT_INCOTERMS_CODE,
       incotermsPlace: resolveDeliveryPlace(quote),
       orderStatus: "new",
@@ -1605,6 +1613,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
           parseNullableNumber(order.balance_days_after_shipment) ??
           inheritedContract?.balanceDaysAfterShipment ??
           null,
+        balanceDaysKind: normalizeBalanceDaysKind(order.balance_days_kind ?? inheritedContract?.balanceDaysKind),
         incotermsCode: order.incoterms_code?.trim() || DEFAULT_INCOTERMS_CODE,
         incotermsPlace: order.incoterms_place?.trim?.() || (linkedQuote ? resolveDeliveryPlace(linkedQuote) : null),
         orderStatus: order.order_status?.trim() || "new",
@@ -2385,6 +2394,7 @@ export async function updateOrderDocumentSettings(params: {
   balancePct?: number | null;
   balanceTiming?: "before_shipment" | "after_shipment" | null;
   balanceDaysAfterShipment?: number | null;
+  balanceDaysKind?: BalanceDaysKind | null;
   incotermsCode?: string;
   incotermsPlace?: string | null;
   contractNumber?: string | null;
@@ -2402,6 +2412,7 @@ export async function updateOrderDocumentSettings(params: {
   if (params.balancePct !== undefined) payload.balance_pct = params.balancePct;
   if (params.balanceTiming !== undefined) payload.balance_timing = params.balanceTiming;
   if (params.balanceDaysAfterShipment !== undefined) payload.balance_days_after_shipment = params.balanceDaysAfterShipment;
+  if (params.balanceDaysKind !== undefined) payload.balance_days_kind = params.balanceDaysKind;
   if (params.incotermsCode !== undefined) payload.incoterms_code = params.incotermsCode;
   if (params.incotermsPlace !== undefined) payload.incoterms_place = params.incotermsPlace;
   if (params.contractNumber !== undefined) payload.contract_number = params.contractNumber;

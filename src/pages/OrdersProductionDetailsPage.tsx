@@ -43,7 +43,13 @@ import {
   type OrderDesignAsset,
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
-import { getMinimumPrepaymentError } from "@/features/orders/paymentRules";
+import {
+  type BalanceDaysKind,
+  formatBalanceDaysShort,
+  formatBalanceDaysTerm,
+  getMinimumPrepaymentError,
+} from "@/features/orders/paymentRules";
+import { BalanceDaysField } from "@/components/orders/BalanceDaysField";
 import {
   getContractRequirementChecks,
   getInvoiceRequirementChecks,
@@ -526,7 +532,7 @@ const formatPaymentBreakdown = (record: DerivedOrderRecord) => {
   if (record.prepaymentPct === null || record.balancePct === null) return record.paymentTerms;
   const balanceWhen =
     record.balanceTiming === "after_shipment"
-      ? `після відвантаження${record.balanceDaysAfterShipment ? `, до ${record.balanceDaysAfterShipment} р.д.` : ""}`
+      ? `після відвантаження${record.balanceDaysAfterShipment ? `, до ${formatBalanceDaysShort(record.balanceDaysAfterShipment, record.balanceDaysKind)}` : ""}`
       : "по готовності, до відвантаження";
   return `${record.prepaymentPct}% перед запуском / ${record.balancePct}% ${balanceWhen}`;
 };
@@ -575,7 +581,9 @@ const buildContractRenderContextFromRecord = (record: DerivedOrderRecord): Contr
     paymentBalancePct: balance ?? 0,
     balanceTimingPhrase,
     balanceAfterShipmentTermSuffix:
-      timing === "after_shipment" ? `, протягом ${balanceDays} робочих днів з дати відвантаження` : "",
+      timing === "after_shipment"
+        ? `, протягом ${formatBalanceDaysTerm(balanceDays, record.balanceDaysKind)} з дати відвантаження`
+        : "",
     contractAutoProlongation: false,
     // totalWithVat is intentionally unused in the default template body, but kept here for future tokens.
     ...{ totalWithVat },
@@ -618,6 +626,8 @@ type BuildOrderDocumentOptions = {
   balanceTiming?: "before_shipment" | "after_shipment" | null;
   /** Кількість робочих днів на доплату (тільки при balanceTiming='after_shipment'). */
   balanceDaysAfterShipment?: number | null;
+  /** Робочі чи календарні дні на доплату. */
+  balanceDaysKind?: BalanceDaysKind;
   /** URL-и зображень погодженої візуалізації, готові до вставки в <img src>. */
   visualizationImageUrls?: string[];
   /** Якщо передано — рендеримо договір з цих секцій (з ревізії), інакше — з дефолтів. */
@@ -734,6 +744,10 @@ const buildOrderDocumentHtml = (
   // Кількість робочих днів на доплату — пріоритет: options → record → дефолт 3.
   const effectiveBalanceDays =
     options.balanceDaysAfterShipment ?? record.balanceDaysAfterShipment ?? 3;
+  const effectiveBalanceDaysTerm = formatBalanceDaysTerm(
+    effectiveBalanceDays,
+    options.balanceDaysKind ?? record.balanceDaysKind
+  );
   const balanceTimingPhrase =
     effectiveBalanceTiming === "after_shipment"
       ? "після відвантаження продукції (отримання Замовником)"
@@ -741,7 +755,7 @@ const buildOrderDocumentHtml = (
   // Фраза про строк доплати у пункті СП. До відвантаження — без термінів; після відвантаження — N робочих днів.
   const balanceTermPhrase =
     effectiveBalanceTiming === "after_shipment"
-      ? `протягом ${effectiveBalanceDays} робочих днів з дати відвантаження`
+      ? `протягом ${effectiveBalanceDaysTerm} з дати відвантаження`
       : "протягом 3-х робочих днів з дати готовності продукції";
   const deliveryTerms = formatIncotermsLabel(record);
   const specificationRows = record.items
@@ -776,7 +790,7 @@ const buildOrderDocumentHtml = (
     balanceTimingPhrase,
     balanceAfterShipmentTermSuffix:
       effectiveBalanceTiming === "after_shipment"
-        ? `, протягом ${effectiveBalanceDays} робочих днів з дати відвантаження`
+        ? `, протягом ${effectiveBalanceDaysTerm} з дати відвантаження`
         : "",
     contractAutoProlongation,
   };
@@ -1198,6 +1212,7 @@ export default function OrdersProductionDetailsPage() {
   const [contractBalancePctInput, setContractBalancePctInput] = useState("30");
   const [contractBalanceTiming, setContractBalanceTiming] = useState<"before_shipment" | "after_shipment">("before_shipment");
   const [contractBalanceDaysInput, setContractBalanceDaysInput] = useState("3");
+  const [contractBalanceDaysKind, setContractBalanceDaysKind] = useState<BalanceDaysKind>("working");
   // Ручні № і дата договору (редагує лише owner/seo) — реальний паперовий договір може мати власні значення.
   const [contractNumberInput, setContractNumberInput] = useState("");
   const [contractDateInput, setContractDateInput] = useState("");
@@ -1212,6 +1227,7 @@ export default function OrdersProductionDetailsPage() {
   const [specBalancePctInput, setSpecBalancePctInput] = useState("30");
   const [specBalanceTiming, setSpecBalanceTiming] = useState<"before_shipment" | "after_shipment">("before_shipment");
   const [specBalanceDaysInput, setSpecBalanceDaysInput] = useState("3");
+  const [specBalanceDaysKind, setSpecBalanceDaysKind] = useState<BalanceDaysKind>("working");
   const [specProductionDaysInput, setSpecProductionDaysInput] = useState(String(DEFAULT_PRODUCTION_WORK_DAYS));
   const [specIncotermsCode, setSpecIncotermsCode] = useState(DEFAULT_INCOTERMS);
   const [specIncotermsPlaceInput, setSpecIncotermsPlaceInput] = useState("");
@@ -1429,6 +1445,7 @@ export default function OrdersProductionDetailsPage() {
       | "balancePct"
       | "balanceTiming"
       | "balanceDaysAfterShipment"
+      | "balanceDaysKind"
       | "contractSections"
       | "contractNumberOverride"
       | "contractDateOverride"
@@ -1575,6 +1592,7 @@ export default function OrdersProductionDetailsPage() {
     setContractBalanceDaysInput(
       record.balanceDaysAfterShipment !== null ? String(record.balanceDaysAfterShipment) : "3"
     );
+    setContractBalanceDaysKind(record.balanceDaysKind);
     // Дефолти: ручний № / дата, інакше номер замовлення CRM і дата створення (або сьогодні).
     setContractNumberInput(record.contractNumber?.trim() || record.quoteNumber);
     setContractDateInput(
@@ -1594,6 +1612,7 @@ export default function OrdersProductionDetailsPage() {
     setSpecBalancePctInput(record.balancePct !== null ? String(record.balancePct) : "30");
     setSpecBalanceTiming(record.balanceTiming ?? "before_shipment");
     setSpecBalanceDaysInput(record.balanceDaysAfterShipment !== null ? String(record.balanceDaysAfterShipment) : "3");
+    setSpecBalanceDaysKind(record.balanceDaysKind);
     setSpecProductionDaysInput(
       record.contractProductionDays !== null
         ? String(record.contractProductionDays)
@@ -2587,19 +2606,13 @@ export default function OrdersProductionDetailsPage() {
                 </Select>
               </div>
               {contractBalanceTiming === "after_shipment" ? (
-                <div className="grid gap-2">
-                  <Label htmlFor="contract-balance-days">Протягом скількох робочих днів</Label>
-                  <Input
-                    id="contract-balance-days"
-                    inputMode="numeric"
-                    value={contractBalanceDaysInput}
-                    onChange={(e) => setContractBalanceDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
-                    placeholder="Напр. 5"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Доплата здійснюється протягом N робочих/банківських днів після відвантаження Продукції.
-                  </p>
-                </div>
+                <BalanceDaysField
+                  id="contract-balance-days"
+                  days={contractBalanceDaysInput}
+                  onDaysChange={setContractBalanceDaysInput}
+                  kind={contractBalanceDaysKind}
+                  onKindChange={setContractBalanceDaysKind}
+                />
               ) : null}
             </div>
           </div>
@@ -2654,6 +2667,7 @@ export default function OrdersProductionDetailsPage() {
                         balancePct,
                         balanceTiming: contractBalanceTiming,
                         balanceDaysAfterShipment,
+                        balanceDaysKind: contractBalanceDaysKind,
                         contractProductionDays: productionWorkingDays ?? null,
                         contractAutoProlongation,
                         ...(isCeo ? { contractNumber: contractNumberOverride, contractDate: contractDateOverride } : {}),
@@ -2666,6 +2680,7 @@ export default function OrdersProductionDetailsPage() {
                               balancePct,
                               balanceTiming: contractBalanceTiming,
                               balanceDaysAfterShipment,
+                              balanceDaysKind: contractBalanceDaysKind,
                               contractProductionDays: productionWorkingDays ?? null,
                               contractAutoProlongation,
                               ...(isCeo
@@ -2685,6 +2700,7 @@ export default function OrdersProductionDetailsPage() {
                     balancePct,
                     balanceTiming: contractBalanceTiming,
                     balanceDaysAfterShipment,
+                    balanceDaysKind: contractBalanceDaysKind,
                     contractNumberOverride: contractNumberOverride ?? undefined,
                     contractDateOverride,
                   });
@@ -2776,16 +2792,13 @@ export default function OrdersProductionDetailsPage() {
                 </Select>
               </div>
               {specBalanceTiming === "after_shipment" ? (
-                <div className="grid gap-2">
-                  <Label htmlFor="spec-balance-days">Протягом скількох робочих днів</Label>
-                  <Input
-                    id="spec-balance-days"
-                    inputMode="numeric"
-                    value={specBalanceDaysInput}
-                    onChange={(e) => setSpecBalanceDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
-                    placeholder="Напр. 5"
-                  />
-                </div>
+                <BalanceDaysField
+                  id="spec-balance-days"
+                  days={specBalanceDaysInput}
+                  onDaysChange={setSpecBalanceDaysInput}
+                  kind={specBalanceDaysKind}
+                  onKindChange={setSpecBalanceDaysKind}
+                />
               ) : null}
             </div>
 
@@ -2891,6 +2904,7 @@ export default function OrdersProductionDetailsPage() {
                     balancePct,
                     balanceTiming: specBalanceTiming,
                     balanceDaysAfterShipment,
+                    balanceDaysKind: specBalanceDaysKind,
                     contractProductionDays: productionWorkingDays,
                     incotermsCode: specIncotermsCode,
                     incotermsPlace,
@@ -2906,6 +2920,7 @@ export default function OrdersProductionDetailsPage() {
                       balancePct,
                       balanceTiming: specBalanceTiming,
                       balanceDaysAfterShipment,
+                      balanceDaysKind: specBalanceDaysKind,
                       contractProductionDays: productionWorkingDays,
                       incotermsCode: specIncotermsCode,
                       incotermsPlace,

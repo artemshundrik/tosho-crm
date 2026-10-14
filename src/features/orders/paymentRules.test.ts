@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   customerRequiresDocuments,
+  formatBalanceDaysShort,
+  formatBalanceDaysTerm,
   getAllowedPaymentTermsOptions,
   getMinimumPrepaymentError,
   isCashlessPaymentMethod,
+  normalizeBalanceDaysKind,
   resolveOrderPaymentMethod,
 } from "./paymentRules";
 
@@ -104,5 +107,31 @@ describe("customerRequiresDocuments", () => {
     expect(customerRequiresDocuments("invoice")).toBe(true);
     expect(customerRequiresDocuments(null)).toBe(true);
     expect(customerRequiresDocuments(undefined)).toBe(true);
+  });
+});
+
+/**
+ * Відтермінування рахують у робочих або календарних днях від дати ВН (Влад,
+ * 14.10.2026). Це число йде в договір і СП, тож відмінок має бути правильним:
+ * «протягом 1 робочого дня», а не «1 робочих днів».
+ */
+describe("відтермінування доплати", () => {
+  it("старі замовлення без позначки рахуються в робочих днях", () => {
+    expect(normalizeBalanceDaysKind(null)).toBe("working");
+    expect(normalizeBalanceDaysKind("calendar")).toBe("calendar");
+    expect(normalizeBalanceDaysKind("будь-що")).toBe("working");
+  });
+
+  it("строк у договорі стоїть у родовому відмінку", () => {
+    expect(formatBalanceDaysTerm(1, "working")).toBe("1 робочого дня");
+    expect(formatBalanceDaysTerm(21, "calendar")).toBe("21 календарного дня");
+    expect(formatBalanceDaysTerm(3, "working")).toBe("3 робочих днів");
+    expect(formatBalanceDaysTerm(14, "calendar")).toBe("14 календарних днів");
+    expect(formatBalanceDaysTerm(11, "working")).toBe("11 робочих днів");
+  });
+
+  it("коротко в зведенні: р.д. або к.д.", () => {
+    expect(formatBalanceDaysShort(5, "working")).toBe("5 р.д.");
+    expect(formatBalanceDaysShort(30, "calendar")).toBe("30 к.д.");
   });
 });
