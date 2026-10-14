@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import { AlertTriangle } from "@/components/icons/appIcons";
 
 import { Label } from "@/components/ui/label";
@@ -8,7 +10,9 @@ import { PercentAmountInput } from "@/features/quotes/components/PercentAmountIn
 import { cn } from "@/lib/utils";
 import type { QuoteRunMarkupState } from "@/lib/quoteMarkupApproval";
 import {
+  markupRateForUnitPrice,
   MODEL_PRICE_VAT_LABEL,
+  roundUnitPrice,
   normalizeQuoteRunModelPriceVat,
   type QuoteRunModelPriceVat,
   type RunSalePricing,
@@ -57,6 +61,58 @@ const COST_FIELDS: Array<{ field: PriceField; label: string; who: string; aria: 
     aria: "Логістика",
   },
 ];
+
+/**
+ * Ціна за штуку, з якої рахується накрутка (REQ-332).
+ *
+ * ЗАКРІПЛЮЄТЬСЯ НА ВИХОДІ З ПОЛЯ, а не на кожній цифрі. Поле накрутки поруч
+ * віддає число одразу, і там це безпечно: «1» на шляху до «16» — теж накрутка.
+ * А «1» на шляху до «1020» — ціна нижче собівартості, тобто накрутка 0 %:
+ * автозбереження, що спрацьовує за ~3 с, записало б її в базу посеред набору,
+ * а смуга й бейдж миготіли б «Треба погодження». Порожнє поле нічого не міняє:
+ * стерти ціну не означає попросити нульову накрутку.
+ */
+function UnitPriceInput({
+  pricing,
+  currency,
+  onMarkupRate,
+}: {
+  pricing: RunSalePricing;
+  currency?: string | null;
+  onMarkupRate: (rate: number) => void;
+}) {
+  const typed = useRef<number | null>(null);
+  return (
+    <CurrencyAmountInput
+      value={pricing.saleUnitPrice}
+      emptyValue={null}
+      onFocus={() => {
+        typed.current = null;
+      }}
+      onValueChange={(next) => {
+        typed.current = next;
+      }}
+      onBlur={() => {
+        // Клік у поле й назад теж проходить через blur — і віддає ту саму ціну.
+        // Перерахунок із неї зсунув би 16,9 % на 16,8999… й запустив збереження
+        // на порожньому місці.
+        if (typed.current === null || roundUnitPrice(typed.current) === pricing.saleUnitPrice) return;
+        const rate = markupRateForUnitPrice({
+          quantity: pricing.quantity,
+          costTotal: pricing.costTotal,
+          unitPrice: typed.current,
+        });
+        typed.current = null;
+        if (rate !== null) onMarkupRate(rate);
+      }}
+      min={0}
+      currency={currency ?? undefined}
+      aria-label="Ціна за одиницю"
+      title="Впишіть ціну — накрутка порахується сама"
+      className="h-9 rounded-lg text-sm font-semibold"
+    />
+  );
+}
 
 export function QuoteRunPriceFields({
   run,
@@ -201,7 +257,30 @@ export function QuoteRunPriceFields({
               <span>Націнка</span>
               <span className="font-semibold tabular-nums">{formatCurrency(pricing.markupTotal, currency)}</span>
             </div>
-            {pricing.saleUnitPrice === null ? null : (
+            {pricing.saleUnitPrice === null ? null : canEditMarkup ? (
+              /*
+                ЦІНА ВПИСУЄТЬСЯ, А НЕ ЛИШЕ ЧИТАЄТЬСЯ (REQ-332).
+
+                Ціну з тендера чи договору відсотком не виставити навіть із
+                сотими: на TS-1026-0002 0,01 % — це ~9 коп за штуку, і 1 020,00
+                лежить між двома сусідніми сотими. Тому тут другі двері в те
+                саме число: вписав ціну — накрутка рахується з повною точністю,
+                а в полі вище показується округленою. Погодження нижче дна від
+                цього не міняється: воно дивиться на відсоток, хоч яким шляхом
+                той прийшов.
+              */
+              // Своїм рядком на всю ширину колонки: поруч із підписом поле не
+              // вміщалось — на вузькій колонці «Ціна / од.» ламалось на три
+              // рядки, а суфікс валюти обрізався (побачено в прев'ю).
+              <div className="space-y-1 pt-1">
+                <span className="block">Ціна / од.</span>
+                <UnitPriceInput
+                  pricing={pricing}
+                  currency={currency}
+                  onMarkupRate={(rate) => onChange("markup_rate", rate)}
+                />
+              </div>
+            ) : (
               <div className="flex items-baseline justify-between gap-3">
                 <span>Ціна / од.</span>
                 <span className="font-semibold tabular-nums">

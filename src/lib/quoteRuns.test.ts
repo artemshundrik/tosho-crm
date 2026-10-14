@@ -5,8 +5,10 @@ import {
   computeRunSalePricingFromMarkup,
   findRunsNeedingModelPriceVat,
   getRunSalePricingFromRun,
+  markupRateForUnitPrice,
   mergeQuoteRunsWithExisting,
   needsMarkupApproval,
+  saleAtMarkup,
 } from "./quoteRuns";
 import { defaultMarkupRateFor, minMarkupRateFor } from "@/lib/quoteDealType";
 
@@ -572,5 +574,44 @@ describe("needsMarkupApproval", () => {
     // Те саме правило, що у validateRunEconomics: поріг вмикається, коли
     // з'являються гроші, а не коли створили рядок.
     expect(needsMarkupApproval({ costTotal: 0, markupRate: 0, dealType: "standard" })).toBe(false);
+  });
+});
+
+/**
+ * Ціна з тендера вписується гривнями, і CRM мусить показати рівно її — не
+ * найближчу досяжну відсотком (REQ-332, TS-1026-0002).
+ */
+describe("markupRateForUnitPrice", () => {
+  it("дає накрутку, з якої штука виходить рівно введеною — там, де соті відсотка промахуються", () => {
+    // 779 × 16 + 1 500 логістики = 13 964, тобто 872,75 за штуку.
+    const params = { quantity: 16, costTotal: 13_964 };
+    expect(saleAtMarkup({ ...params, markupRate: 16.87 }).saleUnitPrice).toBe(1019.98);
+    expect(saleAtMarkup({ ...params, markupRate: 16.88 }).saleUnitPrice).toBe(1020.07);
+
+    const rate = markupRateForUnitPrice({ ...params, unitPrice: 1020 });
+    expect(rate).not.toBeNull();
+    const sale = saleAtMarkup({ ...params, markupRate: rate ?? 0 });
+    expect(sale.saleUnitPrice).toBe(1020);
+    expect(sale.saleTotal).toBe(16_320);
+  });
+
+  it("тримає копійки на будь-якій ціні й кількості", () => {
+    for (const [quantity, costTotal] of [[1, 99.99], [7, 1234.56], [250, 48_317.4], [3, 10]] as const) {
+      for (const unitPrice of [costTotal / quantity + 0.01, 403.68, 1020.24, 9999.99]) {
+        const rounded = Math.round(unitPrice * 100) / 100;
+        if (rounded * quantity < costTotal) continue;
+        const rate = markupRateForUnitPrice({ quantity, costTotal, unitPrice: rounded });
+        expect(saleAtMarkup({ quantity, costTotal, markupRate: rate ?? 0 }).saleUnitPrice).toBe(rounded);
+      }
+    }
+  });
+
+  it("ціна нижче собівартості — нуль, а не від'ємна накрутка", () => {
+    expect(markupRateForUnitPrice({ quantity: 10, costTotal: 1000, unitPrice: 50 })).toBe(0);
+  });
+
+  it("без кількості чи собівартості відповіді немає", () => {
+    expect(markupRateForUnitPrice({ quantity: 0, costTotal: 1000, unitPrice: 120 })).toBeNull();
+    expect(markupRateForUnitPrice({ quantity: 10, costTotal: 0, unitPrice: 120 })).toBeNull();
   });
 });

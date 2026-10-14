@@ -1,9 +1,9 @@
 import { minMarkupRateFor, type QuoteDealType } from "@/lib/quoteDealType";
 import type { QuoteRun } from "@/lib/toshoApi";
-import { roundUnitPrice, saleAtMarkup } from "@/lib/quoteSalePrice";
+import { markupRateForUnitPrice, roundUnitPrice, saleAtMarkup } from "@/lib/quoteSalePrice";
 
 // Ціна за відсотком живе окремо, без залежностей: її рахує й сервер (REQ-328).
-export { saleAtMarkup };
+export { markupRateForUnitPrice, roundUnitPrice, saleAtMarkup };
 
 /**
  * Похибка порівняння відсотків. Та сама причина, що й у quoteMarkupApproval:
