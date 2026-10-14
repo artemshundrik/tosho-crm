@@ -33,6 +33,7 @@ export type LaunchStep = { key: string; title: string; note: string; state: Laun
 
 const PREPAYMENT_RECEIVED = new Set(["partially_paid", "fully_paid", "awaiting_balance"]);
 const LAUNCHED = new Set(["production_started", "in_production", "ready", "shipped", "completed"]);
+const SHIPPED = new Set(["shipped", "completed"]);
 
 /**
  * Відсотки «наперед / доплата»: явні з замовлення, а для старих — з коду умов
@@ -81,15 +82,30 @@ export const buildLaunchPath = (
     state: launched ? "done" : ready ? "current" : "locked",
   });
 
+  const shipmentStep: LaunchStep = {
+    key: "shipment",
+    title: "Відвантаження",
+    note: SHIPPED.has(input.orderStatus) ? "Відвантажено" : "Лише коли надійшла вся сума",
+    state: SHIPPED.has(input.orderStatus) ? "done" : "todo",
+  };
+
   if (!isCashlessPaymentMethod(input.paymentMethodId, input.paymentRail)) {
+    // Правило «не менше 50%» — лише для готівки; крипта йде тим самим шляхом без документів, але без нього.
+    const isCash = input.paymentMethodId !== "crypto";
+    const noPrepayment = breakdown?.prepayment === 0;
+    const prepaymentDone = prepaymentReceived || launched || (!isCash && noPrepayment);
     const steps: LaunchStep[] = [
       {
         key: "prepayment",
         title: "Передоплата",
-        note: `${prepaymentNote} · на готівці не менше 50%`,
-        state: prepaymentReceived || launched ? "done" : "current",
+        note: !isCash && noPrepayment
+          ? "До запуску не потрібна"
+          : isCash
+            ? `${prepaymentNote} · на готівці не менше 50%`
+            : prepaymentNote,
+        state: prepaymentDone ? "done" : "current",
       },
-      launchStep(prepaymentReceived, "Після передоплати"),
+      launchStep(prepaymentDone, "Після передоплати"),
     ];
     if ((breakdown?.balance ?? 0) > 0) {
       steps.push({
@@ -99,11 +115,12 @@ export const buildLaunchPath = (
         state: input.paymentStatus === "fully_paid" ? "done" : "todo",
       });
     }
-    steps.push({ key: "shipment", title: "Відвантаження", note: "Лише коли надійшла вся сума", state: "todo" });
+    steps.push(shipmentStep);
+    const method = isCash ? "Готівка" : "Криптовалюта";
     return {
-      heading: terms ? `Готівка, ${terms}` : "Готівка",
+      heading: terms ? `${method}, ${terms}` : method,
       steps,
-      blocker: prepaymentReceived || launched ? null : "Чекає передоплату",
+      blocker: prepaymentDone ? null : "Чекає передоплату",
     };
   }
 
@@ -137,7 +154,10 @@ export const buildLaunchPath = (
     },
     launchStep(contractDone && specDone && paymentDone, "Після СП і оплати за умовами"),
   ];
-  const blocker = !contractDone
+  // Уже запущене (старі замовлення без договору в CRM) — блокувати нічого.
+  const blocker = launched
+    ? null
+    : !contractDone
     ? "Бракує договору"
     : !specDone
       ? "Бракує СП"

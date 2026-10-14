@@ -187,12 +187,14 @@ export function OrderDocumentsCard({
             ) : null}
           </div>
           <span className="text-xs text-muted-foreground">
-            {cashless ? "Безготівка: договір, СП, рахунок" : "Готівка — не оформлюються"}
+            {cashless
+              ? "Безготівка: договір, СП, рахунок"
+              : `${record.paymentMethodId === "crypto" ? "Криптовалюта" : "Готівка"} — не оформлюються`}
           </span>
         </div>
         {!cashless ? (
           <p className="border-t border-border/40 px-4 py-3 text-sm text-muted-foreground">
-            Договору, СП, рахунку й видаткової на готівці немає.
+            Договору, СП, рахунку й видаткової тут немає: вони лише для безготівки.
             {customerDocs.length > 0 ? " Нижче — те, що вже оформили раніше." : ""}
           </p>
         ) : null}
@@ -203,30 +205,31 @@ export function OrderDocumentsCard({
             ))}
           </div>
         ) : null}
-        {cashless ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-b-xl border-t border-border/40 bg-muted/20 px-4 py-2.5">
-            <span className="flex w-full items-baseline gap-2 sm:w-auto sm:flex-1">
-              <span className="text-sm font-semibold text-foreground">Надіслати замовнику</span>
-              {record.contactTelegram ? (
-                <span className="truncate text-2xs text-muted-foreground">
-                  Telegram: {formatTelegramHandle(record.contactTelegram)}
-                </span>
-              ) : null}
+        {/* Написати замовнику треба й на готівці — тут єдине місце на телефоні, де це можна. */}
+        <div className="flex flex-wrap items-center gap-2 rounded-b-xl border-t border-border/40 bg-muted/20 px-4 py-2.5">
+          <span className="flex w-full items-baseline gap-2 sm:w-auto sm:flex-1">
+            <span className="text-sm font-semibold text-foreground">
+              {cashless ? "Надіслати замовнику" : "Написати замовнику"}
             </span>
-            <Button size="sm" variant="outline" onClick={onEmail} disabled={!record.contactEmail}>
-              <Mail className="mr-2 h-4 w-4" />
-              Email
-            </Button>
-            <Button size="sm" variant="outline" onClick={onTelegram}>
-              <Send className="mr-2 h-4 w-4" />
-              Telegram
-            </Button>
-            <Button size="sm" variant="outline" onClick={onViber} disabled={!record.contactPhone}>
-              <Phone className="mr-2 h-4 w-4" />
-              Viber
-            </Button>
-          </div>
-        ) : null}
+            {record.contactTelegram ? (
+              <span className="truncate text-2xs text-muted-foreground">
+                Telegram: {formatTelegramHandle(record.contactTelegram)}
+              </span>
+            ) : null}
+          </span>
+          <Button size="sm" variant="outline" onClick={onEmail} disabled={!record.contactEmail}>
+            <Mail className="mr-2 h-4 w-4" />
+            Email
+          </Button>
+          <Button size="sm" variant="outline" onClick={onTelegram}>
+            <Send className="mr-2 h-4 w-4" />
+            Telegram
+          </Button>
+          <Button size="sm" variant="outline" onClick={onViber} disabled={!record.contactPhone}>
+            <Phone className="mr-2 h-4 w-4" />
+            Viber
+          </Button>
+        </div>
       </section>
 
       {techCard ? (

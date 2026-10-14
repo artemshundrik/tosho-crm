@@ -1512,32 +1512,30 @@ export default function OrdersProductionDetailsPage() {
             </div>
             <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
               {teamId ? <ThreadDockButton /> : null}
-              {requiresCustomerDocuments ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    {/* На телефоні кнопка не влазить у рядок із номером; надсилання там у картці документів. */}
-                    <Button variant="outline" size="sm" className="hidden gap-1.5 sm:inline-flex">
-                      <Send className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Надіслати замовнику</span>
-                      <ChevronDown className="h-3 w-3 opacity-70" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuItem onClick={openEmailDraft} disabled={!record.contactEmail}>
-                      <Mail className="mr-2 h-4 w-4" />
-                      Email
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={openTelegramDraft}>
-                      <Send className="mr-2 h-4 w-4" />
-                      Telegram
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={openViberDraft} disabled={!record.contactPhone}>
-                      <Phone className="mr-2 h-4 w-4" />
-                      Viber
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  {/* На телефоні кнопка не влазить у рядок із номером; надсилання там у картці документів. */}
+                  <Button variant="outline" size="sm" className="hidden gap-1.5 sm:inline-flex">
+                    <Send className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Надіслати замовнику</span>
+                    <ChevronDown className="h-3 w-3 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuItem onClick={openEmailDraft} disabled={!record.contactEmail}>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Email
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={openTelegramDraft}>
+                    <Send className="mr-2 h-4 w-4" />
+                    Telegram
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={openViberDraft} disabled={!record.contactPhone}>
+                    <Phone className="mr-2 h-4 w-4" />
+                    Viber
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <OrderStatusControl
                 values={{
                   orderStatus: record.orderStatus,
@@ -1566,7 +1564,10 @@ export default function OrdersProductionDetailsPage() {
                     Доставка
                   </DropdownMenuItem>
                   {record.source === "stored" ? (
-                    <DropdownMenuItem onClick={() => setTtnDialogOpen(true)} disabled={!orderDelivery?.deliveryType}>
+                    <DropdownMenuItem
+                      onClick={() => setTtnDialogOpen(true)}
+                      disabled={!orderDelivery?.deliveryType && !record.npTtnNumber}
+                    >
                       <PackageCheck className="mr-2 h-4 w-4" />
                       ТТН Нової пошти
                     </DropdownMenuItem>
@@ -1630,8 +1631,9 @@ export default function OrdersProductionDetailsPage() {
                   onTelegram={openTelegramDraft}
                   onViber={openViberDraft}
                 />
-                {/* Готівка без договору: панель лише там, де договір уже є. */}
-                {teamId && userId && (requiresCustomerDocuments || record.contractCreatedAt) ? (
+                {/* Готівка без договору: панель лише там, де договір уже є. Версії пишуться в рядок
+                    orders — у незбереженого запису його ще немає. */}
+                {teamId && userId && record.source === "stored" && (requiresCustomerDocuments || record.contractCreatedAt) ? (
                   <Suspense
                     fallback={
                       <div className="flex items-center gap-2 rounded-xl border border-border/60 p-5 text-sm text-muted-foreground">
@@ -1720,14 +1722,18 @@ export default function OrdersProductionDetailsPage() {
               managerInitials={getInitials(record.managerLabel)}
               createdAt={record.createdAt}
               deadlines={[
-                { label: "Запуск", short: "—", tone: "none", title: "Запуск: ще не запущено" },
+                launchPath.steps.find((step) => step.key === "launch")?.state === "done"
+                  ? { label: "Запуск", short: "Запущено", tone: "future", title: "Запущено у виробництво" }
+                  : { label: "Запуск", short: "—", tone: "none", title: "Запуск: ще не запущено" },
                 {
                   label: "Готовність",
                   short: `${record.contractProductionDays ?? DEFAULT_PRODUCTION_WORK_DAYS} р.д.`,
                   tone: "future",
                   title: "Строк виробництва від запуску",
                 },
-                { label: "Відвантаження", short: "—", tone: "none", title: "Відвантаження: не вказано" },
+                launchPath.steps.find((step) => step.key === "shipment")?.state === "done"
+                  ? { label: "Відвантаження", short: "Так", tone: "future", title: "Відвантажено" }
+                  : { label: "Відвантаження", short: "—", tone: "none", title: "Відвантаження: ще ні" },
               ]}
               extras={partyExtras}
               onOpenParty={openCustomerCard ?? (() => undefined)}
@@ -1967,6 +1973,11 @@ export default function OrdersProductionDetailsPage() {
                       );
                     } catch (saveError) {
                       console.error("Failed to save contract params", saveError);
+                      // Друкувати з незбереженими умовами не можна: договір розійдеться з тим, що в CRM.
+                      toast.error("Не вдалося зберегти параметри договору", {
+                        description: saveError instanceof Error ? saveError.message : undefined,
+                      });
+                      return;
                     }
                   }
                   await openDocumentPrint("contract", {

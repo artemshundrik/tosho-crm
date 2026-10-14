@@ -172,3 +172,28 @@ describe("умови з коду payment_terms", () => {
     });
   });
 });
+
+describe("після рецензії картки", () => {
+  it("крипта — не готівка: без правила 50% і без слова «Готівка»", () => {
+    const crypto = { ...cash, paymentMethodId: "crypto", paymentRail: "Криптовалюта" };
+    const path = buildLaunchPath(crypto);
+    expect(path.heading).toBe("Криптовалюта, 70/30");
+    expect(path.steps[0].note).toBe("70% до запуску");
+  });
+
+  it("крипта 0% наперед не блокує запуск", () => {
+    const crypto = { ...cash, paymentMethodId: "crypto", paymentRail: "Криптовалюта", prepaymentPct: 0, balancePct: 100 };
+    const path = buildLaunchPath(crypto);
+    expect(path.blocker).toBeNull();
+    expect(path.steps[0]).toMatchObject({ state: "done", note: "До запуску не потрібна" });
+  });
+
+  it("запущене безготівкове замовлення без договору не кричить «Бракує договору»", () => {
+    expect(buildLaunchPath({ ...cashless, orderStatus: "in_production" }).blocker).toBeNull();
+  });
+
+  it("відвантажене замовлення закриває крок відвантаження", () => {
+    const shipped = { ...cash, paymentStatus: "fully_paid", orderStatus: "shipped" };
+    expect(buildLaunchPath(shipped).steps.find((s) => s.key === "shipment")?.state).toBe("done");
+  });
+});
