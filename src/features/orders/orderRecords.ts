@@ -30,6 +30,7 @@ import {
   normalizePaymentMethodId,
   resolveOrderPaymentMethod,
 } from "./paymentRules";
+import { buildDerivedReadinessSteps, getReadinessColumn } from "./orderReadiness";
 import { normalizeUnitLabel } from "@/lib/units";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
@@ -56,6 +57,7 @@ type CustomerRecord = {
   signatory_name?: string | null;
   signatory_position?: string | null;
   legal_entities?: unknown;
+  payment_type?: string | null;
 };
 
 type LeadRecord = {
@@ -812,7 +814,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
           .schema("tosho")
           .from("customers")
           .select(
-            "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,iban,signatory_name,signatory_position,legal_entities"
+            "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,iban,signatory_name,signatory_position,legal_entities,payment_type"
           )
           .in("id", uniqueCustomerIds)
       : Promise.resolve({ data: [] as unknown[], error: null }),
@@ -1085,42 +1087,30 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     const partyType = quote.customer_id ? "customer" : "lead";
     const paymentMethod = resolveOrderPaymentMethod({
       partyType,
-      customerPaymentType: null,
+      customerPaymentType: customer?.payment_type ?? null,
       currency: quote.currency,
       hasLegalEntityIdentity,
     });
+    const requiresCustomerDocuments = isCashlessPaymentMethod(paymentMethod.id);
     const canCreateSpecification = false;
-    const readinessSteps: DerivedReadinessStep[] = [
-      { label: "Прорахунок затверджено менеджером", done: true },
-      { label: "Ліда переведено у Замовника", done: partyType === "customer", blocking: true },
-      { label: "Заповнені email та мобільний номер", done: Boolean(contactEmail && contactPhone), blocking: true },
-      { label: "Заповнені реквізити, юр. назва та підписант", done: hasLegalEntityIdentity, blocking: true },
-      { label: "Вказано повне ПІБ підписанта (прізвище, імʼя, по-батькові)", done: hasFullSignatoryName, blocking: true },
-      ...(isVatPayer ? [{ label: "Вказано ІПН платника ПДВ (12 цифр)", done: hasValidVatId, blocking: true }] : []),
-      { label: "Підготовлені позиції для рахунку та СП", done: items.length > 0, blocking: true },
-      // Кілька тиражів на позицію = кілька різних цін. Доки не позначено, який
-      // із них погодив клієнт, замовлення робити нема з чого — до 25.08.2026
-      // мовчки брався перший створений.
-      ...(runChoicePending
-        ? [{ label: "Позначено тираж, який погодив клієнт", done: false, blocking: true }]
-        : []),
-      ...(requiresVisualization ? [{ label: "Візуал погоджено", done: hasApprovedVisualization, blocking: true }] : []),
-      ...(requiresLayout ? [{ label: "Макет погоджено", done: hasApprovedLayout, blocking: true }] : []),
-    ];
+    const readinessSteps = buildDerivedReadinessSteps({
+      partyType,
+      requiresCustomerDocuments,
+      hasEmail: Boolean(contactEmail),
+      hasPhone: Boolean(contactPhone),
+      hasLegalEntityIdentity,
+      hasFullSignatoryName,
+      isVatPayer,
+      hasValidVatId,
+      hasItems: items.length > 0,
+      runChoicePending,
+      requiresVisualization,
+      hasApprovedVisualization,
+      requiresLayout,
+      hasApprovedLayout,
+    });
     const blockers = readinessSteps.filter((step) => !step.done && step.blocking).map((step) => step.label);
-    const readinessColumn =
-      blockers.some(
-        (label) =>
-          label.includes("Ліда") ||
-          label.includes("email") ||
-          label.includes("реквізити") ||
-          label.includes("ІПН") ||
-          label.includes("ПІБ")
-      )
-        ? "counterparty"
-        : blockers.length > 0
-          ? "design"
-          : "ready";
+    const readinessColumn = getReadinessColumn(blockers);
 
     return {
       id: quote.id,
@@ -1195,8 +1185,12 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       npTtnCreatedAt: null,
       designStatuses: Array.from(new Set(tasks.map((task) => DESIGN_STATUS_LABELS[task.status] ?? task.status))),
       docs: {
-        contract: partyType === "customer" && hasLegalEntityIdentity && Boolean(contactEmail && contactPhone),
-        invoice: items.length > 0,
+        contract:
+          requiresCustomerDocuments &&
+          partyType === "customer" &&
+          hasLegalEntityIdentity &&
+          Boolean(contactEmail && contactPhone),
+        invoice: requiresCustomerDocuments && items.length > 0,
         specification: canCreateSpecification,
         techCard: items.length > 0 && hasApprovedVisualization && hasApprovedLayout,
       },
@@ -1283,7 +1277,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             .schema("tosho")
             .from("customers")
             .select(
-              "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,iban,signatory_name,signatory_position,legal_entities"
+              "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,iban,signatory_name,signatory_position,legal_entities,payment_type"
             )
             .in("id", storedCustomerIds)
         : Promise.resolve({ data: [] as unknown[], error: null }),
@@ -1917,7 +1911,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     .schema("tosho")
     .from("customers")
     .select(
-      "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,iban,signatory_name,signatory_position,legal_entities"
+      "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,iban,signatory_name,signatory_position,legal_entities,payment_type"
     )
     .eq("team_id", params.teamId)
     .eq("id", params.customerId)
