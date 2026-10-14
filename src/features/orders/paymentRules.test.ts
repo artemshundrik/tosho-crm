@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  customerRequiresDocuments,
   getAllowedPaymentTermsOptions,
   getMinimumPrepaymentError,
   isCashlessPaymentMethod,
@@ -89,5 +90,19 @@ describe("getMinimumPrepaymentError", () => {
   it("безготівка й крипта — без обмеження", () => {
     expect(getMinimumPrepaymentError({ methodId: "bank_uah", prepaymentPct: 0 })).toBeNull();
     expect(getMinimumPrepaymentError({ methodId: "crypto", prepaymentPct: 0 })).toBeNull();
+  });
+});
+
+describe("customerRequiresDocuments", () => {
+  /**
+   * Від документів звільняє лише явна «Готівка» в картці. Порожнє поле (старі
+   * замовники) вимагає реквізитів, як і раніше: інакше компанія з неповними
+   * реквізитами вгадувалась би як готівка й проходила в замовлення без договору.
+   */
+  it("лише явна готівка звільняє від реквізитів і документів", () => {
+    expect(customerRequiresDocuments("cash")).toBe(false);
+    expect(customerRequiresDocuments("invoice")).toBe(true);
+    expect(customerRequiresDocuments(null)).toBe(true);
+    expect(customerRequiresDocuments(undefined)).toBe(true);
   });
 });

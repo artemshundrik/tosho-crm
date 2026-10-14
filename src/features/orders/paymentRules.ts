@@ -27,6 +27,15 @@ export const isCashlessPaymentMethod = (methodId?: string | null, label?: string
   return (label ?? "").trim().toLowerCase().includes("безготів");
 };
 
+/**
+ * Від реквізитів, договору, СП і рахунку звільняє лише явна «Готівка» в картці
+ * замовника. Порожнє поле (старі замовники) вимагає їх, як і до 14.10.2026:
+ * інакше компанія з неповними реквізитами вгадувалась би як готівка й мовчки
+ * ставала замовленням без договору.
+ */
+export const customerRequiresDocuments = (customerPaymentType?: string | null) =>
+  (customerPaymentType ?? "").trim() !== "cash";
+
 const method = (id: string) => ({ id, label: PAYMENT_METHOD_LABELS[id] });
 
 /**

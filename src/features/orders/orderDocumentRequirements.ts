@@ -122,3 +122,32 @@ export const getTechCardRequirementChecks = (record: DerivedOrderRecord): Requir
       ]
     : []),
 ];
+
+export type OrderDocumentKind = "contract" | "invoice" | "specification" | "techCard";
+
+/**
+ * Які документи показувати на замовленні. Готівка: договору, СП і рахунку немає
+ * (погоджено СЕО 14.10.2026) — лишається техкарта. Але документ, уже створений
+ * до цього правила, не ховаємо: виписаний рахунок має відкриватись і далі.
+ */
+export const getOrderDocumentKinds = (
+  record: Pick<
+    DerivedOrderRecord,
+    | "paymentMethodId"
+    | "paymentRail"
+    | "contractCreatedAt"
+    | "specificationCreatedAt"
+    | "invoiceCreatedAt"
+    | "invoiceNumber"
+  >
+): OrderDocumentKind[] => {
+  if (isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail)) {
+    return ["contract", "specification", "invoice", "techCard"];
+  }
+  return [
+    ...(record.contractCreatedAt ? (["contract"] as const) : []),
+    ...(record.specificationCreatedAt ? (["specification"] as const) : []),
+    ...(record.invoiceCreatedAt || record.invoiceNumber ? (["invoice"] as const) : []),
+    "techCard",
+  ];
+};

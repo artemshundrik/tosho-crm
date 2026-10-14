@@ -48,8 +48,10 @@ import {
   getContractRequirementChecks,
   getInvoiceRequirementChecks,
   getMissingRequirementLabels,
+  getOrderDocumentKinds,
   getSpecificationRequirementChecks,
   getTechCardRequirementChecks,
+  type OrderDocumentKind,
   type RequirementCheck,
 } from "@/features/orders/orderDocumentRequirements";
 // Панель ревізій договору тягне rich-text-редактор (tiptap/prosemirror,
@@ -404,7 +406,6 @@ const renderDesignAssetList = (
   </div>
 );
 
-type OrderDocumentKind = "contract" | "invoice" | "specification" | "techCard";
 
 const escapeHtml = (value?: string | number | null) =>
   String(value ?? "")
@@ -1703,12 +1704,8 @@ export default function OrdersProductionDetailsPage() {
     );
   }
 
-  // Готівка: договору, СП і рахунку немає (погоджено СЕО 14.10.2026) — лишається техкарта.
   const requiresCustomerDocuments = isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail);
-  const documentKinds: OrderDocumentKind[] = requiresCustomerDocuments
-    ? ["contract", "specification", "invoice", "techCard"]
-    : ["techCard"];
-  const documentActions = documentKinds.map((kind) => ({
+  const documentActions = getOrderDocumentKinds(record).map((kind) => ({
     kind,
     ...getDocumentActionState(record, kind),
   }));
@@ -2210,7 +2207,8 @@ export default function OrdersProductionDetailsPage() {
         </div>
       </Card>
 
-      {teamId && userId ? (
+      {/* Готівка без договору: панель лише там, де договір уже є. */}
+      {teamId && userId && (requiresCustomerDocuments || record.contractCreatedAt) ? (
         <Suspense
           fallback={
             <Card className="flex items-center gap-2 p-5 text-sm text-muted-foreground">

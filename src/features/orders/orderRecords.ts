@@ -26,6 +26,7 @@ import { collectRunsForItem, getRunLineTotal, getRunUnitPrice } from "@/features
 import { formatQuoteItemMethodsSummary } from "@/features/orders/quoteItemMethodsSummary";
 import {
   PAYMENT_METHOD_LABELS,
+  customerRequiresDocuments,
   isCashlessPaymentMethod,
   normalizePaymentMethodId,
   resolveOrderPaymentMethod,
@@ -1091,7 +1092,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       currency: quote.currency,
       hasLegalEntityIdentity,
     });
-    const requiresCustomerDocuments = isCashlessPaymentMethod(paymentMethod.id);
+    const requiresCustomerDocuments = customerRequiresDocuments(customer?.payment_type);
     const canCreateSpecification = false;
     const readinessSteps = buildDerivedReadinessSteps({
       partyType,
