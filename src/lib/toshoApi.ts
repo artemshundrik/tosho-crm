@@ -189,6 +189,7 @@ export type CustomerRow = {
   logo_url?: string | null;
   manager?: string | null;
   manager_user_id?: string | null;
+  payment_type?: string | null;
 };
 export type LeadSearchRow = {
   id: string;
@@ -659,9 +660,9 @@ export async function listCustomersBySearch(teamId: string, search: string) {
   const buildQuery = (variant: "full" | "no_logo" | "base", limit: number) => {
     const columns =
       variant === "full"
-        ? "id,name,legal_name,logo_url,manager,manager_user_id"
+        ? "id,name,legal_name,logo_url,manager,manager_user_id,payment_type"
         : variant === "no_logo"
-          ? "id,name,legal_name,manager,manager_user_id"
+          ? "id,name,legal_name,manager,manager_user_id,payment_type"
           : "id,name,legal_name";
     return supabase
       .schema("tosho")

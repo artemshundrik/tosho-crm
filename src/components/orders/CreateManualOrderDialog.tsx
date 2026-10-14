@@ -39,7 +39,8 @@ import {
   sanitizeQuoteDeliveryDetails,
   type QuoteDeliveryDetails,
 } from "@/components/quotes/QuoteDeliveryFields";
-import { ORDER_PAYMENT_METHOD_OPTIONS, ORDER_PAYMENT_TERMS_OPTIONS } from "@/features/orders/config";
+import { ORDER_PAYMENT_METHOD_OPTIONS } from "@/features/orders/config";
+import { getAllowedPaymentTermsOptions } from "@/features/orders/paymentRules";
 import {
   createManualOrder,
   formatOrderMoney,
@@ -77,8 +78,8 @@ const NO_CATALOG = "__none__";
 const UNIT_OPTIONS = ["шт.", "компл.", "уп.", "пара", "м", "м²", "кг", "год"];
 const DEFAULT_DESIGN_DEADLINE_TIME = "10:00";
 
-const defaultPaymentMethodForCurrency = (currency: CurrencyCode) =>
-  currency === "USD" || currency === "EUR" ? "bank_fx" : "bank_uah";
+const defaultPaymentMethod = (currency: CurrencyCode, customerPaymentType?: string | null) =>
+  customerPaymentType === "cash" ? "cash" : currency === "USD" || currency === "EUR" ? "bank_fx" : "bank_uah";
 
 type DraftPrint = { key: string; methodId: string; positionId: string; width: string; height: string };
 type DraftItem = {
@@ -183,12 +184,13 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   const [customerResults, setCustomerResults] = useState<CustomerRow[]>([]);
   const [customerLoading, setCustomerLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(null);
+  const [selectedCustomerPaymentType, setSelectedCustomerPaymentType] = useState<string | null>(null);
 
   // Менеджер / гроші
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [managerUserId, setManagerUserId] = useState<string>("");
   const [currency, setCurrency] = useState<CurrencyCode>("UAH");
-  const [paymentMethodId, setPaymentMethodId] = useState<string>(defaultPaymentMethodForCurrency("UAH"));
+  const [paymentMethodId, setPaymentMethodId] = useState<string>(defaultPaymentMethod("UAH"));
   const paymentMethodTouched = useRef(false);
   const [paymentTerms, setPaymentTerms] = useState<string>("70/30");
 
@@ -219,8 +221,9 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
     setCustomerSearch("");
     setCustomerResults([]);
     setSelectedCustomer(null);
+    setSelectedCustomerPaymentType(null);
     setCurrency("UAH");
-    setPaymentMethodId(defaultPaymentMethodForCurrency("UAH"));
+    setPaymentMethodId(defaultPaymentMethod("UAH"));
     paymentMethodTouched.current = false;
     setPaymentTerms("70/30");
     setDeliveryType("");
@@ -335,9 +338,16 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
     };
   }, [open, teamId, selectedCustomer]);
 
+  // На готівці передоплата не менше 50% (погоджено СЕО 14.10.2026), тож «100% після
+  // готовності» зникає зі списку, а вже обрана недоступна умова скидається на 70/30.
+  const paymentTermsOptions = useMemo(() => getAllowedPaymentTermsOptions(paymentMethodId), [paymentMethodId]);
+  useEffect(() => {
+    if (!paymentTermsOptions.some((option) => option.id === paymentTerms)) setPaymentTerms("70/30");
+  }, [paymentTermsOptions, paymentTerms]);
+
   const handleCurrencyChange = (next: CurrencyCode) => {
     setCurrency(next);
-    if (!paymentMethodTouched.current) setPaymentMethodId(defaultPaymentMethodForCurrency(next));
+    if (!paymentMethodTouched.current) setPaymentMethodId(defaultPaymentMethod(next, selectedCustomerPaymentType));
   };
 
   const updateItem = (key: string, patch: Partial<DraftItem>) =>
@@ -622,6 +632,10 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                               value={customer.id}
                               onSelect={() => {
                                 setSelectedCustomer({ id: customer.id, name, logoUrl: customer.logo_url ?? null });
+                                setSelectedCustomerPaymentType(customer.payment_type ?? null);
+                                if (!paymentMethodTouched.current) {
+                                  setPaymentMethodId(defaultPaymentMethod(currency, customer.payment_type ?? null));
+                                }
                                 setSelectedDesignTaskId("");
                                 setCustomerOpen(false);
                               }}
@@ -710,7 +724,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ORDER_PAYMENT_TERMS_OPTIONS.map((option) => (
+                    {paymentTermsOptions.map((option) => (
                       <SelectItem key={option.id} value={option.id}>
                         {option.label}
                       </SelectItem>
