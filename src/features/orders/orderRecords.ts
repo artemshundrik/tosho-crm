@@ -24,6 +24,12 @@ import { needsApprovedRunChoice, pickApprovedRun } from "@/lib/quoteRuns";
 import { isQuoteItemIncluded } from "@/lib/quoteItemApproval";
 import { collectRunsForItem, getRunLineTotal, getRunUnitPrice } from "@/features/orders/orderItemPricing";
 import { formatQuoteItemMethodsSummary } from "@/features/orders/quoteItemMethodsSummary";
+import {
+  PAYMENT_METHOD_LABELS,
+  isCashlessPaymentMethod,
+  normalizePaymentMethodId,
+  resolveOrderPaymentMethod,
+} from "./paymentRules";
 import { normalizeUnitLabel } from "@/lib/units";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
@@ -594,42 +600,7 @@ const isValidCurrency = (value?: string | null) => {
 const DEFAULT_PAYMENT_TERMS = "70/30";
 const DEFAULT_INCOTERMS_CODE = "FCA";
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "Готівкові / на карту",
-  bank_uah: "Безготівкові, грн.",
-  bank_fx: "Безготівкові (валютні), $ / €",
-  crypto: "Криптовалюта",
-  pending: "Потрібно обрати після конвертації ліда",
-};
-
-const normalizePaymentMethodId = (value?: string | null) => {
-  const normalized = (value ?? "").trim();
-  return normalized in PAYMENT_METHOD_LABELS ? normalized : "";
-};
-
-export const isCashlessPaymentMethod = (methodId?: string | null, label?: string | null) => {
-  const normalizedId = normalizePaymentMethodId(methodId);
-  if (normalizedId === "bank_uah" || normalizedId === "bank_fx") return true;
-  return (label ?? "").trim().toLowerCase().includes("безготів");
-};
-
-const resolvePaymentMethod = (
-  quote: QuoteListRow,
-  partyType: "customer" | "lead",
-  hasLegalEntityIdentity: boolean
-) => {
-  if (partyType === "lead") {
-    return { id: "pending", label: PAYMENT_METHOD_LABELS.pending };
-  }
-  const currency = (quote.currency ?? "UAH").trim().toUpperCase();
-  if (currency === "USD" || currency === "EUR") {
-    return { id: "bank_fx", label: PAYMENT_METHOD_LABELS.bank_fx };
-  }
-  if (hasLegalEntityIdentity) {
-    return { id: "bank_uah", label: PAYMENT_METHOD_LABELS.bank_uah };
-  }
-  return { id: "cash", label: PAYMENT_METHOD_LABELS.cash };
-};
+export { isCashlessPaymentMethod } from "./paymentRules";
 
 const isMissingOrdersRelationMessage = (message?: string | null) => {
   const normalized = (message ?? "").toLowerCase();
@@ -1112,7 +1083,12 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     // Підписант має бути вказаний повним ПІБ (прізвище + імʼя + по-батькові) — тягнеться у договір/СП.
     const hasFullSignatoryName = signatoryName.trim().split(/\s+/).filter(Boolean).length >= 3;
     const partyType = quote.customer_id ? "customer" : "lead";
-    const paymentMethod = resolvePaymentMethod(quote, partyType, hasLegalEntityIdentity);
+    const paymentMethod = resolveOrderPaymentMethod({
+      partyType,
+      customerPaymentType: null,
+      currency: quote.currency,
+      hasLegalEntityIdentity,
+    });
     const canCreateSpecification = false;
     const readinessSteps: DerivedReadinessStep[] = [
       { label: "Прорахунок затверджено менеджером", done: true },
