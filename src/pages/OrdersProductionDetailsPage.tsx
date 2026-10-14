@@ -2568,7 +2568,7 @@ export default function OrdersProductionDetailsPage() {
             <div className="space-y-3 rounded-md border border-border/60 p-3">
               <div className="text-sm font-medium">Умови оплати</div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label htmlFor="contract-prepayment-pct">Передоплата, %</Label>
                   <Input
                     id="contract-prepayment-pct"
@@ -2579,7 +2579,7 @@ export default function OrdersProductionDetailsPage() {
                   />
                   <p className="text-xs text-muted-foreground">Перед запуском у виробництво.</p>
                 </div>
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label htmlFor="contract-balance-pct">Доплата, %</Label>
                   <Input
                     id="contract-balance-pct"
@@ -2754,7 +2754,7 @@ export default function OrdersProductionDetailsPage() {
                 <p className="text-xs text-muted-foreground">СП формується тільки для безготівкового розрахунку.</p>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label htmlFor="spec-prepayment-pct">Передоплата, %</Label>
                   <Input
                     id="spec-prepayment-pct"
@@ -2765,7 +2765,7 @@ export default function OrdersProductionDetailsPage() {
                   />
                   <p className="text-xs text-muted-foreground">Перед запуском у виробництво.</p>
                 </div>
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                   <Label htmlFor="spec-balance-pct">Доплата, %</Label>
                   <Input
                     id="spec-balance-pct"
