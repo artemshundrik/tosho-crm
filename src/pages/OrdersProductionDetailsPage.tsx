@@ -43,6 +43,15 @@ import {
   type OrderDesignAsset,
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
+import { getMinimumPrepaymentError } from "@/features/orders/paymentRules";
+import {
+  getContractRequirementChecks,
+  getInvoiceRequirementChecks,
+  getMissingRequirementLabels,
+  getSpecificationRequirementChecks,
+  getTechCardRequirementChecks,
+  type RequirementCheck,
+} from "@/features/orders/orderDocumentRequirements";
 // Панель ревізій договору тягне rich-text-редактор (tiptap/prosemirror,
 // ~900 KB у чанку) — lazy, щоб сторінка замовлення відкривалась без нього;
 // стек їде тільки коли до панелі реально дійшов рендер.
@@ -202,124 +211,6 @@ const InfoHint = ({
     </Popover>
   );
 };
-
-type RequirementCheck = {
-  label: string;
-  done: boolean;
-  help: string;
-};
-
-const hasValue = (value?: string | null) => Boolean(value?.trim());
-
-const getMissingRequirementLabels = (checks: RequirementCheck[]) =>
-  checks.filter((check) => !check.done).map((check) => check.label);
-
-const getContractRequirementChecks = (record: DerivedOrderRecord): RequirementCheck[] => [
-  {
-    label: "Замовник створений",
-    done: record.partyType === "customer",
-    help: "СП і договір не формуються напряму з ліда. Спочатку лід має бути переведений у Замовника.",
-  },
-  {
-    label: "Юр. назва / форма власності",
-    done: hasValue(record.legalEntityLabel),
-    help: "Береться з картки Замовника, з блоку юридичних осіб.",
-  },
-  {
-    label: "Код / ІПН",
-    done: hasValue(record.customerTaxId),
-    help: "Потрібен для реквізитів сторін у договорі та СП.",
-  },
-  {
-    label: "IBAN",
-    done: hasValue(record.customerIban) || hasValue(record.customerBankDetails),
-    help: "Потрібен для реквізитів Замовника. Заповнюється у картці Замовника.",
-  },
-  {
-    label: "Юридична адреса",
-    done: hasValue(record.customerLegalAddress),
-    help: "Для ФОП це може бути адреса реєстрації, для компанії - юридична адреса.",
-  },
-  {
-    label: "ПІБ підписанта",
-    done: hasValue(record.customerSignatoryName),
-    help: "ПІБ особи, яка підписує договір зі сторони Замовника.",
-  },
-  {
-    label: "Посада підписанта",
-    done: hasValue(record.customerSignatoryPosition),
-    help: "Наприклад: Директор, ФОП, Генеральний директор.",
-  },
-  {
-    label: "Підстава підпису",
-    done: hasValue(record.customerSignatoryAuthority),
-    help: "Наприклад: Статуту, довіреності, виписки з ЄДР. Без цього договір не є коректним.",
-  },
-  {
-    label: "Email і телефон",
-    done: hasValue(record.contactEmail) && hasValue(record.contactPhone),
-    help: "Контакти потрібні для реквізитів і відправки документів Замовнику.",
-  },
-];
-
-const getSpecificationRequirementChecks = (record: DerivedOrderRecord): RequirementCheck[] => [
-  {
-    label: "Є позиції",
-    done: record.items.length > 0,
-    help: "СП формується тільки якщо у замовленні є хоча б одна позиція.",
-  },
-  {
-    label: "Безготівковий розрахунок",
-    done: isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail),
-    help: "За бізнес-правилом СП створюється тільки для безготівкового розрахунку.",
-  },
-  {
-    label: "Договір створено",
-    done: Boolean(record.contractCreatedAt),
-    help: "Спочатку натисни PDF у рядку Договір. Після відкриття договору CRM позначить його створеним і розблокує СП.",
-  },
-  {
-    label: "Умови оплати",
-    done: hasValue(record.paymentTerms),
-    help: "Наприклад 50/50 або 70/30. Береться з блоку умов СП у цьому замовленні.",
-  },
-  {
-    label: "Incoterms",
-    done: hasValue(record.incotermsCode),
-    help: "Для СП використовується Incoterms 2020. За потреби вкажи також місце поставки.",
-  },
-];
-
-const getInvoiceRequirementChecks = (record: DerivedOrderRecord): RequirementCheck[] => [
-  {
-    label: "Є позиції",
-    done: record.items.length > 0,
-    help: "Рахунок формується з позицій замовлення.",
-  },
-];
-
-const getTechCardRequirementChecks = (record: DerivedOrderRecord): RequirementCheck[] => [
-  {
-    label: "Є позиції",
-    done: record.items.length > 0,
-    help: "Техкарта описує позиції замовлення.",
-  },
-  // Товар без нанесення дизайну не потребує — не показуємо вимоги, яких не буде кому закрити.
-  ...(record.requiresDesignApproval
-    ? [
-        {
-          label: "Візуал погоджено",
-          done: record.hasApprovedVisualization,
-          help: "Потрібен затверджений візуал із дизайн-задачі.",
-        },
-        {
-          label: "Макет погоджено",
-          done: record.hasApprovedLayout,
-          help: "Потрібен затверджений макет із дизайн-задачі.",
-        },
-      ]
-    : []),
-];
 
 // Коротка дата для бейджа «Створено · 12.05».
 const formatShortCreatedDate = (value?: string | null) => {
@@ -1315,6 +1206,7 @@ export default function OrdersProductionDetailsPage() {
   const [specDialogOpen, setSpecDialogOpen] = useState(false);
   const [specDialogSubmitting, setSpecDialogSubmitting] = useState(false);
   const [specPaymentMethodId, setSpecPaymentMethodId] = useState("bank_uah");
+  const [specDialogError, setSpecDialogError] = useState<string | null>(null);
   const [specPrepaymentPctInput, setSpecPrepaymentPctInput] = useState("70");
   const [specBalancePctInput, setSpecBalancePctInput] = useState("30");
   const [specBalanceTiming, setSpecBalanceTiming] = useState<"before_shipment" | "after_shipment">("before_shipment");
@@ -1708,6 +1600,7 @@ export default function OrdersProductionDetailsPage() {
     );
     setSpecIncotermsCode(record.incotermsCode || DEFAULT_INCOTERMS);
     setSpecIncotermsPlaceInput(record.incotermsPlace ?? "");
+    setSpecDialogError(null);
     setSpecDialogOpen(true);
   };
 
@@ -1810,7 +1703,12 @@ export default function OrdersProductionDetailsPage() {
     );
   }
 
-  const documentActions = (["contract", "specification", "invoice", "techCard"] as OrderDocumentKind[]).map((kind) => ({
+  // Готівка: договору, СП і рахунку немає (погоджено СЕО 14.10.2026) — лишається техкарта.
+  const requiresCustomerDocuments = isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail);
+  const documentKinds: OrderDocumentKind[] = requiresCustomerDocuments
+    ? ["contract", "specification", "invoice", "techCard"]
+    : ["techCard"];
+  const documentActions = documentKinds.map((kind) => ({
     kind,
     ...getDocumentActionState(record, kind),
   }));
@@ -2176,13 +2074,17 @@ export default function OrdersProductionDetailsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              Умови СП
-              <InfoHint title="Коли можна створити СП">
-                <RequirementList checks={getSpecificationRequirementChecks(record)} />
-              </InfoHint>
+              {requiresCustomerDocuments ? "Умови СП" : "Умови оплати"}
+              {requiresCustomerDocuments ? (
+                <InfoHint title="Коли можна створити СП">
+                  <RequirementList checks={getSpecificationRequirementChecks(record)} />
+                </InfoHint>
+              ) : null}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              СП доступна тільки для безготівки і після створення договору.
+              {requiresCustomerDocuments
+                ? "СП доступна тільки для безготівки і після створення договору."
+                : "Готівка: передоплата не менше 50%, далі запуск у виробництво."}
             </div>
           </div>
           {record.source === "stored" ? (
@@ -2220,22 +2122,24 @@ export default function OrdersProductionDetailsPage() {
             </div>
           </div>
         </div>
-        {specificationBlocker ? (
-          <div className="tone-warning-subtle mt-3 flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm">
-            <AlertTriangle className="tone-text-warning mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <div className="tone-text-warning font-medium">{specificationBlocker}</div>
-              <div className="mt-1 text-muted-foreground">
-                Наведи на іконку біля заголовка або подивись блок “Документи” справа: там показано конкретні умови, які блокують СП.
+        {requiresCustomerDocuments ? (
+          specificationBlocker ? (
+            <div className="tone-warning-subtle mt-3 flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm">
+              <AlertTriangle className="tone-text-warning mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <div className="tone-text-warning font-medium">{specificationBlocker}</div>
+                <div className="mt-1 text-muted-foreground">
+                  Наведи на іконку біля заголовка або подивись блок “Документи” справа: там показано конкретні умови, які блокують СП.
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="tone-success-subtle mt-3 flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm">
-            <CheckCircle2 className="tone-text-success h-4 w-4" />
-            <span className="tone-text-success font-medium">Умови СП виконані. Документ можна сформувати в блоці “Документи”.</span>
-          </div>
-        )}
+          ) : (
+            <div className="tone-success-subtle mt-3 flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm">
+              <CheckCircle2 className="tone-text-success h-4 w-4" />
+              <span className="tone-text-success font-medium">Умови СП виконані. Документ можна сформувати в блоці “Документи”.</span>
+            </div>
+          )
+        ) : null}
       </Card>
 
       <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
@@ -2365,6 +2269,11 @@ export default function OrdersProductionDetailsPage() {
               <div className="mt-1 text-xs text-muted-foreground">
                 Тут показані саме умови для PDF-документів. Це окремо від чекліста переходу в замовлення.
               </div>
+              {!requiresCustomerDocuments ? (
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Готівка: договір, СП і рахунок не оформлюються.
+                </div>
+              ) : null}
             </div>
             <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-2xs">
               {documentsReadyCount} / {documentsTotalCount}
@@ -2804,7 +2713,9 @@ export default function OrdersProductionDetailsPage() {
       >
         <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-[640px]">
           <DialogHeader>
-            <DialogTitle>Параметри специфікації</DialogTitle>
+            <DialogTitle>
+              {isCashlessPaymentMethod(specPaymentMethodId) ? "Параметри специфікації" : "Умови оплати"}
+            </DialogTitle>
             <DialogDescription>
               Умови цієї партії. Дефолти підтягнуті з договору замовника — зміни, якщо для цього замовлення вони інші.
             </DialogDescription>
@@ -2926,6 +2837,9 @@ export default function OrdersProductionDetailsPage() {
               </div>
             </div>
           </div>
+          {specDialogError ? (
+            <div className="tone-warning-subtle rounded-lg border px-3 py-2 text-sm tone-text-warning">{specDialogError}</div>
+          ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSpecDialogOpen(false)} disabled={specDialogSubmitting}>
               Скасувати
@@ -2951,6 +2865,17 @@ export default function OrdersProductionDetailsPage() {
                   specBalanceTiming === "after_shipment" && Number.isFinite(parsedBalanceDays) && parsedBalanceDays > 0
                     ? Math.round(parsedBalanceDays)
                     : null;
+                const prepaymentError = getMinimumPrepaymentError({
+                  methodId: specPaymentMethodId,
+                  prepaymentPct,
+                  paymentTerms: record.paymentTerms,
+                });
+                if (prepaymentError) {
+                  // Не setError: він ховає всю сторінку замовлення.
+                  setSpecDialogError(prepaymentError);
+                  return;
+                }
+                setSpecDialogError(null);
                 const paymentMethodLabel =
                   ORDER_PAYMENT_METHOD_OPTIONS.find((item) => item.id === specPaymentMethodId)?.label ??
                   record.paymentRail;
@@ -2992,7 +2917,9 @@ export default function OrdersProductionDetailsPage() {
                   // Умови збережені — закриваємо модалку в будь-якому разі. Якщо СП усе ще
                   // заблокована (напр. лишили готівку), генерація покаже причину на сторінці.
                   setSpecDialogOpen(false);
-                  await openDocumentPrint("specification", {}, nextRecord);
+                  if (isCashlessPaymentMethod(specPaymentMethodId)) {
+                    await openDocumentPrint("specification", {}, nextRecord);
+                  }
                 } catch (submitError: unknown) {
                   setError(
                     submitError instanceof Error ? submitError.message : "Не вдалося зберегти умови специфікації."
@@ -3003,7 +2930,11 @@ export default function OrdersProductionDetailsPage() {
               }}
               disabled={specDialogSubmitting}
             >
-              {specDialogSubmitting ? "Створення..." : "Створити PDF"}
+              {specDialogSubmitting
+                ? "Збереження..."
+                : isCashlessPaymentMethod(specPaymentMethodId)
+                  ? "Створити PDF"
+                  : "Зберегти"}
             </Button>
           </DialogFooter>
         </DialogContent>
