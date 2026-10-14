@@ -22,6 +22,7 @@ const cash: LaunchPathInput = {
   balanceTiming: "before_shipment",
   balanceDaysAfterShipment: null,
   balanceDaysKind: "working",
+  paymentTerms: "70/30",
   paymentStatus: "awaiting_payment",
   orderStatus: "approved",
   contractCreatedAt: null,
@@ -116,7 +117,7 @@ describe("buildOrderPaymentParts", () => {
   });
 
   it("без розбивки — одна частина на всю суму", () => {
-    expect(buildOrderPaymentParts({ ...cash, prepaymentPct: null, balancePct: null })).toEqual([
+    expect(buildOrderPaymentParts({ ...cash, prepaymentPct: null, balancePct: null, paymentTerms: "" })).toEqual([
       { key: "balance", label: "До оплати", amount: 5238, pct: 100 },
     ]);
   });
@@ -134,6 +135,40 @@ describe("formatPaymentTermsChip", () => {
         balanceDaysAfterShipment: 14,
       })
     ).toBe("Відтермінування 14 р.д.");
-    expect(formatPaymentTermsChip({ ...cash, prepaymentPct: null, balancePct: null })).toBeNull();
+    expect(formatPaymentTermsChip({ ...cash, prepaymentPct: null, balancePct: null, paymentTerms: "" })).toBeNull();
+  });
+});
+
+/**
+ * Старі замовлення мають лише код умов (`payment_terms`) без явних відсотків.
+ * Картка показувала сирий «100_prepaid» і суму без поділу.
+ */
+describe("умови з коду payment_terms", () => {
+  const legacy = { ...cashless, prepaymentPct: null, balancePct: null };
+
+  it("100% передплата", () => {
+    const input = { ...legacy, paymentTerms: "100_prepaid" };
+    expect(formatPaymentTermsChip(input)).toBe("100% наперед");
+    expect(buildOrderPaymentParts(input).map((p) => [p.label, p.pct])).toEqual([
+      ["Наперед", 100],
+      ["До відвантаження", 0],
+    ]);
+    expect(buildLaunchPath(input).heading).toBe("Безготівка, 100% наперед");
+  });
+
+  it("100% після готовності — не відтермінування: платять до відвантаження", () => {
+    const input = {
+      ...legacy,
+      paymentTerms: "100_after",
+      contractCreatedAt: "2026-10-14",
+      specificationCreatedAt: "2026-10-14",
+    };
+    expect(formatPaymentTermsChip(input)).toBe("100% після готовності");
+    const path = buildLaunchPath(input);
+    expect(path.heading).toBe("Безготівка, 100% після готовності");
+    expect(path.steps.find((s) => s.key === "payment")).toMatchObject({
+      state: "done",
+      note: "До запуску не потрібна: 100% після готовності, до відвантаження",
+    });
   });
 });

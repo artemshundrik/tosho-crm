@@ -1,21 +1,15 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageLoading } from "@/components/app/page-loading";
-import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { HoverTip } from "@/components/ui/hover-tip";
 import {
   DropdownMenu,
@@ -29,7 +23,6 @@ import {
   ORDER_INCOTERMS_OPTIONS,
   ORDER_PAYMENT_METHOD_OPTIONS,
   ORDER_PAYMENT_TERMS_OPTIONS,
-  ORDER_STATUS_SECTIONS,
 } from "@/features/orders/config";
 import {
   assignOrderInvoiceNumber,
@@ -45,7 +38,6 @@ import {
 } from "@/features/orders/orderRecords";
 import {
   type BalanceDaysKind,
-  formatBalanceDaysShort,
   formatBalanceDaysTerm,
   getMinimumPrepaymentError,
 } from "@/features/orders/paymentRules";
@@ -53,9 +45,7 @@ import { BalanceDaysField } from "@/components/orders/BalanceDaysField";
 import {
   getDocumentActionState,
   getOrderDocumentKinds,
-  getSpecificationRequirementChecks,
   type OrderDocumentKind,
-  type RequirementCheck,
 } from "@/features/orders/orderDocumentRequirements";
 // Панель ревізій договору тягне rich-text-редактор (tiptap/prosemirror,
 // ~900 KB у чанку) — lazy, щоб сторінка замовлення відкривалась без нього;
@@ -74,28 +64,19 @@ import {
 } from "@/features/contractRevisions/contractSections";
 import { amountInWords } from "@/lib/amountInWords";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
-import { buildTelegramHref, formatTelegramHandle } from "@/lib/telegramContact";
+import { buildTelegramHref } from "@/lib/telegramContact";
 import { declineToGenitive } from "@/lib/nameDeclension";
 import { toSignatureInitials } from "@/lib/signatureFormat";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { renderPrintDocument } from "@/lib/printDocument";
 import {
-  AlertTriangle,
   ArrowLeft,
+  ChevronDown,
   Building2,
-  CheckCircle2,
-  Circle,
-  ClipboardCheck,
-  ExternalLink,
-  FilePlus2,
-  FileText,
-  Info,
   Mail,
   MoreHorizontal,
   PackageCheck,
-  Palette,
-  Pencil,
   Phone,
   Loader2,
   Send,
@@ -108,7 +89,26 @@ import {
 } from "@/components/orders/OrderDeliveryDialog";
 import { NovaPoshtaTtnDialog } from "@/components/orders/NovaPoshtaTtnDialog";
 import { trackNpDocument } from "@/lib/novaPoshtaApi";
-import { DELIVERY_TYPE_OPTIONS } from "@/features/quotes/quotes-page/config";
+import { toast } from "sonner";
+import { RecordRailResizer } from "@/components/app/RecordRailResizer";
+import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
+import { QuotePartyCard } from "@/features/quotes/quote-details/QuotePartyCard";
+import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
+import { ThreadDock, ThreadDockButton, ThreadDockProvider, type ThreadDockHandle } from "@/features/taskChat/ThreadDock";
+import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
+import { useRecordPageHeight } from "@/hooks/useRecordPageHeight";
+import { threadKeyForOrder, threadKeyForQuote } from "@/lib/taskThread";
+import { buildLaunchPath, formatPaymentTermsChip } from "@/features/orders/orderLaunchPath";
+import { IncotermsHint } from "@/features/orders/order-details/IncotermsHint";
+import { OrderDeliveryCard } from "@/features/orders/order-details/OrderDeliveryCard";
+import { OrderDocumentsCard } from "@/features/orders/order-details/OrderDocumentsCard";
+import { OrderItemsTable } from "@/features/orders/order-details/OrderItemsTable";
+import { OrderLaunchPathCard } from "@/features/orders/order-details/OrderLaunchPathCard";
+import { OrderMaterialsTab, countOrderMaterials } from "@/features/orders/order-details/OrderMaterialsTab";
+import { OrderPaymentCard } from "@/features/orders/order-details/OrderPaymentCard";
+import { OrderStatusControl } from "@/features/orders/order-details/OrderStatusControl";
+
+type OrderPageTab = "launch" | "items" | "materials" | "delivery" | "details";
 
 const getInitials = (value?: string | null) => {
   const parts = (value ?? "").trim().split(/\s+/).filter(Boolean);
@@ -156,136 +156,6 @@ const resolveVisualizationImageUrls = async (assets: OrderDesignAsset[]): Promis
   }
   return urls;
 };
-
-const InfoHint = ({
-  title,
-  children,
-  widthClass = "w-[320px]",
-}: {
-  title: string;
-  children: ReactNode;
-  widthClass?: string;
-}) => {
-  const [open, setOpen] = useState(false);
-  const closeTimer = useRef<number | null>(null);
-
-  const cancelClose = () => {
-    if (closeTimer.current !== null) {
-      window.clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  };
-  const openNow = () => {
-    cancelClose();
-    setOpen(true);
-  };
-  const closeSoon = () => {
-    cancelClose();
-    closeTimer.current = window.setTimeout(() => setOpen(false), 150);
-  };
-
-  useEffect(() => () => cancelClose(), []);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={title}
-          onPointerEnter={openNow}
-          onPointerLeave={closeSoon}
-          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus:outline-none focus-visible:text-foreground"
-        >
-          <Info className="h-3.5 w-3.5" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        side="bottom"
-        sideOffset={6}
-        collisionPadding={16}
-        onOpenAutoFocus={(event) => event.preventDefault()}
-        onCloseAutoFocus={(event) => event.preventDefault()}
-        onPointerEnter={openNow}
-        onPointerLeave={closeSoon}
-        className={`${widthClass} max-w-[min(440px,calc(100vw-2rem))] p-3 text-xs leading-5`}
-      >
-        <div className="mb-1 font-semibold text-foreground">{title}</div>
-        {children}
-      </PopoverContent>
-    </Popover>
-  );
-};
-
-
-const RequirementList = ({ checks }: { checks: RequirementCheck[] }) => (
-  <div className="space-y-1.5">
-    {checks.map((check) => (
-      <div key={check.label} className="flex items-start gap-2">
-        {check.done ? (
-          <CheckCircle2 className="tone-text-success mt-0.5 h-3.5 w-3.5 shrink-0" />
-        ) : (
-          <AlertTriangle className="tone-text-warning mt-0.5 h-3.5 w-3.5 shrink-0" />
-        )}
-        <div>
-          <div className={cn("font-medium", check.done ? "text-foreground" : "tone-text-warning")}>{check.label}</div>
-          <div className="text-muted-foreground">{check.help}</div>
-        </div>
-      </div>
-    ))}
-  </div>
-);
-
-const renderDesignAssetList = (
-  title: string,
-  assets: OrderDesignAsset[],
-  options: {
-    openingAssetId: string | null;
-    onOpenAsset: (asset: OrderDesignAsset) => void;
-  }
-) => (
-  <div className="rounded-lg border border-border/60 bg-muted/[0.04] p-3">
-    <div className="flex items-center justify-between gap-2">
-      <div className="text-sm font-semibold text-foreground">{title}</div>
-      <Badge variant="outline" className="rounded-full px-2 py-0 text-3xs">
-        {assets.length}
-      </Badge>
-    </div>
-    {assets.length === 0 ? (
-      <div className="mt-2 text-sm text-muted-foreground">Немає погоджених матеріалів</div>
-    ) : (
-      <div className="mt-2 space-y-2">
-        {assets.map((asset) => (
-          <div
-            key={`${title}:${asset.id}`}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-background/80 px-3 py-2"
-          >
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-foreground">{asset.label}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">
-                {asset.kind === "file" ? "Файл" : "Посилання"}
-                {asset.createdAt ? ` • ${formatOrderDate(asset.createdAt)}` : ""}
-              </div>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => options.onOpenAsset(asset)}
-              disabled={
-                options.openingAssetId === asset.id ||
-                (!asset.url && !(asset.kind === "file" && asset.storageBucket && asset.storagePath))
-              }
-            >
-              <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-              {options.openingAssetId === asset.id ? "Відкриваємо..." : "Відкрити"}
-            </Button>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-);
-
 
 const escapeHtml = (value?: string | number | null) =>
   String(value ?? "")
@@ -357,59 +227,7 @@ const DEFAULT_PRODUCTION_WORK_DAYS = 50;
 const DEFAULT_INCOTERMS = "FCA";
 
 // Живе поруч із полем Incoterms у модалі СП — саме там менеджер обирає базис поставки.
-const IncotermsHint = () => (
-  <InfoHint title="Як обрати Incoterms" widthClass="w-[440px]">
-    <div className="space-y-3">
-      <div>
-        <div className="font-semibold text-foreground">CPT — підходить, якщо:</div>
-        <ul className="mt-1 list-disc space-y-0.5 pl-4">
-          <li>ми самостійно оформлюємо відправку (Нова Пошта / Meest / Укрпошта);</li>
-          <li>ми сплачуємо за доставку;</li>
-          <li>
-            Замовник погоджується, що після передачі товару Перевізнику відповідальність за
-            транспортування переходить до нього;
-          </li>
-          <li>у договорі або СП це чітко зазначено — претензії по транспортуванню вирішуються через Перевізника.</li>
-        </ul>
-        <div className="mt-2 font-medium text-foreground">У Специфікації, пункт 3.2:</div>
-        <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-2xs leading-4 text-foreground">
-          3.2 Умови доставки: CPT, адресна доставка Нова Пошта: &lt;адреса Замовника з картки клієнта&gt;, Incoterms® 2020
-        </div>
-      </div>
-      <div className="border-t border-border/60 pt-3">
-        <div className="font-semibold text-foreground">CIP — підходить, якщо:</div>
-        <ul className="mt-1 list-disc space-y-0.5 pl-4">
-          <li>товар дорогий;</li>
-          <li>велика партія подарункових наборів;</li>
-          <li>техніка (павери, bluetooth-колонки, EcoFlow), дорогий мерч, преміальна продукція;</li>
-          <li>оформлюємо відправку з великою оголошеною вартістю (страхуванням);</li>
-          <li>
-            ми несемо всі витрати по доставці та страхуванню (компенсаційний захист доставки),
-            поки товар не отримав Замовник.
-          </li>
-        </ul>
-        <div className="mt-2 font-medium text-foreground">У Специфікації:</div>
-        <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-2xs leading-4 text-foreground">
-          Умови поставки: CIP, &lt;місце доставки&gt;, згідно Incoterms® 2020. Доставка товару
-          здійснюється за рахунок Постачальника через службу доставки Нова Пошта (або Укрпошта /
-          Meest Express) із оформленням страхування (оголошеної вартості відправлення) за наш
-          рахунок. Ризик випадкової втрати або пошкодження товару переходить до Замовника
-          відповідно до погоджених умов поставки.
-        </div>
-      </div>
-    </div>
-  </InfoHint>
-);
 
-/** Людський опис умов оплати для зведення: «70% перед запуском / 30% по готовності». */
-const formatPaymentBreakdown = (record: DerivedOrderRecord) => {
-  if (record.prepaymentPct === null || record.balancePct === null) return record.paymentTerms;
-  const balanceWhen =
-    record.balanceTiming === "after_shipment"
-      ? `після відвантаження${record.balanceDaysAfterShipment ? `, до ${formatBalanceDaysShort(record.balanceDaysAfterShipment, record.balanceDaysKind)}` : ""}`
-      : "по готовності, до відвантаження";
-  return `${record.prepaymentPct}% перед запуском / ${record.balancePct}% ${balanceWhen}`;
-};
 
 const getPaymentTermsParts = (terms: string, total: number) => {
   const option = ORDER_PAYMENT_TERMS_OPTIONS.find((item) => item.id === terms) ?? ORDER_PAYMENT_TERMS_OPTIONS[1];
@@ -1075,6 +893,10 @@ export default function OrdersProductionDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState<DerivedOrderRecord | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<OrderPageTab>("launch");
+  const layoutRootRef = useRef<HTMLDivElement>(null);
+  useRecordPageHeight(layoutRootRef);
+  const threadDockRef = useRef<ThreadDockHandle>(null);
   const [openingAssetId, setOpeningAssetId] = useState<string | null>(null);
   // Параметри модала створення Договору (відкривається на кнопці "PDF" біля рядка "Договір").
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
@@ -1242,13 +1064,6 @@ export default function OrdersProductionDetailsPage() {
     },
   });
 
-  const doneSteps = useMemo(
-    () => record?.readinessSteps.filter((step) => step.done).length ?? 0,
-    [record]
-  );
-  const primaryStatusOptions = ORDER_STATUS_SECTIONS.find((section) => section.id === "primary")?.items ?? [];
-  const paymentStatusOptions = ORDER_STATUS_SECTIONS.find((section) => section.id === "payment")?.items ?? [];
-  const deliveryStatusOptions = ORDER_STATUS_SECTIONS.find((section) => section.id === "delivery")?.items ?? [];
 
   const handleStatusChange = async (field: "orderStatus" | "paymentStatus" | "deliveryStatus", value: string) => {
     if (!record || record.source !== "stored" || !teamId) return;
@@ -1277,7 +1092,7 @@ export default function OrdersProductionDetailsPage() {
         paymentStatus: previous.paymentStatus,
         deliveryStatus: previous.deliveryStatus,
       });
-      setError(statusError instanceof Error ? statusError.message : "Не вдалося оновити статуси.");
+      toast.error(statusError instanceof Error ? statusError.message : "Не вдалося оновити статуси.");
     } finally {
       setStatusSaving(false);
     }
@@ -1323,7 +1138,10 @@ export default function OrdersProductionDetailsPage() {
       | "contractSections"
       | "contractNumberOverride"
       | "contractDateOverride"
-    > = {},
+    > & {
+      /** false — перегляд чернетки договору: друкуємо, але не позначаємо договір створеним. */
+      markCreated?: boolean;
+    } = {},
     // Модалка параметрів зберігає значення й одразу друкує: `record` у замиканні на цей
     // момент ще старий, тож вона передає вже оновлений запис явно.
     recordOverride?: DerivedOrderRecord
@@ -1333,12 +1151,12 @@ export default function OrdersProductionDetailsPage() {
     if (kind === "specification") {
       const blocker = getSpecificationBlocker(activeRecord);
       if (blocker) {
-        setError(blocker);
+        toast.error(blocker);
         return;
       }
     }
     if (kind === "contract" && !activeRecord.docs.contract) {
-      setError("Для договору не вистачає реквізитів замовника.");
+      toast.error("Для договору не вистачає реквізитів замовника.");
       return;
     }
     // Відмінюємо ПІБ та посаду замовника у родовий відмінок через OpenAI (з кешем у Supabase).
@@ -1379,7 +1197,7 @@ export default function OrdersProductionDetailsPage() {
         // старою поведінкою, шаблон сам підставить номер замовлення.
       } catch (invoiceError: unknown) {
         // Рахунок має надрукуватись у будь-якому разі — лічильник тут «бонус», а не блокер.
-        setError(
+        toast.error(
           invoiceError instanceof Error
             ? invoiceError.message
             : "Не вдалося отримати номер рахунку з лічильника — надруковано з номером замовлення."
@@ -1394,7 +1212,7 @@ export default function OrdersProductionDetailsPage() {
     });
     const popup = window.open("", "_blank");
     if (!popup) {
-      setError("Браузер заблокував нове вікно для документа.");
+      toast.error("Браузер заблокував нове вікно для документа.");
       return;
     }
 
@@ -1428,7 +1246,8 @@ export default function OrdersProductionDetailsPage() {
       activeRecord.source === "stored" &&
       teamId &&
       (kind === "contract" || kind === "specification") &&
-      !alreadyCreated
+      !alreadyCreated &&
+      extraOptions.markCreated !== false
     ) {
       try {
         const createdAt = await markOrderDocumentCreated({
@@ -1445,7 +1264,7 @@ export default function OrdersProductionDetailsPage() {
           return { ...next, docs: normalizeDocumentDocs(next) };
         });
       } catch (markError: unknown) {
-        setError(markError instanceof Error ? markError.message : "Документ відкрито, але не вдалося зберегти позначку створення.");
+        toast.error(markError instanceof Error ? markError.message : "Документ відкрито, але не вдалося зберегти позначку створення.");
       }
     }
   };
@@ -1602,759 +1421,342 @@ export default function OrdersProductionDetailsPage() {
     kind,
     ...getDocumentActionState(record, kind),
   }));
-  const documentsReadyCount = documentActions.filter((item) => item.ready).length;
-  const documentsTotalCount = documentActions.length;
-  const checklistTotalCount = record.readinessSteps.length;
-  const specificationBlocker = getSpecificationBlocker(record);
+  const launchPath = buildLaunchPath(record);
+  const termsChip = formatPaymentTermsChip(record);
+  const paymentMethodChip =
+    record.paymentMethodId === "cash"
+      ? "Готівка"
+      : requiresCustomerDocuments
+        ? "Безготівка"
+        : record.paymentMethodId === "crypto"
+          ? "Криптовалюта"
+          : record.paymentRail;
+  const openCustomerCard = record.customerId ? () => void openCustomerEditor(record.customerId!) : null;
+  const orderTabs: { value: OrderPageTab; label: string; badge?: string | number | null; mobileOnly?: boolean }[] = [
+    {
+      value: "launch",
+      label: "Запуск",
+      badge: `${launchPath.steps.filter((step) => step.state === "done").length}/${launchPath.steps.length}`,
+    },
+    { value: "items", label: "Позиції", badge: record.items.length || null },
+    { value: "materials", label: "Матеріали", badge: countOrderMaterials(record) || null },
+    { value: "delivery", label: "Доставка", badge: record.incotermsCode || null },
+    { value: "details", label: "Деталі", badge: formatOrderMoney(record.total, record.currency), mobileOnly: true },
+  ];
+  const partyExtras = [
+    record.customerTaxId
+      ? { label: "Реквізити", value: `ЄДРПОУ ${record.customerTaxId}` }
+      : requiresCustomerDocuments
+        ? { label: "Реквізити", value: "Бракує" }
+        : null,
+    record.customerSignatoryName
+      ? {
+          label: "Підписант",
+          value: [toSignatureInitials(record.customerSignatoryName), record.customerSignatoryPosition]
+            .filter(Boolean)
+            .join(", "),
+        }
+      : null,
+    record.designTaskNumber ? { label: "Дизайн", value: record.designTaskNumber } : null,
+  ].filter((extra): extra is { label: string; value: string } => extra !== null);
 
   return (
-    <PageCanvas>
-      <PageCanvasBody className="px-4 py-4 pb-20 sm:px-6 lg:px-8 2xl:px-10 md:pb-8">
-        <div className="mx-auto max-w-[1760px] space-y-5">
-      <Card className="border-border/60 bg-card/95 p-4 sm:p-5">
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-        <div className="space-y-3">
-          <Button variant="outline" className="gap-2" onClick={() => navigate("/orders/production")}>
-            <ArrowLeft className="h-4 w-4" />
-            До списку замовлень
-          </Button>
-          <div className="flex min-w-0 items-start gap-4">
-            {record.partyType === "customer" && record.customerId ? (
-              <HoverTip asChild label="Редагувати замовника">
-                <button
-                  type="button"
-                  onClick={() => void openCustomerEditor(record.customerId!)}
-                  className="shrink-0 rounded-full ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2 hover:opacity-80"
-                  aria-label="Редагувати замовника"
-                >
-                  <EntityAvatar
-                    src={record.customerLogoUrl}
-                    name={record.customerName}
-                    fallback={getInitials(record.customerName)}
-                    size={52}
-                  />
-                </button>
-              </HoverTip>
-            ) : (
-              <EntityAvatar
-                src={record.customerLogoUrl}
-                name={record.customerName}
-                fallback={getInitials(record.customerName)}
-                size={52}
-              />
-            )}
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <HoverCopyText
-                  value={record.quoteNumber}
-                  textClassName="text-2xl font-semibold text-foreground"
-                  successMessage="Номер замовлення скопійовано"
-                  copyLabel="Скопіювати номер замовлення"
-                >
-                  {record.quoteNumber}
-                </HoverCopyText>
-                <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-2xs">
-                  {record.partyType === "customer" ? "Замовник" : "Лід"}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "rounded-full px-2.5 py-0.5 text-2xs",
-                    record.readinessColumn === "ready"
-                      ? "tone-success"
-                      : record.readinessColumn === "design"
-                        ? "tone-info"
-                        : "tone-warning"
-                  )}
-                >
-                  {record.readinessColumn === "ready" ? "Готово до замовлення" : "Є блокери"}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "gap-1 rounded-full px-2.5 py-0.5 text-2xs",
-                    documentsReadyCount === documentsTotalCount ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
-                  )}
-                  title="Готовність документів"
-                >
-                  <FileText className="h-3 w-3" />
-                  {documentsReadyCount} / {documentsTotalCount}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "gap-1 rounded-full px-2.5 py-0.5 text-2xs",
-                    doneSteps === checklistTotalCount ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
-                  )}
-                  title="Чекліст переходу в замовлення"
-                >
-                  <ClipboardCheck className="h-3 w-3" />
-                  {doneSteps} / {checklistTotalCount}
-                </Badge>
-              </div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                {record.partyType === "customer" && record.customerId ? (
-                  <button
-                    type="button"
-                    onClick={() => void openCustomerEditor(record.customerId!)}
-                    className="inline-flex items-center gap-1 text-left text-muted-foreground underline decoration-dotted decoration-muted-foreground/60 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground focus-visible:outline-none focus-visible:text-foreground focus-visible:decoration-foreground"
-                    title="Редагувати замовника"
-                  >
-                    {record.customerName}
-                  </button>
-                ) : (
-                  record.customerName
-                )}
-              </div>
-              <div className="mt-2 text-sm text-muted-foreground">
-                Оновлено {formatOrderDate(record.updatedAt)} • сума {formatOrderMoney(record.total, record.currency)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid w-full gap-3 sm:grid-cols-3 xl:w-auto xl:min-w-[520px]">
-          <div className="space-y-1.5">
-            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Статус замовлення</div>
-            {record.source === "stored" ? (
-              <Select
-                value={record.orderStatus}
-                onValueChange={(value) => void handleStatusChange("orderStatus", value)}
-                disabled={statusSaving}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {primaryStatusOptions.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-sm font-semibold text-foreground">
-                {record.readinessColumn === "ready" ? "Нове" : "Підготовка до створення"}
-              </div>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Статус оплати</div>
-            {record.source === "stored" ? (
-              <Select
-                value={record.paymentStatus}
-                onValueChange={(value) => void handleStatusChange("paymentStatus", value)}
-                disabled={statusSaving}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentStatusOptions.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-sm font-semibold text-foreground">Очікує оплату</div>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Статус доставки</div>
-            {record.source === "stored" ? (
-              <Select
-                value={record.deliveryStatus}
-                onValueChange={(value) => void handleStatusChange("deliveryStatus", value)}
-                disabled={statusSaving}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {deliveryStatusOptions.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-sm font-semibold text-foreground">Не відвантажено</div>
-            )}
-          </div>
-        </div>
-      </div>
-      </Card>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
-        <div className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Card className="border-border/60 p-4">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-caps text-muted-foreground">
-            <Building2 className="h-3.5 w-3.5" />
-            Контрагент
-          </div>
-          <div className="mt-2 text-sm font-semibold text-foreground">
-            {record.legalEntityLabel || "Потрібно заповнити реквізити"}
-          </div>
-          <div className="mt-3 border-t border-border/60 pt-3">
-            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Підписант</div>
-            {record.customerSignatoryName ? (
-              <div className="mt-1 text-sm text-foreground">
-                <span className="font-medium">{toSignatureInitials(record.customerSignatoryName)}</span>
-                {record.customerSignatoryPosition ? (
-                  <span className="text-muted-foreground">, {record.customerSignatoryPosition}</span>
-                ) : null}
-              </div>
-            ) : (
-              <div className="mt-1 text-sm text-muted-foreground">Не вказаний</div>
-            )}
-          </div>
-        </Card>
-
-        <Card className="border-border/60 p-4">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-caps text-muted-foreground">
-            <Palette className="h-3.5 w-3.5" />
-            Погодження дизайну
-          </div>
-          <div className="mt-2 text-sm font-semibold text-foreground">
-            {!record.requiresDesignApproval
-              ? "Дизайн не потрібен"
-              : record.hasApprovedVisualization && record.hasApprovedLayout
-                ? "Візуал і макет затверджені"
-                : "Потрібна дія по дизайну"}
-          </div>
-          <div className="mt-2 text-sm text-muted-foreground">
-            {record.designStatuses.join(", ") ||
-              (record.requiresDesignApproval ? "Задачі дизайну не знайдені" : "Товар без нанесення")}
-          </div>
-          {record.designTaskId ? (
-            <div className="mt-3 border-t border-border/50 pt-3">
-              <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Дизайн-задача</div>
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="h-auto px-0 text-sm"
-                onClick={() => navigate(`/design/${record.designTaskId}`)}
-              >
-                {record.designTaskNumber || "Відкрити дизайн-задачу"}
-              </Button>
-            </div>
-          ) : null}
-        </Card>
-
-        <Card className="border-border/60 p-4">
-          <div className="text-xs uppercase tracking-caps text-muted-foreground">Менеджер замовлення</div>
-          <div className="mt-2 flex items-center gap-3">
-            <AvatarBase
-              src={record.managerAvatarUrl ?? null}
-              name={record.managerLabel}
-              fallback={getInitials(record.managerLabel)}
-              size={36}
-              className="border-border/60"
-              fallbackClassName="text-2xs font-semibold"
-            />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-foreground">
-                {record.managerLabel || "Менеджер не призначений"}
-              </div>
-              <div className="text-xs text-muted-foreground">Відповідальний за замовлення</div>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="border-border/60 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-caps text-muted-foreground">
-              <Truck className="h-3.5 w-3.5" />
-              Доставка
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1 px-2 text-xs"
-              onClick={() => setDeliveryDialogOpen(true)}
-            >
-              <Pencil className="h-3 w-3" />
-              Змінити
-            </Button>
-          </div>
-          {orderDelivery?.deliveryType ? (
-            <>
-              <div className="mt-2 text-sm font-semibold text-foreground">
-                {DELIVERY_TYPE_OPTIONS.find((option) => option.id === orderDelivery.deliveryType)?.label ??
-                  orderDelivery.deliveryType}
-              </div>
-              {(() => {
-                const details = orderDelivery.deliveryDetails;
-                const location = [details.city, details.npDeliveryType === "address" ? details.street : details.address]
-                  .filter(Boolean)
-                  .join(", ");
-                const recipient = [details.contactName, details.contactPhone].filter(Boolean).join(" · ");
-                return (
-                  <>
-                    {location ? <div className="mt-1 text-sm text-foreground">{location}</div> : null}
-                    {recipient ? (
-                      <div className="mt-1 text-xs text-muted-foreground">Отримувач: {recipient}</div>
-                    ) : null}
-                    {details.payer ? (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Платить: {details.payer === "company" ? "ми" : "замовник"}
-                      </div>
-                    ) : null}
-                  </>
-                );
-              })()}
-            </>
-          ) : (
-            <div className="mt-2 text-sm text-muted-foreground">Спосіб доставки не вказаний</div>
-          )}
-          {record.packaging ? (
-            <div className="mt-3 border-t border-border/50 pt-3">
-              <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Пакування</div>
-              <div className="mt-1 text-sm text-foreground">{record.packaging}</div>
-            </div>
-          ) : null}
-          {record.source === "stored" ? (
-            <div className="mt-3 border-t border-border/50 pt-3">
-              {record.npTtnNumber ? (
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-2xs uppercase tracking-wide text-muted-foreground">ТТН Нової Пошти</div>
-                    <div className="font-mono text-sm font-semibold">{record.npTtnNumber}</div>
-                    {record.npTtnEstimatedDelivery ? (
-                      <div className="text-xs text-muted-foreground">Орієнтовно: {record.npTtnEstimatedDelivery}</div>
-                    ) : null}
-                    {ttnStatus ? <div className="text-xs font-medium text-foreground">{ttnStatus}</div> : null}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 px-2 text-xs"
-                    onClick={() => setTtnDialogOpen(true)}
-                  >
-                    Деталі
-                  </Button>
-                </div>
-              ) : (
+    <>
+    <div ref={layoutRootRef} className="@container/record text-foreground">
+      {/* Розкладка — та сама, що в картці прорахунку (QuoteDetailsPage): дві колонки
+          на всю висоту, коли їх вміщає сторінка; вужче права колонка стає вкладкою
+          «Деталі», а обговорення — шторкою. */}
+      <ThreadDockProvider
+        handleRef={threadDockRef}
+        onModeChange={(mode) => {
+          if (mode === "split") setActiveTab((tab) => (tab === "details" ? "launch" : tab));
+        }}
+      >
+      <div className="grid grid-cols-1 record-split:relative [--record-rail-w:21.25rem] record-wide:[--record-rail-w:23.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1fr)_var(--record-rail-w)] record-split:overflow-hidden">
+        <div className="flex min-w-0 flex-col record-split:h-full record-split:min-h-0 record-split:overflow-hidden">
+      <header className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-40 bg-background/95 backdrop-blur record-split:static record-split:shrink-0 record-split:bg-transparent record-split:backdrop-blur-none">
+        <div className="px-2 py-2 md:px-2.5 lg:px-3 2xl:px-4">
+          <div className="flex min-h-10 flex-wrap items-center gap-x-1.5 gap-y-2 sm:gap-x-3">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 lg:gap-3">
+              <HoverTip asChild label="До списку замовлень">
                 <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-1.5 text-xs"
-                  onClick={() => setTtnDialogOpen(true)}
-                  disabled={!orderDelivery?.deliveryType}
+                  variant="ghost"
+                  size="iconSm"
+                  onClick={() => navigate("/orders/production")}
+                  className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label="До списку замовлень"
                 >
-                  <PackageCheck className="h-3.5 w-3.5" />
-                  Створити ТТН
+                  <ArrowLeft className="h-4 w-4" />
                 </Button>
-              )}
-            </div>
-          ) : null}
-        </Card>
-      </div>
-
-      <Card className="border-border/60 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              {requiresCustomerDocuments ? "Умови СП" : "Умови оплати"}
-              {requiresCustomerDocuments ? (
-                <InfoHint title="Коли можна створити СП">
-                  <RequirementList checks={getSpecificationRequirementChecks(record)} />
-                </InfoHint>
-              ) : null}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {requiresCustomerDocuments
-                ? "СП доступна тільки для безготівки і після створення договору."
-                : "Готівка: передоплата не менше 50%, далі запуск у виробництво."}
-            </div>
-          </div>
-          {record.source === "stored" ? (
-            <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs" onClick={openSpecificationParamsDialog}>
-              <Pencil className="h-3.5 w-3.5" />
-              Змінити умови
-            </Button>
-          ) : null}
-        </div>
-        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="space-y-1">
-            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Тип оплати</div>
-            <div className="text-sm font-medium text-foreground">{record.paymentRail}</div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Умови оплати</div>
-            <div className="text-sm font-medium text-foreground">{formatPaymentBreakdown(record)}</div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Строки виробництва</div>
-            <div className="text-sm font-medium text-foreground">
-              {record.contractProductionDays ?? DEFAULT_PRODUCTION_WORK_DAYS} р.д.
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="flex h-4 items-center gap-1.5">
-              <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Умови доставки</div>
-              <IncotermsHint />
-            </div>
-            <div className="text-sm font-medium text-foreground">
-              {record.incotermsCode || DEFAULT_INCOTERMS}
-              {record.incotermsPlace ? (
-                <span className="font-normal text-muted-foreground">, {record.incotermsPlace}</span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-        {requiresCustomerDocuments ? (
-          specificationBlocker ? (
-            <div className="tone-warning-subtle mt-3 flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm">
-              <AlertTriangle className="tone-text-warning mt-0.5 h-4 w-4 shrink-0" />
-              <div>
-                <div className="tone-text-warning font-medium">{specificationBlocker}</div>
-                <div className="mt-1 text-muted-foreground">
-                  Наведи на іконку біля заголовка або подивись блок “Документи” справа: там показано конкретні умови, які блокують СП.
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="tone-success-subtle mt-3 flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm">
-              <CheckCircle2 className="tone-text-success h-4 w-4" />
-              <span className="tone-text-success font-medium">Умови СП виконані. Документ можна сформувати в блоці “Документи”.</span>
-            </div>
-          )
-        ) : null}
-      </Card>
-
-      <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
-        <Table variant="list" size="md">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-14 text-center">№</TableHead>
-              <TableHead>Товар</TableHead>
-              <TableHead className="w-20 text-center">Од.</TableHead>
-              <TableHead className="w-28 text-right">Кількість</TableHead>
-              <TableHead className="w-36 text-right">Ціна</TableHead>
-              <TableHead className="w-36 pr-6 text-right">Сума</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {record.items.map((item, index) => (
-              <TableRow key={item.id}>
-                <TableCell className="text-center font-medium text-muted-foreground">
-                  {item.position || index + 1}
-                </TableCell>
-                <TableCell className="font-medium text-foreground">
-                  <div className="flex items-center gap-3">
-                    {item.thumbUrl || item.imageUrl ? (
-                      <img
-                        src={item.thumbUrl || item.imageUrl || ""}
-                        alt={item.name}
-                        className="h-12 w-12 shrink-0 rounded-lg border border-border/60 object-cover bg-muted/20"
-                        loading="lazy"
-                      />
-                    ) : null}
-                    <div className="min-w-0">
-                      <div>{item.name}</div>
-                      {item.description ? (
-                        <div className="mt-0.5 line-clamp-2 text-xs font-normal text-muted-foreground">{item.description}</div>
-                      ) : null}
-                      {item.methodsSummary ? (
-                        <div className="mt-0.5 text-xs font-normal text-muted-foreground">Нанесення: {item.methodsSummary}</div>
-                      ) : null}
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center">{item.unit}</TableCell>
-                <TableCell className="text-right tabular-nums">{item.qty.toLocaleString("uk-UA")}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatOrderMoney(item.unitPrice, record.currency)}</TableCell>
-                <TableCell className="pr-6 text-right font-semibold tabular-nums text-foreground">
-                  {formatOrderMoney(item.lineTotal, record.currency)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <Card className="border-border/60 p-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Palette className="h-4 w-4 text-muted-foreground" />
-          Затверджені матеріали для виробництва
-        </div>
-        <div className="grid gap-4 xl:grid-cols-2">
-          {renderDesignAssetList("Візуал", record.approvedVisualizationAssets, {
-            openingAssetId,
-            onOpenAsset: (asset) => void handleOpenDesignAsset(asset),
-          })}
-          {renderDesignAssetList("Макет", record.approvedLayoutAssets, {
-            openingAssetId,
-            onOpenAsset: (asset) => void handleOpenDesignAsset(asset),
-          })}
-        </div>
-      </Card>
-
-      {/* Готівка без договору: панель лише там, де договір уже є. */}
-      {teamId && userId && (requiresCustomerDocuments || record.contractCreatedAt) ? (
-        <Suspense
-          fallback={
-            <Card className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Завантаження договорів…
-            </Card>
-          }
-        >
-        <ContractRevisionsPanel
-          teamId={teamId}
-          orderId={record.id}
-          currentUserId={userId}
-          isCeo={isCeo}
-          quoteNumber={record.quoteNumber}
-          initialDefaultSections={buildDefaultContractSections(buildContractRenderContextFromRecord(record))}
-          onOpenPreview={(sections) =>
-            openDocumentPrint("contract", { contractSections: sections })
-          }
-          onSnapshotRevision={async (revision) => {
-            try {
-              const [customerSignatoryNameGenitive, customerSignatoryRoleGenitive] = await Promise.all([
-                record.customerSignatoryName ? declineToGenitive(record.customerSignatoryName) : Promise.resolve(""),
-                record.customerSignatoryPosition ? declineToGenitive(record.customerSignatoryPosition) : Promise.resolve(""),
-              ]);
-              const html = buildOrderDocumentHtml(record, "contract", {
-                customerSignatoryNameGenitive,
-                customerSignatoryRoleGenitive,
-                contractSections: revision.sections,
-              });
-              const path = `${record.id}/v${revision.revisionNumber}.html`;
-              const { error: uploadError } = await supabase.storage
-                .from("contract-snapshots")
-                .upload(path, new Blob([html], { type: "text/html;charset=utf-8" }), {
-                  upsert: true,
-                  contentType: "text/html;charset=utf-8",
-                });
-              if (uploadError) {
-                console.error("Failed to upload contract snapshot", uploadError);
-                return null;
-              }
-              return { storageBucket: "contract-snapshots", storagePath: path };
-            } catch (snapshotError) {
-              console.error("Snapshot generation failed", snapshotError);
-              return null;
-            }
-          }}
-        />
-        </Suspense>
-      ) : null}
-        </div>
-
-      <aside className="space-y-5 xl:sticky xl:top-4 xl:self-start">
-        <Card className="border-border/60 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-foreground">Документи</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Тут показані саме умови для PDF-документів. Це окремо від чекліста переходу в замовлення.
-              </div>
-              {!requiresCustomerDocuments ? (
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Готівка: договір, СП і рахунок не оформлюються.
-                </div>
-              ) : null}
-            </div>
-            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-2xs">
-              {documentsReadyCount} / {documentsTotalCount}
-            </Badge>
-          </div>
-          <div className="mt-3 divide-y divide-border/60">
-            {documentActions.map((document) => {
-              const isCreated = document.actionMode === "open" && Boolean(document.createdDateLabel);
-              // Уже створений документ можна перестворити з іншими параметрами — і договір, і СП.
-              const openParamsDialog =
-                document.kind === "contract" && record.contractCreatedAt
-                  ? openContractParamsDialog
-                  : document.kind === "specification" && record.specificationCreatedAt
-                    ? openSpecificationParamsDialog
-                    : null;
-              // Лівий індикатор стану: зелена галка (створено/готово), бурштин (блокер), нейтральне коло (можна створити).
-              const StatusIcon =
-                document.actionMode === "blocked" ? AlertTriangle : document.actionMode === "open" ? CheckCircle2 : Circle;
-              const statusIconTone =
-                document.actionMode === "blocked"
-                  ? "tone-text-warning"
-                  : document.actionMode === "open"
-                    ? "tone-text-success"
-                    : "text-muted-foreground/70";
-              // Тихий вторинний рядок під назвою (для blocked — окремо нижче, з лінком виправлення).
-              // Договір підписується раз на замовника — на наступних замовленнях він
-              // успадковується, і це має бути видно, щоб ніхто не шукав «другий договір».
-              const inheritedContractLabel =
-                document.kind === "contract" && record.inheritedContractOrderNumber
-                  ? `Успадковано з ${record.inheritedContractOrderNumber}`
-                  : null;
-              const secondaryText =
-                inheritedContractLabel ??
-                (document.actionMode === "open"
-                  ? isCreated
-                    ? `Створено · ${document.createdDateLabel}`
-                    : document.statusLabel
-                  : document.actionMode === "create"
-                    ? "Можна створити"
-                    : null);
-              return (
-                <div
-                  key={document.kind}
-                  className="group flex items-start gap-3 rounded-md px-2 py-3 transition-colors hover:bg-muted/20"
-                >
-                  <StatusIcon className={cn("mt-0.5 h-4 w-4 shrink-0", statusIconTone)} />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-foreground">{document.title}</span>
-                      <InfoHint title={`${document.title}: що перевіряється`}>
-                        <p className="mb-2 text-muted-foreground">{document.hint}</p>
-                        <RequirementList checks={document.checks} />
-                      </InfoHint>
-                    </div>
-                    {document.actionMode === "blocked" ? (
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs leading-4 text-muted-foreground">
-                        <span>{document.blockedLabel}</span>
-                        {document.isRequisitesBlocker && document.kind === "contract" && record.customerId ? (
-                          <button
-                            type="button"
-                            onClick={() => void openCustomerEditor(record.customerId!)}
-                            className="inline-flex items-center gap-1 font-medium text-foreground underline decoration-dotted underline-offset-4 transition-colors hover:text-primary"
-                          >
-                            <Pencil className="h-3 w-3" />
-                            Виправити реквізити
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : secondaryText ? (
-                      <div className="mt-0.5 text-2xs leading-4 text-muted-foreground">{secondaryText}</div>
-                    ) : null}
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    {document.actionMode === "create" ? (
-                      <Button
-                        size="sm"
-                        className="gap-1 px-2.5 text-xs"
-                        onClick={() => handleDocumentAction(document.kind)}
-                      >
-                        <FilePlus2 className="h-3.5 w-3.5" />
-                        Створити
-                      </Button>
-                    ) : document.actionMode === "open" ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="gap-1 px-2 text-xs text-foreground hover:bg-muted/60"
-                          onClick={() => handleDocumentAction(document.kind)}
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                          Відкрити
-                        </Button>
-                        {openParamsDialog ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="w-7 shrink-0 p-0 text-muted-foreground hover:bg-muted/60"
-                                aria-label={`Більше дій: ${document.title}`}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-52">
-                              <DropdownMenuItem onClick={openParamsDialog}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Параметри й перестворити
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 border-t border-border/60 pt-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="text-sm font-semibold text-foreground">Відправити замовнику</div>
-              {record.contactTelegram ? (
-                <span className="rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-2xs text-muted-foreground">
-                  Telegram: {formatTelegramHandle(record.contactTelegram)}
-                </span>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={openEmailDraft} disabled={!record.contactEmail}>
-                <Mail className="mr-2 h-4 w-4" />
-                Email
-              </Button>
-              <Button size="sm" variant="outline" onClick={openTelegramDraft}>
-                <Send className="mr-2 h-4 w-4" />
-                Telegram
-              </Button>
-              <Button size="sm" variant="outline" onClick={openViberDraft} disabled={!record.contactPhone}>
-                <Phone className="mr-2 h-4 w-4" />
-                Viber
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="border-border/60 p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <InfoHint title="Чому тут 6/6, але документи можуть бути заблоковані">
-                  <p className="text-muted-foreground">
-                    Цей чекліст відповідає тільки за перехід із прорахунку в замовлення: контрагент, контакти, позиції і дизайн.
-                    Договір і СП мають додаткові юридичні умови, тому винесені в окремий блок “Документи”.
-                  </p>
-                </InfoHint>
-                Чекліст створення замовлення
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">Не плутати з готовністю Договору та СП.</div>
-            </div>
-            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-2xs">
-              {doneSteps} / {checklistTotalCount}
-            </Badge>
-          </div>
-          <div className="space-y-2">
-            {record.readinessSteps.map((step) => (
-              <div
-                key={step.label}
-                className={cn(
-                  "flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm",
-                  step.done ? "tone-success-subtle" : "tone-warning-subtle"
-                )}
+              </HoverTip>
+              <HoverCopyText
+                value={record.quoteNumber}
+                textClassName="tabular-nums text-[15px] font-medium tracking-wide text-foreground sm:text-[17px]"
+                successMessage="Номер замовлення скопійовано"
+                copyLabel="Скопіювати номер замовлення"
               >
-                {step.done ? (
-                  <CheckCircle2 className="tone-text-success mt-0.5 h-4 w-4 shrink-0" />
-                ) : (
-                  <AlertTriangle className="tone-text-warning mt-0.5 h-4 w-4 shrink-0" />
-                )}
-                <span>{step.label}</span>
-              </div>
-            ))}
+                {record.quoteNumber}
+              </HoverCopyText>
+            </div>
+            <div className="order-3 flex w-full flex-wrap items-center gap-1.5 lg:order-none lg:w-auto">
+              {/* Вузько права колонка схована у «Деталях» — замовника показуємо тут, щоб було видно, чиє це. */}
+              <span className="mr-1 min-w-0 max-w-full truncate text-sm font-medium text-foreground record-split:hidden">
+                {record.customerName}
+              </span>
+              <span className="rounded-md border border-border/70 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                {paymentMethodChip}
+              </span>
+              {termsChip ? (
+                <span className="tone-info rounded-md border px-2 py-0.5 text-xs font-semibold">{termsChip}</span>
+              ) : null}
+            </div>
+            <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
+              {teamId ? <ThreadDockButton /> : null}
+              {requiresCustomerDocuments ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    {/* На телефоні кнопка не влазить у рядок із номером; надсилання там у картці документів. */}
+                    <Button variant="outline" size="sm" className="hidden gap-1.5 sm:inline-flex">
+                      <Send className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Надіслати замовнику</span>
+                      <ChevronDown className="h-3 w-3 opacity-70" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onClick={openEmailDraft} disabled={!record.contactEmail}>
+                      <Mail className="mr-2 h-4 w-4" />
+                      Email
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={openTelegramDraft}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Telegram
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={openViberDraft} disabled={!record.contactPhone}>
+                      <Phone className="mr-2 h-4 w-4" />
+                      Viber
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              <OrderStatusControl
+                values={{
+                  orderStatus: record.orderStatus,
+                  paymentStatus: record.paymentStatus,
+                  deliveryStatus: record.deliveryStatus,
+                }}
+                busy={statusSaving}
+                readOnly={record.source !== "stored"}
+                onChange={(field, value) => void handleStatusChange(field, value)}
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="iconSm" aria-label="Ще дії із замовленням">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {openCustomerCard ? (
+                    <DropdownMenuItem onClick={openCustomerCard}>
+                      <Building2 className="mr-2 h-4 w-4" />
+                      Картка замовника
+                    </DropdownMenuItem>
+                  ) : null}
+                  <DropdownMenuItem onClick={() => setDeliveryDialogOpen(true)}>
+                    <Truck className="mr-2 h-4 w-4" />
+                    Доставка
+                  </DropdownMenuItem>
+                  {record.source === "stored" ? (
+                    <DropdownMenuItem onClick={() => setTtnDialogOpen(true)} disabled={!orderDelivery?.deliveryType}>
+                      <PackageCheck className="mr-2 h-4 w-4" />
+                      ТТН Нової пошти
+                    </DropdownMenuItem>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        </Card>
-      </aside>
-      </div>
         </div>
-      </PageCanvasBody>
+      </header>
+
+        <main
+          className={cn(
+            "min-w-0 px-2 pt-0 md:px-2.5 lg:px-3 record-split:flex record-split:h-full record-split:min-h-0 record-split:flex-1 record-split:flex-col record-split:overflow-hidden record-split:pb-0 2xl:px-4",
+            activeTab === "details" ? "pb-0" : "pb-10"
+          )}
+        >
+          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
+            <TabBar value={activeTab}>
+              {orderTabs.map((tab) => (
+                <TabBarItem
+                  key={tab.value}
+                  value={tab.value}
+                  onSelect={(next) => setActiveTab(next as OrderPageTab)}
+                  className={cn(tab.mobileOnly && "record-split:hidden")}
+                >
+                  <span>{tab.label}</span>
+                  {tab.badge ? (
+                    <span className="inline-flex h-[18px] min-w-[18px] max-w-[104px] items-center justify-center truncate rounded-md bg-muted px-1.5 text-2xs tabular-nums text-muted-foreground">
+                      {tab.badge}
+                    </span>
+                  ) : null}
+                </TabBarItem>
+              ))}
+            </TabBar>
+          </div>
+          <div className="space-y-4 record-split:-mr-3 record-split:min-h-0 record-split:flex-1 record-split:overflow-y-auto record-split:overscroll-contain record-split:pb-8 record-split:pr-3 record-split:pt-4 record-split:2xl:-mr-4 record-split:2xl:pr-4">
+            {activeTab === "launch" ? (
+              <>
+                <OrderLaunchPathCard
+                  record={record}
+                  termsSummary={[
+                    { label: "Оплата", value: termsChip ?? "не задано" },
+                    {
+                      label: "Виробництво",
+                      value: `${record.contractProductionDays ?? DEFAULT_PRODUCTION_WORK_DAYS} р.д.`,
+                    },
+                    { label: "Поставка", value: formatIncotermsLabel(record).replace(" (Incoterms 2020)", "") },
+                  ]}
+                  onEditTerms={record.source === "stored" ? openSpecificationParamsDialog : null}
+                />
+                <OrderDocumentsCard
+                  record={record}
+                  documentActions={documentActions}
+                  onAction={handleDocumentAction}
+                  onParams={(kind) =>
+                    kind === "contract" ? openContractParamsDialog() : openSpecificationParamsDialog()
+                  }
+                  onFixRequisites={openCustomerCard}
+                  onEmail={openEmailDraft}
+                  onTelegram={openTelegramDraft}
+                  onViber={openViberDraft}
+                />
+                {/* Готівка без договору: панель лише там, де договір уже є. */}
+                {teamId && userId && (requiresCustomerDocuments || record.contractCreatedAt) ? (
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center gap-2 rounded-xl border border-border/60 p-5 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Завантаження договорів…
+                      </div>
+                    }
+                  >
+                    <ContractRevisionsPanel
+                      teamId={teamId}
+                      orderId={record.id}
+                      currentUserId={userId}
+                      isCeo={isCeo}
+                      quoteNumber={record.quoteNumber}
+                      initialDefaultSections={buildDefaultContractSections(buildContractRenderContextFromRecord(record))}
+                      onOpenPreview={(sections) =>
+                        openDocumentPrint("contract", { contractSections: sections, markCreated: false })
+                      }
+                      onSnapshotRevision={async (revision) => {
+                        try {
+                          const [customerSignatoryNameGenitive, customerSignatoryRoleGenitive] = await Promise.all([
+                            record.customerSignatoryName ? declineToGenitive(record.customerSignatoryName) : Promise.resolve(""),
+                            record.customerSignatoryPosition ? declineToGenitive(record.customerSignatoryPosition) : Promise.resolve(""),
+                          ]);
+                          const html = buildOrderDocumentHtml(record, "contract", {
+                            customerSignatoryNameGenitive,
+                            customerSignatoryRoleGenitive,
+                            contractSections: revision.sections,
+                          });
+                          const path = `${record.id}/v${revision.revisionNumber}.html`;
+                          const { error: uploadError } = await supabase.storage
+                            .from("contract-snapshots")
+                            .upload(path, new Blob([html], { type: "text/html;charset=utf-8" }), {
+                              upsert: true,
+                              contentType: "text/html;charset=utf-8",
+                            });
+                          if (uploadError) {
+                            console.error("Failed to upload contract snapshot", uploadError);
+                            return null;
+                          }
+                          return { storageBucket: "contract-snapshots", storagePath: path };
+                        } catch (snapshotError) {
+                          console.error("Snapshot generation failed", snapshotError);
+                          return null;
+                        }
+                      }}
+                    />
+                  </Suspense>
+                ) : null}
+              </>
+            ) : null}
+            {activeTab === "items" ? <OrderItemsTable record={record} /> : null}
+            {activeTab === "materials" ? (
+              <OrderMaterialsTab
+                record={record}
+                openingAssetId={openingAssetId}
+                onOpenAsset={(asset) => void handleOpenDesignAsset(asset)}
+                onOpenDesignTask={(designTaskId) => navigate(`/design/${designTaskId}`)}
+              />
+            ) : null}
+            {activeTab === "delivery" ? (
+              <OrderDeliveryCard
+                record={record}
+                delivery={orderDelivery}
+                ttnStatus={ttnStatus}
+                onEditDelivery={() => setDeliveryDialogOpen(true)}
+                onOpenTtn={() => setTtnDialogOpen(true)}
+              />
+            ) : null}
+          </div>
+        </main>
+        </div>
+
+        <aside
+          className={cn(
+            "self-start px-4 pb-10 pt-2 md:px-5 lg:px-6 record-split:flex record-split:min-h-0 record-split:h-full record-split:flex-col record-split:self-stretch record-split:overflow-hidden record-split:border-l record-split:border-[hsl(var(--app-structure-divider))] record-split:px-0 record-split:pb-0 record-split:pt-0",
+            activeTab !== "details" && "record-stack:hidden"
+          )}
+        >
+          <div className="flex flex-col gap-2 record-split:h-full record-split:min-h-0 record-split:px-3 record-split:pt-3">
+            <QuotePartyCard
+              customerName={record.customerName}
+              customerLogoUrl={record.customerLogoUrl}
+              customerInitials={getInitials(record.customerName)}
+              managerName={record.managerLabel}
+              managerAvatarUrl={record.managerAvatarUrl}
+              managerInitials={getInitials(record.managerLabel)}
+              createdAt={record.createdAt}
+              deadlines={[
+                { label: "Запуск", short: "—", tone: "none", title: "Запуск: ще не запущено" },
+                {
+                  label: "Готовність",
+                  short: `${record.contractProductionDays ?? DEFAULT_PRODUCTION_WORK_DAYS} р.д.`,
+                  tone: "future",
+                  title: "Строк виробництва від запуску",
+                },
+                { label: "Відвантаження", short: "—", tone: "none", title: "Відвантаження: не вказано" },
+              ]}
+              extras={partyExtras}
+              onOpenParty={openCustomerCard ?? (() => undefined)}
+              onOpenDeadlines={() => setActiveTab("launch")}
+            />
+            <OrderPaymentCard record={record} />
+            {teamId ? (
+              <ThreadDock
+                className="min-h-0 flex-1 pb-4"
+                renderRail={(slot) => (
+                  <TaskThreadRail
+                    {...slot}
+                    // Замовлення з прорахунку говорить у нитці прорахунку (docs/TASK_CHAT_DESIGN.md):
+                    // уся історія справи лишається в одному місці.
+                    threadKey={record.linkedQuoteId ? threadKeyForQuote(record.linkedQuoteId) : threadKeyForOrder(record.id)}
+                    eventActions={THREAD_EVENT_ACTIONS}
+                    quoteId={record.linkedQuoteId}
+                    teamId={teamId}
+                    canManage={isCeo}
+                  />
+                )}
+              />
+            ) : null}
+          </div>
+        </aside>
+        <RecordRailResizer storageKey="tosho_order_rail_width" />
+      </div>
+      </ThreadDockProvider>
+    </div>
 
       <Dialog
         open={contractDialogOpen}
@@ -2756,7 +2158,7 @@ export default function OrdersProductionDetailsPage() {
                   paymentTerms: record.paymentTerms,
                 });
                 if (prepaymentError) {
-                  // Не setError: він ховає всю сторінку замовлення.
+                  // Помилка лишається у вікні, поруч із полем, яке треба виправити.
                   setSpecDialogError(prepaymentError);
                   return;
                 }
@@ -2808,7 +2210,7 @@ export default function OrdersProductionDetailsPage() {
                     await openDocumentPrint("specification", {}, nextRecord);
                   }
                 } catch (submitError: unknown) {
-                  setError(
+                  toast.error(
                     submitError instanceof Error ? submitError.message : "Не вдалося зберегти умови специфікації."
                   );
                 } finally {
@@ -2871,6 +2273,6 @@ export default function OrdersProductionDetailsPage() {
           }
         />
       ) : null}
-    </PageCanvas>
+    </>
   );
 }

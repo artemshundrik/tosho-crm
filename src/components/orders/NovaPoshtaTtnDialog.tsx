@@ -16,6 +16,7 @@ import {
   type AppIcon,
 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Link } from "react-router-dom";
 import {
   Dialog,
@@ -285,6 +286,8 @@ export function NovaPoshtaTtnDialog({
   const [calculating, setCalculating] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Скасування видаляє накладну в Новій пошті — без підтвердження це був один випадковий клік.
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [printingMarking, setPrintingMarking] = useState(false);
   const [createdTtn, setCreatedTtn] = useState<ExistingTtn | null>(null);
   const [trackStatus, setTrackStatus] = useState<string | null>(null);
@@ -685,7 +688,7 @@ export function NovaPoshtaTtnDialog({
                   <ExternalLink className="mr-2 h-4 w-4" /> Відстежити
                 </a>
               </Button>
-              <Button type="button" variant="ghost" className="text-destructive" onClick={handleDelete} disabled={deleting}>
+              <Button type="button" variant="ghost" className="text-destructive" onClick={() => setConfirmDeleteOpen(true)} disabled={deleting}>
                 {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                 Скасувати ТТН
               </Button>
@@ -1099,6 +1102,20 @@ export function NovaPoshtaTtnDialog({
           </div>
         ) : null}
       </DialogContent>
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title={`Скасувати ТТН ${shownTtn?.number ?? ""}?`}
+        description="Нова пошта видалить накладну, а із замовлення зникне її номер."
+        confirmLabel="Так, скасувати"
+        cancelLabel="Ні"
+        loading={deleting}
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={() => {
+          setConfirmDeleteOpen(false);
+          void handleDelete();
+        }}
+      />
     </Dialog>
   );
 }
