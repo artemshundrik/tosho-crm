@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { getOrderDocumentKinds } from "./orderDocumentRequirements";
+import type { DerivedOrderRecord } from "./orderRecords";
+import {
+  getMissingRequirementLabels,
+  getOrderDocumentKinds,
+  getSpecificationRequirementChecks,
+} from "./orderDocumentRequirements";
 
 const base = {
   paymentMethodId: "cash",
@@ -30,5 +35,21 @@ describe("getOrderDocumentKinds", () => {
       "invoice",
       "techCard",
     ]);
+  });
+});
+
+describe("СП без погодженого візуалу", () => {
+  it("не каже «Можна створити», коли друк однаково відмовить", () => {
+    const record = {
+      items: [{ id: "1" }],
+      paymentMethodId: "bank_uah",
+      paymentRail: "Безготівкові, грн.",
+      contractCreatedAt: "2026-10-14",
+      paymentTerms: "70_30",
+      incotermsCode: "FCA",
+      hasApprovedVisualization: false,
+    } as unknown as DerivedOrderRecord;
+    const labels = getMissingRequirementLabels(getSpecificationRequirementChecks(record));
+    expect(labels).toContain("Погоджена візуалізація");
   });
 });

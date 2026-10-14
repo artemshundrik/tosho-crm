@@ -81,6 +81,11 @@ export const getSpecificationRequirementChecks = (record: DerivedOrderRecord): R
     help: "Спочатку натисни PDF у рядку Договір. Після відкриття договору CRM позначить його створеним і розблокує СП.",
   },
   {
+    label: "Погоджена візуалізація",
+    done: record.hasApprovedVisualization,
+    help: "СП друкується з погодженим візуалом. Без нього рядок казав «Можна створити», а друк відмовляв.",
+  },
+  {
     label: "Умови оплати",
     done: hasValue(record.paymentTerms),
     help: "Наприклад 50/50 або 70/30. Береться з блоку умов СП у цьому замовленні.",
@@ -150,4 +155,128 @@ export const getOrderDocumentKinds = (
     ...(record.invoiceCreatedAt || record.invoiceNumber ? (["invoice"] as const) : []),
     "techCard",
   ];
+};
+
+// Коротка дата для бейджа «Створено · 12.05».
+export const formatShortCreatedDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
+
+// actionMode керує кнопкою рядка:
+//  'blocked' — даних/умов не вистачає, дії нема (лише причина);
+//  'create'  — все готово, документ ще не створено → кнопка «Створити»;
+//  'open'    — документ створено / готовий до генерації → кнопка «Відкрити PDF».
+export type DocumentActionMode = "blocked" | "create" | "open";
+
+export const getDocumentActionState = (
+  record: DerivedOrderRecord,
+  kind: OrderDocumentKind
+): {
+  title: string;
+  ready: boolean;
+  created?: boolean;
+  statusLabel: string;
+  statusReady: boolean;
+  blockedLabel: string | null;
+  checks: RequirementCheck[];
+  hint: string;
+  actionMode: DocumentActionMode;
+  createdDateLabel: string | null;
+  isRequisitesBlocker: boolean;
+} => {
+  if (kind === "contract") {
+    const checks = getContractRequirementChecks(record);
+    const missing = getMissingRequirementLabels(checks);
+    const ready = missing.length === 0;
+    const created = Boolean(record.contractCreatedAt);
+    const actionMode: DocumentActionMode = !ready ? "blocked" : created ? "open" : "create";
+    return {
+      title: "Договір",
+      ready,
+      created,
+      statusLabel: created ? "Створено" : ready ? "Можна створити" : "Немає даних",
+      statusReady: ready,
+      blockedLabel: missing.length > 0 ? `Не вистачає: ${missing.join(", ")}` : null,
+      checks,
+      hint:
+        "Договір використовує реквізити з картки Замовника і контактні дані з замовлення. Якщо тут є жовті пункти, їх треба виправити в картці Замовника або в замовленні.",
+      actionMode,
+      createdDateLabel: formatShortCreatedDate(record.contractCreatedAt),
+      isRequisitesBlocker: !ready,
+    };
+  }
+
+  if (kind === "specification") {
+    const checks = getSpecificationRequirementChecks(record);
+    const missing = getMissingRequirementLabels(checks);
+    const ready = missing.length === 0;
+    // Правило: СП не можна створити без Договору. Якщо саме його не вистачає —
+    // показуємо явну й коротку підказку замість списку всіх missing.
+    const contractMissing = !record.contractCreatedAt;
+    const created = Boolean(record.specificationCreatedAt);
+    const blockedLabel = contractMissing
+      ? "Спочатку створіть Договір — без нього СП недоступна."
+      : missing.length > 0
+        ? `Не виконано: ${missing.join(", ")}`
+        : null;
+    const actionMode: DocumentActionMode =
+      contractMissing || !ready ? "blocked" : created ? "open" : "create";
+    return {
+      title: "СП",
+      ready,
+      created,
+      statusLabel: created
+        ? "Створено"
+        : ready
+          ? "Можна створити"
+          : contractMissing
+            ? "Очікує Договір"
+            : "Потрібні умови",
+      statusReady: ready,
+      blockedLabel,
+      checks,
+      hint:
+        "СП має окремі правила: тільки безготівка, тільки після створення договору, і з умовами оплати та Incoterms із замовлення.",
+      actionMode,
+      createdDateLabel: formatShortCreatedDate(record.specificationCreatedAt),
+      isRequisitesBlocker: false,
+    };
+  }
+
+  if (kind === "invoice") {
+    const checks = getInvoiceRequirementChecks(record);
+    const missing = getMissingRequirementLabels(checks);
+    const ready = missing.length === 0;
+    return {
+      title: "Рахунок",
+      ready,
+      statusLabel: ready ? "Готовий" : "Немає позицій",
+      statusReady: ready,
+      blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
+      checks,
+      hint: "Рахунок формується з товарних позицій замовлення і не потребує створеного договору.",
+      actionMode: ready ? "open" : "blocked",
+      createdDateLabel: null,
+      isRequisitesBlocker: false,
+    };
+  }
+
+  const checks = getTechCardRequirementChecks(record);
+  const missing = getMissingRequirementLabels(checks);
+  const ready = missing.length === 0;
+  return {
+    title: "Техкарта",
+    ready,
+    statusLabel: ready ? "Готова" : "Очікує дизайн",
+    statusReady: ready,
+    blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
+    checks,
+    hint: "Техкарта доступна, коли є позиції і затверджені виробничі матеріали: візуал та макет.",
+    actionMode: ready ? "open" : "blocked",
+    createdDateLabel: null,
+    isRequisitesBlocker: false,
+  };
 };
