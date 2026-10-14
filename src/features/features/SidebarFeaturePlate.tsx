@@ -23,6 +23,13 @@ import { HoverTip } from "@/components/ui/hover-tip";
  * в меню акаунта.
  */
 
+/**
+ * Вимикач плашки (рішення CEO 2026-10-14): нею не користуються, вона лише
+ * висить у сайдбарі. Код лишаємо — повернути показ значить поставити true.
+ * Вимкнено на обгортці, а не всередині, щоб не тягнути запит прогресу даремно.
+ */
+const PLATE_ENABLED = false;
+
 /** Скільки днів після появи фіча вважається приводом для анонсу. */
 const ANNOUNCE_DAYS = 14;
 
@@ -32,6 +39,11 @@ type Mode =
   | { kind: "hidden" };
 
 export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean }) {
+  if (!PLATE_ENABLED) return null;
+  return <FeaturePlate collapsed={collapsed} />;
+}
+
+function FeaturePlate({ collapsed }: { collapsed: boolean }) {
   const navigate = useNavigate();
   const { viewUserId, moduleAccess, accessRole, jobRole } = useAuth();
   const { data: adoption } = useMyFeatureAdoption(viewUserId);

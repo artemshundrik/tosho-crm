@@ -11,7 +11,14 @@ import { cn } from "@/lib/utils";
  * із дизайн-системи (tone-accent), не власні кольори: інакше мітка розійдеться
  * з рештою акцентних поверхонь при першій же зміні палітри.
  */
+/**
+ * Вимикач мітки (рішення CEO 2026-10-14): «Нове» висіло на половині меню й
+ * нікого нікуди не вело. Код лишаємо — повернути показ значить поставити true.
+ */
+const NEW_BADGE_ENABLED = false;
+
 export function SidebarNewBadge({ collapsed, className }: { collapsed: boolean; className?: string }) {
+  if (!NEW_BADGE_ENABLED) return null;
   if (collapsed) {
     return (
       <span
