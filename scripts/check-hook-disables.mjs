@@ -59,7 +59,7 @@ import { join } from "node:path";
  * синхронізації редагування з вибраною людиною — заглушка зникла з нею.
  * Опускаємо, щоб ратчет тримав новий рівень, а не старий дозвіл.
  */
-const ALLOWED_HOOK_DISABLES = 29;
+const ALLOWED_HOOK_DISABLES = 28;
 
 const ROOT = "src";
 const RULE_PATTERN = /eslint-disable(?:-next-line|-line)?([^\n*]*)/g;

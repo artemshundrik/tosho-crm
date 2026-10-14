@@ -31,15 +31,15 @@ export type LaunchPathInput = Pick<
 export type LaunchStepState = "done" | "current" | "todo" | "locked";
 export type LaunchStep = { key: string; title: string; note: string; state: LaunchStepState };
 
-const PREPAYMENT_RECEIVED = new Set(["partially_paid", "fully_paid", "awaiting_balance"]);
-const LAUNCHED = new Set(["production_started", "in_production", "ready", "shipped", "completed"]);
-const SHIPPED = new Set(["shipped", "completed"]);
+export const PREPAYMENT_RECEIVED = new Set(["partially_paid", "fully_paid", "awaiting_balance"]);
+export const LAUNCHED_ORDER_STATUSES = new Set(["production_started", "in_production", "ready", "shipped", "completed"]);
+export const SHIPPED_ORDER_STATUSES = new Set(["shipped", "completed"]);
 
 /**
  * Відсотки «наперед / доплата»: явні з замовлення, а для старих — з коду умов
  * (`payment_terms`: «70/30», «100_prepaid»…). null — умов немає взагалі.
  */
-const resolveBreakdown = (input: LaunchPathInput): { prepayment: number; balance: number } | null => {
+export const resolveBreakdown = (input: LaunchPathInput): { prepayment: number; balance: number } | null => {
   if (typeof input.prepaymentPct === "number" && typeof input.balancePct === "number") {
     return { prepayment: input.prepaymentPct, balance: input.balancePct };
   }
@@ -48,14 +48,14 @@ const resolveBreakdown = (input: LaunchPathInput): { prepayment: number; balance
 };
 
 /** 0% наперед і доплата ПІСЛЯ відвантаження — відтермінування від дати ВН. */
-const isFullyDeferred = (input: LaunchPathInput) =>
+export const isFullyDeferred = (input: LaunchPathInput) =>
   resolveBreakdown(input)?.prepayment === 0 && input.balanceTiming === "after_shipment";
 
 /** 0% наперед, але платять по готовності, до відвантаження («100% після готовності»). */
 const isPaidOnReadiness = (input: LaunchPathInput) =>
   resolveBreakdown(input)?.prepayment === 0 && input.balanceTiming !== "after_shipment";
 
-const balanceDaysShort = (input: LaunchPathInput) =>
+export const balanceDaysShort = (input: LaunchPathInput) =>
   formatBalanceDaysShort(input.balanceDaysAfterShipment ?? 3, input.balanceDaysKind);
 
 export const formatPaymentTermsChip = (input: LaunchPathInput): string | null => {
@@ -71,7 +71,7 @@ export const buildLaunchPath = (
   input: LaunchPathInput
 ): { heading: string; steps: LaunchStep[]; blocker: string | null } => {
   const prepaymentReceived = PREPAYMENT_RECEIVED.has(input.paymentStatus);
-  const launched = LAUNCHED.has(input.orderStatus);
+  const launched = LAUNCHED_ORDER_STATUSES.has(input.orderStatus);
   const terms = formatPaymentTermsChip(input);
   const breakdown = resolveBreakdown(input);
   const prepaymentNote = breakdown ? `${breakdown.prepayment}% до запуску` : "За умовами замовлення";
@@ -85,8 +85,8 @@ export const buildLaunchPath = (
   const shipmentStep: LaunchStep = {
     key: "shipment",
     title: "Відвантаження",
-    note: SHIPPED.has(input.orderStatus) ? "Відвантажено" : "Лише коли надійшла вся сума",
-    state: SHIPPED.has(input.orderStatus) ? "done" : "todo",
+    note: SHIPPED_ORDER_STATUSES.has(input.orderStatus) ? "Відвантажено" : "Лише коли надійшла вся сума",
+    state: SHIPPED_ORDER_STATUSES.has(input.orderStatus) ? "done" : "todo",
   };
 
   if (!isCashlessPaymentMethod(input.paymentMethodId, input.paymentRail)) {

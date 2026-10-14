@@ -1,0 +1,205 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  getOrderDocMarks,
+  getOrderNextStep,
+  getOrderPaidShare,
+  isMyTurn,
+  summarizeOrderStages,
+  type OrderListInput,
+} from "./orderListStages";
+
+/**
+ * Список замовлень (REQ-322#p12): згори етапи, у рядку — що далі й чий хід.
+ * Погоджень, підписів і рахунку через бухгалтерію ще немає в даних (p6–p10),
+ * тож етап виводиться зі статусів і створених документів.
+ */
+const cashless: OrderListInput = {
+  paymentMethodId: "bank_uah",
+  paymentRail: "Безготівкові, грн.",
+  total: 10000,
+  prepaymentPct: 70,
+  balancePct: 30,
+  balanceTiming: "before_shipment",
+  balanceDaysAfterShipment: null,
+  balanceDaysKind: "working",
+  paymentTerms: "70/30",
+  paymentStatus: "awaiting_payment",
+  orderStatus: "approved",
+  deliveryStatus: "not_shipped",
+  designStatuses: [],
+  contractCreatedAt: null,
+  specificationCreatedAt: null,
+  invoiceCreatedAt: null,
+  inheritedContractOrderNumber: null,
+  managerUserId: "me",
+};
+
+const withDocs = { ...cashless, contractCreatedAt: "2026-10-14", specificationCreatedAt: "2026-10-14" };
+const cash: OrderListInput = { ...cashless, paymentMethodId: "cash", paymentRail: "Готівкові / на карту" };
+
+describe("getOrderNextStep", () => {
+  it("безготівка без договору — оформлення, хід менеджера", () => {
+    expect(getOrderNextStep(cashless)).toMatchObject({
+      stage: "setup",
+      turn: "manager",
+      title: "Створити договір",
+      actionLabel: "Договір",
+    });
+  });
+
+  it("договір є, СП немає — створити СП", () => {
+    expect(getOrderNextStep({ ...cashless, contractCreatedAt: "2026-10-14" })).toMatchObject({
+      stage: "setup",
+      title: "Створити СП",
+      actionLabel: "Створити СП",
+    });
+  });
+
+  it("документи є, передоплати немає — чекаємо замовника, з сумою", () => {
+    expect(getOrderNextStep(withDocs)).toMatchObject({
+      stage: "customer",
+      turn: "customer",
+      title: "Передоплата 70%",
+      amountDue: 7000,
+      actionLabel: null,
+    });
+  });
+
+  it("передоплата є — можна запускати", () => {
+    expect(getOrderNextStep({ ...withDocs, paymentStatus: "partially_paid" })).toMatchObject({
+      stage: "setup",
+      turn: "manager",
+      title: "Можна запускати",
+      actionLabel: "Запустити",
+    });
+  });
+
+  it("готівка без передоплати — чекаємо замовника без документів", () => {
+    expect(getOrderNextStep(cash)).toMatchObject({ stage: "customer", title: "Передоплата 70%" });
+  });
+
+  it("у виробництві — хід виробництва", () => {
+    expect(getOrderNextStep({ ...withDocs, orderStatus: "in_production" })).toMatchObject({
+      stage: "production",
+      turn: "production",
+    });
+  });
+
+  it("готове без доплати до відвантаження — хід замовника", () => {
+    expect(getOrderNextStep({ ...withDocs, orderStatus: "ready", paymentStatus: "partially_paid" })).toMatchObject({
+      stage: "shipment",
+      turn: "customer",
+      title: "Доплата 30% — без неї не відвантажуємо",
+      amountDue: 3000,
+    });
+  });
+
+  it("готове й оплачене — відвантажити", () => {
+    expect(getOrderNextStep({ ...withDocs, orderStatus: "ready", paymentStatus: "fully_paid" })).toMatchObject({
+      stage: "shipment",
+      turn: "manager",
+      actionLabel: "Відвантажити",
+    });
+  });
+
+  it("відвантажене з відтермінуванням — чекаємо оплату", () => {
+    const deferred = {
+      ...withDocs,
+      prepaymentPct: 0,
+      balancePct: 100,
+      balanceTiming: "after_shipment" as const,
+      balanceDaysAfterShipment: 14,
+      balanceDaysKind: "calendar" as const,
+      orderStatus: "shipped",
+    };
+    expect(getOrderNextStep(deferred)).toMatchObject({
+      stage: "awaitingPayment",
+      turn: "customer",
+      title: "Оплата після ВН",
+      detail: "до 14 к.д.",
+      amountDue: 10000,
+    });
+  });
+
+  it("відвантажене й оплачене — завершене; completed — теж", () => {
+    expect(getOrderNextStep({ ...withDocs, orderStatus: "shipped", paymentStatus: "fully_paid" }).stage).toBe("done");
+    expect(getOrderNextStep({ ...withDocs, orderStatus: "completed" }).stage).toBe("done");
+  });
+
+  it("скасоване — поза етапами", () => {
+    expect(getOrderNextStep({ ...withDocs, designStatuses: ["cancelled"] })).toMatchObject({
+      stage: "cancelled",
+      turn: null,
+    });
+  });
+});
+
+describe("getOrderPaidShare", () => {
+  it("скільки отримано за статусом", () => {
+    expect(getOrderPaidShare(cashless)).toEqual({ pct: 0, label: "0 з 70%" });
+    expect(getOrderPaidShare({ ...cashless, paymentStatus: "partially_paid" })).toEqual({ pct: 70, label: "70% є" });
+    expect(getOrderPaidShare({ ...cashless, paymentStatus: "fully_paid" })).toEqual({ pct: 100, label: "Оплачено" });
+  });
+
+  it("готове з частковою оплатою — чекає доплату", () => {
+    expect(getOrderPaidShare({ ...cashless, paymentStatus: "partially_paid", orderStatus: "ready" })).toEqual({
+      pct: 70,
+      label: "чекає 30%",
+    });
+  });
+
+  it("відтермінування — строк після ВН", () => {
+    expect(
+      getOrderPaidShare({
+        ...cashless,
+        prepaymentPct: 0,
+        balancePct: 100,
+        balanceTiming: "after_shipment",
+        balanceDaysAfterShipment: 30,
+        balanceDaysKind: "calendar",
+      })
+    ).toEqual({ pct: 0, label: "30 к.д. після ВН" });
+  });
+});
+
+describe("getOrderDocMarks", () => {
+  it("на готівці літер немає", () => {
+    expect(getOrderDocMarks(cash)).toBeNull();
+  });
+
+  it("Д/С/Р/В зі створених документів; успадкований договір — готовий", () => {
+    const marks = getOrderDocMarks({
+      ...cashless,
+      inheritedContractOrderNumber: "ZM-0926-0001",
+      invoiceCreatedAt: "2026-10-14",
+    });
+    expect(marks?.map((mark) => `${mark.letter}:${mark.ready}`)).toEqual(["Д:true", "С:false", "Р:true", "В:false"]);
+  });
+});
+
+describe("summarizeOrderStages", () => {
+  it("рахує активні етапи й отримане, завершені й скасовані — окремо", () => {
+    const summary = summarizeOrderStages([
+      cashless,
+      { ...withDocs, paymentStatus: "partially_paid", orderStatus: "in_production" },
+      { ...withDocs, orderStatus: "completed", paymentStatus: "fully_paid" },
+      { ...withDocs, designStatuses: ["cancelled"] },
+    ]);
+    expect(summary.activeCount).toBe(2);
+    expect(summary.activeTotal).toBe(20000);
+    expect(summary.receivedTotal).toBe(7000);
+    expect(summary.doneCount).toBe(1);
+    expect(summary.byStage.setup).toEqual({ count: 1, total: 10000 });
+    expect(summary.byStage.production).toEqual({ count: 1, total: 10000 });
+  });
+});
+
+describe("isMyTurn", () => {
+  it("лише менеджерський хід на своєму замовленні", () => {
+    expect(isMyTurn(cashless, "me")).toBe(true);
+    expect(isMyTurn(cashless, "other")).toBe(false);
+    expect(isMyTurn(withDocs, "me")).toBe(false);
+    expect(isMyTurn(cashless, null)).toBe(false);
+  });
+});

@@ -146,6 +146,7 @@ const OrdersCustomersPage = lazyWithRetry(() => import("./pages/OrdersCustomersP
 const OrdersEstimateDetailsPage = lazyWithRetry(() => import("./pages/OrdersEstimateDetailsPage"));
 const ProductCatalogPage = lazyWithRetry(() => import("./features/catalog/ProductCatalogPage"));
 const OrdersProductionPage = lazyWithRetry(() => import("./pages/OrdersProductionPage"));
+const OrdersQueuePage = lazyWithRetry(() => import("./pages/OrdersQueuePage"));
 const OrdersProductionDetailsRoutePage = lazyWithRetry(() => import("./pages/OrdersProductionDetailsRoutePage"));
 const OrdersReadyToShipPage = lazyWithRetry(() => import("./pages/OrdersReadyToShipPage"));
 const LogisticsPage = lazyWithRetry(() => import("./pages/LogisticsPage"));
@@ -349,6 +350,7 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/orders/estimates", scope: "page", group: "orders", test: (value) => value === "/orders/estimates" },
     { pattern: "/orders/estimates/:id", scope: "details", group: "orders", test: (value) => /^\/orders\/estimates\/[^/]+$/.test(value) },
     { pattern: "/orders/production", scope: "page", group: "orders", test: (value) => value === "/orders/production" },
+    { pattern: "/orders/queue", scope: "page", group: "orders", test: (value) => value === "/orders/queue" },
     { pattern: "/orders/production/:id", scope: "details", group: "orders", test: (value) => /^\/orders\/production\/[^/]+$/.test(value) },
     { pattern: "/orders/ready-to-ship", scope: "page", group: "orders", test: (value) => value.startsWith("/orders/ready-to-ship") },
     { pattern: "/catalog/products", scope: "page", group: "catalog", test: (value) => value.startsWith("/catalog/products") },
@@ -1052,6 +1054,16 @@ function AppRoutes() {
             <ModuleRouteGate moduleKey="orders">
               <RouteSuspense shell>
                 <OrdersProductionPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="orders/queue"
+          element={
+            <ModuleRouteGate moduleKey="orders">
+              <RouteSuspense shell>
+                <OrdersQueuePage />
               </RouteSuspense>
             </ModuleRouteGate>
           }

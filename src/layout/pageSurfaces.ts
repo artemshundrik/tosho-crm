@@ -192,9 +192,9 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "quote-details", path: "/orders/estimates/:id", page: "src/pages/OrdersEstimateDetailsPage.tsx", toolbar: "none", shape: "quote-record", canvas: true },
   { id: "quotes", path: "/orders/estimates", page: "src/pages/OrdersEstimatesPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: boardColumnCount("quotes"), columnWidth: QUOTES_COLUMN_WIDTH }, view: { storageKey: "quotes_view_mode", boardValue: "kanban", fallbackShape: "table" } },
   { id: "order-details", path: "/orders/production/:id", page: "src/pages/OrdersProductionDetailsRoutePage.tsx", toolbar: "none", shape: "detail", canvas: true, maxWidth: 1760 },
-  // «Замовлення» відкриваються реєстром: канбан там вмикають вручну й вибір не
-  // зберігається, тож типова форма розділу — таблиця, а не дошка.
+  // Канбан замовлень прибрано (REQ-322#p12): список — таблиця зі смугою етапів.
   { id: "orders", path: "/orders/production", page: "src/pages/OrdersProductionPage.tsx", toolbar: "full", shape: "table", canvas: true },
+  { id: "orders-queue", path: "/orders/queue", page: "src/pages/OrdersQueuePage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "ready-to-ship", path: "/orders/ready-to-ship", page: "src/pages/OrdersReadyToShipPage.tsx", toolbar: "none", shape: "list" },
 
   { id: "catalog", path: "/catalog/products", page: "src/features/catalog/ProductCatalogPage/index.tsx", toolbar: "none", shape: "split" },

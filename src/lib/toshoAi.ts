@@ -217,7 +217,13 @@ const ROUTE_RULES: ToShoAiRouteRule[] = [
   {
     test: (pathname) => pathname === "/orders/production",
     title: "Замовлення",
-    routeLabel: "Черга замовлень",
+    routeLabel: "Список замовлень",
+    domainHint: "orders",
+  },
+  {
+    test: (pathname) => pathname === "/orders/queue",
+    title: "Черга з прорахунків",
+    routeLabel: "Черга з прорахунків",
     domainHint: "orders",
   },
   {

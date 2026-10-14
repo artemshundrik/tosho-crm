@@ -326,6 +326,8 @@ export type DerivedOrderRecord = {
   customerName: string;
   customerLogoUrl: string | null;
   partyType: "customer" | "lead";
+  /** Хто веде замовлення — для «Мій хід» у списку. null — не призначено. */
+  managerUserId: string | null;
   managerLabel: string;
   managerAvatarUrl: string | null;
   createdAt: string | null;
@@ -1143,6 +1145,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
         "Контрагент без назви",
       customerLogoUrl: customer?.logo_url?.trim?.() ?? lead?.logo_url?.trim?.() ?? quote.customer_logo_url?.trim?.() ?? null,
       partyType,
+      managerUserId: quote.assigned_to ?? null,
       managerLabel: manager?.label ?? "Менеджер не призначений",
       managerAvatarUrl: manager?.avatarUrl ?? null,
       createdAt: quote.created_at ?? null,
@@ -1595,6 +1598,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
           order.customer_logo_url?.trim?.() ??
           null,
         partyType: order.party_type === "lead" ? "lead" : "customer",
+        managerUserId: order.manager_user_id ?? null,
         managerLabel: manager?.label ?? order.manager_label?.trim?.() ?? "Менеджер не призначений",
         managerAvatarUrl: manager?.avatarUrl ?? null,
         createdAt: order.created_at ?? null,

@@ -20,6 +20,7 @@ const routeImporters: RoutePreloadEntry[] = [
   { key: "quote-details", pattern: /^\/orders\/estimates\/[^/]+$/, importer: () => import("../pages/OrdersEstimateDetailsPage"), heavy: true },
   { pattern: /^\/orders\/customers$/, importer: () => import("../pages/OrdersCustomersPage"), heavy: true },
   { pattern: /^\/orders\/production$/, importer: () => import("../pages/OrdersProductionPage"), heavy: true },
+  { pattern: /^\/orders\/queue$/, importer: () => import("../pages/OrdersQueuePage"), heavy: true },
   { pattern: /^\/orders\/ready-to-ship$/, importer: () => import("../pages/OrdersReadyToShipPage"), heavy: true },
   { pattern: /^\/catalog\/products$/, importer: () => import("../features/catalog/ProductCatalogPage"), heavy: true },
   { pattern: /^\/logistics$/, importer: () => import("../pages/LogisticsPage"), heavy: true },

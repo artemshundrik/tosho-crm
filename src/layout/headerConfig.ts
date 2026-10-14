@@ -65,6 +65,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.ordersProduction,
       showPageHeader: false,
     };
+  if (pathname.startsWith(ROUTES.ordersQueue))
+    return {
+      title: "Черга з прорахунків",
+      subtitle: "Затверджені прорахунки, з яких ще не зроблено замовлення.",
+      breadcrumbLabel: "Черга з прорахунків",
+      breadcrumbTo: ROUTES.ordersQueue,
+      showPageHeader: false,
+    };
   if (pathname.startsWith(ROUTES.ordersReadyToShip))
     return {
       title: "Готові до відвантаження",

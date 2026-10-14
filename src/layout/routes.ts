@@ -17,6 +17,7 @@ export const ROUTES = {
   ordersEstimates: "/orders/estimates",
   ordersCustomers: "/orders/customers",
   ordersProduction: "/orders/production",
+  ordersQueue: "/orders/queue",
   ordersReadyToShip: "/orders/ready-to-ship",
   catalogProducts: "/catalog/products",
 
