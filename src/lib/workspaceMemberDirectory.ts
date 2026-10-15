@@ -729,7 +729,11 @@ export async function listWorkspaceMemberDirectory(workspaceId: string): Promise
   const resolved = applyTodayAbsence(rows, absenceToday).sort((a, b) =>
     a.displayName.localeCompare(b.displayName, "uk")
   );
-  workspaceDirectoryCache.set(workspaceId, resolved);
+  // Порожній довідник — не відповідь, а збій: у робочому просторі завжди є
+  // хоча б сама людина, що питає. Закешувати його означало б тримати порожні
+  // списки людей до кінця дня — так менеджер не міг вибрати виконавця
+  // дизайн-задачі, хоч база віддавала всіх. Хай наступний виклик спитає знову.
+  if (resolved.length > 0) workspaceDirectoryCache.set(workspaceId, resolved);
   return resolved;
   })();
 
@@ -762,7 +766,8 @@ export async function listWorkspaceMembersForDisplay(workspaceId: string): Promi
       };
     });
     const resolved = resolvedEntries.sort((a, b) => a.label.localeCompare(b.label, "uk"));
-    workspaceDisplayDirectoryCache.set(workspaceId, resolved);
+    // Та сама причина, що й у listWorkspaceMemberDirectory: порожнє не кешуємо.
+    if (resolved.length > 0) workspaceDisplayDirectoryCache.set(workspaceId, resolved);
     return resolved;
   })();
 

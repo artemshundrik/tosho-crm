@@ -71,7 +71,10 @@ export async function resolveWorkspaceId(
 
   return singleFlight(`ws:${cacheKey}`, async () => {
     const resolved = await lookupWorkspaceId(userId);
-    workspaceIdCache.set(cacheKey, resolved);
+    // null не кешуємо: це «не вдалося з'ясувати» (сесія ще не підхопилась,
+    // мережа), а не «людина без простору». Закешований null гасив до
+    // перезавантаження все, що від нього залежить, — зокрема списки людей.
+    if (resolved) workspaceIdCache.set(cacheKey, resolved);
     return resolved;
   });
 }
@@ -120,7 +123,6 @@ async function lookupWorkspaceId(userId?: string | null): Promise<string | null>
     }
   }
 
-  workspaceIdCache.set(userId, null);
   return null;
 }
 

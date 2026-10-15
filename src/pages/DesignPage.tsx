@@ -920,6 +920,8 @@ export default function DesignPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
+  /** Смикається, коли вікно створення відкрили з порожніми списками людей. */
+  const [membersReloadKey, setMembersReloadKey] = useState(0);
   const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
   const { skeletonShown: boardSkeletonShown, skeletonOpaque } = useDeferredHeavySurface({
     alreadyMounted: designBodyMountedThisSession,
@@ -1414,7 +1416,24 @@ export default function DesignPage() {
       }
     };
     void loadMembers();
-  }, [userId, effectiveTeamId]);
+  }, [userId, effectiveTeamId, membersReloadKey]);
+
+  // Порожній список людей у вікні створення — це збій завантаження, а не
+  // порожня команда (сама людина, що створює, теж у ньому мала б бути).
+  // Перепитуємо базу на відкритті, інакше вибрати виконавця не можна аж до
+  // перезавантаження сторінки.
+  // Один повтор на одне відкриття: якщо й він порожній, далі не смикаємо.
+  const membersRetriedForOpenRef = useRef(false);
+  useEffect(() => {
+    if (!createDialogOpen) {
+      membersRetriedForOpenRef.current = false;
+      return;
+    }
+    if (membersLoading || membersRetriedForOpenRef.current) return;
+    if (designerMembers.length > 0 && managerMembers.length > 0) return;
+    membersRetriedForOpenRef.current = true;
+    setMembersReloadKey((key) => key + 1);
+  }, [createDialogOpen, membersLoading, designerMembers.length, managerMembers.length]);
 
   useEffect(() => {
     const loadCustomers = async () => {
@@ -5553,7 +5572,9 @@ export default function DesignPage() {
                         </HoverTip>
                       ))
                     ) : (
-                      <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
+                      <div className="text-xs text-muted-foreground p-2">
+                        {membersLoading ? "Завантаження…" : "Немає менеджерів"}
+                      </div>
                     )}
                   </div>
                 </PopoverContent>
@@ -5683,7 +5704,9 @@ export default function DesignPage() {
                           );
                         })
                       ) : (
-                        <div className="text-xs text-muted-foreground p-2">Немає користувачів</div>
+                        <div className="text-xs text-muted-foreground p-2">
+                          {membersLoading ? "Завантаження…" : "Немає користувачів"}
+                        </div>
                       )}
                     </div>
                   </PopoverContent>
