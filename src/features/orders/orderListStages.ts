@@ -1,18 +1,21 @@
 import {
   balanceDaysShort,
   buildLaunchPath,
+  getBalanceDue,
+  getClosingDocumentRef,
   getShipmentBlocker,
   isFullyDeferred,
   LAUNCHED_ORDER_STATUSES,
   PREPAYMENT_RECEIVED,
   resolveBreakdown,
   SHIPPED_ORDER_STATUSES,
+  type BalanceDueInput,
   type LaunchPathInput,
 } from "./orderLaunchPath";
 import { getDocumentApprovalState, getLaunchException } from "./orderApprovals";
 import { getOrderInvoiceState } from "./orderInvoice";
 import type { DerivedOrderRecord } from "./orderRecords";
-import { isCashlessPaymentMethod } from "./paymentRules";
+import { formatDayMonth, isCashlessPaymentMethod, localTodayIso } from "./paymentRules";
 
 /**
  * Список замовлень (REQ-322#p12): етап, що далі й чий хід — для смуги етапів
@@ -21,6 +24,7 @@ import { isCashlessPaymentMethod } from "./paymentRules";
  * умов (p8). Підпис позначає менеджер, коли його поставив замовник (p7).
  */
 export type OrderListInput = LaunchPathInput &
+  BalanceDueInput &
   Pick<
     DerivedOrderRecord,
     | "deliveryStatus"
@@ -77,7 +81,7 @@ const step = (partial: Partial<OrderNextStep> & Pick<OrderNextStep, "stage" | "t
 
 const share = (input: OrderListInput, pct: number) => Math.round(((Number(input.total) || 0) * pct)) / 100;
 
-export const getOrderNextStep = (input: OrderListInput): OrderNextStep => {
+export const getOrderNextStep = (input: OrderListInput, todayIso = localTodayIso()): OrderNextStep => {
   if (input.designStatuses.includes("cancelled")) return step({ stage: "cancelled", title: "Скасовано" });
 
   const breakdown = resolveBreakdown(input);
@@ -90,13 +94,36 @@ export const getOrderNextStep = (input: OrderListInput): OrderNextStep => {
   const unpaidPct = PREPAYMENT_RECEIVED.has(input.paymentStatus) ? (breakdown?.balance ?? 0) : 100;
 
   if (shipped) {
-    const deferred = input.balanceTiming === "after_shipment";
+    const amountDue = share(input, unpaidPct);
+    if (input.balanceTiming !== "after_shipment") {
+      return step({ stage: "awaitingPayment", turn: "customer", title: `Доплата ${unpaidPct}%`, amountDue });
+    }
+    // Відтермінування рахується від дати ВН чи акта (p5): поки бухгалтерія не
+    // внесла її з BAS, строку немає — м'яч у неї.
+    const due = getBalanceDue(input, todayIso);
+    if (!due) {
+      const cashless = isCashlessPaymentMethod(input.paymentMethodId, input.paymentRail);
+      return cashless
+        ? step({
+            stage: "awaitingPayment",
+            turn: "accounting",
+            title: getClosingDocumentRef(input).kind === "act" ? "Внести номер акта" : "Внести номер ВН",
+            detail: `від дати рахуємо ${balanceDaysShort(input)}`,
+            amountDue,
+            actionLabel: "Внести номер",
+          })
+        : step({ stage: "awaitingPayment", turn: "customer", title: "Оплата після ВН", detail: balanceDaysShort(input), amountDue });
+    }
     return step({
       stage: "awaitingPayment",
       turn: "customer",
-      title: deferred ? "Оплата після ВН" : `Доплата ${unpaidPct}%`,
-      detail: deferred ? `до ${balanceDaysShort(input)}` : null,
-      amountDue: share(input, unpaidPct),
+      title: due.overdue ? "Доплату прострочено" : "Оплата після ВН",
+      detail: due.overdue
+        ? `чекали до ${formatDayMonth(due.dueDate)}`
+        : due.daysLeft === 0
+          ? "сьогодні останній день"
+          : `до ${formatDayMonth(due.dueDate)}`,
+      amountDue,
     });
   }
 
@@ -196,7 +223,11 @@ export const getOrderPaidShare = (input: OrderListInput): { pct: number; label: 
       (input.orderStatus === "ready" || SHIPPED_ORDER_STATUSES.has(input.orderStatus));
     return { pct, label: waitsBalance ? `чекає ${breakdown?.balance}%` : `${pct}% є` };
   }
-  if (isFullyDeferred(input)) return { pct: 0, label: `${balanceDaysShort(input)} після ВН` };
+  if (isFullyDeferred(input)) {
+    const due = getBalanceDue(input);
+    if (!due) return { pct: 0, label: `${balanceDaysShort(input)} після ВН` };
+    return { pct: 0, label: due.overdue ? "прострочено" : `до ${formatDayMonth(due.dueDate)}` };
+  }
   if (breakdown?.prepayment === 0) return { pct: 0, label: "після готовності" };
   return { pct: 0, label: breakdown ? `0 з ${breakdown.prepayment}%` : "не оплачено" };
 };
@@ -211,8 +242,8 @@ export type OrderDocMark = {
 };
 
 /**
- * Д/С/Р/В — лише для безготівки. Видаткова в CRM ще не формується (REQ-322#p3),
- * тож «В» поки завжди «ще ні».
+ * Д/С/Р/В — лише для безготівки. ВН друкує BAS, тож «В» готова, коли бухгалтерія
+ * внесла її номер (p5); замовлення, що закривається актом, має «А» замість «В».
  */
 export const getOrderDocMarks = (input: OrderListInput): OrderDocMark[] | null => {
   if (!isCashlessPaymentMethod(input.paymentMethodId, input.paymentRail)) return null;
@@ -238,7 +269,9 @@ export const getOrderDocMarks = (input: OrderListInput): OrderDocMark[] | null =
       ready: getOrderInvoiceState(input) === "issued",
       inProgress: getOrderInvoiceState(input) === "requested",
     },
-    { key: "waybill", letter: "В", title: "Видаткова", ready: false },
+    getClosingDocumentRef(input).kind === "act"
+      ? { key: "act", letter: "А", title: "Акт", ready: Boolean(input.actNumber) }
+      : { key: "waybill", letter: "В", title: "Видаткова", ready: Boolean(input.waybillNumber) },
   ];
 };
 
@@ -294,5 +327,7 @@ export const isMyTurn = (input: OrderListInput, viewer: OrderListViewer) => {
     }
   }
   const { turn } = getOrderNextStep(input);
+  // Номер ВН чи акта після відвантаження — від нього рахується відтермінування.
+  if (viewer.canIssueInvoice && turn === "accounting") return true;
   return Boolean(viewer.userId) && input.managerUserId === viewer.userId && turn === "manager";
 };

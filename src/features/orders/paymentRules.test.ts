@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addBalanceDays,
   customerRequiresDocuments,
+  daysBetween,
   formatBalanceDaysShort,
   formatBalanceDaysTerm,
+  formatDayMonth,
   getAllowedPaymentTermsOptions,
   getMinimumPrepaymentError,
   isCashlessPaymentMethod,
@@ -133,5 +136,30 @@ describe("відтермінування доплати", () => {
   it("коротко в зведенні: р.д. або к.д.", () => {
     expect(formatBalanceDaysShort(5, "working")).toBe("5 р.д.");
     expect(formatBalanceDaysShort(30, "calendar")).toBe("30 к.д.");
+  });
+});
+
+describe("addBalanceDays", () => {
+  it("календарні — просто додаємо", () => {
+    expect(addBalanceDays("2026-10-15", 14, "calendar")).toBe("2026-10-29");
+    expect(addBalanceDays("2026-12-25", 10, "calendar")).toBe("2027-01-04");
+  });
+
+  it("робочі — пропускаємо суботу й неділю, день ВН не рахуємо", () => {
+    // Пт 16.10 + 1 р.д. — пн 19.10; + 5 — пт 23.10.
+    expect(addBalanceDays("2026-10-16", 1, "working")).toBe("2026-10-19");
+    expect(addBalanceDays("2026-10-16", 5, "working")).toBe("2026-10-23");
+    // ВН у суботу: перший робочий — понеділок.
+    expect(addBalanceDays("2026-10-17", 1, "working")).toBe("2026-10-19");
+    expect(addBalanceDays("2026-10-14", 3, "working")).toBe("2026-10-19");
+  });
+});
+
+describe("daysBetween / formatDayMonth", () => {
+  it("рахує календарні дні й коротку дату", () => {
+    expect(daysBetween("2026-10-20", "2026-10-29")).toBe(9);
+    expect(daysBetween("2026-10-30", "2026-10-29")).toBe(-1);
+    expect(daysBetween("2026-10-24", "2026-10-26")).toBe(2); // через перехід на зимовий час
+    expect(formatDayMonth("2026-03-07")).toBe("07.03");
   });
 });

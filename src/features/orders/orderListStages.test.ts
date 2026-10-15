@@ -48,6 +48,11 @@ const cashless: OrderListInput = {
   contractProductionDays: null,
   contractAutoProlongation: false,
   ourLegalEntityId: null,
+  closingDocument: null,
+  actNumber: null,
+  actDate: null,
+  waybillNumber: null,
+  waybillDate: null,
 };
 
 // Договір і СП підписані — далі в безготівки лише рахунок і оплата.
@@ -135,13 +140,45 @@ describe("getOrderNextStep", () => {
       balanceDaysKind: "calendar" as const,
       orderStatus: "shipped",
     };
-    expect(getOrderNextStep(deferred)).toMatchObject({
+    // Без дати ВН строку немає: бухгалтерія вносить номер з BAS.
+    expect(getOrderNextStep(deferred, "2026-10-20")).toMatchObject({
       stage: "awaitingPayment",
-      turn: "customer",
-      title: "Оплата після ВН",
-      detail: "до 14 к.д.",
+      turn: "accounting",
+      title: "Внести номер ВН",
+      detail: "від дати рахуємо 14 к.д.",
       amountDue: 10000,
     });
+    // ВН від 15.10 + 14 календарних — до 29.10.
+    const withWaybill = { ...deferred, waybillNumber: "РН-0000012", waybillDate: "2026-10-15" };
+    expect(getOrderNextStep(withWaybill, "2026-10-20")).toMatchObject({
+      turn: "customer",
+      title: "Оплата після ВН",
+      detail: "до 29.10",
+    });
+    expect(getOrderNextStep(withWaybill, "2026-10-29").detail).toBe("сьогодні останній день");
+    expect(getOrderNextStep(withWaybill, "2026-10-30")).toMatchObject({
+      title: "Доплату прострочено",
+      detail: "чекали до 29.10",
+    });
+  });
+
+  it("закривається актом — строк від дати акта", () => {
+    const deferredAct = {
+      ...withDocs,
+      prepaymentPct: 0,
+      balancePct: 100,
+      balanceTiming: "after_shipment" as const,
+      balanceDaysAfterShipment: 5,
+      balanceDaysKind: "working" as const,
+      orderStatus: "shipped",
+      closingDocument: "act" as const,
+      waybillDate: "2026-10-01",
+    };
+    expect(getOrderNextStep(deferredAct, "2026-10-20").title).toBe("Внести номер акта");
+    // Акт у п'ятницю 16.10 + 5 робочих — до п'ятниці 23.10.
+    expect(getOrderNextStep({ ...deferredAct, actNumber: "ОУ-7", actDate: "2026-10-16" }, "2026-10-20").detail).toBe(
+      "до 23.10"
+    );
   });
 
   it("відвантажене й оплачене — завершене; completed — теж", () => {
@@ -206,6 +243,14 @@ describe("getOrderDocMarks", () => {
       "В:ні",
     ]);
   });
+
+  it("«В» готова з номером ВН; закривається актом — «А»", () => {
+    expect(getOrderDocMarks({ ...cashless, waybillNumber: "РН-1", waybillDate: "2026-10-15" })?.at(-1)).toMatchObject({
+      letter: "В",
+      ready: true,
+    });
+    expect(getOrderDocMarks({ ...cashless, closingDocument: "act" })?.at(-1)).toMatchObject({ letter: "А", ready: false });
+  });
 });
 
 describe("summarizeOrderStages", () => {
@@ -237,6 +282,23 @@ describe("isMyTurn", () => {
     const requested = { ...withDocs, invoiceRequestedAt: "2026-10-15T10:00:00Z" };
     expect(isMyTurn(requested, { userId: "accountant", canIssueInvoice: true, canApproveLaunch: false })).toBe(true);
     expect(isMyTurn(requested, manager("me"))).toBe(false);
+  });
+
+  it("відвантажили з відтермінуванням без номера ВН — хід бухгалтерії", () => {
+    const shipped = {
+      ...withDocs,
+      prepaymentPct: 0,
+      balancePct: 100,
+      balanceTiming: "after_shipment" as const,
+      orderStatus: "shipped",
+    };
+    expect(isMyTurn(shipped, { userId: "accountant", canIssueInvoice: true, canApproveLaunch: false })).toBe(true);
+    expect(
+      isMyTurn(
+        { ...shipped, waybillNumber: "РН-1", waybillDate: "2026-10-15" },
+        { userId: "accountant", canIssueInvoice: true, canApproveLaunch: false }
+      )
+    ).toBe(false);
   });
 });
 

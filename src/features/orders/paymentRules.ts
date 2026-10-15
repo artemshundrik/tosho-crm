@@ -102,3 +102,40 @@ export const formatBalanceDaysTerm = (days: number, kind: BalanceDaysKind) => {
 
 export const formatBalanceDaysShort = (days: number, kind: BalanceDaysKind) =>
   `${days} ${kind === "calendar" ? "к.д." : "р.д."}`;
+
+/** Сьогоднішня дата в часі браузера, YYYY-MM-DD. */
+export const localTodayIso = (now = new Date()) =>
+  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+const isoToUtc = (iso: string) => {
+  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
+};
+
+const utcToIso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Останній день доплати: дата ВН + N днів. Робочі — пн–пт без календаря
+ * свят: за воєнного стану святкові дні не вихідні (Закон 2136-IX), тож
+ * вихідні тут лише субота й неділя. День ВН не рахується.
+ */
+export const addBalanceDays = (startIso: string, days: number, kind: BalanceDaysKind): string => {
+  const start = isoToUtc(startIso);
+  if (kind === "calendar") return utcToIso(start + days * DAY_MS);
+  let cursor = start;
+  let left = days;
+  while (left > 0) {
+    cursor += DAY_MS;
+    const weekday = new Date(cursor).getUTCDay();
+    if (weekday !== 0 && weekday !== 6) left -= 1;
+  }
+  return utcToIso(cursor);
+};
+
+/** Скільки календарних днів від `fromIso` до `toIso` (від'ємне — уже минуло). */
+export const daysBetween = (fromIso: string, toIso: string) => Math.round((isoToUtc(toIso) - isoToUtc(fromIso)) / DAY_MS);
+
+/** «28.10» — коротка дата для рядків і чипів. */
+export const formatDayMonth = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;

@@ -465,6 +465,9 @@ export type DerivedOrderRecord = {
   /** Номер і дата акта з BAS — вносить бухгалтерія. */
   actNumber: string | null;
   actDate: string | null;
+  /** Номер і дата ВН з BAS — вносить бухгалтерія; від дати рахується відтермінування (p5). */
+  waybillNumber: string | null;
+  waybillDate: string | null;
   /**
    * Чи замовлення взагалі потребує погодження дизайну. false — товар без нанесення:
    * ні візуал, ні макет не потрібні, документи не блокуються дизайном.
@@ -535,6 +538,8 @@ type StoredOrderRow = {
   closing_document?: string | null;
   act_number?: string | null;
   act_date?: string | null;
+  waybill_number?: string | null;
+  waybill_date?: string | null;
   np_ttn_number?: string | null;
   np_ttn_ref?: string | null;
   np_ttn_cost?: number | string | null;
@@ -811,7 +816,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,contract_signed_at,contract_signed_via,specification_signed_at,specification_signed_via,our_legal_entity_id,our_legal_entity,closing_document,act_number,act_date,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,contract_signed_at,contract_signed_via,specification_signed_at,specification_signed_via,our_legal_entity_id,our_legal_entity,closing_document,act_number,act_date,waybill_number,waybill_date,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -1295,6 +1300,8 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       closingDocument: null,
       actNumber: null,
       actDate: null,
+      waybillNumber: null,
+      waybillDate: null,
       requiresDesignApproval: hasImprint || requiresVisualization || requiresLayout,
       hasApprovedVisualization,
       hasApprovedLayout,
@@ -1787,6 +1794,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         closingDocument: parseClosingDocument(order.closing_document),
         actNumber: order.act_number?.trim?.() || null,
         actDate: order.act_date ?? null,
+        waybillNumber: order.waybill_number?.trim?.() || null,
+        waybillDate: order.waybill_date ?? null,
         requiresDesignApproval,
         hasApprovedVisualization,
         hasApprovedLayout,

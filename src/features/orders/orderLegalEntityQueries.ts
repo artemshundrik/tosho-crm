@@ -105,21 +105,28 @@ export async function resolveOrderLegalEntity(params: {
   }
 }
 
-/** Номер і дата акта з BAS. Тригер пускає лише бухгалтерію, СЕО й owner. */
-export async function setOrderActNumber(params: {
+/** Номер і дата акта чи ВН з BAS. Тригер пускає лише бухгалтерію, СЕО й owner. */
+export async function setOrderClosingDocumentNumber(params: {
   teamId: string;
   orderId: string;
+  kind: ClosingDocument;
   number: string;
   date: string;
-}): Promise<{ actNumber: string | null; actDate: string | null }> {
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("orders")
-    .update({ act_number: params.number.trim() || null, act_date: params.date || null, updated_at: new Date().toISOString() })
+}): Promise<{ number: string | null; date: string | null }> {
+  const number = params.number.trim() || null;
+  const date = params.date || null;
+  const updatedAt = new Date().toISOString();
+  const orders = supabase.schema("tosho").from("orders");
+  const { data, error } = await (params.kind === "act"
+    ? orders.update({ act_number: number, act_date: date, updated_at: updatedAt })
+    : orders.update({ waybill_number: number, waybill_date: date, updated_at: updatedAt })
+  )
     .eq("team_id", params.teamId)
     .eq("id", params.orderId)
-    .select("act_number,act_date")
-    .single<{ act_number: string | null; act_date: string | null }>();
-  if (error) throw new Error(error.message || "Не вдалося зберегти номер акта.", { cause: error });
-  return { actNumber: data.act_number, actDate: data.act_date };
+    .select("act_number,act_date,waybill_number,waybill_date")
+    .single();
+  if (error) throw new Error(error.message || "Не вдалося зберегти номер документа.", { cause: error });
+  return params.kind === "act"
+    ? { number: data.act_number, date: data.act_date }
+    : { number: data.waybill_number, date: data.waybill_date };
 }

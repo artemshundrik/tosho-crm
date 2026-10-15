@@ -119,7 +119,7 @@ import { useOrderApprovalFlow } from "@/features/orders/order-details/useOrderAp
 import { IncotermsHint } from "@/features/orders/order-details/IncotermsHint";
 import { OrderDeliveryCard } from "@/features/orders/order-details/OrderDeliveryCard";
 import { OrderDocumentsCard } from "@/features/orders/order-details/OrderDocumentsCard";
-import { OrderActDeskCard } from "@/features/orders/order-details/OrderActDeskCard";
+import { OrderClosingDocumentDeskCard } from "@/features/orders/order-details/OrderClosingDocumentDeskCard";
 import { OrderInvoiceDeskCard } from "@/features/orders/order-details/OrderInvoiceDeskCard";
 import { useOrderInvoiceFlow } from "@/features/orders/order-details/useOrderInvoiceFlow";
 import { getOrderInvoiceState } from "@/features/orders/orderInvoice";
@@ -1735,13 +1735,21 @@ export default function OrdersProductionDetailsPage() {
                 onPreview={() => void openDocumentPrint("invoice")}
               />
             ) : null}
-            {canIssueInvoice && teamId && record.closingDocument === "act" && record.invoiceNumber ? (
-              <OrderActDeskCard
-                key={`${record.id}:${record.actNumber ?? ""}`}
+            {canIssueInvoice &&
+            teamId &&
+            record.invoiceNumber &&
+            (record.closingDocument === "act" ||
+              // ВН виписують на відвантаженні — раніше картка лише заважала б.
+              (requiresCustomerDocuments &&
+                (Boolean(record.waybillNumber) || ["ready", "shipped", "completed"].includes(record.orderStatus)))) ? (
+              <OrderClosingDocumentDeskCard
+                key={`${record.id}:${record.closingDocument ?? ""}:${record.actNumber ?? ""}:${record.waybillNumber ?? ""}`}
                 record={record}
                 teamId={teamId}
                 onSaved={(patch) => setRecord((current) => (current ? { ...current, ...patch } : current))}
-                onPreview={() => void openDocumentPrint("act", { markCreated: false })}
+                onPreview={
+                  record.closingDocument === "act" ? () => void openDocumentPrint("act", { markCreated: false }) : null
+                }
               />
             ) : null}
             {activeTab === "launch" ? (

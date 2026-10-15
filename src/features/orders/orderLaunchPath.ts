@@ -7,7 +7,15 @@ import {
 } from "./orderApprovals";
 import { ORDER_PAYMENT_TERMS_OPTIONS } from "./config";
 import type { DerivedOrderRecord } from "./orderRecords";
-import { formatBalanceDaysShort, isCashlessPaymentMethod } from "./paymentRules";
+import { CLOSING_DOCUMENT_LABELS, type ClosingDocument } from "./orderExecutor";
+import {
+  addBalanceDays,
+  daysBetween,
+  formatBalanceDaysShort,
+  isCashlessPaymentMethod,
+  localTodayIso,
+  normalizeBalanceDaysKind,
+} from "./paymentRules";
 
 /**
  * «Шлях до запуску» й розбивка оплати на картці замовлення (REQ-322#p11).
@@ -75,6 +83,54 @@ const isPaidOnReadiness = (input: LaunchPathInput) =>
 
 export const balanceDaysShort = (input: LaunchPathInput) =>
   formatBalanceDaysShort(input.balanceDaysAfterShipment ?? 3, input.balanceDaysKind);
+
+/**
+ * Відтермінування (REQ-322#p5): доплата протягом N робочих чи календарних днів
+ * від дати закривального документа. Його номер і дату вносить бухгалтерія з
+ * BAS: акт, якщо замовлення закривається актом, інакше — ВН.
+ */
+export type BalanceDueInput = Pick<
+  DerivedOrderRecord,
+  | "balanceTiming"
+  | "balanceDaysAfterShipment"
+  | "balanceDaysKind"
+  | "closingDocument"
+  | "actNumber"
+  | "actDate"
+  | "waybillNumber"
+  | "waybillDate"
+>;
+
+export const getClosingDocumentRef = (
+  input: BalanceDueInput
+): { kind: ClosingDocument; label: string; number: string | null; date: string | null } =>
+  input.closingDocument === "act"
+    ? { kind: "act", label: CLOSING_DOCUMENT_LABELS.act, number: input.actNumber, date: input.actDate }
+    : { kind: "waybill", label: CLOSING_DOCUMENT_LABELS.waybill, number: input.waybillNumber, date: input.waybillDate };
+
+export type BalanceDue = {
+  /** Останній день доплати, YYYY-MM-DD. */
+  dueDate: string;
+  /** Дата ВН чи акта, від якої рахуємо. */
+  fromDate: string;
+  /** Скільки днів лишилось (0 — сьогодні, від'ємне — прострочено). */
+  daysLeft: number;
+  overdue: boolean;
+};
+
+/** null — доплата не після відвантаження або дати документа ще немає. */
+export const getBalanceDue = (input: BalanceDueInput, todayIso = localTodayIso()): BalanceDue | null => {
+  if (input.balanceTiming !== "after_shipment") return null;
+  const { date } = getClosingDocumentRef(input);
+  if (!date) return null;
+  const dueDate = addBalanceDays(
+    date,
+    input.balanceDaysAfterShipment ?? 3,
+    normalizeBalanceDaysKind(input.balanceDaysKind)
+  );
+  const daysLeft = daysBetween(todayIso, dueDate);
+  return { dueDate, fromDate: date, daysLeft, overdue: daysLeft < 0 };
+};
 
 export const formatPaymentTermsChip = (input: LaunchPathInput): string | null => {
   const breakdown = resolveBreakdown(input);

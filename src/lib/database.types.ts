@@ -3287,7 +3287,9 @@ export type Database = {
           our_legal_entity: Json | null
           closing_document: string | null
           act_number: string | null
+          waybill_number: string | null
           act_date: string | null
+          waybill_date: string | null
           invoice_date: string | null
           invoice_issued_by: string | null
           invoice_requested_at: string | null
@@ -3367,7 +3369,9 @@ export type Database = {
           our_legal_entity?: Json | null
           closing_document?: string | null
           act_number?: string | null
+          waybill_number?: string | null
           act_date?: string | null
+          waybill_date?: string | null
           invoice_date?: string | null
           invoice_issued_by?: string | null
           invoice_requested_at?: string | null
@@ -3447,7 +3451,9 @@ export type Database = {
           our_legal_entity?: Json | null
           closing_document?: string | null
           act_number?: string | null
+          waybill_number?: string | null
           act_date?: string | null
+          waybill_date?: string | null
           invoice_date?: string | null
           invoice_issued_by?: string | null
           invoice_requested_at?: string | null
