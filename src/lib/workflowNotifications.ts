@@ -873,6 +873,45 @@ export async function notifyOrderApprovalDecided(params: {
 }
 
 /* ------------------------------------------------------------------ */
+/* Готово, а оплати бракує (REQ-322#p9)                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Замовлення готове, а відвантажити не можна: бракує суми, яку платять до
+ * відвантаження. Дізнаються менеджер замовлення й логісти — щоб не везли й
+ * щоб менеджер нагадав замовнику.
+ */
+export async function notifyOrderReadyUnpaid(params: {
+  teamId: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  managerUserId?: string | null;
+  /** Готовий рядок: «Відвантажити можна після доплати 30% — 1 571,40 грн». */
+  blocker: string;
+  actorUserId?: string | null;
+}) {
+  const members = await resolveTeamMembers(params.teamId);
+  const recipients = new Set(
+    members
+      .filter((row) => ["logistics", "head_of_logistics"].includes(normalizeRole(row.job_role)))
+      .map((row) => row.user_id)
+      .filter((value): value is string => !!value)
+  );
+  if (params.managerUserId) recipients.add(params.managerUserId);
+  if (params.actorUserId) recipients.delete(params.actorUserId);
+  if (recipients.size === 0) return;
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: `${params.orderNumber} готове, але оплати бракує`,
+    body: `${params.customerName}: ${params.blocker}. Не відвантажуємо, доки не надійде.`,
+    href: `/orders/production/${params.orderId}`,
+    type: "warning",
+    category: "order_shipment_blocked",
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Заявки на відсутність                                               */
 /* ------------------------------------------------------------------ */
 

@@ -14,6 +14,7 @@ export type NotificationCategoryKey =
   | "order_invoice_decision"
   | "order_approval_request"
   | "order_approval_decision"
+  | "order_shipment_blocked"
   | "design"
   | "contractor"
   | "team_events"
@@ -86,6 +87,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     key: "order_approval_decision",
     label: "Рішення щодо договору й запуску",
     description: "Ваш договір, СП або прохання про запуск погодили чи повернули",
+  },
+  {
+    key: "order_shipment_blocked",
+    label: "Готово, але не оплачено",
+    description: "Замовлення готове, а відвантажити не можна: бракує оплати до відвантаження",
   },
   {
     key: "design",
@@ -241,6 +247,9 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
       return isInvoiceIssuer;
     case "order_approval_decision":
       return isQuoteWorker;
+    // Менеджеру — нагадати замовнику, логісту — не везти.
+    case "order_shipment_blocked":
+      return isQuoteWorker || ["logistics", "head_of_logistics"].includes(job);
     // Збут / прорахунки / контрагенти — лише ті, хто з цим працює.
     case "customer_followup":
     case "quote_deadline":

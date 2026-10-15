@@ -1,6 +1,7 @@
 import {
   balanceDaysShort,
   buildLaunchPath,
+  getShipmentBlocker,
   isFullyDeferred,
   LAUNCHED_ORDER_STATUSES,
   PREPAYMENT_RECEIVED,
@@ -100,7 +101,8 @@ export const getOrderNextStep = (input: OrderListInput): OrderNextStep => {
   }
 
   if (input.orderStatus === "ready" || input.deliveryStatus === "preparing_shipment") {
-    const owesBeforeShipment = !fullyPaid && input.balanceTiming !== "after_shipment" && unpaidPct > 0;
+    // Ті самі ворота, що на картці (p9): після ВН досить передоплати.
+    const owesBeforeShipment = getShipmentBlocker(input) !== null;
     return owesBeforeShipment
       ? step({
           stage: "shipment",

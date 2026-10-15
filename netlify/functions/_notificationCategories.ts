@@ -12,6 +12,7 @@ export type NotificationCategoryKey =
   | "order_invoice_decision"
   | "order_approval_request"
   | "order_approval_decision"
+  | "order_shipment_blocked"
   | "design"
   | "contractor"
   | "team_events"
@@ -42,6 +43,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "order_invoice_decision", label: "Рахунок готовий" },
   { key: "order_approval_request", label: "Погодження договорів і запусків" },
   { key: "order_approval_decision", label: "Рішення щодо договору й запуску" },
+  { key: "order_shipment_blocked", label: "Готово, але не оплачено" },
   { key: "design", label: "Дизайн-задачі" },
   { key: "contractor", label: "Контрагенти" },
   { key: "team_events", label: "Події команди" },
@@ -113,6 +115,8 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
       return isInvoiceIssuer;
     case "order_approval_decision":
       return isQuoteWorker;
+    case "order_shipment_blocked":
+      return isQuoteWorker || ["logistics", "head_of_logistics"].includes(job);
     case "customer_followup":
     case "quote_deadline":
     case "quote_comment":

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildLaunchPath,
   buildOrderPaymentParts,
+  getShipmentBlocker,
   formatPaymentTermsChip,
   type LaunchPathInput,
 } from "./orderLaunchPath";
@@ -273,5 +274,33 @@ describe("ворота запуску (p6–p8)", () => {
 
   it("готівка: дозвіл відкриває запуск без передоплати", () => {
     expect(buildLaunchPath({ ...cash, approvals: [approval("launch", "approved")] }).blocker).toBeNull();
+  });
+});
+
+describe("ворота відвантаження (p9)", () => {
+  it("70/30 до відвантаження: без повної оплати не відвантажуємо, сума доплати в причині", () => {
+    expect(getShipmentBlocker({ ...cash, paymentStatus: "partially_paid" })).toBe(
+      "Відвантажити можна після доплати 30% — 1 571,40 грн"
+    );
+    expect(getShipmentBlocker({ ...cash, paymentStatus: "fully_paid" })).toBeNull();
+  });
+
+  it("нічого не прийшло — бракує всієї суми", () => {
+    expect(getShipmentBlocker(cash)).toBe("Відвантажити можна після оплати — 5 238,00 грн");
+  });
+
+  it("доплата після ВН: досить передоплати", () => {
+    const afterVn = { ...cashless, balanceTiming: "after_shipment" as const, balanceDaysAfterShipment: 14 };
+    expect(getShipmentBlocker({ ...afterVn, paymentStatus: "partially_paid" })).toBeNull();
+    expect(getShipmentBlocker(afterVn)).toBe("Відвантажити можна після передоплати 70% — 69 552,00 грн");
+  });
+
+  it("повне відтермінування не блокує: платять після ВН (Влад, 15.10)", () => {
+    const deferred = { ...cashless, prepaymentPct: 0, balancePct: 100, balanceTiming: "after_shipment" as const };
+    expect(getShipmentBlocker(deferred)).toBeNull();
+  });
+
+  it("уже відвантажене не блокуємо заднім числом", () => {
+    expect(getShipmentBlocker({ ...cash, orderStatus: "shipped" })).toBeNull();
   });
 });

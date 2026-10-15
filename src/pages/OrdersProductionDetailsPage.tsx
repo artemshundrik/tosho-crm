@@ -97,7 +97,14 @@ import { ThreadDock, ThreadDockButton, ThreadDockProvider, type ThreadDockHandle
 import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
 import { useRecordPageHeight } from "@/hooks/useRecordPageHeight";
 import { threadKeyForOrder, threadKeyForQuote } from "@/lib/taskThread";
-import { buildLaunchPath, formatPaymentTermsChip, LAUNCHED_ORDER_STATUSES } from "@/features/orders/orderLaunchPath";
+import {
+  buildLaunchPath,
+  formatPaymentTermsChip,
+  getShipmentBlocker,
+  isShipmentStatus,
+  LAUNCHED_ORDER_STATUSES,
+} from "@/features/orders/orderLaunchPath";
+import { notifyOrderReadyUnpaid } from "@/lib/workflowNotifications";
 import { getDocumentApprovalState, getSendToCustomerBlocker, isDocumentCleared } from "@/features/orders/orderApprovals";
 import { OrderApprovalDeskCard } from "@/features/orders/order-details/OrderApprovalDeskCard";
 import { useOrderApprovalFlow } from "@/features/orders/order-details/useOrderApprovalFlow";
@@ -1117,6 +1124,18 @@ export default function OrdersProductionDetailsPage() {
         return;
       }
     }
+    // Ворота відвантаження (REQ-322#p9): без суми, належної до відвантаження, не веземо.
+    if (
+      (field === "orderStatus" || field === "deliveryStatus") &&
+      isShipmentStatus(field, value) &&
+      !isShipmentStatus(field, record[field])
+    ) {
+      const shipmentBlocker = getShipmentBlocker(record);
+      if (shipmentBlocker) {
+        toast.error(shipmentBlocker);
+        return;
+      }
+    }
     const previous = {
       orderStatus: record.orderStatus,
       paymentStatus: record.paymentStatus,
@@ -1135,6 +1154,19 @@ export default function OrdersProductionDetailsPage() {
         paymentStatus: field === "paymentStatus" ? value : undefined,
         deliveryStatus: field === "deliveryStatus" ? value : undefined,
       });
+      // Готове, але неоплачене — менеджер і логіст дізнаються одразу.
+      const readyBlocker = field === "orderStatus" && value === "ready" ? getShipmentBlocker(record) : null;
+      if (readyBlocker) {
+        void notifyOrderReadyUnpaid({
+          teamId,
+          orderId: record.id,
+          orderNumber: record.quoteNumber,
+          customerName: record.customerName,
+          managerUserId: record.managerUserId,
+          blocker: readyBlocker,
+          actorUserId: userId,
+        }).catch(() => undefined);
+      }
     } catch (statusError: unknown) {
       setRecord({
         ...record,
@@ -1380,6 +1412,17 @@ export default function OrdersProductionDetailsPage() {
     void openDocumentPrint(kind);
   };
 
+  // Нова ТТН — це відвантаження: ті самі ворота, що й статус (REQ-322#p9).
+  // Уже створену ТТН відкрити можна завжди.
+  const openTtnDialog = () => {
+    const shipmentBlocker = record && !record.npTtnNumber ? getShipmentBlocker(record) : null;
+    if (shipmentBlocker) {
+      toast.error(shipmentBlocker);
+      return;
+    }
+    setTtnDialogOpen(true);
+  };
+
   // Договір і СП — замовнику лише після погодження бухгалтера або СЕО (REQ-322#p6).
   const guardSendToCustomer = () => {
     const blocker = record ? getSendToCustomerBlocker(record) : null;
@@ -1607,7 +1650,7 @@ export default function OrdersProductionDetailsPage() {
                   </DropdownMenuItem>
                   {record.source === "stored" ? (
                     <DropdownMenuItem
-                      onClick={() => setTtnDialogOpen(true)}
+                      onClick={openTtnDialog}
                       disabled={!orderDelivery?.deliveryType && !record.npTtnNumber}
                     >
                       <PackageCheck className="mr-2 h-4 w-4" />
@@ -1769,7 +1812,7 @@ export default function OrdersProductionDetailsPage() {
                 delivery={orderDelivery}
                 ttnStatus={ttnStatus}
                 onEditDelivery={() => setDeliveryDialogOpen(true)}
-                onOpenTtn={() => setTtnDialogOpen(true)}
+                onOpenTtn={openTtnDialog}
               />
             ) : null}
           </div>

@@ -126,7 +126,11 @@ export const buildLaunchPath = (
   const shipmentStep: LaunchStep = {
     key: "shipment",
     title: "Відвантаження",
-    note: SHIPPED_ORDER_STATUSES.has(input.orderStatus) ? "Відвантажено" : "Лише коли надійшла вся сума",
+    note: SHIPPED_ORDER_STATUSES.has(input.orderStatus)
+      ? "Відвантажено"
+      : input.balanceTiming === "after_shipment"
+        ? "Доплата — після ВН, відвантаженню не заважає"
+        : "Лише коли надійшла вся сума",
     state: SHIPPED_ORDER_STATUSES.has(input.orderStatus) ? "done" : "todo",
   };
 
@@ -236,6 +240,41 @@ export const buildLaunchPath = (
     missing: launched ? [] : missing,
     exception,
   };
+};
+
+const SHIPPED_DELIVERY_STATUSES = new Set(["shipped", "delivered", "partially_delivered", "unclaimed"]);
+
+/** Статуси, що означають «відвантажено»: у рядку замовлення або в доставці. */
+export const isShipmentStatus = (field: "orderStatus" | "deliveryStatus", value: string) =>
+  field === "orderStatus" ? SHIPPED_ORDER_STATUSES.has(value) : SHIPPED_DELIVERY_STATUSES.has(value);
+
+const formatDue = (amount: number, currency: string | null | undefined) =>
+  `${amount.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\s/g, " ")} ${
+    !currency || currency === "UAH" ? "грн" : currency
+  }`;
+
+/**
+ * Ворота відвантаження (REQ-322#p9, СЕО 14.10; тлумачення підтвердив Влад
+ * 15.10): відвантажити можна, лише коли надійшла сума, яку за умовами платять
+ * до відвантаження. І на готівці, і на безготівці. Доплата після ВН — досить
+ * передоплати; повне відтермінування не блокує взагалі. null — можна.
+ */
+export const getShipmentBlocker = (input: LaunchPathInput): string | null => {
+  if (SHIPPED_ORDER_STATUSES.has(input.orderStatus)) return null;
+  if (input.paymentStatus === "fully_paid") return null;
+  const total = Number(input.total) || 0;
+  const breakdown = resolveBreakdown(input);
+  const prepayment = breakdown?.prepayment ?? 100;
+  const prepaymentReceived = PREPAYMENT_RECEIVED.has(input.paymentStatus);
+  if (input.balanceTiming === "after_shipment") {
+    if (prepayment === 0 || prepaymentReceived) return null;
+    return `Відвантажити можна після передоплати ${prepayment}% — ${formatDue(roundMoney((total * prepayment) / 100), input.currency)}`;
+  }
+  if (prepaymentReceived && breakdown && breakdown.balance > 0) {
+    const due = roundMoney(total - roundMoney((total * prepayment) / 100));
+    return `Відвантажити можна після доплати ${breakdown.balance}% — ${formatDue(due, input.currency)}`;
+  }
+  return `Відвантажити можна після оплати — ${formatDue(total, input.currency)}`;
 };
 
 export type OrderPaymentPart = { key: "prepayment" | "balance"; label: string; amount: number; pct: number };
