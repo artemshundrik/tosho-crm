@@ -907,6 +907,8 @@ export default function OrdersProductionDetailsPage() {
     record,
     teamId,
     userId,
+    loadFresh: async () =>
+      teamId && id ? ((await loadDerivedOrders(teamId, userId)).find((entry) => entry.id === id) ?? null) : null,
     onRecordPatch: (patch) =>
       setRecord((current) => {
         if (!current) return current;
@@ -1685,6 +1687,7 @@ export default function OrdersProductionDetailsPage() {
                   approvals={{
                     busy: approvalFlow.busy,
                     onRequestApproval: (kind) => void approvalFlow.request(kind),
+                    onWithdraw: (approval) => void approvalFlow.withdraw(approval),
                     onSign: (kind, via) => void approvalFlow.sign(kind, via),
                   }}
                   documentActions={documentActions}

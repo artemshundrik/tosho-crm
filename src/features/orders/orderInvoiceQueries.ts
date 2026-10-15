@@ -69,9 +69,12 @@ async function updateInvoice(
 export const requestOrderInvoice = (params: { teamId: string; orderId: string }) =>
   updateInvoice(params, { invoice_requested_at: new Date().toISOString() });
 
+/** «№ 407» і «407» — той самий номер: знак і пробіли прибираємо, інакше унікальність їх не зловить. */
+const normalizeInvoiceNumber = (value: string) => value.replace(/№/g, "").replace(/\s+/g, "").trim();
+
 export const issueOrderInvoice = (params: { teamId: string; orderId: string; number: string; date: string }) =>
-  updateInvoice({ ...params, number: params.number.trim() }, {
-    invoice_number: params.number.trim(),
+  updateInvoice({ ...params, number: normalizeInvoiceNumber(params.number) }, {
+    invoice_number: normalizeInvoiceNumber(params.number),
     invoice_date: params.date,
   });
 

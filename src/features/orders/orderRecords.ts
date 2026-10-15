@@ -207,6 +207,7 @@ type InheritedContract = {
   autoProlongation: boolean;
   signedAt: string | null;
   signedVia: SignatureVia | null;
+  orderId: string;
 };
 
 const parseSignatureVia = (value: unknown): SignatureVia | null =>
@@ -241,6 +242,7 @@ const buildContractByCustomerId = (orders: StoredOrderRow[]) => {
       autoProlongation: order.contract_auto_prolongation === true,
       signedAt: order.contract_signed_at ?? null,
       signedVia: parseSignatureVia(order.contract_signed_via),
+      orderId: order.id,
     };
     const current = byCustomerId.get(customerId);
     // Найсвіжіший договір виграє: якщо з замовником переукладали — нові замовлення йдуть за новим.
@@ -432,6 +434,8 @@ export type DerivedOrderRecord = {
    * замовника). null — договір власний або його ще немає.
    */
   inheritedContractOrderNumber: string | null;
+  /** Замовлення, на якому живе успадкований договір: підпис ставиться саме туди. */
+  inheritedContractOrderId: string | null;
   /**
    * Чи замовлення взагалі потребує погодження дизайну. false — товар без нанесення:
    * ні візуал, ні макет не потрібні, документи не блокуються дизайном.
@@ -1246,6 +1250,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       blockers,
       readinessColumn,
       inheritedContractOrderNumber: null,
+      inheritedContractOrderId: null,
       requiresDesignApproval: hasImprint || requiresVisualization || requiresLayout,
       hasApprovedVisualization,
       hasApprovedLayout,
@@ -1729,6 +1734,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             ? "ready"
             : order.readiness_column ?? "ready",
         inheritedContractOrderNumber: inheritedContract?.orderNumber ?? null,
+        inheritedContractOrderId: inheritedContract?.orderId ?? null,
         requiresDesignApproval,
         hasApprovedVisualization,
         hasApprovedLayout,

@@ -31,11 +31,19 @@ export function useOrderApprovalFlow({
   teamId,
   userId,
   onRecordPatch,
+  loadFresh,
 }: {
   record: DerivedOrderRecord | null;
   teamId: string | null | undefined;
   userId: string | null | undefined;
   onRecordPatch: (patch: (current: DerivedOrderRecord) => DerivedOrderRecord) => void;
+  /**
+   * Свіжий запис із бази. Відбиток документа рахуємо саме з нього: локальний
+   * запис після правки умов відрізняється від того, що прийде після
+   * перезавантаження (успадковані умови, ціни з тиражів), і погоджений документ
+   * хибно ставав би «зміненим».
+   */
+  loadFresh: () => Promise<DerivedOrderRecord | null>;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -82,13 +90,15 @@ export function useOrderApprovalFlow({
 
   const request = (kind: "contract" | "specification" | "launch", note?: string) =>
     guard(`request:${kind}`, async () => {
+      const fresh = kind === "launch" ? null : await loadFresh();
       const approval = await requestOrderApproval({
         teamId: teamId!,
         orderId: record!.id,
         kind,
-        documentStamp: kind === "launch" ? null : documentStamp(record!, kind),
+        documentStamp: kind === "launch" ? null : documentStamp(fresh ?? record!, kind),
         note,
       });
+      if (fresh) onRecordPatch(() => fresh);
       upsertApproval(approval);
       toast.success(kind === "launch" ? "Попросили дозволу — СЕО й головбух отримали сповіщення" : `${SUBJECT[kind]} надіслано на погодження`);
       void followUp(
@@ -136,9 +146,19 @@ export function useOrderApprovalFlow({
       );
     });
 
+  /** Відкликати свій запит — щоб виправити документ і надіслати наново. */
+  const withdraw = (approval: OrderApproval) =>
+    guard(`withdraw:${approval.id}`, async () => {
+      upsertApproval(await decideOrderApproval({ approvalId: approval.id, status: "withdrawn" }));
+      toast.success("Запит відкликано — виправте документ і надішліть на погодження знову");
+    });
+
   const sign = (kind: "contract" | "specification", via: SignatureVia | null) =>
     guard(`sign:${kind}`, async () => {
-      const result = await setOrderSignature({ teamId: teamId!, orderId: record!.id, kind, via });
+      // Успадкований договір підписують один раз — позначка йде на замовлення, де
+      // він живе, і тоді її бачать усі наступні замовлення замовника.
+      const orderId = kind === "contract" && record!.inheritedContractOrderId ? record!.inheritedContractOrderId : record!.id;
+      const result = await setOrderSignature({ teamId: teamId!, orderId, kind, via });
       onRecordPatch((current) =>
         kind === "contract"
           ? { ...current, contractSignedAt: result.signedAt, contractSignedVia: result.via }
@@ -152,5 +172,5 @@ export function useOrderApprovalFlow({
       );
     });
 
-  return { busy, request, decide, sign };
+  return { busy, request, decide, withdraw, sign };
 }

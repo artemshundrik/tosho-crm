@@ -67,25 +67,33 @@ type StampInput = Pick<
  * Відбиток того, що погоджують. Перестворили СП з іншими умовами чи
  * позиціями — відбиток інший, і старе погодження вже не про цей документ.
  */
+const num = (value: number | string | null | undefined) =>
+  value === null || value === undefined || value === "" ? "" : (Number(value) || 0).toFixed(2);
+
 export const documentStamp = (record: StampInput, kind: "contract" | "specification"): string => {
+  // Числа — в одному форматі (база тримає numeric(5,2)), а строк доплати — лише
+  // там, де він діє: до відвантаження він порожній локально, але після
+  // перезавантаження підтягується з успадкованого договору, і без цього
+  // погоджена СП хибно ставала «зміненою».
+  const afterShipment = record.balanceTiming === "after_shipment";
   const terms = [
-    record.prepaymentPct,
-    record.balancePct,
-    record.balanceTiming,
-    record.balanceDaysAfterShipment,
-    record.balanceDaysKind,
-    record.contractProductionDays,
+    num(record.prepaymentPct),
+    num(record.balancePct),
+    record.balanceTiming ?? "",
+    afterShipment ? num(record.balanceDaysAfterShipment) : "",
+    afterShipment ? (record.balanceDaysKind ?? "") : "",
+    num(record.contractProductionDays),
   ];
   if (kind === "contract") {
     return ["contract", record.contractNumber, record.contractDate, record.contractAutoProlongation, ...terms].join("|");
   }
-  const items = record.items.map((item) => `${item.name}:${item.qty}:${item.unitPrice}`).join(";");
+  const items = record.items.map((item) => `${item.name}:${num(item.qty)}:${num(item.unitPrice)}`).join(";");
   return [
     "specification",
     record.currency,
     Math.round((Number(record.total) || 0) * 100),
-    record.incotermsCode,
-    record.incotermsPlace,
+    record.incotermsCode ?? "",
+    record.incotermsPlace ?? "",
     ...terms,
     items,
   ].join("|");
@@ -123,13 +131,15 @@ export const getDocumentApprovalState = (
   // Успадкований договір погоджували й підписували на першому замовленні.
   if (kind === "contract" && record.inheritedContractOrderNumber) return { state: "notRequired", approval: null };
   if (!created) return { state: "missing", approval: null };
+  const approval = latestApproval(record.approvals, kind);
+  const changedSinceApproval =
+    approval?.status === "approved" && Boolean(approval.documentStamp) && approval.documentStamp !== documentStamp(record, kind);
+  // Документ, змінений після погодження, — уже інший документ: старий підпис
+  // його не покриває, погоджувати й підписувати треба наново.
+  if (changedSinceApproval) return { state: "stale", approval };
   const signed = kind === "contract" ? record.contractSignedAt : record.specificationSignedAt;
   if (signed) return { state: "notRequired", approval: null };
-  const approval = latestApproval(record.approvals, kind);
   if (!approval) return { state: "none", approval };
-  if (approval.status === "approved" && approval.documentStamp && approval.documentStamp !== documentStamp(record, kind)) {
-    return { state: "stale", approval };
-  }
   return { state: approval.status as DocumentApprovalState, approval };
 };
 
@@ -152,8 +162,14 @@ export const getSendToCustomerBlocker = (record: ApprovalRecord): string | null 
   return pending.length > 0 ? `Надіслати можна після погодження: ${pending.join(" і ")}` : null;
 };
 
-/** Договір підписано: свій або успадкований від першого замовлення замовника. */
-export const isContractSigned = (record: Pick<DerivedOrderRecord, "contractSignedAt">) => Boolean(record.contractSignedAt);
+/**
+ * Підпис чинний: позначка є, і документ не змінювали після погодження. Договір —
+ * свій або успадкований від першого замовлення замовника.
+ */
+export const isDocumentSigned = (record: ApprovalRecord, kind: "contract" | "specification") => {
+  const signed = kind === "contract" ? record.contractSignedAt : record.specificationSignedAt;
+  return Boolean(signed) && getDocumentApprovalState(record, kind).state !== "stale";
+};
 
 /** Дозвіл на запуск без умов: останній запит виду launch, погоджений. */
 export const getLaunchException = (record: Pick<DerivedOrderRecord, "approvals">) => latestApproval(record.approvals, "launch");

@@ -23,6 +23,7 @@ import {
   getDocumentApprovalState,
   getSendToCustomerBlocker,
   SIGNATURE_VIA_LABELS,
+  type OrderApproval,
   type SignatureVia,
 } from "@/features/orders/orderApprovals";
 import {
@@ -42,6 +43,7 @@ export type OrderDocumentAction = { kind: OrderDocumentKind } & ReturnType<typeo
 export type OrderApprovalHandlers = {
   busy: string | null;
   onRequestApproval: (kind: "contract" | "specification") => void;
+  onWithdraw: (approval: OrderApproval) => void;
   onSign: (kind: "contract" | "specification", via: SignatureVia | null) => void;
 };
 
@@ -77,17 +79,14 @@ function ApprovalLine({
           {signLabel}
           {signedVia ? ` ${SIGNATURE_VIA_LABELS[signedVia]}` : ""} · {formatShortCreatedDate(signedAt)}
         </span>
-        {/* Підпис успадкованого договору стоїть на першому замовленні — знімати його звідси нема чого. */}
-        {kind === "contract" && record.inheritedContractOrderNumber ? null : (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => approvals.onSign(kind, null)}
-            className="text-muted-foreground underline decoration-dotted underline-offset-4 hover:text-foreground"
-          >
-            Зняти позначку
-          </button>
-        )}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => approvals.onSign(kind, null)}
+          className="text-muted-foreground underline decoration-dotted underline-offset-4 hover:text-foreground"
+        >
+          Зняти позначку
+        </button>
       </div>
     );
   }
@@ -127,9 +126,21 @@ function ApprovalLine({
 
   if (state === "pending") {
     return (
-      <div className="mt-1.5 flex items-center gap-1 text-2xs font-medium tone-text-info">
-        <Clock className="h-3 w-3" />
-        На погодженні в бухгалтерії — надіслати замовнику можна після рішення
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs">
+        <span className="inline-flex items-center gap-1 font-medium tone-text-info">
+          <Clock className="h-3 w-3" />
+          На погодженні в бухгалтерії — надіслати замовнику можна після рішення
+        </span>
+        {approval ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => approvals.onWithdraw(approval)}
+            className="text-muted-foreground underline decoration-dotted underline-offset-4 hover:text-foreground"
+          >
+            Відкликати
+          </button>
+        ) : null}
       </div>
     );
   }

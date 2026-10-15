@@ -1,6 +1,7 @@
 import {
   getDocumentApprovalState,
   getLaunchException,
+  isDocumentSigned,
   type ApprovalRecord,
   type DocumentApprovalState,
 } from "./orderApprovals";
@@ -170,8 +171,8 @@ export const buildLaunchPath = (
   const spec = getDocumentApprovalState(input, "specification");
   const contractCreated = Boolean(input.contractCreatedAt);
   const specCreated = Boolean(input.specificationCreatedAt);
-  const contractSigned = Boolean(input.contractSignedAt);
-  const specSigned = Boolean(input.specificationSignedAt);
+  const contractSigned = isDocumentSigned(input, "contract");
+  const specSigned = isDocumentSigned(input, "specification");
   const deferred = isFullyDeferred(input);
   const onReadiness = isPaidOnReadiness(input);
   const paymentDone = deferred || onReadiness || prepaymentReceived || launched;

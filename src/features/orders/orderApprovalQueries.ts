@@ -56,7 +56,12 @@ export async function loadOrderApprovalsByOrderId(teamId: string): Promise<Map<s
     .select(COLUMNS)
     .eq("team_id", teamId)
     .order("requested_at", { ascending: false });
-  if (error) return byOrderId;
+  if (error) {
+    // Таблиці ще немає — порожньо. Іншу помилку не ковтаємо: інакше погоджені
+    // документи мовчки виглядали б непогодженими.
+    if (/order_approvals|does not exist|schema cache/i.test(error.message)) return byOrderId;
+    throw new Error(error.message, { cause: error });
+  }
   for (const row of (data as ApprovalRow[] | null) ?? []) {
     const list = byOrderId.get(row.order_id) ?? [];
     list.push(toApproval(row));
