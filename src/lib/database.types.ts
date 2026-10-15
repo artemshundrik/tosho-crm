@@ -3126,6 +3126,51 @@ export type Database = {
         }
         Relationships: []
       }
+      order_approvals: {
+        Row: {
+          id: string
+          team_id: string
+          order_id: string
+          kind: string
+          status: string
+          document_stamp: string | null
+          request_note: string | null
+          requested_by: string | null
+          requested_at: string
+          decided_by: string | null
+          decided_at: string | null
+          decision_note: string | null
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          order_id: string
+          kind: string
+          status?: string
+          document_stamp?: string | null
+          request_note?: string | null
+          requested_by?: string | null
+          requested_at?: string
+          decided_by?: string | null
+          decided_at?: string | null
+          decision_note?: string | null
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          order_id?: string
+          kind?: string
+          status?: string
+          document_stamp?: string | null
+          request_note?: string | null
+          requested_by?: string | null
+          requested_at?: string
+          decided_by?: string | null
+          decided_at?: string | null
+          decision_note?: string | null
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           catalog_model_id: string | null
@@ -3229,6 +3274,12 @@ export type Database = {
           incoterms_place: string | null
           invoice_created_at: string | null
           invoice_number: string | null
+          contract_signed_at: string | null
+          contract_signed_by: string | null
+          contract_signed_via: string | null
+          specification_signed_at: string | null
+          specification_signed_by: string | null
+          specification_signed_via: string | null
           invoice_date: string | null
           invoice_issued_by: string | null
           invoice_requested_at: string | null
@@ -3298,6 +3349,12 @@ export type Database = {
           incoterms_place?: string | null
           invoice_created_at?: string | null
           invoice_number?: string | null
+          contract_signed_at?: string | null
+          contract_signed_by?: string | null
+          contract_signed_via?: string | null
+          specification_signed_at?: string | null
+          specification_signed_by?: string | null
+          specification_signed_via?: string | null
           invoice_date?: string | null
           invoice_issued_by?: string | null
           invoice_requested_at?: string | null
@@ -3367,6 +3424,12 @@ export type Database = {
           incoterms_place?: string | null
           invoice_created_at?: string | null
           invoice_number?: string | null
+          contract_signed_at?: string | null
+          contract_signed_by?: string | null
+          contract_signed_via?: string | null
+          specification_signed_at?: string | null
+          specification_signed_by?: string | null
+          specification_signed_via?: string | null
           invoice_date?: string | null
           invoice_issued_by?: string | null
           invoice_requested_at?: string | null

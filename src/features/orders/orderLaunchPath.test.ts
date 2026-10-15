@@ -10,8 +10,8 @@ import {
 /**
  * «Шлях до запуску» на картці замовлення показує лише умови свого способу
  * оплати (СЕО, 14.10.2026): на готівці — передоплату, на безготівці — договір,
- * СП і оплату за умовами. Підписів і воріт ще немає в даних (p7, p8), тож
- * кроки рахуються з того, що CRM знає сьогодні.
+ * СП і оплату за умовами. Ворота запуску (p8): договір і СП зроблені, лише
+ * коли підписані (p7); до підпису — погодження (p6).
  */
 const cash: LaunchPathInput = {
   paymentMethodId: "cash",
@@ -27,6 +27,25 @@ const cash: LaunchPathInput = {
   orderStatus: "approved",
   contractCreatedAt: null,
   specificationCreatedAt: null,
+  contractSignedAt: null,
+  specificationSignedAt: null,
+  inheritedContractOrderNumber: null,
+  approvals: [],
+  items: [],
+  currency: "UAH",
+  incotermsCode: "FCA",
+  incotermsPlace: null,
+  contractNumber: null,
+  contractDate: null,
+  contractProductionDays: null,
+  contractAutoProlongation: false,
+};
+
+const SIGNED = {
+  contractCreatedAt: "2026-10-14",
+  specificationCreatedAt: "2026-10-14",
+  contractSignedAt: "2026-10-15",
+  specificationSignedAt: "2026-10-15",
 };
 
 const cashless: LaunchPathInput = {
@@ -70,8 +89,8 @@ describe("buildLaunchPath", () => {
     expect(stateOf(cashless)).toEqual(["contract:current", "specification:todo", "payment:todo", "launch:locked"]);
   });
 
-  it("безготівка з договором і СП чекає оплату", () => {
-    const input = { ...cashless, contractCreatedAt: "2026-10-14", specificationCreatedAt: "2026-10-14" };
+  it("безготівка з підписаними договором і СП чекає оплату", () => {
+    const input = { ...cashless, ...SIGNED };
     expect(buildLaunchPath(input).blocker).toBe("Чекає передоплату");
     expect(stateOf(input)).toEqual(["contract:done", "specification:done", "payment:current", "launch:locked"]);
   });
@@ -84,8 +103,7 @@ describe("buildLaunchPath", () => {
       balanceTiming: "after_shipment" as const,
       balanceDaysAfterShipment: 14,
       balanceDaysKind: "calendar" as const,
-      contractCreatedAt: "2026-10-14",
-      specificationCreatedAt: "2026-10-14",
+      ...SIGNED,
     };
     const path = buildLaunchPath(deferred);
     expect(path.heading).toBe("Безготівка, оплата після відвантаження");
@@ -195,5 +213,65 @@ describe("після рецензії картки", () => {
   it("відвантажене замовлення закриває крок відвантаження", () => {
     const shipped = { ...cash, paymentStatus: "fully_paid", orderStatus: "shipped" };
     expect(buildLaunchPath(shipped).steps.find((s) => s.key === "shipment")?.state).toBe("done");
+  });
+});
+
+describe("ворота запуску (p6–p8)", () => {
+  const created = { ...cashless, contractCreatedAt: "2026-10-14", specificationCreatedAt: "2026-10-14" };
+  const approval = (kind: "contract" | "specification" | "launch", status: "pending" | "approved", stamp: string | null = null) => ({
+    id: `${kind}-${status}`,
+    orderId: "o",
+    kind,
+    status,
+    documentStamp: stamp,
+    requestNote: kind === "launch" ? "Постійний клієнт" : null,
+    requestedBy: "m",
+    requestedAt: "2026-10-15T10:00:00Z",
+    decidedBy: status === "approved" ? "a" : null,
+    decidedAt: null,
+    decisionNote: null,
+  });
+
+  it("створені, але не погоджені — запуск чекає погодження договору", () => {
+    expect(buildLaunchPath(created).blocker).toBe("Договір не погоджено");
+    expect(buildLaunchPath(created).steps[0].note).toBe("Створено — надіслати на погодження");
+  });
+
+  it("договір погоджено — далі погодження СП, потім підписи", () => {
+    const withContract = { ...created, approvals: [approval("contract", "approved")] };
+    expect(buildLaunchPath(withContract).blocker).toBe("СП не погоджено");
+    const both = { ...withContract, approvals: [approval("contract", "approved"), approval("specification", "approved")] };
+    expect(buildLaunchPath(both).blocker).toBe("Договір не підписано");
+    expect(buildLaunchPath({ ...both, contractSignedAt: "2026-10-15" }).blocker).toBe("СП не підписана");
+  });
+
+  it("успадкований підписаний договір не просить ні погодження, ні підпису", () => {
+    const inherited = {
+      ...cashless,
+      contractCreatedAt: "2026-09-01",
+      contractSignedAt: "2026-09-02",
+      inheritedContractOrderNumber: "ZM-0926-0001",
+      specificationCreatedAt: "2026-10-14",
+      specificationSignedAt: "2026-10-15",
+    };
+    expect(buildLaunchPath(inherited).blocker).toBe("Чекає передоплату");
+  });
+
+  it("дозвіл без умов відкриває запуск і каже, чого бракує", () => {
+    const path = buildLaunchPath({ ...created, approvals: [approval("launch", "approved")] });
+    expect(path.blocker).toBeNull();
+    expect(path.missing).toEqual(["підпису договору", "підпису СП", "оплати"]);
+    expect(path.steps.find((step) => step.key === "launch")).toMatchObject({
+      state: "current",
+      note: "Дозволено запустити без умов",
+    });
+  });
+
+  it("запит на дозвіл ще на розгляді — запуск закритий", () => {
+    expect(buildLaunchPath({ ...created, approvals: [approval("launch", "pending")] }).blocker).toBe("Договір не погоджено");
+  });
+
+  it("готівка: дозвіл відкриває запуск без передоплати", () => {
+    expect(buildLaunchPath({ ...cash, approvals: [approval("launch", "approved")] }).blocker).toBeNull();
   });
 });

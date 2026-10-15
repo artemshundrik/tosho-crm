@@ -14,11 +14,22 @@ import {
   FilePlus2,
   Mail,
   MoreHorizontal,
+  FileSignature,
   Pencil,
   Phone,
   Send,
 } from "@/components/icons/appIcons";
-import { getDocumentActionState, type OrderDocumentKind } from "@/features/orders/orderDocumentRequirements";
+import {
+  getDocumentApprovalState,
+  getSendToCustomerBlocker,
+  SIGNATURE_VIA_LABELS,
+  type SignatureVia,
+} from "@/features/orders/orderApprovals";
+import {
+  formatShortCreatedDate,
+  getDocumentActionState,
+  type OrderDocumentKind,
+} from "@/features/orders/orderDocumentRequirements";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { isCashlessPaymentMethod } from "@/features/orders/paymentRules";
 import { formatTelegramHandle } from "@/lib/telegramContact";
@@ -27,6 +38,117 @@ import { cn } from "@/lib/utils";
 import { InfoHint, RequirementList } from "./OrderHints";
 
 export type OrderDocumentAction = { kind: OrderDocumentKind } & ReturnType<typeof getDocumentActionState>;
+
+export type OrderApprovalHandlers = {
+  busy: string | null;
+  onRequestApproval: (kind: "contract" | "specification") => void;
+  onSign: (kind: "contract" | "specification", via: SignatureVia | null) => void;
+};
+
+const SIGN_OPTIONS: SignatureVia[] = ["paper", "vchasno", "medoc"];
+
+/**
+ * Під договором і СП — погодження (p6) і підпис (p7): «На погодження», «На
+ * погодженні», «Погоджено» з позначкою підпису, «Підписано … ». Лише безготівка
+ * і лише створений документ — до того рядка тут нема чого показувати.
+ */
+function ApprovalLine({
+  record,
+  kind,
+  approvals,
+}: {
+  record: DerivedOrderRecord;
+  kind: "contract" | "specification";
+  approvals: OrderApprovalHandlers;
+}) {
+  const { state, approval } = getDocumentApprovalState(record, kind);
+  const signedAt = kind === "contract" ? record.contractSignedAt : record.specificationSignedAt;
+  const signedVia = kind === "contract" ? record.contractSignedVia : record.specificationSignedVia;
+  const created = kind === "contract" ? record.contractCreatedAt : record.specificationCreatedAt;
+  if (!isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail) || !created) return null;
+  const busy = approvals.busy !== null;
+  const signLabel = kind === "contract" ? "Підписано обома сторонами" : "Підписано замовником";
+
+  if (signedAt) {
+    return (
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs">
+        <span className="tone-text-success inline-flex items-center gap-1 font-medium">
+          <CheckCircle2 className="h-3 w-3" />
+          {signLabel}
+          {signedVia ? ` ${SIGNATURE_VIA_LABELS[signedVia]}` : ""} · {formatShortCreatedDate(signedAt)}
+        </span>
+        {/* Підпис успадкованого договору стоїть на першому замовленні — знімати його звідси нема чого. */}
+        {kind === "contract" && record.inheritedContractOrderNumber ? null : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => approvals.onSign(kind, null)}
+            className="text-muted-foreground underline decoration-dotted underline-offset-4 hover:text-foreground"
+          >
+            Зняти позначку
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const signMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="xs" variant="outline" disabled={busy}>
+          <FileSignature />
+          Позначити підписаним
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        {SIGN_OPTIONS.map((via) => (
+          <DropdownMenuItem key={via} onClick={() => approvals.onSign(kind, via)}>
+            Підписано {SIGNATURE_VIA_LABELS[via]}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  if (state === "approved" || state === "notRequired") {
+    return (
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
+        {state === "approved" ? (
+          <span className="tone-text-success inline-flex items-center gap-1 font-medium">
+            <CheckCircle2 className="h-3 w-3" />
+            Погоджено{approval?.decidedAt ? ` · ${formatShortCreatedDate(approval.decidedAt)}` : ""}
+          </span>
+        ) : null}
+        <span>{kind === "contract" ? "Чекаємо підпис обох сторін" : "Чекаємо підпис замовника"}</span>
+        {signMenu}
+      </div>
+    );
+  }
+
+  if (state === "pending") {
+    return (
+      <div className="mt-1.5 flex items-center gap-1 text-2xs font-medium tone-text-info">
+        <Clock className="h-3 w-3" />
+        На погодженні в бухгалтерії — надіслати замовнику можна після рішення
+      </div>
+    );
+  }
+
+  const reason =
+    state === "returned"
+      ? `Повернули: ${approval?.decisionNote ?? "без коментаря"}`
+      : state === "stale"
+        ? "Змінився після погодження — погодьте ще раз"
+        : "Не погоджено — замовнику ще не надсилати";
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-2xs">
+      <span className={cn(state === "returned" ? "tone-text-warning font-medium" : "text-muted-foreground")}>{reason}</span>
+      <Button size="xs" variant="outline" disabled={busy} onClick={() => approvals.onRequestApproval(kind)}>
+        На погодження
+      </Button>
+    </div>
+  );
+}
 
 /**
  * «Документи замовнику» + «Внутрішні» (макет Main / Cash). На готівці замість
@@ -39,12 +161,14 @@ function DocumentRow({
   onAction,
   onParams,
   onFixRequisites,
+  approvals,
 }: {
   record: DerivedOrderRecord;
   document: OrderDocumentAction;
   onAction: (kind: OrderDocumentKind) => void;
   onParams: (kind: OrderDocumentKind) => void;
   onFixRequisites: (() => void) | null;
+  approvals: OrderApprovalHandlers;
 }) {
   const isCreated = document.actionMode === "open" && Boolean(document.createdDateLabel);
   // Уже створений документ можна перестворити з іншими параметрами — і договір, і СП.
@@ -112,6 +236,9 @@ function DocumentRow({
         ) : secondaryText ? (
           <div className="mt-0.5 text-2xs leading-4 text-muted-foreground">{secondaryText}</div>
         ) : null}
+        {document.kind === "contract" || document.kind === "specification" ? (
+          <ApprovalLine record={record} kind={document.kind} approvals={approvals} />
+        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-0.5">
         {document.actionMode === "create" ? (
@@ -166,8 +293,10 @@ export function OrderDocumentsCard({
   onEmail,
   onTelegram,
   onViber,
+  approvals,
 }: {
   record: DerivedOrderRecord;
+  approvals: OrderApprovalHandlers;
   documentActions: OrderDocumentAction[];
   onAction: (kind: OrderDocumentKind) => void;
   onParams: (kind: OrderDocumentKind) => void;
@@ -180,7 +309,8 @@ export function OrderDocumentsCard({
   const customerDocs = documentActions.filter((item) => item.kind !== "techCard");
   const techCard = documentActions.find((item) => item.kind === "techCard");
   const readyCount = customerDocs.filter((item) => item.actionMode === "open").length;
-  const rowProps = { record, onAction, onParams, onFixRequisites };
+  const rowProps = { record, onAction, onParams, onFixRequisites, approvals };
+  const sendBlocker = getSendToCustomerBlocker(record);
 
   return (
     <>
@@ -221,7 +351,9 @@ export function OrderDocumentsCard({
             <span className="text-sm font-semibold text-foreground">
               {cashless ? "Надіслати замовнику" : "Написати замовнику"}
             </span>
-            {record.contactTelegram ? (
+            {sendBlocker ? (
+              <span className="truncate text-2xs tone-text-warning">{sendBlocker}</span>
+            ) : record.contactTelegram ? (
               <span className="truncate text-2xs text-muted-foreground">
                 Telegram: {formatTelegramHandle(record.contactTelegram)}
               </span>

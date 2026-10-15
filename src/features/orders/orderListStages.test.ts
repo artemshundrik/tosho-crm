@@ -36,9 +36,27 @@ const cashless: OrderListInput = {
   invoiceReturnNote: null,
   inheritedContractOrderNumber: null,
   managerUserId: "me",
+  contractSignedAt: null,
+  specificationSignedAt: null,
+  approvals: [],
+  items: [],
+  currency: "UAH",
+  incotermsCode: "FCA",
+  incotermsPlace: null,
+  contractNumber: null,
+  contractDate: null,
+  contractProductionDays: null,
+  contractAutoProlongation: false,
 };
 
-const withDocs = { ...cashless, contractCreatedAt: "2026-10-14", specificationCreatedAt: "2026-10-14" };
+// Договір і СП підписані — далі в безготівки лише рахунок і оплата.
+const withDocs = {
+  ...cashless,
+  contractCreatedAt: "2026-10-14",
+  specificationCreatedAt: "2026-10-14",
+  contractSignedAt: "2026-10-15",
+  specificationSignedAt: "2026-10-15",
+};
 const cash: OrderListInput = { ...cashless, paymentMethodId: "cash", paymentRail: "Готівкові / на карту" };
 
 describe("getOrderNextStep", () => {
@@ -171,14 +189,21 @@ describe("getOrderDocMarks", () => {
     expect(getOrderDocMarks(cash)).toBeNull();
   });
 
-  it("Д/С/Р/В зі створених документів; успадкований договір — готовий", () => {
+  it("Д/С готові, коли підписані; створені — обведені; успадкований підписаний договір — готовий", () => {
     const marks = getOrderDocMarks({
       ...cashless,
       inheritedContractOrderNumber: "ZM-0926-0001",
+      contractSignedAt: "2026-09-02",
+      specificationCreatedAt: "2026-10-14",
       invoiceNumber: "407",
       invoiceCreatedAt: "2026-10-14",
     });
-    expect(marks?.map((mark) => `${mark.letter}:${mark.ready}`)).toEqual(["Д:true", "С:false", "Р:true", "В:false"]);
+    expect(marks?.map((mark) => `${mark.letter}:${mark.ready ? "так" : mark.inProgress ? "в роботі" : "ні"}`)).toEqual([
+      "Д:так",
+      "С:в роботі",
+      "Р:так",
+      "В:ні",
+    ]);
   });
 });
 
@@ -200,7 +225,7 @@ describe("summarizeOrderStages", () => {
 });
 
 describe("isMyTurn", () => {
-  const manager = (userId: string | null) => ({ userId, canIssueInvoice: false });
+  const manager = (userId: string | null) => ({ userId, canIssueInvoice: false, canApproveLaunch: false });
   it("менеджерський хід — лише на своєму замовленні", () => {
     expect(isMyTurn(cashless, manager("me"))).toBe(true);
     expect(isMyTurn(cashless, manager("other"))).toBe(false);
@@ -209,7 +234,7 @@ describe("isMyTurn", () => {
 
   it("попросили рахунок — хід бухгалтерії на будь-якому замовленні, не менеджера", () => {
     const requested = { ...withDocs, invoiceRequestedAt: "2026-10-15T10:00:00Z" };
-    expect(isMyTurn(requested, { userId: "accountant", canIssueInvoice: true })).toBe(true);
+    expect(isMyTurn(requested, { userId: "accountant", canIssueInvoice: true, canApproveLaunch: false })).toBe(true);
     expect(isMyTurn(requested, manager("me"))).toBe(false);
   });
 });
@@ -232,12 +257,12 @@ describe("рахунок через бухгалтерію (p10)", () => {
   it("попросили ще до договору — хід однаково бухгалтерії, не «Створити договір»", () => {
     const early = { ...cashless, invoiceRequestedAt: "2026-10-15T10:00:00Z" };
     expect(getOrderNextStep(early)).toMatchObject({ turn: "accounting" });
-    expect(isMyTurn(early, { userId: "accountant", canIssueInvoice: true })).toBe(true);
+    expect(isMyTurn(early, { userId: "accountant", canIssueInvoice: true, canApproveLaunch: false })).toBe(true);
   });
 
   it("попросили в запущеному замовленні — у бухгалтера це теж його хід", () => {
     const launched = { ...withDocs, orderStatus: "in_production", invoiceRequestedAt: "2026-10-15T10:00:00Z" };
-    expect(isMyTurn(launched, { userId: "accountant", canIssueInvoice: true })).toBe(true);
+    expect(isMyTurn(launched, { userId: "accountant", canIssueInvoice: true, canApproveLaunch: false })).toBe(true);
   });
 
   it("повернули — знову менеджер, з причиною", () => {
@@ -257,5 +282,52 @@ describe("рахунок через бухгалтерію (p10)", () => {
 
   it("готівці рахунок не потрібен", () => {
     expect(getOrderNextStep({ ...cash, contractCreatedAt: null }).title).toBe("Передоплата 70%");
+  });
+});
+
+describe("погодження, підпис і виняток у списку (p6–p8)", () => {
+  const created = { ...cashless, contractCreatedAt: "2026-10-14", specificationCreatedAt: "2026-10-14" };
+  const approval = (kind: "contract" | "specification" | "launch", status: "pending" | "approved" | "returned") => ({
+    id: `${kind}-${status}`,
+    orderId: "o",
+    kind,
+    status,
+    documentStamp: null,
+    requestNote: null,
+    requestedBy: "me",
+    requestedAt: "2026-10-15T10:00:00Z",
+    decidedBy: null,
+    decidedAt: null,
+    decisionNote: status === "returned" ? "Не та дата" : null,
+  });
+  const accountant = { userId: "acc", canIssueInvoice: true, canApproveLaunch: false };
+  const ceo = { userId: "ceo", canIssueInvoice: true, canApproveLaunch: true };
+
+  it("створені й не надіслані — менеджер шле договір на погодження", () => {
+    expect(getOrderNextStep(created)).toMatchObject({ turn: "manager", title: "Договір — на погодження" });
+  });
+
+  it("договір на погодженні — хід бухгалтерії, і бухгалтер бачить його в «Мій хід»", () => {
+    const pending = { ...created, approvals: [approval("contract", "pending")] };
+    expect(getOrderNextStep(pending)).toMatchObject({ turn: "accounting", title: "Договір на погодженні" });
+    expect(isMyTurn(pending, accountant)).toBe(true);
+    expect(isMyTurn(pending, { userId: "me", canIssueInvoice: false, canApproveLaunch: false })).toBe(false);
+  });
+
+  it("повернули — менеджер бачить причину", () => {
+    const returned = { ...created, approvals: [approval("contract", "returned")] };
+    expect(getOrderNextStep(returned)).toMatchObject({ turn: "manager", detail: "Не та дата" });
+  });
+
+  it("обидва погоджено — чекаємо підпис замовника", () => {
+    const approved = { ...created, approvals: [approval("contract", "approved"), approval("specification", "approved")] };
+    expect(getOrderNextStep(approved)).toMatchObject({ turn: "customer", title: "Чекаємо підпис договору" });
+  });
+
+  it("просять запустити без умов — хід керівництва, бухгалтеру це не його хід", () => {
+    const asked = { ...created, approvals: [approval("launch", "pending")] };
+    expect(getOrderNextStep(asked)).toMatchObject({ turn: "management" });
+    expect(isMyTurn(asked, ceo)).toBe(true);
+    expect(isMyTurn(asked, accountant)).toBe(false);
   });
 });

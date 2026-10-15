@@ -1,3 +1,9 @@
+import {
+  getDocumentApprovalState,
+  getLaunchException,
+  type ApprovalRecord,
+  type DocumentApprovalState,
+} from "./orderApprovals";
 import { ORDER_PAYMENT_TERMS_OPTIONS } from "./config";
 import type { DerivedOrderRecord } from "./orderRecords";
 import { formatBalanceDaysShort, isCashlessPaymentMethod } from "./paymentRules";
@@ -7,11 +13,12 @@ import { formatBalanceDaysShort, isCashlessPaymentMethod } from "./paymentRules"
  * Показуємо лише умови свого способу оплати (СЕО, 14.10.2026): на готівці —
  * передоплату, на безготівці — договір, СП і оплату за умовами.
  *
- * Підписів, погоджень і воріт запуску в даних ще немає (p6–p8), тому договір і
- * СП тут «зроблені», щойно створені. Коли з'являться підписи, крок стане
- * «зроблений», лише коли підписано, — і змінити треба буде саме цей файл.
+ * Ворота запуску (p8): договір і СП «зроблені», лише коли підписані (p7);
+ * до того крок показує погодження (p6). Дозвіл на запуск без умов від СЕО чи
+ * головного бухгалтера відкриває запуск, хоч би чого бракувало.
  */
-export type LaunchPathInput = Pick<
+export type LaunchPathInput = ApprovalRecord &
+  Pick<
   DerivedOrderRecord,
   | "paymentMethodId"
   | "paymentRail"
@@ -30,6 +37,16 @@ export type LaunchPathInput = Pick<
 
 export type LaunchStepState = "done" | "current" | "todo" | "locked";
 export type LaunchStep = { key: string; title: string; note: string; state: LaunchStepState };
+
+/** Що саме зупиняє запуск; null — можна запускати. Читає й список замовлень. */
+export type LaunchBlocker =
+  | "Бракує договору"
+  | "Бракує СП"
+  | "Договір не погоджено"
+  | "СП не погоджено"
+  | "Договір не підписано"
+  | "СП не підписана"
+  | "Чекає передоплату";
 
 export const PREPAYMENT_RECEIVED = new Set(["partially_paid", "fully_paid", "awaiting_balance"]);
 export const LAUNCHED_ORDER_STATUSES = new Set(["production_started", "in_production", "ready", "shipped", "completed"]);
@@ -67,9 +84,26 @@ export const formatPaymentTermsChip = (input: LaunchPathInput): string | null =>
   return `${breakdown.prepayment}/${breakdown.balance}`;
 };
 
+const APPROVAL_NOTES: Partial<Record<DocumentApprovalState, string>> = {
+  none: "Створено — надіслати на погодження",
+  stale: "Змінився після погодження — погодити ще раз",
+  pending: "На погодженні в бухгалтерії",
+  returned: "Повернули на правки",
+  approved: "Погоджено — чекаємо підпис",
+};
+
 export const buildLaunchPath = (
   input: LaunchPathInput
-): { heading: string; steps: LaunchStep[]; blocker: string | null } => {
+): {
+  heading: string;
+  steps: LaunchStep[];
+  blocker: LaunchBlocker | null;
+  /** Що ще бракує, коли запускають за дозволом: «оплати», «підпису СП». */
+  missing: string[];
+  exception: ReturnType<typeof getLaunchException>;
+} => {
+  const exception = getLaunchException(input);
+  const exceptionApproved = exception?.status === "approved";
   const prepaymentReceived = PREPAYMENT_RECEIVED.has(input.paymentStatus);
   const launched = LAUNCHED_ORDER_STATUSES.has(input.orderStatus);
   const terms = formatPaymentTermsChip(input);
@@ -78,8 +112,14 @@ export const buildLaunchPath = (
   const launchStep = (ready: boolean, lockedNote: string): LaunchStep => ({
     key: "launch",
     title: "Запуск у виробництво",
-    note: launched ? "Запущено" : ready ? "Можна запускати" : lockedNote,
-    state: launched ? "done" : ready ? "current" : "locked",
+    note: launched
+      ? "Запущено"
+      : ready
+        ? "Можна запускати"
+        : exceptionApproved
+          ? "Дозволено запустити без умов"
+          : lockedNote,
+    state: launched ? "done" : ready || exceptionApproved ? "current" : "locked",
   });
 
   const shipmentStep: LaunchStep = {
@@ -120,27 +160,37 @@ export const buildLaunchPath = (
     return {
       heading: terms ? `${method}, ${terms}` : method,
       steps,
-      blocker: prepaymentDone ? null : "Чекає передоплату",
+      blocker: prepaymentDone || exceptionApproved ? null : "Чекає передоплату",
+      missing: prepaymentDone ? [] : ["передоплати"],
+      exception,
     };
   }
 
-  const contractDone = Boolean(input.contractCreatedAt);
-  const specDone = Boolean(input.specificationCreatedAt);
+  const contract = getDocumentApprovalState(input, "contract");
+  const spec = getDocumentApprovalState(input, "specification");
+  const contractCreated = Boolean(input.contractCreatedAt);
+  const specCreated = Boolean(input.specificationCreatedAt);
+  const contractSigned = Boolean(input.contractSignedAt);
+  const specSigned = Boolean(input.specificationSignedAt);
   const deferred = isFullyDeferred(input);
   const onReadiness = isPaidOnReadiness(input);
   const paymentDone = deferred || onReadiness || prepaymentReceived || launched;
+  const docNote = (created: boolean, signed: boolean, state: DocumentApprovalState, emptyNote: string) =>
+    signed ? "Підписано" : !created ? emptyNote : (APPROVAL_NOTES[state] ?? "Створено — чекаємо підпис");
   const steps: LaunchStep[] = [
     {
       key: "contract",
       title: "Договір",
-      note: contractDone ? "Створено" : "Один на замовника",
-      state: contractDone ? "done" : "current",
+      note: input.inheritedContractOrderNumber && !contractSigned
+        ? `З ${input.inheritedContractOrderNumber} — не позначено підписаним`
+        : docNote(contractCreated, contractSigned, contract.state, "Один на замовника, підписують обидві сторони"),
+      state: contractSigned ? "done" : "current",
     },
     {
       key: "specification",
       title: "СП",
-      note: specDone ? "Створено" : "Додаток до договору на це замовлення",
-      state: specDone ? "done" : contractDone ? "current" : "todo",
+      note: docNote(specCreated, specSigned, spec.state, "Додаток до договору на це замовлення"),
+      state: specSigned ? "done" : contractCreated ? "current" : "todo",
     },
     {
       key: "payment",
@@ -150,24 +200,40 @@ export const buildLaunchPath = (
         : onReadiness
           ? "До запуску не потрібна: 100% після готовності, до відвантаження"
           : prepaymentNote,
-      state: paymentDone ? "done" : contractDone && specDone ? "current" : "todo",
+      state: paymentDone ? "done" : contractSigned && specSigned ? "current" : "todo",
     },
-    launchStep(contractDone && specDone && paymentDone, "Після СП і оплати за умовами"),
+    launchStep(contractSigned && specSigned && paymentDone, "Після підписаної СП і оплати за умовами"),
   ];
+  const needsApproval = (state: DocumentApprovalState) => state !== "approved" && state !== "notRequired";
   // Уже запущене (старі замовлення без договору в CRM) — блокувати нічого.
-  const blocker = launched
+  const rawBlocker: LaunchBlocker | null = launched
     ? null
-    : !contractDone
-    ? "Бракує договору"
-    : !specDone
-      ? "Бракує СП"
-      : !paymentDone
-        ? "Чекає передоплату"
-        : null;
+    : !contractCreated
+      ? "Бракує договору"
+      : !specCreated
+        ? "Бракує СП"
+        : !contractSigned && needsApproval(contract.state)
+          ? "Договір не погоджено"
+          : !specSigned && needsApproval(spec.state)
+            ? "СП не погоджено"
+            : !contractSigned
+              ? "Договір не підписано"
+              : !specSigned
+                ? "СП не підписана"
+                : !paymentDone
+                  ? "Чекає передоплату"
+                  : null;
+  const missing = [
+    ...(!contractSigned ? ["підпису договору"] : []),
+    ...(!specSigned ? ["підпису СП"] : []),
+    ...(!paymentDone ? ["оплати"] : []),
+  ];
   return {
     heading: deferred ? "Безготівка, оплата після відвантаження" : terms ? `Безготівка, ${terms}` : "Безготівка",
     steps,
-    blocker,
+    blocker: exceptionApproved ? null : rawBlocker,
+    missing: launched ? [] : missing,
+    exception,
   };
 };
 

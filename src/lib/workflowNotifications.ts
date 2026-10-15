@@ -4,7 +4,7 @@ import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import { formatRatePercent, minMarkupRateFor, type QuoteDealType } from "@/lib/quoteDealType";
 import { resolveMarkupApproverIds } from "@/lib/quoteMarkupNotice";
 import { boardColumnStatuses } from "@/lib/kanbanBoards";
-import { canIssueOrderInvoice } from "@/lib/permissions";
+import { canApproveOrderLaunch, canIssueOrderInvoice } from "@/lib/permissions";
 
 const isUuid = (value?: string | null) =>
   typeof value === "string" &&
@@ -76,17 +76,6 @@ function pickQuoteWatcherUserIds(rows: TeamMemberRoleRow[]) {
     .filter((value): value is string => !!value);
 }
 
-/** Керівництво: access_role='owner' АБО job_role='seo'. */
-function pickOwnerAndSeoUserIds(rows: TeamMemberRoleRow[]) {
-  return rows
-    .filter((row) => normalizeRole(row.access_role) === "owner" || normalizeRole(row.job_role) === "seo")
-    .map((row) => row.user_id)
-    .filter((value): value is string => !!value);
-}
-
-// Approver pool for contract revisions: access_role='owner' OR job_role='seo'.
-// CEO users act as alternate contract approvers per project rule.
-const pickContractApproverUserIds = pickOwnerAndSeoUserIds;
 
 function pickDesignerUserIds(rows: TeamMemberRoleRow[]) {
   return rows
@@ -560,7 +549,8 @@ export async function notifyContractRevisionSubmitted(params: {
   actorUserId?: string | null;
 }) {
   const members = await resolveTeamMembers(params.teamId);
-  const recipients = new Set(pickContractApproverUserIds(members));
+  // Версію договору погоджує бухгалтерія або СЕО (REQ-322#p6) — той самий круг, що й рахунок.
+  const recipients = new Set(pickInvoiceIssuerUserIds(members));
   if (params.actorUserId) recipients.delete(params.actorUserId);
   if (recipients.size === 0) return;
   const quoteRef = params.quoteNumber ? `#${params.quoteNumber}` : "цього замовлення";
@@ -792,6 +782,93 @@ export async function notifyOrderInvoiceDecided(params: {
     href: `/orders/production/${params.orderId}`,
     type: issued ? "success" : "warning",
     category: "order_invoice_decision",
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Погодження договору й СП, дозвіл на запуск (REQ-322#p6, p8)         */
+/* ------------------------------------------------------------------ */
+
+const ORDER_APPROVAL_SUBJECT = {
+  contract: "договір",
+  specification: "СП",
+  launch: "запуск без умов",
+} as const;
+
+export async function notifyOrderApprovalRequested(params: {
+  teamId: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  kind: "contract" | "specification" | "launch";
+  /** Для запуску — причина й чого бракує. */
+  note?: string | null;
+  requesterName?: string | null;
+  actorUserId?: string | null;
+}) {
+  const members = await resolveTeamMembers(params.teamId);
+  const recipients = new Set(
+    params.kind === "launch"
+      ? members
+          .filter((row) => canApproveOrderLaunch(row.job_role))
+          .map((row) => row.user_id)
+          .filter((value): value is string => !!value)
+      : pickInvoiceIssuerUserIds(members)
+  );
+  if (params.actorUserId) recipients.delete(params.actorUserId);
+  if (recipients.size === 0) return;
+  const who = params.requesterName?.trim() || "Менеджер";
+  const note = params.note?.trim();
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title:
+      params.kind === "launch"
+        ? `${params.orderNumber}: просять запустити без умов`
+        : `${params.orderNumber}: погодити ${ORDER_APPROVAL_SUBJECT[params.kind]}`,
+    body:
+      params.kind === "launch"
+        ? `${who} просить дозволу запустити замовлення ${params.customerName}.${note ? ` ${note}` : ""}`
+        : `${who} просить погодити ${ORDER_APPROVAL_SUBJECT[params.kind]} для ${params.customerName}, перш ніж надіслати замовнику.`,
+    href: `/orders/production/${params.orderId}`,
+    type: "warning",
+    category: "order_approval_request",
+  });
+}
+
+export async function notifyOrderApprovalDecided(params: {
+  orderId: string;
+  orderNumber: string;
+  kind: "contract" | "specification" | "launch";
+  decision: "approved" | "returned";
+  note?: string | null;
+  requesterUserId?: string | null;
+  deciderName?: string | null;
+  actorUserId?: string | null;
+}) {
+  const recipient = params.requesterUserId?.trim();
+  if (!recipient || recipient === params.actorUserId) return;
+  const who = params.deciderName?.trim() || "Погоджувач";
+  const subject = ORDER_APPROVAL_SUBJECT[params.kind];
+  const approved = params.decision === "approved";
+  const note = params.note?.trim();
+  await notifyUsers({
+    userIds: [recipient],
+    title:
+      params.kind === "launch"
+        ? approved
+          ? `${params.orderNumber}: запуск дозволено`
+          : `${params.orderNumber}: у запуску без умов відмовили`
+        : approved
+          ? `${params.orderNumber}: ${subject} погоджено`
+          : `${params.orderNumber}: ${subject} повернули`,
+    body: approved
+      ? params.kind === "launch"
+        ? `${who} дозволив(ла) запустити замовлення.${note ? ` ${note}` : ""}`
+        : `${who} погодив(ла) ${subject} — можна надсилати замовнику.${note ? ` ${note}` : ""}`
+      : `${who}: ${note || "без коментаря"}`,
+    href: `/orders/production/${params.orderId}`,
+    type: approved ? "success" : "warning",
+    category: "order_approval_decision",
   });
 }
 

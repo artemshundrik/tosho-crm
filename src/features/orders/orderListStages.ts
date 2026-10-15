@@ -8,15 +8,16 @@ import {
   SHIPPED_ORDER_STATUSES,
   type LaunchPathInput,
 } from "./orderLaunchPath";
+import { getDocumentApprovalState, getLaunchException } from "./orderApprovals";
 import { getOrderInvoiceState } from "./orderInvoice";
 import type { DerivedOrderRecord } from "./orderRecords";
 import { isCashlessPaymentMethod } from "./paymentRules";
 
 /**
  * Список замовлень (REQ-322#p12): етап, що далі й чий хід — для смуги етапів
- * і колонки «Що далі». Хід бухгалтерії — рахунок, який попросили (p10).
- * Погоджень (p6) і підписів (p7) ще немає в даних; коли з'являться, нові
- * гілки додаються в `getOrderNextStep`.
+ * і колонки «Що далі». Хід бухгалтерії — рахунок, який попросили (p10), і
+ * договір чи СП на погодженні (p6). Хід керівництва — прохання запустити без
+ * умов (p8). Підпис позначає менеджер, коли його поставив замовник (p7).
  */
 export type OrderListInput = LaunchPathInput &
   Pick<
@@ -42,13 +43,14 @@ export const ACTIVE_ORDER_STAGES: { id: ActiveOrderStage; label: string }[] = [
   { id: "awaitingPayment", label: "Чекають оплату" },
 ];
 
-export type OrderTurn = "manager" | "customer" | "production" | "accounting";
+export type OrderTurn = "manager" | "customer" | "production" | "accounting" | "management";
 
 export const ORDER_TURN_LABELS: Record<OrderTurn, string> = {
   manager: "Менеджер",
   customer: "Замовник",
   production: "Виробництво",
   accounting: "Бухгалтерія",
+  management: "Керівництво",
 };
 
 export type OrderNextStep = {
@@ -113,6 +115,11 @@ export const getOrderNextStep = (input: OrderListInput): OrderNextStep => {
     return step({ stage: "production", turn: "production", title: "Виробництво" });
   }
 
+  // Просять запустити без оплати чи підпису — м'яч у СЕО або головного бухгалтера.
+  if (getLaunchException(input)?.status === "pending") {
+    return step({ stage: "setup", turn: "management", title: "Просять запустити без умов", actionLabel: "Вирішити" });
+  }
+
   // Рахунок можна попросити й до договору. Поки він чекає номера з BAS, м'яч у
   // бухгалтерії — інакше «Створити договір» затуляв би запит, і бухгалтер не
   // побачив би його в «Мій хід».
@@ -120,11 +127,35 @@ export const getOrderNextStep = (input: OrderListInput): OrderNextStep => {
     return step({ stage: "setup", turn: "accounting", title: "Рахунок у бухгалтерії", actionLabel: "Внести номер" });
   }
 
-  switch (buildLaunchPath(input).blocker) {
+  const path = buildLaunchPath(input);
+  switch (path.blocker) {
     case "Бракує договору":
       return step({ stage: "setup", turn: "manager", title: "Створити договір", actionLabel: "Договір" });
     case "Бракує СП":
       return step({ stage: "setup", turn: "manager", title: "Створити СП", actionLabel: "Створити СП" });
+    case "Договір не погоджено":
+    case "СП не погоджено": {
+      const kind = path.blocker === "Договір не погоджено" ? "contract" : "specification";
+      const what = kind === "contract" ? "Договір" : "СП";
+      const { state, approval } = getDocumentApprovalState(input, kind);
+      if (state === "pending") {
+        return step({ stage: "setup", turn: "accounting", title: `${what} на погодженні`, actionLabel: "Погодити" });
+      }
+      if (state === "returned") {
+        return step({
+          stage: "setup",
+          turn: "manager",
+          title: `${what}: повернули на правки`,
+          detail: approval?.decisionNote ?? null,
+          actionLabel: "Виправити",
+        });
+      }
+      return step({ stage: "setup", turn: "manager", title: `${what} — на погодження`, actionLabel: "На погодження" });
+    }
+    case "Договір не підписано":
+      return step({ stage: "customer", turn: "customer", title: "Чекаємо підпис договору" });
+    case "СП не підписана":
+      return step({ stage: "customer", turn: "customer", title: "Чекаємо підпис СП" });
     case "Чекає передоплату": {
       const pct = breakdown?.prepayment ?? 100;
       // На безготівці замовник платить за рахунком, а рахунок виписує бухгалтерія.
@@ -188,9 +219,16 @@ export const getOrderDocMarks = (input: OrderListInput): OrderDocMark[] | null =
       key: "contract",
       letter: "Д",
       title: "Договір",
-      ready: Boolean(input.contractCreatedAt || input.inheritedContractOrderNumber),
+      ready: Boolean(input.contractSignedAt),
+      inProgress: Boolean(input.contractCreatedAt || input.inheritedContractOrderNumber) && !input.contractSignedAt,
     },
-    { key: "specification", letter: "С", title: "Специфікація", ready: Boolean(input.specificationCreatedAt) },
+    {
+      key: "specification",
+      letter: "С",
+      title: "Специфікація",
+      ready: Boolean(input.specificationSignedAt),
+      inProgress: Boolean(input.specificationCreatedAt) && !input.specificationSignedAt,
+    },
     {
       key: "invoice",
       letter: "Р",
@@ -233,12 +271,26 @@ export const summarizeOrderStages = (records: OrderListInput[]): OrderStageSumma
  * «Мій хід»: менеджеру — кроки на його замовленнях, бухгалтерії — рахунки, які
  * попросили (на будь-якому замовленні). Погодження СЕО з'являться з p6.
  */
-export const isMyTurn = (
-  input: OrderListInput,
-  viewer: { userId: string | null | undefined; canIssueInvoice: boolean }
-) => {
-  // Запит рахунку чекає бухгалтерію на будь-якому етапі — і в запущеному замовленні теж.
-  if (getOrderInvoiceState(input) === "requested") return viewer.canIssueInvoice;
+export type OrderListViewer = {
+  userId: string | null | undefined;
+  /** Власник, СЕО, бухгалтери: рахунок і погодження договору й СП. */
+  canIssueInvoice: boolean;
+  /** СЕО або головний бухгалтер: дозвіл запустити без умов. */
+  canApproveLaunch: boolean;
+};
+
+export const isMyTurn = (input: OrderListInput, viewer: OrderListViewer) => {
+  // Запити чекають погоджувача на будь-якому етапі — і в запущеному замовленні теж.
+  if (viewer.canApproveLaunch && getLaunchException(input)?.status === "pending") return true;
+  if (viewer.canIssueInvoice) {
+    if (getOrderInvoiceState(input) === "requested") return true;
+    if (
+      getDocumentApprovalState(input, "contract").state === "pending" ||
+      getDocumentApprovalState(input, "specification").state === "pending"
+    ) {
+      return true;
+    }
+  }
   const { turn } = getOrderNextStep(input);
   return Boolean(viewer.userId) && input.managerUserId === viewer.userId && turn === "manager";
 };

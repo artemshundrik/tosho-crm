@@ -97,14 +97,17 @@ import { ThreadDock, ThreadDockButton, ThreadDockProvider, type ThreadDockHandle
 import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
 import { useRecordPageHeight } from "@/hooks/useRecordPageHeight";
 import { threadKeyForOrder, threadKeyForQuote } from "@/lib/taskThread";
-import { buildLaunchPath, formatPaymentTermsChip } from "@/features/orders/orderLaunchPath";
+import { buildLaunchPath, formatPaymentTermsChip, LAUNCHED_ORDER_STATUSES } from "@/features/orders/orderLaunchPath";
+import { getDocumentApprovalState, getSendToCustomerBlocker, isDocumentCleared } from "@/features/orders/orderApprovals";
+import { OrderApprovalDeskCard } from "@/features/orders/order-details/OrderApprovalDeskCard";
+import { useOrderApprovalFlow } from "@/features/orders/order-details/useOrderApprovalFlow";
 import { IncotermsHint } from "@/features/orders/order-details/IncotermsHint";
 import { OrderDeliveryCard } from "@/features/orders/order-details/OrderDeliveryCard";
 import { OrderDocumentsCard } from "@/features/orders/order-details/OrderDocumentsCard";
 import { OrderInvoiceDeskCard } from "@/features/orders/order-details/OrderInvoiceDeskCard";
 import { useOrderInvoiceFlow } from "@/features/orders/order-details/useOrderInvoiceFlow";
 import { getOrderInvoiceState } from "@/features/orders/orderInvoice";
-import { canIssueOrderInvoice } from "@/lib/permissions";
+import { canApproveOrderLaunch, canIssueOrderInvoice } from "@/lib/permissions";
 import { OrderItemsTable } from "@/features/orders/order-details/OrderItemsTable";
 import { OrderLaunchPathCard } from "@/features/orders/order-details/OrderLaunchPathCard";
 import { OrderMaterialsTab, countOrderMaterials } from "@/features/orders/order-details/OrderMaterialsTab";
@@ -895,10 +898,22 @@ export default function OrdersProductionDetailsPage() {
   // Approver pool for contract revisions: owner OR job_role=seo (per project policy).
   const isCeo = accessRole === "owner" || (jobRole ?? "").toLowerCase() === "seo";
   const canIssueInvoice = canIssueOrderInvoice(accessRole, jobRole);
+  const canApproveLaunch = canApproveOrderLaunch(jobRole);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState<DerivedOrderRecord | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
+  const approvalFlow = useOrderApprovalFlow({
+    record,
+    teamId,
+    userId,
+    onRecordPatch: (patch) =>
+      setRecord((current) => {
+        if (!current) return current;
+        const next = patch(current);
+        return { ...next, docs: normalizeDocumentDocs(next) };
+      }),
+  });
   const invoiceFlow = useOrderInvoiceFlow({
     record,
     teamId,
@@ -1084,6 +1099,22 @@ export default function OrdersProductionDetailsPage() {
 
   const handleStatusChange = async (field: "orderStatus" | "paymentStatus" | "deliveryStatus", value: string) => {
     if (!record || record.source !== "stored" || !teamId) return;
+    // Ворота запуску (REQ-322#p8): без підписаної СП і оплати за умовами — лише з
+    // дозволу СЕО чи головбуха. Запущене раніше не чіпаємо.
+    if (
+      field === "orderStatus" &&
+      LAUNCHED_ORDER_STATUSES.has(value) &&
+      !LAUNCHED_ORDER_STATUSES.has(record.orderStatus)
+    ) {
+      const gate = buildLaunchPath(record);
+      if (gate.blocker) {
+        toast.error(`Запустити ще не можна: ${gate.blocker.toLowerCase()}.`, {
+          description: "Попросіть дозвіл у «Шляху до запуску» — вирішує СЕО або головний бухгалтер.",
+        });
+        setActiveTab("launch");
+        return;
+      }
+    }
     const previous = {
       orderStatus: record.orderStatus,
       paymentStatus: record.paymentStatus,
@@ -1187,12 +1218,23 @@ export default function OrdersProductionDetailsPage() {
     // Готуємо URL-и зображень погодженої візуалізації для вставки у Специфікацію.
     const visualizationImageUrls =
       kind === "specification" ? await resolveVisualizationImageUrls(activeRecord.approvedVisualizationAssets) : [];
-    const html = buildOrderDocumentHtml(activeRecord, kind, {
+    const builtHtml = buildOrderDocumentHtml(activeRecord, kind, {
       customerSignatoryNameGenitive,
       customerSignatoryRoleGenitive,
       visualizationImageUrls,
       ...extraOptions,
     });
+    // Непогоджений договір чи СП друкуються з плашкою «чернетка» (REQ-322#p6):
+    // надіслати PDF повз погодження тоді видно з першого погляду.
+    const unapproved =
+      (kind === "contract" || kind === "specification") &&
+      !isDocumentCleared(getDocumentApprovalState(activeRecord, kind).state);
+    const html = unapproved
+      ? builtHtml.replace(
+          /<body([^>]*)>/i,
+          `<body$1><div style="border:2px dashed #c2410c;color:#c2410c;padding:6px 10px;margin:0 0 12px;font:600 12px/1.4 sans-serif;text-align:center">ЧЕРНЕТКА — ще не погоджено бухгалтером або СЕО. Замовнику не надсилати.</div>`
+        )
+      : builtHtml;
     const popup = window.open("", "_blank");
     if (!popup) {
       toast.error("Браузер заблокував нове вікно для документа.");
@@ -1336,8 +1378,16 @@ export default function OrdersProductionDetailsPage() {
     void openDocumentPrint(kind);
   };
 
+  // Договір і СП — замовнику лише після погодження бухгалтера або СЕО (REQ-322#p6).
+  const guardSendToCustomer = () => {
+    const blocker = record ? getSendToCustomerBlocker(record) : null;
+    if (blocker) toast.error(blocker);
+    return !blocker;
+  };
+
   const openEmailDraft = () => {
     if (!record) return;
+    if (!guardSendToCustomer()) return;
     const subject = encodeURIComponent(`Документи по замовленню ${record.quoteNumber}`);
     const body = encodeURIComponent(
       [
@@ -1355,6 +1405,7 @@ export default function OrdersProductionDetailsPage() {
 
   const openTelegramDraft = () => {
     if (!record) return;
+    if (!guardSendToCustomer()) return;
     const directHref = buildTelegramHref(record.contactTelegram);
     if (directHref) {
       window.open(directHref, "_blank", "noopener,noreferrer");
@@ -1368,6 +1419,7 @@ export default function OrdersProductionDetailsPage() {
 
   const openViberDraft = () => {
     if (!record) return;
+    if (!guardSendToCustomer()) return;
     const text = encodeURIComponent(
       `Документи по замовленню ${record.quoteNumber}. ${record.customerName}. Сума: ${formatOrderMoney(record.total, record.currency)}`
     );
@@ -1593,6 +1645,16 @@ export default function OrdersProductionDetailsPage() {
             </TabBar>
           </div>
           <div className="space-y-4 record-split:-mr-3 record-split:min-h-0 record-split:flex-1 record-split:overflow-y-auto record-split:overscroll-contain record-split:pb-8 record-split:pr-3 record-split:pt-4 record-split:2xl:-mr-4 record-split:2xl:pr-4">
+            <OrderApprovalDeskCard
+              record={record}
+              pending={record.approvals.filter(
+                (approval) =>
+                  approval.status === "pending" && (approval.kind === "launch" ? canApproveLaunch : canIssueInvoice)
+              )}
+              busy={approvalFlow.busy !== null}
+              onDecide={approvalFlow.decide}
+              onPreview={(kind) => void openDocumentPrint(kind, { markCreated: false })}
+            />
             {canIssueInvoice && getOrderInvoiceState(record) === "requested" ? (
               <OrderInvoiceDeskCard
                 record={record}
@@ -1615,9 +1677,16 @@ export default function OrdersProductionDetailsPage() {
                     { label: "Поставка", value: formatIncotermsLabel(record).replace(" (Incoterms 2020)", "") },
                   ]}
                   onEditTerms={record.source === "stored" ? openSpecificationParamsDialog : null}
+                  exceptionBusy={approvalFlow.busy !== null}
+                  onRequestException={record.source === "stored" ? (note) => approvalFlow.request("launch", note) : null}
                 />
                 <OrderDocumentsCard
                   record={record}
+                  approvals={{
+                    busy: approvalFlow.busy,
+                    onRequestApproval: (kind) => void approvalFlow.request(kind),
+                    onSign: (kind, via) => void approvalFlow.sign(kind, via),
+                  }}
                   documentActions={documentActions}
                   onAction={handleDocumentAction}
                   onParams={(kind) =>
@@ -1642,7 +1711,8 @@ export default function OrdersProductionDetailsPage() {
                       teamId={teamId}
                       orderId={record.id}
                       currentUserId={userId}
-                      isCeo={isCeo}
+                      // Погоджувач тепер не лише СЕО, а й бухгалтерія (REQ-322#p6).
+                      isCeo={canIssueInvoice}
                       quoteNumber={record.quoteNumber}
                       initialDefaultSections={buildDefaultContractSections(buildContractRenderContextFromRecord(record))}
                       onOpenPreview={(sections) =>

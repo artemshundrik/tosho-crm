@@ -3,6 +3,8 @@ import { parseDesignTaskType, type DesignTaskType } from "@/lib/designTaskType";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
 import type { Database, Json } from "@/lib/database.types";
+import type { OrderApproval, SignatureVia } from "./orderApprovals";
+import { loadOrderApprovalsByOrderId } from "./orderApprovalQueries";
 import {
   formatCustomerLegalEntityTitle,
   isVatPayerRate,
@@ -203,7 +205,12 @@ type InheritedContract = {
   balanceDaysAfterShipment: number | null;
   balanceDaysKind: BalanceDaysKind | null;
   autoProlongation: boolean;
+  signedAt: string | null;
+  signedVia: SignatureVia | null;
 };
+
+const parseSignatureVia = (value: unknown): SignatureVia | null =>
+  value === "paper" || value === "vchasno" || value === "medoc" ? value : null;
 
 const parseNullableNumber = (value: unknown) => {
   if (value === null || value === undefined || value === "") return null;
@@ -232,6 +239,8 @@ const buildContractByCustomerId = (orders: StoredOrderRow[]) => {
       balanceDaysAfterShipment: parseNullableNumber(order.balance_days_after_shipment),
       balanceDaysKind: order.balance_days_kind ? normalizeBalanceDaysKind(order.balance_days_kind) : null,
       autoProlongation: order.contract_auto_prolongation === true,
+      signedAt: order.contract_signed_at ?? null,
+      signedVia: parseSignatureVia(order.contract_signed_via),
     };
     const current = byCustomerId.get(customerId);
     // Найсвіжіший договір виграє: якщо з замовником переукладали — нові замовлення йдуть за новим.
@@ -392,6 +401,16 @@ export type DerivedOrderRecord = {
   invoiceRequestedBy: string | null;
   invoiceReturnedAt: string | null;
   invoiceReturnNote: string | null;
+  /**
+   * Підписи (REQ-322#p7). Договір — свій або успадкований від першого
+   * замовлення замовника: підписаний раз, він діє й далі.
+   */
+  contractSignedAt: string | null;
+  contractSignedVia: SignatureVia | null;
+  specificationSignedAt: string | null;
+  specificationSignedVia: SignatureVia | null;
+  /** Запити погодження договору, СП і винятку для запуску (p6, p8), свіжі першими. */
+  approvals: OrderApproval[];
   /** Nova Poshta ТТН (Phase 2). null → ще не створено. */
   npTtnNumber: string | null;
   npTtnRef: string | null;
@@ -474,6 +493,10 @@ type StoredOrderRow = {
   invoice_requested_by?: string | null;
   invoice_returned_at?: string | null;
   invoice_return_note?: string | null;
+  contract_signed_at?: string | null;
+  contract_signed_via?: string | null;
+  specification_signed_at?: string | null;
+  specification_signed_via?: string | null;
   np_ttn_number?: string | null;
   np_ttn_ref?: string | null;
   np_ttn_cost?: number | string | null;
@@ -745,7 +768,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,contract_signed_at,contract_signed_via,specification_signed_at,specification_signed_via,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -1198,6 +1221,11 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       invoiceRequestedBy: null,
       invoiceReturnedAt: null,
       invoiceReturnNote: null,
+      contractSignedAt: null,
+      contractSignedVia: null,
+      specificationSignedAt: null,
+      specificationSignedVia: null,
+      approvals: [],
       npTtnNumber: null,
       npTtnRef: null,
       npTtnCost: null,
@@ -1228,7 +1256,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
 }
 
 export async function loadDerivedOrders(teamId: string, userId?: string | null): Promise<DerivedOrderRecord[]> {
-  const [storedOrders, membersResult] = await Promise.all([
+  const [storedOrders, membersResult, approvalsByOrderId] = await Promise.all([
     listStoredOrders(teamId),
     (async () => {
       if (!userId) return [];
@@ -1236,6 +1264,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       if (!workspaceId) return [];
       return await listWorkspaceMembersForDisplay(workspaceId);
     })(),
+    loadOrderApprovalsByOrderId(teamId),
   ]);
 
   const approvedQuoteDerivedOrdersPromise = loadApprovedQuoteDerivedOrders(teamId, userId);
@@ -1661,6 +1690,11 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         invoiceRequestedBy: order.invoice_requested_by ?? null,
         invoiceReturnedAt: order.invoice_returned_at ?? null,
         invoiceReturnNote: order.invoice_return_note?.trim?.() || null,
+        contractSignedAt: order.contract_signed_at ?? inheritedContract?.signedAt ?? null,
+        contractSignedVia: parseSignatureVia(order.contract_signed_via) ?? inheritedContract?.signedVia ?? null,
+        specificationSignedAt: order.specification_signed_at ?? null,
+        specificationSignedVia: parseSignatureVia(order.specification_signed_via),
+        approvals: approvalsByOrderId.get(order.id) ?? [],
         npTtnNumber: order.np_ttn_number?.trim?.() || null,
         npTtnRef: order.np_ttn_ref?.trim?.() || null,
         npTtnCost:

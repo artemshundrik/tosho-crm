@@ -1,4 +1,8 @@
-import { Check, Lock } from "@/components/icons/appIcons";
+import { useState } from "react";
+
+import { Check, Clock, Lock } from "@/components/icons/appIcons";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { buildLaunchPath, type LaunchStep } from "@/features/orders/orderLaunchPath";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { cn } from "@/lib/utils";
@@ -39,15 +43,99 @@ const STATE_LABEL: Record<LaunchStep["state"], string> = {
   locked: "закрито",
 };
 
+/**
+ * «Попросити дозвіл запустити без …» (REQ-322#p8). Причина обов'язкова: її
+ * бачать двоє СЕО й головбух у сповіщенні, а рішення лишається в стрічці.
+ */
+function LaunchExceptionFooter({
+  path,
+  busy,
+  onRequest,
+}: {
+  path: ReturnType<typeof buildLaunchPath>;
+  busy: boolean;
+  onRequest: (note: string) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const exception = path.exception;
+  const what = path.missing.join(", ");
+
+  if (exception?.status === "pending") {
+    return (
+      <div className="flex items-center gap-1.5 border-t border-border/50 px-4 py-2.5 text-xs font-medium tone-text-info">
+        <Clock className="h-3.5 w-3.5" />
+        Попросили дозволу запустити без {what} — чекає рішення СЕО або головбуха
+      </div>
+    );
+  }
+  if (exception?.status === "approved") {
+    return (
+      <div className="border-t border-border/50 px-4 py-2.5 text-xs text-muted-foreground">
+        <span className="tone-text-success font-medium">Запуск без {what || "умов"} дозволено</span>
+        {exception.decisionNote ? ` · «${exception.decisionNote}»` : ""}
+      </div>
+    );
+  }
+  if (!path.blocker || path.missing.length === 0) return null;
+
+  return (
+    <div className="border-t border-border/50 px-4 py-2.5 text-xs">
+      {exception?.status === "returned" ? (
+        <div className="mb-1.5 tone-text-warning">Відмовили: {exception.decisionNote ?? "без коментаря"}</div>
+      ) : null}
+      {open ? (
+        <div className="space-y-2">
+          <Textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={2}
+            autoFocus
+            aria-label="Чому запускаємо без умов"
+            placeholder="Чому запускаємо зараз — напр.: постійний клієнт, оплата завтра, СП підпише в понеділок"
+          />
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={busy}>
+              Скасувати
+            </Button>
+            <Button
+              size="sm"
+              disabled={!note.trim() || busy}
+              onClick={async () => {
+                if (await onRequest(note)) setOpen(false);
+              }}
+            >
+              Попросити дозвіл
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Попросити дозвіл запустити без {what}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function OrderLaunchPathCard({
   record,
   termsSummary,
   onEditTerms,
+  exceptionBusy,
+  onRequestException,
 }: {
   record: DerivedOrderRecord;
   /** «Оплата 70/30 · Виробництво 50 р.д. · Поставка FCA, Київ». */
   termsSummary: { label: string; value: string }[];
   onEditTerms: (() => void) | null;
+  exceptionBusy: boolean;
+  /** null — незбережений запис: просити дозвіл ще нема на чому. */
+  onRequestException: ((note: string) => Promise<boolean>) | null;
 }) {
   const path = buildLaunchPath(record);
 
@@ -100,6 +188,9 @@ export function OrderLaunchPathCard({
           </button>
         ) : null}
       </div>
+      {onRequestException ? (
+        <LaunchExceptionFooter path={path} busy={exceptionBusy} onRequest={onRequestException} />
+      ) : null}
     </section>
   );
 }

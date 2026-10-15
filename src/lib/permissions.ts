@@ -350,3 +350,13 @@ export function canIssueOrderInvoice(accessRole: string | null | undefined, jobR
   const job = (jobRole ?? "").trim().toLowerCase();
   return access === "owner" || (INVOICE_ISSUER_JOB_ROLES as readonly string[]).includes(job);
 }
+
+/**
+ * Хто дозволяє запустити замовлення без оплати чи підпису (REQ-322#p8): двоє
+ * СЕО або головний бухгалтер — саме їх назвав Влад 14.10.2026. Власника тут
+ * немає: його ніхто не називав. Дзеркало в базі — tosho.is_order_approver(_, 'launch').
+ */
+export function canApproveOrderLaunch(jobRole: string | null | undefined) {
+  const job = (jobRole ?? "").trim().toLowerCase();
+  return job === "seo" || job === "chief_accountant";
+}

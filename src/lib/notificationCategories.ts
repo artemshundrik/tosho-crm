@@ -12,6 +12,8 @@ export type NotificationCategoryKey =
   | "quote_markup_decision"
   | "order_invoice_request"
   | "order_invoice_decision"
+  | "order_approval_request"
+  | "order_approval_decision"
   | "design"
   | "contractor"
   | "team_events"
@@ -74,6 +76,16 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     key: "order_invoice_decision",
     label: "Рахунок готовий",
     description: "Бухгалтер виписав рахунок на ваше замовлення або повернув запит",
+  },
+  {
+    key: "order_approval_request",
+    label: "Погодження договорів і запусків",
+    description: "Менеджер просить погодити договір чи СП або дозволити запуск без оплати чи підпису",
+  },
+  {
+    key: "order_approval_decision",
+    label: "Рішення щодо договору й запуску",
+    description: "Ваш договір, СП або прохання про запуск погодили чи повернули",
   },
   {
     key: "design",
@@ -222,6 +234,12 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
       return isInvoiceIssuer;
     // Відповідь летить менеджеру, що просив, — окремо від запиту, як у ціні.
     case "order_invoice_decision":
+      return isQuoteWorker;
+    // Погодження договору й СП вирішує той самий круг, що виписує рахунок;
+    // дозвіл на запуск — СЕО або головний бухгалтер, вони теж у цьому крузі.
+    case "order_approval_request":
+      return isInvoiceIssuer;
+    case "order_approval_decision":
       return isQuoteWorker;
     // Збут / прорахунки / контрагенти — лише ті, хто з цим працює.
     case "customer_followup":
