@@ -10,6 +10,8 @@ export type NotificationCategoryKey =
   | "quote_comment"
   | "quote_markup_request"
   | "quote_markup_decision"
+  | "order_invoice_request"
+  | "order_invoice_decision"
   | "design"
   | "contractor"
   | "team_events"
@@ -62,6 +64,16 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     key: "quote_markup_decision",
     label: "Рішення щодо ціни",
     description: "Вашу ціну нижче дна підтвердили або відхилили",
+  },
+  {
+    key: "order_invoice_request",
+    label: "Запити рахунків",
+    description: "Менеджер просить виписати рахунок із BAS на замовлення",
+  },
+  {
+    key: "order_invoice_decision",
+    label: "Рахунок готовий",
+    description: "Бухгалтер виписав рахунок на ваше замовлення або повернув запит",
   },
   {
     key: "design",
@@ -148,6 +160,8 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   const isDesigner = job === "designer" || job === "дизайнер";
   // Фінанси — власник + CEO + бухгалтери (той самий набір, що має доступ до Фінансів).
   const isFinance = access === "owner" || access === "admin" || ["seo", "accountant", "chief_accountant"].includes(job);
+  const isInvoiceIssuer =
+    access === "owner" || ["seo", "accountant", "chief_accountant", "junior_accountant"].includes(job);
   switch (key) {
     // Універсальні / персональні — бачать усі.
     case "team_events":
@@ -200,6 +214,14 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // не одна на обидва боки: вимкнути «мені більше не приходять чужі запити»
     // не має заодно глушити «на моє прохання відповіли».
     case "quote_markup_decision":
+      return isQuoteWorker;
+    // Запит рахунку бачать ті, хто його виписує або має знати (REQ-322#p10):
+    // власник, СЕО, бухгалтер, головний і молодший бухгалтер (Артем, 15.10.2026).
+    // Той самий круг пускає в номер рахунку tosho.is_order_invoice_issuer.
+    case "order_invoice_request":
+      return isInvoiceIssuer;
+    // Відповідь летить менеджеру, що просив, — окремо від запиту, як у ціні.
+    case "order_invoice_decision":
       return isQuoteWorker;
     // Збут / прорахунки / контрагенти — лише ті, хто з цим працює.
     case "customer_followup":

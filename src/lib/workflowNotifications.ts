@@ -4,6 +4,7 @@ import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import { formatRatePercent, minMarkupRateFor, type QuoteDealType } from "@/lib/quoteDealType";
 import { resolveMarkupApproverIds } from "@/lib/quoteMarkupNotice";
 import { boardColumnStatuses } from "@/lib/kanbanBoards";
+import { canIssueOrderInvoice } from "@/lib/permissions";
 
 const isUuid = (value?: string | null) =>
   typeof value === "string" &&
@@ -717,6 +718,80 @@ export async function notifyMarkupApprovalDecided(params: {
     // Окрема категорія від запиту: вимкнути «чужі запити» не має заодно
     // глушити відповідь на власне прохання.
     category: "quote_markup_decision",
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Рахунок через бухгалтерію (REQ-322#p10)                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Хто отримує запит рахунку: власник, СЕО, бухгалтер, головний і молодший
+ * бухгалтер (Артем, 15.10.2026). Той самий круг вносить номер з BAS —
+ * tosho.is_order_invoice_issuer, canIssueOrderInvoice.
+ */
+function pickInvoiceIssuerUserIds(rows: TeamMemberRoleRow[]) {
+  return rows
+    .filter((row) => canIssueOrderInvoice(row.access_role, row.job_role))
+    .map((row) => row.user_id)
+    .filter((value): value is string => !!value);
+}
+
+export async function notifyOrderInvoiceRequested(params: {
+  teamId: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  /** Готовий рядок суми: «12 400 грн». */
+  total: string;
+  requesterName?: string | null;
+  actorUserId?: string | null;
+}) {
+  const members = await resolveTeamMembers(params.teamId);
+  const recipients = new Set(pickInvoiceIssuerUserIds(members));
+  if (params.actorUserId) recipients.delete(params.actorUserId);
+  if (recipients.size === 0) return;
+  const who = params.requesterName?.trim() || "Менеджер";
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: `Рахунок на ${params.orderNumber} — внести номер з BAS`,
+    body: `${who} просить рахунок для ${params.customerName} на ${params.total}. Внесіть номер і дату з BAS або поверніть менеджеру.`,
+    href: `/orders/production/${params.orderId}`,
+    type: "warning",
+    category: "order_invoice_request",
+  });
+}
+
+export async function notifyOrderInvoiceDecided(params: {
+  orderId: string;
+  orderNumber: string;
+  decision: "issued" | "returned";
+  /** «№ 407 від 15.10.2026» — для виписаного. */
+  invoiceLabel?: string | null;
+  note?: string | null;
+  /** Хто просив, і менеджер замовлення — якщо це різні люди, дізнаються обидва. */
+  recipientUserIds: Array<string | null | undefined>;
+  deciderName?: string | null;
+  actorUserId?: string | null;
+}) {
+  const recipients = new Set(
+    params.recipientUserIds.filter((value): value is string => Boolean(value?.trim()))
+  );
+  if (params.actorUserId) recipients.delete(params.actorUserId);
+  if (recipients.size === 0) return;
+  const who = params.deciderName?.trim() || "Бухгалтер";
+  const issued = params.decision === "issued";
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: issued
+      ? `Рахунок ${params.invoiceLabel ?? ""} готовий`.replace(/\s+/g, " ")
+      : `Рахунок на ${params.orderNumber} повернули`,
+    body: issued
+      ? `${who} виписав(ла) рахунок на ${params.orderNumber}. Його можна відкрити й надіслати замовнику.`
+      : `${who} повернув(ла) запит рахунку на ${params.orderNumber}: ${params.note?.trim() || "без коментаря"}. Виправте й попросіть ще раз.`,
+    href: `/orders/production/${params.orderId}`,
+    type: issued ? "success" : "warning",
+    category: "order_invoice_decision",
   });
 }
 

@@ -17,6 +17,8 @@ export const THREAD_EVENT_ACTIONS = [
   "design_task_brief_change_request",
   "design_output_upload",
   "design_task_attachment",
+  // Рахунок через бухгалтерію (REQ-322#p10): попросили, виписали, повернули.
+  "order_invoice",
 ] as const;
 
 /** Тон крапки поруч із подією: зелена — просування, бурштинова — правки/дедлайн. */

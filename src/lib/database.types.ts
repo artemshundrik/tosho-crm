@@ -3229,6 +3229,12 @@ export type Database = {
           incoterms_place: string | null
           invoice_created_at: string | null
           invoice_number: string | null
+          invoice_date: string | null
+          invoice_issued_by: string | null
+          invoice_requested_at: string | null
+          invoice_requested_by: string | null
+          invoice_return_note: string | null
+          invoice_returned_at: string | null
           legal_entity_label: string | null
           manager_label: string | null
           manager_user_id: string | null
@@ -3292,6 +3298,12 @@ export type Database = {
           incoterms_place?: string | null
           invoice_created_at?: string | null
           invoice_number?: string | null
+          invoice_date?: string | null
+          invoice_issued_by?: string | null
+          invoice_requested_at?: string | null
+          invoice_requested_by?: string | null
+          invoice_return_note?: string | null
+          invoice_returned_at?: string | null
           legal_entity_label?: string | null
           manager_label?: string | null
           manager_user_id?: string | null
@@ -3355,6 +3367,12 @@ export type Database = {
           incoterms_place?: string | null
           invoice_created_at?: string | null
           invoice_number?: string | null
+          invoice_date?: string | null
+          invoice_issued_by?: string | null
+          invoice_requested_at?: string | null
+          invoice_requested_by?: string | null
+          invoice_return_note?: string | null
+          invoice_returned_at?: string | null
           legal_entity_label?: string | null
           manager_label?: string | null
           manager_user_id?: string | null

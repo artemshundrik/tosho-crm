@@ -8,19 +8,27 @@ import {
   SHIPPED_ORDER_STATUSES,
   type LaunchPathInput,
 } from "./orderLaunchPath";
+import { getOrderInvoiceState } from "./orderInvoice";
 import type { DerivedOrderRecord } from "./orderRecords";
 import { isCashlessPaymentMethod } from "./paymentRules";
 
 /**
  * Список замовлень (REQ-322#p12): етап, що далі й чий хід — для смуги етапів
- * і колонки «Що далі». Погоджень (p6), підписів (p7) і рахунку через
- * бухгалтерію (p10) ще немає в даних, тому хід бухгалтера чи СЕО тут не
- * виникає. Коли вони з'являться, нові гілки додаються в `getOrderNextStep`.
+ * і колонки «Що далі». Хід бухгалтерії — рахунок, який попросили (p10).
+ * Погоджень (p6) і підписів (p7) ще немає в даних; коли з'являться, нові
+ * гілки додаються в `getOrderNextStep`.
  */
 export type OrderListInput = LaunchPathInput &
   Pick<
     DerivedOrderRecord,
-    "deliveryStatus" | "designStatuses" | "invoiceCreatedAt" | "inheritedContractOrderNumber" | "managerUserId"
+    | "deliveryStatus"
+    | "designStatuses"
+    | "invoiceCreatedAt"
+    | "invoiceNumber"
+    | "invoiceRequestedAt"
+    | "invoiceReturnNote"
+    | "inheritedContractOrderNumber"
+    | "managerUserId"
   >;
 
 export type ActiveOrderStage = "setup" | "customer" | "production" | "shipment" | "awaitingPayment";
@@ -34,12 +42,13 @@ export const ACTIVE_ORDER_STAGES: { id: ActiveOrderStage; label: string }[] = [
   { id: "awaitingPayment", label: "Чекають оплату" },
 ];
 
-export type OrderTurn = "manager" | "customer" | "production";
+export type OrderTurn = "manager" | "customer" | "production" | "accounting";
 
 export const ORDER_TURN_LABELS: Record<OrderTurn, string> = {
   manager: "Менеджер",
   customer: "Замовник",
   production: "Виробництво",
+  accounting: "Бухгалтерія",
 };
 
 export type OrderNextStep = {
@@ -111,6 +120,22 @@ export const getOrderNextStep = (input: OrderListInput): OrderNextStep => {
       return step({ stage: "setup", turn: "manager", title: "Створити СП", actionLabel: "Створити СП" });
     case "Чекає передоплату": {
       const pct = breakdown?.prepayment ?? 100;
+      // На безготівці замовник платить за рахунком, а рахунок виписує бухгалтерія.
+      if (isCashlessPaymentMethod(input.paymentMethodId, input.paymentRail)) {
+        const invoice = getOrderInvoiceState(input);
+        if (invoice === "requested") {
+          return step({ stage: "setup", turn: "accounting", title: "Рахунок у бухгалтерії", actionLabel: "Внести номер" });
+        }
+        if (invoice !== "issued") {
+          return step({
+            stage: "setup",
+            turn: "manager",
+            title: invoice === "returned" ? "Рахунок повернули — виправити" : "Попросити рахунок",
+            detail: invoice === "returned" ? input.invoiceReturnNote : null,
+            actionLabel: "Рахунок",
+          });
+        }
+      }
       return step({
         stage: "customer",
         turn: "customer",
@@ -139,7 +164,14 @@ export const getOrderPaidShare = (input: OrderListInput): { pct: number; label: 
   return { pct: 0, label: breakdown ? `0 з ${breakdown.prepayment}%` : "не оплачено" };
 };
 
-export type OrderDocMark = { key: string; letter: string; title: string; ready: boolean };
+export type OrderDocMark = {
+  key: string;
+  letter: string;
+  title: string;
+  ready: boolean;
+  /** Документ у роботі в когось (рахунок у бухгалтерії) — обведена плашка. */
+  inProgress?: boolean;
+};
 
 /**
  * Д/С/Р/В — лише для безготівки. Видаткова в CRM ще не формується (REQ-322#p3),
@@ -155,7 +187,13 @@ export const getOrderDocMarks = (input: OrderListInput): OrderDocMark[] | null =
       ready: Boolean(input.contractCreatedAt || input.inheritedContractOrderNumber),
     },
     { key: "specification", letter: "С", title: "Специфікація", ready: Boolean(input.specificationCreatedAt) },
-    { key: "invoice", letter: "Р", title: "Рахунок", ready: Boolean(input.invoiceCreatedAt) },
+    {
+      key: "invoice",
+      letter: "Р",
+      title: "Рахунок",
+      ready: getOrderInvoiceState(input) === "issued",
+      inProgress: getOrderInvoiceState(input) === "requested",
+    },
     { key: "waybill", letter: "В", title: "Видаткова", ready: false },
   ];
 };
@@ -187,6 +225,15 @@ export const summarizeOrderStages = (records: OrderListInput[]): OrderStageSumma
   return summary;
 };
 
-/** «Мій хід» поки лише менеджерський: інших ролей у кроках ще немає (див. вгорі). */
-export const isMyTurn = (input: OrderListInput, userId: string | null | undefined) =>
-  Boolean(userId) && input.managerUserId === userId && getOrderNextStep(input).turn === "manager";
+/**
+ * «Мій хід»: менеджеру — кроки на його замовленнях, бухгалтерії — рахунки, які
+ * попросили (на будь-якому замовленні). Погодження СЕО з'являться з p6.
+ */
+export const isMyTurn = (
+  input: OrderListInput,
+  viewer: { userId: string | null | undefined; canIssueInvoice: boolean }
+) => {
+  const { turn } = getOrderNextStep(input);
+  if (turn === "accounting") return viewer.canIssueInvoice;
+  return Boolean(viewer.userId) && input.managerUserId === viewer.userId && turn === "manager";
+};

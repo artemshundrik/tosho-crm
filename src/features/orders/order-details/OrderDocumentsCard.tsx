@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Circle,
+  Clock,
   ExternalLink,
   FilePlus2,
   Mail,
@@ -51,13 +52,21 @@ function DocumentRow({
     (document.kind === "contract" && Boolean(record.contractCreatedAt)) ||
     (document.kind === "specification" && Boolean(record.specificationCreatedAt));
   const StatusIcon =
-    document.actionMode === "blocked" ? AlertTriangle : document.actionMode === "open" ? CheckCircle2 : Circle;
+    document.actionMode === "blocked"
+      ? AlertTriangle
+      : document.actionMode === "open"
+        ? CheckCircle2
+        : document.actionMode === "pending"
+          ? Clock
+          : Circle;
   const statusIconTone =
     document.actionMode === "blocked"
       ? "tone-text-warning"
       : document.actionMode === "open"
         ? "tone-text-success"
-        : "text-muted-foreground/70";
+        : document.actionMode === "pending"
+          ? "tone-text-info"
+          : "text-muted-foreground/70";
   // Договір підписується раз на замовника — на наступних замовленнях він
   // успадковується, і це має бути видно, щоб ніхто не шукав «другий договір».
   const inheritedContractLabel =
@@ -66,6 +75,7 @@ function DocumentRow({
       : null;
   const secondaryText =
     inheritedContractLabel ??
+    document.detail ??
     (document.actionMode === "open"
       ? isCreated
         ? `Створено · ${document.createdDateLabel}`
@@ -107,7 +117,7 @@ function DocumentRow({
         {document.actionMode === "create" ? (
           <Button size="sm" className="gap-1 px-2.5 text-xs" onClick={() => onAction(document.kind)}>
             <FilePlus2 className="h-3.5 w-3.5" />
-            Створити
+            {document.createLabel ?? "Створити"}
           </Button>
         ) : document.actionMode === "open" ? (
           <>

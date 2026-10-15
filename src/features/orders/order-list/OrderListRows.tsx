@@ -87,12 +87,14 @@ function DocMarks({ docs }: { docs: OrderDocMark[] | null }) {
       {docs.map((mark) => (
         <span
           key={mark.key}
-          title={`${mark.title}: ${mark.ready ? "готово" : "ще ні"}`}
+          title={`${mark.title}: ${mark.ready ? "готово" : mark.inProgress ? "у процесі" : "ще ні"}`}
           className={cn(
             "inline-grid h-5 w-5 place-items-center rounded-md text-3xs font-bold",
             mark.ready
               ? "bg-success-solid text-white"
-              : "border-[1.5px] border-dashed border-muted-foreground/40 text-muted-foreground/70"
+              : mark.inProgress
+                ? "border-[1.5px] border-info-foreground text-info-foreground"
+                : "border-[1.5px] border-dashed border-muted-foreground/40 text-muted-foreground/70"
           )}
         >
           {mark.letter}
@@ -112,6 +114,8 @@ function TurnChip({ step, mine }: { step: OrderNextStep; mine: boolean }) {
           ? "bg-primary text-primary-foreground"
           : step.turn === "customer"
             ? "tone-warning"
+            : step.turn === "accounting"
+              ? "tone-info"
             : step.turn === "production"
               ? "tone-neutral"
               : "tone-info"

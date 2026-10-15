@@ -11,8 +11,8 @@ import {
 
 /**
  * Список замовлень (REQ-322#p12): згори етапи, у рядку — що далі й чий хід.
- * Погоджень, підписів і рахунку через бухгалтерію ще немає в даних (p6–p10),
- * тож етап виводиться зі статусів і створених документів.
+ * Погоджень і підписів ще немає в даних (p6, p7), тож етап виводиться зі
+ * статусів, створених документів і запиту рахунку (p10).
  */
 const cashless: OrderListInput = {
   paymentMethodId: "bank_uah",
@@ -31,6 +31,9 @@ const cashless: OrderListInput = {
   contractCreatedAt: null,
   specificationCreatedAt: null,
   invoiceCreatedAt: null,
+  invoiceNumber: null,
+  invoiceRequestedAt: null,
+  invoiceReturnNote: null,
   inheritedContractOrderNumber: null,
   managerUserId: "me",
 };
@@ -56,8 +59,8 @@ describe("getOrderNextStep", () => {
     });
   });
 
-  it("документи є, передоплати немає — чекаємо замовника, з сумою", () => {
-    expect(getOrderNextStep(withDocs)).toMatchObject({
+  it("документи й рахунок є, передоплати немає — чекаємо замовника, з сумою", () => {
+    expect(getOrderNextStep({ ...withDocs, invoiceNumber: "407" })).toMatchObject({
       stage: "customer",
       turn: "customer",
       title: "Передоплата 70%",
@@ -172,6 +175,7 @@ describe("getOrderDocMarks", () => {
     const marks = getOrderDocMarks({
       ...cashless,
       inheritedContractOrderNumber: "ZM-0926-0001",
+      invoiceNumber: "407",
       invoiceCreatedAt: "2026-10-14",
     });
     expect(marks?.map((mark) => `${mark.letter}:${mark.ready}`)).toEqual(["Д:true", "С:false", "Р:true", "В:false"]);
@@ -196,10 +200,51 @@ describe("summarizeOrderStages", () => {
 });
 
 describe("isMyTurn", () => {
-  it("лише менеджерський хід на своєму замовленні", () => {
-    expect(isMyTurn(cashless, "me")).toBe(true);
-    expect(isMyTurn(cashless, "other")).toBe(false);
-    expect(isMyTurn(withDocs, "me")).toBe(false);
-    expect(isMyTurn(cashless, null)).toBe(false);
+  const manager = (userId: string | null) => ({ userId, canIssueInvoice: false });
+  it("менеджерський хід — лише на своєму замовленні", () => {
+    expect(isMyTurn(cashless, manager("me"))).toBe(true);
+    expect(isMyTurn(cashless, manager("other"))).toBe(false);
+    expect(isMyTurn(cashless, manager(null))).toBe(false);
+  });
+
+  it("попросили рахунок — хід бухгалтерії на будь-якому замовленні, не менеджера", () => {
+    const requested = { ...withDocs, invoiceRequestedAt: "2026-10-15T10:00:00Z" };
+    expect(isMyTurn(requested, { userId: "accountant", canIssueInvoice: true })).toBe(true);
+    expect(isMyTurn(requested, manager("me"))).toBe(false);
+  });
+});
+
+describe("рахунок через бухгалтерію (p10)", () => {
+  it("з договором і СП безготівці бракує рахунку — менеджер просить", () => {
+    const next = getOrderNextStep(withDocs);
+    expect(next).toMatchObject({ stage: "setup", turn: "manager", title: "Попросити рахунок" });
+  });
+
+  it("попросили — хід бухгалтерії, Р обведена", () => {
+    const requested = { ...withDocs, invoiceRequestedAt: "2026-10-15T10:00:00Z" };
+    expect(getOrderNextStep(requested)).toMatchObject({ turn: "accounting", title: "Рахунок у бухгалтерії" });
+    expect(getOrderDocMarks(requested)?.find((mark) => mark.key === "invoice")).toMatchObject({
+      ready: false,
+      inProgress: true,
+    });
+  });
+
+  it("повернули — знову менеджер, з причиною", () => {
+    const returned = { ...withDocs, invoiceReturnNote: "Ціна не ділиться на 1,2" };
+    expect(getOrderNextStep(returned)).toMatchObject({
+      turn: "manager",
+      title: "Рахунок повернули — виправити",
+      detail: "Ціна не ділиться на 1,2",
+    });
+  });
+
+  it("виписано — чекаємо передоплату від замовника", () => {
+    const issued = { ...withDocs, invoiceNumber: "407", invoiceCreatedAt: "2026-10-15" };
+    expect(getOrderNextStep(issued)).toMatchObject({ stage: "customer", turn: "customer" });
+    expect(getOrderDocMarks(issued)?.find((mark) => mark.key === "invoice")?.ready).toBe(true);
+  });
+
+  it("готівці рахунок не потрібен", () => {
+    expect(getOrderNextStep({ ...cash, contractCreatedAt: null }).title).toBe("Передоплата 70%");
   });
 });

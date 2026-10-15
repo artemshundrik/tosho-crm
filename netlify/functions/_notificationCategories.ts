@@ -8,6 +8,8 @@ export type NotificationCategoryKey =
   | "quote_comment"
   | "quote_markup_request"
   | "quote_markup_decision"
+  | "order_invoice_request"
+  | "order_invoice_decision"
   | "design"
   | "contractor"
   | "team_events"
@@ -34,6 +36,8 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "quote_comment", label: "Коментарі у прорахунках" },
   { key: "quote_markup_request", label: "Запити на погодження ціни" },
   { key: "quote_markup_decision", label: "Рішення щодо ціни" },
+  { key: "order_invoice_request", label: "Запити рахунків" },
+  { key: "order_invoice_decision", label: "Рахунок готовий" },
   { key: "design", label: "Дизайн-задачі" },
   { key: "contractor", label: "Контрагенти" },
   { key: "team_events", label: "Події команди" },
@@ -61,6 +65,8 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   const isQuoteWorker = isPrivileged || QUOTE_JOB_ROLES.includes(job);
   const isDesigner = job === "designer" || job === "дизайнер";
   const isFinance = access === "owner" || access === "admin" || ["seo", "accountant", "chief_accountant"].includes(job);
+  const isInvoiceIssuer =
+    access === "owner" || ["seo", "accountant", "chief_accountant", "junior_accountant"].includes(job);
   switch (key) {
     case "team_events":
     case "team_absences":
@@ -93,6 +99,11 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     case "quote_markup_request":
       return access === "owner" || job === "seo" || job === "chief_accountant";
     case "quote_markup_decision":
+      return isQuoteWorker;
+    // Запит рахунку — власник, СЕО і бухгалтери (див. src/lib/notificationCategories.ts).
+    case "order_invoice_request":
+      return isInvoiceIssuer;
+    case "order_invoice_decision":
       return isQuoteWorker;
     case "customer_followup":
     case "quote_deadline":

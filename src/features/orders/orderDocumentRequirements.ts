@@ -1,3 +1,4 @@
+import { getOrderInvoiceState } from "./orderInvoice";
 import { isCashlessPaymentMethod } from "./paymentRules";
 import type { DerivedOrderRecord } from "./orderRecords";
 
@@ -169,7 +170,8 @@ export const formatShortCreatedDate = (value?: string | null) => {
 //  'blocked' — даних/умов не вистачає, дії нема (лише причина);
 //  'create'  — все готово, документ ще не створено → кнопка «Створити»;
 //  'open'    — документ створено / готовий до генерації → кнопка «Відкрити PDF».
-export type DocumentActionMode = "blocked" | "create" | "open";
+//  'pending' — документ у когось іншого (рахунок у бухгалтерії) → дії нема, лише стан.
+export type DocumentActionMode = "blocked" | "create" | "open" | "pending";
 
 export const getDocumentActionState = (
   record: DerivedOrderRecord,
@@ -186,6 +188,10 @@ export const getDocumentActionState = (
   actionMode: DocumentActionMode;
   createdDateLabel: string | null;
   isRequisitesBlocker: boolean;
+  /** Підпис кнопки «Створити», коли він інший (рахунок: «Створити рахунок»). */
+  createLabel?: string;
+  /** Рядок під назвою замість типового «Можна створити». */
+  detail?: string | null;
 } => {
   if (kind === "contract") {
     const checks = getContractRequirementChecks(record);
@@ -250,17 +256,44 @@ export const getDocumentActionState = (
     const checks = getInvoiceRequirementChecks(record);
     const missing = getMissingRequirementLabels(checks);
     const ready = missing.length === 0;
-    return {
+    // Номер дає бухгалтерія з BAS (REQ-322#p10): менеджер просить, а відкрити
+    // може лише виписаний рахунок.
+    const state = getOrderInvoiceState(record);
+    const issuedDate = formatShortCreatedDate(record.invoiceDate ?? record.invoiceCreatedAt);
+    const base = {
       title: "Рахунок",
       ready,
-      statusLabel: ready ? "Готовий" : "Немає позицій",
-      statusReady: ready,
-      blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
       checks,
-      hint: "Рахунок формується з товарних позицій замовлення і не потребує створеного договору.",
-      actionMode: ready ? "open" : "blocked",
+      hint: "Рахунок виписує бухгалтер у BAS: менеджер просить, бухгалтер вносить номер і дату, і тоді рахунок можна відкрити й надіслати.",
       createdDateLabel: null,
       isRequisitesBlocker: false,
+      blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
+    };
+    if (state === "issued") {
+      return {
+        ...base,
+        created: true,
+        statusLabel: `№ ${record.invoiceNumber}${issuedDate ? ` від ${issuedDate}` : ""}`,
+        statusReady: true,
+        actionMode: "open",
+      };
+    }
+    if (state === "requested") {
+      return {
+        ...base,
+        statusLabel: "У бухгалтерії",
+        statusReady: false,
+        actionMode: "pending",
+        detail: "Рахунок у бухгалтерії — відкрити можна, коли внесуть номер з BAS",
+      };
+    }
+    return {
+      ...base,
+      statusLabel: ready ? "Можна попросити" : "Немає позицій",
+      statusReady: ready,
+      actionMode: ready ? "create" : "blocked",
+      createLabel: "Створити рахунок",
+      detail: state === "returned" ? `Бухгалтер повернув: ${record.invoiceReturnNote}` : "Номер і дату внесе бухгалтер з BAS",
     };
   }
 

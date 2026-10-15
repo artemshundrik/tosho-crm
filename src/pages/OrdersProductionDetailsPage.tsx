@@ -25,7 +25,6 @@ import {
   ORDER_PAYMENT_TERMS_OPTIONS,
 } from "@/features/orders/config";
 import {
-  assignOrderInvoiceNumber,
   formatOrderDate,
   formatOrderMoney,
   isCashlessPaymentMethod,
@@ -102,6 +101,10 @@ import { buildLaunchPath, formatPaymentTermsChip } from "@/features/orders/order
 import { IncotermsHint } from "@/features/orders/order-details/IncotermsHint";
 import { OrderDeliveryCard } from "@/features/orders/order-details/OrderDeliveryCard";
 import { OrderDocumentsCard } from "@/features/orders/order-details/OrderDocumentsCard";
+import { OrderInvoiceDeskCard } from "@/features/orders/order-details/OrderInvoiceDeskCard";
+import { useOrderInvoiceFlow } from "@/features/orders/order-details/useOrderInvoiceFlow";
+import { getOrderInvoiceState } from "@/features/orders/orderInvoice";
+import { canIssueOrderInvoice } from "@/lib/permissions";
 import { OrderItemsTable } from "@/features/orders/order-details/OrderItemsTable";
 import { OrderLaunchPathCard } from "@/features/orders/order-details/OrderLaunchPathCard";
 import { OrderMaterialsTab, countOrderMaterials } from "@/features/orders/order-details/OrderMaterialsTab";
@@ -678,11 +681,13 @@ const buildOrderDocumentHtml = (
   }
 
   if (kind === "invoice") {
-    // Номер рахунку — з наскрізного лічильника команди, проставляється атомарно при
-    // ПЕРШІЙ генерації і далі не змінюється. Фолбек на номер замовлення потрібен для
-    // похідних замовлень: у них немає збереженого рядка, тож і номер закріпити нема де.
-    const invoiceNumber = record.invoiceNumber?.trim() || record.quoteNumber;
-    const invoiceDate = formatContractDateParts(record.invoiceCreatedAt ?? null);
+    // Номер і дату вносить бухгалтер з BAS (REQ-322#p10). Без номера це чернетка,
+    // яку бачить лише бухгалтерія: «№ ___», і дата теж порожня — її задає бухгалтер.
+    const invoiceNumber = record.invoiceNumber?.trim() || "___";
+    const invoiceDateSource = record.invoiceDate ?? record.invoiceCreatedAt;
+    const invoiceDate = invoiceDateSource
+      ? formatContractDateParts(invoiceDateSource)
+      : { day: "___", monthLabel: "__________", year: "20__" };
     const currencyShort =
       record.currency === "USD" ? "дол. США" : record.currency === "EUR" ? "євро" : "грн.";
     const wordsCurrency = record.currency === "USD" || record.currency === "EUR" ? record.currency : "UAH";
@@ -889,10 +894,22 @@ export default function OrdersProductionDetailsPage() {
   const { teamId, session, userId, accessRole, jobRole } = useAuth();
   // Approver pool for contract revisions: owner OR job_role=seo (per project policy).
   const isCeo = accessRole === "owner" || (jobRole ?? "").toLowerCase() === "seo";
+  const canIssueInvoice = canIssueOrderInvoice(accessRole, jobRole);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState<DerivedOrderRecord | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
+  const invoiceFlow = useOrderInvoiceFlow({
+    record,
+    teamId,
+    userId,
+    onPatched: (patch) =>
+      setRecord((current) => {
+        if (!current) return current;
+        const next = { ...current, ...patch };
+        return { ...next, docs: normalizeDocumentDocs(next) };
+      }),
+  });
   const [activeTab, setActiveTab] = useState<OrderPageTab>("launch");
   const layoutRootRef = useRef<HTMLDivElement>(null);
   useRecordPageHeight(layoutRootRef);
@@ -1170,41 +1187,7 @@ export default function OrdersProductionDetailsPage() {
     // Готуємо URL-и зображень погодженої візуалізації для вставки у Специфікацію.
     const visualizationImageUrls =
       kind === "specification" ? await resolveVisualizationImageUrls(activeRecord.approvedVisualizationAssets) : [];
-    // Номер рахунку закріплюємо з наскрізного лічильника ЛИШЕ при першій генерації —
-    // до того, як будуємо html, бо шаблон рахунку вже читає record.invoiceNumber.
-    // Похідні (ще не збережені) замовлення й уже пронумеровані рахунки пропускаємо.
-    let recordForDocument = activeRecord;
-    if (kind === "invoice" && activeRecord.source === "stored" && teamId && !activeRecord.invoiceNumber) {
-      try {
-        const invoiceAssignment = await assignOrderInvoiceNumber({ teamId, orderId: activeRecord.id });
-        if (invoiceAssignment) {
-          recordForDocument = {
-            ...activeRecord,
-            invoiceNumber: invoiceAssignment.invoiceNumber,
-            invoiceCreatedAt: invoiceAssignment.invoiceCreatedAt,
-          };
-          setRecord((current) => {
-            if (!current || current.id !== activeRecord.id) return current;
-            const next = {
-              ...current,
-              invoiceNumber: invoiceAssignment.invoiceNumber,
-              invoiceCreatedAt: invoiceAssignment.invoiceCreatedAt,
-            };
-            return { ...next, docs: normalizeDocumentDocs(next) };
-          });
-        }
-        // invoiceAssignment === null: міграція ще не застосована — друкуємо зі
-        // старою поведінкою, шаблон сам підставить номер замовлення.
-      } catch (invoiceError: unknown) {
-        // Рахунок має надрукуватись у будь-якому разі — лічильник тут «бонус», а не блокер.
-        toast.error(
-          invoiceError instanceof Error
-            ? invoiceError.message
-            : "Не вдалося отримати номер рахунку з лічильника — надруковано з номером замовлення."
-        );
-      }
-    }
-    const html = buildOrderDocumentHtml(recordForDocument, kind, {
+    const html = buildOrderDocumentHtml(activeRecord, kind, {
       customerSignatoryNameGenitive,
       customerSignatoryRoleGenitive,
       visualizationImageUrls,
@@ -1331,6 +1314,11 @@ export default function OrdersProductionDetailsPage() {
   //  - Договір уже створено → одразу відкриваємо PDF з persisted-параметрів;
   //  - решта документів → одразу генерація.
   const handleDocumentAction = (kind: OrderDocumentKind) => {
+    // Рахунок без номера з BAS не відкривається: менеджер його просить (REQ-322#p10).
+    if (kind === "invoice" && record && getOrderInvoiceState(record) !== "issued") {
+      void invoiceFlow.request();
+      return;
+    }
     if (kind === "contract") {
       if (record?.contractCreatedAt) {
         regenerateContract();
@@ -1605,6 +1593,15 @@ export default function OrdersProductionDetailsPage() {
             </TabBar>
           </div>
           <div className="space-y-4 record-split:-mr-3 record-split:min-h-0 record-split:flex-1 record-split:overflow-y-auto record-split:overscroll-contain record-split:pb-8 record-split:pr-3 record-split:pt-4 record-split:2xl:-mr-4 record-split:2xl:pr-4">
+            {canIssueInvoice && getOrderInvoiceState(record) === "requested" ? (
+              <OrderInvoiceDeskCard
+                record={record}
+                busy={invoiceFlow.busy}
+                onIssue={invoiceFlow.issue}
+                onReturn={invoiceFlow.returnRequest}
+                onPreview={() => void openDocumentPrint("invoice")}
+              />
+            ) : null}
             {activeTab === "launch" ? (
               <>
                 <OrderLaunchPathCard

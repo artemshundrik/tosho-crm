@@ -3,6 +3,7 @@ import { useNavigate, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { canIssueOrderInvoice } from "@/lib/permissions";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
@@ -96,7 +97,8 @@ const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
 export default function OrdersProductionPage() {
   const navigate = useNavigate();
   const navigationType = useNavigationType();
-  const { teamId, session, userId } = useAuth();
+  const { teamId, session, userId, accessRole, jobRole } = useAuth();
+  const canIssueInvoice = canIssueOrderInvoice(accessRole, jobRole);
   const isNarrowViewport = useIsNarrowViewport();
   const { records, setRecords, loading, refreshing, error, reload } = useOrderRecords(teamId, userId);
 
@@ -152,9 +154,9 @@ export default function OrdersProductionPage() {
         step: getOrderNextStep(record),
         paid: getOrderPaidShare(record),
         docs: getOrderDocMarks(record),
-        mine: isMyTurn(record, userId),
+        mine: isMyTurn(record, { userId, canIssueInvoice }),
       })),
-    [orders, userId]
+    [orders, userId, canIssueInvoice]
   );
   const summary = useMemo(() => summarizeOrderStages(orders), [orders]);
   const myTurnCount = useMemo(() => views.filter((view) => view.mine).length, [views]);
