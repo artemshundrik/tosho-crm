@@ -40,7 +40,13 @@ import {
   type QuoteDeliveryDetails,
 } from "@/components/quotes/QuoteDeliveryFields";
 import { ORDER_PAYMENT_METHOD_OPTIONS } from "@/features/orders/config";
-import { getAllowedPaymentTermsOptions } from "@/features/orders/paymentRules";
+import { getAllowedPaymentTermsOptions, isCashlessPaymentMethod } from "@/features/orders/paymentRules";
+import { executorBadge } from "@/features/orders/orderExecutor";
+import {
+  findCustomerLastLegalEntityId,
+  listOrderLegalEntities,
+  type OrderLegalEntityOption,
+} from "@/features/orders/orderLegalEntityQueries";
 import {
   createManualOrder,
   formatOrderMoney,
@@ -193,6 +199,14 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   const [paymentMethodId, setPaymentMethodId] = useState<string>(defaultPaymentMethod("UAH"));
   const paymentMethodTouched = useRef(false);
   const [paymentTerms, setPaymentTerms] = useState<string>("70/30");
+  // Від кого документи (REQ-322#p1): за замовчуванням — юрособа з останнього замовлення замовника.
+  const [legalEntityOptions, setLegalEntityOptions] = useState<OrderLegalEntityOption[]>([]);
+  const [ourLegalEntityId, setOurLegalEntityId] = useState<string>("");
+  const legalEntityTouched = useRef(false);
+  const legalEntityLookupFor = useRef<string | null>(null);
+  // Показане у виборі = те, що піде в замовлення: без вибору це ТОВ.
+  const shownLegalEntityId =
+    ourLegalEntityId || legalEntityOptions.find((option) => option.executor.kind === "llc")?.row.id || "";
 
   // Логістика / пакування
   const [deliveryType, setDeliveryType] = useState<string>("");
@@ -246,6 +260,23 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   useEffect(() => {
     if (open) resetForm();
   }, [open, resetForm]);
+
+  useEffect(() => {
+    if (!open || !teamId) return;
+    let active = true;
+    legalEntityTouched.current = false;
+    setOurLegalEntityId("");
+    listOrderLegalEntities(teamId)
+      .then((rows) => {
+        if (active) setLegalEntityOptions(rows);
+      })
+      .catch(() => {
+        if (active) setLegalEntityOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, teamId]);
 
   useEffect(() => {
     if (!open || !userId) return;
@@ -568,6 +599,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
           : null,
         packaging: packaging.trim() || null,
         design,
+        ourLegalEntityId: isCashlessPaymentMethod(paymentMethodId, null) ? shownLegalEntityId || null : null,
         items: payloadItems,
       });
       onCreated({ id: result.id, orderNumber: result.orderNumber });
@@ -633,6 +665,13 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                               onSelect={() => {
                                 setSelectedCustomer({ id: customer.id, name, logoUrl: customer.logo_url ?? null });
                                 setSelectedCustomerPaymentType(customer.payment_type ?? null);
+                                legalEntityLookupFor.current = customer.id;
+                                if (teamId && !legalEntityTouched.current) {
+                                  void findCustomerLastLegalEntityId(teamId, customer.id).then((entityId) => {
+                                    if (legalEntityTouched.current || legalEntityLookupFor.current !== customer.id) return;
+                                    setOurLegalEntityId(entityId ?? "");
+                                  });
+                                }
                                 if (!paymentMethodTouched.current) {
                                   setPaymentMethodId(defaultPaymentMethod(currency, customer.payment_type ?? null));
                                 }
@@ -733,6 +772,33 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                 </Select>
               </div>
             </div>
+
+            {isCashlessPaymentMethod(paymentMethodId, null) && legalEntityOptions.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Від кого документи</Label>
+                <Select
+                  value={shownLegalEntityId}
+                  onValueChange={(value) => {
+                    legalEntityTouched.current = true;
+                    setOurLegalEntityId(value);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="ТОВ «АВАНПРІНТ»" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {legalEntityOptions.map((option) => (
+                      <SelectItem key={option.row.id} value={option.row.id}>
+                        {executorBadge(option.executor)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Договір, СП, рахунок і акт підуть від цієї юрособи. ФОП — без ПДВ.
+                </p>
+              </div>
+            ) : null}
           </section>
 
           {/* ── Товари ── */}

@@ -1,4 +1,5 @@
-import { ORDER_DOCUMENT_EXECUTOR, ORDER_PAYMENT_TERMS_OPTIONS } from "@/features/orders/config";
+import { ORDER_PAYMENT_TERMS_OPTIONS } from "@/features/orders/config";
+import { executorPreamble, executorRequisiteLines, splitVat, VAT_RATE } from "@/features/orders/orderExecutor";
 import {
   isCashlessPaymentMethod,
   markOrderDocumentCreated,
@@ -13,8 +14,6 @@ import { toSignatureInitials } from "@/lib/signatureFormat";
  */
 const normalizeText = (value?: string | null) => (value ?? "").trim().toLowerCase();
 
-const SPEC_VAT_RATE = 20;
-const CONTRACT_EXECUTOR = ORDER_DOCUMENT_EXECUTOR;
 
 const escapeHtml = (value: string) =>
   value
@@ -60,6 +59,9 @@ export const getSpecificationGroupBlocker = (records: DerivedOrderRecord[]) => {
     const blocker = getSpecificationRecordBlocker(record);
     if (blocker) return `${record.quoteNumber}: ${blocker}`;
     if (getSpecificationCustomerKey(record) !== firstKey) return "В одну СП можна додати тільки замовлення одного Замовника.";
+    if ((record.ourLegalEntityId ?? "") !== (first.ourLegalEntityId ?? "")) {
+      return "В одну СП можна додати тільки замовлення від однієї нашої юрособи.";
+    }
     if (record.paymentTerms !== first.paymentTerms) return "Для групової СП обери замовлення з однаковими умовами оплати.";
     if (record.incotermsCode !== first.incotermsCode || (record.incotermsPlace ?? "") !== (first.incotermsPlace ?? "")) {
       return "Для групової СП обери замовлення з однаковими умовами Incoterms.";
@@ -84,7 +86,10 @@ export const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], opt
     }))
   );
   const totalWithVat = rows.reduce((sum, row) => sum + Number(row.item.lineTotal || 0), 0);
-  const totalWithoutVat = totalWithVat / (1 + SPEC_VAT_RATE / 100);
+  // Від кого СП: ТОВ (з ПДВ) чи ФОП (без ПДВ) — REQ-322#p1–p2.
+  const executor = first.executor;
+  const vatPayer = executor.vatPayer;
+  const totalWithoutVat = splitVat(totalWithVat, vatPayer).net;
   const vatAmount = totalWithVat - totalWithoutVat;
   const terms =
     ORDER_PAYMENT_TERMS_OPTIONS.find((item) => item.id === first.paymentTerms) ?? ORDER_PAYMENT_TERMS_OPTIONS[1];
@@ -122,7 +127,7 @@ export const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], opt
   const itemRows = rows
     .map(({ orderNumber, item }, index) => {
       const unitPriceWithVat = Number(item.unitPrice || 0);
-      const unitPriceWithoutVat = unitPriceWithVat / (1 + SPEC_VAT_RATE / 100);
+      const unitPriceWithoutVat = splitVat(unitPriceWithVat, vatPayer).net;
       const imageUrl = item.thumbUrl || item.imageUrl || "";
       const details = [
         item.description ? `<div class="muted small">${escapeHtml(item.description)}</div>` : "",
@@ -136,7 +141,7 @@ export const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], opt
           <td>${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.name)}" />` : ""}<strong>${escapeHtml(item.name)}</strong>${details}</td>
           <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
           <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithVat))}</td>
-          <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithoutVat))}</td>
+          ${vatPayer ? `<td class="num">${escapeHtml(formatPlainMoney(unitPriceWithoutVat))}</td>` : ""}
           <td class="num">${escapeHtml(formatPlainMoney(item.lineTotal))}</td>
         </tr>`;
     })
@@ -176,7 +181,7 @@ export const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], opt
         <div>Дата: ${escapeHtml(dateLabel)}</div>
         <div>Замовник: <strong>${escapeHtml(customerTitle)}</strong></div>
       </div>
-      <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, що діє на підставі ${escapeHtml(customerAuthority)}, з іншої сторони, підписали цю Специфікацію щодо наступної продукції:</p>
+      <p>${escapeHtml(executorPreamble(executor))}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, що діє на підставі ${escapeHtml(customerAuthority)}, з іншої сторони, підписали цю Специфікацію щодо наступної продукції:</p>
       <table>
         <thead>
           <tr>
@@ -184,33 +189,33 @@ export const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], opt
             <th style="width:92px;">Замовлення</th>
             <th>Назва продукції</th>
             <th style="width:70px;">К-сть</th>
-            <th style="width:92px;">Ціна з ПДВ</th>
-            <th style="width:92px;">Ціна без ПДВ</th>
-            <th style="width:100px;">Сума з ПДВ</th>
+            <th style="width:92px;">${vatPayer ? "Ціна з ПДВ" : "Ціна"}</th>
+            ${vatPayer ? `<th style="width:92px;">Ціна без ПДВ</th>` : ""}
+            <th style="width:100px;">${vatPayer ? "Сума з ПДВ" : "Сума"}</th>
           </tr>
         </thead>
         <tbody>${itemRows}</tbody>
       </table>
       <table class="totals">
-        <tr><td>Разом без ПДВ</td><td class="num">${escapeHtml(formatPlainMoney(totalWithoutVat))} грн</td></tr>
-        <tr><td>ПДВ ${SPEC_VAT_RATE}%</td><td class="num">${escapeHtml(formatPlainMoney(vatAmount))} грн</td></tr>
-        <tr><td><strong>Разом з ПДВ</strong></td><td class="num"><strong>${escapeHtml(formatPlainMoney(totalWithVat))} грн</strong></td></tr>
+        ${
+          vatPayer
+            ? `<tr><td>Разом без ПДВ</td><td class="num">${escapeHtml(formatPlainMoney(totalWithoutVat))} грн</td></tr>
+        <tr><td>ПДВ ${VAT_RATE}%</td><td class="num">${escapeHtml(formatPlainMoney(vatAmount))} грн</td></tr>
+        <tr><td><strong>Разом з ПДВ</strong></td><td class="num"><strong>${escapeHtml(formatPlainMoney(totalWithVat))} грн</strong></td></tr>`
+            : `<tr><td><strong>Разом, без ПДВ</strong></td><td class="num"><strong>${escapeHtml(formatPlainMoney(totalWithVat))} грн</strong></td></tr>`
+        }
       </table>
       <div class="section">Порядок оплати</div>
-      <p>Оплата: ${escapeHtml(terms.label)}. Перед запуском: ${terms.advance}% (${escapeHtml(formatPlainMoney(advanceAmount))} грн з ПДВ). Після готовності: ${terms.balance}% (${escapeHtml(formatPlainMoney(balanceAmount))} грн з ПДВ). Спосіб оплати: ${escapeHtml(first.paymentRail)}.</p>
+      <p>Оплата: ${escapeHtml(terms.label)}. Перед запуском: ${terms.advance}% (${escapeHtml(formatPlainMoney(advanceAmount))} грн${vatPayer ? " з ПДВ" : ""}). Після готовності: ${terms.balance}% (${escapeHtml(formatPlainMoney(balanceAmount))} грн${vatPayer ? " з ПДВ" : ""}). Спосіб оплати: ${escapeHtml(first.paymentRail)}.</p>
       <div class="section">Доставка</div>
       <p>Доставка продукції здійснюється на умовах ${escapeHtml(deliveryTerms)}.</p>
       <div class="parties">
         <div class="party">
           <strong>ВИКОНАВЕЦЬ</strong>
-          <p>${escapeHtml(CONTRACT_EXECUTOR.shortName)}</p>
-          <p>Юридична адреса: ${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
-          <p>IBAN: ${escapeHtml(CONTRACT_EXECUTOR.iban)}</p>
-          <p>${escapeHtml(CONTRACT_EXECUTOR.bank)}</p>
-          <p>Код ЄДРПОУ: ${escapeHtml(CONTRACT_EXECUTOR.taxId)}</p>
-          <p>ІПН: ${escapeHtml(CONTRACT_EXECUTOR.vatId)}</p>
-          <p>${escapeHtml(CONTRACT_EXECUTOR.taxStatus)}</p>
-          <p class="signature">${escapeHtml(CONTRACT_EXECUTOR.signatoryPositionDisplay)} ${escapeHtml(CONTRACT_EXECUTOR.signatureLabel)}</p>
+          ${executorRequisiteLines(executor, { addressLabel: "Юридична адреса: " })
+            .map((line) => `<p>${escapeHtml(line)}</p>`)
+            .join("")}
+          <p class="signature">${escapeHtml(executor.signatoryPositionDisplay)} ${escapeHtml(executor.signatureLabel)}</p>
         </div>
         <div class="party">
           <strong>ЗАМОВНИК</strong>

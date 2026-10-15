@@ -47,6 +47,7 @@ const cashless: OrderListInput = {
   contractDate: null,
   contractProductionDays: null,
   contractAutoProlongation: false,
+  ourLegalEntityId: null,
 };
 
 // Договір і СП підписані — далі в безготівки лише рахунок і оплата.

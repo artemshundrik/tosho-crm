@@ -3280,6 +3280,9 @@ export type Database = {
           specification_signed_at: string | null
           specification_signed_by: string | null
           specification_signed_via: string | null
+          our_legal_entity_id: string | null
+          our_legal_entity: Json | null
+          closing_document: string | null
           invoice_date: string | null
           invoice_issued_by: string | null
           invoice_requested_at: string | null
@@ -3355,6 +3358,9 @@ export type Database = {
           specification_signed_at?: string | null
           specification_signed_by?: string | null
           specification_signed_via?: string | null
+          our_legal_entity_id?: string | null
+          our_legal_entity?: Json | null
+          closing_document?: string | null
           invoice_date?: string | null
           invoice_issued_by?: string | null
           invoice_requested_at?: string | null
@@ -3430,6 +3436,9 @@ export type Database = {
           specification_signed_at?: string | null
           specification_signed_by?: string | null
           specification_signed_via?: string | null
+          our_legal_entity_id?: string | null
+          our_legal_entity?: Json | null
+          closing_document?: string | null
           invoice_date?: string | null
           invoice_issued_by?: string | null
           invoice_requested_at?: string | null
@@ -5976,6 +5985,20 @@ export type Database = {
             Args: { p_user_id: string; p_workspace_id: string }
             Returns: boolean
           }
+      list_order_legal_entities: {
+        Args: { _team_id: string }
+        Returns: {
+          edrpou: string | null
+          iban: string | null
+          id: string
+          ipn: string | null
+          kind: string
+          name: string
+          requisites: Json
+          tax_group: string | null
+          vat_payer: boolean
+        }[]
+      }
       list_supplier_products: {
         Args: {
           p_slug: string

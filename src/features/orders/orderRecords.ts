@@ -5,6 +5,8 @@ import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborator
 import type { Database, Json } from "@/lib/database.types";
 import type { OrderApproval, SignatureVia } from "./orderApprovals";
 import { loadOrderApprovalsByOrderId } from "./orderApprovalQueries";
+import { legalEntityInsertColumns, resolveOrderLegalEntity } from "./orderLegalEntityQueries";
+import { DEFAULT_ORDER_EXECUTOR, executorFromSnapshot, parseClosingDocument, type ClosingDocument, type OrderExecutor } from "./orderExecutor";
 import {
   formatCustomerLegalEntityTitle,
   isVatPayerRate,
@@ -222,6 +224,13 @@ const parseNullableNumber = (value: unknown) => {
 const parseBalanceTiming = (value: unknown) =>
   value === "before_shipment" || value === "after_shipment" ? value : null;
 
+/**
+ * Договір укладено між замовником і КОНКРЕТНОЮ нашою юрособою: договір із ТОВ не
+ * покриває замовлення від ФОП. Тому ключ — замовник + юрособа.
+ */
+export const contractInheritanceKey = (customerId: string, ourLegalEntityId: string | null | undefined) =>
+  `${customerId}|${ourLegalEntityId?.trim() || ""}`;
+
 const buildContractByCustomerId = (orders: StoredOrderRow[]) => {
   const byCustomerId = new Map<string, InheritedContract>();
   for (const order of orders) {
@@ -244,10 +253,11 @@ const buildContractByCustomerId = (orders: StoredOrderRow[]) => {
       signedVia: parseSignatureVia(order.contract_signed_via),
       orderId: order.id,
     };
-    const current = byCustomerId.get(customerId);
+    const key = contractInheritanceKey(customerId, order.our_legal_entity_id);
+    const current = byCustomerId.get(key);
     // Найсвіжіший договір виграє: якщо з замовником переукладали — нові замовлення йдуть за новим.
     const sortKey = (contract: InheritedContract) => contract.date || contract.createdAt;
-    if (!current || sortKey(candidate) > sortKey(current)) byCustomerId.set(customerId, candidate);
+    if (!current || sortKey(candidate) > sortKey(current)) byCustomerId.set(key, candidate);
   }
   return byCustomerId;
 };
@@ -436,6 +446,12 @@ export type DerivedOrderRecord = {
   inheritedContractOrderNumber: string | null;
   /** Замовлення, на якому живе успадкований договір: підпис ставиться саме туди. */
   inheritedContractOrderId: string | null;
+  /** Наша юрособа, від якої йдуть документи (REQ-322#p1). null — ТОВ за замовчуванням. */
+  ourLegalEntityId: string | null;
+  /** Реквізити виконавця для документів — знімок на замовленні, інакше ТОВ. */
+  executor: OrderExecutor;
+  /** Закривальний документ: ВН чи акт (p3). null — ще не обрано. */
+  closingDocument: ClosingDocument | null;
   /**
    * Чи замовлення взагалі потребує погодження дизайну. false — товар без нанесення:
    * ні візуал, ні макет не потрібні, документи не блокуються дизайном.
@@ -501,6 +517,9 @@ type StoredOrderRow = {
   contract_signed_via?: string | null;
   specification_signed_at?: string | null;
   specification_signed_via?: string | null;
+  our_legal_entity_id?: string | null;
+  our_legal_entity?: unknown;
+  closing_document?: string | null;
   np_ttn_number?: string | null;
   np_ttn_ref?: string | null;
   np_ttn_cost?: number | string | null;
@@ -621,6 +640,8 @@ export type CreateManualOrderParams = {
   packaging?: string | null;
   /** Вибір дизайну (враховується лише коли хоч один товар із нанесенням). */
   design?: ManualOrderDesignChoice;
+  /** Наша юрособа (REQ-322#p1). Не задано — з останнього замовлення замовника. */
+  ourLegalEntityId?: string | null;
 };
 
 /** Селектований елемент для «Дизайн вже готовий». */
@@ -772,7 +793,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,contract_signed_at,contract_signed_via,specification_signed_at,specification_signed_via,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,contract_signed_at,contract_signed_via,specification_signed_at,specification_signed_via,our_legal_entity_id,our_legal_entity,closing_document,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -1251,6 +1272,9 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       readinessColumn,
       inheritedContractOrderNumber: null,
       inheritedContractOrderId: null,
+      ourLegalEntityId: null,
+      executor: DEFAULT_ORDER_EXECUTOR,
+      closingDocument: null,
       requiresDesignApproval: hasImprint || requiresVisualization || requiresLayout,
       hasApprovedVisualization,
       hasApprovedLayout,
@@ -1600,7 +1624,9 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       const ownContractCreatedAt = order.contract_created_at ?? null;
       const inheritedContract = ownContractCreatedAt
         ? null
-        : (order.customer_id?.trim?.() ? contractByCustomerId.get(order.customer_id.trim()) ?? null : null);
+        : order.customer_id?.trim?.()
+          ? (contractByCustomerId.get(contractInheritanceKey(order.customer_id.trim(), order.our_legal_entity_id)) ?? null)
+          : null;
       const contractCreatedAt = ownContractCreatedAt ?? inheritedContract?.createdAt ?? null;
       const orderDocuments = getOrderDocuments(order);
       const contractReady = Boolean(
@@ -1735,6 +1761,9 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             : order.readiness_column ?? "ready",
         inheritedContractOrderNumber: inheritedContract?.orderNumber ?? null,
         inheritedContractOrderId: inheritedContract?.orderId ?? null,
+        ourLegalEntityId: order.our_legal_entity_id ?? null,
+        executor: executorFromSnapshot(order.our_legal_entity),
+        closingDocument: parseClosingDocument(order.closing_document),
         requiresDesignApproval,
         hasApprovedVisualization,
         hasApprovedLayout,
@@ -1855,6 +1884,9 @@ export async function createOrderFromApprovedQuote(params: {
     readiness_column: "ready",
     has_approved_visualization: draft.readiness.hasApprovedVisualization,
     has_approved_layout: draft.readiness.hasApprovedLayout,
+    ...legalEntityInsertColumns(
+      await resolveOrderLegalEntity({ teamId: params.teamId, customerId: draft.readiness.customerId })
+    ),
     created_at: nowIso,
     updated_at: nowIso,
   };
@@ -2072,6 +2104,13 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     // Без друку дизайн не потрібен — одразу закриваємо вимогу, щоб СП/техкарта не чекали візуалу.
     has_approved_visualization: designAlreadyApproved || !hasPrint,
     has_approved_layout: designAlreadyApproved || !hasPrint,
+    ...legalEntityInsertColumns(
+      await resolveOrderLegalEntity({
+        teamId: params.teamId,
+        customerId: customer.id,
+        explicitId: params.ourLegalEntityId,
+      })
+    ),
     created_at: nowIso,
     updated_at: nowIso,
   };

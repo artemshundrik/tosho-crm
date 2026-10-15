@@ -48,7 +48,8 @@ export function OrderInvoiceDeskCard({
   const [date, setDate] = useState(todayIso);
   const [returning, setReturning] = useState(false);
   const [note, setNote] = useState("");
-  const indivisible = findIndivisiblePrices(record.items);
+  // Кратність 6 коп. потрібна, щоб виділити 20% ПДВ; у ФОП без ПДВ її немає.
+  const indivisible = record.executor.vatPayer ? findIndivisiblePrices(record.items) : [];
   const requester =
     record.invoiceRequestedBy && record.invoiceRequestedBy === record.managerUserId ? record.managerLabel : "Менеджер";
   const requestedAt = formatRequestedAt(record.invoiceRequestedAt);

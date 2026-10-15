@@ -18,6 +18,7 @@ import {
   Pencil,
   Phone,
   Send,
+  ChevronDown,
 } from "@/components/icons/appIcons";
 import {
   getDocumentApprovalState,
@@ -31,6 +32,15 @@ import {
   getDocumentActionState,
   type OrderDocumentKind,
 } from "@/features/orders/orderDocumentRequirements";
+import {
+  CLOSING_DOCUMENT_LABELS,
+  executorBadge,
+  legalEntityLockReason,
+  storedLegalEntityId,
+  getExecutorGaps,
+  type ClosingDocument,
+} from "@/features/orders/orderExecutor";
+import type { OrderLegalEntityOption } from "@/features/orders/orderLegalEntityQueries";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { isCashlessPaymentMethod } from "@/features/orders/paymentRules";
 import { formatTelegramHandle } from "@/lib/telegramContact";
@@ -48,6 +58,76 @@ export type OrderApprovalHandlers = {
 };
 
 const SIGN_OPTIONS: SignatureVia[] = ["paper", "vchasno", "medoc"];
+
+export type OrderIssuerHandlers = {
+  options: OrderLegalEntityOption[];
+  busy: boolean;
+  onChangeEntity: (option: OrderLegalEntityOption) => void;
+  onChangeClosingDocument: (value: ClosingDocument) => void;
+};
+
+/**
+ * Від кого документи (ТОВ з ПДВ чи ФОП без ПДВ) і чим закриваємо — ВН чи акт
+ * (REQ-322#p1, p3). Лише безготівка: на готівці документів немає.
+ */
+function IssuerLine({ record, issuer }: { record: DerivedOrderRecord; issuer: OrderIssuerHandlers }) {
+  const gaps = getExecutorGaps(record.executor);
+  const lockReason = legalEntityLockReason(record);
+  const closing = record.closingDocument;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 px-4 py-2 text-xs">
+      <span className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Від кого</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="xs" variant="ghost" className="gap-1 font-medium" disabled={issuer.busy || issuer.options.length === 0 || Boolean(lockReason)}
+              title={lockReason ?? undefined}
+            >
+              {executorBadge(record.executor)}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {issuer.options.map((option) => (
+              <DropdownMenuItem
+                key={option.row.id}
+                onSelect={() => {
+                  if (storedLegalEntityId(option) !== (record.ourLegalEntityId ?? null)) issuer.onChangeEntity(option);
+                }}
+              >
+                {executorBadge(option.executor)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Закриваємо</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="xs" variant="ghost" className="gap-1 font-medium" disabled={issuer.busy}>
+              {closing ? CLOSING_DOCUMENT_LABELS[closing] : "Не обрано"}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {(Object.keys(CLOSING_DOCUMENT_LABELS) as ClosingDocument[]).map((value) => (
+              <DropdownMenuItem key={value} onSelect={() => issuer.onChangeClosingDocument(value)}>
+                {CLOSING_DOCUMENT_LABELS[value]}
+                <span className="ml-2 text-muted-foreground">{value === "act" ? "за послуги" : "за товар, у BAS"}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
+      {gaps.length > 0 ? (
+        <span className="tone-text-warning">
+          У довіднику юросіб бракує: {gaps.join(", ")} — Фінанси → Налаштування
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * Під договором і СП — погодження (p6) і підпис (p7): «На погодження», «На
@@ -305,9 +385,11 @@ export function OrderDocumentsCard({
   onTelegram,
   onViber,
   approvals,
+  issuer,
 }: {
   record: DerivedOrderRecord;
   approvals: OrderApprovalHandlers;
+  issuer: OrderIssuerHandlers | null;
   documentActions: OrderDocumentAction[];
   onAction: (kind: OrderDocumentKind) => void;
   onParams: (kind: OrderDocumentKind) => void;
@@ -339,10 +421,11 @@ export function OrderDocumentsCard({
           </div>
           <span className="text-xs text-muted-foreground">
             {cashless
-              ? "Безготівка: договір, СП, рахунок"
+              ? `Безготівка: договір, СП, рахунок${record.closingDocument === "act" ? ", акт" : ""}`
               : `${record.paymentMethodId === "crypto" ? "Криптовалюта" : "Готівка"} — не оформлюються`}
           </span>
         </div>
+        {cashless && issuer ? <IssuerLine record={record} issuer={issuer} /> : null}
         {!cashless ? (
           <p className="border-t border-border/40 px-4 py-3 text-sm text-muted-foreground">
             Договору, СП, рахунку й видаткової тут немає: вони лише для безготівки.

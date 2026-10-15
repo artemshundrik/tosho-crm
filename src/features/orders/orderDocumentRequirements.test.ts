@@ -14,6 +14,7 @@ const base = {
   specificationCreatedAt: null,
   invoiceCreatedAt: null,
   invoiceNumber: null,
+  closingDocument: null,
 };
 
 describe("getOrderDocumentKinds", () => {
@@ -24,6 +25,18 @@ describe("getOrderDocumentKinds", () => {
       "invoice",
       "techCard",
     ]);
+  });
+
+  it("безготівка з актом — акт стоїть після рахунку; видаткову CRM не друкує", () => {
+    const cashless = { ...base, paymentMethodId: "bank_uah", paymentRail: "Безготівкові, грн." };
+    expect(getOrderDocumentKinds({ ...cashless, closingDocument: "act" })).toEqual([
+      "contract",
+      "specification",
+      "invoice",
+      "act",
+      "techCard",
+    ]);
+    expect(getOrderDocumentKinds({ ...cashless, closingDocument: "waybill" })).not.toContain("act");
   });
 
   it("готівка — лише техкарта", () => {

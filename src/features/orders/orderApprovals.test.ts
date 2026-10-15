@@ -25,6 +25,7 @@ const base: ApprovalRecord = {
   contractDate: null,
   contractProductionDays: 50,
   contractAutoProlongation: false,
+  ourLegalEntityId: null,
 };
 
 describe("documentStamp", () => {
@@ -38,6 +39,16 @@ describe("documentStamp", () => {
     expect(documentStamp({ ...base, prepaymentPct: 33.333 }, "specification")).toBe(
       documentStamp({ ...base, prepaymentPct: 33.33 }, "specification")
     );
+  });
+
+  it("інша наша юрособа — інший договір і СП; без юрособи відбиток не змінився", () => {
+    for (const kind of ["contract", "specification"] as const) {
+      expect(documentStamp({ ...base, ourLegalEntityId: "fop-1" }, kind)).not.toBe(documentStamp(base, kind));
+      expect(documentStamp({ ...base, ourLegalEntityId: "fop-1" }, kind)).not.toBe(
+        documentStamp({ ...base, ourLegalEntityId: "fop-2" }, kind)
+      );
+    }
+    expect(documentStamp(base, "contract")).toBe("contract|||false|100.00|0.00|before_shipment|||50.00");
   });
 
   it("інша ціна — інший документ", () => {

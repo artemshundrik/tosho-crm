@@ -61,6 +61,7 @@ type StampInput = Pick<
   | "contractDate"
   | "contractProductionDays"
   | "contractAutoProlongation"
+  | "ourLegalEntityId"
 >;
 
 /**
@@ -83,6 +84,8 @@ export const documentStamp = (record: StampInput, kind: "contract" | "specificat
     afterShipment ? num(record.balanceDaysAfterShipment) : "",
     afterShipment ? (record.balanceDaysKind ?? "") : "",
     num(record.contractProductionDays),
+    // Юрособу дописуємо лише коли вона є: відбитки, зняті до юросіб, лишаються чинними.
+    ...(record.ourLegalEntityId ? [`entity:${record.ourLegalEntityId}`] : []),
   ];
   if (kind === "contract") {
     return ["contract", record.contractNumber, record.contractDate, record.contractAutoProlongation, ...terms].join("|");

@@ -129,7 +129,7 @@ export const getTechCardRequirementChecks = (record: DerivedOrderRecord): Requir
     : []),
 ];
 
-export type OrderDocumentKind = "contract" | "invoice" | "specification" | "techCard";
+export type OrderDocumentKind = "contract" | "invoice" | "specification" | "act" | "techCard";
 
 /**
  * Які документи показувати на замовленні. Готівка: договору, СП і рахунку немає
@@ -145,10 +145,12 @@ export const getOrderDocumentKinds = (
     | "specificationCreatedAt"
     | "invoiceCreatedAt"
     | "invoiceNumber"
+    | "closingDocument"
   >
 ): OrderDocumentKind[] => {
   if (isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail)) {
-    return ["contract", "specification", "invoice", "techCard"];
+    // Закривальний: акт друкує CRM; видаткову виписує бухгалтерія в BAS (REQ-322#p3).
+    return ["contract", "specification", "invoice", ...(record.closingDocument === "act" ? (["act"] as const) : []), "techCard"];
   }
   return [
     ...(record.contractCreatedAt ? (["contract"] as const) : []),
@@ -294,6 +296,23 @@ export const getDocumentActionState = (
       actionMode: ready ? "create" : "blocked",
       createLabel: "Створити рахунок",
       detail: state === "returned" ? `Бухгалтер повернув: ${record.invoiceReturnNote}` : "Номер і дату внесе бухгалтер з BAS",
+    };
+  }
+
+  if (kind === "act") {
+    // Акт посилається на рахунок, тож без номера рахунку з BAS він не має сенсу.
+    const invoiceIssued = getOrderInvoiceState(record) === "issued";
+    return {
+      title: "Акт",
+      ready: invoiceIssued,
+      statusLabel: invoiceIssued ? "Можна відкрити" : "Очікує рахунок",
+      statusReady: invoiceIssued,
+      blockedLabel: invoiceIssued ? null : "Акт — після рахунку з номером з BAS",
+      checks: [],
+      hint: "Акт здачі-прийняття робіт (надання послуг) — закривальний документ для послуг. Номер акта веде BAS.",
+      actionMode: invoiceIssued ? "open" : "blocked",
+      createdDateLabel: null,
+      isRequisitesBlocker: false,
     };
   }
 

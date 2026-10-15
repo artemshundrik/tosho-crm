@@ -40,6 +40,7 @@ const cash: LaunchPathInput = {
   contractDate: null,
   contractProductionDays: null,
   contractAutoProlongation: false,
+  ourLegalEntityId: null,
 };
 
 const SIGNED = {

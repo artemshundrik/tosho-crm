@@ -213,6 +213,57 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
 // Legal entities
 // ===========================================================================
 
+/** Ключі requisites, які читають документи замовлення (orderExecutor.ts). */
+const DOCUMENT_REQUISITE_FIELDS: Array<{ key: string; label: string; placeholder: string; kinds?: LegalEntityKind[] }> = [
+  { key: "address", label: "Адреса", placeholder: "03048, м. Київ, вул. …" },
+  { key: "bank", label: "Банк", placeholder: "АТ КБ «УНІВЕРСАЛ БАНК», МФО 322001" },
+  { key: "phone", label: "Телефон", placeholder: "+380…" },
+  { key: "signatory_name", label: "Підписант (ПІБ)", placeholder: "Прізвище Ім'я По батькові" },
+  { key: "signatory_position", label: "Посада підписанта", placeholder: "Керівник / Директор" },
+  {
+    key: "signatory_genitive",
+    label: "Підписант у родовому",
+    placeholder: "в особі кого: Прізвища Імені По батькові",
+    kinds: ["llc"],
+  },
+];
+
+/**
+ * Реквізити для договору, СП, рахунку й акта замовлення (REQ-322#p1–p3): від
+ * обраної юрособи документи беруть адресу, банк і підписанта саме звідси.
+ */
+function DocumentRequisitesFields({
+  form,
+  setForm,
+}: {
+  form: LegalEntityInput;
+  setForm: React.Dispatch<React.SetStateAction<LegalEntityInput>>;
+}) {
+  if (form.kind === "individual") return null;
+  const requisites = form.requisites ?? {};
+  const value = (key: string) => (typeof requisites[key] === "string" ? (requisites[key] as string) : "");
+  return (
+    <div className="space-y-3 border-t border-border/40 pt-3">
+      <p className="text-xs text-muted-foreground">Для документів замовлення — договору, СП, рахунку й акта.</p>
+      <div className="grid grid-cols-2 gap-3">
+        {DOCUMENT_REQUISITE_FIELDS.filter((field) => !field.kinds || field.kinds.includes(form.kind)).map((field) => (
+          <div key={field.key} className={cn("grid gap-2", field.key === "address" || field.key === "bank" ? "col-span-2" : "")}>
+            <Label>{field.label}</Label>
+            <Input
+              controlSize="md"
+              value={value(field.key)}
+              placeholder={field.placeholder}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, requisites: { ...(p.requisites ?? {}), [field.key]: e.target.value } }))
+              }
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const EMPTY_ENTITY: LegalEntityInput = {
   name: "",
   kind: "sole_prop",
@@ -253,6 +304,7 @@ function LegalEntitiesPanel({
       edrpou: entity.edrpou ?? "",
       ipn: entity.ipn ?? "",
       iban: entity.iban ?? "",
+      requisites: entity.requisites,
     });
     setDialogOpen(true);
   };
@@ -421,6 +473,7 @@ function LegalEntitiesPanel({
                 placeholder="UA…"
               />
             </div>
+            <DocumentRequisitesFields form={form} setForm={setForm} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>

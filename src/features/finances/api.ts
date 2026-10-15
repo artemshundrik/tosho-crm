@@ -138,7 +138,8 @@ const serializeLegalEntity = (input: LegalEntityInput) => ({
   edrpou: input.edrpou?.trim() || null,
   ipn: input.ipn?.trim() || null,
   iban: input.iban?.trim() || null,
-  requisites: (input.requisites ?? {}) as Json,
+  // Без requisites у вводі — не чіпаємо: інакше правка назви стерла б адресу й підписанта.
+  ...(input.requisites !== undefined ? { requisites: input.requisites as Json } : {}),
   is_active: input.isActive ?? true,
   ...(input.sortOrder !== undefined ? { sort_order: input.sortOrder } : {}),
 });

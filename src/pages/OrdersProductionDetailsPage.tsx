@@ -19,11 +19,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CustomerDialog, useCustomerEditor } from "@/components/customers";
 import {
-  ORDER_DOCUMENT_EXECUTOR,
   ORDER_INCOTERMS_OPTIONS,
   ORDER_PAYMENT_METHOD_OPTIONS,
   ORDER_PAYMENT_TERMS_OPTIONS,
 } from "@/features/orders/config";
+import {
+  executorCodesInline,
+  executorPreamble,
+  executorRequisiteLines,
+  splitVat,
+  VAT_RATE,
+} from "@/features/orders/orderExecutor";
 import {
   formatOrderDate,
   formatOrderMoney,
@@ -62,6 +68,8 @@ import {
   type ContractRenderContext,
 } from "@/features/contractRevisions/contractSections";
 import { amountInWords } from "@/lib/amountInWords";
+import { buildOrderActHtml } from "@/features/orders/orderActDocument";
+import { useOrderLegalEntity } from "@/features/orders/order-details/useOrderLegalEntity";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { buildTelegramHref } from "@/lib/telegramContact";
 import { declineToGenitive } from "@/lib/nameDeclension";
@@ -194,10 +202,9 @@ const documentTitleByKind: Record<OrderDocumentKind, string> = {
   contract: "Договір",
   invoice: "Рахунок",
   specification: "Специфікація",
+  act: "Акт",
   techCard: "Технологічний додаток",
 };
-
-const CONTRACT_EXECUTOR = ORDER_DOCUMENT_EXECUTOR;
 
 const formatContractDateParts = (value?: string | null) => {
   const source = value ? new Date(value) : new Date();
@@ -234,7 +241,6 @@ const formatPlainMoney = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value || 0);
 
-const SPEC_VAT_RATE = 20;
 /** Строк виробництва, коли його ще не задавали в договорі. Збігається з дефолтом поля в модалі. */
 const DEFAULT_PRODUCTION_WORK_DAYS = 50;
 const DEFAULT_INCOTERMS = "FCA";
@@ -413,8 +419,16 @@ const buildOrderDocumentHtml = (
   const contractAutoProlongation = options.contractAutoProlongation === true;
   const specificationNumber = record.quoteNumber;
   const specificationDateLong = formatContractDateParts(record.specificationCreatedAt ?? null);
+  // Від кого документ: ТОВ (з ПДВ) чи ФОП (без ПДВ) — REQ-322#p1–p2.
+  const executor = record.executor;
+  const vatPayer = executor.vatPayer;
+  const executorPreambleText = executorPreamble(executor);
+  const executorLinesHtml = (addressLabel?: string) =>
+    executorRequisiteLines(executor, { addressLabel })
+      .map((line) => `<p>${escapeHtml(line)}</p>`)
+      .join("");
   const totalWithVat = Number(record.total || 0);
-  const totalWithoutVat = totalWithVat / (1 + SPEC_VAT_RATE / 100);
+  const totalWithoutVat = splitVat(totalWithVat, vatPayer).net;
   // Структура оплати: пріоритет — options з модала, потім збережені на record поля,
   // у фоллбеку — legacy `paymentTerms` (50/50, 70/30, ...).
   const effectivePrepaymentPct =
@@ -466,7 +480,7 @@ const buildOrderDocumentHtml = (
   const specificationRows = record.items
     .map((item, index) => {
       const unitPriceWithVat = Number(item.unitPrice || 0);
-      const unitPriceWithoutVat = unitPriceWithVat / (1 + SPEC_VAT_RATE / 100);
+      const unitPriceWithoutVat = splitVat(unitPriceWithVat, vatPayer).net;
       // Свідомо НЕ виводимо посилання на каталог постачальника (catalogSourceUrl) —
       // це внутрішнє джерело, його не місце в документі для замовника.
       const itemDetails = [
@@ -479,7 +493,7 @@ const buildOrderDocumentHtml = (
           <td>${item.thumbUrl || item.imageUrl ? `<img src="${escapeHtml(item.thumbUrl || item.imageUrl)}" alt="${escapeHtml(item.name)}" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;margin-bottom:8px;" />` : ""}${escapeHtml(item.name)}${itemDetails}</td>
           <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
           <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithVat))}</td>
-          <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithoutVat))}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(vatPayer ? unitPriceWithoutVat : Number(item.lineTotal || 0)))}</td>
           <td class="num">${escapeHtml(`${productionWorkingDays} р.д.`)}</td>
         </tr>`;
     })
@@ -531,7 +545,7 @@ const buildOrderDocumentHtml = (
           <div>«${escapeHtml(contractDate.day)}» ${escapeHtml(contractDate.monthLabel)} ${escapeHtml(contractDate.year)} р.</div>
         </div>
 
-        <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі – Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, яка діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони (надалі – Сторони), уклали цей Договір про наступне:</p>
+        <p>${escapeHtml(executorPreambleText)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, яка діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони (надалі – Сторони), уклали цей Договір про наступне:</p>
 
         ${contractBodyHtml}
 
@@ -539,14 +553,8 @@ const buildOrderDocumentHtml = (
         <div class="party-grid">
           <div class="party-card">
             <div class="party-title">ВИКОНАВЕЦЬ</div>
-            <p>${escapeHtml(CONTRACT_EXECUTOR.shortName)}</p>
-            <p>${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
-            <p>Код ЄДРПОУ: ${escapeHtml(CONTRACT_EXECUTOR.taxId)}</p>
-            <p>ІПН: ${escapeHtml(CONTRACT_EXECUTOR.vatId)}</p>
-            <p>IBAN: ${escapeHtml(CONTRACT_EXECUTOR.iban)}</p>
-            <p>${escapeHtml(CONTRACT_EXECUTOR.bank)}</p>
-            <p>${escapeHtml(CONTRACT_EXECUTOR.taxStatus)}</p>
-            <p class="signature">${escapeHtml(CONTRACT_EXECUTOR.signatoryPositionDisplay)} ____________________ ${escapeHtml(CONTRACT_EXECUTOR.signatureLabel)}</p>
+            ${executorLinesHtml()}
+            <p class="signature">${escapeHtml(executor.signatoryPositionDisplay)} ____________________ ${escapeHtml(executor.signatureLabel)}</p>
           </div>
           <div class="party-card">
             <div class="party-title">ЗАМОВНИК</div>
@@ -600,7 +608,7 @@ const buildOrderDocumentHtml = (
             <div>«${escapeHtml(specificationDateLong.day)}» ${escapeHtml(specificationDateLong.monthLabel)} ${escapeHtml(specificationDateLong.year)} р.</div>
           </div>
 
-          <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, що діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони, разом - Сторони, підписали цей Додаток до Договору про наступне:</p>
+          <p>${escapeHtml(executorPreambleText)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, що діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони, разом - Сторони, підписали цей Додаток до Договору про наступне:</p>
 
           <div class="section-title center">1. СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
 
@@ -610,17 +618,16 @@ const buildOrderDocumentHtml = (
                 <th style="width:48px;">№</th>
                 <th>Назва продукції та характеристика</th>
                 <th style="width:110px;">К-ть продукції, шт.</th>
-                <th style="width:120px;">Вартість з ПДВ, грн</th>
-                <th style="width:140px;">Ціна 1 шт без ПДВ, грн</th>
+                <th style="width:120px;">${vatPayer ? "Вартість з ПДВ, грн" : "Ціна 1 шт, грн"}</th>
+                <th style="width:140px;">${vatPayer ? "Ціна 1 шт без ПДВ, грн" : "Вартість, грн"}</th>
                 <th style="width:120px;">Строки виконання робіт</th>
               </tr>
             </thead>
             <tbody>
               ${specificationRows}
               <tr>
-                <td colspan="3"><b>Загальна вартість з ПДВ</b></td>
-                <td class="num"><b>${escapeHtml(formatPlainMoney(totalWithVat))}</b></td>
-                <td colspan="2"></td>
+                <td colspan="3"><b>${vatPayer ? "Загальна вартість з ПДВ" : "Загальна вартість, без ПДВ"}</b></td>
+                ${vatPayer ? `<td class="num"><b>${escapeHtml(formatPlainMoney(totalWithVat))}</b></td><td colspan="2"></td>` : `<td></td><td class="num"><b>${escapeHtml(formatPlainMoney(totalWithVat))}</b></td><td></td>`}
               </tr>
             </tbody>
           </table>
@@ -641,8 +648,12 @@ const buildOrderDocumentHtml = (
           <div class="section-title">2. ВАРТІСТЬ РОБІТ ТА СТРОКИ ВИГОТОВЛЕННЯ ПРОДУКЦІЇ</div>
           <div class="subsection-title">2.1. Загальна вартість виготовлення Продукції</div>
           <ul>
-            <li>Загальна вартість робіт з виготовлення продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} грн, враховуючи ПДВ ${SPEC_VAT_RATE}%.</li>
-            <li>Вартість робіт без ПДВ складає ${escapeHtml(formatPlainMoney(totalWithoutVat))} грн.</li>
+            ${
+              vatPayer
+                ? `<li>Загальна вартість робіт з виготовлення продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} грн, враховуючи ПДВ ${VAT_RATE}%.</li>
+            <li>Вартість робіт без ПДВ складає ${escapeHtml(formatPlainMoney(totalWithoutVat))} грн.</li>`
+                : `<li>Загальна вартість робіт з виготовлення продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} грн, без ПДВ (Виконавець не є платником ПДВ).</li>`
+            }
           </ul>
           <div class="subsection-title">2.2. Терміни поставки Продукції</div>
           <ul>
@@ -652,7 +663,7 @@ const buildOrderDocumentHtml = (
           <div class="section-title">3. ПОРЯДОК ОПЛАТИ ВАРТОСТІ ПРОДУКЦІЇ</div>
           <div class="subsection-title">3.1. Умови оплати</div>
           <ul>
-            <li>Оплата продукції здійснюється Замовником на умовах ${escapeHtml(paymentTerms.label)}: ${paymentTerms.advance}% (${escapeHtml(formatPlainMoney(paymentTerms.advanceAmount))} грн з урахуванням ПДВ) перед запуском та ${paymentTerms.balance}% (${escapeHtml(formatPlainMoney(paymentTerms.balanceAmount))} грн з урахуванням ПДВ) — ${escapeHtml(balanceTimingPhrase)}, ${escapeHtml(balanceTermPhrase)}.</li>
+            <li>Оплата продукції здійснюється Замовником на умовах ${escapeHtml(paymentTerms.label)}: ${paymentTerms.advance}% (${escapeHtml(formatPlainMoney(paymentTerms.advanceAmount))} грн${vatPayer ? " з урахуванням ПДВ" : ""}) перед запуском та ${paymentTerms.balance}% (${escapeHtml(formatPlainMoney(paymentTerms.balanceAmount))} грн${vatPayer ? " з урахуванням ПДВ" : ""}) — ${escapeHtml(balanceTimingPhrase)}, ${escapeHtml(balanceTermPhrase)}.</li>
             <li>Спосіб оплати: ${escapeHtml(record.paymentRail || "Не вказано")}.</li>
           </ul>
           <div class="subsection-title">3.2. Умови доставки Продукції</div>
@@ -664,15 +675,9 @@ const buildOrderDocumentHtml = (
           <div class="signature-grid">
             <div>
               <div class="party-title">ВИКОНАВЕЦЬ:</div>
-              <p>${escapeHtml(CONTRACT_EXECUTOR.shortName)}</p>
-              <p>Юридична адреса: ${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
-              <p>IBAN: ${escapeHtml(CONTRACT_EXECUTOR.iban)}</p>
-              <p>${escapeHtml(CONTRACT_EXECUTOR.bank)}</p>
-              <p>Код ЄДРПОУ: ${escapeHtml(CONTRACT_EXECUTOR.taxId)}</p>
-              <p>ІПН: ${escapeHtml(CONTRACT_EXECUTOR.vatId)}</p>
-              <p>${escapeHtml(CONTRACT_EXECUTOR.taxStatus)}</p>
-              <p class="signature-line">Директор</p>
-              <p>__________________________ ${escapeHtml(CONTRACT_EXECUTOR.signatureLabel)}</p>
+              ${executorLinesHtml("Юридична адреса: ")}
+              <p class="signature-line">${escapeHtml(executor.signatoryPositionDisplay)}</p>
+              <p>__________________________ ${escapeHtml(executor.signatureLabel)}</p>
             </div>
             <div>
               <div class="party-title">ЗАМОВНИК:</div>
@@ -710,7 +715,7 @@ const buildOrderDocumentHtml = (
       .map((item, index) => {
         // Ціни в замовленні зберігаються З ПДВ — у рахунку колонки без ПДВ,
         // тож ділимо, як це вже робить специфікація.
-        const unitPriceWithoutVat = Number(item.unitPrice || 0) / (1 + SPEC_VAT_RATE / 100);
+        const unitPriceWithoutVat = splitVat(Number(item.unitPrice || 0), vatPayer).net;
         const lineWithoutVat = unitPriceWithoutVat * Number(item.qty || 0);
         return `
         <tr>
@@ -765,17 +770,17 @@ const buildOrderDocumentHtml = (
         <table class="pay-box">
           <tr>
             <td class="label">Отримувач</td>
-            <td colspan="3">${escapeHtml(CONTRACT_EXECUTOR.companyName)}</td>
+            <td colspan="3">${escapeHtml(executor.companyName)}</td>
           </tr>
           <tr>
             <td class="label">Код</td>
-            <td colspan="3">${escapeHtml(CONTRACT_EXECUTOR.taxId)}</td>
+            <td colspan="3">${escapeHtml(executor.taxId)}</td>
           </tr>
           <tr>
             <td class="label">Банк отримувача</td>
-            <td>${escapeHtml(CONTRACT_EXECUTOR.bank)}</td>
+            <td>${escapeHtml(executor.bank)}</td>
             <td class="label">КРЕДИТ рах. №</td>
-            <td>${escapeHtml(CONTRACT_EXECUTOR.iban)}</td>
+            <td>${escapeHtml(executor.iban)}</td>
           </tr>
         </table>
 
@@ -784,11 +789,11 @@ const buildOrderDocumentHtml = (
         <div class="req-row">
           <div class="req-label"><b>Постачальник:</b></div>
           <div class="req-value">
-            <div>${escapeHtml(CONTRACT_EXECUTOR.companyName)}</div>
-            <div>п/р ${escapeHtml(CONTRACT_EXECUTOR.iban)} у банку ${escapeHtml(CONTRACT_EXECUTOR.bank)},</div>
-            <div>${escapeHtml(CONTRACT_EXECUTOR.address)},</div>
-            <div>тел.: ${escapeHtml(CONTRACT_EXECUTOR.phone)},</div>
-            <div>код за ЄДРПОУ ${escapeHtml(CONTRACT_EXECUTOR.taxId)}, ІПН ${escapeHtml(CONTRACT_EXECUTOR.vatId)}</div>
+            <div>${escapeHtml(executor.companyName)}</div>
+            <div>п/р ${escapeHtml(executor.iban)}${executor.bank ? ` у банку ${escapeHtml(executor.bank)}` : ""},</div>
+            ${executor.address ? `<div>${escapeHtml(executor.address)},</div>` : ""}
+            ${executor.phone ? `<div>тел.: ${escapeHtml(executor.phone)},</div>` : ""}
+            <div>${escapeHtml(executorCodesInline(executor))}</div>
           </div>
         </div>
         <div class="req-row">
@@ -817,8 +822,8 @@ const buildOrderDocumentHtml = (
               <th>Товари (роботи, послуги)</th>
               <th style="width:70px;">Кіл-сть</th>
               <th style="width:52px;">Од.</th>
-              <th style="width:100px;">Ціна без ПДВ</th>
-              <th style="width:110px;">Сума без ПДВ</th>
+              <th style="width:100px;">${vatPayer ? "Ціна без ПДВ" : "Ціна"}</th>
+              <th style="width:110px;">${vatPayer ? "Сума без ПДВ" : "Сума"}</th>
             </tr>
           </thead>
           <tbody>${invoiceRows}</tbody>
@@ -827,15 +832,19 @@ const buildOrderDocumentHtml = (
         <div class="totals">
           <table>
             <tr><td class="cap">Всього:</td><td class="val">${escapeHtml(formatPlainMoney(totalWithoutVat))}</td></tr>
-            <tr><td class="cap">Сума ПДВ:</td><td class="val">${escapeHtml(formatPlainMoney(vatAmount))}</td></tr>
-            <tr class="grand"><td class="cap">Всього із ПДВ:</td><td class="val">${escapeHtml(formatPlainMoney(totalWithVat))}</td></tr>
+            ${
+              vatPayer
+                ? `<tr><td class="cap">Сума ПДВ:</td><td class="val">${escapeHtml(formatPlainMoney(vatAmount))}</td></tr>
+            <tr class="grand"><td class="cap">Всього із ПДВ:</td><td class="val">${escapeHtml(formatPlainMoney(totalWithVat))}</td></tr>`
+                : `<tr class="grand"><td class="cap">ПДВ:</td><td class="val">без ПДВ</td></tr>`
+            }
           </table>
         </div>
 
         <div class="summary">
           <div>Всього найменувань ${record.items.length}, на суму ${escapeHtml(formatPlainMoney(totalWithVat))} ${escapeHtml(currencyShort)}</div>
           <div><b>${escapeHtml(amountInWords(totalWithVat, wordsCurrency))}</b></div>
-          <div>У т.ч. ПДВ: ${escapeHtml(amountInWords(vatAmount, wordsCurrency))}</div>
+          <div>${vatPayer ? `У т.ч. ПДВ: ${escapeHtml(amountInWords(vatAmount, wordsCurrency))}` : "Без ПДВ"}</div>
         </div>
 
         <div class="sign">
@@ -845,6 +854,8 @@ const buildOrderDocumentHtml = (
       `,
     });
   }
+
+  if (kind === "act") return buildOrderActHtml(record);
 
   const extraSection =
     kind === "techCard"
@@ -931,6 +942,16 @@ export default function OrdersProductionDetailsPage() {
       setRecord((current) => {
         if (!current) return current;
         const next = { ...current, ...patch };
+        return { ...next, docs: normalizeDocumentDocs(next) };
+      }),
+  });
+  const legalEntity = useOrderLegalEntity({
+    record,
+    teamId,
+    onRecordPatch: (patch) =>
+      setRecord((current) => {
+        if (!current) return current;
+        const next = patch(current);
         return { ...next, docs: normalizeDocumentDocs(next) };
       }),
   });
@@ -1733,6 +1754,16 @@ export default function OrdersProductionDetailsPage() {
                     onWithdraw: (approval) => void approvalFlow.withdraw(approval),
                     onSign: (kind, via) => void approvalFlow.sign(kind, via),
                   }}
+                  issuer={
+                    record.source === "stored"
+                      ? {
+                          options: legalEntity.options,
+                          busy: legalEntity.busy,
+                          onChangeEntity: (option) => void legalEntity.changeEntity(option),
+                          onChangeClosingDocument: (value) => void legalEntity.changeClosingDocument(value),
+                        }
+                      : null
+                  }
                   documentActions={documentActions}
                   onAction={handleDocumentAction}
                   onParams={(kind) =>
