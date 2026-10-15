@@ -263,3 +263,13 @@ export const legalEntityLockReason = (record: {
   if (record.specificationSignedAt) return "СП уже підписана від цієї юрособи — змінити її не можна.";
   return null;
 };
+
+/** Позиція замовлення: товар закриває видаткова накладна, послугу — акт. */
+export type OrderItemKind = "goods" | "service";
+export const parseItemKind = (value: unknown): OrderItemKind => (value === "service" ? "service" : "goods");
+
+/** Закривальний документ за замовчуванням: самі послуги — акт, є хоч один товар — ВН. */
+export const defaultClosingDocument = (kinds: OrderItemKind[]): ClosingDocument | null => {
+  if (kinds.length === 0) return null;
+  return kinds.every((kind) => kind === "service") ? "act" : "waybill";
+};

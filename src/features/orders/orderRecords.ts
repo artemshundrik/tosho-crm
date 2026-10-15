@@ -6,7 +6,16 @@ import type { Database, Json } from "@/lib/database.types";
 import type { OrderApproval, SignatureVia } from "./orderApprovals";
 import { loadOrderApprovalsByOrderId } from "./orderApprovalQueries";
 import { legalEntityInsertColumns, resolveOrderLegalEntity } from "./orderLegalEntityQueries";
-import { DEFAULT_ORDER_EXECUTOR, executorFromSnapshot, parseClosingDocument, type ClosingDocument, type OrderExecutor } from "./orderExecutor";
+import {
+  DEFAULT_ORDER_EXECUTOR,
+  defaultClosingDocument,
+  executorFromSnapshot,
+  parseClosingDocument,
+  parseItemKind,
+  type ClosingDocument,
+  type OrderExecutor,
+  type OrderItemKind,
+} from "./orderExecutor";
 import {
   formatCustomerLegalEntityTitle,
   isVatPayerRate,
@@ -317,6 +326,7 @@ export type DerivedOrderItem = {
   lineTotal: number;
   imageUrl?: string | null;
   thumbUrl?: string | null;
+  kind?: OrderItemKind;
 };
 
 export type DerivedReadinessStep = {
@@ -452,6 +462,9 @@ export type DerivedOrderRecord = {
   executor: OrderExecutor;
   /** Закривальний документ: ВН чи акт (p3). null — ще не обрано. */
   closingDocument: ClosingDocument | null;
+  /** Номер і дата акта з BAS — вносить бухгалтерія. */
+  actNumber: string | null;
+  actDate: string | null;
   /**
    * Чи замовлення взагалі потребує погодження дизайну. false — товар без нанесення:
    * ні візуал, ні макет не потрібні, документи не блокуються дизайном.
@@ -520,6 +533,8 @@ type StoredOrderRow = {
   our_legal_entity_id?: string | null;
   our_legal_entity?: unknown;
   closing_document?: string | null;
+  act_number?: string | null;
+  act_date?: string | null;
   np_ttn_number?: string | null;
   np_ttn_ref?: string | null;
   np_ttn_cost?: number | string | null;
@@ -559,6 +574,7 @@ type StoredOrderItemRow = {
   catalog_model_id?: string | null;
   image_url?: string | null;
   thumb_url?: string | null;
+  item_kind?: string | null;
 };
 
 const parseQuoteItemAttachmentImage = (attachment: unknown) => {
@@ -597,6 +613,8 @@ export type ManualOrderItemInput = {
   catalogModelId?: string | null;
   imageUrl?: string | null;
   thumbUrl?: string | null;
+  /** Послуга — рядок без товару з каталогу (макет, доставка); закривається актом. */
+  kind?: OrderItemKind;
   /** Нанесення саме цього товару. Порожньо = товар без друку. */
   printApplications?: ManualOrderPrintApplication[];
 };
@@ -793,7 +811,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,contract_signed_at,contract_signed_via,specification_signed_at,specification_signed_via,our_legal_entity_id,our_legal_entity,closing_document,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,contract_signed_at,contract_signed_via,specification_signed_at,specification_signed_via,our_legal_entity_id,our_legal_entity,closing_document,act_number,act_date,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -819,7 +837,7 @@ async function listStoredOrderItems(teamId: string, orderIds: string[]): Promise
   if (uniqueOrderIds.length === 0) return [];
 
   const baseColumns = "id,order_id,quote_item_id,position,name,qty,unit,unit_price,line_total";
-  const extendedColumns = `${baseColumns},description,methods,catalog_model_id,image_url,thumb_url`;
+  const extendedColumns = `${baseColumns},description,methods,catalog_model_id,image_url,thumb_url,item_kind`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -1275,6 +1293,8 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       ourLegalEntityId: null,
       executor: DEFAULT_ORDER_EXECUTOR,
       closingDocument: null,
+      actNumber: null,
+      actDate: null,
       requiresDesignApproval: hasImprint || requiresVisualization || requiresLayout,
       hasApprovedVisualization,
       hasApprovedLayout,
@@ -1428,6 +1448,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         lineTotal: Number(item.line_total ?? 0) || 0,
         imageUrl: item.image_url?.trim?.() || null,
         thumbUrl: item.thumb_url?.trim?.() || null,
+        kind: parseItemKind(item.item_kind),
       });
       itemsByOrderId.set(orderId, list);
     });
@@ -1764,6 +1785,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         ourLegalEntityId: order.our_legal_entity_id ?? null,
         executor: executorFromSnapshot(order.our_legal_entity),
         closingDocument: parseClosingDocument(order.closing_document),
+        actNumber: order.act_number?.trim?.() || null,
+        actDate: order.act_date ?? null,
         requiresDesignApproval,
         hasApprovedVisualization,
         hasApprovedLayout,
@@ -1994,6 +2017,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
         catalogModelId: item.catalogModelId?.trim() || null,
         imageUrl: item.imageUrl?.trim() || null,
         thumbUrl: item.thumbUrl?.trim() || null,
+        kind: parseItemKind(item.kind),
         prints,
       };
     })
@@ -2104,6 +2128,9 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     // Без друку дизайн не потрібен — одразу закриваємо вимогу, щоб СП/техкарта не чекали візуалу.
     has_approved_visualization: designAlreadyApproved || !hasPrint,
     has_approved_layout: designAlreadyApproved || !hasPrint,
+    closing_document: isCashlessPaymentMethod(paymentMethodId, null)
+      ? defaultClosingDocument(items.map((item) => item.kind))
+      : null,
     ...legalEntityInsertColumns(
       await resolveOrderLegalEntity({
         teamId: params.teamId,
@@ -2156,6 +2183,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     catalog_model_id: item.catalogModelId,
     image_url: item.imageUrl,
     thumb_url: item.thumbUrl,
+    item_kind: item.kind,
   }));
 
   const { error: insertItemsError } = await supabase.schema("tosho").from("order_items").insert(orderItemsPayload);

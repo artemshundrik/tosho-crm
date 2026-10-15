@@ -118,3 +118,20 @@ describe("legalEntityLockReason", () => {
     expect(legalEntityLockReason({ invoiceNumber: null, specificationSignedAt: "2026-10-01" })).toMatch(/СП/);
   });
 });
+
+describe("defaultClosingDocument", () => {
+  it("самі послуги — акт, є товар — ВН, порожньо — не обрано", async () => {
+    const { defaultClosingDocument } = await import("./orderExecutor");
+    expect(defaultClosingDocument(["service", "service"])).toBe("act");
+    expect(defaultClosingDocument(["goods", "service"])).toBe("waybill");
+    expect(defaultClosingDocument([])).toBeNull();
+  });
+});
+
+describe("parseItemKind", () => {
+  it("невідоме — товар", async () => {
+    const { parseItemKind } = await import("./orderExecutor");
+    expect(parseItemKind("service")).toBe("service");
+    expect(parseItemKind(null)).toBe("goods");
+  });
+});

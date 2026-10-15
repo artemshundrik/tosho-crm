@@ -104,3 +104,22 @@ export async function resolveOrderLegalEntity(params: {
     return null;
   }
 }
+
+/** Номер і дата акта з BAS. Тригер пускає лише бухгалтерію, СЕО й owner. */
+export async function setOrderActNumber(params: {
+  teamId: string;
+  orderId: string;
+  number: string;
+  date: string;
+}): Promise<{ actNumber: string | null; actDate: string | null }> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("orders")
+    .update({ act_number: params.number.trim() || null, act_date: params.date || null, updated_at: new Date().toISOString() })
+    .eq("team_id", params.teamId)
+    .eq("id", params.orderId)
+    .select("act_number,act_date")
+    .single<{ act_number: string | null; act_date: string | null }>();
+  if (error) throw new Error(error.message || "Не вдалося зберегти номер акта.", { cause: error });
+  return { actNumber: data.act_number, actDate: data.act_date };
+}

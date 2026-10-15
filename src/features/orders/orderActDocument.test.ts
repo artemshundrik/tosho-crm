@@ -55,3 +55,11 @@ describe("buildOrderActHtml", () => {
     expect(evil).toContain("&lt;b&gt;x&lt;/b&gt;");
   });
 });
+
+describe("номер акта з BAS", () => {
+  it("внесений номер друкується, без нього — прочерк", () => {
+    const withNumber = buildOrderActHtml({ ...record, actNumber: "ОУ-0000007", actDate: "2026-10-16" } as typeof record, {});
+    expect(withNumber).toContain("АКТ № ОУ-0000007 від 16 жовтня 2026 р.");
+    expect(buildOrderActHtml(record)).toContain("АКТ № ________");
+  });
+});

@@ -3178,6 +3178,7 @@ export type Database = {
           description: string | null
           id: string
           image_url: string | null
+          item_kind: string
           line_total: number
           methods: Json | null
           name: string
@@ -3196,6 +3197,7 @@ export type Database = {
           description?: string | null
           id: string
           image_url?: string | null
+          item_kind?: string
           line_total?: number
           methods?: Json | null
           name: string
@@ -3214,6 +3216,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          item_kind?: string
           line_total?: number
           methods?: Json | null
           name?: string
@@ -3283,6 +3286,8 @@ export type Database = {
           our_legal_entity_id: string | null
           our_legal_entity: Json | null
           closing_document: string | null
+          act_number: string | null
+          act_date: string | null
           invoice_date: string | null
           invoice_issued_by: string | null
           invoice_requested_at: string | null
@@ -3361,6 +3366,8 @@ export type Database = {
           our_legal_entity_id?: string | null
           our_legal_entity?: Json | null
           closing_document?: string | null
+          act_number?: string | null
+          act_date?: string | null
           invoice_date?: string | null
           invoice_issued_by?: string | null
           invoice_requested_at?: string | null
@@ -3439,6 +3446,8 @@ export type Database = {
           our_legal_entity_id?: string | null
           our_legal_entity?: Json | null
           closing_document?: string | null
+          act_number?: string | null
+          act_date?: string | null
           invoice_date?: string | null
           invoice_issued_by?: string | null
           invoice_requested_at?: string | null

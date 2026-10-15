@@ -3,6 +3,7 @@ import { Check, Loader2, Package, Palette, Plus, RotateCcw, Search, Trash2 } fro
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Command,
   CommandEmpty,
@@ -41,7 +42,7 @@ import {
 } from "@/components/quotes/QuoteDeliveryFields";
 import { ORDER_PAYMENT_METHOD_OPTIONS } from "@/features/orders/config";
 import { getAllowedPaymentTermsOptions, isCashlessPaymentMethod } from "@/features/orders/paymentRules";
-import { executorBadge } from "@/features/orders/orderExecutor";
+import { DEFAULT_ORDER_EXECUTOR, executorBadge, splitVat } from "@/features/orders/orderExecutor";
 import {
   findCustomerLastLegalEntityId,
   listOrderLegalEntities,
@@ -117,6 +118,10 @@ const createDraftItem = (): DraftItem => ({
   unitPrice: "",
   prints: [],
 });
+
+/** Послуга — рядок без товару з каталогу: макет, доставка, монтаж. Закривається актом. */
+type DraftService = { key: string; name: string; qty: string; unitPrice: string };
+const createDraftService = (): DraftService => ({ key: nextKey("service"), name: "", qty: "1", unitPrice: "" });
 
 type SelectedCustomer = { id: string; name: string; logoUrl: string | null };
 type MemberOption = { userId: string; label: string; avatarUrl: string | null };
@@ -215,6 +220,9 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
 
   // Товари
   const [items, setItems] = useState<DraftItem[]>(() => [createDraftItem()]);
+  const [services, setServices] = useState<DraftService[]>([]);
+  // Підтверджено саме цю суму від цієї юрособи: змінилась сума чи юрособа — галочка знімається сама.
+  const [confirmedPricesKey, setConfirmedPricesKey] = useState<string | null>(null);
 
   // Дизайн
   const [designMode, setDesignMode] = useState<DesignMode>("create");
@@ -244,6 +252,8 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
     setDeliveryDetails(createEmptyQuoteDeliveryDetails());
     setPackaging("");
     setItems([createDraftItem()]);
+    setServices([]);
+    setConfirmedPricesKey(null);
     setDesignMode("create");
     setDesignTasks([]);
     setSelectedDesignTaskId("");
@@ -501,14 +511,30 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   };
 
   const lineTotal = (item: DraftItem) => (Number(item.qty) || 0) * (Number(item.unitPrice) || 0);
-  const orderTotal = useMemo(() => items.reduce((sum, it) => sum + lineTotal(it), 0), [items]);
+  const serviceTotal = (service: DraftService) => (Number(service.qty) || 0) * (Number(service.unitPrice) || 0);
+  const orderTotal = useMemo(
+    () => items.reduce((sum, it) => sum + lineTotal(it), 0) + services.reduce((sum, it) => sum + serviceTotal(it), 0),
+    [items, services]
+  );
+  const updateService = (key: string, patch: Partial<DraftService>) => {
+    setServices((cur) => cur.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+  };
   const managerLabel = useMemo(
     () => members.find((m) => m.userId === managerUserId)?.label ?? null,
     [members, managerUserId]
   );
 
-  const hasValidItem = items.some((it) => it.modelId);
-  const canSubmit = Boolean(teamId && selectedCustomer && hasValidItem && !submitting);
+  const hasValidItem = items.some((it) => it.modelId) || services.some((it) => it.name.trim());
+  // Безготівка: перед створенням менеджер підтверджує суму й ПДВ — від неї підуть СП і рахунок.
+  const isCashless = isCashlessPaymentMethod(paymentMethodId, null);
+  const shownExecutor =
+    legalEntityOptions.find((option) => option.row.id === shownLegalEntityId)?.executor ?? DEFAULT_ORDER_EXECUTOR;
+  const orderVat = splitVat(orderTotal, shownExecutor.vatPayer);
+  const pricesKey = `${orderTotal}|${currency}|${shownLegalEntityId}`;
+  const pricesConfirmed = confirmedPricesKey === pricesKey;
+  const canSubmit = Boolean(
+    teamId && selectedCustomer && hasValidItem && !submitting && (!isCashless || pricesConfirmed)
+  );
 
   const handleSubmit = async () => {
     if (!teamId || !selectedCustomer) {
@@ -539,8 +565,20 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
             })),
         };
       });
+    for (const service of services) {
+      if (!service.name.trim()) continue;
+      payloadItems.push({
+        name: service.name.trim(),
+        qty: Number(service.qty) || 0,
+        unit: "посл.",
+        unitPrice: Number(service.unitPrice) || 0,
+        catalogModelId: null,
+        kind: "service",
+        printApplications: [],
+      });
+    }
     if (payloadItems.length === 0) {
-      setError("Додайте хоча б один товар із каталогу.");
+      setError("Додайте хоча б один товар із каталогу або послугу.");
       return;
     }
 
@@ -975,9 +1013,54 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
               );
             })}
 
-            <Button type="button" variant="outline" size="md" onClick={addItem} className="w-full gap-2 border-dashed">
-              <Plus className="h-4 w-4" /> Додати товар
-            </Button>
+            {services.map((service) => (
+              <div key={service.key} className="grid grid-cols-[1fr_auto] gap-2 rounded-xl border border-border/60 p-3 sm:grid-cols-[1fr_88px_120px_auto]">
+                <Input
+                  aria-label="Назва послуги"
+                  value={service.name}
+                  onChange={(event) => updateService(service.key, { name: event.target.value })}
+                  placeholder="Послуга: розробка макету, доставка…"
+                  className="col-span-2 sm:col-span-1"
+                />
+                <Input
+                  aria-label="Кількість послуг"
+                  value={service.qty}
+                  onChange={(event) => updateService(service.key, { qty: event.target.value })}
+                  inputMode="decimal"
+                />
+                <Input
+                  aria-label="Ціна послуги"
+                  value={service.unitPrice}
+                  onChange={(event) => updateService(service.key, { unitPrice: event.target.value })}
+                  inputMode="decimal"
+                  placeholder="Ціна"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Прибрати послугу"
+                  onClick={() => setServices((cur) => cur.filter((it) => it.key !== service.key))}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button type="button" variant="outline" size="md" onClick={addItem} className="w-full gap-2 border-dashed">
+                <Plus className="h-4 w-4" /> Додати товар
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => setServices((cur) => [...cur, createDraftService()])}
+                className="w-full gap-2 border-dashed"
+              >
+                <Plus className="h-4 w-4" /> Додати послугу
+              </Button>
+            </div>
           </section>
 
           {/* ── Дизайн ── */}
@@ -1165,6 +1248,23 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
               />
             ) : null}
           </section>
+
+          {isCashless && orderTotal > 0 ? (
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border/60 px-4 py-3 text-sm">
+              <Checkbox
+                checked={pricesConfirmed}
+                onCheckedChange={(value) => setConfirmedPricesKey(value === true ? pricesKey : null)}
+                className="mt-0.5"
+              />
+              <span>
+                Ціни перевірив: {formatOrderMoney(orderTotal, currency)}
+                {shownExecutor.vatPayer
+                  ? `, у т.ч. ПДВ ${formatOrderMoney(orderVat.vat, currency)}`
+                  : ` без ПДВ (${shownExecutor.shortName})`}
+                <span className="block text-xs text-muted-foreground">Від цієї суми підуть СП і рахунок.</span>
+              </span>
+            </label>
+          ) : null}
 
           {error ? <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div> : null}
         </div>

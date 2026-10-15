@@ -129,8 +129,8 @@ export function OrderInvoiceDeskCard({
               id="invoice-number"
               value={number}
               onChange={(event) => setNumber(event.target.value)}
-              placeholder="напр. 407"
-              inputMode="numeric"
+              placeholder={record.executor.kind === "sole_prop" ? "напр. СФ-0000118" : "напр. 407"}
+              inputMode={record.executor.kind === "sole_prop" ? "text" : "numeric"}
             />
           </div>
           <div className="grid w-full gap-1 sm:w-40">

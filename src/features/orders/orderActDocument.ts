@@ -7,7 +7,7 @@ import { toSignatureInitials } from "@/lib/signatureFormat";
 /**
  * Акт здачі-прийняття робіт (надання послуг) — закривальний документ для послуг
  * (REQ-322#p3), за шаблоном бухгалтерії «Шаблон Акту для ФОП (2026)». Номер акта
- * веде BAS, тож у CRM він лишається порожнім «№ ___», як номер рахунку до виписки.
+ * веде BAS: бухгалтерія вносить його після виписки, до того в акті прочерк «№ ___».
  */
 type ActRecord = Pick<
   DerivedOrderRecord,
@@ -25,7 +25,8 @@ type ActRecord = Pick<
   | "customerLegalAddress"
   | "invoiceNumber"
   | "invoiceDate"
->;
+> &
+  Partial<Pick<DerivedOrderRecord, "actNumber" | "actDate">>;
 
 const escapeHtml = (value?: string | number | null) =>
   String(value ?? "")
@@ -52,7 +53,10 @@ const shortDate = (value: string) => {
 
 export const buildOrderActHtml = (record: ActRecord, options: { date?: Date } = {}) => {
   const executor = record.executor;
-  const date = longDate(options.date ?? new Date());
+  // Номер і дату акта веде BAS; до внесення — прочерк і сьогоднішня дата.
+  const actNumber = record.actNumber?.trim() || "";
+  const actDate = record.actDate ? new Date(`${record.actDate}T00:00:00`) : null;
+  const date = longDate(options.date ?? (actDate && !Number.isNaN(actDate.getTime()) ? actDate : new Date()));
   const currencyLabel = record.currency === "USD" ? "дол. США" : record.currency === "EUR" ? "євро" : "грн";
   const wordsCurrency = record.currency === "USD" || record.currency === "EUR" ? record.currency : "UAH";
   const total = Number(record.total || 0);
@@ -130,7 +134,7 @@ export const buildOrderActHtml = (record: ActRecord, options: { date?: Date } = 
         </div>
       </div>
 
-      <h1>АКТ № ________ від ${escapeHtml(date)}</h1>
+      <h1>АКТ № ${actNumber ? escapeHtml(actNumber) : "________"} від ${escapeHtml(date)}</h1>
       <h2>здачі-прийняття робіт (надання послуг)</h2>
 
       <p>Ми, представники Замовника ${escapeHtml(customerTitle)}${customerSigner ? ` ${escapeHtml(customerSigner)}` : ""}, з одного боку, та представник Виконавця ${escapeHtml(executor.shortName)} ${escapeHtml(executor.signatureLabel)}, з іншого боку, склали цей акт про те, що Виконавцем були проведені такі роботи (надані такі послуги)${escapeHtml(invoiceReference)}:</p>

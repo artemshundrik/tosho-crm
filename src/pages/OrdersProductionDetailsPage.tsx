@@ -119,6 +119,7 @@ import { useOrderApprovalFlow } from "@/features/orders/order-details/useOrderAp
 import { IncotermsHint } from "@/features/orders/order-details/IncotermsHint";
 import { OrderDeliveryCard } from "@/features/orders/order-details/OrderDeliveryCard";
 import { OrderDocumentsCard } from "@/features/orders/order-details/OrderDocumentsCard";
+import { OrderActDeskCard } from "@/features/orders/order-details/OrderActDeskCard";
 import { OrderInvoiceDeskCard } from "@/features/orders/order-details/OrderInvoiceDeskCard";
 import { useOrderInvoiceFlow } from "@/features/orders/order-details/useOrderInvoiceFlow";
 import { getOrderInvoiceState } from "@/features/orders/orderInvoice";
@@ -1732,6 +1733,15 @@ export default function OrdersProductionDetailsPage() {
                 onIssue={invoiceFlow.issue}
                 onReturn={invoiceFlow.returnRequest}
                 onPreview={() => void openDocumentPrint("invoice")}
+              />
+            ) : null}
+            {canIssueInvoice && teamId && record.closingDocument === "act" && record.invoiceNumber ? (
+              <OrderActDeskCard
+                key={`${record.id}:${record.actNumber ?? ""}`}
+                record={record}
+                teamId={teamId}
+                onSaved={(patch) => setRecord((current) => (current ? { ...current, ...patch } : current))}
+                onPreview={() => void openDocumentPrint("act", { markCreated: false })}
               />
             ) : null}
             {activeTab === "launch" ? (
