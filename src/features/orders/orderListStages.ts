@@ -113,6 +113,13 @@ export const getOrderNextStep = (input: OrderListInput): OrderNextStep => {
     return step({ stage: "production", turn: "production", title: "Виробництво" });
   }
 
+  // Рахунок можна попросити й до договору. Поки він чекає номера з BAS, м'яч у
+  // бухгалтерії — інакше «Створити договір» затуляв би запит, і бухгалтер не
+  // побачив би його в «Мій хід».
+  if (getOrderInvoiceState(input) === "requested") {
+    return step({ stage: "setup", turn: "accounting", title: "Рахунок у бухгалтерії", actionLabel: "Внести номер" });
+  }
+
   switch (buildLaunchPath(input).blocker) {
     case "Бракує договору":
       return step({ stage: "setup", turn: "manager", title: "Створити договір", actionLabel: "Договір" });
@@ -123,9 +130,6 @@ export const getOrderNextStep = (input: OrderListInput): OrderNextStep => {
       // На безготівці замовник платить за рахунком, а рахунок виписує бухгалтерія.
       if (isCashlessPaymentMethod(input.paymentMethodId, input.paymentRail)) {
         const invoice = getOrderInvoiceState(input);
-        if (invoice === "requested") {
-          return step({ stage: "setup", turn: "accounting", title: "Рахунок у бухгалтерії", actionLabel: "Внести номер" });
-        }
         if (invoice !== "issued") {
           return step({
             stage: "setup",
@@ -233,7 +237,8 @@ export const isMyTurn = (
   input: OrderListInput,
   viewer: { userId: string | null | undefined; canIssueInvoice: boolean }
 ) => {
+  // Запит рахунку чекає бухгалтерію на будь-якому етапі — і в запущеному замовленні теж.
+  if (getOrderInvoiceState(input) === "requested") return viewer.canIssueInvoice;
   const { turn } = getOrderNextStep(input);
-  if (turn === "accounting") return viewer.canIssueInvoice;
   return Boolean(viewer.userId) && input.managerUserId === viewer.userId && turn === "manager";
 };

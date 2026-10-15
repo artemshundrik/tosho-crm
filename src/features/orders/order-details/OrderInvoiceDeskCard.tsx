@@ -128,7 +128,7 @@ export function OrderInvoiceDeskCard({
               id="invoice-number"
               value={number}
               onChange={(event) => setNumber(event.target.value)}
-              placeholder="407"
+              placeholder="напр. 407"
               inputMode="numeric"
             />
           </div>

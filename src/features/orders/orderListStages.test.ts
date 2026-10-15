@@ -229,6 +229,17 @@ describe("рахунок через бухгалтерію (p10)", () => {
     });
   });
 
+  it("попросили ще до договору — хід однаково бухгалтерії, не «Створити договір»", () => {
+    const early = { ...cashless, invoiceRequestedAt: "2026-10-15T10:00:00Z" };
+    expect(getOrderNextStep(early)).toMatchObject({ turn: "accounting" });
+    expect(isMyTurn(early, { userId: "accountant", canIssueInvoice: true })).toBe(true);
+  });
+
+  it("попросили в запущеному замовленні — у бухгалтера це теж його хід", () => {
+    const launched = { ...withDocs, orderStatus: "in_production", invoiceRequestedAt: "2026-10-15T10:00:00Z" };
+    expect(isMyTurn(launched, { userId: "accountant", canIssueInvoice: true })).toBe(true);
+  });
+
   it("повернули — знову менеджер, з причиною", () => {
     const returned = { ...withDocs, invoiceReturnNote: "Ціна не ділиться на 1,2" };
     expect(getOrderNextStep(returned)).toMatchObject({
