@@ -125,7 +125,7 @@ export function SiteListingRow({
 
         <span
           className="shrink-0 text-xs tabular-nums text-muted-foreground"
-          title={price ? "Роздріб постачальника → наша ціна (−1%, вниз до гривні)" : blockedReason ?? undefined}
+          title={price ? "Роздріб постачальника → наша ціна (−1%, вниз до цілої гривні, що ділиться на 1,2 — для ПДВ)" : blockedReason ?? undefined}
         >
           {priceCellText(candidate)}
         </span>

@@ -3,18 +3,29 @@ import { describe, expect, it } from "vitest";
 import { colorsSentence, locativeNumeral } from "./colorsSentence";
 import { siteListingPrice } from "./price";
 
-describe("ціна на сайті = роздріб × 0,99 вниз до гривні", () => {
+describe("ціна на сайті = роздріб × 0,99 вниз до гривні, кратної 3", () => {
   it("рахує в цілих копійках: межа гривні не з'їдається двійковим дробом", () => {
     expect(1.15 * 100).not.toBe(115); // ціна з фіду — двійковий дріб
     expect(siteListingPrice(100)).toBe(99);
-    expect(siteListingPrice(1.15)).toBe(1);
-    expect(siteListingPrice(101.02)).toBe(100);
+    expect(siteListingPrice(3.04)).toBe(3);
+    expect(siteListingPrice(101.02)).toBe(99);
   });
 
-  it("округлює вниз до цілої гривні", () => {
+  it("округлює вниз до цілої гривні, кратної 3", () => {
     expect(siteListingPrice(846.4)).toBe(837);
-    expect(siteListingPrice(837.93)).toBe(829);
+    expect(siteListingPrice(837.93)).toBe(828);
     expect(siteListingPrice(357.59)).toBe(354);
+    expect(siteListingPrice(668)).toBe(660);
+    expect(siteListingPrice(48)).toBe(45);
+  });
+
+  it("ціна з ПДВ ділиться на 1,2 до копійки — рахунок сходиться без округлення", () => {
+    for (let kopecks = 300; kopecks <= 200000; kopecks += 7) {
+      const price = siteListingPrice(kopecks / 100);
+      if (price === null) continue;
+      expect((price * 100) % 6).toBe(0);
+      expect(price).toBeLessThanOrEqual((kopecks * 0.99) / 100);
+    }
   });
 
   it("немає ціни — немає й нашої", () => {
@@ -23,6 +34,7 @@ describe("ціна на сайті = роздріб × 0,99 вниз до гри
     expect(siteListingPrice(0)).toBeNull();
     expect(siteListingPrice(Number.NaN)).toBeNull();
     expect(siteListingPrice(0.5)).toBeNull();
+    expect(siteListingPrice(3)).toBeNull(); // 2,97 → нижче за найменшу кратну 3
   });
 });
 
