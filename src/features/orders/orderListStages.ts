@@ -160,6 +160,17 @@ export const getOrderNextStep = (input: OrderListInput, todayIso = localTodayIso
   switch (path.blocker) {
     case "Бракує договору":
       return step({ stage: "setup", turn: "manager", title: "Створити договір", actionLabel: "Договір" });
+    case "Чекає рахунок": {
+      // Рахунок у бухгалтерії ловиться вище; тут — ще не просили або повернули.
+      const returned = getOrderInvoiceState(input) === "returned";
+      return step({
+        stage: "setup",
+        turn: "manager",
+        title: returned ? "Рахунок повернули — виправити" : "Попросити рахунок",
+        detail: returned ? input.invoiceReturnNote : null,
+        actionLabel: "Рахунок",
+      });
+    }
     case "Бракує СП":
       return step({ stage: "setup", turn: "manager", title: "Створити СП", actionLabel: "Створити СП" });
     case "Договір не погоджено":

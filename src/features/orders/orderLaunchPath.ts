@@ -8,6 +8,7 @@ import {
 import { ORDER_PAYMENT_TERMS_OPTIONS } from "./config";
 import type { DerivedOrderRecord } from "./orderRecords";
 import { CLOSING_DOCUMENT_LABELS, type ClosingDocument } from "./orderExecutor";
+import { getOrderInvoiceState } from "./orderInvoice";
 import {
   addBalanceDays,
   daysBetween,
@@ -42,6 +43,9 @@ export type LaunchPathInput = ApprovalRecord &
   | "orderStatus"
   | "contractCreatedAt"
   | "specificationCreatedAt"
+  | "invoiceNumber"
+  | "invoiceRequestedAt"
+  | "invoiceReturnNote"
 >;
 
 export type LaunchStepState = "done" | "current" | "todo" | "locked";
@@ -50,6 +54,7 @@ export type LaunchStep = { key: string; title: string; note: string; state: Laun
 /** Що саме зупиняє запуск; null — можна запускати. Читає й список замовлень. */
 export type LaunchBlocker =
   | "Бракує договору"
+  | "Чекає рахунок"
   | "Бракує СП"
   | "Договір не погоджено"
   | "СП не погоджено"
@@ -233,6 +238,10 @@ export const buildLaunchPath = (
   const specCreated = Boolean(input.specificationCreatedAt);
   const contractSigned = isDocumentSigned(input, "contract");
   const specSigned = isDocumentSigned(input, "specification");
+  // СП — лише після виписаного рахунку (REQ-322#p15, 19.10.2026). Уже створену
+  // СП правило не чіпає: старі замовлення йшли в іншому порядку.
+  const invoiceState = getOrderInvoiceState(input);
+  const invoiceIssued = invoiceState === "issued";
   const deferred = isFullyDeferred(input);
   const onReadiness = isPaidOnReadiness(input);
   const paymentDone = deferred || onReadiness || prepaymentReceived || launched;
@@ -248,10 +257,27 @@ export const buildLaunchPath = (
       state: contractSigned ? "done" : "current",
     },
     {
+      key: "invoice",
+      title: "Рахунок",
+      note: invoiceIssued
+        ? `№ ${input.invoiceNumber}`
+        : invoiceState === "requested"
+          ? "У бухгалтерії — чекаємо номер з BAS"
+          : invoiceState === "returned"
+            ? "Повернули — виправити й попросити знову"
+            : "Попросити в бухгалтерії — без нього СП недоступна",
+      state: invoiceIssued || specCreated ? "done" : contractCreated ? "current" : "todo",
+    },
+    {
       key: "specification",
       title: "СП",
-      note: docNote(specCreated, specSigned, spec.state, "Додаток до договору на це замовлення"),
-      state: specSigned ? "done" : contractCreated ? "current" : "todo",
+      note: docNote(
+        specCreated,
+        specSigned,
+        spec.state,
+        invoiceIssued ? "Додаток до договору на це замовлення" : "Після виписаного рахунку"
+      ),
+      state: specSigned ? "done" : contractCreated && (invoiceIssued || specCreated) ? "current" : "todo",
     },
     {
       key: "payment",
@@ -271,8 +297,10 @@ export const buildLaunchPath = (
     ? null
     : !contractCreated
       ? "Бракує договору"
-      : !specCreated
-        ? "Бракує СП"
+      : !specCreated && !invoiceIssued
+        ? "Чекає рахунок"
+        : !specCreated
+          ? "Бракує СП"
         : !contractSigned && needsApproval(contract.state)
           ? "Договір не погоджено"
           : !specSigned && needsApproval(spec.state)

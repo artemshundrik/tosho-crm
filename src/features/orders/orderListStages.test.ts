@@ -75,8 +75,19 @@ describe("getOrderNextStep", () => {
     });
   });
 
-  it("договір є, СП немає — створити СП", () => {
+  it("договір є, рахунку немає — спершу рахунок (p15)", () => {
     expect(getOrderNextStep({ ...cashless, contractCreatedAt: "2026-10-14" })).toMatchObject({
+      stage: "setup",
+      turn: "manager",
+      title: "Попросити рахунок",
+    });
+    expect(
+      getOrderNextStep({ ...cashless, contractCreatedAt: "2026-10-14", invoiceReturnNote: "не та сума" })
+    ).toMatchObject({ title: "Рахунок повернули — виправити", detail: "не та сума" });
+  });
+
+  it("договір і рахунок є, СП немає — створити СП", () => {
+    expect(getOrderNextStep({ ...cashless, contractCreatedAt: "2026-10-14", invoiceNumber: "407" })).toMatchObject({
       stage: "setup",
       title: "Створити СП",
       actionLabel: "Створити СП",

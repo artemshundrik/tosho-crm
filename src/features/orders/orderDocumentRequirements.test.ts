@@ -21,18 +21,18 @@ describe("getOrderDocumentKinds", () => {
   it("безготівка — усі чотири документи", () => {
     expect(getOrderDocumentKinds({ ...base, paymentMethodId: "bank_uah", paymentRail: "Безготівкові, грн." })).toEqual([
       "contract",
-      "specification",
       "invoice",
+      "specification",
       "techCard",
     ]);
   });
 
-  it("безготівка з актом — акт стоїть після рахунку; видаткову CRM не друкує", () => {
+  it("безготівка з актом — рахунок перед СП, акт після них; видаткову CRM не друкує", () => {
     const cashless = { ...base, paymentMethodId: "bank_uah", paymentRail: "Безготівкові, грн." };
     expect(getOrderDocumentKinds({ ...cashless, closingDocument: "act" })).toEqual([
       "contract",
-      "specification",
       "invoice",
+      "specification",
       "act",
       "techCard",
     ]);

@@ -41,6 +41,9 @@ const cash: LaunchPathInput = {
   contractProductionDays: null,
   contractAutoProlongation: false,
   ourLegalEntityId: null,
+  invoiceNumber: null,
+  invoiceRequestedAt: null,
+  invoiceReturnNote: null,
 };
 
 const SIGNED = {
@@ -88,13 +91,36 @@ describe("buildLaunchPath", () => {
     const path = buildLaunchPath(cashless);
     expect(path.heading).toBe("Безготівка, 70/30");
     expect(path.blocker).toBe("Бракує договору");
-    expect(stateOf(cashless)).toEqual(["contract:current", "specification:todo", "payment:todo", "launch:locked"]);
+    expect(stateOf(cashless)).toEqual([
+      "contract:current",
+      "invoice:todo",
+      "specification:todo",
+      "payment:todo",
+      "launch:locked",
+    ]);
+  });
+
+  it("СП — лише після виписаного рахунку (p15)", () => {
+    const contract = { ...cashless, contractCreatedAt: "2026-10-19" };
+    expect(buildLaunchPath(contract).blocker).toBe("Чекає рахунок");
+    expect(stateOf(contract).slice(1, 3)).toEqual(["invoice:current", "specification:todo"]);
+    const issued = { ...contract, invoiceNumber: "407" };
+    expect(buildLaunchPath(issued).blocker).toBe("Бракує СП");
+    expect(stateOf(issued).slice(1, 3)).toEqual(["invoice:done", "specification:current"]);
+    // Створену раніше СП правило не чіпає.
+    expect(buildLaunchPath({ ...contract, specificationCreatedAt: "2026-10-10" }).blocker).not.toBe("Чекає рахунок");
   });
 
   it("безготівка з підписаними договором і СП чекає оплату", () => {
     const input = { ...cashless, ...SIGNED };
     expect(buildLaunchPath(input).blocker).toBe("Чекає передоплату");
-    expect(stateOf(input)).toEqual(["contract:done", "specification:done", "payment:current", "launch:locked"]);
+    expect(stateOf(input)).toEqual([
+      "contract:done",
+      "invoice:done",
+      "specification:done",
+      "payment:current",
+      "launch:locked",
+    ]);
   });
 
   it("повне відтермінування: оплата до запуску не потрібна", () => {

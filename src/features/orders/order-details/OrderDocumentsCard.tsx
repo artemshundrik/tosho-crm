@@ -421,7 +421,7 @@ export function OrderDocumentsCard({
           </div>
           <span className="text-xs text-muted-foreground">
             {cashless
-              ? `Безготівка: договір, СП, рахунок${record.closingDocument === "act" ? ", акт" : ""}`
+              ? `Безготівка: договір, рахунок, СП${record.closingDocument === "act" ? ", акт" : ""}`
               : `${record.paymentMethodId === "crypto" ? "Криптовалюта" : "Готівка"} — не оформлюються`}
           </span>
         </div>

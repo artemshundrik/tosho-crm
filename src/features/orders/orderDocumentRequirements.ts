@@ -149,8 +149,9 @@ export const getOrderDocumentKinds = (
   >
 ): OrderDocumentKind[] => {
   if (isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail)) {
+    // Рахунок перед СП: СП створюється після виписаного рахунку (REQ-322#p15).
     // Закривальний: акт друкує CRM; видаткову виписує бухгалтерія в BAS (REQ-322#p3).
-    return ["contract", "specification", "invoice", ...(record.closingDocument === "act" ? (["act"] as const) : []), "techCard"];
+    return ["contract", "invoice", "specification", ...(record.closingDocument === "act" ? (["act"] as const) : []), "techCard"];
   }
   return [
     ...(record.contractCreatedAt ? (["contract"] as const) : []),
@@ -225,29 +226,35 @@ export const getDocumentActionState = (
     // показуємо явну й коротку підказку замість списку всіх missing.
     const contractMissing = !record.contractCreatedAt;
     const created = Boolean(record.specificationCreatedAt);
+    // СП — лише після виписаного рахунку (REQ-322#p15); створену вже не чіпаємо.
+    const invoiceMissing = !created && !record.invoiceNumber;
     const blockedLabel = contractMissing
       ? "Спочатку створіть Договір — без нього СП недоступна."
-      : missing.length > 0
+      : invoiceMissing
+        ? "Спочатку рахунок: СП створюється, коли бухгалтерія його випише."
+        : missing.length > 0
         ? `Не виконано: ${missing.join(", ")}`
         : null;
     const actionMode: DocumentActionMode =
-      contractMissing || !ready ? "blocked" : created ? "open" : "create";
+      contractMissing || invoiceMissing || !ready ? "blocked" : created ? "open" : "create";
     return {
       title: "СП",
       ready,
       created,
       statusLabel: created
         ? "Створено"
-        : ready
-          ? "Можна створити"
-          : contractMissing
-            ? "Очікує Договір"
-            : "Потрібні умови",
-      statusReady: ready,
+        : contractMissing
+          ? "Очікує Договір"
+          : invoiceMissing
+            ? "Очікує рахунок"
+            : ready
+              ? "Можна створити"
+              : "Потрібні умови",
+      statusReady: ready && !invoiceMissing,
       blockedLabel,
       checks,
       hint:
-        "СП має окремі правила: тільки безготівка, тільки після створення договору, і з умовами оплати та Incoterms із замовлення.",
+        "СП має окремі правила: тільки безготівка, тільки після договору й виписаного рахунку, і з умовами оплати та Incoterms із замовлення.",
       actionMode,
       createdDateLabel: formatShortCreatedDate(record.specificationCreatedAt),
       isRequisitesBlocker: false,
@@ -331,4 +338,31 @@ export const getDocumentActionState = (
     createdDateLabel: null,
     isRequisitesBlocker: false,
   };
+};
+
+/** Чи можна створити СП: безготівка, договір, рахунок (REQ-322#p15) і погоджений візуал. */
+export const canCreateSpecification = (record: DerivedOrderRecord) =>
+  record.items.length > 0 &&
+  isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail) &&
+  Boolean(record.contractCreatedAt) &&
+  (Boolean(record.specificationCreatedAt) || Boolean(record.invoiceNumber)) &&
+  record.hasApprovedVisualization;
+
+/** Чому СП ще не можна друкувати; null — можна. */
+export const getSpecificationBlocker = (record: DerivedOrderRecord) => {
+  if (record.items.length === 0) return "Немає позицій для СП.";
+  if (!isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail)) {
+    return "СП створюється тільки для безготівкового розрахунку.";
+  }
+  if (!record.contractCreatedAt) {
+    return "Перед СП потрібно створити Договір.";
+  }
+  // REQ-322#p15: СП — після виписаного рахунку; передрук створеної не блокуємо.
+  if (!record.specificationCreatedAt && !record.invoiceNumber) {
+    return "Спочатку рахунок: СП створюється, коли бухгалтерія його випише.";
+  }
+  if (!record.hasApprovedVisualization) {
+    return "Для СП потрібна погоджена візуалізація.";
+  }
+  return null;
 };

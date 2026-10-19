@@ -48,8 +48,10 @@ import {
 } from "@/features/orders/paymentRules";
 import { BalanceDaysField } from "@/components/orders/BalanceDaysField";
 import {
+  canCreateSpecification,
   getDocumentActionState,
   getOrderDocumentKinds,
+  getSpecificationBlocker,
   type OrderDocumentKind,
 } from "@/features/orders/orderDocumentRequirements";
 // Панель ревізій договору тягне rich-text-редактор (tiptap/prosemirror,
@@ -270,12 +272,6 @@ const formatIncotermsLabel = (record: Pick<DerivedOrderRecord, "incotermsCode" |
   return `${code} (Incoterms 2020)${place ? `, ${place}` : ""}`;
 };
 
-const canCreateSpecification = (record: DerivedOrderRecord) =>
-  record.items.length > 0 &&
-  isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail) &&
-  Boolean(record.contractCreatedAt) &&
-  record.hasApprovedVisualization;
-
 // Build initial render context for the contract sections from current record fields.
 // Used to seed defaults when manager creates the very first revision (v1).
 const buildContractRenderContextFromRecord = (record: DerivedOrderRecord): ContractRenderContext => {
@@ -304,20 +300,6 @@ const buildContractRenderContextFromRecord = (record: DerivedOrderRecord): Contr
     // totalWithVat is intentionally unused in the default template body, but kept here for future tokens.
     ...{ totalWithVat },
   } as ContractRenderContext;
-};
-
-const getSpecificationBlocker = (record: DerivedOrderRecord) => {
-  if (record.items.length === 0) return "Немає позицій для СП.";
-  if (!isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail)) {
-    return "СП створюється тільки для безготівкового розрахунку.";
-  }
-  if (!record.contractCreatedAt) {
-    return "Перед СП потрібно створити Договір.";
-  }
-  if (!record.hasApprovedVisualization) {
-    return "Для СП потрібна погоджена візуалізація.";
-  }
-  return null;
 };
 
 const normalizeDocumentDocs = (record: DerivedOrderRecord) => ({
