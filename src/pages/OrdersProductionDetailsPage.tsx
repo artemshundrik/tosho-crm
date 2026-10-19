@@ -45,6 +45,8 @@ import {
   type BalanceDaysKind,
   formatBalanceDaysTerm,
   getMinimumPrepaymentError,
+  isCashLikePaymentMethod,
+  PAYMENT_METHOD_LABELS,
 } from "@/features/orders/paymentRules";
 import { BalanceDaysField } from "@/components/orders/BalanceDaysField";
 import {
@@ -1501,8 +1503,8 @@ export default function OrdersProductionDetailsPage() {
   const launchPath = buildLaunchPath(record);
   const termsChip = formatPaymentTermsChip(record);
   const paymentMethodChip =
-    record.paymentMethodId === "cash"
-      ? "Готівка"
+    isCashLikePaymentMethod(record.paymentMethodId)
+      ? PAYMENT_METHOD_LABELS[record.paymentMethodId]
       : requiresCustomerDocuments
         ? "Безготівка"
         : record.paymentMethodId === "crypto"

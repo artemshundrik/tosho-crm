@@ -7,7 +7,8 @@ import { ORDER_PAYMENT_TERMS_OPTIONS } from "./config";
  */
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "Готівкові / на карту",
+  cash: "Готівка",
+  card: "На карту",
   bank_uah: "Безготівкові, грн.",
   bank_fx: "Безготівкові (валютні), $ / €",
   crypto: "Криптовалюта",
@@ -15,6 +16,12 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 export const CASH_MIN_PREPAYMENT_PCT = 50;
+
+/** «На карту» живе за правилами готівки: без документів, передоплата від 50% (REQ-322#p17). */
+export const isCashLikePaymentMethod = (methodId?: string | null) => {
+  const normalized = (methodId ?? "").trim();
+  return normalized === "cash" || normalized === "card";
+};
 
 export const normalizePaymentMethodId = (value?: string | null) => {
   const normalized = (value ?? "").trim();
@@ -60,7 +67,7 @@ export const resolveOrderPaymentMethod = (input: {
 };
 
 export const getAllowedPaymentTermsOptions = (methodId?: string | null) =>
-  normalizePaymentMethodId(methodId) === "cash"
+  isCashLikePaymentMethod(methodId)
     ? ORDER_PAYMENT_TERMS_OPTIONS.filter((option) => option.advance >= CASH_MIN_PREPAYMENT_PCT)
     : [...ORDER_PAYMENT_TERMS_OPTIONS];
 
@@ -69,13 +76,13 @@ export const getMinimumPrepaymentError = (input: {
   prepaymentPct?: number | null;
   paymentTerms?: string | null;
 }) => {
-  if (normalizePaymentMethodId(input.methodId) !== "cash") return null;
+  if (!isCashLikePaymentMethod(input.methodId)) return null;
   const advance =
     typeof input.prepaymentPct === "number"
       ? input.prepaymentPct
       : ORDER_PAYMENT_TERMS_OPTIONS.find((option) => option.id === input.paymentTerms)?.advance ?? null;
   if (advance === null || advance >= CASH_MIN_PREPAYMENT_PCT) return null;
-  return `На готівці передоплата не менше ${CASH_MIN_PREPAYMENT_PCT}%: 50/50, 70/30 або 100%.`;
+  return `На готівці й на карту передоплата не менше ${CASH_MIN_PREPAYMENT_PCT}%: 50/50, 70/30 або 100%.`;
 };
 
 /**
@@ -139,3 +146,29 @@ export const daysBetween = (fromIso: string, toIso: string) => Math.round((isoTo
 
 /** «28.10» — коротка дата для рядків і чипів. */
 export const formatDayMonth = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+
+/**
+ * «Як платить» (REQ-322#p17) — одне поле замість типу оплати й юрособи.
+ * «За рахунком» несе юрособу (`invoice:<id>`), а гривня чи валюта береться з
+ * поля «Валюта». Решта — способи без документів.
+ */
+export const PAY_HOW_INVOICE_PREFIX = "invoice:";
+
+export const PAY_HOW_WITHOUT_DOCUMENTS = [
+  { id: "cash", label: "Готівка" },
+  { id: "card", label: "На карту" },
+  { id: "crypto", label: "Криптовалюта" },
+] as const;
+
+export const bankPaymentMethodFor = (currency?: string | null) => {
+  const code = (currency ?? "UAH").trim().toUpperCase();
+  return code === "USD" || code === "EUR" ? "bank_fx" : "bank_uah";
+};
+
+export const toPayHowValue = (methodId: string, legalEntityId: string) =>
+  isCashlessPaymentMethod(methodId, null) ? `${PAY_HOW_INVOICE_PREFIX}${legalEntityId}` : methodId;
+
+export const fromPayHowValue = (value: string, currency?: string | null) =>
+  value.startsWith(PAY_HOW_INVOICE_PREFIX)
+    ? { methodId: bankPaymentMethodFor(currency), legalEntityId: value.slice(PAY_HOW_INVOICE_PREFIX.length) }
+    : { methodId: value, legalEntityId: null };

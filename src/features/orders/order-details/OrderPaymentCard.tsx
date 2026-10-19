@@ -7,7 +7,7 @@ import {
   getClosingDocumentRef,
 } from "@/features/orders/orderLaunchPath";
 import { formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
-import { formatDayMonth, isCashlessPaymentMethod } from "@/features/orders/paymentRules";
+import { formatDayMonth, isCashLikePaymentMethod, isCashlessPaymentMethod, PAYMENT_METHOD_LABELS } from "@/features/orders/paymentRules";
 import { toneBadgeClass, type Tone } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 
@@ -53,12 +53,12 @@ export function OrderPaymentCard({ record }: { record: DerivedOrderRecord }) {
   const parts = buildOrderPaymentParts(record);
   const status = paymentStatusOption(record.paymentStatus);
   const tone = (status?.tone ?? "neutral") as Tone;
-  const isCash = record.paymentMethodId === "cash";
+  const isCash = isCashLikePaymentMethod(record.paymentMethodId);
 
   return (
     <HeroShell
       className="p-4 sm:p-4"
-      label={isCash ? "Оплата · готівка" : "Оплата"}
+      label={isCash ? `Оплата · ${PAYMENT_METHOD_LABELS[record.paymentMethodId].toLowerCase()}` : "Оплата"}
       value={formatOrderMoney(record.total, record.currency)}
       badge={
         <span className={cn("rounded-md border px-2 py-0.5 text-xs font-semibold", toneBadgeClass[tone])}>

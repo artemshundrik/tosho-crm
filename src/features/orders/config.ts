@@ -3,8 +3,13 @@ import { onBoardColumns } from "@/lib/kanbanBoards";
 export const ORDER_PAYMENT_METHOD_OPTIONS = [
   {
     id: "cash",
-    label: "Готівкові",
-    description: "Готівка або оплата на карту.",
+    label: "Готівка",
+    description: "Без документів, передоплата від 50%.",
+  },
+  {
+    id: "card",
+    label: "На карту",
+    description: "Як готівка: без документів, передоплата від 50%.",
   },
   {
     id: "bank_uah",

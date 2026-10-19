@@ -76,7 +76,7 @@ function readFilters(teamId: string | null | undefined): FiltersState | null {
 const PAYMENT_FILTER_OPTIONS: { value: PaymentFilter; label: string }[] = [
   { value: "all", label: "Будь-яка оплата" },
   { value: "cashless", label: "Безготівка" },
-  { value: "cash", label: "Готівка" },
+  { value: "cash", label: "Готівка / на карту" },
   { value: "crypto", label: "Криптовалюта" },
 ];
 

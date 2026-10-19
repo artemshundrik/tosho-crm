@@ -42,7 +42,7 @@ import {
 } from "@/features/orders/orderExecutor";
 import type { OrderLegalEntityOption } from "@/features/orders/orderLegalEntityQueries";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
-import { isCashlessPaymentMethod } from "@/features/orders/paymentRules";
+import { isCashlessPaymentMethod, PAYMENT_METHOD_LABELS } from "@/features/orders/paymentRules";
 import { formatTelegramHandle } from "@/lib/telegramContact";
 import { cn } from "@/lib/utils";
 
@@ -422,7 +422,7 @@ export function OrderDocumentsCard({
           <span className="text-xs text-muted-foreground">
             {cashless
               ? `Безготівка: договір, рахунок, СП${record.closingDocument === "act" ? ", акт" : ""}`
-              : `${record.paymentMethodId === "crypto" ? "Криптовалюта" : "Готівка"} — не оформлюються`}
+              : `${PAYMENT_METHOD_LABELS[record.paymentMethodId] ?? "Готівка"} — не оформлюються`}
           </span>
         </div>
         {cashless && issuer ? <IssuerLine record={record} issuer={issuer} /> : null}

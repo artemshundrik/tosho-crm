@@ -40,9 +40,16 @@ import {
   sanitizeQuoteDeliveryDetails,
   type QuoteDeliveryDetails,
 } from "@/components/quotes/QuoteDeliveryFields";
-import { ORDER_PAYMENT_METHOD_OPTIONS } from "@/features/orders/config";
-import { getAllowedPaymentTermsOptions, isCashlessPaymentMethod } from "@/features/orders/paymentRules";
-import { DEFAULT_ORDER_EXECUTOR, executorBadge, splitVat } from "@/features/orders/orderExecutor";
+import {
+  bankPaymentMethodFor,
+  fromPayHowValue,
+  getAllowedPaymentTermsOptions,
+  isCashlessPaymentMethod,
+  isCashLikePaymentMethod,
+  toPayHowValue,
+} from "@/features/orders/paymentRules";
+import { DEFAULT_ORDER_EXECUTOR, splitVat } from "@/features/orders/orderExecutor";
+import { OrderPayHowSelect } from "@/features/orders/OrderPayHowSelect";
 import {
   findCustomerLastLegalEntityId,
   listOrderLegalEntities,
@@ -86,7 +93,7 @@ const UNIT_OPTIONS = ["шт.", "компл.", "уп.", "пара", "м", "м²",
 const DEFAULT_DESIGN_DEADLINE_TIME = "10:00";
 
 const defaultPaymentMethod = (currency: CurrencyCode, customerPaymentType?: string | null) =>
-  customerPaymentType === "cash" ? "cash" : currency === "USD" || currency === "EUR" ? "bank_fx" : "bank_uah";
+  customerPaymentType === "cash" ? "cash" : bankPaymentMethodFor(currency);
 
 type DraftPrint = { key: string; methodId: string; positionId: string; width: string; height: string };
 type DraftItem = {
@@ -204,7 +211,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   const [paymentMethodId, setPaymentMethodId] = useState<string>(defaultPaymentMethod("UAH"));
   const paymentMethodTouched = useRef(false);
   const [paymentTerms, setPaymentTerms] = useState<string>("70/30");
-  // Від кого документи (REQ-322#p1): за замовчуванням — юрособа з останнього замовлення замовника.
+  // Юрособа «За рахунком» (REQ-322#p1, p17): за замовчуванням — з останнього замовлення замовника.
   const [legalEntityOptions, setLegalEntityOptions] = useState<OrderLegalEntityOption[]>([]);
   const [ourLegalEntityId, setOurLegalEntityId] = useState<string>("");
   const legalEntityTouched = useRef(false);
@@ -389,6 +396,18 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   const handleCurrencyChange = (next: CurrencyCode) => {
     setCurrency(next);
     if (!paymentMethodTouched.current) setPaymentMethodId(defaultPaymentMethod(next, selectedCustomerPaymentType));
+    // «За рахунком» уже обрано руками — гривня чи валюта йде за полем «Валюта».
+    else if (isCashlessPaymentMethod(paymentMethodId, null)) setPaymentMethodId(bankPaymentMethodFor(next));
+  };
+
+  const handlePayHowChange = (value: string) => {
+    const next = fromPayHowValue(value, currency);
+    paymentMethodTouched.current = true;
+    setPaymentMethodId(next.methodId);
+    if (next.legalEntityId) {
+      legalEntityTouched.current = true;
+      setOurLegalEntityId(next.legalEntityId);
+    }
   };
 
   const updateItem = (key: string, patch: Partial<DraftItem>) =>
@@ -774,25 +793,13 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Тип оплати</Label>
-                <Select
-                  value={paymentMethodId}
-                  onValueChange={(value) => {
-                    paymentMethodTouched.current = true;
-                    setPaymentMethodId(value);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ORDER_PAYMENT_METHOD_OPTIONS.map((option) => (
-                      <SelectItem key={option.id} value={option.id}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="manual-order-pay-how">Як платить</Label>
+                <OrderPayHowSelect
+                  id="manual-order-pay-how"
+                  value={toPayHowValue(paymentMethodId, shownLegalEntityId)}
+                  onChange={handlePayHowChange}
+                  legalEntityOptions={legalEntityOptions}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Умови оплати</Label>
@@ -810,33 +817,13 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                 </Select>
               </div>
             </div>
-
-            {isCashlessPaymentMethod(paymentMethodId, null) && legalEntityOptions.length > 0 ? (
-              <div className="space-y-2">
-                <Label>Від кого документи</Label>
-                <Select
-                  value={shownLegalEntityId}
-                  onValueChange={(value) => {
-                    legalEntityTouched.current = true;
-                    setOurLegalEntityId(value);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="ТОВ «АВАНПРІНТ»" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {legalEntityOptions.map((option) => (
-                      <SelectItem key={option.row.id} value={option.row.id}>
-                        {executorBadge(option.executor)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Договір, СП, рахунок і акт підуть від цієї юрособи. ФОП — без ПДВ.
-                </p>
-              </div>
-            ) : null}
+            <p className="-mt-2 text-xs text-muted-foreground">
+              {isCashlessPaymentMethod(paymentMethodId, null)
+                ? `Договір, СП, рахунок і акт підуть від цієї юрособи, ${currency === "UAH" ? "у гривні" : "у валюті"}.`
+                : isCashLikePaymentMethod(paymentMethodId)
+                  ? "Без договору, СП і рахунку. Передоплата — не менше 50%."
+                  : "Без договору, СП і рахунку."}
+            </p>
           </section>
 
           {/* ── Товари ── */}

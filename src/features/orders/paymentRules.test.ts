@@ -7,11 +7,14 @@ import {
   formatBalanceDaysShort,
   formatBalanceDaysTerm,
   formatDayMonth,
+  fromPayHowValue,
   getAllowedPaymentTermsOptions,
   getMinimumPrepaymentError,
+  isCashLikePaymentMethod,
   isCashlessPaymentMethod,
   normalizeBalanceDaysKind,
   resolveOrderPaymentMethod,
+  toPayHowValue,
 } from "./paymentRules";
 
 /**
@@ -161,5 +164,31 @@ describe("daysBetween / formatDayMonth", () => {
     expect(daysBetween("2026-10-30", "2026-10-29")).toBe(-1);
     expect(daysBetween("2026-10-24", "2026-10-26")).toBe(2); // через перехід на зимовий час
     expect(formatDayMonth("2026-03-07")).toBe("07.03");
+  });
+});
+
+/** «Як платить» (REQ-322#p17): юрособа «За рахунком» або спосіб без документів одним полем. */
+describe("«Як платить»", () => {
+  it("«На карту» — правила готівки: передоплата від 50%", () => {
+    expect(isCashLikePaymentMethod("card")).toBe(true);
+    expect(isCashlessPaymentMethod("card", null)).toBe(false);
+    expect(getAllowedPaymentTermsOptions("card").map((option) => option.id)).not.toContain("100_after");
+    expect(getMinimumPrepaymentError({ methodId: "card", prepaymentPct: 30 })).toMatch(/не менше 50%/);
+  });
+
+  it("крипта без правила 50%", () => {
+    expect(isCashLikePaymentMethod("crypto")).toBe(false);
+    expect(getMinimumPrepaymentError({ methodId: "crypto", prepaymentPct: 0 })).toBeNull();
+  });
+
+  it("«За рахунком» несе юрособу, а гривня чи валюта — з поля «Валюта»", () => {
+    expect(fromPayHowValue("invoice:fop-ro", "UAH")).toEqual({ methodId: "bank_uah", legalEntityId: "fop-ro" });
+    expect(fromPayHowValue("invoice:fop-ro", "EUR")).toEqual({ methodId: "bank_fx", legalEntityId: "fop-ro" });
+    expect(fromPayHowValue("card", "UAH")).toEqual({ methodId: "card", legalEntityId: null });
+  });
+
+  it("значення поля збирається назад зі способу й юрособи", () => {
+    expect(toPayHowValue("bank_fx", "llc")).toBe("invoice:llc");
+    expect(toPayHowValue("cash", "llc")).toBe("cash");
   });
 });
