@@ -178,8 +178,8 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   const isDesigner = job === "designer" || job === "дизайнер";
   // Фінанси — власник + CEO + бухгалтери (той самий набір, що має доступ до Фінансів).
   const isFinance = access === "owner" || access === "admin" || ["seo", "accountant", "chief_accountant"].includes(job);
-  const isInvoiceIssuer =
-    access === "owner" || ["seo", "accountant", "chief_accountant", "junior_accountant"].includes(job);
+  // Дзеркало INVOICE_ISSUER_JOB_ROLES (src/lib/permissions.ts): молодший бухгалтер рахунків не виписує.
+  const isInvoiceIssuer = access === "owner" || ["seo", "accountant", "chief_accountant"].includes(job);
   switch (key) {
     // Універсальні / персональні — бачать усі.
     case "team_events":

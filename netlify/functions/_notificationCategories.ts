@@ -71,8 +71,8 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   const isQuoteWorker = isPrivileged || QUOTE_JOB_ROLES.includes(job);
   const isDesigner = job === "designer" || job === "дизайнер";
   const isFinance = access === "owner" || access === "admin" || ["seo", "accountant", "chief_accountant"].includes(job);
-  const isInvoiceIssuer =
-    access === "owner" || ["seo", "accountant", "chief_accountant", "junior_accountant"].includes(job);
+  // Дзеркало INVOICE_ISSUER_JOB_ROLES (src/lib/permissions.ts): молодший бухгалтер рахунків не виписує.
+  const isInvoiceIssuer = access === "owner" || ["seo", "accountant", "chief_accountant"].includes(job);
   switch (key) {
     case "team_events":
     case "team_absences":

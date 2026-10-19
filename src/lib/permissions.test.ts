@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPermissions,
   canApproveQuoteMarkup,
+  canIssueOrderInvoice,
   canEditQuoteDelivery,
   permissionsForViewAs,
   resolveQuoteRunPriceFieldAccess,
@@ -228,5 +229,16 @@ describe("canApproveQuoteMarkup", () => {
     // вирішує notifyMarkupApprovalRequested (тільки призначений погоджувач),
     // друге — ця функція. Глядач без посади СЕО не підписує в жодному разі.
     expect(approve("manager", null, { isPrintQuote: true, printApproverUserId: OLENA })).toBe(false);
+  });
+});
+
+describe("canIssueOrderInvoice", () => {
+  it("рахунок виписують бухгалтер, головбух, СЕО й власник — молодший бухгалтер ні (REQ-322#p16)", () => {
+    expect(canIssueOrderInvoice("member", "accountant")).toBe(true);
+    expect(canIssueOrderInvoice("member", "chief_accountant")).toBe(true);
+    expect(canIssueOrderInvoice("admin", "seo")).toBe(true);
+    expect(canIssueOrderInvoice("owner", "it_specialist")).toBe(true);
+    expect(canIssueOrderInvoice("member", "junior_accountant")).toBe(false);
+    expect(canIssueOrderInvoice("member", "manager")).toBe(false);
   });
 });

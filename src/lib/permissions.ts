@@ -339,11 +339,12 @@ export function canEditQuoteDelivery({
 
 /**
  * Хто вносить номер рахунку з BAS і повертає запит рахунку (REQ-322#p10):
- * власник, СЕО, бухгалтер, головний і молодший бухгалтер (Артем, 15.10.2026).
- * Цьому ж колу йде сповіщення про запит. Дзеркало в базі —
- * tosho.is_order_invoice_issuer (scripts/orders-invoice-request.sql).
+ * власник, СЕО, бухгалтер і головний бухгалтер. Молодшого бухгалтера прибрано
+ * 19.10.2026 (REQ-322#p16): рахунок погоджують Юля, Таня або СЕО. Цьому ж колу
+ * йде сповіщення про запит. Дзеркало в базі — tosho.is_order_invoice_issuer
+ * (scripts/orders-invoice-issuers.sql) і перемикачі сповіщень у notificationCategories.
  */
-export const INVOICE_ISSUER_JOB_ROLES = ["seo", "accountant", "chief_accountant", "junior_accountant"] as const;
+export const INVOICE_ISSUER_JOB_ROLES = ["seo", "accountant", "chief_accountant"] as const;
 
 export function canIssueOrderInvoice(accessRole: string | null | undefined, jobRole: string | null | undefined) {
   const access = (accessRole ?? "").trim().toLowerCase();
