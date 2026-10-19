@@ -6,6 +6,7 @@ import {
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
 import { declineToGenitive } from "@/lib/nameDeclension";
+import { openDocumentWindow } from "../documentPrintWindow";
 import { toSignatureInitials } from "@/lib/signatureFormat";
 
 /**
@@ -244,35 +245,21 @@ export async function openGroupedSpecification(
   const blocker = getSpecificationGroupBlocker(selectedRecords);
   if (blocker) throw new Error(blocker);
 
+  // Вікно — одразу в кліку, до запитів: інакше браузер його блокує (див. documentPrintWindow).
+  const printWindow = openDocumentWindow("Специфікація");
+  if (printWindow.blocked) throw new Error("Браузер заблокував відкриття документа. Дозволь popup для цього сайту.");
+
   // Відмінюємо ПІБ і посаду підписанта замовника у родовий відмінок (паралельно, з кешем + fallback).
   const first = selectedRecords[0];
   const [customerSignatoryNameGenitive, customerSignatoryRoleGenitive] = await Promise.all([
     first?.customerSignatoryName ? declineToGenitive(first.customerSignatoryName) : Promise.resolve(""),
     first?.customerSignatoryPosition ? declineToGenitive(first.customerSignatoryPosition) : Promise.resolve(""),
   ]);
-  const html = buildGroupedSpecificationHtml(selectedRecords, {
-    customerSignatoryNameGenitive,
-    customerSignatoryRoleGenitive,
-  });
-  const popup = window.open("", "_blank");
-  if (!popup) throw new Error("Браузер заблокував відкриття документа. Дозволь popup для цього сайту.");
-
-  let wroteDocument = false;
-  try {
-    popup.document.open();
-    popup.document.write(html);
-    popup.document.close();
-    popup.focus();
-    wroteDocument = true;
-  } catch {
-    // Fallback for browsers/extensions that prevent document.write into a popup.
-  }
-
-  if (!wroteDocument) {
-    const objectUrl = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-    popup.location.href = objectUrl;
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-  }
+  printWindow.mark("відмінювання ПІБ");
+  printWindow.show(
+    buildGroupedSpecificationHtml(selectedRecords, { customerSignatoryNameGenitive, customerSignatoryRoleGenitive }),
+    { teamId, orderId: first?.id ?? "" }
+  );
 
   try {
     const markedAt = await Promise.all(

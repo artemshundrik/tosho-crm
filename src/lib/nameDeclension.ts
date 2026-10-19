@@ -22,6 +22,12 @@ const cacheKey = (source: string, targetCase: DeclineCase) => `${targetCase}::${
 
 const FALLBACK = (source: string) => source.trim();
 
+/**
+ * Довше документ не чекає: холодна функція з OpenAI відповідала до 10 с, і
+ * вікно документа весь цей час висіло. Не встигли — друкуємо називний відмінок.
+ */
+const DECLINE_TIMEOUT_MS = 4_000;
+
 export async function declineName(source: string, targetCase: DeclineCase = "genitive"): Promise<string> {
   const trimmed = (source ?? "").trim();
   if (!trimmed) return trimmed;
@@ -45,6 +51,7 @@ export async function declineName(source: string, targetCase: DeclineCase = "gen
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ source: trimmed, case: targetCase }),
+      signal: AbortSignal.timeout(DECLINE_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -57,8 +64,9 @@ export async function declineName(source: string, targetCase: DeclineCase = "gen
       typeof data.result === "string" && data.result.trim() ? data.result.trim() : FALLBACK(trimmed);
     memoryCache.set(key, result);
     return result;
-  } catch {
-    memoryCache.set(key, FALLBACK(trimmed));
+  } catch (error: unknown) {
+    // Тайм-аут не кешуємо: наступного разу функція вже тепла й відповість вчасно.
+    if (!(error instanceof DOMException && error.name === "TimeoutError")) memoryCache.set(key, FALLBACK(trimmed));
     return FALLBACK(trimmed);
   }
 }

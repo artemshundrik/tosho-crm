@@ -7,7 +7,8 @@ type RuntimeErrorPayload = {
   teamId?: string | null;
   userId?: string | null;
   actorName?: string | null;
-  source: "boundary" | "window_error" | "unhandledrejection";
+  /** slow_document — документ замовлення готувався довше 5 с (див. documentPrintWindow). */
+  source: "boundary" | "window_error" | "unhandledrejection" | "slow_document";
   title?: string | null;
   href?: string | null;
   metadata?: Record<string, unknown>;

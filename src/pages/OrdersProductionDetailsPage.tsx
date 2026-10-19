@@ -75,6 +75,8 @@ import { useOrderLegalEntity } from "@/features/orders/order-details/useOrderLeg
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { buildTelegramHref } from "@/lib/telegramContact";
 import { declineToGenitive } from "@/lib/nameDeclension";
+import { openDocumentWindow } from "@/features/orders/documentPrintWindow";
+import { formatInvoicePartyName } from "@/features/orders/invoicePartyName";
 import { toSignatureInitials } from "@/lib/signatureFormat";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
@@ -694,9 +696,13 @@ const buildOrderDocumentHtml = (
       record.currency === "USD" ? "дол. США" : record.currency === "EUR" ? "євро" : "грн.";
     const wordsCurrency = record.currency === "USD" || record.currency === "EUR" ? record.currency : "UAH";
     const vatAmount = totalWithVat - totalWithoutVat;
+    const contractDateSource = record.contractDate ?? record.contractCreatedAt;
+    const contractDateParts = contractDateSource ? formatContractDateParts(contractDateSource) : null;
     const contractReference = record.contractNumber
-      ? `№ ${record.contractNumber}${record.contractCreatedAt ? ` від ${formatOrderDate(record.contractCreatedAt)}` : ""}`
+      ? `№ ${record.contractNumber}${contractDateParts ? ` від ${contractDateParts.day} ${contractDateParts.monthLabel} ${contractDateParts.year} р.` : ""}`
       : null;
+    // Сторони — як друкує BAS: повна форма великими, прямі лапки (зразок № 433).
+    const supplierName = formatInvoicePartyName(executor.companyName);
 
     const invoiceRows = record.items
       .map((item, index) => {
@@ -725,7 +731,7 @@ const buildOrderDocumentHtml = (
           .pay-box { width: 100%; border-collapse: collapse; margin-bottom: 26px; }
           .pay-box td { border: 1px solid #111827; padding: 5px 8px; font-size: 12px; vertical-align: top; }
           .pay-box .label { width: 150px; color: #374151; }
-          h1 { font-size: 19px; margin: 0 0 18px; font-weight: 700; }
+          h1 { font-size: 19px; margin: 0 0 18px; padding-bottom: 6px; border-bottom: 2px solid #111827; font-weight: 700; }
           .req-row { display: flex; gap: 12px; font-size: 13px; margin-bottom: 4px; }
           .req-label { width: 120px; flex: 0 0 120px; }
           .req-value { flex: 1; }
@@ -757,7 +763,7 @@ const buildOrderDocumentHtml = (
         <table class="pay-box">
           <tr>
             <td class="label">Отримувач</td>
-            <td colspan="3">${escapeHtml(executor.companyName)}</td>
+            <td colspan="3"><b>${escapeHtml(supplierName)}</b></td>
           </tr>
           <tr>
             <td class="label">Код</td>
@@ -776,7 +782,7 @@ const buildOrderDocumentHtml = (
         <div class="req-row">
           <div class="req-label"><b>Постачальник:</b></div>
           <div class="req-value">
-            <div>${escapeHtml(executor.companyName)}</div>
+            <div><b>${escapeHtml(supplierName)}</b></div>
             <div>п/р ${escapeHtml(executor.iban)}${executor.bank ? ` у банку ${escapeHtml(executor.bank)}` : ""},</div>
             ${executor.address ? `<div>${escapeHtml(executor.address)},</div>` : ""}
             ${executor.phone ? `<div>тел.: ${escapeHtml(executor.phone)},</div>` : ""}
@@ -785,9 +791,7 @@ const buildOrderDocumentHtml = (
         </div>
         <div class="req-row">
           <div class="req-label"><b>Покупець:</b></div>
-          <div class="req-value"><div>${escapeHtml(customerTitle)}${
-            record.customerTaxId?.trim() ? ` (код ЄДРПОУ ${escapeHtml(record.customerTaxId.trim())})` : ""
-          }</div></div>
+          <div class="req-value"><div><b>${escapeHtml(formatInvoicePartyName(customerTitle))}</b></div></div>
         </div>
         ${
           contractReference
@@ -797,10 +801,6 @@ const buildOrderDocumentHtml = (
                </div>`
             : ""
         }
-        <div class="req-row">
-          <div class="req-label"><b>Замовлення:</b></div>
-          <div class="req-value"><div>${escapeHtml(record.quoteNumber)}</div></div>
-        </div>
 
         <table class="items">
           <thead>
@@ -1249,17 +1249,23 @@ export default function OrdersProductionDetailsPage() {
       toast.error("Для договору не вистачає реквізитів замовника.");
       return;
     }
-    // Відмінюємо ПІБ та посаду замовника у родовий відмінок через OpenAI (з кешем у Supabase).
-    // Якщо API недоступний — fallback на оригінал, документ не зламається.
+    const printWindow = openDocumentWindow(documentTitleByKind[kind]);
+    if (printWindow.blocked) {
+      toast.error("Браузер заблокував нове вікно для документа.");
+      return;
+    }
+    // Родовий відмінок ПІБ і посади («в особі директора …») потрібен лише договору й СП:
+    // рахунок і акт не чекають на OpenAI. Недоступний API — fallback на оригінал.
+    const needsGenitive = kind === "contract" || kind === "specification";
     const [customerSignatoryNameGenitive, customerSignatoryRoleGenitive] = await Promise.all([
-      activeRecord.customerSignatoryName ? declineToGenitive(activeRecord.customerSignatoryName) : Promise.resolve(""),
-      activeRecord.customerSignatoryPosition
-        ? declineToGenitive(activeRecord.customerSignatoryPosition)
-        : Promise.resolve(""),
+      needsGenitive && activeRecord.customerSignatoryName ? declineToGenitive(activeRecord.customerSignatoryName) : "",
+      needsGenitive && activeRecord.customerSignatoryPosition ? declineToGenitive(activeRecord.customerSignatoryPosition) : "",
     ]);
+    printWindow.mark("відмінювання ПІБ");
     // Готуємо URL-и зображень погодженої візуалізації для вставки у Специфікацію.
     const visualizationImageUrls =
       kind === "specification" ? await resolveVisualizationImageUrls(activeRecord.approvedVisualizationAssets) : [];
+    printWindow.mark("візуалізації");
     const builtHtml = buildOrderDocumentHtml(activeRecord, kind, {
       customerSignatoryNameGenitive,
       customerSignatoryRoleGenitive,
@@ -1277,29 +1283,7 @@ export default function OrdersProductionDetailsPage() {
           `<body$1><div style="border:2px dashed #c2410c;color:#c2410c;padding:6px 10px;margin:0 0 12px;font:600 12px/1.4 sans-serif;text-align:center">ЧЕРНЕТКА — ще не погоджено бухгалтером або СЕО. Замовнику не надсилати.</div>`
         )
       : builtHtml;
-    const popup = window.open("", "_blank");
-    if (!popup) {
-      toast.error("Браузер заблокував нове вікно для документа.");
-      return;
-    }
-
-    let wroteDocument = false;
-    try {
-      popup.document.open();
-      popup.document.write(html);
-      popup.document.close();
-      popup.focus();
-      wroteDocument = true;
-    } catch {
-      // Fallback for browsers/extensions that prevent document.write into a popup.
-    }
-
-    if (!wroteDocument) {
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const objectUrl = URL.createObjectURL(blob);
-      popup.location.href = objectUrl;
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-    }
+    printWindow.show(html, { teamId, orderId: activeRecord.id });
 
     // Позначку «створено» ставимо лише при ПЕРШІЙ генерації. Повторне «Відкрити PDF»
     // не має зсувати дату створення (раніше contract_created_at перезаписувався на сьогодні).
