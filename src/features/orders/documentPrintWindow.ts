@@ -7,6 +7,34 @@ const escapeText = (value: string) =>
   value.replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char] ?? char);
 
 /**
+ * Поки документ готується, у вікні крутилка, а не порожня сторінка: інакше
+ * незрозуміло, чи клік спрацював. Друге речення проступає через 5 с — лише
+ * коли справді довго. Самий CSS, без скриптів.
+ */
+const loadingPageHtml = (label: string) => `<!doctype html>
+<html lang="uk"><head><meta charset="utf-8"><title>${escapeText(label)} — готуємо…</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; align-items: center; justify-content: center; background: #f3f4f6;
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #111827; }
+  .box { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 24px; }
+  .spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid #d1d5db; border-top-color: #111827;
+    animation: spin .8s linear infinite; }
+  .title { font-size: 16px; font-weight: 600; }
+  .hint { color: #6b7280; }
+  .slow { color: #6b7280; opacity: 0; animation: appear .3s ease 5s forwards; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes appear { to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+</style></head>
+<body><div class="box" role="status" aria-live="polite">
+  <div class="spinner" aria-hidden="true"></div>
+  <div class="title">${escapeText(label)}</div>
+  <div class="hint">Готуємо документ…</div>
+  <div class="slow">Довше, ніж зазвичай — чекаємо на сервер. Вікно не закривайте.</div>
+</div></body></html>`;
+
+/**
  * Вікно документа замовлення. Відкривається одразу в кліку, ще до будь-яких
  * запитів: браузер пускає спливне вікно лише кілька секунд після натискання.
  * Раніше CRM спершу чекала відмінювання ПІБ підписанта (холодна функція — до
@@ -21,10 +49,7 @@ export function openDocumentWindow(label: string) {
   const popup = window.open("", "_blank");
   if (popup) {
     try {
-      popup.document.write(
-        `<!doctype html><meta charset="utf-8"><title>${escapeText(label)}</title>` +
-          `<p style="font:14px system-ui,sans-serif;color:#6b7280;padding:32px">Готуємо: ${escapeText(label)}…</p>`
-      );
+      popup.document.write(loadingPageHtml(label));
     } catch {
       // Розширення буває забороняє писати у вікно — тоді покажемо документ через blob у show().
     }
