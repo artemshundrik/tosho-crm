@@ -121,9 +121,10 @@ export async function loadSpecificationItemTexts(
       "id,metadata",
       rows.map((row) => row.quote_item_id ?? "")
     ),
+    // Опис моделі живе в metadata.description; беремо лише його, metadata цілком важке.
     selectByIds<{ id: string; description: string | null }>(
       "catalog_models",
-      "id,description",
+      "id,description:metadata->>description",
       rows.map((row) => row.catalog_model_id ?? "")
     ),
     selectByIds<{ id: string; name: string | null }>(
