@@ -28,7 +28,6 @@ import {
   executorPreamble,
   executorRequisiteLines,
   splitVat,
-  VAT_RATE,
 } from "@/features/orders/orderExecutor";
 import {
   formatOrderDate,
@@ -78,6 +77,10 @@ import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { buildTelegramHref } from "@/lib/telegramContact";
 import { declineToGenitive } from "@/lib/nameDeclension";
 import { openDocumentWindow } from "@/features/orders/documentPrintWindow";
+import { buildSpecificationHtml, customerIbanWithBank, toAuthorityGenitive } from "@/features/orders/specificationDocument";
+import { loadSpecificationItemTexts, resolveVisualizationImageUrls } from "@/features/orders/specificationQueries";
+import { SpecificationItemTextsField } from "@/features/orders/order-details/SpecificationItemTextsField";
+import { useSpecificationItemTexts } from "@/features/orders/order-details/useSpecificationItemTexts";
 import { formatInvoicePartyName } from "@/features/orders/invoicePartyName";
 import { toSignatureInitials } from "@/lib/signatureFormat";
 import { supabase } from "@/lib/supabaseClient";
@@ -157,34 +160,6 @@ const isPreviewableAsset = (name?: string | null) => {
   return ["PNG", "JPG", "JPEG", "WEBP", "GIF", "BMP", "PDF", "TIF", "TIFF"].includes(extension);
 };
 
-const IMAGE_EXTENSIONS = new Set(["PNG", "JPG", "JPEG", "WEBP", "GIF", "BMP"]);
-
-const isImageAsset = (asset: OrderDesignAsset) => {
-  if (asset.mimeType && asset.mimeType.startsWith("image/")) return true;
-  return IMAGE_EXTENSIONS.has(getFileExtension(asset.label));
-};
-
-const resolveVisualizationImageUrls = async (assets: OrderDesignAsset[]): Promise<string[]> => {
-  const urls: string[] = [];
-  for (const asset of assets) {
-    if (!isImageAsset(asset)) continue;
-    if (asset.kind === "link") {
-      if (asset.url) urls.push(asset.url);
-      continue;
-    }
-    if (!asset.storageBucket || !asset.storagePath) continue;
-    try {
-      const signedUrl =
-        (await getSignedAttachmentUrl(asset.storageBucket, asset.storagePath, "preview", 60 * 60)) ??
-        (await getSignedAttachmentUrl(asset.storageBucket, asset.storagePath, "original", 60 * 60));
-      if (signedUrl) urls.push(signedUrl);
-    } catch (resolveError) {
-      console.error("Failed to resolve visualization signed URL", resolveError);
-    }
-  }
-  return urls;
-};
-
 const escapeHtml = (value?: string | number | null) =>
   String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -192,18 +167,6 @@ const escapeHtml = (value?: string | number | null) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-
-// Підстава підпису у тексті йде після «діє на підставі ...» → потрібен родовий відмінок.
-// Закритий набір значень із Select (Статут/Довіреність) відмінюємо детерміновано;
-// довільні значення (напр. для ФОП) лишаємо як є — їх вводять уже в потрібній формі.
-const toAuthorityGenitive = (value?: string | null) => {
-  const trimmed = (value ?? "").trim();
-  if (!trimmed) return "";
-  const normalized = trimmed.toLowerCase();
-  if (normalized === "статут" || normalized === "статуту") return "Статуту";
-  if (normalized === "довіреність" || normalized === "довіреності") return "Довіреності";
-  return trimmed;
-};
 
 const documentTitleByKind: Record<OrderDocumentKind, string> = {
   contract: "Договір",
@@ -238,12 +201,6 @@ const formatContractEndDate = (value?: string | null) => {
     month: "long",
     year: "numeric",
   });
-};
-
-const formatSlashDate = (value?: string | null) => {
-  const source = value ? new Date(value) : new Date();
-  const date = Number.isNaN(source.getTime()) ? new Date() : source;
-  return date.toLocaleDateString("uk-UA");
 };
 
 const formatPlainMoney = (value: number) =>
@@ -347,7 +304,7 @@ const buildOrderDocumentHtml = (
 ) => {
   const title = documentTitleByKind[kind];
   // Ручні перевизначення (редагує лише owner/seo): реальний паперовий договір може мати власний № і дату.
-  // Якщо їх не задано — fallback на номер замовлення CRM та дату створення.
+  // Якщо їх не задано — номер, виданий CRM (ДД/ММ/РРРР-NNN); у старих договорів без нього — номер замовлення.
   const effectiveContractNumber =
     options.contractNumberOverride?.trim() || record.contractNumber?.trim() || record.quoteNumber;
   const effectiveContractDateSource =
@@ -384,7 +341,8 @@ const buildOrderDocumentHtml = (
         </tr>`
     )
     .join("");
-  const customerBankDetails = record.customerBankDetails?.trim() || record.customerIban?.trim() || "Не вказано";
+  // Банк після IBAN — і в договорі, і в СП (REQ-322#p25).
+  const customerBankDetails = customerIbanWithBank(record);
   const customerTaxId = record.customerTaxId?.trim() || "Не вказано";
   const customerVatId = record.customerVatId?.trim() || "Не вказано";
   // Формуємо фразу про статус ПДВ зі ставки в карті клієнта.
@@ -408,8 +366,6 @@ const buildOrderDocumentHtml = (
         ? Math.round(record.contractProductionDays)
         : DEFAULT_PRODUCTION_WORK_DAYS;
   const contractAutoProlongation = options.contractAutoProlongation === true;
-  const specificationNumber = record.quoteNumber;
-  const specificationDateLong = formatContractDateParts(record.specificationCreatedAt ?? null);
   // Від кого документ: ТОВ (з ПДВ) чи ФОП (без ПДВ) — REQ-322#p1–p2.
   const executor = record.executor;
   const vatPayer = executor.vatPayer;
@@ -462,34 +418,6 @@ const buildOrderDocumentHtml = (
     effectiveBalanceTiming === "after_shipment"
       ? "після відвантаження продукції (отримання Замовником)"
       : "після готовності продукції, до відвантаження";
-  // Фраза про строк доплати у пункті СП. До відвантаження — без термінів; після відвантаження — N робочих днів.
-  const balanceTermPhrase =
-    effectiveBalanceTiming === "after_shipment"
-      ? `протягом ${effectiveBalanceDaysTerm} з дати відвантаження`
-      : "протягом 3-х робочих днів з дати готовності продукції";
-  const deliveryTerms = formatIncotermsLabel(record);
-  const specificationRows = record.items
-    .map((item, index) => {
-      const unitPriceWithVat = Number(item.unitPrice || 0);
-      const unitPriceWithoutVat = splitVat(unitPriceWithVat, vatPayer).net;
-      // Свідомо НЕ виводимо посилання на каталог постачальника (catalogSourceUrl) —
-      // це внутрішнє джерело, його не місце в документі для замовника.
-      const itemDetails = [
-        item.description?.trim() ? `<div style="margin-top:4px;font-size:12px;color:#374151;">${escapeHtml(item.description)}</div>` : "",
-        item.methodsSummary?.trim() ? `<div style="margin-top:4px;font-size:12px;color:#4b5563;">Нанесення: ${escapeHtml(item.methodsSummary)}</div>` : "",
-      ].join("");
-      return `
-        <tr>
-          <td>${index + 1}</td>
-          <td>${item.thumbUrl || item.imageUrl ? `<img src="${escapeHtml(item.thumbUrl || item.imageUrl)}" alt="${escapeHtml(item.name)}" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;margin-bottom:8px;" />` : ""}${escapeHtml(item.name)}${itemDetails}</td>
-          <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
-          <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithVat))}</td>
-          <td class="num">${escapeHtml(formatPlainMoney(vatPayer ? unitPriceWithoutVat : Number(item.lineTotal || 0)))}</td>
-          <td class="num">${escapeHtml(`${productionWorkingDays} р.д.`)}</td>
-        </tr>`;
-    })
-    .join("");
-
   // Контекст для генерації дефолтних секцій договору з поточних опцій/полів.
   const contractRenderContext = {
     productionWorkingDays,
@@ -558,130 +486,6 @@ const buildOrderDocumentHtml = (
             <p class="signature">${escapeHtml(customerSignatoryRole)} ____________________ ${escapeHtml(customerSignatureLabel)}</p>
           </div>
         </div>
-      `,
-    });
-  }
-
-  if (kind === "specification") {
-    return renderPrintDocument({
-      title: `${title} ${record.quoteNumber}`,
-      toolbarTitle: `СП ${record.quoteNumber}`,
-      styles: `
-          p { margin: 0 0 10px; font-size: 14px; }
-          .center { text-align: center; }
-          .small { font-size: 13px; }
-          .section-title { margin: 18px 0 10px; font-size: 15px; font-weight: 700; }
-          .topline { display: flex; justify-content: space-between; gap: 24px; margin: 14px 0 18px; font-size: 14px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-          th, td { border: 1px solid #111827; padding: 8px 10px; vertical-align: top; font-size: 13px; }
-          th { background: #f8fafc; font-weight: 700; text-align: left; }
-          .num { text-align: right; white-space: nowrap; }
-          .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 24px; }
-          .party-title { font-weight: 700; margin-bottom: 10px; }
-          .signature-line { margin-top: 20px; }
-          .subsection-title { margin: 10px 0 4px; font-size: 14px; font-weight: 700; }
-          ul { margin: 4px 0 10px 18px; padding: 0; }
-          li { margin: 0 0 6px; font-size: 14px; }
-          .visualization { margin: 18px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
-          .visualization img { max-width: 100%; max-height: 320px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff; }
-          @media print {
-            .visualization { page-break-inside: avoid; }
-            .visualization img { max-height: 260px; }
-          }
-      `,
-      bodyHtml: `
-          <div class="center small">Додаток № ${escapeHtml(specificationNumber)}</div>
-          <div class="center small">До Договору на виготовлення та поставку рекламно-сувенірної продукції</div>
-          <div class="center small">№${escapeHtml(effectiveContractNumber)} від ${escapeHtml(formatSlashDate(effectiveContractDateSource))}</div>
-
-          <div class="topline">
-            <div>м. Київ</div>
-            <div>«${escapeHtml(specificationDateLong.day)}» ${escapeHtml(specificationDateLong.monthLabel)} ${escapeHtml(specificationDateLong.year)} р.</div>
-          </div>
-
-          <p>${escapeHtml(executorPreambleText)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, що діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони, разом - Сторони, підписали цей Додаток до Договору про наступне:</p>
-
-          <div class="section-title center">1. СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
-
-          <table>
-            <thead>
-              <tr>
-                <th style="width:48px;">№</th>
-                <th>Назва продукції та характеристика</th>
-                <th style="width:110px;">К-ть продукції, шт.</th>
-                <th style="width:120px;">${vatPayer ? "Вартість з ПДВ, грн" : "Ціна 1 шт, грн"}</th>
-                <th style="width:140px;">${vatPayer ? "Ціна 1 шт без ПДВ, грн" : "Вартість, грн"}</th>
-                <th style="width:120px;">Строки виконання робіт</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${specificationRows}
-              <tr>
-                <td colspan="3"><b>${vatPayer ? "Загальна вартість з ПДВ" : "Загальна вартість, без ПДВ"}</b></td>
-                ${vatPayer ? `<td class="num"><b>${escapeHtml(formatPlainMoney(totalWithVat))}</b></td><td colspan="2"></td>` : `<td></td><td class="num"><b>${escapeHtml(formatPlainMoney(totalWithVat))}</b></td><td></td>`}
-              </tr>
-            </tbody>
-          </table>
-
-          ${
-            (options.visualizationImageUrls ?? []).length > 0
-              ? `<div class="visualization">
-            ${(options.visualizationImageUrls ?? [])
-              .map(
-                (src) =>
-                  `<img src="${escapeHtml(src)}" alt="Візуалізація" />`
-              )
-              .join("")}
-          </div>`
-              : ""
-          }
-
-          <div class="section-title">2. ВАРТІСТЬ РОБІТ ТА СТРОКИ ВИГОТОВЛЕННЯ ПРОДУКЦІЇ</div>
-          <div class="subsection-title">2.1. Загальна вартість виготовлення Продукції</div>
-          <ul>
-            ${
-              vatPayer
-                ? `<li>Загальна вартість робіт з виготовлення продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} грн, враховуючи ПДВ ${VAT_RATE}%.</li>
-            <li>Вартість робіт без ПДВ складає ${escapeHtml(formatPlainMoney(totalWithoutVat))} грн.</li>`
-                : `<li>Загальна вартість робіт з виготовлення продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} грн, без ПДВ (Виконавець не є платником ПДВ).</li>`
-            }
-          </ul>
-          <div class="subsection-title">2.2. Терміни поставки Продукції</div>
-          <ul>
-            <li>Термін виготовлення продукції складає ${productionWorkingDays} робочих днів з дати затвердження оригінал-макету до друку.</li>
-          </ul>
-
-          <div class="section-title">3. ПОРЯДОК ОПЛАТИ ВАРТОСТІ ПРОДУКЦІЇ</div>
-          <div class="subsection-title">3.1. Умови оплати</div>
-          <ul>
-            <li>Оплата продукції здійснюється Замовником на умовах ${escapeHtml(paymentTerms.label)}: ${paymentTerms.advance}% (${escapeHtml(formatPlainMoney(paymentTerms.advanceAmount))} грн${vatPayer ? " з урахуванням ПДВ" : ""}) перед запуском та ${paymentTerms.balance}% (${escapeHtml(formatPlainMoney(paymentTerms.balanceAmount))} грн${vatPayer ? " з урахуванням ПДВ" : ""}) — ${escapeHtml(balanceTimingPhrase)}, ${escapeHtml(balanceTermPhrase)}.</li>
-            <li>Спосіб оплати: ${escapeHtml(record.paymentRail || "Не вказано")}.</li>
-          </ul>
-          <div class="subsection-title">3.2. Умови доставки Продукції</div>
-          <ul>
-            <li>Доставка продукції здійснюється на умовах ${escapeHtml(deliveryTerms)}.</li>
-          </ul>
-
-          <div class="section-title">4. АДРЕСИ І РЕКВІЗИТИ СТОРІН</div>
-          <div class="signature-grid">
-            <div>
-              <div class="party-title">ВИКОНАВЕЦЬ:</div>
-              ${executorLinesHtml("Юридична адреса: ")}
-              <p class="signature-line">${escapeHtml(executor.signatoryPositionDisplay)}</p>
-              <p>__________________________ ${escapeHtml(executor.signatureLabel)}</p>
-            </div>
-            <div>
-              <div class="party-title">ЗАМОВНИК:</div>
-              <p>${escapeHtml(customerTitle)}</p>
-              <p>Юридична адреса: ${escapeHtml(record.customerLegalAddress || "Не вказано")}</p>
-              <p>Код ЄДРПОУ: ${escapeHtml(customerTaxId)}</p>
-              <p>ІПН: ${escapeHtml(customerVatId)}</p>
-              <p>IBAN: ${escapeHtml(customerBankDetails)}</p>
-              <p>${escapeHtml(customerVatStatus)}</p>
-              <p class="signature-line">${escapeHtml(customerSignatoryRole)}</p>
-              <p>______________________ ${escapeHtml(customerSignatureLabel)}</p>
-            </div>
-          </div>
       `,
     });
   }
@@ -968,6 +772,7 @@ export default function OrdersProductionDetailsPage() {
   // тож умови партії (оплата, строки, доставка) задаються саме тут.
   const [specDialogOpen, setSpecDialogOpen] = useState(false);
   const [specDialogSubmitting, setSpecDialogSubmitting] = useState(false);
+  const specItemTexts = useSpecificationItemTexts(teamId ?? null, record, specDialogOpen);
   const [specPaymentMethodId, setSpecPaymentMethodId] = useState("bank_uah");
   const [specDialogError, setSpecDialogError] = useState<string | null>(null);
   const [specPrepaymentPctInput, setSpecPrepaymentPctInput] = useState("70");
@@ -1264,31 +1069,12 @@ export default function OrdersProductionDetailsPage() {
       needsGenitive && activeRecord.customerSignatoryPosition ? declineToGenitive(activeRecord.customerSignatoryPosition) : "",
     ]);
     printWindow.mark("відмінювання ПІБ");
-    // Готуємо URL-и зображень погодженої візуалізації для вставки у Специфікацію.
-    const visualizationImageUrls =
-      kind === "specification" ? await resolveVisualizationImageUrls(activeRecord.approvedVisualizationAssets) : [];
-    printWindow.mark("візуалізації");
-    const builtHtml = buildOrderDocumentHtml(activeRecord, kind, {
-      customerSignatoryNameGenitive,
-      customerSignatoryRoleGenitive,
-      visualizationImageUrls,
-      ...extraOptions,
-    });
-    // Непогоджений договір чи СП друкуються з плашкою «чернетка» (REQ-322#p6):
-    // надіслати PDF повз погодження тоді видно з першого погляду.
-    const unapproved =
-      (kind === "contract" || kind === "specification") &&
-      !isDocumentCleared(getDocumentApprovalState(activeRecord, kind).state);
-    const html = unapproved
-      ? builtHtml.replace(
-          /<body([^>]*)>/i,
-          `<body$1><div style="border:2px dashed #c2410c;color:#c2410c;padding:6px 10px;margin:0 0 12px;font:600 12px/1.4 sans-serif;text-align:center">ЧЕРНЕТКА — ще не погоджено бухгалтером або СЕО. Замовнику не надсилати.</div>`
-        )
-      : builtHtml;
-    printWindow.show(html, { teamId, orderId: activeRecord.id });
 
-    // Позначку «створено» ставимо лише при ПЕРШІЙ генерації. Повторне «Відкрити PDF»
-    // не має зсувати дату створення (раніше contract_created_at перезаписувався на сьогодні).
+    // Позначку «створено» ставимо ДО збирання документа і лише при першій генерації:
+    // номер договору (ДД/ММ/РРРР-NNN) і № СП видає тригер у цю мить, і вони мають
+    // стояти вже в першому надрукованому примірнику. Повторне «Відкрити PDF» дату
+    // створення не зсуває.
+    let printedRecord = activeRecord;
     const alreadyCreated =
       kind === "contract"
         ? Boolean(activeRecord.contractCreatedAt)
@@ -1303,23 +1089,61 @@ export default function OrdersProductionDetailsPage() {
       extraOptions.markCreated !== false
     ) {
       try {
-        const createdAt = await markOrderDocumentCreated({
-          teamId,
-          orderId: activeRecord.id,
-          documentKind: kind,
-        });
+        const created = await markOrderDocumentCreated({ teamId, orderId: activeRecord.id, documentKind: kind });
+        const patch =
+          kind === "contract"
+            ? {
+                contractCreatedAt: created.createdAt,
+                contractNumber: created.contractNumber ?? activeRecord.contractNumber,
+                contractDate: created.contractDate ?? activeRecord.contractDate,
+              }
+            : { specificationCreatedAt: created.createdAt, specificationNumber: created.specificationNumber };
+        printedRecord = { ...activeRecord, ...patch };
+        printedRecord = { ...printedRecord, docs: normalizeDocumentDocs(printedRecord) };
         setRecord((current) => {
           if (!current || current.id !== activeRecord.id) return current;
-          const next =
-            kind === "contract"
-              ? { ...current, contractCreatedAt: createdAt }
-              : { ...current, specificationCreatedAt: createdAt };
+          const next = { ...current, ...patch };
           return { ...next, docs: normalizeDocumentDocs(next) };
         });
       } catch (markError: unknown) {
         toast.error(markError instanceof Error ? markError.message : "Документ відкрито, але не вдалося зберегти позначку створення.");
       }
     }
+
+    let builtHtml: string;
+    if (kind === "specification") {
+      const [visualizationImageUrls, itemTexts] = await Promise.all([
+        resolveVisualizationImageUrls(printedRecord.approvedVisualizationAssets),
+        teamId ? loadSpecificationItemTexts(teamId, [printedRecord]).catch(() => []) : [],
+      ]);
+      printWindow.mark("візуалізації й тексти позицій");
+      builtHtml = buildSpecificationHtml({
+        records: [printedRecord],
+        specificationNumber: printedRecord.specificationNumber,
+        itemTexts: new Map(itemTexts.map((entry) => [entry.itemId, entry.text])),
+        visualizationImageUrls,
+        customerSignatoryNameGenitive,
+        customerSignatoryRoleGenitive,
+      });
+    } else {
+      builtHtml = buildOrderDocumentHtml(printedRecord, kind, {
+        customerSignatoryNameGenitive,
+        customerSignatoryRoleGenitive,
+        ...extraOptions,
+      });
+    }
+    // Непогоджений договір чи СП друкуються з плашкою «чернетка» (REQ-322#p6):
+    // надіслати PDF повз погодження тоді видно з першого погляду.
+    const unapproved =
+      (kind === "contract" || kind === "specification") &&
+      !isDocumentCleared(getDocumentApprovalState(printedRecord, kind).state);
+    const html = unapproved
+      ? builtHtml.replace(
+          /<body([^>]*)>/i,
+          `<body$1><div style="border:2px dashed #c2410c;color:#c2410c;padding:6px 10px;margin:0 0 12px;font:600 12px/1.4 sans-serif;text-align:center">ЧЕРНЕТКА — ще не погоджено бухгалтером або СЕО. Замовнику не надсилати.</div>`
+        )
+      : builtHtml;
+    printWindow.show(html, { teamId, orderId: printedRecord.id });
   };
 
   // Договір спершу відкриває модал параметрів (строки, пролонгація, оплата), а вже звідти — генерацію PDF.
@@ -1339,8 +1163,8 @@ export default function OrdersProductionDetailsPage() {
       record.balanceDaysAfterShipment !== null ? String(record.balanceDaysAfterShipment) : "3"
     );
     setContractBalanceDaysKind(record.balanceDaysKind);
-    // Дефолти: ручний № / дата, інакше номер замовлення CRM і дата створення (або сьогодні).
-    setContractNumberInput(record.contractNumber?.trim() || record.quoteNumber);
+    // Порожній № — його видасть CRM при створенні: ДД/ММ/РРРР-NNN за датою договору (REQ-322#p23).
+    setContractNumberInput(record.contractNumber?.trim() ?? "");
     setContractDateInput(
       (record.contractDate || record.contractCreatedAt || new Date().toISOString()).slice(0, 10)
     );
@@ -1929,7 +1753,7 @@ export default function OrdersProductionDetailsPage() {
                     id="contract-number"
                     value={contractNumberInput}
                     onChange={(e) => setContractNumberInput(e.target.value)}
-                    placeholder={record.quoteNumber}
+                    placeholder="ДД/ММ/РРРР-NNN — видасть CRM"
                     disabled={!isCeo}
                   />
                 </div>
@@ -1946,8 +1770,8 @@ export default function OrdersProductionDetailsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {isCeo
-                  ? "Якщо паперовий договір вже існує — встав його реальні № і дату. Інакше залишиться номер замовлення CRM і дата створення."
-                  : "Змінювати № і дату договору може лише CEO або власник. Зараз підставляться номер замовлення CRM і дата створення."}
+                  ? "Якщо паперовий договір вже існує — встав його реальні № і дату. Інакше CRM видасть номер за датою договору: ДД/ММ/РРРР-001, -002…"
+                  : "Змінювати № і дату договору може лише CEO або власник. CRM видасть номер за датою договору: ДД/ММ/РРРР-001, -002…"}
               </p>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
@@ -2233,7 +2057,7 @@ export default function OrdersProductionDetailsPage() {
                 placeholder={`Напр. ${DEFAULT_PRODUCTION_WORK_DAYS}`}
               />
               <p className="text-xs text-muted-foreground">
-                Іде в колонку «Строки виконання робіт» і в п. 2.2 СП. Це ж число використовує договір.
+                Іде в п. 2.2 СП: «до N робочих днів». Це ж число використовує договір.
               </p>
             </div>
 
@@ -2265,9 +2089,11 @@ export default function OrdersProductionDetailsPage() {
                   onChange={(e) => setSpecIncotermsPlaceInput(e.target.value)}
                   placeholder="Напр. склад НП, Київ"
                 />
-                <p className="text-xs text-muted-foreground">Іде в п. 3.2 СП разом із базисом Incoterms.</p>
+                <p className="text-xs text-muted-foreground">Іде в п. 2.4 СП разом із базисом Incoterms.</p>
               </div>
             </div>
+
+            {isCashlessPaymentMethod(specPaymentMethodId) ? <SpecificationItemTextsField state={specItemTexts} /> : null}
           </div>
           {specDialogError ? (
             <div className="tone-warning-subtle rounded-lg border px-3 py-2 text-sm tone-text-warning">{specDialogError}</div>
@@ -2347,6 +2173,7 @@ export default function OrdersProductionDetailsPage() {
                       incotermsPlace,
                     });
                     setRecord((current) => (current && current.id === record.id ? nextRecord : current));
+                    await specItemTexts.save();
                   }
                   // Умови збережені — закриваємо модалку в будь-якому разі. Якщо СП усе ще
                   // заблокована (напр. лишили готівку), генерація покаже причину на сторінці.

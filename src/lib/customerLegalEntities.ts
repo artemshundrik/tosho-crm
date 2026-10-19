@@ -9,6 +9,8 @@ export type CustomerLegalEntity = {
   vatRate: string;
   cardNumber: string;
   iban: string;
+  /** Банк рахунку — у реквізитах СП іде після IBAN: «IBAN: UA… в АТ КБ «ПриватБанк»». */
+  bankName: string;
   /** Combined "Прізвище Імʼя По-батькові" — похідна від трьох полів нижче; тягнеться у договір/СП. */
   signatoryName: string;
   signatoryLastName: string;
@@ -88,6 +90,7 @@ type CustomerLegalEntityRow = {
   vat_rate?: unknown;
   card_number?: unknown;
   iban?: unknown;
+  bank_name?: unknown;
   signatory_name?: unknown;
   signatory_last_name?: unknown;
   signatory_first_name?: unknown;
@@ -117,6 +120,7 @@ export const createEmptyCustomerLegalEntity = (): CustomerLegalEntity => ({
   vatRate: "none",
   cardNumber: "",
   iban: "",
+  bankName: "",
   signatoryName: "",
   signatoryLastName: "",
   signatoryFirstName: "",
@@ -150,6 +154,7 @@ const normalizeLegalEntity = (value: CustomerLegalEntityRow): CustomerLegalEntit
     vatRate: normalizeVatRate(value.vat_rate),
     cardNumber: typeof value.card_number === "string" ? value.card_number : "",
     iban: typeof value.iban === "string" ? value.iban : "",
+    bankName: typeof value.bank_name === "string" ? value.bank_name : "",
     signatoryName,
     signatoryLastName: nameParts.last,
     signatoryFirstName: nameParts.first,
@@ -167,6 +172,7 @@ const hasMeaningfulLegalEntity = (value: CustomerLegalEntity) =>
       value.legalAddress.trim() ||
       value.cardNumber.trim() ||
       value.iban.trim() ||
+      value.bankName.trim() ||
       value.signatoryName.trim() ||
       value.signatoryLastName.trim() ||
       value.signatoryFirstName.trim() ||
@@ -223,6 +229,7 @@ export const serializeCustomerLegalEntities = (value: CustomerLegalEntity[]) =>
         vat_rate: entity.vatRate === "none" ? null : Number(entity.vatRate),
         card_number: entity.cardNumber.trim() || null,
         iban: entity.iban.trim() || null,
+        bank_name: entity.bankName.trim() || null,
         signatory_name: combinedName || null,
         signatory_last_name: entity.signatoryLastName.trim() || null,
         signatory_first_name: entity.signatoryFirstName.trim() || null,

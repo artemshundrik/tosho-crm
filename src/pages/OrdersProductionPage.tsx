@@ -228,10 +228,8 @@ export default function OrdersProductionPage() {
       const markedById = await openGroupedSpecification(teamId, selectedRecords);
       setRecords((current) =>
         current.map((record) => {
-          const specificationCreatedAt = markedById.get(record.id);
-          return specificationCreatedAt
-            ? { ...record, specificationCreatedAt, docs: { ...record.docs, specification: true } }
-            : record;
+          const mark = markedById.get(record.id);
+          return mark ? { ...record, ...mark, docs: { ...record.docs, specification: true } } : record;
         })
       );
       setSelectedIds([]);

@@ -3186,6 +3186,7 @@ export type Database = {
           position: number | null
           qty: number
           quote_item_id: string | null
+          spec_text: string | null
           team_id: string
           thumb_url: string | null
           unit: string | null
@@ -3205,6 +3206,7 @@ export type Database = {
           position?: number | null
           qty?: number
           quote_item_id?: string | null
+          spec_text?: string | null
           team_id: string
           thumb_url?: string | null
           unit?: string | null
@@ -3224,6 +3226,7 @@ export type Database = {
           position?: number | null
           qty?: number
           quote_item_id?: string | null
+          spec_text?: string | null
           team_id?: string
           thumb_url?: string | null
           unit?: string | null
@@ -3283,6 +3286,7 @@ export type Database = {
           specification_signed_at: string | null
           specification_signed_by: string | null
           specification_signed_via: string | null
+          specification_number: number | null
           our_legal_entity_id: string | null
           our_legal_entity: Json | null
           closing_document: string | null
@@ -3365,6 +3369,7 @@ export type Database = {
           specification_signed_at?: string | null
           specification_signed_by?: string | null
           specification_signed_via?: string | null
+          specification_number?: number | null
           our_legal_entity_id?: string | null
           our_legal_entity?: Json | null
           closing_document?: string | null
@@ -3447,6 +3452,7 @@ export type Database = {
           specification_signed_at?: string | null
           specification_signed_by?: string | null
           specification_signed_via?: string | null
+          specification_number?: number | null
           our_legal_entity_id?: string | null
           our_legal_entity?: Json | null
           closing_document?: string | null

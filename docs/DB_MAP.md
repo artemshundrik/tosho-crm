@@ -228,6 +228,12 @@ Practical implication:
   - customer/lead info
   - approved design assets derived from design-task activity
 
+- Document numbers are assigned by the `orders_document_numbers` trigger ([scripts/orders-specification-numbering.sql](/Users/artem/Projects/tosho-crm/scripts/orders-specification-numbering.sql)), at the moment `contract_created_at` / `specification_created_at` first goes non-null:
+  - `contract_number` — `DD/MM/YYYY-NNN`, counter per contract date within the team; a hand-typed number is kept
+  - `specification_number` — 1, 2, 3… within the governing contract (same `customer_id` + `our_legal_entity_id`, СП created after that contract); a grouped СП stamps one number on all its orders
+- `order_items.spec_text` — manager's edit of the item's text in the СП; `null` = default text built in [specificationQueries.ts](/Users/artem/Projects/tosho-crm/src/features/orders/specificationQueries.ts)
+- Customer bank name for the СП lives in `customers.legal_entities[].bank_name` (jsonb, no column)
+
 Practical implication:
 - production bugs often need cross-table and cross-entity analysis, not just `orders` inspection
 

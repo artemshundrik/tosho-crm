@@ -1448,6 +1448,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           onChange={(iban) => updateLegalEntity(activeLegalEntityIndex, { iban })}
                         />
                       </div>
+                      <div className="grid gap-2">
+                        <Label>Банк <span className="text-3xs font-normal text-muted-foreground">для реквізитів СП</span></Label>
+                        <Input
+                          value={activeLegalEntity.bankName}
+                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { bankName: e.target.value })}
+                          placeholder="Напр. АТ КБ «ПриватБанк»"
+                        />
+                      </div>
                     </div>
 
                     {/* ПІБ підписанта — трьома окремими полями: повне ПІБ тягнеться у договір/СП

@@ -14,14 +14,13 @@ const ORGANIZATION_FORMS: [RegExp, string][] = [
   [/^ФОП(?=[\s«"])/i, "Фізична особа-підприємець"],
 ];
 
+/** «ТОВ «АВАНТІ ГРУП»» → «Товариство з обмеженою відповідальністю «АВАНТІ ГРУП»» (преамбула СП). */
+export function expandOrganizationForm(name?: string | null): string {
+  const value = (name ?? "").replace(/\s+/g, " ").trim();
+  const form = ORGANIZATION_FORMS.find(([pattern]) => pattern.test(value));
+  return form ? value.replace(form[0], form[1]) : value;
+}
+
 export function formatInvoicePartyName(name?: string | null): string {
-  let value = (name ?? "").replace(/\s+/g, " ").trim();
-  if (!value) return "";
-  for (const [pattern, full] of ORGANIZATION_FORMS) {
-    if (pattern.test(value)) {
-      value = value.replace(pattern, full);
-      break;
-    }
-  }
-  return value.replace(/[«»“”„]/g, '"').toLocaleUpperCase("uk-UA");
+  return expandOrganizationForm(name).replace(/[«»“”„]/g, '"').toLocaleUpperCase("uk-UA");
 }

@@ -354,7 +354,7 @@ const CEILINGS = {
   // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
   "src/pages/OrdersCustomersPage.tsx": 4277,
   "src/pages/TeamMembersPage.tsx": 2633,
-  "src/pages/OrdersProductionDetailsPage.tsx": 2456,
+  "src/pages/OrdersProductionDetailsPage.tsx": 2251,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2848,
   "src/features/finances/FinanceExpenses.tsx": 2439,
   "src/layout/AppLayout.tsx": 3000,
