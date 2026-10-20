@@ -279,7 +279,7 @@ export async function listOrdersForFinance(teamId: string, userId?: string | nul
 // ---------------------------------------------------------------------------
 
 const PAYMENT_COLUMNS =
-  "id,team_id,account_id,quote_id,invoice_id,amount,currency,fx_rate,uah_equivalent,paid_at,source,bank_txn_ref,notes,entered_by,created_at,updated_at";
+  "id,team_id,account_id,quote_id,invoice_id,amount,currency,fx_rate,uah_equivalent,paid_at,source,bank_txn_ref,notes,entered_by,created_at,updated_at,order_id";
 
 type PaymentRow = {
   id: string;
@@ -298,6 +298,7 @@ type PaymentRow = {
   entered_by: string | null;
   created_at: string | null;
   updated_at: string | null;
+  order_id: string | null;
 };
 
 const toNumber = (value: number | string | null): number => {
@@ -329,6 +330,7 @@ const normalizePayment = (row: PaymentRow): FinancePayment => ({
   enteredBy: row.entered_by ?? null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  orderId: row.order_id ?? null,
 });
 
 export async function listPayments(teamId: string): Promise<FinancePayment[]> {
@@ -337,6 +339,9 @@ export async function listPayments(teamId: string): Promise<FinancePayment[]> {
     .from("finance_payments")
     .select(PAYMENT_COLUMNS)
     .eq("team_id", teamId)
+    // Скасований у замовленні платіж (REQ-322#p26) — не гроші: його історія
+    // живе в картці замовлення, а суми Фінансів рахують лише нескасовані.
+    .is("cancelled_at", null)
     .order("paid_at", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw error;

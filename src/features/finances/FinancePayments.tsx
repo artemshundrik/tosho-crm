@@ -196,7 +196,7 @@ export function FinancePayments({ teamId, userId, canSeeSensitive }: FinancePaym
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <EditIconButton onClick={() => openEdit(payment)} />
-                  <DeleteIconButton onClick={() => void remove(payment)} />
+                  {payment.orderId ? null : <DeleteIconButton onClick={() => void remove(payment)} />}
                 </div>
               </div>
             );

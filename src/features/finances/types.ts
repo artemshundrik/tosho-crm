@@ -103,6 +103,8 @@ export type FinancePayment = {
   enteredBy: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  /** Внесено із замовлення (REQ-322#p26): видаляти тут не можна, лише скасувати там. */
+  orderId: string | null;
 };
 
 export const PAYMENT_SOURCE_LABELS: Record<FinancePaymentSource, string> = {
