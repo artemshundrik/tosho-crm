@@ -15,6 +15,8 @@ export type NotificationCategoryKey =
   | "order_approval_request"
   | "order_approval_decision"
   | "order_shipment_blocked"
+  | "order_payment"
+  | "order_payment_check"
   | "design"
   | "contractor"
   | "team_events"
@@ -92,6 +94,16 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     key: "order_shipment_blocked",
     label: "Готово, але не оплачено",
     description: "Замовлення готове, а відвантажити не можна: бракує оплати до відвантаження",
+  },
+  {
+    key: "order_payment",
+    label: "Оплати замовлень",
+    description: "Бухгалтерія внесла або скасувала оплату вашого замовлення",
+  },
+  {
+    key: "order_payment_check",
+    label: "Перевірити оплату",
+    description: "Менеджер каже, що замовник оплатив, — перевірте надходження",
   },
   {
     key: "design",
@@ -234,7 +246,7 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     case "quote_markup_decision":
       return isQuoteWorker;
     // Запит рахунку бачать ті, хто його виписує або має знати (REQ-322#p10):
-    // власник, СЕО, бухгалтер, головний і молодший бухгалтер (Артем, 15.10.2026).
+    // власник, СЕО, бухгалтер і головний бухгалтер; молодшого прибрано (REQ-322#p16).
     // Той самий круг пускає в номер рахунку tosho.is_order_invoice_issuer.
     case "order_invoice_request":
       return isInvoiceIssuer;
@@ -250,6 +262,12 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // Менеджеру — нагадати замовнику, логісту — не везти.
     case "order_shipment_blocked":
       return isQuoteWorker || ["logistics", "head_of_logistics"].includes(job);
+    // Внесену чи скасовану оплату — менеджеру замовлення (REQ-322#p26).
+    case "order_payment":
+      return isQuoteWorker;
+    // «Замовник каже, що оплатив» — тим, хто вносить оплати.
+    case "order_payment_check":
+      return isInvoiceIssuer;
     // Збут / прорахунки / контрагенти — лише ті, хто з цим працює.
     case "customer_followup":
     case "quote_deadline":

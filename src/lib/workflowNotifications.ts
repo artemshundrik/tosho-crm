@@ -716,9 +716,9 @@ export async function notifyMarkupApprovalDecided(params: {
 /* ------------------------------------------------------------------ */
 
 /**
- * Хто отримує запит рахунку: власник, СЕО, бухгалтер, головний і молодший
- * бухгалтер (Артем, 15.10.2026). Той самий круг вносить номер з BAS —
- * tosho.is_order_invoice_issuer, canIssueOrderInvoice.
+ * Хто отримує запит рахунку: власник, СЕО, бухгалтер і головний бухгалтер;
+ * молодшого прибрано (REQ-322#p16). Той самий круг вносить номер з BAS і
+ * оплати — tosho.is_order_invoice_issuer, canIssueOrderInvoice.
  */
 function pickInvoiceIssuerUserIds(rows: TeamMemberRoleRow[]) {
   return rows
@@ -782,6 +782,75 @@ export async function notifyOrderInvoiceDecided(params: {
     href: `/orders/production/${params.orderId}`,
     type: issued ? "success" : "warning",
     category: "order_invoice_decision",
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Оплати замовлення (REQ-322#p26)                                     */
+/* ------------------------------------------------------------------ */
+
+type OrderPaymentNotice = {
+  orderId: string;
+  orderNumber: string;
+  /** Готовий рядок: «49 680,00 грн». */
+  amountLabel: string;
+  statusLabel: string;
+  managerUserId: string | null;
+  actorUserId: string | null;
+  actorName: string | null;
+};
+
+/** Менеджерові замовлення: бухгалтерія внесла оплату. Собі автор не отримує. */
+export async function notifyOrderPaymentRecorded(params: OrderPaymentNotice) {
+  if (!params.managerUserId || params.managerUserId === params.actorUserId) return;
+  const who = params.actorName?.trim() || "Бухгалтерія";
+  await notifyUsers({
+    userIds: [params.managerUserId],
+    title: `Оплата ${params.amountLabel} · ${params.orderNumber}`,
+    body: `${who} вніс(ла) оплату. Статус: ${params.statusLabel}.`,
+    href: `/orders/production/${params.orderId}`,
+    type: "success",
+    category: "order_payment",
+  });
+}
+
+export async function notifyOrderPaymentCancelled(params: OrderPaymentNotice & { reason: string }) {
+  if (!params.managerUserId || params.managerUserId === params.actorUserId) return;
+  const who = params.actorName?.trim() || "Бухгалтерія";
+  await notifyUsers({
+    userIds: [params.managerUserId],
+    title: `Платіж ${params.amountLabel} скасовано · ${params.orderNumber}`,
+    body: `${who} скасував(ла) платіж: ${params.reason}. Статус: ${params.statusLabel}.`,
+    href: `/orders/production/${params.orderId}`,
+    type: "warning",
+    category: "order_payment",
+  });
+}
+
+/** Менеджер: «Замовник каже, що оплатив» — бухгалтерії перевірити виписку. */
+export async function notifyOrderPaymentCheckRequested(params: {
+  teamId: string;
+  orderId: string;
+  orderNumber: string;
+  /** Що мало прийти: «Передоплата 49 680,00 грн». */
+  dueLabel: string;
+  note: string;
+  actorUserId: string | null;
+  actorName: string | null;
+}) {
+  const members = await resolveTeamMembers(params.teamId);
+  const recipients = new Set(pickInvoiceIssuerUserIds(members));
+  if (params.actorUserId) recipients.delete(params.actorUserId);
+  if (recipients.size === 0) return;
+  const who = params.actorName?.trim() || "Менеджер";
+  const note = params.note.trim();
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: `Замовник каже, що оплатив · ${params.orderNumber}`,
+    body: `${who}: ${params.dueLabel}. Перевірте виписку й внесіть оплату.${note ? ` Коментар: ${note}` : ""}`,
+    href: `/orders/production/${params.orderId}`,
+    type: "warning",
+    category: "order_payment_check",
   });
 }
 

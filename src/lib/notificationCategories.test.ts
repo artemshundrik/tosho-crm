@@ -90,3 +90,20 @@ describe("канал за замовчуванням увімкнено", () => 
     expect(isChannelEnabled({}, "quote_markup_request", "push")).toBe(true);
   });
 });
+
+describe("оплати замовлень (REQ-322#p26)", () => {
+  const junior = { accessRole: "member", jobRole: "junior_accountant" };
+
+  it("«перевірити оплату» — лише тим, хто вносить оплати", () => {
+    expect(isCategoryVisibleForRole("order_payment_check", ROLES.accountant)).toBe(true);
+    expect(isCategoryVisibleForRole("order_payment_check", ROLES.chief)).toBe(true);
+    expect(isCategoryVisibleForRole("order_payment_check", ROLES.manager)).toBe(false);
+    expect(isCategoryVisibleForRole("order_payment_check", junior)).toBe(false);
+    expect(botIsCategoryVisibleForRole("order_payment_check", junior)).toBe(false);
+  });
+
+  it("внесену оплату бачить менеджер", () => {
+    expect(isCategoryVisibleForRole("order_payment", ROLES.manager)).toBe(true);
+    expect(botIsCategoryVisibleForRole("order_payment", ROLES.manager)).toBe(true);
+  });
+});
