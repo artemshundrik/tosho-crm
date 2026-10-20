@@ -34,16 +34,19 @@ export const MUTATING_RPCS = [
   "adjust_sample_stock_item",
   "archive_activity_log_all",
   "bot_submit_absence",
+  "cancel_order_payment",
   "capture_admin_observability_snapshot",
   "force_release_entity_lock",
   "next_design_task_number",
   "next_dev_request_number",
   "next_document_number",
+  "record_order_payment",
   "release_entity_lock",
   "request_entity_lock_release",
   "set_quote_status",
   "site_listing_commit_batch",
   "site_listing_decide",
+  "undo_order_payment",
 ] as const;
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

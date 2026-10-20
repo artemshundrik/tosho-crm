@@ -1,4 +1,3 @@
-import { format, subDays } from "date-fns";
 import { useMemo, useRef, useState } from "react";
 
 import { Loader2 } from "@/components/icons/appIcons";
@@ -22,6 +21,11 @@ const amountFormat = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, 
 
 /** Число для поля суми: «49 680,00» звичайними пробілами — так його й друкують. */
 export const formatAmountInput = (value: number) => amountFormat.format(value).replace(/[  ]/g, " ");
+
+const kyivDayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Kiev" });
+
+/** Київський календарний день (yyyy-MM-dd) — база перевіряє дату оплати саме за ним. */
+const kyivDay = (daysAgo = 0) => kyivDayFormat.format(new Date(Date.now() - daysAgo * 86_400_000));
 
 const dayMonth = (iso: string) => {
   const [, month, day] = iso.split("-");
@@ -68,8 +72,8 @@ export function OrderPaymentDialog({
   saving: boolean;
   onSubmit: (draft: OrderPaymentDraft) => Promise<boolean>;
 }) {
-  const today = format(new Date(), "yyyy-MM-dd");
-  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+  const today = kyivDay();
+  const yesterday = kyivDay(1);
   const chips = useMemo(() => quickAmounts(total, prePct, paid), [total, prePct, paid]);
   const amountRef = useRef<HTMLInputElement>(null);
 

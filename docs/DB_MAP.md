@@ -234,6 +234,16 @@ Practical implication:
 - `order_items.spec_text` — manager's edit of the item's text in the СП; `null` = default text built in [specificationQueries.ts](/Users/artem/Projects/tosho-crm/src/features/orders/specificationQueries.ts)
 - Customer bank name for the СП lives in `customers.legal_entities[].bank_name` (jsonb, no column)
 
+### Order payments ([scripts/order-payments.sql](/Users/artem/Projects/tosho-crm/scripts/order-payments.sql) + [order-payments-basis.sql](/Users/artem/Projects/tosho-crm/scripts/order-payments-basis.sql), REQ-322#p26)
+
+- One row in `finance_payments` per incoming payment; `order_id` links it to the order. The `finance_payments_link_order` trigger fills `order_id` from `quote_id` (matches `orders.quote_id` or `orders.id`), so a payment entered in Finances counts for the order too.
+- **`orders.payment_status` is derived, not typed.** After-trigger `finance_payments_sync_order` recomputes it from the sum of non-cancelled rows: `0` → `awaiting_payment`, `≥ total` → `fully_paid`, `≥ prepayment` (or prepayment 0 and sum > 0) → `partially_paid` (keeps `awaiting_balance` if already set), else `awaiting_payment`. Total = `order_payment_total`: `orders.total`, else the quote's total, else `sum(order_items.line_total)` (2 of 11 prod orders have `total = 0`). Prepayment = `round(total × pct / 100, 2)`, pct = `orders.prepayment_pct` → the newest contract with the same customer + our legal entity (as `buildContractByCustomerId`) → terms preset, empty terms = `70/30`. Changing `total` / `prepayment_pct` / `payment_terms` / `quote_id` recomputes (`orders_payment_basis_sync`). Client mirror: [orderPayments.ts](/Users/artem/Projects/tosho-crm/src/features/orders/orderPayments.ts) — change both together.
+- Once an order has payments, `orders_payment_status_guard` allows a manual change only `partially_paid` ↔ `awaiting_balance`; anything else raises. Writes without `auth.uid()` (service, crons) skip the guard.
+- On rows with `order_id`, a direct update (Finances) may change only date, account, payment-order № and notes; amount, currency, `quote_id`, `order_id` and `cancelled_*` are blocked by `finance_payments_guard_update`. An explicit `order_id` from another team is refused (`finance_payments_link_order`).
+- Cancel = soft: `cancelled_at`, `cancelled_by`, `cancel_reason`. Rows with `order_id` cannot be deleted (`finance_payments_guard_delete`) except by `undo_order_payment` (own payment, 30 s). Finances `listPayments` hides cancelled rows.
+- Write only via security-definer RPCs `record_order_payment` / `cancel_order_payment` / `undo_order_payment` — gated by `is_order_invoice_issuer` + `is_team_member`. `list_order_payments` returns account name and payment-order № only to invoice issuers or `has_finance_access`; others get `null`.
+- Internal GUC `tosho.payment_sync` marks writes coming from these functions so the guards let them through.
+
 Practical implication:
 - production bugs often need cross-table and cross-entity analysis, not just `orders` inspection
 

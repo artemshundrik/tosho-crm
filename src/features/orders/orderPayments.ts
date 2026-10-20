@@ -1,7 +1,8 @@
 /**
  * Оплати замовлення (REQ-322#p26): скільки внесено, скільки треба наперед і
  * який з цього статус. Ті самі правила рахує база у scripts/order-payments.sql
- * (order_prepayment_amount, order_payment_status_from_sum) — міняти лише разом.
+ * (order_payment_total, order_prepayment_amount, order_payment_status_from_sum; база суми —
+ * scripts/order-payments-basis.sql) — міняти лише разом.
  */
 import { ORDER_PAYMENT_TERMS_OPTIONS, ORDER_STATUS_SECTIONS } from "./config";
 

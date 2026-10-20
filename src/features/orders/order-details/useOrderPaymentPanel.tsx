@@ -15,6 +15,7 @@ import {
   type OrderPayment,
 } from "@/features/orders/orderPayments";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
+import { isCashLikePaymentMethod } from "@/features/orders/paymentRules";
 
 type PaymentAccounts = { accounts: Array<{ id: string; name: string }>; defaultId: string | null };
 
@@ -50,11 +51,12 @@ export function useOrderPaymentPanel({
   const loadAccounts = canEnter && enabled && !isForeignCurrency;
   const quoteId = record ? (record.linkedQuoteId ?? record.id) : null;
   const legalEntityId = record?.ourLegalEntityId ?? null;
+  const prefer = record && isCashLikePaymentMethod(record.paymentMethodId) ? "cash" : "bank";
 
   useEffect(() => {
     if (!loadAccounts || !teamId || !quoteId) return;
     let active = true;
-    listOrderPaymentAccounts(teamId, legalEntityId, quoteId)
+    listOrderPaymentAccounts(teamId, legalEntityId, quoteId, prefer)
       .then((result) => {
         if (active) setAccounts(result);
       })
@@ -64,7 +66,7 @@ export function useOrderPaymentPanel({
     return () => {
       active = false;
     };
-  }, [loadAccounts, teamId, quoteId, legalEntityId]);
+  }, [loadAccounts, teamId, quoteId, legalEntityId, prefer]);
 
   const paymentLocked = payments.payments.some((payment) => !payment.cancelledAt);
   if (!record || !enabled) return { ledger: null, paymentLocked, dialogs: null };

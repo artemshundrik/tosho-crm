@@ -68,6 +68,15 @@ export function useOrderPayments({
   const recordRef = useRef(record);
   recordRef.current = record;
 
+  const flushPending = useCallback(() => {
+    const queue = pending.current;
+    pending.current = [];
+    for (const item of queue) {
+      clearTimeout(item.timer);
+      item.run();
+    }
+  }, []);
+
   const reload = useCallback(async () => {
     if (!orderId) return;
     try {
@@ -80,19 +89,12 @@ export function useOrderPayments({
   useEffect(() => {
     setPayments([]);
     setCheckRequested(false);
+    // Відкладене попереднього замовлення виконується одразу, а не наздоганяє нове.
+    flushPending();
     if (!orderId) return;
     setLoading(true);
     void reload().finally(() => setLoading(false));
-  }, [orderId, reload]);
-
-  const flushPending = useCallback(() => {
-    const queue = pending.current;
-    pending.current = [];
-    for (const item of queue) {
-      clearTimeout(item.timer);
-      item.run();
-    }
-  }, []);
+  }, [orderId, reload, flushPending]);
 
   useEffect(() => {
     window.addEventListener("pagehide", flushPending);
@@ -103,9 +105,8 @@ export function useOrderPayments({
   }, [flushPending]);
 
   const followUp = useCallback(
-    async (title: string, notify: (actorName: string | null) => Promise<void>) => {
-      const current = recordRef.current;
-      if (!current || !teamId) return;
+    async (current: DerivedOrderRecord, title: string, notify: (actorName: string | null) => Promise<void>) => {
+      if (!teamId) return;
       try {
         const actorName = await currentUserName();
         await Promise.all([
@@ -159,8 +160,10 @@ export function useOrderPayments({
         const result = await recordOrderPayment({ orderId, ...input });
         const amountLabel = formatUah(input.amount);
         const statusLabel = paymentStatusLabel(result.paymentStatus);
-        const run = () =>
-          void followUp(`Внесено оплату ${amountLabel} від ${dayMonth(input.paidAt)} · ${statusLabel}`, (actorName) =>
+        const run = () => {
+          // Менеджеру вже пішло «внесено» — «Скасувати» в тості лишив би хибне сповіщення.
+          toast.dismiss(result.paymentId);
+          void followUp(current, `Внесено оплату ${amountLabel} від ${dayMonth(input.paidAt)} · ${statusLabel}`, (actorName) =>
             notifyOrderPaymentRecorded({
               orderId: current.id,
               orderNumber: current.quoteNumber,
@@ -171,6 +174,7 @@ export function useOrderPayments({
               actorName,
             })
           );
+        };
         const item: PendingFollowUp = {
           paymentId: result.paymentId,
           run,
@@ -181,6 +185,7 @@ export function useOrderPayments({
         };
         pending.current.push(item);
         toast.success(`Внесено ${amountLabel}`, {
+          id: result.paymentId,
           description: `Статус: ${statusLabel}`,
           duration: FOLLOW_UP_DELAY_MS,
           action: { label: "Скасувати", onClick: () => void undo(result.paymentId) },
@@ -208,7 +213,7 @@ export function useOrderPayments({
         const amountLabel = formatUah(target.amount);
         const statusLabel = paymentStatusLabel(result.paymentStatus);
         toast.success(`Платіж ${amountLabel} скасовано`, { description: `Статус: ${statusLabel}` });
-        void followUp(`Скасовано платіж ${amountLabel} від ${dayMonth(target.paidAt)}: ${reason}`, (actorName) =>
+        void followUp(current, `Скасовано платіж ${amountLabel} від ${dayMonth(target.paidAt)}: ${reason}`, (actorName) =>
           notifyOrderPaymentCancelled({
             orderId: current.id,
             orderNumber: current.quoteNumber,
@@ -238,7 +243,7 @@ export function useOrderPayments({
       if (!current || !teamId) return;
       setCheckRequested(true);
       toast.success("Бухгалтерія перевірить надходження");
-      await followUp(`Замовник каже, що оплатив: ${dueLabel}${note.trim() ? ` · ${note.trim()}` : ""}`, (actorName) =>
+      await followUp(current, `Замовник каже, що оплатив: ${dueLabel}${note.trim() ? ` · ${note.trim()}` : ""}`, (actorName) =>
         notifyOrderPaymentCheckRequested({
           teamId,
           orderId: current.id,

@@ -86,12 +86,14 @@ export async function undoOrderPayment(paymentId: string): Promise<PaymentSummar
 export async function listOrderPaymentAccounts(
   teamId: string,
   legalEntityId: string | null,
-  quoteId: string | null
+  quoteId: string | null,
+  /** Безготівкове замовлення — спершу банківські рахунки, готівкове — каса. */
+  prefer: "bank" | "cash" = "bank"
 ): Promise<{ accounts: Array<{ id: string; name: string }>; defaultId: string | null }> {
   const { data, error } = await supabase
     .schema("tosho")
     .from("finance_accounts")
-    .select("id,name,legal_entity_id,currency,is_active,sort_order")
+    .select("id,name,kind,legal_entity_id,currency,is_active,sort_order")
     .eq("team_id", teamId)
     .eq("is_active", true)
     .eq("currency", "UAH")
@@ -100,6 +102,8 @@ export async function listOrderPaymentAccounts(
   if (error) throw toOrderPaymentError(error);
   const accounts = (data ?? [])
     .filter((row) => !legalEntityId || !row.legal_entity_id || row.legal_entity_id === legalEntityId)
+    // Стабільне сортування: свій вид рахунку вгору, решта в порядку Фінансів.
+    .sort((a, b) => Number(b.kind === prefer) - Number(a.kind === prefer))
     .map((row) => ({ id: row.id, name: row.name }));
 
   let intended: string | null = null;

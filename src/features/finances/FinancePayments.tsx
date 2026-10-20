@@ -195,8 +195,13 @@ export function FinancePayments({ teamId, userId, canSeeSensitive }: FinancePaym
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <EditIconButton onClick={() => openEdit(payment)} />
-                  {payment.orderId ? null : <DeleteIconButton onClick={() => void remove(payment)} />}
+                  {/* Платіж замовлення виправляють у замовленні: скасувати з причиною й внести знову. */}
+                  {payment.orderId ? null : (
+                    <>
+                      <EditIconButton onClick={() => openEdit(payment)} />
+                      <DeleteIconButton onClick={() => void remove(payment)} />
+                    </>
+                  )}
                 </div>
               </div>
             );
