@@ -2566,6 +2566,9 @@ export type Database = {
           account_id: string | null
           amount: number
           bank_txn_ref: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           created_at: string
           currency: string
           entered_by: string | null
@@ -2573,6 +2576,7 @@ export type Database = {
           id: string
           invoice_id: string | null
           notes: string | null
+          order_id: string | null
           paid_at: string
           quote_id: string
           source: string
@@ -2584,6 +2588,9 @@ export type Database = {
           account_id?: string | null
           amount?: number
           bank_txn_ref?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           currency?: string
           entered_by?: string | null
@@ -2591,6 +2598,7 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           notes?: string | null
+          order_id?: string | null
           paid_at?: string
           quote_id: string
           source?: string
@@ -2602,6 +2610,9 @@ export type Database = {
           account_id?: string | null
           amount?: number
           bank_txn_ref?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           currency?: string
           entered_by?: string | null
@@ -2609,6 +2620,7 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           notes?: string | null
+          order_id?: string | null
           paid_at?: string
           quote_id?: string
           source?: string
@@ -5896,6 +5908,10 @@ export type Database = {
         Returns: Json
       }
       can_read_all_feature_adoption: { Args: never; Returns: boolean }
+      cancel_order_payment: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: Json
+      }
       capture_admin_observability_snapshot: {
         Args: { p_team_id: string }
         Returns: Json
@@ -6020,6 +6036,23 @@ export type Database = {
           vat_payer: boolean
         }[]
       }
+      list_order_payments: {
+        Args: { p_order_id: string }
+        Returns: {
+          account_name: string | null
+          amount: number
+          bank_txn_ref: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          created_at: string
+          entered_by: string | null
+          entered_by_name: string | null
+          id: string
+          kind: string
+          notes: string | null
+          paid_at: string
+        }[]
+      }
       list_supplier_products: {
         Args: {
           p_slug: string
@@ -6075,6 +6108,17 @@ export type Database = {
         Returns: undefined
       }
       refresh_feature_adoption: { Args: never; Returns: undefined }
+      record_order_payment: {
+        Args: {
+          p_account_id: string
+          p_amount: number
+          p_bank_txn_ref?: string | null
+          p_notes?: string | null
+          p_order_id: string
+          p_paid_at: string
+        }
+        Returns: Json
+      }
       search_supplier_pool: {
         Args: { p_per_supplier?: number; p_terms: string[] }
         Returns: {
@@ -6210,6 +6254,10 @@ export type Database = {
           absence_id: string
           decision_comment: string
         }[]
+      }
+      undo_order_payment: {
+        Args: { p_payment_id: string }
+        Returns: Json
       }
     }
     Enums: {
