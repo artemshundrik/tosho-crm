@@ -72,15 +72,20 @@ describe("оплати замовлення", () => {
     expect(spaces(paymentHint(45000, 99360, 49680))).toBe("До передоплати бракує 4 680,00 грн");
     expect(spaces(paymentHint(0, 99360, 49680))).toBe("Передоплата за умовами — 49 680,00 грн");
     expect(paymentHint(99360, 99360, 49680)).toBe("Оплачено повністю");
+    expect(spaces(paymentHint(60000, 99360, 49680))).toBe("Лишилось 39 360,00 грн");
+    expect(spaces(paymentHint(100000, 99360, 49680))).toBe("Переплата 640,00 грн");
     expect(spaces(paymentWarnings({ amount: 120000, paid: 0, total: 99360, pre: 49680, ref: "", payments: [] })[0])).toMatch(
       /^Більше за залишок на 20 640,00 грн/
     );
+    expect(spaces(paymentWarnings({ amount: 45000, paid: 0, total: 99360, pre: 49680, ref: "", payments: [] })[0])).toBe(
+      "Менше за передоплату на 4 680,00 грн — запуск лишиться закритим"
+    );
     expect(
-      paymentWarnings({ amount: 10, paid: 0, total: 99360, pre: 49680, ref: "9898", payments: [payment({ bankTxnRef: "9898" })] })
+      paymentWarnings({ amount: 49680, paid: 0, total: 99360, pre: 49680, ref: "9898", payments: [payment({ bankTxnRef: "9898" })] })
     ).toEqual(["Платіжку № 9898 вже внесено"]);
     expect(
       paymentWarnings({
-        amount: 10,
+        amount: 49680,
         paid: 0,
         total: 99360,
         pre: 49680,

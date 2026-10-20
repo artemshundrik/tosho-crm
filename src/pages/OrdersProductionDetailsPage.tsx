@@ -137,17 +137,11 @@ import { OrderItemsTable } from "@/features/orders/order-details/OrderItemsTable
 import { OrderLaunchPathCard } from "@/features/orders/order-details/OrderLaunchPathCard";
 import { OrderMaterialsTab, countOrderMaterials } from "@/features/orders/order-details/OrderMaterialsTab";
 import { OrderPaymentCard } from "@/features/orders/order-details/OrderPaymentCard";
+import { useOrderPaymentPanel } from "@/features/orders/order-details/useOrderPaymentPanel";
+import { partyInitials } from "@/features/orders/partyInitials";
 import { OrderStatusControl } from "@/features/orders/order-details/OrderStatusControl";
 
 type OrderPageTab = "launch" | "items" | "materials" | "delivery" | "details";
-
-const getInitials = (value?: string | null) => {
-  const parts = (value ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
-  return (first + last).toUpperCase() || "?";
-};
 
 const getFileExtension = (name?: string | null) => {
   const value = (name ?? "").trim();
@@ -885,6 +879,9 @@ export default function OrdersProductionDetailsPage() {
     }
   }, [id, teamId, userId]);
 
+  // Оплати замовлення (REQ-322#p26): вносить бухгалтерія, статус оплати рахує база.
+  const paymentPanel = useOrderPaymentPanel({ record, teamId, userId, canEnter: canIssueInvoice, onChanged: refreshRecord });
+
   useEffect(() => {
     if (!teamId || !id) return;
     let active = true;
@@ -1447,6 +1444,7 @@ export default function OrdersProductionDetailsPage() {
                 }}
                 busy={statusSaving}
                 readOnly={record.source !== "stored"}
+                paymentLocked={paymentPanel.paymentLocked}
                 onChange={(field, value) => void handleStatusChange(field, value)}
               />
               <DropdownMenu>
@@ -1674,10 +1672,10 @@ export default function OrdersProductionDetailsPage() {
             <QuotePartyCard
               customerName={record.customerName}
               customerLogoUrl={record.customerLogoUrl}
-              customerInitials={getInitials(record.customerName)}
+              customerInitials={partyInitials(record.customerName)}
               managerName={record.managerLabel}
               managerAvatarUrl={record.managerAvatarUrl}
-              managerInitials={getInitials(record.managerLabel)}
+              managerInitials={partyInitials(record.managerLabel)}
               createdAt={record.createdAt}
               deadlines={[
                 launchPath.steps.find((step) => step.key === "launch")?.state === "done"
@@ -1697,7 +1695,7 @@ export default function OrdersProductionDetailsPage() {
               onOpenParty={openCustomerCard ?? (() => undefined)}
               onOpenDeadlines={() => setActiveTab("launch")}
             />
-            <OrderPaymentCard record={record} />
+            <OrderPaymentCard record={record} ledger={paymentPanel.ledger} />
             {teamId ? (
               <ThreadDock
                 className="min-h-0 flex-1 pb-4"
@@ -2245,6 +2243,7 @@ export default function OrdersProductionDetailsPage() {
           }
         />
       ) : null}
+      {paymentPanel.dialogs}
     </>
   );
 }

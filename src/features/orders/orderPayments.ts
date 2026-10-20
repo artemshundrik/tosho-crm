@@ -85,10 +85,13 @@ export const parseAmountInput = (raw: string): number | null => {
 
 export const paymentHint = (paid: number, total: number, pre: number): string => {
   if (paid <= 0) return pre > 0 ? `Передоплата за умовами — ${formatUah(pre)}` : "Оплат ще не було";
+  if (total > 0 && paid > total) return `Переплата ${formatUah(paid - total)}`;
   if (total > 0 && paid >= total) return "Оплачено повністю";
   if (paid < pre) return `До передоплати бракує ${formatUah(pre - paid)}`;
-  return `Залишок ${formatUah(total - paid)}`;
+  return `Лишилось ${formatUah(total - paid)}`;
 };
+
+export const paymentKindLabel = (kind: OrderPayment["kind"]) => (kind === "balance" ? "доплата" : "передоплата");
 
 export const paymentWarnings = (p: {
   amount: number;
@@ -102,6 +105,8 @@ export const paymentWarnings = (p: {
   const remaining = roundMoney(p.total - p.paid);
   if (p.amount > remaining) {
     warnings.push(`Більше за залишок на ${formatUah(p.amount - remaining)} — перевірте суму`);
+  } else if (p.paid < p.pre && p.paid + p.amount < p.pre) {
+    warnings.push(`Менше за передоплату на ${formatUah(p.pre - p.paid - p.amount)} — запуск лишиться закритим`);
   }
   const ref = p.ref.trim();
   if (ref && p.payments.some((payment) => !payment.cancelledAt && payment.bankTxnRef?.trim() === ref)) {

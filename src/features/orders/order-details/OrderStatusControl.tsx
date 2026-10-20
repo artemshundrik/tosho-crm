@@ -24,6 +24,9 @@ const GROUPS: { field: OrderStatusField; sectionId: string; label: string }[] = 
   { field: "deliveryStatus", sectionId: "delivery", label: "Доставка" },
 ];
 
+/** Єдина ручна пара, коли статус оплати рахується з платежів (scripts/order-payments.sql). */
+const MANUAL_PAYMENT_PAIR = new Set(["partially_paid", "awaiting_balance"]);
+
 const sectionItems = (sectionId: string) =>
   ORDER_STATUS_SECTIONS.find((section) => section.id === sectionId)?.items ?? [];
 
@@ -31,12 +34,15 @@ export function OrderStatusControl({
   values,
   busy,
   readOnly,
+  paymentLocked = false,
   onChange,
 }: {
   values: Record<OrderStatusField, string>;
   busy: boolean;
   /** Незбережений запис (затверджений прорахунок без рядка в orders) — статус лише текстом. */
   readOnly: boolean;
+  /** Є внесені оплати: статус оплати ставить сума, вручну — лише «Частково» ↔ «Очікує доплату». */
+  paymentLocked?: boolean;
   onChange: (field: OrderStatusField, value: string) => void;
 }) {
   const current = sectionItems("primary").find((item) => item.id === values.orderStatus);
@@ -70,13 +76,20 @@ export function OrderStatusControl({
             {index > 0 ? <DropdownMenuSeparator /> : null}
             <DropdownMenuLabel className="text-3xs uppercase tracking-caps text-muted-foreground">
               {group.label}
+              {paymentLocked && group.field === "paymentStatus" ? (
+                <span className="ml-1 normal-case tracking-normal">· рахується з оплат</span>
+              ) : null}
             </DropdownMenuLabel>
             {sectionItems(group.sectionId).map((item) => {
               const isCurrent = values[group.field] === item.id;
+              const lockedByPayments =
+                paymentLocked &&
+                group.field === "paymentStatus" &&
+                !(MANUAL_PAYMENT_PAIR.has(item.id) && MANUAL_PAYMENT_PAIR.has(values.paymentStatus));
               return (
                 <DropdownMenuItem
                   key={`${group.field}:${item.id}`}
-                  disabled={busy || isCurrent}
+                  disabled={busy || isCurrent || lockedByPayments}
                   onSelect={() => onChange(group.field, item.id)}
                 >
                   <span className={cn("mr-2 h-2 w-2 shrink-0 rounded-full", toneDotClass[(item.tone ?? "neutral") as Tone])} />
