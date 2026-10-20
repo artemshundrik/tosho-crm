@@ -1566,7 +1566,7 @@ export default function OrdersProductionDetailsPage() {
                     busy: approvalFlow.busy,
                     onRequestApproval: (kind) => void approvalFlow.request(kind),
                     onWithdraw: (approval) => void approvalFlow.withdraw(approval),
-                    onSign: (kind, via) => void approvalFlow.sign(kind, via),
+                    onSign: (kind, via, signedOn) => void approvalFlow.sign(kind, via, signedOn),
                   }}
                   issuer={
                     record.source === "stored"

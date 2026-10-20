@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+
 import type { OrderApproval, OrderApprovalKind, OrderApprovalStatus, SignatureVia } from "./orderApprovals";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -111,17 +113,23 @@ export async function decideOrderApproval(params: {
   return toApproval(data);
 }
 
-/** Позначка підпису: `via` — паперово / Вчасно / Медок; null знімає позначку. */
+/**
+ * Позначка підпису: `via` — паперово / Вчасно / Медок; null знімає позначку.
+ * `signedOn` (yyyy-MM-dd) — день, коли документ справді підписали; порожній або
+ * сьогоднішній — ставимо поточний момент, інший — полудень того дня, щоб часовий
+ * пояс не зсунув дату.
+ */
 export async function setOrderSignature(params: {
   teamId: string;
   orderId: string;
   kind: "contract" | "specification";
   via: SignatureVia | null;
+  signedOn?: string | null;
 }): Promise<{ signedAt: string | null; via: SignatureVia | null }> {
   const at = params.kind === "contract" ? "contract_signed_at" : "specification_signed_at";
   const viaColumn = params.kind === "contract" ? "contract_signed_via" : "specification_signed_via";
   const now = new Date().toISOString();
-  const signedAt = params.via ? now : null;
+  const signedAt = params.via ? signedAtFromDay(params.signedOn) : null;
   const { data, error } = await supabase
     .schema("tosho")
     .from("orders")
@@ -136,4 +144,10 @@ export async function setOrderSignature(params: {
     .single<Record<string, string | null>>();
   if (error) throw asError(error);
   return { signedAt: data[at] ?? null, via: (data[viaColumn] as SignatureVia | null) ?? null };
+}
+
+function signedAtFromDay(day: string | null | undefined): string {
+  const now = new Date();
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day) || day === format(now, "yyyy-MM-dd")) return now.toISOString();
+  return new Date(`${day}T12:00:00`).toISOString();
 }

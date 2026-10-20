@@ -1,3 +1,6 @@
+import { format } from "date-fns";
+import { useState, type ReactNode } from "react";
+
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -5,6 +8,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DateInput } from "@/components/ui/picker-input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -54,10 +59,95 @@ export type OrderApprovalHandlers = {
   busy: string | null;
   onRequestApproval: (kind: "contract" | "specification") => void;
   onWithdraw: (approval: OrderApproval) => void;
-  onSign: (kind: "contract" | "specification", via: SignatureVia | null) => void;
+  /** `signedOn` — yyyy-MM-dd, день підпису; без нього — сьогодні. */
+  onSign: (kind: "contract" | "specification", via: SignatureVia | null, signedOn?: string) => void;
 };
 
 const SIGN_OPTIONS: SignatureVia[] = ["paper", "vchasno", "medoc"];
+
+/**
+ * «Позначити підписаним»: як підписали і коли (REQ-322#p27). Документ часто
+ * підписують раніше, ніж менеджер ставить позначку, а від дати підпису СП
+ * рахуються терміни — тож день обирається, за замовчуванням сьогодні. Той самий
+ * поповер правив дату вже поставленої позначки.
+ */
+function SignPopover({
+  trigger,
+  initialVia,
+  initialAt,
+  disabled,
+  onSign,
+}: {
+  trigger: ReactNode;
+  initialVia: SignatureVia | null;
+  initialAt: string | null;
+  disabled: boolean;
+  onSign: (via: SignatureVia, signedOn: string) => void;
+}) {
+  const today = format(new Date(), "yyyy-MM-dd");
+  const [open, setOpen] = useState(false);
+  const [via, setVia] = useState<SignatureVia>(initialVia ?? "paper");
+  const [day, setDay] = useState(today);
+  const invalid = !day || day > today;
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          setVia(initialVia ?? "paper");
+          setDay(initialAt ? format(new Date(initialAt), "yyyy-MM-dd") : today);
+        }
+        setOpen(next);
+      }}
+    >
+      <PopoverTrigger asChild disabled={disabled}>
+        {trigger}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 space-y-3 p-3">
+        <div className="space-y-1.5">
+          <div className="text-xs font-medium text-muted-foreground">Як підписали</div>
+          <div className="flex flex-wrap gap-1.5">
+            {SIGN_OPTIONS.map((option) => (
+              <Button
+                key={option}
+                type="button"
+                size="xs"
+                variant={via === option ? "primary" : "outline"}
+                aria-pressed={via === option}
+                onClick={() => setVia(option)}
+              >
+                {SIGNATURE_VIA_LABELS[option]}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="order-sign-date" className="text-xs font-medium text-muted-foreground">
+            Дата підпису
+          </label>
+          <DateInput id="order-sign-date" controlSize="sm" value={day} max={today} onChange={(event) => setDay(event.target.value)} />
+          {day > today ? <div className="tone-text-warning text-2xs">Дата підпису не може бути в майбутньому</div> : null}
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" size="xs" variant="ghost" onClick={() => setOpen(false)}>
+            Скасувати
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            disabled={invalid}
+            onClick={() => {
+              setOpen(false);
+              onSign(via, day);
+            }}
+          >
+            Позначити
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export type OrderIssuerHandlers = {
   options: OrderLegalEntityOption[];
@@ -157,8 +247,23 @@ function ApprovalLine({
         <span className="tone-text-success inline-flex items-center gap-1 font-medium">
           <CheckCircle2 className="h-3 w-3" />
           {signLabel}
-          {signedVia ? ` ${SIGNATURE_VIA_LABELS[signedVia]}` : ""} · {formatShortCreatedDate(signedAt)}
+          {signedVia ? ` ${SIGNATURE_VIA_LABELS[signedVia]}` : ""} ·
         </span>
+        <SignPopover
+          initialVia={signedVia}
+          initialAt={signedAt}
+          disabled={busy}
+          onSign={(via, day) => approvals.onSign(kind, via, day)}
+          trigger={
+            <button
+              type="button"
+              title="Змінити дату підпису"
+              className="tone-text-success -ml-1 font-medium underline decoration-dotted underline-offset-4 hover:opacity-80"
+            >
+              {formatShortCreatedDate(signedAt)}
+            </button>
+          }
+        />
         <button
           type="button"
           disabled={busy}
@@ -172,21 +277,18 @@ function ApprovalLine({
   }
 
   const signMenu = (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <SignPopover
+      initialVia={null}
+      initialAt={null}
+      disabled={busy}
+      onSign={(via, day) => approvals.onSign(kind, via, day)}
+      trigger={
         <Button size="xs" variant="outline" disabled={busy}>
           <FileSignature />
           Позначити підписаним
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
-        {SIGN_OPTIONS.map((via) => (
-          <DropdownMenuItem key={via} onClick={() => approvals.onSign(kind, via)}>
-            Підписано {SIGNATURE_VIA_LABELS[via]}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      }
+    />
   );
 
   if (state === "approved" || state === "notRequired") {

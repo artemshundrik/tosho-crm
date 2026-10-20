@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { format, isToday } from "date-fns";
 
 import { documentStamp, SIGNATURE_VIA_LABELS, type OrderApproval, type SignatureVia } from "@/features/orders/orderApprovals";
 import { decideOrderApproval, requestOrderApproval, setOrderSignature } from "@/features/orders/orderApprovalQueries";
@@ -153,21 +154,22 @@ export function useOrderApprovalFlow({
       toast.success("Запит відкликано — виправте документ і надішліть на погодження знову");
     });
 
-  const sign = (kind: "contract" | "specification", via: SignatureVia | null) =>
+  const sign = (kind: "contract" | "specification", via: SignatureVia | null, signedOn?: string | null) =>
     guard(`sign:${kind}`, async () => {
       // Успадкований договір підписують один раз — позначка йде на замовлення, де
       // він живе, і тоді її бачать усі наступні замовлення замовника.
       const orderId = kind === "contract" && record!.inheritedContractOrderId ? record!.inheritedContractOrderId : record!.id;
-      const result = await setOrderSignature({ teamId: teamId!, orderId, kind, via });
+      const result = await setOrderSignature({ teamId: teamId!, orderId, kind, via, signedOn });
       onRecordPatch((current) =>
         kind === "contract"
           ? { ...current, contractSignedAt: result.signedAt, contractSignedVia: result.via }
           : { ...current, specificationSignedAt: result.signedAt, specificationSignedVia: result.via }
       );
       const what = kind === "contract" ? "Договір" : "СП";
-      toast.success(via ? `${what}: позначено підписаним ${SIGNATURE_VIA_LABELS[via]}` : `${what}: позначку підпису знято`);
+      const day = result.signedAt && !isToday(new Date(result.signedAt)) ? ` ${format(new Date(result.signedAt), "dd.MM.yyyy")}` : "";
+      toast.success(via ? `${what}: позначено підписаним ${SIGNATURE_VIA_LABELS[via]}${day}` : `${what}: позначку підпису знято`);
       void followUp(
-        via ? `${what} підписано ${SIGNATURE_VIA_LABELS[via]}` : `Зняв(ла) позначку підпису: ${what}`,
+        via ? `${what} підписано ${SIGNATURE_VIA_LABELS[via]}${day}` : `Зняв(ла) позначку підпису: ${what}`,
         async () => undefined
       );
     });
