@@ -70,11 +70,13 @@ describe("СП за шаблоном № 31", () => {
     expect(html).not.toContain("Строки");
   });
 
-  it("пункти 2.1–2.4 і 3.1 суцільним текстом, банк після IBAN", () => {
+  it("пункти 2.1–2.3, 3.1–3.2 суцільним текстом, банк після IBAN", () => {
     expect(html).toContain("2.1. Загальна вартість робіт з виготовлення Продукції складає 152 300,00 (сто");
     expect(html).toContain("до 15 робочих днів");
     expect(html).toContain("(Telegram, Viber)");
-    expect(html).toContain("2.4. Поставка Продукції здійснюється на умовах FCA (Incoterms 2020), м. Київ.");
+    expect(html).toContain("ПОРЯДОК ОПЛАТИ ТА ДОСТАВКИ");
+    expect(html).toContain("3.2. Поставка Продукції здійснюється на умовах FCA (Incoterms 2020), м. Київ.");
+    expect(html).not.toContain("2.4.");
     expect(html).toContain("IBAN: UA213223130000026007233566001 в АТ КБ «ПриватБанк»");
     expect(html).not.toContain("Спосіб оплати");
   });

@@ -333,10 +333,10 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
           stages.advance > 0 ? ", отримання передоплати згідно пункту 3.1., та" : " та"
         } підписання даної Специфікації.</p>
         <p>2.3. Сторони погодили, що всі дизайн-макети та візуалізації, що підлягають погодженню Замовником до початку виготовлення Продукції, можуть направлятися та погоджуватися засобами електронної пошти та месенджерів (Telegram, Viber).</p>
-        <p>2.4. Поставка Продукції здійснюється на умовах ${escapeHtml(incoterms)}.</p>
 
-        <div class="heading">ПОРЯДОК ОПЛАТИ ВАРТОСТІ ПРОДУКЦІЇ</div>
+        <div class="heading">ПОРЯДОК ОПЛАТИ ТА ДОСТАВКИ</div>
         <p>${escapeHtml(paymentClause)}</p>
+        <p>3.2. Поставка Продукції здійснюється на умовах ${escapeHtml(incoterms)}.</p>
 
         <div class="heading">АДРЕСИ І РЕКВІЗИТИ СТОРІН:</div>
         <div class="signature-grid">
