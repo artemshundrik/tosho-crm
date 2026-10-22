@@ -244,7 +244,7 @@ begin
      pg_temp.probe(format('update tosho.finance_expenses set account_id = %L where id = %L returning null', _usd, _expense.id))),
     ('accountant', 'витрата із закупки: рахунок на вимкнений', 'ERR 22023',
      pg_temp.probe(format('update tosho.finance_expenses set account_id = %L where id = %L returning null', _off, _expense.id))),
-    ('accountant', 'витрата із закупки: рахунок прибрати', 'ERR 22023',
+    ('accountant', 'витрата із закупки: рахунок прибрати (видалення рахунку)', 'ERR 42501',
      pg_temp.probe(format('update tosho.finance_expenses set account_id = null where id = %L returning null', _expense.id))),
     ('accountant', 'витрата із закупки: нотатки й категорія', 'ok',
      pg_temp.probe(format('update tosho.finance_expenses set notes = %L, category_id = null where id = %L returning null', 'вручну', _expense.id))),
