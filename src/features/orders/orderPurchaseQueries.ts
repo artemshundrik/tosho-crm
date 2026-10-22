@@ -190,7 +190,7 @@ export async function listSupplierNameHints(teamId: string): Promise<string[]> {
   return [...names].sort((a, b) => a.localeCompare(b, "uk")).slice(0, 200);
 }
 
-/** Позначка «закупок немає» і хто її поставив; поки SQL не накочено (немає колонок) — null. */
+/** Позначка «закупок немає» і хто її поставив; null — позначки немає. */
 export async function getOrderPurchasesNone(orderId: string): Promise<{ byName: string | null } | null> {
   const { data, error } = await supabase
     .schema("tosho")
@@ -198,7 +198,8 @@ export async function getOrderPurchasesNone(orderId: string): Promise<{ byName: 
     .select("purchases_none_at,purchases_none_by")
     .eq("id", orderId)
     .maybeSingle();
-  if (error || !data?.purchases_none_at) return null;
+  if (error) throw toPurchaseError(error);
+  if (!data?.purchases_none_at) return null;
   if (!data.purchases_none_by) return { byName: null };
   const profile = await supabase
     .schema("tosho")
