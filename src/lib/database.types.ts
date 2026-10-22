@@ -3254,6 +3254,109 @@ export type Database = {
           },
         ]
       }
+      order_purchases: {
+        Row: {
+          amount: number
+          cost_with_vat: number | null
+          created_at: string
+          created_by: string | null
+          description: string
+          expense_id: string | null
+          id: string
+          order_id: string
+          order_item_id: string | null
+          paid_on: string | null
+          qty: number | null
+          received_at: string | null
+          received_by: string | null
+          received_doc_kind: string | null
+          received_doc_number: string | null
+          received_on: string | null
+          received_qty: number | null
+          supplier_invoice_date: string
+          supplier_invoice_number: string | null
+          supplier_name: string
+          team_id: string
+          unit: string | null
+          updated_at: string
+          vat_mode: string
+        }
+        Insert: {
+          amount: number
+          cost_with_vat?: never
+          created_at?: string
+          created_by?: string | null
+          description: string
+          expense_id?: string | null
+          id?: string
+          order_id: string
+          order_item_id?: string | null
+          paid_on?: string | null
+          qty?: number | null
+          received_at?: string | null
+          received_by?: string | null
+          received_doc_kind?: string | null
+          received_doc_number?: string | null
+          received_on?: string | null
+          received_qty?: number | null
+          supplier_invoice_date: string
+          supplier_invoice_number?: string | null
+          supplier_name: string
+          team_id: string
+          unit?: string | null
+          updated_at?: string
+          vat_mode?: string
+        }
+        Update: {
+          amount?: number
+          cost_with_vat?: never
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          expense_id?: string | null
+          id?: string
+          order_id?: string
+          order_item_id?: string | null
+          paid_on?: string | null
+          qty?: number | null
+          received_at?: string | null
+          received_by?: string | null
+          received_doc_kind?: string | null
+          received_doc_number?: string | null
+          received_on?: string | null
+          received_qty?: number | null
+          supplier_invoice_date?: string
+          supplier_invoice_number?: string | null
+          supplier_name?: string
+          team_id?: string
+          unit?: string | null
+          updated_at?: string
+          vat_mode?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_purchases_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: true
+            referencedRelation: "finance_expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_purchases_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_purchases_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           balance_days_after_shipment: number | null
@@ -3328,6 +3431,8 @@ export type Database = {
           payment_status: string
           payment_terms: string
           prepayment_pct: number | null
+          purchases_none_at: string | null
+          purchases_none_by: string | null
           quote_id: string | null
           quote_number: string | null
           readiness_column: string
@@ -3411,6 +3516,8 @@ export type Database = {
           payment_status?: string
           payment_terms?: string
           prepayment_pct?: number | null
+          purchases_none_at?: string | null
+          purchases_none_by?: string | null
           quote_id?: string | null
           quote_number?: string | null
           readiness_column?: string
@@ -3494,6 +3601,8 @@ export type Database = {
           payment_status?: string
           payment_terms?: string
           prepayment_pct?: number | null
+          purchases_none_at?: string | null
+          purchases_none_by?: string | null
           quote_id?: string | null
           quote_number?: string | null
           readiness_column?: string
@@ -5912,12 +6021,26 @@ export type Database = {
         Args: { p_payment_id: string; p_reason: string }
         Returns: Json
       }
+      cancel_order_purchase_payment: {
+        Args: { p_id: string; p_reason: string }
+        Returns: undefined
+      }
       capture_admin_observability_snapshot: {
         Args: { p_team_id: string }
         Returns: Json
       }
       capture_observability_snapshot_scheduled: { Args: never; Returns: Json }
       catalog_model_search_skus: { Args: { p_metadata: Json }; Returns: string }
+      confirm_order_purchase_receipt: {
+        Args: {
+          p_doc_kind: string
+          p_doc_number: string
+          p_id: string
+          p_received_on: string
+          p_received_qty: number
+        }
+        Returns: undefined
+      }
       count_absence_business_days: {
         Args: { _from: string; _to: string; _workspace: string }
         Returns: number
@@ -5961,6 +6084,7 @@ export type Database = {
         Returns: string
       }
       current_user_blocked: { Args: never; Returns: boolean }
+      delete_order_purchase: { Args: { p_id: string }; Returns: undefined }
       get_admin_attachment_audit: {
         Args: { p_workspace_id: string }
         Returns: Json
@@ -6053,6 +6177,11 @@ export type Database = {
           paid_at: string
         }[]
       }
+      list_order_purchases: { Args: { p_order_id: string }; Returns: Json }
+      list_pending_purchase_receipts: {
+        Args: { p_team_id: string }
+        Returns: Json
+      }
       list_supplier_products: {
         Args: {
           p_slug: string
@@ -6098,6 +6227,15 @@ export type Database = {
         Args: { p_deal_type: string }
         Returns: number
       }
+      pay_order_purchase: {
+        Args: {
+          p_account_id: string
+          p_amount: number
+          p_id: string
+          p_paid_on: string
+        }
+        Returns: string
+      }
       recalc_quote_totals: { Args: { p_quote_id: string }; Returns: undefined }
       record_activity_minute: {
         Args: {
@@ -6119,6 +6257,22 @@ export type Database = {
         }
         Returns: Json
       }
+      save_order_purchase: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_id: string | null
+          p_invoice_date: string
+          p_invoice_number: string | null
+          p_order_id: string
+          p_order_item_id: string | null
+          p_qty: number | null
+          p_supplier_name: string
+          p_unit: string | null
+          p_vat_mode: string
+        }
+        Returns: string
+      }
       search_supplier_pool: {
         Args: { p_per_supplier?: number; p_terms: string[] }
         Returns: {
@@ -6135,6 +6289,10 @@ export type Database = {
           url: string | null
           vendor: string | null
         }[]
+      }
+      set_order_purchases_none: {
+        Args: { p_none: boolean; p_order_id: string }
+        Returns: undefined
       }
       set_quote_status: {
         Args: {
