@@ -294,7 +294,7 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
 
         <p>${escapeHtml(executorPreamble(executor))}, з однієї сторони, та ${escapeHtml(customerFullTitle)} (надалі – Замовник), в особі ${escapeHtml(roleBody)} ${escapeHtml(signatoryNameBody)}, ${escapeHtml(signatoryActsPhrase(first.customerSignatoryName))} на підставі ${escapeHtml(authority)}, з іншої сторони, разом – Сторони, підписали цей Додаток до ${escapeHtml(contractTitle)} № ${escapeHtml(contractNumber)} від ${escapeHtml(contractDate)} р. про наступне:</p>
 
-        <div class="heading">СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
+        <div class="heading">1. СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
         <table>
           <thead>
             <tr>
@@ -323,7 +323,7 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
             : ""
         }
 
-        <div class="heading">ВАРТІСТЬ РОБІТ ТА СТРОКИ ВИГОТОВЛЕННЯ ПРОДУКЦІЇ</div>
+        <div class="heading">2. ВАРТІСТЬ РОБІТ ТА СТРОКИ ВИГОТОВЛЕННЯ ПРОДУКЦІЇ</div>
         <p>${
           vatPayer
             ? `2.1. Загальна вартість робіт з виготовлення Продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} (${escapeHtml(wordsInline)}), враховуючи ПДВ ${VAT_RATE}%. Вартість робіт без ПДВ складає ${escapeHtml(formatPlainMoney(totalWithoutVat))} грн.`
@@ -334,7 +334,7 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
         } підписання даної Специфікації.</p>
         <p>2.3. Сторони погодили, що всі дизайн-макети та візуалізації, що підлягають погодженню Замовником до початку виготовлення Продукції, можуть направлятися та погоджуватися засобами електронної пошти та месенджерів (Telegram, Viber).</p>
 
-        <div class="heading">ПОРЯДОК ОПЛАТИ ТА ДОСТАВКИ</div>
+        <div class="heading">3. ПОРЯДОК ОПЛАТИ ТА ДОСТАВКИ</div>
         <p>${escapeHtml(paymentClause)}</p>
         <p>3.2. Поставка Продукції здійснюється на умовах ${escapeHtml(incoterms)}.</p>
 
