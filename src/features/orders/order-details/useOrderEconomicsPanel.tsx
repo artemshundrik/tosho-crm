@@ -116,8 +116,12 @@ export function useOrderEconomicsPanel({
   // сесії, і застарілі причини не мають тримати картку ВН закритою до F5.
   useEffect(() => {
     if (!orderId) return;
+    // focus і visibilitychange приходять парою — друге перечитування за 2 с зайве.
+    let last = 0;
     const refresh = () => {
-      if (document.visibilityState === "visible") void reload();
+      if (document.visibilityState !== "visible" || Date.now() - last < 2000) return;
+      last = Date.now();
+      void reload();
     };
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);

@@ -267,6 +267,12 @@ begin
      is distinct from (to_jsonb(old) - array['category_id', 'notes', 'account_id', 'file', 'updated_at']) then
     raise exception 'Витрату із закупки виправляють у замовленні' using errcode = '42501';
   end if;
+  -- Видалення рахунку (FK on delete set null) — окреме повідомлення, бо інакше
+  -- бухгалтер побачить незрозуміле «лише з гривневого рахунку».
+  if new.account_id is null and old.account_id is not null then
+    raise exception 'З цього рахунку оплачено закупки під замовлення — його не можна видалити, лише зробити неактивним'
+      using errcode = '42501';
+  end if;
   -- Рахунок списання — за тими ж правилами, що й під час оплати (pay_order_purchase):
   -- активний гривневий рахунок цієї команди й юрособи витрати.
   if new.account_id is distinct from old.account_id and not exists (
