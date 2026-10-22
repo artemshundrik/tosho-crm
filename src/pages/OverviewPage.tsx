@@ -13,6 +13,8 @@ import { usePageData } from "@/hooks/usePageData";
 import { buildOverview } from "@/features/overview/buildOverview";
 import { OverviewAside } from "@/features/overview/OverviewAside";
 import { OverviewQueue } from "@/features/overview/OverviewQueue";
+import { SupplierDocumentsCard, canSeeSupplierDocumentsCard } from "@/features/overview/SupplierDocumentsCard";
+import { useSupplierDocuments } from "@/features/overview/useSupplierDocuments";
 import { createEmptyOverviewData, loadOverviewData, type OverviewData } from "@/features/overview/overviewData";
 import { resolveOverviewLens } from "@/features/overview/overviewRoles";
 
@@ -58,6 +60,10 @@ export function OverviewPage() {
   const { teamId, userId, accessRole, jobRole } = useAuth();
 
   const lens = useMemo(() => resolveOverviewLens({ accessRole, jobRole }), [accessRole, jobRole]);
+
+  // «Документи постачальників» - лише тим, хто веде замовлення чи приймає товар.
+  const showSupplierDocuments = canSeeSupplierDocumentsCard(accessRole, jobRole);
+  const supplierDocuments = useSupplierDocuments(teamId, showSupplierDocuments);
 
   /*
    * Сторінка оновлюється САМА, і саме тому тут немає кнопки «Оновити».
@@ -171,11 +177,14 @@ export function OverviewPage() {
               навмисно: React комітить обидві, скільки б `hidden` на них не було. */}
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
             <OverviewQueue items={view.queue} total={view.queueTotal} emptyText={view.hero.emptyText} />
-            <OverviewAside
-              cards={view.aside}
-              activity={safeData.activity}
-              className="sm:grid-cols-2 lg:grid-cols-1"
-            />
+            <div className="grid min-w-0 grid-cols-1 gap-4">
+              {supplierDocuments ? <SupplierDocumentsCard data={supplierDocuments} now={now} /> : null}
+              <OverviewAside
+                cards={view.aside}
+                activity={safeData.activity}
+                className="sm:grid-cols-2 lg:grid-cols-1"
+              />
+            </div>
           </div>
         </div>
         </PullToRefresh>
