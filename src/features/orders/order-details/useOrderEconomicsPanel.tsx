@@ -73,7 +73,7 @@ export function useOrderEconomicsPanel({
   const [purchases, setPurchases] = useState<OrderPurchase[]>([]);
   const [none, setNone] = useState<{ byName: string | null } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [payTarget, setPayTarget] = useState<{ mode: "pay" | "cancel"; purchase: OrderPurchase } | null>(null);
@@ -92,7 +92,7 @@ export function useOrderEconomicsPanel({
       if (token !== loadToken.current) return;
       setPurchases(list);
       setNone(noneState);
-      setLoaded(true);
+      setLoadedFor(orderId);
     } catch (error) {
       if (token === loadToken.current) toast.error(errorText(error));
     }
@@ -101,7 +101,7 @@ export function useOrderEconomicsPanel({
   useEffect(() => {
     setPurchases([]);
     setNone(null);
-    setLoaded(false);
+    setLoadedFor(null);
     if (!orderId) return;
     setLoading(true);
     void reload().finally(() => setLoading(false));
@@ -265,6 +265,6 @@ export function useOrderEconomicsPanel({
     content,
     purchases,
     purchasesNone: none !== null,
-    waybillBlockers: loaded ? waybillBlockers(purchases, none !== null) : undefined,
+    waybillBlockers: orderId && loadedFor === orderId ? waybillBlockers(purchases, none !== null) : undefined,
   };
 }
