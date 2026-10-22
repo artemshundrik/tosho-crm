@@ -140,6 +140,7 @@ import { OrderPaymentCard } from "@/features/orders/order-details/OrderPaymentCa
 import { useOrderPaymentPanel } from "@/features/orders/order-details/useOrderPaymentPanel";
 import { partyInitials } from "@/features/orders/partyInitials";
 import { OrderStatusControl } from "@/features/orders/order-details/OrderStatusControl";
+import { OrderSourceQuoteLink } from "@/features/orders/order-details/OrderSourceQuoteLink";
 
 type OrderPageTab = "launch" | "items" | "materials" | "delivery" | "details";
 
@@ -1397,6 +1398,7 @@ export default function OrdersProductionDetailsPage() {
               >
                 {record.quoteNumber}
               </HoverCopyText>
+              <OrderSourceQuoteLink record={record} />
             </div>
             <div className="order-3 flex w-full flex-wrap items-center gap-1.5 lg:order-none lg:w-auto">
               {/* Вузько права колонка схована у «Деталях» — замовника показуємо тут, щоб було видно, чиє це. */}
@@ -2045,7 +2047,6 @@ export default function OrdersProductionDetailsPage() {
                 />
               ) : null}
             </div>
-
             <div className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="spec-production-days">Строки виробництва (робочих днів)</Label>
@@ -2091,7 +2092,6 @@ export default function OrdersProductionDetailsPage() {
             </div>
             </div>
             </div>
-
             {isCashlessPaymentMethod(specPaymentMethodId) ? <SpecificationItemTextsField state={specItemTexts} /> : null}
           </div>
           {specDialogError ? (

@@ -345,6 +345,7 @@ export type DerivedOrderRecord = {
    */
   linkedQuoteId: string | null;
   quoteNumber: string;
+  sourceQuoteNumber?: string | null; // прорахунок, з якого зроблене замовлення (TS-…)
   /** Логістика: у ручних замовлень живе на самому замовленні, інакше — у прорахунку. */
   deliveryType: string | null;
   deliveryDetails: unknown | null;
@@ -1204,6 +1205,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       quoteId: quote.id,
       linkedQuoteId: quote.id,
       quoteNumber: quote.number ?? quote.id.slice(0, 8),
+      sourceQuoteNumber: quote.number ?? null,
       // Для derived-записів логістика приходить із самого прорахунку.
       deliveryType: quote.delivery_type?.trim?.() || null,
       deliveryDetails: quote.delivery_details ?? null,
@@ -1683,6 +1685,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         quoteId: order.quote_id ?? order.id,
         linkedQuoteId: order.quote_id ?? null,
         quoteNumber: order.quote_number?.trim() || order.quote_id?.slice(0, 8) || order.id.slice(0, 8),
+        sourceQuoteNumber: linkedQuote?.number ?? null,
         deliveryType: order.delivery_type?.trim?.() || null,
         deliveryDetails: order.delivery_details ?? null,
         packaging: order.packaging?.trim?.() || null,
@@ -1878,11 +1881,12 @@ export async function createOrderFromApprovedQuote(params: {
   const nowIso = new Date().toISOString();
   const orderTotal = selectedItems.reduce((sum, item) => sum + item.lineTotal, 0);
 
+  const orderNumber = await getNextOrderNumber(params.teamId);
   const orderPayload = {
     id: orderId,
     team_id: params.teamId,
     quote_id: params.quoteId,
-    quote_number: draft.readiness.quoteNumber,
+    quote_number: orderNumber,
     customer_id: draft.readiness.customerId,
     customer_name: draft.readiness.customerName,
     customer_logo_url: draft.readiness.customerLogoUrl,
@@ -1974,26 +1978,22 @@ const getManualOrderMonthCode = (date = new Date()) => {
 };
 
 /**
- * Наступний номер для замовлення без прорахунку — формат `TO-{MMYY}-{0000}` (ToSho Order).
- * Окремий префікс від прорахунків (`TS-`), щоб не плутати нумерацію. До 22.10.2026 був `ZM-`:
- * його прибрали через латинську Z; старі номери переписує scripts/orders-number-prefix-to.sql,
- * а лічильник до того часу враховує обидва префікси, щоб номер не повторився.
- * quote_number НЕ унікальний, тож достатньо best-effort max+1 у межах місяця.
+ * Наступний номер замовлення `TO-{MMYY}-{0000}` (ToSho Order), з прорахунку чи без: TS-… лишається
+ * за прорахунком. quote_number НЕ унікальний, тож достатньо best-effort max+1 у межах місяця.
  */
-async function getNextManualOrderNumber(teamId: string) {
+async function getNextOrderNumber(teamId: string) {
   const monthCode = getManualOrderMonthCode();
   const { data, error } = await supabase
     .schema("tosho")
     .from("orders")
     .select("quote_number")
     .eq("team_id", teamId)
-    .or(`quote_number.like.TO-${monthCode}-%,quote_number.like.ZM-${monthCode}-%`);
+    .like("quote_number", `TO-${monthCode}-%`)
+    .order("quote_number", { ascending: false })
+    .limit(1);
   if (error && !isMissingOrdersRelationMessage(error.message)) throw error;
-  const last = ((data ?? []) as Array<{ quote_number?: string | null }>).reduce((max, row) => {
-    const parsed = Number.parseInt((row.quote_number ?? "").trim().split("-")[2] ?? "", 10);
-    return Number.isFinite(parsed) && parsed > max ? parsed : max;
-  }, 0);
-  return `TO-${monthCode}-${String(last + 1).padStart(4, "0")}`;
+  const last = Number.parseInt(((data ?? [])[0] as { quote_number?: string | null } | undefined)?.quote_number?.split("-")[2] ?? "", 10);
+  return `TO-${monthCode}-${String(Number.isFinite(last) && last >= 1 ? last + 1 : 1).padStart(4, "0")}`;
 }
 
 /**
@@ -2080,7 +2080,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
   const currency = isValidCurrency(params.currency) ? params.currency.toUpperCase() : "UAH";
   const paymentMethodId = normalizePaymentMethodId(params.paymentMethodId) || "cash";
   const orderTotal = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
-  const orderNumber = await getNextManualOrderNumber(params.teamId);
+  const orderNumber = await getNextOrderNumber(params.teamId);
 
   // «Є друк» = хоч один товар має нанесення (як у прорахунку — похідне, без окремого прапорця).
   const printCount = items.reduce((sum, item) => sum + item.prints.length, 0);
