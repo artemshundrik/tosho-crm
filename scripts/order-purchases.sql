@@ -24,8 +24,8 @@
 -- разом із сумою рахунку замовнику сума закупки дає маржу, а її бачать четверо.
 -- Менеджер не отримує нічого — ні з таблиці, ні з RPC.
 --
--- ОХОРОНЦІ. Витрату, народжену з рядка, з Фінансів не видаляють і не міняють
--- їй суму, валюту й дату (finance_expenses_purchase_guard). ВН не зберігається,
+-- ОХОРОНЦІ. Витрату, народжену з рядка, з Фінансів не видаляють і міняють їй
+-- лише категорію, нотатки, рахунок і файл (finance_expenses_purchase_guard). ВН не зберігається,
 -- поки немає рядків чи позначки або склад не підтвердив отримання
 -- (orders_waybill_purchase_gate). Позначку «закупок немає» напряму в orders не
 -- пишуть (orders_purchases_none_guard). Обхід — GUC-прапорець
@@ -175,8 +175,11 @@ $$;
 -- ---------------------------------------------------------------------------
 
 /**
- * Витрата із закупки: з Фінансів не видаляють і не міняють суму, валюту й дату.
- * Категорію, нотатки, рахунок — можна. Обхід — tosho.purchase_sync.
+ * Витрата із закупки: з Фінансів не видаляють, а міняти можна лише категорію,
+ * нотатки, рахунок і файл. Білий список, а не чорний: форма Фінансів шле всі
+ * колонки, і «регулярна», «змінна сума», ПДВ чи ручні суми за місяці інакше
+ * мовчки розвели б Фінанси із замовленням. Незмінені значення проходять
+ * (порівняння рядків без дозволених ключів). Обхід — tosho.purchase_sync.
  */
 create or replace function tosho.finance_expenses_purchase_guard()
 returns trigger
@@ -194,9 +197,8 @@ begin
     raise exception 'Витрату із закупки прибирають у замовленні: скасуйте оплату закупки'
       using errcode = '42501';
   end if;
-  if new.amount is distinct from old.amount
-     or new.currency is distinct from old.currency
-     or new.expense_date is distinct from old.expense_date then
+  if (to_jsonb(new) - array['category_id', 'notes', 'account_id', 'file', 'updated_at'])
+     is distinct from (to_jsonb(old) - array['category_id', 'notes', 'account_id', 'file', 'updated_at']) then
     raise exception 'Витрату із закупки виправляють у замовленні' using errcode = '42501';
   end if;
   return new;
