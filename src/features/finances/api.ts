@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
 import type { TableUpdate } from "@/lib/dbTables";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
-import type { PaidPurchaseCost } from "./financeMarginRows";
 import { isFxCurrency, type FxCurrency } from "@/lib/fxRates";
 import type {
   BillingPeriod,
@@ -31,6 +30,7 @@ import type {
   PayoutStatus,
   TaxStatus,
   TaxType,
+  PaidPurchaseCost,
 } from "./types";
 
 const LEGAL_ENTITY_COLUMNS =
@@ -783,20 +783,43 @@ type PaidPurchaseRow = {
   orders: { quote_id: string | null; quote_number: string | null } | null;
 };
 
+const PAID_PURCHASE_PAGE = 1000;
+
+async function fetchPaidPurchaseRows(teamId: string): Promise<PaidPurchaseRow[]> {
+  // Сторінками по 1000: більше PostgREST за раз не віддає, і мовчки — без цього
+  // маржа й позначки «із закупки» обрізалися б на тисячному оплаченому рядку.
+  const rows: PaidPurchaseRow[] = [];
+  for (let from = 0; ; from += PAID_PURCHASE_PAGE) {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("order_purchases")
+      .select("order_id,expense_id,cost_with_vat,orders:order_id(quote_id,quote_number)")
+      .eq("team_id", teamId)
+      .not("expense_id", "is", null)
+      .order("id", { ascending: true })
+      .range(from, from + PAID_PURCHASE_PAGE - 1);
+    if (error) throw error;
+    const page = (data ?? []) as unknown as PaidPurchaseRow[];
+    rows.push(...page);
+    if (page.length < PAID_PURCHASE_PAGE) break;
+  }
+  return rows;
+}
+
+/** Запити, що вже летять: маржа й список витрат вантажаться разом і беруть одну відповідь. */
+const paidPurchaseRowsInFlight = new Map<string, Promise<PaidPurchaseRow[]>>();
+
 /**
  * Оплачені закупки замовлень: рядок закупки + номер і прорахунок замовлення одним
  * запитом (вкладене `orders`), без N+1. Читає лише хто має доступ до фінансів.
  * Кидає помилку: кожен споживач вирішує, що робити, коли таблиці ще нема.
  */
-async function loadPaidPurchaseRows(teamId: string): Promise<PaidPurchaseRow[]> {
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("order_purchases")
-    .select("order_id,expense_id,cost_with_vat,orders:order_id(quote_id,quote_number)")
-    .eq("team_id", teamId)
-    .not("expense_id", "is", null);
-  if (error) throw error;
-  return (data ?? []) as unknown as PaidPurchaseRow[];
+function loadPaidPurchaseRows(teamId: string): Promise<PaidPurchaseRow[]> {
+  const pending = paidPurchaseRowsInFlight.get(teamId);
+  if (pending) return pending;
+  const request = fetchPaidPurchaseRows(teamId).finally(() => paidPurchaseRowsInFlight.delete(teamId));
+  paidPurchaseRowsInFlight.set(teamId, request);
+  return request;
 }
 
 const orderNumberOf = (row: PaidPurchaseRow) => row.orders?.quote_number?.trim() || row.order_id.slice(0, 8);

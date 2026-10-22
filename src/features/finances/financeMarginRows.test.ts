@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildFinanceMarginRows, type PaidPurchaseCost } from "./financeMarginRows";
-import type { FinanceExpense, FinanceInvoice, FinancePayment } from "./types";
+import { purchaseCostWithVat } from "@/features/orders/orderPurchases";
+
+import { buildFinanceMarginRows } from "./financeMarginRows";
+import type { FinanceExpense, FinanceInvoice, FinancePayment, PaidPurchaseCost } from "./types";
 
 const expense = (over: Partial<FinanceExpense> = {}): FinanceExpense => ({
   id: "e1",
@@ -78,9 +80,17 @@ describe("buildFinanceMarginRows", () => {
     expect(rows[0].margin).toBe(3565.5);
   });
 
-  it("ФОП-закупка 1 000 дає витрату маржі 1 200 (вартість із ПДВ)", () => {
-    const rows = build({ purchaseCosts: [purchase({ costWithVat: 1200, expenseId: "e9" })] });
+  it("ФОП-закупка 1 000 дає витрату маржі 1 200 (вартість із ПДВ), а не сплачені 1 000", () => {
+    const costWithVat = purchaseCostWithVat(1000, "no_vat");
+    const rows = build({
+      payments: [payment("q1", 5000)],
+      // Витрата у Фінансах — фактично сплачене ФОПу, без × 1,2; маржа її не бере вдруге.
+      expenses: [expense({ id: "e9", amount: 1000, allocations: [{ id: "a9", expenseId: "e9", quoteId: "q1", amount: 1000 }] })],
+      purchaseCosts: [purchase({ costWithVat, expenseId: "e9" })],
+    });
+    expect(costWithVat).toBe(1200);
     expect(rows[0].expenses).toBe(1200);
+    expect(rows[0].margin).toBe(3800);
   });
 
   it("розподіл звичайної витрати лишається в марже, а лише закупкові розподіли відкидаються", () => {

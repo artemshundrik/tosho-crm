@@ -1368,6 +1368,22 @@ function ExpenseDialog({
   const purchaseLink = editing?.orderPurchase ?? null;
   const purchaseLocked = purchaseLink !== null;
   const lockedHint = purchaseLocked ? "Виправляють у замовленні" : undefined;
+  // Рахунок списання витрати із закупки — ті самі правила, що в оплаті закупки й у
+  // запобіжнику бази: активний гривневий рахунок юрособи витрати. Поточний лишаємо,
+  // щоб вибір не «зник» у старої витрати.
+  const accountOptions = React.useMemo(
+    () =>
+      purchaseLocked
+        ? accounts.filter(
+            (a) =>
+              a.id === editing?.accountId ||
+              (a.isActive &&
+                a.currency === "UAH" &&
+                (!a.legalEntityId || !editing?.legalEntityId || a.legalEntityId === editing.legalEntityId))
+          )
+        : accounts,
+    [accounts, purchaseLocked, editing?.accountId, editing?.legalEntityId]
+  );
   const [categoryId, setCategoryId] = React.useState(editing?.categoryId ?? "");
   const [amount, setAmount] = React.useState(editing ? String(editing.amount) : "");
   const [currency, setCurrency] = React.useState<FxCurrency>(editing?.currency ?? "UAH");
@@ -1900,8 +1916,8 @@ function ExpenseDialog({
                         <SelectValue placeholder="Не вказано" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Не вказано</SelectItem>
-                        {accounts.map((account) => (
+                        {purchaseLocked ? null : <SelectItem value="none">Не вказано</SelectItem>}
+                        {accountOptions.map((account) => (
                           <SelectItem key={account.id} value={account.id}>
                             {account.name}
                           </SelectItem>
@@ -2209,8 +2225,8 @@ function ExpenseDialog({
                     <SelectValue placeholder="Не вказано" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Не вказано</SelectItem>
-                    {accounts.map((account) => (
+                    {purchaseLocked ? null : <SelectItem value="none">Не вказано</SelectItem>}
+                    {accountOptions.map((account) => (
                       <SelectItem key={account.id} value={account.id}>
                         {account.name}
                       </SelectItem>

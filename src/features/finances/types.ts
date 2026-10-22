@@ -326,6 +326,16 @@ export type FinanceExpense = {
 
 export type FinanceExpenseOrderPurchase = { orderId: string; orderNumber: string };
 
+/** Оплачена закупка замовлення: її вартість із ПДВ і витрата, що з'явилася від оплати. */
+export type PaidPurchaseCost = {
+  /** Прорахунок замовлення; null — замовлення без прорахунку (рядок за `orderId`, як його платежі). */
+  quoteId: string | null;
+  orderId: string;
+  orderNumber: string;
+  costWithVat: number;
+  expenseId: string;
+};
+
 /**
  * Гривнева вартість витрати. Валютні суми — за зафіксованим курсом операції,
  * а якщо його нема (план на майбутнє) — за поточним курсом Мінфіну з шапки.

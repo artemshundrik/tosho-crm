@@ -17,8 +17,9 @@ import {
   type FinanceInvoice,
   type FinanceOrderMeta,
   type FinancePayment,
+  type PaidPurchaseCost,
 } from "./types";
-import { buildFinanceMarginRows, type MarginOrderInfo, type PaidPurchaseCost } from "./financeMarginRows";
+import { buildFinanceMarginRows, type MarginOrderInfo } from "./financeMarginRows";
 import { Badge } from "@/components/ui/badge";
 import { FinanceSkeleton } from "./FinanceSkeleton";
 
@@ -57,7 +58,12 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
   const purchaseCosts = purchaseCostsQuery.data ?? EMPTY_PURCHASE_COSTS;
   const ordersByQuote: Map<string, MarginOrderInfo> = ordersQuery.data ?? EMPTY_ORDERS;
   const loading =
-    paymentsQuery.isPending || invoicesQuery.isPending || expensesQuery.isPending || orderMetaQuery.isPending;
+    paymentsQuery.isPending ||
+    invoicesQuery.isPending ||
+    expensesQuery.isPending ||
+    orderMetaQuery.isPending ||
+    // Без закупок маржа спершу показалася б завищеною, а потім «просіла».
+    purchaseCostsQuery.isPending;
 
   const loadError =
     paymentsQuery.error ?? invoicesQuery.error ?? expensesQuery.error ?? orderMetaQuery.error ?? null;

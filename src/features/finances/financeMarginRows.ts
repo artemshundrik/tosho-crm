@@ -6,17 +6,8 @@ import {
   type FinanceOrderMeta,
   type FinancePayment,
   type OrderType,
+  type PaidPurchaseCost,
 } from "./types";
-
-/** Оплачена закупка замовлення: її вартість із ПДВ і витрата, що з'явилася від оплати. */
-export type PaidPurchaseCost = {
-  /** Прорахунок замовлення; null — замовлення без прорахунку (рядок за `orderId`, як його платежі). */
-  quoteId: string | null;
-  orderId: string;
-  orderNumber: string;
-  costWithVat: number;
-  expenseId: string;
-};
 
 export type MarginOrderInfo = { number: string; customerName: string };
 

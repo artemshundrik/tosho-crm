@@ -21,7 +21,6 @@ import {
   listPayoutMeta,
   listTaxes,
 } from "./api";
-import type { PaidPurchaseCost } from "./financeMarginRows";
 import type {
   ExpenseEntry,
   FinanceAccount,
@@ -34,6 +33,7 @@ import type {
   FinancePayment,
   FinancePayoutMeta,
   FinanceTax,
+  PaidPurchaseCost,
 } from "./types";
 
 /**
