@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { dayMonth, kyivDay } from "@/features/orders/kyivDate";
 import {
   derivePaymentStatus,
+  formatAmountInput,
   formatUah,
   parseAmountInput,
   paymentStatusLabel,
@@ -17,11 +18,6 @@ import {
   quickAmounts,
   type OrderPayment,
 } from "@/features/orders/orderPayments";
-
-const amountFormat = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-/** Число для поля суми: «49 680,00» звичайними пробілами — так його й друкують. */
-export const formatAmountInput = (value: number) => amountFormat.format(value).replace(/[  ]/g, " ");
 
 export type OrderPaymentDraft = { amount: number; paidAt: string; accountId: string; bankTxnRef: string | null };
 

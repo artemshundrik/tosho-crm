@@ -10,9 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { kyivDay } from "@/features/orders/kyivDate";
 import type { EconomicsItem } from "@/features/orders/order-details/OrderEconomicsTab";
-import { formatAmountInput } from "@/features/orders/order-details/OrderPaymentDialog";
 import type { SavePurchaseInput } from "@/features/orders/orderPurchaseQueries";
-import { parseAmountInput } from "@/features/orders/orderPayments";
+import { formatAmountInput, parseAmountInput } from "@/features/orders/orderPayments";
 import { purchaseCostWithVat, type OrderPurchase, type PurchaseVatMode } from "@/features/orders/orderPurchases";
 
 /** Значення Select для «на все замовлення»: порожній рядок Radix не приймає. */

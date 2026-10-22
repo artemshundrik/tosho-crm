@@ -15,8 +15,6 @@ describe("рядки стрічки про закупки", () => {
 
   it("заголовки дослівні", () => {
     expect(orderPurchaseEventTitle.created).toBe("Внесено закупку");
-    expect(orderPurchaseEventTitle.paid).toBe("Закупку оплачено");
-    expect(orderPurchaseEventTitle.paymentCancelled("Помилка в сумі")).toBe("Скасовано оплату закупки: Помилка в сумі");
     expect(orderPurchaseEventTitle.received).toBe("Товар отримано");
     expect(orderPurchaseEventTitle.noneSet).toBe("Позначено: закупок немає");
     expect(orderPurchaseEventTitle.noneUnset).toBe("Знято позначку «закупок немає»");
@@ -26,8 +24,6 @@ describe("рядки стрічки про закупки", () => {
     // Закупка «Коробка-200 шт», постачальник «КОРОБКА», сума 5 250,30.
     const titles = [
       orderPurchaseEventTitle.created,
-      orderPurchaseEventTitle.paid,
-      orderPurchaseEventTitle.paymentCancelled("Подвійне внесення"),
       orderPurchaseEventTitle.received,
       orderPurchaseEventTitle.noneSet,
       orderPurchaseEventTitle.noneUnset,

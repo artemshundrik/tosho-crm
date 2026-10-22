@@ -35,6 +35,8 @@ import { logActivity } from "@/lib/activityLogger";
 import { canViewOrderEconomics } from "@/lib/permissions";
 
 type Accounts = Array<{ id: string; name: string }>;
+/** Рахунки списання, завантажені для ключа «команда:юрособа». */
+type AccountsState = { key: string; accounts: Accounts };
 type EditorState = { key: number; purchase: OrderPurchase | null; itemId?: string | null };
 
 const errorText = (error: unknown) =>
@@ -82,7 +84,8 @@ export function useOrderEconomicsPanel({
   const [receiptTarget, setReceiptTarget] = useState<OrderPurchase | null>(null);
   const [toDelete, setToDelete] = useState<OrderPurchase | null>(null);
   const [hints, setHints] = useState<string[]>([]);
-  const [accounts, setAccounts] = useState<Accounts>([]);
+  const [accountsState, setAccountsState] = useState<AccountsState | null>(null);
+  const accountsRequested = useRef<string | null>(null);
   const hintsRequested = useRef(false);
   const loadToken = useRef(0);
 
@@ -109,21 +112,38 @@ export function useOrderEconomicsPanel({
     void reload().finally(() => setLoading(false));
   }, [orderId, reload]);
 
-  // Рахунки списання — гривневі рахунки нашої юрособи замовлення; лише тим, хто оплачує.
+  // Повернулись у вкладку — перечитуємо: склад міг підтвердити отримання в іншій
+  // сесії, і застарілі причини не мають тримати картку ВН закритою до F5.
   useEffect(() => {
-    if (!enabled || !access.edit || !teamId) return;
-    let active = true;
-    listOrderPaymentAccounts(teamId, legalEntityId, null, "bank")
-      .then((result) => {
-        if (active) setAccounts(result.accounts);
-      })
-      .catch(() => {
-        if (active) setAccounts([]);
-      });
-    return () => {
-      active = false;
+    if (!orderId) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void reload();
     };
-  }, [enabled, access.edit, teamId, legalEntityId]);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [orderId, reload]);
+
+  // Рахунки списання — гривневі рахунки нашої юрособи замовлення. Вантажимо, коли
+  // відкрили оплату, а не на кожне відкриття замовлення; на юрособу — один раз.
+  const payOpen = payTarget?.mode === "pay";
+  const accountsKey = `${teamId ?? ""}:${legalEntityId ?? ""}`;
+  useEffect(() => {
+    if (!payOpen || !teamId || accountsRequested.current === accountsKey) return;
+    accountsRequested.current = accountsKey;
+    listOrderPaymentAccounts(teamId, legalEntityId, null, "bank")
+      .then((result) => setAccountsState({ key: accountsKey, accounts: result.accounts }))
+      .catch((error: unknown) => {
+        accountsRequested.current = null; // наступне відкриття спробує ще раз
+        toast.error(errorText(error));
+        setAccountsState({ key: accountsKey, accounts: [] });
+      });
+  }, [payOpen, teamId, legalEntityId, accountsKey]);
+  // null — ще вантажимо (віконце так і каже); відповідь для іншої юрособи не беремо.
+  const accounts = accountsState?.key === accountsKey ? accountsState.accounts : null;
 
   const recordId = record?.id ?? null;
   const linkedQuoteId = record?.linkedQuoteId ?? null;
@@ -200,6 +220,7 @@ export function useOrderEconomicsPanel({
         currency={record.currency}
         access={access}
         loading={loading}
+        saving={saving}
         onAdd={(itemId) => openEditor(null, items.length === 1 && itemId === undefined ? items[0].id : itemId)}
         onEdit={(purchase) => openEditor(purchase)}
         onDelete={setToDelete}
@@ -244,12 +265,9 @@ export function useOrderEconomicsPanel({
           onOpenChange={(open) => {
             if (!open) setPayTarget(null);
           }}
-          onPay={(purchase, draft) =>
-            run(() => payOrderPurchase({ id: purchase.id, ...draft }), "Оплату внесено — витрата у Фінансах", orderPurchaseEventTitle.paid)
-          }
-          onCancel={(purchase, reason) =>
-            run(() => cancelOrderPurchasePayment(purchase.id, reason), "Оплату скасовано", orderPurchaseEventTitle.paymentCancelled(reason))
-          }
+          // Рядок у стрічці про оплату й скасування пише сама база, у тій самій транзакції.
+          onPay={(purchase, draft) => run(() => payOrderPurchase({ id: purchase.id, ...draft }), "Оплату внесено — витрата у Фінансах")}
+          onCancel={(purchase, reason) => run(() => cancelOrderPurchasePayment(purchase.id, reason), "Оплату скасовано")}
         />
       ) : null}
       {access.receive ? (

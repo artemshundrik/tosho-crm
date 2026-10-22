@@ -16,11 +16,14 @@ import { DateInput } from "@/components/ui/picker-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { dayMonth, kyivDay } from "@/features/orders/kyivDate";
-import { formatAmountInput } from "@/features/orders/order-details/OrderPaymentDialog";
-import { formatUah, parseAmountInput } from "@/features/orders/orderPayments";
+import { formatAmountInput, formatUah, parseAmountInput } from "@/features/orders/orderPayments";
+import { PURCHASE_CANCEL_REASON_MAX } from "@/features/orders/orderPurchaseEvents";
 import type { OrderPurchase } from "@/features/orders/orderPurchases";
 
 export type PurchasePayDraft = { paidOn: string; accountId: string; amount: number };
+
+/** null — рахунки ще вантажаться (їх тягнемо, лише коли відкрили оплату). */
+export type PurchasePayAccounts = Array<{ id: string; name: string }> | null;
 
 const purchaseLine = (p: OrderPurchase) =>
   [p.description, p.supplierName, p.supplierInvoiceNumber ? `№ ${p.supplierInvoiceNumber}` : null].filter(Boolean).join(" · ");
@@ -33,7 +36,7 @@ function PayForm({
   onPay,
 }: {
   purchase: OrderPurchase;
-  accounts: Array<{ id: string; name: string }>;
+  accounts: PurchasePayAccounts;
   saving: boolean;
   onClose: () => void;
   onPay: (draft: PurchasePayDraft) => Promise<boolean>;
@@ -42,7 +45,9 @@ function PayForm({
   const yesterday = kyivDay(1);
   const invoiceAmount = purchase.amount ?? 0;
   const [paidOn, setPaidOn] = useState(today);
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [picked, setPicked] = useState("");
+  // Рахунки можуть приїхати вже після відкриття: тоді за замовчуванням — перший.
+  const accountId = picked && accounts?.some((a) => a.id === picked) ? picked : (accounts?.[0]?.id ?? "");
   const [amountText, setAmountText] = useState(() => (invoiceAmount > 0 ? formatAmountInput(invoiceAmount) : ""));
 
   const amount = parseAmountInput(amountText);
@@ -90,10 +95,12 @@ function PayForm({
 
         <div className="space-y-2">
           <Label htmlFor="purchase-pay-account">З якого рахунку</Label>
-          {accounts.length === 0 ? (
+          {accounts === null ? (
+            <div className="text-sm text-muted-foreground">Завантажуємо рахунки…</div>
+          ) : accounts.length === 0 ? (
             <div className="text-sm text-muted-foreground">Додайте гривневий рахунок у Фінансах</div>
           ) : (
-            <Select value={accountId} onValueChange={setAccountId}>
+            <Select value={accountId} onValueChange={setPicked}>
               <SelectTrigger id="purchase-pay-account">
                 <SelectValue placeholder="Оберіть рахунок" />
               </SelectTrigger>
@@ -177,9 +184,15 @@ function CancelForm({
           id="purchase-cancel-reason"
           rows={3}
           placeholder="Помилилися сумою, рахунком, датою…"
+          maxLength={PURCHASE_CANCEL_REASON_MAX}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
         />
+        {reason.length > PURCHASE_CANCEL_REASON_MAX - 40 ? (
+          <div className="text-right text-xs text-muted-foreground">
+            {reason.length} / {PURCHASE_CANCEL_REASON_MAX}
+          </div>
+        ) : null}
       </div>
       <DialogFooter>
         <Button type="button" variant="ghost" disabled={saving} onClick={onClose}>
@@ -215,7 +228,7 @@ export function OrderPurchasePayDialog({
 }: {
   /** null — закрито. */
   target: { mode: "pay" | "cancel"; purchase: OrderPurchase } | null;
-  accounts: Array<{ id: string; name: string }>;
+  accounts: PurchasePayAccounts;
   saving: boolean;
   onOpenChange: (open: boolean) => void;
   onPay: (purchase: OrderPurchase, draft: PurchasePayDraft) => Promise<boolean>;

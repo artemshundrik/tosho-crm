@@ -16,11 +16,17 @@ type TabProps = {
 };
 type SaveProps = { onSubmit: (input: Record<string, unknown>) => Promise<boolean> };
 type PayProps = {
+  accounts: Array<{ id: string; name: string }> | null;
+  target: unknown;
   onPay: (purchase: OrderPurchase, draft: Record<string, unknown>) => Promise<boolean>;
   onCancel: (purchase: OrderPurchase, reason: string) => Promise<boolean>;
 };
 type ReceiptProps = { onConfirm: (purchase: OrderPurchase, draft: Record<string, unknown>) => Promise<boolean> };
-type DeleteTab = { onDelete: (purchase: OrderPurchase) => void; onAdd: (itemId?: string) => void };
+type DeleteTab = {
+  onDelete: (purchase: OrderPurchase) => void;
+  onAdd: (itemId?: string) => void;
+  onPay: (purchase: OrderPurchase) => void;
+};
 
 const captured = vi.hoisted(() => ({
   tab: null as null | (TabProps & DeleteTab),
@@ -45,9 +51,10 @@ const logActivity = vi.hoisted(() => vi.fn(async (_payload: Record<string, unkno
 vi.mock("@/lib/supabaseClient", () => ({ supabase: {} }));
 vi.mock("@/lib/activityLogger", () => ({ logActivity }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
-vi.mock("@/features/orders/orderPaymentQueries", () => ({
-  listOrderPaymentAccounts: vi.fn(async () => ({ accounts: [] })),
-}));
+const listOrderPaymentAccounts = vi.hoisted(() =>
+  vi.fn(async (..._args: unknown[]) => ({ accounts: [{ id: "acc-1", name: "Рахунок" }] }))
+);
+vi.mock("@/features/orders/orderPaymentQueries", () => ({ listOrderPaymentAccounts }));
 vi.mock("@/features/orders/orderPurchaseQueries", () => queries);
 vi.mock("@/features/orders/order-details/OrderEconomicsTab", () => ({
   economicsAccess: () => ({ amounts: true, margin: true, edit: true, receive: true, markNone: true }),
@@ -151,25 +158,36 @@ describe("useOrderEconomicsPanel: стрічка замовлення", () => {
     expect(logActivity).not.toHaveBeenCalled();
   });
 
-  it("оплата, скасування оплати, отримання й позначка «закупок немає»", async () => {
+  it("отримання й позначка «закупок немає» пишуться з клієнта", async () => {
     await mount();
     await act(async () => {
-      await captured.pay?.onPay(purchase, { paidOn: "2026-10-12", accountId: "acc", amount: 5250.3 });
-      await captured.pay?.onCancel(purchase, "Подвійне внесення");
       await captured.receipt?.onConfirm(purchase, { receivedOn: "2026-10-16", receivedQty: 200, docKind: "waybill", docNumber: "77" });
       captured.tab?.onToggleNone(true);
     });
-    await waitFor(() => expect(logActivity).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(logActivity).toHaveBeenCalledTimes(2));
     await act(async () => captured.tab?.onToggleNone(false));
-    await waitFor(() => expect(logActivity).toHaveBeenCalledTimes(5));
+    await waitFor(() => expect(logActivity).toHaveBeenCalledTimes(3));
     expect(logged().map((entry) => entry.title)).toEqual([
-      "Закупку оплачено",
-      "Скасовано оплату закупки: Подвійне внесення",
       "Товар отримано",
       "Позначено: закупок немає",
       "Знято позначку «закупок немає»",
     ]);
     expect(logged().every((entry) => entry.action === "order_purchase")).toBe(true);
+  });
+
+  it("оплату й скасування оплати в стрічку пише база, клієнт — ні", async () => {
+    await mount();
+    let paid: boolean | undefined;
+    let cancelled: boolean | undefined;
+    await act(async () => {
+      paid = await captured.pay?.onPay(purchase, { paidOn: "2026-10-12", accountId: "acc", amount: 5250.3 });
+      cancelled = await captured.pay?.onCancel(purchase, "Подвійне внесення");
+    });
+    expect(paid).toBe(true);
+    expect(cancelled).toBe(true);
+    expect(queries.payOrderPurchase).toHaveBeenCalledTimes(1);
+    expect(queries.cancelOrderPurchasePayment).toHaveBeenCalledWith(purchase.id, "Подвійне внесення");
+    expect(logActivity).not.toHaveBeenCalled();
   });
 
   it("видалення закупки не пишеться в стрічку", async () => {
@@ -197,5 +215,35 @@ describe("useOrderEconomicsPanel: стрічка замовлення", () => {
     });
     expect(ok).toBe(true);
     expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+describe("useOrderEconomicsPanel: свіжість і рахунки", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    captured.tab = captured.save = captured.pay = captured.receipt = null;
+  });
+
+  it("повернення у вкладку перечитує закупки — застарілі причини не тримають ВН", async () => {
+    render(<Harness />);
+    await waitFor(() => expect(queries.listOrderPurchases).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() => expect(queries.listOrderPurchases).toHaveBeenCalledTimes(2));
+  });
+
+  it("рахунки списання вантажаться, лише коли відкрили оплату, і один раз", async () => {
+    render(<Harness />);
+    await waitFor(() => expect(captured.tab).not.toBeNull());
+    expect(listOrderPaymentAccounts).not.toHaveBeenCalled();
+    expect(captured.pay?.accounts).toBeNull();
+
+    await act(async () => captured.tab?.onPay(purchase));
+    await waitFor(() => expect(captured.pay?.accounts).toEqual([{ id: "acc-1", name: "Рахунок" }]));
+    expect(listOrderPaymentAccounts).toHaveBeenCalledTimes(1);
+
+    await act(async () => captured.tab?.onPay(purchase));
+    expect(listOrderPaymentAccounts).toHaveBeenCalledTimes(1);
   });
 });

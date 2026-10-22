@@ -33,6 +33,9 @@ const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 const moneyFormat = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** Число для поля суми: «49 680,00» звичайними пробілами — так його й друкують. Пара до parseAmountInput. */
+export const formatAmountInput = (value: number) => moneyFormat.format(value).replace(/[\u00a0\u202f]/g, " ");
+
 /** «49 680,00 грн» — у віконці оплати копійки важливі, тож не formatOrderMoney. */
 export const formatUah = (value: number) => `${moneyFormat.format(roundMoney(value))} грн`;
 

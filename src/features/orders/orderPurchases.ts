@@ -20,6 +20,8 @@ export type OrderPurchase = {
   receivedByName: string | null;
   expenseId: string | null;
   paidOn: string | null;
+  /** Фактично сплачено (сума витрати; для ФОП без × 1,2). null — не оплачено або суми сховані. */
+  paidAmount: number | null;
 };
 
 const money = (value: number) => Math.round(value * 100) / 100;
@@ -102,16 +104,34 @@ export function groupPurchasesByItem(
   return groups;
 }
 
+/**
+ * Сплачено не стільки, скільки в рахунку постачальника: тоді рядок показує
+ * «оплачено X з Y». Порівнюємо з `amount` (сума як у рахунку): для ФОП сплачене
+ * теж без × 1,2. Маржа й далі рахується з собівартості рядка.
+ */
+export function purchasePaidDiffers(p: Pick<OrderPurchase, "paidAmount" | "amount">): boolean {
+  if (p.paidAmount == null || p.amount == null) return false;
+  return Math.abs(p.paidAmount - p.amount) >= 0.005;
+}
+
 export function isPurchaseShortReceived(p: OrderPurchase): boolean {
   return p.receivedQty != null && p.qty != null && p.receivedQty < p.qty;
 }
 
-/** Що не дає виписати ВН; порожній масив — можна. */
+/** Скільки неотриманих рядків називаємо поіменно; решта — «та ще N». Як у гейті бази. */
+const BLOCKER_NAMES_SHOWN = 5;
+
+/**
+ * Що не дає виписати ВН; порожній масив — можна. Текст — дослівно як у гейті
+ * бази (orders_waybill_purchase_gate): перші 5 описів у порядку внесення + «та ще N».
+ */
 export function waybillBlockers(purchases: OrderPurchase[], purchasesNone: boolean): string[] {
   if (purchases.length === 0) {
     return purchasesNone ? [] : ["Внесіть закупки або позначку «закупок немає»"];
   }
   const pending = purchases.filter((p) => !p.receivedOn);
   if (pending.length === 0) return [];
-  return [`Склад ще не підтвердив отримання: ${pending.map((p) => p.description).join(", ")}`];
+  const names = pending.slice(0, BLOCKER_NAMES_SHOWN).map((p) => p.description).join(", ");
+  const rest = pending.length - BLOCKER_NAMES_SHOWN;
+  return [`Склад ще не підтвердив отримання: ${names}${rest > 0 ? ` та ще ${rest}` : ""}`];
 }

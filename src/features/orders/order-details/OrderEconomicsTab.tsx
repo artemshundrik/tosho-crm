@@ -11,11 +11,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dayMonth } from "@/features/orders/kyivDate";
-import { formatAmountInput } from "@/features/orders/order-details/OrderPaymentDialog";
-import { formatUah } from "@/features/orders/orderPayments";
+import { formatAmountInput, formatUah } from "@/features/orders/orderPayments";
 import {
   groupPurchasesByItem,
   isPurchaseShortReceived,
+  purchasePaidDiffers,
   summarizeOrderEconomics,
   type OrderPurchase,
 } from "@/features/orders/orderPurchases";
@@ -64,6 +64,27 @@ const purchaseAmountText = (p: OrderPurchase) => {
 const qtyText = (qty: number | null, unit: string | null) => (qty == null ? null : [qty, unit].filter(Boolean).join(" "));
 
 const isPaid = (p: OrderPurchase) => Boolean(p.expenseId || p.paidOn);
+
+/**
+ * «оплачено 12.10» — або, якщо сплатили не суму рахунку, «оплачено 5 000,00 з
+ * 5 250,30 · 12.10» жовтим: інакше різниця між замовленням і Фінансами
+ * лишилась би без пояснення. Для ФОП обидва числа без × 1,2.
+ */
+function PaidBadge({ purchase: p }: { purchase: OrderPurchase }) {
+  const date = p.paidOn ? dayMonth(p.paidOn) : null;
+  if (purchasePaidDiffers(p) && p.paidAmount != null && p.amount != null) {
+    return (
+      <Badge tone="warning" size="sm" title="Сплачено не стільки, скільки в рахунку постачальника">
+        {`оплачено ${formatAmountInput(p.paidAmount)} з ${formatAmountInput(p.amount)}${date ? ` · ${date}` : ""}`}
+      </Badge>
+    );
+  }
+  return (
+    <Badge tone="success" size="sm">
+      {date ? `оплачено ${date}` : "оплачено"}
+    </Badge>
+  );
+}
 
 function EconomicsSummary({
   purchases,
@@ -218,9 +239,7 @@ function PurchaseRow({ purchase: p, access, handlers }: { purchase: OrderPurchas
       <div className="flex flex-wrap items-center gap-1.5">
         {access.amounts ? (
           paid ? (
-            <Badge tone="success" size="sm">
-              {p.paidOn ? `оплачено ${dayMonth(p.paidOn)}` : "оплачено"}
-            </Badge>
+            <PaidBadge purchase={p} />
           ) : access.edit ? (
             <Button type="button" size="xs" variant="outline" onClick={() => handlers.onPay(p)}>
               Оплачено
@@ -278,6 +297,7 @@ export function OrderEconomicsTab({
   currency,
   access,
   loading,
+  saving = false,
   onAdd,
   onToggleNone,
   ...handlers
@@ -290,6 +310,8 @@ export function OrderEconomicsTab({
   currency: string | null;
   access: EconomicsAccess;
   loading: boolean;
+  /** Іде запис: кнопки позначки неактивні, щоб подвійний клік не слав два запити. */
+  saving?: boolean;
   /** undefined — позицію обере людина; null — «на все замовлення». */
   onAdd: (itemId?: string | null) => void;
   /** true - поставити «закупок немає», false - зняти. */
@@ -319,7 +341,7 @@ export function OrderEconomicsTab({
         <h2 className="text-sm font-semibold">Закупки</h2>
         <div className="flex items-center gap-2">
           {access.markNone && !purchasesNone && purchases.length === 0 ? (
-            <Button type="button" size="sm" variant="ghost" onClick={() => onToggleNone(true)}>
+            <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={() => onToggleNone(true)}>
               Закупок немає
             </Button>
           ) : null}
@@ -335,7 +357,7 @@ export function OrderEconomicsTab({
         <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
           <span>{["Закупок немає", purchasesNone.byName].filter(Boolean).join(" · ")}</span>
           {access.markNone ? (
-            <Button type="button" size="xs" variant="textPrimary" onClick={() => onToggleNone(false)}>
+            <Button type="button" size="xs" variant="textPrimary" disabled={saving} onClick={() => onToggleNone(false)}>
               Зняти позначку
             </Button>
           ) : null}
@@ -346,7 +368,7 @@ export function OrderEconomicsTab({
         </div>
       ) : (
         groups.map((group) => {
-          const groupCost = group.purchases.reduce((sum, p) => sum + (p.costWithVat ?? 0), 0);
+          const groupCost = summarizeOrderEconomics(group.purchases, 0, currency).costAll; // до копійок
           return (
             <section key={group.itemId ?? "whole"} className="rounded-xl border border-border/60 px-4 py-2">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2 pt-1">

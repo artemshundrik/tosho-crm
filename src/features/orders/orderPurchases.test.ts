@@ -3,6 +3,7 @@ import {
   groupPurchasesByItem,
   isPurchaseShortReceived,
   purchaseCostWithVat,
+  purchasePaidDiffers,
   purchaseExpenseVat,
   summarizeOrderEconomics,
   waybillBlockers,
@@ -38,6 +39,7 @@ function line(id: string, amount: number | null, paid: boolean, extra: Partial<O
     receivedByName: null,
     expenseId: paid ? `e-${id}` : null,
     paidOn: paid ? "2026-10-05" : null,
+    paidAmount: paid ? amount : null,
     ...extra,
   };
 }
@@ -110,9 +112,34 @@ describe("waybill", () => {
       "Склад ще не підтвердив отримання: Парасолі",
     ]);
   });
+  it("blockers name the first 5 pending lines and count the rest, like the DB gate", () => {
+    const pending = ["А", "Б", "В", "Г", "Ґ", "Д", "Е"].map((title, index) =>
+      line(`p${index}`, 1, false, { description: title, receivedOn: null })
+    );
+    expect(waybillBlockers([line("ok", 1, false), ...pending], false)).toEqual([
+      "Склад ще не підтвердив отримання: А, Б, В, Г, Ґ та ще 2",
+    ]);
+    expect(waybillBlockers(pending.slice(0, 5), false)).toEqual([
+      "Склад ще не підтвердив отримання: А, Б, В, Г, Ґ",
+    ]);
+  });
   it("short receipt", () => {
     expect(isPurchaseShortReceived(line("s", 1, false, { qty: 10, receivedQty: 8 }))).toBe(true);
     expect(isPurchaseShortReceived(line("s", 1, false, { qty: 10, receivedQty: 10 }))).toBe(false);
+  });
+});
+
+describe("paid vs invoice", () => {
+  it("differs only when the actual payment is not the invoice sum", () => {
+    expect(purchasePaidDiffers({ amount: 5250.3, paidAmount: 5000 })).toBe(true);
+    expect(purchasePaidDiffers({ amount: 5250.3, paidAmount: 5250.3 })).toBe(false);
+    expect(purchasePaidDiffers({ amount: 5250.3, paidAmount: null })).toBe(false);
+    expect(purchasePaidDiffers({ amount: null, paidAmount: null })).toBe(false);
+  });
+  it("ФОП: paid is compared with the invoice sum, not the × 1,2 cost", () => {
+    const fop = line("f", 1000, true, { vatMode: "no_vat", costWithVat: purchaseCostWithVat(1000, "no_vat"), paidAmount: 1000 });
+    expect(purchasePaidDiffers(fop)).toBe(false);
+    expect(purchasePaidDiffers({ ...fop, paidAmount: 1200 })).toBe(true);
   });
 });
 

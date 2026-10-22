@@ -71,6 +71,7 @@ const mapPurchase = (row: Raw): OrderPurchase => {
     receivedByName: toStr(row.received_by_name),
     expenseId: toStr(row.expense_id),
     paidOn: toStr(row.paid_on),
+    paidAmount: toNum(row.paid_amount),
   };
 };
 
