@@ -1968,7 +1968,7 @@ export default function OrdersProductionDetailsPage() {
           setSpecDialogOpen(open);
         }}
       >
-        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-[640px]">
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-[960px]">
           <DialogHeader>
             <DialogTitle>
               {isCashlessPaymentMethod(specPaymentMethodId) ? "Параметри специфікації" : "Умови оплати"}
@@ -1978,22 +1978,25 @@ export default function OrdersProductionDetailsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid gap-2 sm:w-1/2 sm:pr-1.5">
-              <Label htmlFor="spec-production-days">Строки виробництва (робочих днів)</Label>
-              <Input
-                id="spec-production-days"
-                inputMode="numeric"
-                value={specProductionDaysInput}
-                onChange={(e) => setSpecProductionDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
-                placeholder={`Напр. ${DEFAULT_PRODUCTION_WORK_DAYS}`}
-              />
-              <p className="text-xs text-muted-foreground">
-                Іде в п. 2.2 СП: «до N робочих днів». Це ж число використовує договір.
-              </p>
-            </div>
-
+            <div className="grid items-start gap-4 md:grid-cols-2">
             <div className="space-y-3 rounded-md border border-border/60 p-3">
               <div className="text-sm font-medium">Умови оплати</div>
+              <div className="grid gap-2">
+                <Label>Тип оплати</Label>
+                <Select value={specPaymentMethodId} onValueChange={setSpecPaymentMethodId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ORDER_PAYMENT_METHOD_OPTIONS.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">СП формується тільки для безготівкового розрахунку.</p>
+              </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="grid content-start gap-2">
                   <Label htmlFor="spec-prepayment-pct">Передоплата, %</Label>
@@ -2043,6 +2046,18 @@ export default function OrdersProductionDetailsPage() {
               ) : null}
             </div>
 
+            <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="spec-production-days">Строки виробництва (робочих днів)</Label>
+              <Input
+                id="spec-production-days"
+                inputMode="numeric"
+                value={specProductionDaysInput}
+                onChange={(e) => setSpecProductionDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
+                placeholder={`Напр. ${DEFAULT_PRODUCTION_WORK_DAYS}`}
+              />
+              <p className="text-xs text-muted-foreground">Іде в п. 2.2 СП: «до N робочих днів».</p>
+            </div>
             <div className="space-y-3 rounded-md border border-border/60 p-3">
               <div className="text-sm font-medium">Умови доставки</div>
               <div className="grid gap-2">
@@ -2073,6 +2088,8 @@ export default function OrdersProductionDetailsPage() {
                 />
                 <p className="text-xs text-muted-foreground">Іде в п. 3.2 СП разом із базисом Incoterms.</p>
               </div>
+            </div>
+            </div>
             </div>
 
             {isCashlessPaymentMethod(specPaymentMethodId) ? <SpecificationItemTextsField state={specItemTexts} /> : null}
