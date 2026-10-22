@@ -94,15 +94,16 @@ describe("buildFinanceMarginRows", () => {
     expect(rows[0].expenses).toBe(6934.5);
   });
 
-  it("замовлення без прорахунку дає власний рядок з ключем order:<orderId>", () => {
+  it("замовлення без прорахунку — один рядок за orderId разом зі своїми оплатами", () => {
     const rows = build({
+      payments: [payment("o7", 1000)],
       purchaseCosts: [purchase({ quoteId: null, orderId: "o7", orderNumber: "ZM-1026-0007", costWithVat: 300 })],
     });
     expect(rows).toHaveLength(1);
-    expect(rows[0].key).toBe("order:o7");
+    expect(rows[0].key).toBe("o7");
     expect(rows[0].number).toBe("ZM-1026-0007");
     expect(rows[0].expenses).toBe(300);
-    expect(rows[0].margin).toBe(-300);
+    expect(rows[0].margin).toBe(700);
   });
 
   it("сума кількох закупок одного прорахунку округлюється до копійок", () => {

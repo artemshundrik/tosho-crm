@@ -10,7 +10,7 @@ import {
 
 /** Оплачена закупка замовлення: її вартість із ПДВ і витрата, що з'явилася від оплати. */
 export type PaidPurchaseCost = {
-  /** Прорахунок замовлення; null — замовлення без прорахунку (рядок `order:<orderId>`). */
+  /** Прорахунок замовлення; null — замовлення без прорахунку (рядок за `orderId`, як його платежі). */
   quoteId: string | null;
   orderId: string;
   orderNumber: string;
@@ -21,7 +21,7 @@ export type PaidPurchaseCost = {
 export type MarginOrderInfo = { number: string; customerName: string };
 
 export type MarginRow = {
-  /** `quoteId` або `order:<orderId>` для замовлення без прорахунку. */
+  /** `quoteId`; для замовлення без прорахунку — його `orderId` (ним же ключуються платежі й рахунки). */
   key: string;
   number: string;
   customerName: string;
@@ -53,13 +53,13 @@ export function buildFinanceMarginRows(params: {
   const { invoices, payments, expenses, purchaseCosts, ordersByQuote, orderMeta } = params;
   const byKey = new Map<string, MarginRow>();
 
-  const ensure = (quoteId: string): MarginRow => {
+  const ensure = (quoteId: string, fallbackNumber?: string): MarginRow => {
     let row = byKey.get(quoteId);
     if (!row) {
       const order = ordersByQuote.get(quoteId);
       row = {
         key: quoteId,
-        number: order?.number ?? quoteId.slice(0, 8),
+        number: order?.number ?? fallbackNumber ?? quoteId.slice(0, 8),
         customerName: order?.customerName ?? "Замовлення",
         orderType: orderMeta?.get(quoteId)?.orderType ?? null,
         invoiced: 0,
@@ -69,25 +69,8 @@ export function buildFinanceMarginRows(params: {
       };
       byKey.set(quoteId, row);
     }
-    return row;
-  };
-
-  const ensureOrderOnly = (cost: PaidPurchaseCost): MarginRow => {
-    const key = `order:${cost.orderId}`;
-    let row = byKey.get(key);
-    if (!row) {
-      row = {
-        key,
-        number: cost.orderNumber,
-        customerName: "Замовлення без прорахунку",
-        orderType: null,
-        invoiced: 0,
-        received: 0,
-        expenses: 0,
-        margin: 0,
-      };
-      byKey.set(key, row);
-    }
+    // Рядок міг завестись від платежу ще без номера — номер закупки його уточнює.
+    if (fallbackNumber && !ordersByQuote.has(quoteId)) row.number = fallbackNumber;
     return row;
   };
 
@@ -101,8 +84,8 @@ export function buildFinanceMarginRows(params: {
 
   const purchaseExpenseIds = new Set(purchaseCosts.map((cost) => cost.expenseId));
   for (const cost of purchaseCosts) {
-    const row = cost.quoteId ? ensure(cost.quoteId) : ensureOrderOnly(cost);
-    row.expenses += cost.costWithVat;
+    // Замовлення без прорахунку: платежі й рахунки ключуються його id, тож і закупки туди ж.
+    ensure(cost.quoteId ?? cost.orderId, cost.orderNumber).expenses += cost.costWithVat;
   }
   for (const exp of expenses) {
     if (purchaseExpenseIds.has(exp.id)) continue;
