@@ -15,6 +15,7 @@ import { economicsAccess, OrderEconomicsTab } from "@/features/orders/order-deta
 import { OrderPurchaseDialog } from "@/features/orders/order-details/OrderPurchaseDialog";
 import { OrderPurchasePayDialog } from "@/features/orders/order-details/OrderPurchasePayDialog";
 import { OrderPurchaseReceiptDialog } from "@/features/orders/order-details/OrderPurchaseReceiptDialog";
+import { ORDER_PURCHASE_EVENT, orderPurchaseEventTitle } from "@/features/orders/orderPurchaseEvents";
 import { listOrderPaymentAccounts } from "@/features/orders/orderPaymentQueries";
 import {
   cancelOrderPurchasePayment,
@@ -30,6 +31,7 @@ import {
 } from "@/features/orders/orderPurchaseQueries";
 import { summarizeOrderEconomics, waybillBlockers, type OrderPurchase } from "@/features/orders/orderPurchases";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
+import { logActivity } from "@/lib/activityLogger";
 import { canViewOrderEconomics } from "@/lib/permissions";
 
 type Accounts = Array<{ id: string; name: string }>;
@@ -123,11 +125,32 @@ export function useOrderEconomicsPanel({
     };
   }, [enabled, access.edit, teamId, legalEntityId]);
 
+  const recordId = record?.id ?? null;
+  const linkedQuoteId = record?.linkedQuoteId ?? null;
+
+  // Рядок у стрічці замовлення: одразу після запису, без сум. Збій логера не ламає дію.
+  const logEvent = useCallback(
+    (title: string) => {
+      if (!teamId || !recordId) return;
+      void logActivity({
+        teamId,
+        action: ORDER_PURCHASE_EVENT,
+        entityType: "orders",
+        entityId: recordId,
+        title,
+        href: `/orders/production/${recordId}`,
+        metadata: { quote_id: linkedQuoteId ?? recordId, order_id: recordId },
+      }).catch(() => undefined);
+    },
+    [teamId, recordId, linkedQuoteId]
+  );
+
   const run = useCallback(
-    async (action: () => Promise<unknown>, success: string) => {
+    async (action: () => Promise<unknown>, success: string, eventTitle?: string) => {
       setSaving(true);
       try {
         await action();
+        if (eventTitle) logEvent(eventTitle);
         toast.success(success);
         await reload();
         onChanged();
@@ -139,7 +162,7 @@ export function useOrderEconomicsPanel({
         setSaving(false);
       }
     },
-    [reload, onChanged]
+    [reload, onChanged, logEvent]
   );
 
   const openEditor = (purchase: OrderPurchase | null, itemId?: string | null) => {
@@ -184,7 +207,11 @@ export function useOrderEconomicsPanel({
         onCancelPayment={(purchase) => setPayTarget({ mode: "cancel", purchase })}
         onReceive={setReceiptTarget}
         onToggleNone={(value) =>
-          void run(() => setOrderPurchasesNone(record.id, value), value ? "Позначку «закупок немає» поставлено" : "Позначку знято")
+          void run(
+            () => setOrderPurchasesNone(record.id, value),
+            value ? "Позначку «закупок немає» поставлено" : "Позначку знято",
+            value ? orderPurchaseEventTitle.noneSet : orderPurchaseEventTitle.noneUnset
+          )
         }
       />
       {access.edit && editor ? (
@@ -201,7 +228,11 @@ export function useOrderEconomicsPanel({
           supplierHints={hints}
           saving={saving}
           onSubmit={(input: SavePurchaseInput) =>
-            run(() => saveOrderPurchase(input), input.id ? "Закупку збережено" : "Закупку внесено")
+            run(
+              () => saveOrderPurchase(input),
+              input.id ? "Закупку збережено" : "Закупку внесено",
+              input.id ? undefined : orderPurchaseEventTitle.created
+            )
           }
         />
       ) : null}
@@ -213,8 +244,12 @@ export function useOrderEconomicsPanel({
           onOpenChange={(open) => {
             if (!open) setPayTarget(null);
           }}
-          onPay={(purchase, draft) => run(() => payOrderPurchase({ id: purchase.id, ...draft }), "Оплату внесено — витрата у Фінансах")}
-          onCancel={(purchase, reason) => run(() => cancelOrderPurchasePayment(purchase.id, reason), "Оплату скасовано")}
+          onPay={(purchase, draft) =>
+            run(() => payOrderPurchase({ id: purchase.id, ...draft }), "Оплату внесено — витрата у Фінансах", orderPurchaseEventTitle.paid)
+          }
+          onCancel={(purchase, reason) =>
+            run(() => cancelOrderPurchasePayment(purchase.id, reason), "Оплату скасовано", orderPurchaseEventTitle.paymentCancelled(reason))
+          }
         />
       ) : null}
       {access.receive ? (
@@ -225,7 +260,7 @@ export function useOrderEconomicsPanel({
             if (!open) setReceiptTarget(null);
           }}
           onConfirm={(purchase, draft) =>
-            run(() => confirmOrderPurchaseReceipt({ id: purchase.id, ...draft }), "Отримання підтверджено")
+            run(() => confirmOrderPurchaseReceipt({ id: purchase.id, ...draft }), "Отримання підтверджено", orderPurchaseEventTitle.received)
           }
         />
       ) : null}
