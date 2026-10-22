@@ -361,3 +361,34 @@ export function canApproveOrderLaunch(jobRole: string | null | undefined) {
   const job = (jobRole ?? "").trim().toLowerCase();
   return job === "seo" || job === "chief_accountant";
 }
+
+const norm = (value: string | null | undefined) => (value ?? "").trim().toLowerCase();
+
+/** Вкладка «Економіка» замовлення: кого й що бачить (закупки, маржа). Дзеркало в базі — RPC order_purchases. */
+export function canEditOrderPurchases(accessRole: string | null | undefined, jobRole: string | null | undefined) {
+  return canIssueOrderInvoice(accessRole, jobRole);
+}
+
+export function canSeeOrderMargin(accessRole: string | null | undefined, jobRole: string | null | undefined) {
+  return canIssueOrderInvoice(accessRole, jobRole);
+}
+
+export function canSeeOrderPurchaseAmounts(accessRole: string | null | undefined, jobRole: string | null | undefined) {
+  return canIssueOrderInvoice(accessRole, jobRole) || norm(jobRole) === "junior_accountant";
+}
+
+const PURCHASE_RECEIVER_EXTRA_JOB_ROLES = ["logistics", "head_of_logistics", "head_of_production", "pm"];
+
+export function canConfirmPurchaseReceipt(accessRole: string | null | undefined, jobRole: string | null | undefined) {
+  return canIssueOrderInvoice(accessRole, jobRole) || PURCHASE_RECEIVER_EXTRA_JOB_ROLES.includes(norm(jobRole));
+}
+
+export function canViewOrderEconomics(accessRole: string | null | undefined, jobRole: string | null | undefined) {
+  return canSeeOrderPurchaseAmounts(accessRole, jobRole) || canConfirmPurchaseReceipt(accessRole, jobRole);
+}
+
+/** Позначку «закупок немає» ставлять лише бухгалтер і головний бухгалтер — не власник і не СЕО. */
+export function canMarkNoPurchases(_accessRole: string | null | undefined, jobRole: string | null | undefined) {
+  const job = norm(jobRole);
+  return job === "accountant" || job === "chief_accountant";
+}
