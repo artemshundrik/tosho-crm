@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import { ChevronRight } from "@/components/icons/appIcons";
 
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -24,7 +26,7 @@ export type QuoteDeadlineTrackItem = {
   title: string;
 };
 
-export type QuotePartyExtra = { label: string; value: string };
+export type QuotePartyExtra = { label: string; value: string; href?: string };
 
 type QuotePartyCardProps = {
   customerName?: string | null;
@@ -137,7 +139,13 @@ export function QuotePartyCard({
           {extras.map((extra) => (
             <span key={extra.label} className="inline-flex items-center gap-1.5">
               {extra.label}
-              <span className="font-medium text-foreground">{extra.value}</span>
+              {extra.href ? (
+                <Link to={extra.href} className="font-medium text-foreground hover:underline">
+                  {extra.value}
+                </Link>
+              ) : (
+                <span className="font-medium text-foreground">{extra.value}</span>
+              )}
             </span>
           ))}
         </div>

@@ -140,7 +140,7 @@ import { OrderPaymentCard } from "@/features/orders/order-details/OrderPaymentCa
 import { useOrderPaymentPanel } from "@/features/orders/order-details/useOrderPaymentPanel";
 import { partyInitials } from "@/features/orders/partyInitials";
 import { OrderStatusControl } from "@/features/orders/order-details/OrderStatusControl";
-import { OrderSourceQuoteLink } from "@/features/orders/order-details/OrderSourceQuoteLink";
+import { orderSourceQuoteExtra } from "@/features/orders/order-details/orderSourceQuoteExtra";
 
 type OrderPageTab = "launch" | "items" | "materials" | "delivery" | "details";
 
@@ -1345,6 +1345,7 @@ export default function OrdersProductionDetailsPage() {
     { value: "details", label: "Деталі", badge: formatOrderMoney(record.total, record.currency), mobileOnly: true },
   ];
   const partyExtras = [
+    orderSourceQuoteExtra(record),
     record.customerTaxId
       ? { label: "Реквізити", value: `ЄДРПОУ ${record.customerTaxId}` }
       : requiresCustomerDocuments
@@ -1398,7 +1399,6 @@ export default function OrdersProductionDetailsPage() {
               >
                 {record.quoteNumber}
               </HoverCopyText>
-              <OrderSourceQuoteLink record={record} />
             </div>
             <div className="order-3 flex w-full flex-wrap items-center gap-1.5 lg:order-none lg:w-auto">
               {/* Вузько права колонка схована у «Деталях» — замовника показуємо тут, щоб було видно, чиє це. */}
