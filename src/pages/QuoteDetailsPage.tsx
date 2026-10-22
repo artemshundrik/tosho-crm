@@ -25,7 +25,6 @@ import type { ActivityRow } from "@/lib/activity";
 import { cn } from "@/lib/utils";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { EconomicsComingSoon } from "@/features/quotes/quote-details/EconomicsComingSoon";
 import {
   buildDeadlineTabBadge,
   combineWallClockValue,
@@ -187,7 +186,6 @@ import type { AppIcon } from "@/components/icons/appIcons";
 import {
   AlertTriangle,
   ArrowLeft,
-  Banknote,
   Copy,
   FileDown,
   FileText,
@@ -297,7 +295,7 @@ type QuoteDetailsPageProps = {
   quoteId: string;
 };
 
-type QuotePageTab = "products" | "design" | "deadlines" | "discussion" | "details" | "economics";
+type QuotePageTab = "products" | "design" | "deadlines" | "discussion" | "details";
 
 type QuoteDetailsCachePayload = {
   quote: QuoteSummaryRow;
@@ -3973,16 +3971,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       badge: canViewSummarySection ? formatCurrency(totals.total, quote.currency) : null,
       mobileOnly: true,
     },
-    // «Економіка» стоїть останньою і поки що веде на заглушку: вкладку ще
-    // узгоджують (REQ-56), і доки рішення не ухвалені, формула ціни лишається
-    // рівно такою, як зараз. Порожня вкладка з чесним «скоро» краща за
-    // вигаданий макет, який доведеться переробляти.
-    {
-      value: "economics",
-      label: "Економіка",
-      icon: Banknote,
-      soon: true,
-    },
   ];
 
   return (
@@ -5452,17 +5440,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 loadingMore={activityLoading}
                 onLoadMore={() => void loadActivityLog({ full: true })}
               />
-            </section>
-
-            {/*
-              «Економіка» — заглушка, а не порожня вкладка.
-              Розкладка ціни вже працює в «Активному підсумку» справа, тож тут
-              чесно сказано, що саме додасться і чому воно ще не додане. Формулу
-              ціни ця вкладка не чіпає: доки відкриті питання не закриті, все
-              рахується рівно так, як рахувалось.
-            */}
-            <section className={cn("tab-panel py-2", activeQuoteTab !== "economics" && "hidden")}>
-              <EconomicsComingSoon />
             </section>
           </div>
         </main>

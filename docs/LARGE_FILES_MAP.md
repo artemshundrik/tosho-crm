@@ -53,7 +53,6 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 5321 | вкладка «Дедлайни» — `<QuoteDeadlinesTab>` (`QuoteDeadlinesTab.tsx`: три картки по черзі, правка й швидкі дати там же; збереження — обробники сторінки вище) |
 | 5347 / 5360 | вкладка «Дизайн» — `<QuoteDesignTabSection>` (смуга стану, картки задач, товари без задачі з формою в рядку); картки й матеріали — `QuoteDesignTasksPanel.tsx`, збирач `buildQuoteDesignTaskCards` там же |
 | 5419 / 5425 | вкладка «Стрічка» — `<QuoteFeed>`; збирач подій — `quoteFeedEvents.ts`, розмітка — `QuoteFeed.tsx` |
-| 6247 | вкладка «Економіка» (заглушка `EconomicsComingSoon`) |
 | 7319 | діалог «Створити замовлення» |
 
 ## src/pages/DesignTaskPage.tsx (~12 869 lines, 589 KB, as of 2026-10-15)
