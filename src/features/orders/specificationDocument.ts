@@ -250,11 +250,28 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
         </tr>`;
     })
     .join("");
-  const totalLabel = vatPayer
-    ? `Загальна вартість з ПДВ: ${formatPlainMoney(totalWithVat)} грн. (в тому числі ПДВ — ${formatPlainMoney(vatAmount)} грн.)`
-    : `Загальна вартість: ${formatPlainMoney(totalWithVat)} грн. (без ПДВ)`;
+  // Під таблицею — три рядки: без ПДВ, ПДВ окремо, з ПДВ (REQ-322: верх таблиці без ПДВ, низ — з ПДВ).
+  const totalRows = (
+    vatPayer
+      ? [
+          ["Разом без ПДВ:", totalWithoutVat],
+          [`ПДВ (${VAT_RATE}%):`, vatAmount],
+          ["Загальна вартість з ПДВ:", totalWithVat],
+        ]
+      : [["Загальна вартість (без ПДВ):", totalWithVat]]
+  )
+    .map(
+      ([label, amount]) => `
+            <tr class="total-row">
+              <td colspan="4" class="num">${escapeHtml(String(label))}</td>
+              <td class="num">${escapeHtml(formatPlainMoney(Number(amount)))}</td>
+            </tr>`
+    )
+    .join("");
   const visualizations = params.visualizationImageUrls ?? [];
-  const wordsInline = totalInWords.charAt(0).toLocaleLowerCase("uk-UA") + totalInWords.slice(1);
+  const lowerFirst = (text: string) => text.charAt(0).toLocaleLowerCase("uk-UA") + text.slice(1);
+  const wordsInline = lowerFirst(totalInWords);
+  const netWordsInline = lowerFirst(amountInWords(totalWithoutVat, wordsCurrency));
 
   return renderPrintDocument({
     title: `Специфікація № ${numberLabel}`,
@@ -307,10 +324,7 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
           </thead>
           <tbody>
             ${rows}
-            <tr class="total-row">
-              <td colspan="4" class="num">${escapeHtml(totalLabel)}</td>
-              <td class="num">${escapeHtml(formatPlainMoney(totalWithVat))}</td>
-            </tr>
+${totalRows}
           </tbody>
         </table>
 
@@ -326,7 +340,7 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
         <div class="heading">2. ВАРТІСТЬ РОБІТ ТА СТРОКИ ВИГОТОВЛЕННЯ ПРОДУКЦІЇ</div>
         <p>${
           vatPayer
-            ? `2.1. Загальна вартість робіт з виготовлення Продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} (${escapeHtml(wordsInline)}), враховуючи ПДВ ${VAT_RATE}%. Вартість робіт без ПДВ складає ${escapeHtml(formatPlainMoney(totalWithoutVat))} грн.`
+            ? `2.1. Загальна вартість робіт з виготовлення Продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} (${escapeHtml(wordsInline)}), враховуючи ПДВ ${VAT_RATE}%. Вартість робіт без ПДВ складає ${escapeHtml(formatPlainMoney(totalWithoutVat))} (${escapeHtml(netWordsInline)}).`
             : `2.1. Загальна вартість робіт з виготовлення Продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} (${escapeHtml(wordsInline)}), без ПДВ.`
         }</p>
         <p>2.2. Термін виготовлення Продукції, з поставкою на склад, складає до ${escapeHtml(formatBalanceDaysTerm(productionDays, "working"))} з дати затвердження макету до друку${

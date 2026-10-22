@@ -21,6 +21,7 @@ export const getSpecificationRecordBlocker = (record: DerivedOrderRecord) => {
   if (record.items.length === 0) return "У замовленні немає позицій.";
   if (!isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail)) return "СП створюється тільки для безготівки.";
   if (!record.contractCreatedAt) return "Спочатку потрібно створити договір.";
+  if (!record.customerVatId?.trim()) return "У картці замовника не вказано ІПН.";
   if (!record.specificationCreatedAt && !record.invoiceNumber) return "Спочатку рахунок: бухгалтерія ще його не виписала.";
   if (!record.docs.specification) return "У замовленні ще не виконані умови для СП.";
   return null;

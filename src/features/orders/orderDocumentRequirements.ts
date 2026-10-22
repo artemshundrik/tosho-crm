@@ -345,6 +345,7 @@ export const canCreateSpecification = (record: DerivedOrderRecord) =>
   record.items.length > 0 &&
   isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail) &&
   Boolean(record.contractCreatedAt) &&
+  Boolean(record.customerVatId?.trim()) &&
   (Boolean(record.specificationCreatedAt) || Boolean(record.invoiceNumber)) &&
   record.hasApprovedVisualization;
 
@@ -356,6 +357,10 @@ export const getSpecificationBlocker = (record: DerivedOrderRecord) => {
   }
   if (!record.contractCreatedAt) {
     return "Перед СП потрібно створити Договір.";
+  }
+  // ІПН замовника в СП обов'язковий: без нього документ не створюємо.
+  if (!record.customerVatId?.trim()) {
+    return "У картці замовника не вказано ІПН — без нього СП не створюється.";
   }
   // REQ-322#p15: СП — після виписаного рахунку; передрук створеної не блокуємо.
   if (!record.specificationCreatedAt && !record.invoiceNumber) {
