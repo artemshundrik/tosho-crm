@@ -276,22 +276,25 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
   return renderPrintDocument({
     title: `Специфікація № ${numberLabel}`,
     toolbarTitle: `СП № ${numberLabel}`,
+    // Шрифти — як у шаблоні юристів: Times New Roman, текст 11, шапка 12, розділи 11 великими.
     styles: `
-        p { margin: 0 0 8px; font-size: 14px; text-align: justify; }
+        .page { font-family: "Times New Roman", Times, serif; font-size: 11pt; }
+        p { margin: 0 0 8px; font-size: 11pt; text-align: justify; }
         .center { text-align: center; }
-        .heading { margin: 20px 0 10px; font-size: 14px; font-weight: 700; text-align: center; }
-        .topline { display: flex; justify-content: space-between; gap: 24px; margin: 16px 0 16px; font-size: 14px; }
+        .doc-title { font-size: 12pt; }
+        .heading { margin: 20px 0 10px; font-size: 11pt; font-weight: 700; text-align: center; text-transform: uppercase; }
+        .topline { display: flex; justify-content: space-between; gap: 24px; margin: 16px 0 16px; font-size: 11pt; }
         table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-        th, td { border: 1px solid #111827; padding: 6px 8px; vertical-align: top; font-size: 13px; }
+        th, td { border: 1px solid #111827; padding: 6px 8px; vertical-align: top; font-size: 11pt; }
         th { background: #f4f4f2; font-weight: 700; text-align: left; }
         .num { text-align: right; white-space: nowrap; }
         .item-name { font-weight: 700; }
         .total-row td { font-weight: 700; }
-        .visual-title { margin: 18px 0 8px; font-weight: 700; font-size: 14px; }
+        .visual-title { margin: 18px 0 8px; font-weight: 700; font-size: 11pt; }
         .visualization { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
         .visualization img { max-width: 100%; max-height: 320px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; background: #ffffff; }
-        .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 8px; font-size: 13px; }
-        .signature-grid p { margin: 0 0 3px; font-size: 13px; text-align: left; }
+        .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 8px; font-size: 11pt; }
+        .signature-grid p { margin: 0 0 3px; font-size: 11pt; text-align: left; }
         .party-title { font-weight: 700; margin-bottom: 4px; }
         .signature-line { margin-top: 18px !important; }
         @media print {
@@ -300,9 +303,9 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
         }
     `,
     bodyHtml: `
-        <div class="center">Додаток (Специфікація) № ${escapeHtml(numberLabel)} до</div>
-        <div class="center">${escapeHtml(contractTitle)}</div>
-        <div class="center">№ ${escapeHtml(contractNumber)} від ${escapeHtml(contractDate)} р.</div>
+        <div class="center doc-title">Додаток (Специфікація) № ${escapeHtml(numberLabel)} до</div>
+        <div class="center doc-title">${escapeHtml(contractTitle)}</div>
+        <div class="center doc-title">№ ${escapeHtml(contractNumber)} від ${escapeHtml(contractDate)} р.</div>
 
         <div class="topline">
           <div>м. Київ</div>
