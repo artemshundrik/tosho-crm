@@ -77,7 +77,7 @@ describe("СП за шаблоном № 31", () => {
     expect(html).toContain("2.1. Загальна вартість робіт з виготовлення Продукції складає 152 300,00 (сто");
     expect(html).toMatch(/Вартість робіт без ПДВ складає 126 916,67 \(сто двадцять шість тисяч [^)]+\)\./);
     expect(html).toContain("до 15 робочих днів");
-    expect(html).toContain("(Telegram, Viber)");
+    expect(html).toContain("(Telegram, Viber або WhatsApp)");
     expect(html).toContain("1. СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ");
     expect(html).toContain("3. ПОРЯДОК ОПЛАТИ ТА ДОСТАВКИ");
     expect(html).toContain("3.2. Поставка Продукції здійснюється на умовах FCA (Incoterms 2020), м. Київ.");
