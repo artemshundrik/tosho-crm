@@ -278,7 +278,7 @@ describe("ворота запуску (p6–p8)", () => {
       ...cashless,
       contractCreatedAt: "2026-09-01",
       contractSignedAt: "2026-09-02",
-      inheritedContractOrderNumber: "ZM-0926-0001",
+      inheritedContractOrderNumber: "TO-0926-0001",
       specificationCreatedAt: "2026-10-14",
       specificationSignedAt: "2026-10-15",
     };

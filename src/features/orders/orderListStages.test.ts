@@ -241,7 +241,7 @@ describe("getOrderDocMarks", () => {
   it("Д/С готові, коли підписані; створені — обведені; успадкований підписаний договір — готовий", () => {
     const marks = getOrderDocMarks({
       ...cashless,
-      inheritedContractOrderNumber: "ZM-0926-0001",
+      inheritedContractOrderNumber: "TO-0926-0001",
       contractSignedAt: "2026-09-02",
       specificationCreatedAt: "2026-10-14",
       invoiceNumber: "407",

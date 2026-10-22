@@ -1974,26 +1974,26 @@ const getManualOrderMonthCode = (date = new Date()) => {
 };
 
 /**
- * Наступний номер для замовлення без прорахунку — формат `ZM-{MMYY}-{0000}`.
- * Окремий префікс від прорахунків (`TS-`), щоб не плутати нумерацію.
+ * Наступний номер для замовлення без прорахунку — формат `TO-{MMYY}-{0000}` (ToSho Order).
+ * Окремий префікс від прорахунків (`TS-`), щоб не плутати нумерацію. До 22.10.2026 був `ZM-`:
+ * його прибрали через латинську Z; старі номери переписує scripts/orders-number-prefix-to.sql,
+ * а лічильник до того часу враховує обидва префікси, щоб номер не повторився.
  * quote_number НЕ унікальний, тож достатньо best-effort max+1 у межах місяця.
  */
 async function getNextManualOrderNumber(teamId: string) {
   const monthCode = getManualOrderMonthCode();
-  const pattern = `ZM-${monthCode}-%`;
   const { data, error } = await supabase
     .schema("tosho")
     .from("orders")
     .select("quote_number")
     .eq("team_id", teamId)
-    .like("quote_number", pattern)
-    .order("quote_number", { ascending: false })
-    .limit(1);
+    .or(`quote_number.like.TO-${monthCode}-%,quote_number.like.ZM-${monthCode}-%`);
   if (error && !isMissingOrdersRelationMessage(error.message)) throw error;
-  const last = (((data ?? []) as Array<{ quote_number?: string | null }>)[0]?.quote_number ?? "").trim();
-  const parsed = last ? Number.parseInt(last.split("-")[2] ?? "", 10) : NaN;
-  const next = Number.isFinite(parsed) && parsed >= 1 ? parsed + 1 : 1;
-  return `ZM-${monthCode}-${String(next).padStart(4, "0")}`;
+  const last = ((data ?? []) as Array<{ quote_number?: string | null }>).reduce((max, row) => {
+    const parsed = Number.parseInt((row.quote_number ?? "").trim().split("-")[2] ?? "", 10);
+    return Number.isFinite(parsed) && parsed > max ? parsed : max;
+  }, 0);
+  return `TO-${monthCode}-${String(last + 1).padStart(4, "0")}`;
 }
 
 /**

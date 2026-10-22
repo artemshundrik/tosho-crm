@@ -18,7 +18,7 @@ const record = {
   items: [{ name: "Розробка макету бейджа", qty: 1, unit: "посл.", lineTotal: 1200 }],
   total: 1200,
   currency: "UAH",
-  quoteNumber: "ZM-1026-0003",
+  quoteNumber: "TO-1026-0003",
   customerName: "Замовник",
   legalEntityLabel: "ТОВ «Замовник»",
   customerSignatoryName: "Іваненко Ірина Іванівна",
