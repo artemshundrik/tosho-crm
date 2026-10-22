@@ -189,3 +189,23 @@ export async function listSupplierNameHints(teamId: string): Promise<string[]> {
   }
   return [...names].sort((a, b) => a.localeCompare(b, "uk")).slice(0, 200);
 }
+
+/** Позначка «закупок немає» і хто її поставив; поки SQL не накочено (немає колонок) — null. */
+export async function getOrderPurchasesNone(orderId: string): Promise<{ byName: string | null } | null> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("orders")
+    .select("purchases_none_at,purchases_none_by")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (error || !data?.purchases_none_at) return null;
+  if (!data.purchases_none_by) return { byName: null };
+  const profile = await supabase
+    .schema("tosho")
+    .from("team_member_profiles")
+    .select("full_name")
+    .eq("user_id", data.purchases_none_by)
+    .limit(1)
+    .maybeSingle();
+  return { byName: profile.data?.full_name?.trim() || null };
+}

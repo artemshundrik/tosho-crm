@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/ui/picker-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { dayMonth, kyivDay } from "@/features/orders/kyivDate";
 import {
   derivePaymentStatus,
   formatUah,
@@ -21,16 +22,6 @@ const amountFormat = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, 
 
 /** Число для поля суми: «49 680,00» звичайними пробілами — так його й друкують. */
 export const formatAmountInput = (value: number) => amountFormat.format(value).replace(/[  ]/g, " ");
-
-const kyivDayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Kiev" });
-
-/** Київський календарний день (yyyy-MM-dd) — база перевіряє дату оплати саме за ним. */
-const kyivDay = (daysAgo = 0) => kyivDayFormat.format(new Date(Date.now() - daysAgo * 86_400_000));
-
-const dayMonth = (iso: string) => {
-  const [, month, day] = iso.split("-");
-  return `${day}.${month}`;
-};
 
 export type OrderPaymentDraft = { amount: number; paidAt: string; accountId: string; bankTxnRef: string | null };
 

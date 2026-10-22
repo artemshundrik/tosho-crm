@@ -138,11 +138,12 @@ import { OrderLaunchPathCard } from "@/features/orders/order-details/OrderLaunch
 import { OrderMaterialsTab, countOrderMaterials } from "@/features/orders/order-details/OrderMaterialsTab";
 import { OrderPaymentCard } from "@/features/orders/order-details/OrderPaymentCard";
 import { useOrderPaymentPanel } from "@/features/orders/order-details/useOrderPaymentPanel";
+import { useOrderEconomicsPanel } from "@/features/orders/order-details/useOrderEconomicsPanel";
 import { partyInitials } from "@/features/orders/partyInitials";
 import { OrderStatusControl } from "@/features/orders/order-details/OrderStatusControl";
 import { orderSourceQuoteExtra } from "@/features/orders/order-details/orderSourceQuoteExtra";
 
-type OrderPageTab = "launch" | "items" | "materials" | "delivery" | "details";
+type OrderPageTab = "launch" | "items" | "materials" | "delivery" | "economics" | "details";
 
 const getFileExtension = (name?: string | null) => {
   const value = (name ?? "").trim();
@@ -882,6 +883,7 @@ export default function OrdersProductionDetailsPage() {
 
   // Оплати замовлення (REQ-322#p26): вносить бухгалтерія, статус оплати рахує база.
   const paymentPanel = useOrderPaymentPanel({ record, teamId, userId, canEnter: canIssueInvoice, onChanged: refreshRecord });
+  const economicsPanel = useOrderEconomicsPanel({ record, teamId, userId, accessRole, jobRole, onChanged: refreshRecord }); // закупки й маржа
 
   useEffect(() => {
     if (!teamId || !id) return;
@@ -1334,14 +1336,11 @@ export default function OrdersProductionDetailsPage() {
           : record.paymentRail;
   const openCustomerCard = record.customerId ? () => void openCustomerEditor(record.customerId!) : null;
   const orderTabs: { value: OrderPageTab; label: string; badge?: string | number | null; mobileOnly?: boolean }[] = [
-    {
-      value: "launch",
-      label: "Запуск",
-      badge: `${launchPath.steps.filter((step) => step.state === "done").length}/${launchPath.steps.length}`,
-    },
+    { value: "launch", label: "Запуск", badge: `${launchPath.steps.filter((step) => step.state === "done").length}/${launchPath.steps.length}` },
     { value: "items", label: "Позиції", badge: record.items.length || null },
     { value: "materials", label: "Матеріали", badge: countOrderMaterials(record) || null },
     { value: "delivery", label: "Доставка", badge: record.incotermsCode || null },
+    ...(economicsPanel.tab ? [economicsPanel.tab] : []),
     { value: "details", label: "Деталі", badge: formatOrderMoney(record.total, record.currency), mobileOnly: true },
   ];
   const partyExtras = [
@@ -1643,6 +1642,7 @@ export default function OrdersProductionDetailsPage() {
               </>
             ) : null}
             {activeTab === "items" ? <OrderItemsTable record={record} /> : null}
+            {activeTab === "economics" ? economicsPanel.content : null}
             {activeTab === "materials" ? (
               <OrderMaterialsTab
                 record={record}
