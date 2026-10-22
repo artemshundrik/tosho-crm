@@ -23,11 +23,12 @@ import {
   getOrderPurchasesNone,
   listOrderPurchases,
   listSupplierNameHints,
+  setOrderPurchasesNone,
   payOrderPurchase,
   saveOrderPurchase,
   type SavePurchaseInput,
 } from "@/features/orders/orderPurchaseQueries";
-import { summarizeOrderEconomics, type OrderPurchase } from "@/features/orders/orderPurchases";
+import { summarizeOrderEconomics, waybillBlockers, type OrderPurchase } from "@/features/orders/orderPurchases";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { canViewOrderEconomics } from "@/lib/permissions";
 
@@ -61,6 +62,8 @@ export function useOrderEconomicsPanel({
   content: ReactNode;
   purchases: OrderPurchase[];
   purchasesNone: boolean;
+  /** Причини, чому ВН ще не внести; undefined - дані не завантажено (посада без вкладки чи збій читання): не блокуємо, відповість база. */
+  waybillBlockers: string[] | undefined;
 } {
   const access = economicsAccess(accessRole, jobRole);
   const enabled = record?.source === "stored" && canViewOrderEconomics(accessRole, jobRole);
@@ -70,6 +73,7 @@ export function useOrderEconomicsPanel({
   const [purchases, setPurchases] = useState<OrderPurchase[]>([]);
   const [none, setNone] = useState<{ byName: string | null } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [payTarget, setPayTarget] = useState<{ mode: "pay" | "cancel"; purchase: OrderPurchase } | null>(null);
@@ -88,6 +92,7 @@ export function useOrderEconomicsPanel({
       if (token !== loadToken.current) return;
       setPurchases(list);
       setNone(noneState);
+      setLoaded(true);
     } catch (error) {
       if (token === loadToken.current) toast.error(errorText(error));
     }
@@ -96,6 +101,7 @@ export function useOrderEconomicsPanel({
   useEffect(() => {
     setPurchases([]);
     setNone(null);
+    setLoaded(false);
     if (!orderId) return;
     setLoading(true);
     void reload().finally(() => setLoading(false));
@@ -146,7 +152,7 @@ export function useOrderEconomicsPanel({
     setEditor((current) => ({ key: (current?.key ?? 0) + 1, purchase, itemId }));
   };
 
-  if (!record || !enabled) return { tab: null, content: null, purchases: [], purchasesNone: false };
+  if (!record || !enabled) return { tab: null, content: null, purchases: [], purchasesNone: false, waybillBlockers: undefined };
 
   const items = record.items.map((item) => ({ id: item.id, name: item.name, qty: item.qty ?? null, unit: item.unit || null }));
   const invoiceTotal = Number(record.total) || 0;
@@ -177,6 +183,9 @@ export function useOrderEconomicsPanel({
         onPay={(purchase) => setPayTarget({ mode: "pay", purchase })}
         onCancelPayment={(purchase) => setPayTarget({ mode: "cancel", purchase })}
         onReceive={setReceiptTarget}
+        onToggleNone={(value) =>
+          void run(() => setOrderPurchasesNone(record.id, value), value ? "Позначку «закупок немає» поставлено" : "Позначку знято")
+        }
       />
       {access.edit && editor ? (
         <OrderPurchaseDialog
@@ -256,5 +265,6 @@ export function useOrderEconomicsPanel({
     content,
     purchases,
     purchasesNone: none !== null,
+    waybillBlockers: loaded ? waybillBlockers(purchases, none !== null) : undefined,
   };
 }

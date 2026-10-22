@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -48,7 +48,7 @@ const PURCHASES: OrderPurchase[] = [
 const HIDDEN: OrderPurchase[] = PURCHASES.map((p) => ({ ...p, amount: null, vatMode: null, costWithVat: null, expenseId: null, paidOn: null }));
 
 function renderTab(jobRole: string, overrides: Partial<Parameters<typeof OrderEconomicsTab>[0]> = {}) {
-  const handlers = { onAdd: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn(), onPay: vi.fn(), onCancelPayment: vi.fn(), onReceive: vi.fn() };
+  const handlers = { onAdd: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn(), onPay: vi.fn(), onCancelPayment: vi.fn(), onReceive: vi.fn(), onToggleNone: vi.fn() };
   const access = economicsAccess("member", jobRole);
   render(
     <OrderEconomicsTab
@@ -166,5 +166,35 @@ describe("віконце «Закупка»", () => {
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
     expect((screen.getByLabelText("Що") as HTMLInputElement).value).toBe("");
     expect((screen.getByLabelText("Постачальник") as HTMLInputElement).value).toBe("ФОП Іваненко");
+  });
+
+  describe("позначка «закупок немає»", () => {
+    it("бухгалтер без рядків бачить «Закупок немає» і ставить позначку", async () => {
+      const onToggleNone = vi.fn();
+      renderTab("accountant", { purchases: [], onToggleNone });
+      await userEvent.click(screen.getByRole("button", { name: "Закупок немає" }));
+      expect(onToggleNone).toHaveBeenCalledWith(true);
+    });
+
+    it("СЕО без рядків кнопки не бачить", () => {
+      renderTab("seo", { purchases: [] });
+      expect(screen.queryByRole("button", { name: "Закупок немає" })).toBeNull();
+    });
+
+    it("з рядками кнопки немає", () => {
+      renderTab("accountant");
+      expect(screen.queryByRole("button", { name: "Закупок немає" })).toBeNull();
+    });
+
+    it("коли позначка стоїть, бухгалтер може її зняти, СЕО - ні", async () => {
+      const onToggleNone = vi.fn();
+      const none = { byName: "Ірина" };
+      renderTab("accountant", { purchases: [], purchasesNone: none, onToggleNone });
+      await userEvent.click(screen.getByRole("button", { name: "Зняти позначку" }));
+      expect(onToggleNone).toHaveBeenCalledWith(false);
+      cleanup();
+      renderTab("seo", { purchases: [], purchasesNone: none });
+      expect(screen.queryByRole("button", { name: "Зняти позначку" })).toBeNull();
+    });
   });
 });

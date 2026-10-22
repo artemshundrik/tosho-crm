@@ -23,13 +23,14 @@ import { formatOrderMoney } from "@/features/orders/orderRecords";
 import {
   canConfirmPurchaseReceipt,
   canEditOrderPurchases,
+  canMarkNoPurchases,
   canSeeOrderMargin,
   canSeeOrderPurchaseAmounts,
 } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 /** Що посада бачить і робить у вкладці. Права все одно перевіряє база; тут — що показати. */
-export type EconomicsAccess = { amounts: boolean; margin: boolean; edit: boolean; receive: boolean };
+export type EconomicsAccess = { amounts: boolean; margin: boolean; edit: boolean; receive: boolean; markNone: boolean };
 
 export function economicsAccess(accessRole: string | null | undefined, jobRole: string | null | undefined): EconomicsAccess {
   return {
@@ -37,6 +38,7 @@ export function economicsAccess(accessRole: string | null | undefined, jobRole: 
     margin: canSeeOrderMargin(accessRole, jobRole),
     edit: canEditOrderPurchases(accessRole, jobRole),
     receive: canConfirmPurchaseReceipt(accessRole, jobRole),
+    markNone: canMarkNoPurchases(accessRole, jobRole),
   };
 }
 
@@ -277,6 +279,7 @@ export function OrderEconomicsTab({
   access,
   loading,
   onAdd,
+  onToggleNone,
   ...handlers
 }: {
   items: EconomicsItem[];
@@ -289,6 +292,8 @@ export function OrderEconomicsTab({
   loading: boolean;
   /** undefined — позицію обере людина; null — «на все замовлення». */
   onAdd: (itemId?: string | null) => void;
+  /** true - поставити «закупок немає», false - зняти. */
+  onToggleNone: (none: boolean) => void;
 } & RowHandlers) {
   // Позиція могла зникнути із замовлення: такий рядок показуємо в «На все замовлення», а не губимо.
   const known = new Set(items.map((item) => item.id));
@@ -312,16 +317,28 @@ export function OrderEconomicsTab({
 
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Закупки</h2>
-        {canAdd ? (
-          <Button type="button" size="sm" variant="outline" onClick={() => onAdd(undefined)}>
-            + Закупка
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {access.markNone && !purchasesNone && purchases.length === 0 ? (
+            <Button type="button" size="sm" variant="ghost" onClick={() => onToggleNone(true)}>
+              Закупок немає
+            </Button>
+          ) : null}
+          {canAdd ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => onAdd(undefined)}>
+              + Закупка
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {purchasesNone ? (
-        <div className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-          {["Закупок немає", purchasesNone.byName].filter(Boolean).join(" · ")}
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+          <span>{["Закупок немає", purchasesNone.byName].filter(Boolean).join(" · ")}</span>
+          {access.markNone ? (
+            <Button type="button" size="xs" variant="textPrimary" onClick={() => onToggleNone(false)}>
+              Зняти позначку
+            </Button>
+          ) : null}
         </div>
       ) : groups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">

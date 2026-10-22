@@ -44,18 +44,27 @@ export function OrderClosingDocumentDeskCard({
   teamId,
   onSaved,
   onPreview,
+  waybillBlockers,
 }: {
   record: DerivedOrderRecord;
   teamId: string;
   onSaved: (patch: ClosingDocumentPatch) => void;
   /** Друк є лише в акта: ВН друкує BAS. */
   onPreview: (() => void) | null;
+  /**
+   * Чому ВН ще не внести: склад не підтвердив отримання закупок чи їх не внесено.
+   * Діє лише для ВН і лише на першому внесенні номера - так само, як гейт у базі.
+   * undefined - посада без вкладки «Економіка»: тут не блокуємо, відповість база.
+   */
+  waybillBlockers?: string[];
 }) {
   const doc = getClosingDocumentRef(record);
   const copy = COPY[doc.kind];
   const [number, setNumber] = useState(doc.number ?? "");
   const [date, setDate] = useState(doc.date ?? localTodayIso());
   const [busy, setBusy] = useState(false);
+  const blockers = doc.kind === "waybill" && !doc.number ? (waybillBlockers ?? []) : [];
+  const blocked = blockers.length > 0;
   const unchanged = number.trim() === (doc.number ?? "") && date === (doc.date ?? date);
 
   const save = async () => {
@@ -100,7 +109,13 @@ export function OrderClosingDocumentDeskCard({
           <Label htmlFor={fieldId} className="text-xs">
             Номер з BAS
           </Label>
-          <Input id={fieldId} value={number} onChange={(event) => setNumber(event.target.value)} placeholder={copy.placeholder} />
+          <Input
+            id={fieldId}
+            value={number}
+            disabled={blocked}
+            onChange={(event) => setNumber(event.target.value)}
+            placeholder={copy.placeholder}
+          />
         </div>
         <div className="grid w-full gap-1 sm:w-40">
           <Label htmlFor={`${fieldId}-date`} className="text-xs">
@@ -111,12 +126,19 @@ export function OrderClosingDocumentDeskCard({
         <Button
           size="sm"
           className="w-full sm:ml-auto sm:w-auto"
-          disabled={busy || unchanged || (!number.trim() && !doc.number)}
+          disabled={busy || blocked || unchanged || (!number.trim() && !doc.number)}
           onClick={() => void save()}
         >
           {doc.number ? "Зберегти" : copy.confirm}
         </Button>
       </div>
+      {blocked ? (
+        <div className="tone-text-warning mt-2 text-xs" role="status">
+          {blockers.map((text) => (
+            <p key={text}>{text}</p>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }

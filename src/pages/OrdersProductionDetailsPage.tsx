@@ -1535,8 +1535,7 @@ export default function OrdersProductionDetailsPage() {
                 (Boolean(record.waybillNumber) || ["ready", "shipped", "completed"].includes(record.orderStatus)))) ? (
               <OrderClosingDocumentDeskCard
                 key={`${record.id}:${record.closingDocument ?? ""}:${record.actNumber ?? ""}:${record.waybillNumber ?? ""}`}
-                record={record}
-                teamId={teamId}
+                record={record} teamId={teamId} waybillBlockers={economicsPanel.waybillBlockers}
                 onSaved={(patch) => setRecord((current) => (current ? { ...current, ...patch } : current))}
                 onPreview={
                   record.closingDocument === "act" ? () => void openDocumentPrint("act", { markCreated: false }) : null
