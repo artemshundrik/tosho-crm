@@ -8,18 +8,17 @@ import {
   useFinanceExpenses,
   useFinanceInvoices,
   useFinanceOrderMeta,
+  useFinancePaidPurchaseCosts,
   useFinancePayments,
 } from "./queries";
 import {
-  invoiceIsReceivable,
   ORDER_TYPE_LABELS,
-  paymentUahValue,
   type FinanceExpense,
   type FinanceInvoice,
   type FinanceOrderMeta,
   type FinancePayment,
-  type OrderType,
 } from "./types";
+import { buildFinanceMarginRows, type MarginOrderInfo, type PaidPurchaseCost } from "./financeMarginRows";
 import { Badge } from "@/components/ui/badge";
 import { FinanceSkeleton } from "./FinanceSkeleton";
 
@@ -33,24 +32,12 @@ const getErrorMessage = (error: unknown, fallback: string) =>
 
 const uah = (value: number) => formatOrderMoney(value, "UAH");
 
-type OrderInfo = { number: string; customerName: string; total: number; currency: string };
-
-type MarginRow = {
-  quoteId: string;
-  number: string;
-  customerName: string;
-  orderType: OrderType | null;
-  invoiced: number;
-  received: number;
-  expenses: number;
-  margin: number; // received − expenses (factual)
-};
-
 const EMPTY_PAYMENTS: FinancePayment[] = [];
 const EMPTY_INVOICES: FinanceInvoice[] = [];
 const EMPTY_EXPENSES: FinanceExpense[] = [];
 const EMPTY_ORDER_META = new Map<string, FinanceOrderMeta>();
-const EMPTY_ORDERS = new Map<string, OrderInfo>();
+const EMPTY_PURCHASE_COSTS: PaidPurchaseCost[] = [];
+const EMPTY_ORDERS = new Map<string, MarginOrderInfo>();
 
 export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
   // Спільні finance-хуки (див. queries.ts): рендер з кешу між вкладками;
@@ -60,12 +47,15 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
   const expensesQuery = useFinanceExpenses(teamId);
   const orderMetaQuery = useFinanceOrderMeta(teamId);
   const ordersQuery = useFinanceDerivedOrderInfo(teamId, userId ?? null);
+  // Закупки під замовлення: збій читання (таблиці ще нема) не блокує маржу — тоді їх просто нема.
+  const purchaseCostsQuery = useFinancePaidPurchaseCosts(teamId);
 
   const payments = paymentsQuery.data ?? EMPTY_PAYMENTS;
   const invoices = invoicesQuery.data ?? EMPTY_INVOICES;
   const expenses = expensesQuery.data ?? EMPTY_EXPENSES;
   const orderMeta = orderMetaQuery.data ?? EMPTY_ORDER_META;
-  const ordersByQuote: Map<string, OrderInfo> = ordersQuery.data ?? EMPTY_ORDERS;
+  const purchaseCosts = purchaseCostsQuery.data ?? EMPTY_PURCHASE_COSTS;
+  const ordersByQuote: Map<string, MarginOrderInfo> = ordersQuery.data ?? EMPTY_ORDERS;
   const loading =
     paymentsQuery.isPending || invoicesQuery.isPending || expensesQuery.isPending || orderMetaQuery.isPending;
 
@@ -77,45 +67,11 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
     }
   }, [loadError]);
 
-  const rows = React.useMemo<MarginRow[]>(() => {
-    const byQuote = new Map<string, MarginRow>();
-    const ensure = (quoteId: string): MarginRow => {
-      let row = byQuote.get(quoteId);
-      if (!row) {
-        const order = ordersByQuote.get(quoteId);
-        row = {
-          quoteId,
-          number: order?.number ?? quoteId.slice(0, 8),
-          customerName: order?.customerName ?? "Замовлення",
-          orderType: orderMeta.get(quoteId)?.orderType ?? null,
-          invoiced: 0,
-          received: 0,
-          expenses: 0,
-          margin: 0,
-        };
-        byQuote.set(quoteId, row);
-      }
-      return row;
-    };
-
-    for (const inv of invoices) {
-      if (!inv.quoteId || !invoiceIsReceivable(inv.status)) continue;
-      ensure(inv.quoteId).invoiced += inv.amount;
-    }
-    for (const p of payments) {
-      ensure(p.quoteId).received += paymentUahValue(p);
-    }
-    for (const exp of expenses) {
-      for (const alloc of exp.allocations) {
-        ensure(alloc.quoteId).expenses += alloc.amount;
-      }
-    }
-    for (const row of byQuote.values()) {
-      row.margin = row.received - row.expenses;
-    }
-
-    return Array.from(byQuote.values()).sort((a, b) => a.margin - b.margin); // worst margin first
-  }, [invoices, payments, expenses, orderMeta, ordersByQuote]);
+  const rows = React.useMemo(
+    () =>
+      buildFinanceMarginRows({ invoices, payments, expenses, purchaseCosts, ordersByQuote, orderMeta }),
+    [invoices, payments, expenses, purchaseCosts, ordersByQuote, orderMeta]
+  );
 
   const totals = React.useMemo(() => {
     return rows.reduce(
@@ -144,8 +100,9 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Фактична маржа = отримано − розподілені витрати, по кожному замовленню. Планова маржа (з прорахунку) з'явиться
-        згодом. Сортування — від найгіршої маржі.
+        Фактична маржа = отримано − витрати (оплачені закупки замовлення з ПДВ + розподілені витрати), по кожному
+        замовленню. Закупка, оплачена з Фінансів як витрата, рахується один раз. Планова маржа (з прорахунку)
+        з'явиться згодом. Сортування — від найгіршої маржі.
       </p>
 
       {rows.length === 0 ? (
@@ -164,12 +121,12 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
             <span className="text-right">Виставлено</span>
             <span className="text-right">Отримано</span>
             <span className="text-right">Витрати</span>
-            <span className="text-right">Маржа</span>
+            <span className="text-right">Маржа по оплатах</span>
           </div>
           <div className="divide-y divide-border/50">
             {rows.map((row) => (
               <div
-                key={row.quoteId}
+                key={row.key}
                 className="grid grid-cols-2 gap-x-2 gap-y-1 px-4 py-3 sm:grid-cols-[1.5fr_repeat(4,minmax(0,1fr))] sm:items-center"
               >
                 <div className="col-span-2 min-w-0 sm:col-span-1">
@@ -187,7 +144,7 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
                 <Cell label="Отримано" value={uah(row.received)} />
                 <Cell label="Витрати" value={uah(row.expenses)} />
                 <Cell
-                  label="Маржа"
+                  label="Маржа по оплатах"
                   value={uah(row.margin)}
                   className={cn("font-semibold", row.margin < 0 ? "text-destructive" : "text-foreground")}
                 />

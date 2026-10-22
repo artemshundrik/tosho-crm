@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
 import type { TableUpdate } from "@/lib/dbTables";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
+import type { PaidPurchaseCost } from "./financeMarginRows";
 import { isFxCurrency, type FxCurrency } from "@/lib/fxRates";
 import type {
   BillingPeriod,
@@ -15,6 +16,7 @@ import type {
   FinanceExpense,
   FinanceExpenseAllocation,
   FinanceExpenseCategory,
+  FinanceExpenseOrderPurchase,
   FinanceInvoice,
   FinanceInvoiceStatus,
   FinanceLegalEntity,
@@ -736,7 +738,11 @@ const normalizeMonthOverrides = (raw: Record<string, unknown> | null): Record<st
   return out;
 };
 
-const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation[]): FinanceExpense => ({
+const normalizeExpense = (
+  row: ExpenseRow,
+  allocations: FinanceExpenseAllocation[],
+  orderPurchase: FinanceExpenseOrderPurchase | null = null
+): FinanceExpense => ({
   id: row.id,
   teamId: row.team_id,
   legalEntityId: row.legal_entity_id ?? null,
@@ -767,10 +773,66 @@ const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   allocations,
+  orderPurchase,
 });
 
+type PaidPurchaseRow = {
+  order_id: string;
+  expense_id: string;
+  cost_with_vat: number | string | null;
+  orders: { quote_id: string | null; quote_number: string | null } | null;
+};
+
+/**
+ * Оплачені закупки замовлень: рядок закупки + номер і прорахунок замовлення одним
+ * запитом (вкладене `orders`), без N+1. Читає лише хто має доступ до фінансів.
+ * Кидає помилку: кожен споживач вирішує, що робити, коли таблиці ще нема.
+ */
+async function loadPaidPurchaseRows(teamId: string): Promise<PaidPurchaseRow[]> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("order_purchases")
+    .select("order_id,expense_id,cost_with_vat,orders:order_id(quote_id,quote_number)")
+    .eq("team_id", teamId)
+    .not("expense_id", "is", null);
+  if (error) throw error;
+  return (data ?? []) as unknown as PaidPurchaseRow[];
+}
+
+const orderNumberOf = (row: PaidPurchaseRow) => row.orders?.quote_number?.trim() || row.order_id.slice(0, 8);
+
+/** Оплачені закупки замовлень для маржі. Помилка читання = порожній список: маржа не падає. */
+export async function listPaidOrderPurchaseCosts(teamId: string): Promise<PaidPurchaseCost[]> {
+  try {
+    const rows = await loadPaidPurchaseRows(teamId);
+    return rows.map((row) => ({
+      quoteId: row.orders?.quote_id ?? null,
+      orderId: row.order_id,
+      orderNumber: orderNumberOf(row),
+      costWithVat: toNumber(row.cost_with_vat),
+      expenseId: row.expense_id,
+    }));
+  } catch (error) {
+    console.error("[finance] order_purchases (margin) load failed", error);
+    return [];
+  }
+}
+
+/** expenseId → замовлення, з якого виросла витрата. Помилка = порожня мапа: список витрат не падає. */
+async function loadExpensePurchaseLinks(teamId: string): Promise<Map<string, FinanceExpenseOrderPurchase>> {
+  const links = new Map<string, FinanceExpenseOrderPurchase>();
+  try {
+    for (const row of await loadPaidPurchaseRows(teamId)) {
+      links.set(row.expense_id, { orderId: row.order_id, orderNumber: orderNumberOf(row) });
+    }
+  } catch (error) {
+    console.error("[finance] order_purchases (expense links) load failed", error);
+  }
+  return links;
+}
+
 export async function listExpenses(teamId: string): Promise<FinanceExpense[]> {
-  const [{ data: expenseData, error: expenseError }, allocResult] = await Promise.all([
+  const [{ data: expenseData, error: expenseError }, allocResult, purchaseLinks] = await Promise.all([
     supabase
       .schema("tosho")
       .from("finance_expenses")
@@ -783,6 +845,7 @@ export async function listExpenses(teamId: string): Promise<FinanceExpense[]> {
       .from("finance_expense_allocations")
       .select("id,expense_id,quote_id,amount")
       .eq("team_id", teamId),
+    loadExpensePurchaseLinks(teamId),
   ]);
   if (expenseError) throw expenseError;
   if (allocResult.error) {
@@ -799,7 +862,7 @@ export async function listExpenses(teamId: string): Promise<FinanceExpense[]> {
   }
 
   return ((expenseData as unknown as ExpenseRow[]) ?? []).map((row) =>
-    normalizeExpense(row, allocByExpense.get(row.id) ?? [])
+    normalizeExpense(row, allocByExpense.get(row.id) ?? [], purchaseLinks.get(row.id) ?? null)
   );
 }
 
@@ -896,6 +959,31 @@ export async function createExpense(teamId: string, input: ExpenseInput): Promis
   const id = (data as { id: string }).id;
   await replaceAllocations(teamId, id, input.allocations);
   return id;
+}
+
+/**
+ * Витрата із закупки: база (охоронець finance_expenses_purchase_guard) дозволяє
+ * міняти лише категорію, нотатки, рахунок і файл. Тому шлемо тільки їх, а не всі
+ * колонки форми: ПДВ, юрособа й постачальник у витраті з закупки не збігаються зі
+ * значеннями форми за замовчуванням і зламали б збереження. Розподіл на замовлення
+ * не чіпаємо: маржа його для таких витрат ігнорує (рахує саму закупку).
+ */
+export async function updatePurchaseLinkedExpense(
+  teamId: string,
+  id: string,
+  input: Pick<ExpenseInput, "categoryId" | "accountId" | "notes">
+): Promise<void> {
+  const { error } = await supabase
+    .schema("tosho")
+    .from("finance_expenses")
+    .update({
+      category_id: input.categoryId || null,
+      account_id: input.accountId || null,
+      notes: input.notes?.trim() || null,
+    })
+    .eq("team_id", teamId)
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export async function updateExpense(teamId: string, id: string, input: ExpenseInput): Promise<void> {

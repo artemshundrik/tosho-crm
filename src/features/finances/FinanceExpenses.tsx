@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Archive,
@@ -7,9 +7,7 @@ import {
   BellRing,
   CalendarClock,
   CalendarOff,
-  Check,
   ChevronDown,
-  ChevronsUpDown,
   Cloud,
   Loader2,
   PartyPopper,
@@ -39,15 +37,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { SubscriptionLogo } from "./SubscriptionLogo";
@@ -87,6 +76,7 @@ import {
 } from "./expenseFormat";
 import { OrderPickerInline } from "./OrderPickerInline";
 import { ExpenseMonthAmount } from "./ExpenseMonthAmount";
+import { CategoryPicker } from "./ExpenseCategoryPicker";
 import {
   createExpense,
   createExpenseCategory,
@@ -98,6 +88,7 @@ import {
   setExpenseMonthOverride,
   updateExpense,
   updateExpenseEntry,
+  updatePurchaseLinkedExpense,
   type ExpenseAllocationInput,
   type ExpenseInput,
 } from "./api";
@@ -825,9 +816,11 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     [teamId, entriesByExpense, setExpenseBusy]
   );
 
+  // Витрата із закупки: архів, видалення й поправку місяця база забороняє
+  // (finance_expenses_purchase_guard) — кнопок немає, а не «натисни й отримай 42501».
   const rowActions = (expense: FinanceExpense) => (
     <div className="flex shrink-0 items-center gap-1.5">
-      {expense.isRecurring ? (
+      {expense.isRecurring && !expense.orderPurchase ? (
         <ActionButton
           onClick={() => void toggleArchive(expense)}
           title={isExpenseArchived(expense) ? "Повернути з архіву" : "Здати в архів"}
@@ -840,7 +833,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           setDialogOpen(true);
         }}
       />
-      <DeleteIconButton onClick={() => void remove(expense)} />
+      {expense.orderPurchase ? null : <DeleteIconButton onClick={() => void remove(expense)} />}
     </div>
   );
 
@@ -872,7 +865,13 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                   {category.name}
                 </Badge>
               ) : null}
-              {expense.allocations.length > 0 ? (
+              {expense.orderPurchase ? (
+                <Link to={`/orders/production/${expense.orderPurchase.orderId}`} title="Відкрити замовлення">
+                  <Badge variant="outline" className="text-3xs border-info/40 bg-info/10 text-info-foreground">
+                    Замовлення {expense.orderPurchase.orderNumber}
+                  </Badge>
+                </Link>
+              ) : expense.allocations.length > 0 ? (
                 <Badge variant="outline" className="text-3xs border-info/40 bg-info/10 text-info-foreground">
                   На {expense.allocations.length} замовл. · {formatOrderMoney(allocatedTotal, "UAH")}
                 </Badge>
@@ -1333,99 +1332,6 @@ type RecurRow = {
   amountVaries: boolean; // сума змінна (комуналка) — факт вводиться по місяцях
 };
 
-// Вибір «виду» (статті) з можливістю вписати нову — combobox поверх Command.
-function CategoryPicker({
-  categories,
-  categoryId,
-  categoryName,
-  onChange,
-}: {
-  categories: FinanceExpenseCategory[];
-  categoryId: string;
-  categoryName: string;
-  onChange: (next: { categoryId: string; categoryName: string }) => void;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [query, setQuery] = React.useState("");
-  const q = query.trim();
-  const filtered = React.useMemo(
-    () => (q ? categories.filter((c) => c.name.toLowerCase().includes(q.toLowerCase())) : categories),
-    [categories, q]
-  );
-  const exactExists = categories.some((c) => c.name.trim().toLowerCase() === q.toLowerCase());
-
-  // Іконка обраного виду: за наявною статтею, інакше — здогадка за введеною назвою.
-  const selected = categories.find((c) => c.id === categoryId) ?? null;
-  const TriggerIcon = categoryName
-    ? getExpenseCategoryIcon(selected?.name ?? categoryName, selected?.kind ?? "fixed")
-    : null;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className={cn("w-full justify-between px-3 font-normal", !categoryName && "text-muted-foreground")}
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            {TriggerIcon
-              ? React.createElement(TriggerIcon, { className: "h-4 w-4 shrink-0 text-muted-foreground" })
-              : null}
-            <span className="truncate">{categoryName || "Вид витрати"}</span>
-          </span>
-          <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[280px] min-w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command shouldFilter={false}>
-          <CommandInput placeholder="Пошук або нова стаття…" value={query} onValueChange={setQuery} />
-          <CommandList>
-            {filtered.length === 0 && !q ? <CommandEmpty>Немає статей</CommandEmpty> : null}
-            <CommandGroup>
-              {filtered.map((c) => {
-                const Icon = getExpenseCategoryIcon(c.name, c.kind);
-                return (
-                  <CommandItem
-                    key={c.id}
-                    value={c.name}
-                    onSelect={() => {
-                      onChange({ categoryId: c.id, categoryName: c.name });
-                      setQuery("");
-                      setOpen(false);
-                    }}
-                  >
-                    <Icon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{c.name}</span>
-                    <Check
-                      className={cn("ml-auto h-4 w-4 shrink-0", categoryId === c.id ? "opacity-100" : "opacity-0")}
-                    />
-                  </CommandItem>
-                );
-              })}
-              {q && !exactExists ? (
-                <CommandItem
-                  value={`__create_${q}`}
-                  onSelect={() => {
-                    onChange({ categoryId: "", categoryName: q });
-                    setQuery("");
-                    setOpen(false);
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Створити «{q}»
-                </CommandItem>
-              ) : null}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 function ExpenseDialog({
   open,
   onOpenChange,
@@ -1457,6 +1363,11 @@ function ExpenseDialog({
   onSaved: () => Promise<void> | void;
 }) {
   const rates = useFxRates();
+  // Витрата з оплати закупки: суму, валюту, дату, постачальника й юрособу тримає
+  // замовлення (база відхилить зміну). Тут правляться лише категорія, рахунок і нотатки.
+  const purchaseLink = editing?.orderPurchase ?? null;
+  const purchaseLocked = purchaseLink !== null;
+  const lockedHint = purchaseLocked ? "Виправляють у замовленні" : undefined;
   const [categoryId, setCategoryId] = React.useState(editing?.categoryId ?? "");
   const [amount, setAmount] = React.useState(editing ? String(editing.amount) : "");
   const [currency, setCurrency] = React.useState<FxCurrency>(editing?.currency ?? "UAH");
@@ -1556,6 +1467,20 @@ function ExpenseDialog({
 
   const submit = async () => {
     if (!teamId) return;
+    if (editing && purchaseLocked) {
+      setSaving(true);
+      try {
+        await updatePurchaseLinkedExpense(teamId, editing.id, { categoryId, accountId, notes });
+        onOpenChange(false);
+        await onSaved();
+        toast.success("Витрату оновлено");
+      } catch (error) {
+        toast.error("Не вдалося зберегти витрату", { description: getErrorMessage(error, "Спробуйте ще раз.") });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     // Введена, але «нечислова» сума (напр. зайвий символ у «6'238,20») — не мовчимо: явний тост.
     if (amount.trim() && parseAmountInput(amount) === null) {
       toast.error("Перевірте суму", {
@@ -1786,6 +1711,12 @@ function ExpenseDialog({
               <option key={o} value={o} />
             ))}
           </datalist>
+          {purchaseLink ? (
+            <div className="mb-4 rounded-xl border border-info/40 bg-info/10 px-3 py-2.5 text-sm text-info-foreground">
+              Витрата з оплати закупки замовлення {purchaseLink.orderNumber}. Суму, валюту, дату й постачальника
+              виправляють у замовленні; тут можна змінити статтю, спосіб оплати й коментар.
+            </div>
+          ) : null}
           {/* Тип витрати задає і поля форми, і групу в списку — тому він перший і явний. */}
           <div role="radiogroup" aria-label="Тип витрати" className="grid gap-2 sm:grid-cols-3">
             {EXPENSE_KIND_OPTIONS.map((option) => {
@@ -1797,9 +1728,10 @@ function ExpenseDialog({
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  disabled={purchaseLocked}
                   onClick={() => setExpenseKind(option.value)}
                   className={cn(
-                    "flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-left transition-colors",
+                    "flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-left transition-colors disabled:pointer-events-none disabled:opacity-60",
                     active
                       ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30"
                       : "border-border/60 hover:border-border hover:bg-muted/40"
@@ -2033,11 +1965,13 @@ function ExpenseDialog({
                     onChange={(e) => setAmount(e.target.value)}
                     inputMode="decimal"
                     placeholder="0.00"
+                    disabled={purchaseLocked}
+                    title={lockedHint}
                     autoFocus={!editing}
                     className="text-base font-semibold tabular-nums"
                   />
-                  <Select value={currency} onValueChange={(v) => setCurrency(v as FxCurrency)}>
-                    <SelectTrigger className="w-[92px] shrink-0">
+                  <Select value={currency} onValueChange={(v) => setCurrency(v as FxCurrency)} disabled={purchaseLocked}>
+                    <SelectTrigger className="w-[92px] shrink-0" title={lockedHint}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2051,7 +1985,14 @@ function ExpenseDialog({
               )}
               <div className="grid gap-2">
                 <Label>{isEvent ? "Дата події" : varyingRecurring ? "Веду облік з" : isRecurring ? "Дата початку" : "Дата оплати"}</Label>
-                <DateInput value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="h-10" />
+                <DateInput
+                  value={expenseDate}
+                  onChange={(e) => setExpenseDate(e.target.value)}
+                  className="h-10"
+                  disabled={purchaseLocked}
+                  title={lockedHint}
+                />
+                {purchaseLocked ? <p className="text-2xs text-muted-foreground">{lockedHint}</p> : null}
               </div>
 
               {/* FX — на всю ширину, тому наступні рядки не зсуваються */}
@@ -2197,6 +2138,8 @@ function ExpenseDialog({
                 <Input
                   value={supplierName}
                   onChange={(e) => setSupplierName(e.target.value)}
+                  disabled={purchaseLocked}
+                  title={lockedHint}
                   placeholder={
                     isEvent
                       ? "Корпоратив Q3, День народження Ані…"
@@ -2277,8 +2220,12 @@ function ExpenseDialog({
               </div>
               <div className="grid gap-2">
                 <Label>Юрособа</Label>
-                <Select value={legalEntityId || "none"} onValueChange={(v) => setLegalEntityId(v === "none" ? "" : v)}>
-                  <SelectTrigger>
+                <Select
+                  value={legalEntityId || "none"}
+                  onValueChange={(v) => setLegalEntityId(v === "none" ? "" : v)}
+                  disabled={purchaseLocked}
+                >
+                  <SelectTrigger title={lockedHint}>
                     <SelectValue placeholder="Не вказано" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2318,7 +2265,7 @@ function ExpenseDialog({
               ) : null}
 
               {/* Розподіл на замовлення — тільки разова: підписка не належить замовленню. */}
-              {expenseKind === "one_off" ? (
+              {expenseKind === "one_off" && !purchaseLocked ? (
                 <div className="rounded-xl border border-border/60 bg-muted/10 p-3 sm:col-span-2">
                   <div className="mb-2 flex items-center justify-between">
                     <Label className="text-xs uppercase tracking-wide text-muted-foreground">

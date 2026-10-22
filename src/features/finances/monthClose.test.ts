@@ -37,6 +37,7 @@ const journal = (id: string, over: Partial<FinanceExpense> = {}): FinanceExpense
   createdAt: null,
   updatedAt: null,
   allocations: [],
+  orderPurchase: null,
   ...over,
 });
 

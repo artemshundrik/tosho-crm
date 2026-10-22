@@ -16,10 +16,12 @@ import {
   listLegalEntities,
   listOrderMeta,
   listOrdersForFinance,
+  listPaidOrderPurchaseCosts,
   listPayments,
   listPayoutMeta,
   listTaxes,
 } from "./api";
+import type { PaidPurchaseCost } from "./financeMarginRows";
 import type {
   ExpenseEntry,
   FinanceAccount,
@@ -71,6 +73,7 @@ export const financeKeys = {
   legalEntities: (teamId: string) => ["finances", teamId, "legal-entities"] as const,
   invoices: (teamId: string) => ["finances", teamId, "invoices"] as const,
   expenses: (teamId: string) => ["finances", teamId, "expenses"] as const,
+  paidPurchases: (teamId: string) => ["finances", teamId, "paid-purchases"] as const,
   taxes: (teamId: string) => ["finances", teamId, "taxes"] as const,
   derivedOrders: (teamId: string, userId: string | null) =>
     ["finances", teamId, "derived-orders", userId ?? ""] as const,
@@ -129,6 +132,16 @@ export function useFinanceExpenses(teamId: string | null) {
   return useQuery<FinanceExpense[]>({
     queryKey: financeKeys.expenses(teamId ?? ""),
     queryFn: () => listExpenses(teamId as string),
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/** Оплачені закупки замовлень для маржі. Best-effort: збій = [] (див. listPaidOrderPurchaseCosts). */
+export function useFinancePaidPurchaseCosts(teamId: string | null) {
+  return useQuery<PaidPurchaseCost[]>({
+    queryKey: financeKeys.paidPurchases(teamId ?? ""),
+    queryFn: () => listPaidOrderPurchaseCosts(teamId as string),
     enabled: !!teamId,
     ...FINANCE_SHARED_OPTIONS,
   });

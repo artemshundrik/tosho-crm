@@ -316,7 +316,15 @@ export type FinanceExpense = {
   createdAt: string | null;
   updatedAt: string | null;
   allocations: FinanceExpenseAllocation[];
+  /**
+   * Не null = витрату створила оплата закупки замовлення. Суму, валюту, дату,
+   * архів і видалення такої витрати тримає база (охоронець), виправляють у
+   * замовленні; у Фінансах міняються лише категорія, нотатки, рахунок і файл.
+   */
+  orderPurchase: FinanceExpenseOrderPurchase | null;
 };
+
+export type FinanceExpenseOrderPurchase = { orderId: string; orderNumber: string };
 
 /**
  * Гривнева вартість витрати. Валютні суми — за зафіксованим курсом операції,
@@ -335,6 +343,7 @@ export const expenseUahAmount = (expense: FinanceExpense, rates: FxRates): numbe
  * і так ведеться записами, а річну підписку «за жовтень» виправляти безглуздо.
  */
 export const canOverrideMonth = (expense: FinanceExpense): boolean =>
+  !expense.orderPurchase && // month_uah_overrides витрати із закупки заблокований охоронцем у базі
   expense.isRecurring && !expense.amountVaries && !expense.eventType && billingPeriodOf(expense) === "monthly";
 
 export const expenseMonthOverride = (expense: FinanceExpense, monthKey: string): number | null => {
