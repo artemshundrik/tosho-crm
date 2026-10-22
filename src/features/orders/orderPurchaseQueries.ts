@@ -82,15 +82,15 @@ export async function listOrderPurchases(orderId: string): Promise<OrderPurchase
 
 export async function saveOrderPurchase(input: SavePurchaseInput): Promise<string> {
   const { data, error } = await supabase.schema("tosho").rpc("save_order_purchase", {
-    p_id: input.id as string,
+    p_id: input.id,
     p_order_id: input.orderId,
-    p_order_item_id: input.orderItemId as string,
+    p_order_item_id: input.orderItemId,
     p_description: input.description,
     p_supplier_name: input.supplierName,
-    p_invoice_number: input.invoiceNumber as string,
+    p_invoice_number: input.invoiceNumber,
     p_invoice_date: input.invoiceDate,
-    p_qty: input.qty as number,
-    p_unit: input.unit as string,
+    p_qty: input.qty,
+    p_unit: input.unit,
     p_amount: input.amount,
     p_vat_mode: input.vatMode,
   });
