@@ -103,8 +103,10 @@ git config core.hooksPath
 
 ## pre-push — перевірки коду (блокують)
 
-Перед пушем ганяє **сімнадцять** перевірок і **зупиняє пуш**, якщо хоч одна
-впала. Часи заміряні 29.08.2026 на цій машині, після переїзду на oxlint (REQ-208):
+Перед пушем ганяє **двадцять** перевірок (станом на 05.10.2026 — `scripts/run-checks.sh`,
+список `FULL_CHECKS`) і **зупиняє пуш**, якщо хоч одна впала. Часи нижче заміряні
+29.08.2026 на цій машині, після переїзду на oxlint (REQ-208); для трьох рядків
+без часу вимірювання тоді не робили:
 
 | Перевірка | Команда | ~час |
 |---|---|---|
@@ -117,19 +119,23 @@ git config core.hooksPath
 | реєстр поверхонь | `npm run check:page-surfaces` | 0.1 с |
 | копії спільних модулів | `npm run check:duplicate-singletons` | 0.1 с |
 | заглушки правил хуків | `node scripts/check-hook-disables.mjs` | 0.1 с |
+| перевизначення контролів | `node scripts/check-control-overrides.mjs` | не заміряно |
 | читачі правил | `node scripts/check-rule-readers.mjs` | 0.05 с |
 | розростання файлів | `node scripts/check-file-growth.mjs` | 0.05 с |
 | розмір інструкцій | `node scripts/check-instruction-size.mjs` | 0.05 с |
 | знімок стеку | `node scripts/check-stack-snapshot.mjs` | 0.03 с |
+| eval-сценарії | `node scripts/check-eval-cases.mjs` | не заміряно |
 | версія Node | `node scripts/check-node-version.mjs` | 0.02 с |
 | адреси кронів ¹ | `node scripts/check-cron-endpoints.mjs` | 0.7 с |
+| виклики RPC ¹ | `node scripts/check-rpc-contracts.mjs` | не заміряно |
 | захист БД ¹ | `node scripts/check-db-guards.mjs` | 2.2 с |
 | SQL-журнал ¹ | `node scripts/check-sql-journal.mjs` | 0.6 с |
 
 ¹ Дивиться в ЖИВУ базу через `BACKUP_DB_URL` із `.env.backup`. Немає доступу
 (CI, свіжий клон, чужа машина) — перевірка мовчки пропускається.
 
-Разом **11 секунд**. Було майже дві хвилини, з яких 88 с їв ESLint. Падіння
+Разом **11 секунд** за заміряними рядками (29.08.2026) — плюс три перевірки вище без
+заміру часу, додані пізніше. Було майже дві хвилини, з яких 88 с їв ESLint. Падіння
 однієї перевірки не зупиняє решту — усі проблеми видно за один прогін, а не по
 черзі.
 
