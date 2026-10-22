@@ -7,8 +7,7 @@ import { listPendingPurchaseReceipts, type PendingReceipts } from "@/features/or
  * для посад, яким картку показують, - решта RPC не кличе.
  *
  * Збій мовчки лишає `null` і картка просто не з'являється: головна не місце
- * для тосту про закупки (RPC може бути ще не накочений, або в людини немає
- * права - база скаже 42501).
+ * для тосту про закупки (мережа, або в людини немає права - база скаже 42501).
  */
 export function useSupplierDocuments(teamId: string | null | undefined, enabled: boolean): PendingReceipts | null {
   const [data, setData] = useState<PendingReceipts | null>(null);
