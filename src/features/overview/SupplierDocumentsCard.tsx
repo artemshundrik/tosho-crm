@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { canConfirmPurchaseReceipt, canMarkNoPurchases } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { toneSubtleClass, toneTextClass } from "@/lib/statusTones";
 import type { PendingReceipts } from "@/features/orders/orderPurchaseQueries";
@@ -17,12 +18,15 @@ import type { PendingReceipts } from "@/features/orders/orderPurchaseQueries";
 /** Рахунок старший за цей поріг (у днях) підсвічується й піднімає групу вгору. */
 const STALE_AFTER_DAYS = 8;
 
-const JOB_ROLES_WITH_CARD = ["seo", "pm", "logistics", "head_of_logistics", "head_of_production"];
-
-/** Хто бачить картку: проджект, склад, начальник виробництва, СЕО й власник. */
+/**
+ * Хто бачить картку: ті, хто відмічає отримання закупки (проджект, склад,
+ * начальник виробництва, СЕО, власник), крім бухгалтерії — у неї ці замовлення
+ * й так у вкладці «Економіка». Виведено з permissions.ts, щоб не розійтися з
+ * правом на відмітку отримання.
+ */
 export function canSeeSupplierDocumentsCard(accessRole: string | null | undefined, jobRole: string | null | undefined) {
-  if ((accessRole ?? "").trim().toLowerCase() === "owner") return true;
-  return JOB_ROLES_WITH_CARD.includes((jobRole ?? "").trim().toLowerCase());
+  if (!canConfirmPurchaseReceipt(accessRole, jobRole)) return false;
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || !canMarkNoPurchases(accessRole, jobRole);
 }
 
 /** Календарні дні від дати рахунку (`YYYY-MM-DD`, без поясу) до `now`. */
@@ -69,6 +73,9 @@ const orderHref = (orderId: string) => `/orders/production/${orderId}`;
 const rowLinkClass =
   "flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted/50";
 
+/** Застарілий рядок: текст тоном попередження (приглушений сірий на жовтому тінті губиться), hover — теж жовтий. */
+const staleRowClass = cn(toneSubtleClass.warning, "hover:bg-warning-soft");
+
 function SectionTitle({ children, count }: { children: string; count: number }) {
   return (
     <div className="mt-3 flex items-baseline justify-between gap-2 first:mt-2.5">
@@ -107,19 +114,20 @@ export function SupplierDocumentsCard({
                 <div className="px-2 pt-1 text-xs font-medium text-foreground">{group.supplierName}</div>
                 {group.rows.map((row) => {
                   const isStale = row.days >= STALE_AFTER_DAYS;
+                  const mutedText = isStale ? toneTextClass.warning : "text-muted-foreground";
                   return (
                     <Link
                       key={row.purchaseId}
                       to={orderHref(row.orderId)}
                       data-tone={isStale ? "warning" : undefined}
-                      className={cn(rowLinkClass, isStale && toneSubtleClass.warning)}
+                      className={cn(rowLinkClass, isStale && staleRowClass)}
                     >
                       <span className="figure font-medium text-foreground">{row.orderNumber}</span>
-                      <span className="min-w-0 flex-1 truncate text-muted-foreground">{row.description}</span>
+                      <span className={cn("min-w-0 flex-1 truncate", mutedText)}>{row.description}</span>
                       {row.supplierInvoiceNumber ? (
-                        <span className="text-2xs text-muted-foreground">№ {row.supplierInvoiceNumber}</span>
+                        <span className={cn("text-2xs", mutedText)}>№ {row.supplierInvoiceNumber}</span>
                       ) : null}
-                      <span className={cn("figure text-2xs", isStale ? toneTextClass.warning : "text-muted-foreground")}>
+                      <span className={cn("figure text-2xs", mutedText)}>
                         {row.days} дн.
                       </span>
                     </Link>
