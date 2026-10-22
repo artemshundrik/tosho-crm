@@ -20,14 +20,16 @@
 --   • підтвердити отримання — receiver (writer + logistics, head_of_logistics,
 --     head_of_production, pm);
 --   • «закупок немає» — лише accountant, chief_accountant.
+-- Оплату й скасування оплати RPC самі пишуть у стрічку замовлення (activity_log).
 -- Склад читає рядки через list_order_purchases без сум, ПДВ і стану оплати:
 -- разом із сумою рахунку замовнику сума закупки дає маржу, а її бачать четверо.
 -- Менеджер не отримує нічого — ні з таблиці, ні з RPC.
 --
 -- ОХОРОНЦІ. Витрату, народжену з рядка, з Фінансів не видаляють і міняють їй
--- лише категорію, нотатки, рахунок і файл (finance_expenses_purchase_guard). ВН не зберігається,
--- поки немає рядків чи позначки або склад не підтвердив отримання
--- (orders_waybill_purchase_gate). Позначку «закупок немає» напряму в orders не
+-- лише категорію, нотатки, рахунок (активний гривневий своєї юрособи) і файл
+-- (finance_expenses_purchase_guard). ВН не зберігається, поки немає рядків чи
+-- позначки або склад не підтвердив отримання — і на внесенні номера, і на
+-- перемиканні з акта на ВН (orders_waybill_purchase_gate). Позначку «закупок немає» напряму в orders не
 -- пишуть (orders_purchases_none_guard). Обхід — GUC-прапорець
 -- tosho.purchase_sync, який ставлять лише ці функції; сервіс і крони (без
 -- auth.uid()) охоронці не чіпають.
@@ -62,6 +64,7 @@ create table if not exists tosho.order_purchases (
   received_at timestamptz,
   expense_id uuid unique references tosho.finance_expenses(id) on delete restrict,
   paid_on date,
+  paid_amount numeric(14,2),
   created_by uuid,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
@@ -73,6 +76,11 @@ comment on column tosho.order_purchases.cost_with_vat is
   'Собівартість з ПДВ: with_vat = amount, no_vat (ФОП) = round(amount × 1,2, 2).';
 comment on column tosho.order_purchases.expense_id is
   'Витрата у Фінансах, створена оплатою рядка. Порожньо = «рахунок є», не оплачено.';
+
+-- Повторний запуск на вже створеній таблиці: колонка з'явилась після першої версії файлу.
+alter table tosho.order_purchases add column if not exists paid_amount numeric(14,2);
+comment on column tosho.order_purchases.paid_amount is
+  'Фактично сплачено (сума витрати, для ФОП без × 1,2). Може відрізнятися від amount — вкладка показує різницю; маржа рахується з cost_with_vat.';
 
 create index if not exists order_purchases_order_idx on tosho.order_purchases (order_id);
 create index if not exists order_purchases_pending_idx
@@ -170,6 +178,64 @@ begin
 end;
 $$;
 
+/** Нотатка витрати з оплати закупки: «TO-… · опис · № рахунку» (без № — без хвоста). */
+create or replace function tosho.order_purchase_expense_notes(_order_id uuid, _description text, _invoice text)
+returns text
+language sql
+stable
+security definer
+set search_path = tosho, public, auth
+as $$
+  select concat_ws(
+    ' · ',
+    coalesce((select nullif(btrim(o.quote_number), '') from tosho.orders o where o.id = _order_id), _order_id::text),
+    _description,
+    _invoice
+  );
+$$;
+
+/**
+ * Рядок у стрічці замовлення (public.activity_log) — у тій самій транзакції, що
+ * й запис. Для оплати й скасування: скасування видаляє витрату, і слід «була
+ * оплата, хто й чому прибрав» не має залежати від вкладки браузера. Форма —
+ * як у клієнтського logActivity (src/lib/activityLogger.ts): дія order_purchase,
+ * сутність orders, metadata {quote_id, order_id}. Без сум і постачальника:
+ * стрічку бачать усі, хто бачить замовлення.
+ */
+create or replace function tosho.log_order_purchase_event(_order_id uuid, _title text)
+returns void
+language plpgsql
+security definer
+set search_path = tosho, public, auth
+as $$
+declare
+  _order tosho.orders;
+  _uid uuid := auth.uid();
+begin
+  select * into _order from tosho.orders where id = _order_id;
+  if not found or _uid is null then
+    return;
+  end if;
+  insert into public.activity_log (
+    team_id, user_id, actor_name, action, entity_type, entity_id, title, href, metadata
+  ) values (
+    _order.team_id,
+    _uid,
+    coalesce(
+      (select nullif(btrim(tmp.full_name), '') from tosho.team_member_profiles tmp where tmp.user_id = _uid limit 1),
+      (select nullif(btrim(mv.full_name), '') from tosho.memberships_view mv where mv.user_id = _uid limit 1),
+      (select u.email::text from auth.users u where u.id = _uid)
+    ),
+    'order_purchase',
+    'orders',
+    _order.id::text,
+    _title,
+    '/orders/production/' || _order.id::text,
+    jsonb_build_object('quote_id', coalesce(_order.quote_id::text, _order.id::text), 'order_id', _order.id::text)
+  );
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Охоронці.
 -- ---------------------------------------------------------------------------
@@ -200,6 +266,20 @@ begin
   if (to_jsonb(new) - array['category_id', 'notes', 'account_id', 'file', 'updated_at'])
      is distinct from (to_jsonb(old) - array['category_id', 'notes', 'account_id', 'file', 'updated_at']) then
     raise exception 'Витрату із закупки виправляють у замовленні' using errcode = '42501';
+  end if;
+  -- Рахунок списання — за тими ж правилами, що й під час оплати (pay_order_purchase):
+  -- активний гривневий рахунок цієї команди й юрособи витрати.
+  if new.account_id is distinct from old.account_id and not exists (
+    select 1
+      from tosho.finance_accounts a
+     where a.id = new.account_id
+       and a.team_id = new.team_id
+       and a.is_active
+       and a.currency = 'UAH'
+       and (a.legal_entity_id is null or new.legal_entity_id is null or a.legal_entity_id = new.legal_entity_id)
+  ) then
+    raise exception 'Витрату із закупки списують лише з активного гривневого рахунку її юрособи'
+      using errcode = '22023';
   end if;
   return new;
 end;
@@ -266,9 +346,12 @@ create trigger orders_purchases_none_guard
 
 /**
  * Гейт ВН. Замовлення, що закривається ВН (не актом), не отримує номер ВН, поки
- * немає рядків і позначки або склад не підтвердив отримання. Спрацьовує лише на
- * першому внесенні номера: уже внесені ВН заднім числом не ламаємо. Іде після
- * orders_closing_document_number (за абеткою), тож номер уже обрізаний.
+ * немає рядків і позначки або склад не підтвердив отримання. Спрацьовує, коли
+ * номер ВН стає чинним: перше внесення номера або перемикання закривального
+ * документа з акта на ВН (чи порожній), коли номер ВН уже лежить, — інакше
+ * «акт → номер ВН → назад на ВН» обходив би гейт. Уже чинні ВН заднім числом не
+ * ламаємо. Іде після orders_closing_document_number (за абеткою), тож номер уже
+ * обрізаний.
  */
 create or replace function tosho.orders_waybill_purchase_gate()
 returns trigger
@@ -281,10 +364,11 @@ declare
   _pending text[];
   _pending_count integer;
 begin
-  if old.waybill_number is not null
-     or new.waybill_number is null
+  if new.waybill_number is null
      or coalesce(new.closing_document, 'waybill') = 'act'
-     or auth.uid() is null then
+     or auth.uid() is null
+     -- Номер ВН уже був чинним (був і замовлення закривалось не актом): не чіпаємо.
+     or (old.waybill_number is not null and coalesce(old.closing_document, 'waybill') <> 'act') then
     return new;
   end if;
 
@@ -310,7 +394,7 @@ $$;
 
 drop trigger if exists orders_waybill_purchase_gate on tosho.orders;
 create trigger orders_waybill_purchase_gate
-  before update of waybill_number on tosho.orders
+  before update of waybill_number, closing_document on tosho.orders
   for each row execute function tosho.orders_waybill_purchase_gate();
 
 -- ---------------------------------------------------------------------------
@@ -413,6 +497,15 @@ begin
            qty = p_qty,
            unit = _unit
      where id = p_id;
+    -- Опис і № рахунку живуть і в нотатці витрати: Фінанси не мають показувати старі.
+    if _row.description is distinct from _description
+       or _row.supplier_invoice_number is distinct from _invoice then
+      perform set_config('tosho.purchase_sync', 'on', true);
+      update tosho.finance_expenses
+         set notes = tosho.order_purchase_expense_notes(_order.id, _description, _invoice)
+       where id = _row.expense_id;
+      perform set_config('tosho.purchase_sync', 'off', true);
+    end if;
     return p_id;
   end if;
 
@@ -454,9 +547,10 @@ end;
 $$;
 
 /**
- * «Оплачено»: витрата у Фінансах + зв'язок з рядком, одна транзакція.
- * Сума витрати — фактично сплачене (для ФОП без × 1,2); ПДВ — сума / 6 для
- * рядка «з ПДВ», 0 для ФОП. Повертає id витрати.
+ * «Оплачено»: витрата у Фінансах + зв'язок з рядком + рядок у стрічці, одна
+ * транзакція. Сума витрати — фактично сплачене (для ФОП без × 1,2), вона ж
+ * лягає в paid_amount, щоб різницю з рахунком було видно в замовленні; ПДВ —
+ * сума / 6 для рядка «з ПДВ», 0 для ФОП. Повертає id витрати.
  */
 create or replace function tosho.pay_order_purchase(
   p_id uuid,
@@ -476,6 +570,7 @@ declare
   _today date := (now() at time zone 'Europe/Kyiv')::date;
   _amount numeric := round(p_amount, 2);
   _category_id uuid;
+  _category_active boolean;
   _expense_id uuid;
 begin
   select * into _row from tosho.order_purchases where id = p_id for update;
@@ -511,13 +606,17 @@ begin
   end if;
 
   -- Категорія «Закупки під замовлення» — одна на команду; два паралельні
-  -- платежі не заводять дві.
+  -- платежі не заводять дві. Активна — першою; якщо лишилась лише вимкнена,
+  -- вмикаємо її: інакше витрата лягла б у сховану категорію.
   perform pg_advisory_xact_lock(hashtext('tosho.order_purchase_category:' || _row.team_id::text));
-  select c.id into _category_id
+  select c.id, c.is_active into _category_id, _category_active
     from tosho.finance_expense_categories c
    where c.team_id = _row.team_id and lower(btrim(c.name)) = lower('Закупки під замовлення')
    order by c.is_active desc, c.created_at
    limit 1;
+  if _category_id is not null and not _category_active then
+    update tosho.finance_expense_categories set is_active = true where id = _category_id;
+  end if;
   if _category_id is null then
     insert into tosho.finance_expense_categories (team_id, name, kind, is_active, sort_order)
     values (
@@ -531,24 +630,31 @@ begin
     team_id, legal_entity_id, account_id, category_id, supplier_name,
     amount, vat_amount, expense_date, currency, notes, entered_by
   ) values (
-    _row.team_id, _order.our_legal_entity_id, _account.id, _category_id, _row.supplier_name,
+    -- Замовлення без юрособи: беремо юрособу рахунку, щоб витрата не випала з підсумків по юрособах.
+    _row.team_id, coalesce(_order.our_legal_entity_id, _account.legal_entity_id), _account.id, _category_id, _row.supplier_name,
     _amount,
     case when _row.vat_mode = 'with_vat' then round(_amount / 6, 2) else 0 end,
     p_paid_on, 'UAH',
-    concat_ws(' · ', coalesce(nullif(btrim(_order.quote_number), ''), _order.id::text), _row.description, _row.supplier_invoice_number),
+    tosho.order_purchase_expense_notes(_order.id, _row.description, _row.supplier_invoice_number),
     auth.uid()
   )
   returning id into _expense_id;
 
   update tosho.order_purchases
-     set expense_id = _expense_id, paid_on = p_paid_on
+     set expense_id = _expense_id, paid_on = p_paid_on, paid_amount = _amount
    where id = p_id;
+
+  perform tosho.log_order_purchase_event(_order.id, 'Закупку оплачено');
 
   return _expense_id;
 end;
 $$;
 
-/** Скасувати оплату: видаляє витрату, створену оплатою, рядок вертається в «рахунок є». */
+/**
+ * Скасувати оплату: видаляє витрату, створену оплатою, рядок вертається в
+ * «рахунок є». Причина (до 200 символів) іде в стрічку замовлення тут же, у
+ * транзакції: витрата зникає, а слід лишається.
+ */
 create or replace function tosho.cancel_order_purchase_payment(p_id uuid, p_reason text)
 returns void
 language plpgsql
@@ -570,13 +676,18 @@ begin
   if _reason is null then
     raise exception 'Вкажіть причину скасування' using errcode = '22023';
   end if;
+  if char_length(_reason) > 200 then
+    raise exception 'Причина скасування — до 200 символів' using errcode = '22023';
+  end if;
 
   perform set_config('tosho.purchase_sync', 'on', true);
   update tosho.order_purchases
-     set expense_id = null, paid_on = null
+     set expense_id = null, paid_on = null, paid_amount = null
    where id = p_id;
   delete from tosho.finance_expenses where id = _row.expense_id;
   perform set_config('tosho.purchase_sync', 'off', true);
+
+  perform tosho.log_order_purchase_event(_row.order_id, 'Скасовано оплату закупки: ' || _reason);
 end;
 $$;
 
@@ -671,7 +782,7 @@ $$;
 
 /**
  * Рядки закупок замовлення. Writer і has_finance_access — повністю; склад —
- * без суми, собівартості, ПДВ і стану оплати (null).
+ * без суми, собівартості, ПДВ, сплаченого і стану оплати (null).
  */
 create or replace function tosho.list_order_purchases(p_order_id uuid)
 returns jsonb
@@ -705,7 +816,8 @@ begin
                     )
                   )
                || case when _sees_amounts then '{}'::jsonb else jsonb_build_object(
-                    'amount', null, 'cost_with_vat', null, 'vat_mode', null, 'paid_on', null, 'expense_id', null
+                    'amount', null, 'cost_with_vat', null, 'vat_mode', null, 'paid_on', null, 'expense_id', null,
+                    'paid_amount', null
                   ) end
              order by p.created_at, p.id
            )
@@ -773,6 +885,8 @@ $$;
 revoke all on function tosho.is_order_purchase_receiver(uuid) from public, anon, authenticated;
 revoke all on function tosho.is_order_purchase_none_marker(uuid) from public, anon, authenticated;
 revoke all on function tosho.assert_order_purchase_access(uuid, text) from public, anon, authenticated;
+revoke all on function tosho.order_purchase_expense_notes(uuid, text, text) from public, anon, authenticated;
+revoke all on function tosho.log_order_purchase_event(uuid, text) from public, anon, authenticated;
 revoke all on function tosho.finance_expenses_purchase_guard() from public, anon, authenticated;
 revoke all on function tosho.order_purchases_guard_delete() from public, anon, authenticated;
 revoke all on function tosho.orders_purchases_none_guard() from public, anon, authenticated;

@@ -3265,6 +3265,7 @@ export type Database = {
           id: string
           order_id: string
           order_item_id: string | null
+          paid_amount: number | null
           paid_on: string | null
           qty: number | null
           received_at: string | null
@@ -3291,6 +3292,7 @@ export type Database = {
           id?: string
           order_id: string
           order_item_id?: string | null
+          paid_amount?: number | null
           paid_on?: string | null
           qty?: number | null
           received_at?: string | null
@@ -3317,6 +3319,7 @@ export type Database = {
           id?: string
           order_id?: string
           order_item_id?: string | null
+          paid_amount?: number | null
           paid_on?: string | null
           qty?: number | null
           received_at?: string | null
