@@ -82,11 +82,6 @@ export const getSpecificationRequirementChecks = (record: DerivedOrderRecord): R
     help: "Спочатку натисни PDF у рядку Договір. Після відкриття договору CRM позначить його створеним і розблокує СП.",
   },
   {
-    label: "Погоджена візуалізація",
-    done: record.hasApprovedVisualization,
-    help: "СП друкується з погодженим візуалом. Без нього рядок казав «Можна створити», а друк відмовляв.",
-  },
-  {
     label: "Умови оплати",
     done: hasValue(record.paymentTerms),
     help: "Наприклад 50/50 або 70/30. Береться з блоку умов СП у цьому замовленні.",
@@ -340,14 +335,17 @@ export const getDocumentActionState = (
   };
 };
 
-/** Чи можна створити СП: безготівка, договір, рахунок (REQ-322#p15) і погоджений візуал. */
+/**
+ * Чи можна створити СП: безготівка, договір і рахунок (REQ-322#p15). Погоджений
+ * візуал не вимагаємо: не кожному замовнику він потрібен у СП, і менеджер сам
+ * вирішує у вікні параметрів, чи його друкувати (REQ-322#p37).
+ */
 export const canCreateSpecification = (record: DerivedOrderRecord) =>
   record.items.length > 0 &&
   isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail) &&
   Boolean(record.contractCreatedAt) &&
   Boolean(record.customerVatId?.trim()) &&
-  (Boolean(record.specificationCreatedAt) || Boolean(record.invoiceNumber)) &&
-  record.hasApprovedVisualization;
+  (Boolean(record.specificationCreatedAt) || Boolean(record.invoiceNumber));
 
 /** Чому СП ще не можна друкувати; null — можна. */
 export const getSpecificationBlocker = (record: DerivedOrderRecord) => {
@@ -365,9 +363,6 @@ export const getSpecificationBlocker = (record: DerivedOrderRecord) => {
   // REQ-322#p15: СП — після виписаного рахунку; передрук створеної не блокуємо.
   if (!record.specificationCreatedAt && !record.invoiceNumber) {
     return "Спочатку рахунок: СП створюється, коли бухгалтерія його випише.";
-  }
-  if (!record.hasApprovedVisualization) {
-    return "Для СП потрібна погоджена візуалізація.";
   }
   return null;
 };

@@ -1,9 +1,19 @@
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { OrderItemDocumentNamesField } from "@/features/orders/order-details/OrderItemDocumentNamesField";
 import { formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
 
-/** Вкладка «Позиції»: товари замовлення з підсумком унизу. */
-export function OrderItemsTable({ record }: { record: DerivedOrderRecord }) {
+/** Вкладка «Позиції»: товари замовлення з підсумком унизу і назви для документів. */
+export function OrderItemsTable({
+  record,
+  teamId,
+  onDocumentNamesSaved,
+}: {
+  record: DerivedOrderRecord;
+  teamId: string | null | undefined;
+  onDocumentNamesSaved: (names: Map<string, string | null>) => void;
+}) {
   return (
+    <div className="space-y-4">
     <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
       <Table variant="list" size="md">
         <TableHeader>
@@ -63,6 +73,10 @@ export function OrderItemsTable({ record }: { record: DerivedOrderRecord }) {
           </TableFooter>
         ) : null}
       </Table>
+    </div>
+    <div className="rounded-xl border border-border/60 bg-card p-4">
+      <OrderItemDocumentNamesField record={record} teamId={teamId} onSaved={onDocumentNamesSaved} />
+    </div>
     </div>
   );
 }

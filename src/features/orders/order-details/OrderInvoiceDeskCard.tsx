@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
+import { OrderItemDocumentNamesField } from "@/features/orders/order-details/OrderItemDocumentNamesField";
 import { findIndivisiblePrices } from "@/features/orders/orderInvoice";
 import { formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
 
@@ -29,7 +30,8 @@ const price = (value: number, currency: string) => formatOrderMoney(value, curre
  * «Повернути менеджеру». Бухгалтер приходить сюди з Telegram просто на замовлення.
  *
  * Неподільні на 1,2 ціни — попередження, а не замок: виправити ціну може лише
- * менеджер, тож бухгалтер вирішує сам — повернути чи виписати.
+ * менеджер, тож бухгалтер вирішує сам — повернути чи виписати. Назву позиції
+ * (номенклатуру BAS) бухгалтер виправляє тут сам (REQ-322#p38).
  */
 export function OrderInvoiceDeskCard({
   record,
@@ -37,8 +39,12 @@ export function OrderInvoiceDeskCard({
   onIssue,
   onReturn,
   onPreview,
+  teamId,
+  onDocumentNamesSaved,
 }: {
   record: DerivedOrderRecord;
+  teamId: string | null | undefined;
+  onDocumentNamesSaved: (names: Map<string, string | null>) => void;
   busy: "request" | "issue" | "return" | null;
   onIssue: (number: string, date: string) => Promise<boolean>;
   onReturn: (note: string) => Promise<boolean>;
@@ -71,6 +77,10 @@ export function OrderInvoiceDeskCard({
           <ExternalLink className="h-3.5 w-3.5" />
           Переглянути чернетку
         </Button>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-border/60 bg-background/70 p-3">
+        <OrderItemDocumentNamesField record={record} teamId={teamId} onSaved={onDocumentNamesSaved} />
       </div>
 
       {indivisible.length > 0 ? (

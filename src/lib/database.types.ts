@@ -3188,6 +3188,7 @@ export type Database = {
           catalog_model_id: string | null
           created_at: string
           description: string | null
+          document_name: string | null
           id: string
           image_url: string | null
           item_kind: string
@@ -3208,6 +3209,7 @@ export type Database = {
           catalog_model_id?: string | null
           created_at?: string
           description?: string | null
+          document_name?: string | null
           id: string
           image_url?: string | null
           item_kind?: string
@@ -3228,6 +3230,7 @@ export type Database = {
           catalog_model_id?: string | null
           created_at?: string
           description?: string | null
+          document_name?: string | null
           id?: string
           image_url?: string | null
           item_kind?: string
@@ -3405,6 +3408,7 @@ export type Database = {
           specification_signed_by: string | null
           specification_signed_via: string | null
           specification_number: number | null
+          spec_include_visualization: boolean | null
           our_legal_entity_id: string | null
           our_legal_entity: Json | null
           closing_document: string | null
@@ -3490,6 +3494,7 @@ export type Database = {
           specification_signed_by?: string | null
           specification_signed_via?: string | null
           specification_number?: number | null
+          spec_include_visualization?: boolean | null
           our_legal_entity_id?: string | null
           our_legal_entity?: Json | null
           closing_document?: string | null
@@ -3575,6 +3580,7 @@ export type Database = {
           specification_signed_by?: string | null
           specification_signed_via?: string | null
           specification_number?: number | null
+          spec_include_visualization?: boolean | null
           our_legal_entity_id?: string | null
           our_legal_entity?: Json | null
           closing_document?: string | null

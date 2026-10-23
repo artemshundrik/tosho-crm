@@ -1,6 +1,7 @@
 import { ORDER_PAYMENT_TERMS_OPTIONS } from "@/features/orders/config";
 import { expandOrganizationForm } from "@/features/orders/invoicePartyName";
 import { executorPreamble, executorRequisiteLines, splitVat, VAT_RATE } from "@/features/orders/orderExecutor";
+import { itemDocumentName } from "@/features/orders/orderItemDocumentNames";
 import type { DerivedOrderItem, DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { formatBalanceDaysTerm } from "@/features/orders/paymentRules";
 import { amountInWords, type AmountCurrency } from "@/lib/amountInWords";
@@ -187,7 +188,7 @@ export type SpecificationDocumentParams = {
 };
 
 const fallbackItemText = (item: DerivedOrderItem) =>
-  buildDefaultSpecItemText({ name: item.name, characteristics: [], imprints: item.methodsSummary ? [item.methodsSummary] : [] });
+  buildDefaultSpecItemText({ name: itemDocumentName(item), characteristics: [], imprints: item.methodsSummary ? [item.methodsSummary] : [] });
 
 export function buildSpecificationHtml(params: SpecificationDocumentParams) {
   const { records } = params;

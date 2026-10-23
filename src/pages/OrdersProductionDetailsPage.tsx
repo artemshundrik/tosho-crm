@@ -80,6 +80,9 @@ import { openDocumentWindow } from "@/features/orders/documentPrintWindow";
 import { buildSpecificationHtml, customerIbanWithBank, toAuthorityGenitive } from "@/features/orders/specificationDocument";
 import { loadSpecificationItemTexts, resolveVisualizationImageUrls } from "@/features/orders/specificationQueries";
 import { SpecificationItemTextsField } from "@/features/orders/order-details/SpecificationItemTextsField";
+import { SpecificationVisualizationField } from "@/features/orders/order-details/SpecificationVisualizationField";
+import { formatContractDateParts, formatContractEndDate } from "@/features/orders/contractDateFormat";
+import { itemDocumentName, withDocumentNames } from "@/features/orders/orderItemDocumentNames";
 import { useSpecificationItemTexts } from "@/features/orders/order-details/useSpecificationItemTexts";
 import { formatInvoicePartyName } from "@/features/orders/invoicePartyName";
 import { toSignatureInitials } from "@/lib/signatureFormat";
@@ -170,33 +173,6 @@ const documentTitleByKind: Record<OrderDocumentKind, string> = {
   specification: "Специфікація",
   act: "Акт",
   techCard: "Технологічний додаток",
-};
-
-const formatContractDateParts = (value?: string | null) => {
-  const source = value ? new Date(value) : new Date();
-  const date = Number.isNaN(source.getTime()) ? new Date() : source;
-  // Окремо { month: "long" } дає називний «жовтень»; родовий «жовтня» — лише разом із днем.
-  const monthLabel =
-    new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long" })
-      .formatToParts(date)
-      .find((part) => part.type === "month")?.value ?? "";
-  return {
-    day: String(date.getDate()).padStart(2, "0"),
-    monthLabel,
-    year: String(date.getFullYear()),
-    city: "м. Київ",
-  };
-};
-
-const formatContractEndDate = (value?: string | null) => {
-  const source = value ? new Date(value) : new Date();
-  const date = Number.isNaN(source.getTime()) ? new Date() : source;
-  date.setFullYear(date.getFullYear() + 1);
-  return date.toLocaleDateString("uk-UA", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
 };
 
 const formatPlainMoney = (value: number) =>
@@ -515,7 +491,7 @@ const buildOrderDocumentHtml = (
         return `
         <tr>
           <td class="mid">${index + 1}</td>
-          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(itemDocumentName(item))}</td>
           <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
           <td class="mid">${escapeHtml(item.unit)}</td>
           <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithoutVat))}</td>
@@ -723,6 +699,8 @@ export default function OrdersProductionDetailsPage() {
         return { ...next, docs: normalizeDocumentDocs(next) };
       }),
   });
+  const applyDocumentNames = (names: Map<string, string | null>) =>
+    setRecord((current) => (current ? withDocumentNames(current, names) : current));
   const invoiceFlow = useOrderInvoiceFlow({
     record,
     teamId,
@@ -779,6 +757,7 @@ export default function OrdersProductionDetailsPage() {
   const [specProductionDaysInput, setSpecProductionDaysInput] = useState(String(DEFAULT_PRODUCTION_WORK_DAYS));
   const [specIncotermsCode, setSpecIncotermsCode] = useState(DEFAULT_INCOTERMS);
   const [specIncotermsPlaceInput, setSpecIncotermsPlaceInput] = useState("");
+  const [specIncludeVisualization, setSpecIncludeVisualization] = useState(true);
   // Доставка живе на прорахунку (quotes.delivery_type/delivery_details);
   // замовлення читає і редагує саме її, щоб обидва екрани показували одне.
   const [orderDelivery, setOrderDelivery] = useState<OrderDeliverySnapshot | null>(null);
@@ -1112,8 +1091,10 @@ export default function OrdersProductionDetailsPage() {
 
     let builtHtml: string;
     if (kind === "specification") {
+      // Візуал — за вибором менеджера у вікні параметрів (REQ-322#p37); старі СП — як були.
+      const includeVisualization = printedRecord.specIncludeVisualization !== false;
       const [visualizationImageUrls, itemTexts] = await Promise.all([
-        resolveVisualizationImageUrls(printedRecord.approvedVisualizationAssets),
+        includeVisualization ? resolveVisualizationImageUrls(printedRecord.approvedVisualizationAssets) : [],
         teamId ? loadSpecificationItemTexts(teamId, [printedRecord]).catch(() => []) : [],
       ]);
       printWindow.mark("візуалізації й тексти позицій");
@@ -1190,6 +1171,7 @@ export default function OrdersProductionDetailsPage() {
     );
     setSpecIncotermsCode(record.incotermsCode || DEFAULT_INCOTERMS);
     setSpecIncotermsPlaceInput(record.incotermsPlace ?? "");
+    setSpecIncludeVisualization(record.specIncludeVisualization !== false);
     setSpecDialogError(null);
     setSpecDialogOpen(true);
   };
@@ -1524,6 +1506,8 @@ export default function OrdersProductionDetailsPage() {
                 onIssue={invoiceFlow.issue}
                 onReturn={invoiceFlow.returnRequest}
                 onPreview={() => void openDocumentPrint("invoice")}
+                teamId={teamId}
+                onDocumentNamesSaved={applyDocumentNames}
               />
             ) : null}
             {canIssueInvoice &&
@@ -1640,7 +1624,9 @@ export default function OrdersProductionDetailsPage() {
                 ) : null}
               </>
             ) : null}
-            {activeTab === "items" ? <OrderItemsTable record={record} /> : null}
+            {activeTab === "items" ? (
+              <OrderItemsTable record={record} teamId={teamId} onDocumentNamesSaved={applyDocumentNames} />
+            ) : null}
             {activeTab === "economics" ? economicsPanel.content : null}
             {activeTab === "materials" ? (
               <OrderMaterialsTab
@@ -2091,6 +2077,13 @@ export default function OrdersProductionDetailsPage() {
             </div>
             </div>
             </div>
+            {isCashlessPaymentMethod(specPaymentMethodId) ? (
+              <SpecificationVisualizationField
+                available={Boolean(record?.hasApprovedVisualization)}
+                checked={specIncludeVisualization}
+                onCheckedChange={setSpecIncludeVisualization}
+              />
+            ) : null}
             {isCashlessPaymentMethod(specPaymentMethodId) ? <SpecificationItemTextsField state={specItemTexts} /> : null}
           </div>
           {specDialogError ? (
@@ -2153,6 +2146,7 @@ export default function OrdersProductionDetailsPage() {
                     contractProductionDays: productionWorkingDays,
                     incotermsCode: specIncotermsCode,
                     incotermsPlace,
+                    specIncludeVisualization,
                   };
                   const nextRecord = { ...patched, docs: normalizeDocumentDocs(patched) };
                   if (record.source === "stored" && teamId) {
@@ -2169,6 +2163,7 @@ export default function OrdersProductionDetailsPage() {
                       contractProductionDays: productionWorkingDays,
                       incotermsCode: specIncotermsCode,
                       incotermsPlace,
+                      specIncludeVisualization,
                     });
                     setRecord((current) => (current && current.id === record.id ? nextRecord : current));
                     await specItemTexts.save();

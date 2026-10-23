@@ -1,4 +1,5 @@
 import { executorCodesInline, splitVat } from "./orderExecutor";
+import { itemDocumentName } from "./orderItemDocumentNames";
 import type { DerivedOrderRecord } from "./orderRecords";
 import { amountInWords } from "@/lib/amountInWords";
 import { renderPrintDocument } from "@/lib/printDocument";
@@ -72,7 +73,7 @@ export const buildOrderActHtml = (record: ActRecord, options: { date?: Date } = 
     .map(
       (item) => `
         <tr>
-          <td>- ${escapeHtml(item.name)}</td>
+          <td>- ${escapeHtml(itemDocumentName(item))}</td>
           <td class="qty">- ${escapeHtml(Number(item.qty || 0).toLocaleString("uk-UA"))} ${escapeHtml(item.unit || "посл.")}</td>
           <td class="num">${escapeHtml(money(Number(item.lineTotal || 0)))} ${escapeHtml(currencyLabel)}</td>
         </tr>`

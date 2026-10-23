@@ -3,6 +3,7 @@ import { formatPrintSpecEntries, getPrintSpecPreset } from "@/lib/printSpec";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { supabase } from "@/lib/supabaseClient";
 import type { DerivedOrderRecord, OrderDesignAsset } from "@/features/orders/orderRecords";
+import { itemDocumentName } from "@/features/orders/orderItemDocumentNames";
 import { buildDefaultSpecItemText } from "@/features/orders/specificationDocument";
 
 /**
@@ -178,7 +179,7 @@ export async function loadSpecificationItemTexts(
     record.items.map((item) => {
       const row = rowsById.get(item.id);
       const defaultText = buildDefaultSpecItemText({
-        name: item.name,
+        name: itemDocumentName(item),
         characteristics: row ? characteristicsOf(row) : [],
         imprints: row ? imprintsOf(row) : item.methodsSummary ? [item.methodsSummary] : [],
       });

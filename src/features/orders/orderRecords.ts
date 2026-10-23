@@ -48,6 +48,7 @@ import {
 } from "./paymentRules";
 import { buildDerivedReadinessSteps, getReadinessColumn } from "./orderReadiness";
 import { normalizeUnitLabel } from "@/lib/units";
+import { isMissingOrdersColumnMessage, isMissingOrdersRelationMessage } from "./ordersSchemaErrors";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 
@@ -316,6 +317,8 @@ export type DerivedOrderItem = {
   quoteItemId?: string | null;
   position: number;
   name: string;
+  /** Назва в рахунку, СП, ВН і акті (REQ-322#p38); null — назва позиції. */
+  documentName?: string | null;
   description?: string | null;
   methodsSummary?: string | null;
   catalogModelId?: string | null;
@@ -403,6 +406,8 @@ export type DerivedOrderRecord = {
   contractCreatedAt: string | null;
   specificationCreatedAt: string | null;
   specificationNumber: number | null; // № СП у межах договору, видає тригер бази (REQ-322#p22)
+  /** Чи друкувати погоджений візуал у СП (REQ-322#p37). null — так, якщо він погоджений. */
+  specIncludeVisualization?: boolean | null;
   /** Manual override of the contract number (owner/seo only). Falls back to quoteNumber when null. */
   contractNumber: string | null;
   /** Manual override of the contract date (owner/seo only). Falls back to contractCreatedAt when null. */
@@ -521,6 +526,7 @@ type StoredOrderRow = {
   contract_created_at?: string | null;
   specification_created_at?: string | null;
   specification_number?: number | null;
+  spec_include_visualization?: boolean | null;
   contract_number?: string | null;
   contract_date?: string | null;
   contract_production_days?: number | string | null;
@@ -583,6 +589,7 @@ type StoredOrderItemRow = {
   image_url?: string | null;
   thumb_url?: string | null;
   item_kind?: string | null;
+  document_name?: string | null;
 };
 
 const parseQuoteItemAttachmentImage = (attachment: unknown) => {
@@ -699,19 +706,8 @@ const DEFAULT_PAYMENT_TERMS = "70/30";
 const DEFAULT_INCOTERMS_CODE = "FCA";
 
 export { isCashlessPaymentMethod } from "./paymentRules";
+export { updateOrderDocumentSettings } from "./orderDocumentSettings";
 
-const isMissingOrdersRelationMessage = (message?: string | null) => {
-  const normalized = (message ?? "").toLowerCase();
-  return (
-    normalized.includes("relation") &&
-    (normalized.includes("orders") || normalized.includes("order_items"))
-  );
-};
-
-const isMissingOrdersColumnMessage = (message?: string | null) => {
-  const normalized = (message ?? "").toLowerCase();
-  return normalized.includes("column") || normalized.includes("schema cache") || normalized.includes("could not find");
-};
 
 
 const parseCustomerContacts = (row?: CustomerRecord | null): CustomerContact[] => {
@@ -819,7 +815,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,specification_number,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,contract_signed_at,contract_signed_via,specification_signed_at,specification_signed_via,our_legal_entity_id,our_legal_entity,closing_document,act_number,act_date,waybill_number,waybill_date,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,balance_days_kind,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,specification_number,spec_include_visualization,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,invoice_date,invoice_requested_at,invoice_requested_by,invoice_returned_at,invoice_return_note,contract_signed_at,contract_signed_via,specification_signed_at,specification_signed_via,our_legal_entity_id,our_legal_entity,closing_document,act_number,act_date,waybill_number,waybill_date,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -845,7 +841,7 @@ async function listStoredOrderItems(teamId: string, orderIds: string[]): Promise
   if (uniqueOrderIds.length === 0) return [];
 
   const baseColumns = "id,order_id,quote_item_id,position,name,qty,unit,unit_price,line_total";
-  const extendedColumns = `${baseColumns},description,methods,catalog_model_id,image_url,thumb_url,item_kind`;
+  const extendedColumns = `${baseColumns},description,methods,catalog_model_id,image_url,thumb_url,item_kind,document_name`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -1450,6 +1446,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         quoteItemId: item.quote_item_id ?? null,
         position: Number(item.position ?? list.length + 1) || list.length + 1,
         name: (item.name ?? "").trim() || "Позиція без назви",
+        documentName: item.document_name?.trim?.() || null,
         description: item.description?.trim?.() || null,
         methodsSummary: formatQuoteItemMethodsSummary(item.methods, storedMethodNamesById),
         catalogModelId: item.catalog_model_id?.trim?.() || null,
@@ -1746,6 +1743,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         contractCreatedAt,
         specificationCreatedAt: order.specification_created_at ?? null,
         specificationNumber: order.specification_number ?? null,
+        specIncludeVisualization: order.spec_include_visualization ?? null,
         contractNumber: order.contract_number?.trim?.() || inheritedContract?.number || null,
         contractDate: order.contract_date?.trim?.() || inheritedContract?.date || null,
         // На відміну від договору, номер рахунку належить лише цьому замовленню — ніколи не успадковується.
@@ -2518,57 +2516,6 @@ export async function updateOrderNovaPoshtaTtn(params: {
   }
   if (!data || data.length === 0) {
     throw new Error("Замовлення не знайдено для збереження ТТН");
-  }
-}
-
-export async function updateOrderDocumentSettings(params: {
-  teamId: string;
-  orderId: string;
-  paymentMethodId?: string;
-  paymentMethodLabel?: string;
-  paymentTerms?: string;
-  prepaymentPct?: number | null;
-  balancePct?: number | null;
-  balanceTiming?: "before_shipment" | "after_shipment" | null;
-  balanceDaysAfterShipment?: number | null;
-  balanceDaysKind?: BalanceDaysKind | null;
-  incotermsCode?: string;
-  incotermsPlace?: string | null;
-  contractNumber?: string | null;
-  contractDate?: string | null;
-  contractProductionDays?: number | null;
-  contractAutoProlongation?: boolean;
-}) {
-  const payload: Database["tosho"]["Tables"]["orders"]["Update"] = {
-    updated_at: new Date().toISOString(),
-  };
-  if (params.paymentMethodId !== undefined) payload.payment_method_id = params.paymentMethodId;
-  if (params.paymentMethodLabel !== undefined) payload.payment_method_label = params.paymentMethodLabel;
-  if (params.paymentTerms !== undefined) payload.payment_terms = params.paymentTerms;
-  if (params.prepaymentPct !== undefined) payload.prepayment_pct = params.prepaymentPct;
-  if (params.balancePct !== undefined) payload.balance_pct = params.balancePct;
-  if (params.balanceTiming !== undefined) payload.balance_timing = params.balanceTiming;
-  if (params.balanceDaysAfterShipment !== undefined) payload.balance_days_after_shipment = params.balanceDaysAfterShipment;
-  if (params.balanceDaysKind !== undefined) payload.balance_days_kind = params.balanceDaysKind;
-  if (params.incotermsCode !== undefined) payload.incoterms_code = params.incotermsCode;
-  if (params.incotermsPlace !== undefined) payload.incoterms_place = params.incotermsPlace;
-  if (params.contractNumber !== undefined) payload.contract_number = params.contractNumber;
-  if (params.contractDate !== undefined) payload.contract_date = params.contractDate;
-  if (params.contractProductionDays !== undefined) payload.contract_production_days = params.contractProductionDays;
-  if (params.contractAutoProlongation !== undefined) payload.contract_auto_prolongation = params.contractAutoProlongation;
-
-  const { error } = await supabase
-    .schema("tosho")
-    .from("orders")
-    .update(payload)
-    .eq("team_id", params.teamId)
-    .eq("id", params.orderId);
-
-  if (error) {
-    if (isMissingOrdersRelationMessage(error.message) || isMissingOrdersColumnMessage(error.message)) {
-      throw new Error("Таблиця замовлень не має полів для СП. Запустіть оновлений scripts/orders-schema.sql.");
-    }
-    throw error;
   }
 }
 

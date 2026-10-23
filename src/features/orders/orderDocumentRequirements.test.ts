@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { DerivedOrderRecord } from "./orderRecords";
 import {
+  canCreateSpecification,
   getMissingRequirementLabels,
   getOrderDocumentKinds,
+  getSpecificationBlocker,
   getSpecificationRequirementChecks,
 } from "./orderDocumentRequirements";
 
@@ -52,17 +54,22 @@ describe("getOrderDocumentKinds", () => {
 });
 
 describe("СП без погодженого візуалу", () => {
-  it("не каже «Можна створити», коли друк однаково відмовить", () => {
-    const record = {
-      items: [{ id: "1" }],
-      paymentMethodId: "bank_uah",
-      paymentRail: "Безготівкові, грн.",
-      contractCreatedAt: "2026-10-14",
-      paymentTerms: "70_30",
-      incotermsCode: "FCA",
-      hasApprovedVisualization: false,
-    } as unknown as DerivedOrderRecord;
-    const labels = getMissingRequirementLabels(getSpecificationRequirementChecks(record));
-    expect(labels).toContain("Погоджена візуалізація");
+  // Не кожному замовнику візуал потрібен у СП — менеджер вирішує у вікні параметрів (REQ-322#p37).
+  const record = {
+    items: [{ id: "1" }],
+    paymentMethodId: "bank_uah",
+    paymentRail: "Безготівкові, грн.",
+    contractCreatedAt: "2026-10-14",
+    invoiceNumber: "407",
+    customerVatId: "1234567890",
+    paymentTerms: "70_30",
+    incotermsCode: "FCA",
+    hasApprovedVisualization: false,
+  } as unknown as DerivedOrderRecord;
+
+  it("не блокується відсутнім візуалом", () => {
+    expect(getMissingRequirementLabels(getSpecificationRequirementChecks(record))).toEqual([]);
+    expect(getSpecificationBlocker(record)).toBeNull();
+    expect(canCreateSpecification(record)).toBe(true);
   });
 });

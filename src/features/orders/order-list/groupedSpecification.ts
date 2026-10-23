@@ -128,7 +128,12 @@ export async function openGroupedSpecification(
     await Promise.all([
       first.customerSignatoryName ? declineToGenitive(first.customerSignatoryName) : Promise.resolve(""),
       first.customerSignatoryPosition ? declineToGenitive(first.customerSignatoryPosition) : Promise.resolve(""),
-      resolveVisualizationImageUrls(records.flatMap((record) => record.approvedVisualizationAssets)),
+      // Замовлення, де менеджер зняв «Додати візуалізацію», свій візуал у групову СП не дають.
+      resolveVisualizationImageUrls(
+        records
+          .filter((record) => record.specIncludeVisualization !== false)
+          .flatMap((record) => record.approvedVisualizationAssets)
+      ),
       loadSpecificationItemTexts(teamId, records).catch(() => []),
     ]);
   printWindow.mark("відмінювання ПІБ, візуалізації й тексти позицій");
