@@ -353,6 +353,19 @@ export function canIssueOrderInvoice(accessRole: string | null | undefined, jobR
 }
 
 /**
+ * Хто вносить договори, підписані поза CRM, і править назви позицій у документах
+ * (REQ-322#p41, Влад 24.10.2026): власник, СЕО, головний бухгалтер, бухгалтер і
+ * молодший бухгалтер. Ширше за INVOICE_ISSUER_JOB_ROLES — молодший бухгалтер тут є.
+ * Дзеркало в базі — tosho.is_order_document_clerk (scripts/customer-contracts.sql).
+ */
+export function canManageOrderDocuments(accessRole: string | null | undefined, jobRole: string | null | undefined) {
+  return (
+    canIssueOrderInvoice(accessRole, jobRole) ||
+    ["chief_accountant", "accountant", "junior_accountant"].includes((jobRole ?? "").trim().toLowerCase())
+  );
+}
+
+/**
  * Хто дозволяє запустити замовлення без оплати чи підпису (REQ-322#p8): двоє
  * СЕО або головний бухгалтер — саме їх назвав Влад 14.10.2026. Власника тут
  * немає: його ніхто не називав. Дзеркало в базі — tosho.is_order_approver(_, 'launch').

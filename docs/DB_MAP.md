@@ -231,6 +231,8 @@ Practical implication:
 - Document numbers are assigned by the `orders_document_numbers` trigger ([scripts/orders-specification-numbering.sql](/Users/artem/Projects/tosho-crm/scripts/orders-specification-numbering.sql)), at the moment `contract_created_at` / `specification_created_at` first goes non-null:
   - `contract_number` — `DD/MM/YYYY-NNN`, counter per contract date within the team; a hand-typed number is kept
   - `specification_number` — 1, 2, 3… within the governing contract (same `customer_id` + `our_legal_entity_id`, СП created after that contract); a grouped СП stamps one number on all its orders
+- `customer_contracts` ([scripts/customer-contracts.sql](/Users/artem/Projects/tosho-crm/scripts/customer-contracts.sql), REQ-322#p39) — contracts signed outside CRM, entered by accounting with the file (`attachments` bucket, `teams/<team>/customer-contracts/<customer>/…`). Same inheritance key as CRM contracts (customer + `our_legal_entity_id`); the newest active one (not expired, or auto-prolonged) wins in `buildContractByCustomerId` and counts as signed. Write: `tosho.is_order_document_clerk` (owner, seo, chief/junior accountant, accountant), mirror `canManageOrderDocuments`; the same function guards `order_items.document_name` via trigger `order_items_guard_document_name`.
+- Invoice needs a signed contract (own or inherited, REQ-322#p40) — enforced in UI (`getInvoiceContractBlocker`), not in the DB.
 - `order_items.spec_text` — manager's edit of the item's text in the СП; `null` = default text built in [specificationQueries.ts](/Users/artem/Projects/tosho-crm/src/features/orders/specificationQueries.ts)
 - Customer bank name for the СП lives in `customers.legal_entities[].bank_name` (jsonb, no column)
 

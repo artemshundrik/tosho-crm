@@ -125,6 +125,7 @@
     "catalog-avanprint-import.ts",
     "catalog-image-import.ts",
     "contractor-reminders.ts",
+    "customer-contract-parse.ts",
     "customer-lead-reminders.ts",
     "daily-digest.ts",
     "decline-name.ts",

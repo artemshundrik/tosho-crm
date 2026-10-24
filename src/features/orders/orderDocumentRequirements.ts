@@ -99,7 +99,23 @@ export const getInvoiceRequirementChecks = (record: DerivedOrderRecord): Require
     done: record.items.length > 0,
     help: "Рахунок формується з позицій замовлення.",
   },
+  {
+    label: "Договір підписано",
+    done: Boolean(record.contractSignedAt),
+    help: "Рахунок виписується на підставі діючого договору. Договір, підписаний поза CRM, вносить бухгалтерія.",
+  },
 ];
+
+/**
+ * Без підписаного договору рахунок не просять і не виписують (REQ-322#p40, Влад
+ * 24.10.2026): підстава рахунку — діючий договір. null — договір є.
+ */
+export const getInvoiceContractBlocker = (record: Pick<DerivedOrderRecord, "contractSignedAt" | "contractCreatedAt">) =>
+  record.contractSignedAt
+    ? null
+    : record.contractCreatedAt
+      ? "Договір ще не підписаний — без нього рахунок не виписується."
+      : "Немає договору — без нього рахунок не виписується.";
 
 export const getTechCardRequirementChecks = (record: DerivedOrderRecord): RequirementCheck[] => [
   {
@@ -271,7 +287,7 @@ export const getDocumentActionState = (
       hint: "Рахунок виписує бухгалтер у BAS: менеджер просить, бухгалтер вносить номер і дату, і тоді рахунок можна відкрити й надіслати.",
       createdDateLabel: null,
       isRequisitesBlocker: false,
-      blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
+      blockedLabel: getInvoiceContractBlocker(record) ?? (missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null),
     };
     if (state === "issued") {
       return {
@@ -293,7 +309,7 @@ export const getDocumentActionState = (
     }
     return {
       ...base,
-      statusLabel: ready ? "Можна попросити" : "Немає позицій",
+      statusLabel: ready ? "Можна попросити" : record.items.length > 0 ? "Очікує договір" : "Немає позицій",
       statusReady: ready,
       actionMode: ready ? "create" : "blocked",
       createLabel: "Створити рахунок",

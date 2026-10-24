@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -45,12 +46,14 @@ import {
   getExecutorGaps,
   type ClosingDocument,
 } from "@/features/orders/orderExecutor";
+import { openCustomerContractFile } from "@/features/orders/customerContractsQueries";
 import type { OrderLegalEntityOption } from "@/features/orders/orderLegalEntityQueries";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { isCashlessPaymentMethod, PAYMENT_METHOD_LABELS } from "@/features/orders/paymentRules";
 import { formatTelegramHandle } from "@/lib/telegramContact";
 import { cn } from "@/lib/utils";
 
+import { CustomerContractEntry } from "./CustomerContractDialog";
 import { InfoHint, RequirementList } from "./OrderHints";
 
 export type OrderDocumentAction = { kind: OrderDocumentKind } & ReturnType<typeof getDocumentActionState>;
@@ -355,6 +358,7 @@ function DocumentRow({
   onParams,
   onFixRequisites,
   approvals,
+  contractEntry,
 }: {
   record: DerivedOrderRecord;
   document: OrderDocumentAction;
@@ -362,11 +366,21 @@ function DocumentRow({
   onParams: (kind: OrderDocumentKind) => void;
   onFixRequisites: (() => void) | null;
   approvals: OrderApprovalHandlers;
+  /** «Внести підписаний договір» під рядком договору (REQ-322#p39). */
+  contractEntry: ReactNode;
 }) {
+  // Договір поза CRM (p39) — це файл, а не документ, який CRM друкує: «Відкрити» показує скан.
+  const externalFile = document.kind === "contract" ? (record.externalContract?.filePath ?? null) : null;
+  const openDocument = (kind: OrderDocumentKind) =>
+    externalFile
+      ? void openCustomerContractFile(externalFile).catch((error: unknown) =>
+          toast.error(error instanceof Error ? error.message : "Не вдалося відкрити файл договору.")
+        )
+      : onAction(kind);
   const isCreated = document.actionMode === "open" && Boolean(document.createdDateLabel);
   // Уже створений документ можна перестворити з іншими параметрами — і договір, і СП.
   const canEditParams =
-    (document.kind === "contract" && Boolean(record.contractCreatedAt)) ||
+    (document.kind === "contract" && Boolean(record.contractCreatedAt) && !externalFile) ||
     (document.kind === "specification" && Boolean(record.specificationCreatedAt));
   const StatusIcon =
     document.actionMode === "blocked"
@@ -432,10 +446,11 @@ function DocumentRow({
         {document.kind === "contract" || document.kind === "specification" ? (
           <ApprovalLine record={record} kind={document.kind} approvals={approvals} />
         ) : null}
+        {document.kind === "contract" && contractEntry ? <div className="mt-1.5">{contractEntry}</div> : null}
       </div>
       <div className="flex shrink-0 items-center gap-0.5">
         {document.actionMode === "create" ? (
-          <Button size="sm" className="gap-1 px-2.5 text-xs" onClick={() => onAction(document.kind)}>
+          <Button size="sm" className="gap-1 px-2.5 text-xs" onClick={() => openDocument(document.kind)}>
             <FilePlus2 className="h-3.5 w-3.5" />
             {document.createLabel ?? "Створити"}
           </Button>
@@ -445,7 +460,7 @@ function DocumentRow({
               size="sm"
               variant="ghost"
               className="gap-1 px-2 text-xs text-foreground hover:bg-muted/60"
-              onClick={() => onAction(document.kind)}
+              onClick={() => openDocument(document.kind)}
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Відкрити
@@ -488,8 +503,12 @@ export function OrderDocumentsCard({
   onViber,
   approvals,
   issuer,
+  teamId,
+  onContractSaved,
 }: {
   record: DerivedOrderRecord;
+  teamId: string | null | undefined;
+  onContractSaved: () => void;
   approvals: OrderApprovalHandlers;
   issuer: OrderIssuerHandlers | null;
   documentActions: OrderDocumentAction[];
@@ -504,7 +523,11 @@ export function OrderDocumentsCard({
   const customerDocs = documentActions.filter((item) => item.kind !== "techCard");
   const techCard = documentActions.find((item) => item.kind === "techCard");
   const readyCount = customerDocs.filter((item) => item.actionMode === "open").length;
-  const rowProps = { record, onAction, onParams, onFixRequisites, approvals };
+  const contractEntry =
+    cashless && record.source === "stored" ? (
+      <CustomerContractEntry record={record} teamId={teamId} onSaved={onContractSaved} />
+    ) : null;
+  const rowProps = { record, onAction, onParams, onFixRequisites, approvals, contractEntry };
   const sendBlocker = getSendToCustomerBlocker(record);
 
   return (

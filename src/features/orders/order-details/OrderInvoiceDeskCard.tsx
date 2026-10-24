@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
+import { CustomerContractEntry } from "@/features/orders/order-details/CustomerContractDialog";
 import { OrderItemDocumentNamesField } from "@/features/orders/order-details/OrderItemDocumentNamesField";
+import { getInvoiceContractBlocker } from "@/features/orders/orderDocumentRequirements";
 import { findIndivisiblePrices } from "@/features/orders/orderInvoice";
 import { formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
 
@@ -32,6 +34,9 @@ const price = (value: number, currency: string) => formatOrderMoney(value, curre
  * Неподільні на 1,2 ціни — попередження, а не замок: виправити ціну може лише
  * менеджер, тож бухгалтер вирішує сам — повернути чи виписати. Назву позиції
  * (номенклатуру BAS) бухгалтер виправляє тут сам (REQ-322#p38).
+ *
+ * Без підписаного договору рахунок не виписується (REQ-322#p40): договір,
+ * підписаний поза CRM, бухгалтер вносить звідси ж (p39).
  */
 export function OrderInvoiceDeskCard({
   record,
@@ -41,10 +46,12 @@ export function OrderInvoiceDeskCard({
   onPreview,
   teamId,
   onDocumentNamesSaved,
+  onContractSaved,
 }: {
   record: DerivedOrderRecord;
   teamId: string | null | undefined;
   onDocumentNamesSaved: (names: Map<string, string | null>) => void;
+  onContractSaved: () => void;
   busy: "request" | "issue" | "return" | null;
   onIssue: (number: string, date: string) => Promise<boolean>;
   onReturn: (note: string) => Promise<boolean>;
@@ -59,6 +66,7 @@ export function OrderInvoiceDeskCard({
   const requester =
     record.invoiceRequestedBy && record.invoiceRequestedBy === record.managerUserId ? record.managerLabel : "Менеджер";
   const requestedAt = formatRequestedAt(record.invoiceRequestedAt);
+  const contractBlocker = getInvoiceContractBlocker(record);
 
   return (
     <section className="rounded-xl border border-info-soft-border bg-info-soft/40 p-4" aria-label="Запит рахунку">
@@ -82,6 +90,16 @@ export function OrderInvoiceDeskCard({
       <div className="mt-3 rounded-lg border border-border/60 bg-background/70 p-3">
         <OrderItemDocumentNamesField record={record} teamId={teamId} onSaved={onDocumentNamesSaved} />
       </div>
+
+      {contractBlocker ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning-soft-border bg-warning-soft/50 px-3 py-2 text-xs text-foreground">
+          <div className="flex items-center gap-1.5 font-medium">
+            <AlertTriangle className="h-3.5 w-3.5 tone-text-warning" />
+            {contractBlocker}
+          </div>
+          <CustomerContractEntry record={record} teamId={teamId} onSaved={onContractSaved} />
+        </div>
+      ) : null}
 
       {indivisible.length > 0 ? (
         <div className="mt-3 rounded-lg border border-warning-soft-border bg-warning-soft/50 px-3 py-2 text-xs text-foreground">
@@ -155,7 +173,7 @@ export function OrderInvoiceDeskCard({
             </Button>
             <Button
               size="sm"
-              disabled={!number.trim() || !date || busy !== null}
+              disabled={!number.trim() || !date || busy !== null || Boolean(contractBlocker)}
               onClick={() => void onIssue(number, date)}
             >
               Рахунок виписано

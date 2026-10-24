@@ -1502,6 +1502,54 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_contracts: {
+        Row: {
+          auto_prolongation: boolean
+          contract_date: string
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          file_name: string | null
+          file_path: string | null
+          id: string
+          number: string
+          our_legal_entity_id: string | null
+          signed_via: string
+          team_id: string
+          valid_until: string | null
+        }
+        Insert: {
+          auto_prolongation?: boolean
+          contract_date: string
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          number: string
+          our_legal_entity_id?: string | null
+          signed_via?: string
+          team_id: string
+          valid_until?: string | null
+        }
+        Update: {
+          auto_prolongation?: boolean
+          contract_date?: string
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          number?: string
+          our_legal_entity_id?: string | null
+          signed_via?: string
+          team_id?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           accountant_edrpou: string | null

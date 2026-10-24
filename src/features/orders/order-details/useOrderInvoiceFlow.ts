@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { getInvoiceContractBlocker } from "@/features/orders/orderDocumentRequirements";
 import { formatOrderDate, formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
 import {
   issueOrderInvoice,
@@ -70,6 +71,12 @@ export function useOrderInvoiceFlow({
     success: string
   ) => {
     if (!record || !teamId || busy) return false;
+    // Без підписаного договору рахунок не просять і не виписують (REQ-322#p40).
+    const contractBlocker = kind === "return" ? null : getInvoiceContractBlocker(record);
+    if (contractBlocker) {
+      toast.error(contractBlocker);
+      return false;
+    }
     setBusy(kind);
     try {
       const patch = await write();

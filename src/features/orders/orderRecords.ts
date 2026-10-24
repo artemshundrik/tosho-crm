@@ -5,6 +5,8 @@ import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborator
 import type { Database, Json } from "@/lib/database.types";
 import type { OrderApproval, SignatureVia } from "./orderApprovals";
 import { loadOrderApprovalsByOrderId } from "./orderApprovalQueries";
+import { externalContractLabel, isCustomerContractActive, type CustomerContract } from "./customerContracts";
+import { listCustomerContracts } from "./customerContractsQueries";
 import { legalEntityInsertColumns, resolveOrderLegalEntity } from "./orderLegalEntityQueries";
 import {
   DEFAULT_ORDER_EXECUTOR,
@@ -219,7 +221,9 @@ type InheritedContract = {
   autoProlongation: boolean;
   signedAt: string | null;
   signedVia: SignatureVia | null;
-  orderId: string;
+  orderId: string | null;
+  /** Договір, підписаний поза CRM (REQ-322#p39); null — договір із CRM-замовлення. */
+  external: CustomerContract | null;
 };
 
 const parseSignatureVia = (value: unknown): SignatureVia | null =>
@@ -241,8 +245,29 @@ const parseBalanceTiming = (value: unknown) =>
 export const contractInheritanceKey = (customerId: string, ourLegalEntityId: string | null | undefined) =>
   `${customerId}|${ourLegalEntityId?.trim() || ""}`;
 
-const buildContractByCustomerId = (orders: StoredOrderRow[]) => {
+const buildContractByCustomerId = (orders: StoredOrderRow[], externalContracts: CustomerContract[] = []) => {
   const byCustomerId = new Map<string, InheritedContract>();
+  const today = new Date().toISOString().slice(0, 10);
+  const candidates: Array<{ key: string; contract: InheritedContract }> = externalContracts
+    .filter((contract) => isCustomerContractActive(contract, today))
+    .map((contract) => ({
+      key: contractInheritanceKey(contract.customerId, contract.ourLegalEntityId),
+      contract: {
+        // Умови оплати й строки — з замовлення; договір поза CRM їх не задає.
+        ...{ productionDays: null, prepaymentPct: null, balancePct: null, balanceTiming: null },
+        ...{ balanceDaysAfterShipment: null, balanceDaysKind: null },
+        orderNumber: externalContractLabel(contract),
+        createdAt: contract.createdAt,
+        number: contract.number,
+        date: contract.date,
+        autoProlongation: contract.autoProlongation,
+        // Вносять лише підписаний: від дати договору й рахуємо підпис.
+        signedAt: `${contract.date}T00:00:00.000Z`,
+        signedVia: contract.signedVia,
+        orderId: null,
+        external: contract,
+      },
+    }));
   for (const order of orders) {
     const customerId = order.customer_id?.trim?.() || "";
     const createdAt = order.contract_created_at ?? null;
@@ -262,8 +287,11 @@ const buildContractByCustomerId = (orders: StoredOrderRow[]) => {
       signedAt: order.contract_signed_at ?? null,
       signedVia: parseSignatureVia(order.contract_signed_via),
       orderId: order.id,
+      external: null,
     };
-    const key = contractInheritanceKey(customerId, order.our_legal_entity_id);
+    candidates.push({ key: contractInheritanceKey(customerId, order.our_legal_entity_id), contract: candidate });
+  }
+  for (const { key, contract: candidate } of candidates) {
     const current = byCustomerId.get(key);
     // Найсвіжіший договір виграє: якщо з замовником переукладали — нові замовлення йдуть за новим.
     const sortKey = (contract: InheritedContract) => contract.date || contract.createdAt;
@@ -463,6 +491,8 @@ export type DerivedOrderRecord = {
   inheritedContractOrderNumber: string | null;
   /** Замовлення, на якому живе успадкований договір: підпис ставиться саме туди. */
   inheritedContractOrderId: string | null;
+  /** Успадкований договір підписано поза CRM (REQ-322#p39): «Відкрити» показує файл. */
+  externalContract: CustomerContract | null;
   /** Наша юрособа, від якої йдуть документи (REQ-322#p1). null — ТОВ за замовчуванням. */
   ourLegalEntityId: string | null;
   /** Реквізити виконавця для документів — знімок на замовленні, інакше ТОВ. */
@@ -1296,6 +1326,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       readinessColumn,
       inheritedContractOrderNumber: null,
       inheritedContractOrderId: null,
+      externalContract: null,
       ourLegalEntityId: null,
       executor: DEFAULT_ORDER_EXECUTOR,
       closingDocument: null,
@@ -1354,6 +1385,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       storedCustomersResult,
       storedLeadsResult,
       approvedQuoteDerivedOrders,
+      externalContracts,
     ] = await Promise.all([
       listStoredOrderItems(teamId, storedOrders.map((order) => order.id)),
       storedQuoteIds.length > 0 ? listQuoteItemsForQuotes({ teamId, quoteIds: storedQuoteIds }) : [],
@@ -1414,6 +1446,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         return Array.from(unique.values());
       })(),
       approvedQuoteDerivedOrdersPromise,
+      listCustomerContracts(teamId, storedCustomerIds),
     ] as const);
     if (storedCustomersResult.error) throw storedCustomersResult.error;
     const storedQuoteItemById = new Map<string, QuoteItemExportRow>();
@@ -1518,7 +1551,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       ])
     );
 
-    const contractByCustomerId = buildContractByCustomerId(storedOrders);
+    const contractByCustomerId = buildContractByCustomerId(storedOrders, externalContracts);
 
     const storedRecords = storedOrders.map((order) => {
       const manager = order.manager_user_id ? memberById.get(order.manager_user_id) : null;
@@ -1794,6 +1827,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             : order.readiness_column ?? "ready",
         inheritedContractOrderNumber: inheritedContract?.orderNumber ?? null,
         inheritedContractOrderId: inheritedContract?.orderId ?? null,
+        externalContract: inheritedContract?.external ?? null,
         ourLegalEntityId: order.our_legal_entity_id ?? null,
         executor: executorFromSnapshot(order.our_legal_entity),
         closingDocument: parseClosingDocument(order.closing_document),
