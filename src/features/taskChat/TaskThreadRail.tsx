@@ -95,7 +95,7 @@ export function TaskThreadRail({
   const readQuery = useThreadRead(threadKey, userId ?? null);
   const sendMutation = useSendThreadMessage(threadKey);
   const markRead = useMarkThreadRead(threadKey);
-  useThreadRealtime(threadKey);
+  useThreadRealtime(threadKey, teamId);
 
   const membersQuery = useQuery({
     queryKey: ["taskThread", "members", userId ?? "none"],

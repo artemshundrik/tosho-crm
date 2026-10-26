@@ -6,35 +6,31 @@ import { threadKeys } from "./queries";
 /**
  * Живі повідомлення нитки.
  *
- * ГОЧА: працює лише тому, що tosho.quote_comments додано в публікацію
- * supabase_realtime (scripts/task-chat-schema.sql, розділ 4). До того публікація
- * на проді була ПОРОЖНЯ, і будь-яка підписка postgres_changes мовчала без
- * жодної помилки. Якщо повідомлення не прилітають — перевіряй публікацію, а не код.
+ * Сигнал іде через Broadcast із бази (scripts/realtime-broadcast-signals.sql):
+ * тригер на tosho.quote_comments шле порожнє «changed» у приватний канал
+ * `tosho:<team_id>:thread:<thread_key>`, а ми перечитуємо нитку звичайним
+ * запитом. Раніше тут був postgres_changes — він змушував Realtime двічі на
+ * секунду декодувати весь журнал змін бази (REQ-337).
+ *
+ * Канал приватний: слухати його пускає лише політика на realtime.messages для
+ * членів команди з теми. Якщо сигнали не приходять — перевіряй тригер і
+ * політику, а не код.
  */
-export function useThreadRealtime(threadKey: string | null, disabled = false) {
+export function useThreadRealtime(threadKey: string | null, teamId: string | null, disabled = false) {
   const client = useQueryClient();
 
   React.useEffect(() => {
-    if (!threadKey || disabled) return;
+    if (!threadKey || !teamId || disabled) return;
 
     const channel = supabase
-      .channel(`thread:${threadKey}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "tosho",
-          table: "quote_comments",
-          filter: `thread_key=eq.${threadKey}`,
-        },
-        () => {
-          void client.invalidateQueries({ queryKey: threadKeys.entries(threadKey) });
-        }
-      )
+      .channel(`tosho:${teamId}:thread:${threadKey}`, { config: { private: true } })
+      .on("broadcast", { event: "changed" }, () => {
+        void client.invalidateQueries({ queryKey: threadKeys.entries(threadKey) });
+      })
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [client, disabled, threadKey]);
+  }, [client, disabled, teamId, threadKey]);
 }

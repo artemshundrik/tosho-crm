@@ -301,11 +301,14 @@ export function useEntityLock({
     // Realtime замість опитування: «звільнилось» і «просять звільнити» доходять
     // одразу. Без нього запит доїжджав би з затримкою до heartbeat — рівно та
     // затримка, через яку зараз дзвонять по телефону.
+    // Сигнал — Broadcast із бази (scripts/realtime-broadcast-signals.sql), не
+    // postgres_changes: той змушував Realtime декодувати весь журнал змін бази
+    // (REQ-337). Канал приватний, слухати пускає лише член команди.
     const channel = supabase
-      .channel(`entity-lock:${entityType}:${entityId}`)
+      .channel(`tosho:${teamId}:lock:${entityType}:${entityId}`, { config: { private: true } })
       .on(
-        "postgres_changes",
-        { event: "*", schema: "tosho", table: "entity_locks", filter: `entity_id=eq.${entityId}` },
+        "broadcast",
+        { event: "changed" },
         () => {
           if (!alive || disabledAfterErrorRef.current) return;
           if (hasLockRef.current) {
