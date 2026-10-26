@@ -113,7 +113,7 @@ import {
   type AbsenceOverlap,
 } from "@/components/team/AbsenceDialog";
 import { AbsencePlanner, type PlannerMark, type PlannerPerson } from "@/components/team/AbsencePlanner";
-import { expandSchedulesToAbsences } from "@/lib/teamWorkSchedule";
+import { expandSchedulesToAbsences, isScheduleAbsence } from "@/lib/teamWorkSchedule";
 import { useWorkSchedules } from "@/features/team/useWorkSchedules";
 import { AbsenceYearReportDialog } from "@/components/team/AbsenceYearReportDialog";
 import { HolidayEditorDialog } from "@/components/team/HolidayEditorDialog";
@@ -1152,8 +1152,11 @@ export function TeamPage() {
    */
   const findOwnConflict = useCallback(
     ({ userId: forUserId, startDate, endDate }: { userId: string; startDate: string; endDate: string }) => {
+      // День «з дому» з графіка — не запис журналу: вихідний чи відпустка
+      // на нього лягають поверх, інакше віддалений вівторок не взяти.
       const hit = liveAbsences.find(
         (absence) =>
+          !isScheduleAbsence(absence) &&
           absence.userId === forUserId &&
           absence.startDate <= endDate &&
           absence.endDate >= startDate
