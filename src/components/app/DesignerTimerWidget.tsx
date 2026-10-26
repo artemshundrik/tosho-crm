@@ -290,12 +290,22 @@ export function useDesignerTimerController({
         void refresh();
       }
     };
+    // Прихована вкладка базу не опитує: забута на ніч вкладка дизайнера щохвилини
+    // перечитувала журнал задач цілком (REQ-337). Повернувся — одразу свіже.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
     window.addEventListener(DESIGN_TASK_TIMER_UPDATED_EVENT, handleTimerUpdated);
     window.addEventListener("focus", handleTimerUpdated);
-    const intervalId = window.setInterval(() => void refresh(), 60 * 1000);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void refresh();
+    }, 60 * 1000);
     return () => {
       window.removeEventListener(DESIGN_TASK_TIMER_UPDATED_EVENT, handleTimerUpdated);
       window.removeEventListener("focus", handleTimerUpdated);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.clearInterval(intervalId);
     };
   }, [enabled, refresh, teamId]);
