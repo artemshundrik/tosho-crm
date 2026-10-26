@@ -297,18 +297,19 @@ describe("кнопки замість підказок", () => {
 });
 
 describe("неможливе вимкнене", () => {
-  it("з поролоном вертикальна резинка сіра, а вже вибрана знімається з поясненням", async () => {
+  it("з поролоном вертикальна застібка сіра, а вже вибрана знімається з поясненням", async () => {
     const user = userEvent.setup();
     render(<Harness />);
 
-    await pick(user, "Резинка", "Наявна");
-    await pick(user, "Розташування", "Вертикальна");
-    expect(chip("Розташування", "Вертикальна").getAttribute("aria-pressed")).toBe("true");
+    await pick(user, "Резинка-застібка", "Вертикальна");
+    await pick(user, "Резинка під ручку", "Наявна");
+    expect(chip("Резинка-застібка", "Вертикальна").getAttribute("aria-pressed")).toBe("true");
 
     await pick(user, "Поролон", "З поролоном");
-    expect(chip("Розташування", "Вертикальна").getAttribute("aria-pressed")).toBe("false");
-    expect((chip("Розташування", "Вертикальна") as HTMLButtonElement).disabled).toBe(true);
-    expect((chip("Розташування", "Під ручку") as HTMLButtonElement).disabled).toBe(false);
+    expect(chip("Резинка-застібка", "Вертикальна").getAttribute("aria-pressed")).toBe("false");
+    expect((chip("Резинка-застібка", "Вертикальна") as HTMLButtonElement).disabled).toBe(true);
+    expect((chip("Резинка-застібка", "Відсутня") as HTMLButtonElement).disabled).toBe(false);
+    expect(chip("Резинка під ручку", "Наявна").getAttribute("aria-pressed")).toBe("true");
     expect(
       screen.getByText("«Вертикальна» знято: З поролоновою обкладинкою можлива лише резинка під ручку")
     ).toBeTruthy();

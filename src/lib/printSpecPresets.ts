@@ -949,7 +949,11 @@ export const PRINT_SPEC_CERTIFICATE: PrintSpecPreset = {
  * «Папір з друком» тягне за собою обовʼязкові друк 4+0 і матову ламінацію 1+0:
  * це окреме поле з єдиним варіантом, і воно обирається само (щоб факт потрапив у
  * специфікацію, а не лишився знанням у голові). Поролонова обкладинка лишає тільки
- * резинку під ручку — інші положення вимкнені (`disabledWhen`, REQ-326#p4).
+ * резинку під ручку — застібка вимкнена (`disabledWhen`, REQ-326#p4).
+ *
+ * Резинка — два поля, а не одне «Розташування»: застібка (вертикальна чи
+ * горизонтальна — лише одна) і резинка під ручку ставляться разом, кожна своїм
+ * кольором. Старі позиції з `elastic`/`elasticPosition` перекладає `upgradeValues`.
  */
 
 /** Форзац і нахзац: за замовчуванням карти; у лінії, клітинки й Moleskine — чисті. */
@@ -959,14 +963,34 @@ const DIARY_ENDPAPER_DEFAULTS: PrintSpecDefaultRule[] = [
   { value: "maps" },
 ];
 
-/** Поролонова обкладинка лишає тільки резинку під ручку. */
+/** Поролонова обкладинка лишає тільки резинку під ручку: застібку вимикає. */
 const ELASTIC_FOAM_LOCK = {
   disabledWhen: { field: "coverFoam", equals: "yes" },
   reason: "З поролоновою обкладинкою можлива лише резинка під ручку",
 };
+
+/**
+ * До 26.10.2026 резинка була одним вибором: «Наявна» + розташування
+ * (вертикальна, горизонтальна або під ручку) + один колір. Тепер це застібка й
+ * резинка під ручку окремо; старий вибір лягає в одну з них, друга — «Відсутня».
+ */
+function upgradeDiaryElastic(source: Record<string, unknown>): Record<string, unknown> {
+  if (!("elastic" in source) || "elasticClosure" in source || "penLoop" in source) return source;
+  const { elastic, elasticPosition, elasticColor, ...rest } = source;
+  const color = typeof elasticColor === "string" ? elasticColor : "";
+  if (elastic === "no") return { ...rest, elasticClosure: "none", penLoop: "no" };
+  if (elastic !== "yes") return rest;
+  if (elasticPosition === "pen_loop") return { ...rest, elasticClosure: "none", penLoop: "yes", penLoopColor: color };
+  if (elasticPosition === "vertical" || elasticPosition === "horizontal") {
+    return { ...rest, elasticClosure: elasticPosition, elasticClosureColor: color, penLoop: "no" };
+  }
+  return rest;
+}
+
 export const PRINT_SPEC_DIARY: PrintSpecPreset = {
   key: "print_diary",
   label: "Щоденник",
+  upgradeValues: upgradeDiaryElastic,
   sections: ["Обкладинка", "Блок", "Кути й торець", "Вставки", "Ляссе", "Резинка й шильда", "Решта"],
   columns: [
     { title: "Обкладинка", sections: ["Обкладинка"] },
@@ -1298,34 +1322,41 @@ export const PRINT_SPEC_DIARY: PrintSpecPreset = {
       hint: "Pantone або опис",
     },
     {
-      id: "elastic",
-      label: "Резинка",
+      id: "elasticClosure",
+      label: "Резинка-застібка",
+      type: "single",
+      section: "Резинка й шильда",
+      options: [
+        { value: "none", label: "Відсутня" },
+        { value: "vertical", label: "Вертикальна", ...ELASTIC_FOAM_LOCK },
+        { value: "horizontal", label: "Горизонтальна", ...ELASTIC_FOAM_LOCK },
+      ],
+      hint: "Тримає щоденник закритим. З поролоновою обкладинкою застібки не буває.",
+    },
+    {
+      id: "elasticClosureColor",
+      label: "Колір застібки",
+      type: "text",
+      section: "Резинка й шильда",
+      showIf: { field: "elasticClosure", oneOf: ["vertical", "horizontal"] },
+    },
+    {
+      id: "penLoop",
+      label: "Резинка під ручку",
       type: "single",
       section: "Резинка й шильда",
       options: [
         { value: "yes", label: "Наявна" },
         { value: "no", label: "Відсутня" },
       ],
+      hint: "Ставиться разом із застібкою або без неї.",
     },
     {
-      id: "elasticPosition",
-      label: "Розташування",
-      type: "single",
-      section: "Резинка й шильда",
-      options: [
-        { value: "vertical", label: "Вертикальна", ...ELASTIC_FOAM_LOCK },
-        { value: "horizontal", label: "Горизонтальна", ...ELASTIC_FOAM_LOCK },
-        { value: "pen_loop", label: "Під ручку" },
-      ],
-      showIf: { field: "elastic", equals: "yes" },
-      hint: "З поролоновою обкладинкою можлива лише резинка під ручку",
-    },
-    {
-      id: "elasticColor",
-      label: "Колір резинки",
+      id: "penLoopColor",
+      label: "Колір резинки під ручку",
       type: "text",
       section: "Резинка й шильда",
-      showIf: { field: "elastic", equals: "yes" },
+      showIf: { field: "penLoop", equals: "yes" },
     },
     {
       id: "badge",

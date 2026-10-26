@@ -160,6 +160,12 @@ export type PrintSpecPreset = {
    * одного чи кількох розділів. Без `columns` — один стовпчик з усіма розділами.
    */
   columns?: PrintSpecColumn[];
+  /**
+   * Переклад збережених значень зі старого набору полів — на читанні, до
+   * розбору. Поле розділили чи перейменували: стара позиція мусить показати той
+   * самий вибір, а не тихо його загубити.
+   */
+  upgradeValues?: (source: Record<string, unknown>) => Record<string, unknown>;
 };
 
 /** Один підписаний розмір у полі `sizeRows`. Рядки — бо поле може бути порожнім. Глибина — лише з `withDepth`. */
@@ -787,7 +793,8 @@ function parsePrintSpecVersions(preset: PrintSpecPreset, raw: unknown): PrintSpe
 export function parsePrintSpecValues(preset: PrintSpecPreset, raw: unknown): PrintSpecValues {
   const values = createEmptyPrintSpecValues(preset);
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return values;
-  const source = raw as Record<string, unknown>;
+  const record = raw as Record<string, unknown>;
+  const source = preset.upgradeValues?.(record) ?? record;
 
   for (const field of preset.fields) {
     const stored = source[field.id];

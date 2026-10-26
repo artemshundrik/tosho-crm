@@ -682,32 +682,59 @@ describe("значення за замовчуванням", () => {
 
 describe("вимкнені варіанти", () => {
   const diary = (patch: PrintSpecValues = {}) => ({ ...createEmptyPrintSpecValues(PRINT_SPEC_DIARY), ...patch });
-  const elastic = PRINT_SPEC_DIARY.fields.find((field) => field.id === "elasticPosition");
-  const option = (value: string) => elastic?.options?.find((entry) => entry.value === value);
+  const closure = PRINT_SPEC_DIARY.fields.find((field) => field.id === "elasticClosure");
+  const option = (value: string) => closure?.options?.find((entry) => entry.value === value);
 
-  it("з поролоном резинка лише під ручку", () => {
-    const foam = diary({ coverFoam: "yes", elastic: "yes" });
+  it("з поролоном застібки немає, резинка під ручку лишається", () => {
+    const foam = diary({ coverFoam: "yes" });
     expect(isPrintSpecOptionDisabled(option("vertical")!, foam)).toBe(true);
     expect(isPrintSpecOptionDisabled(option("horizontal")!, foam)).toBe(true);
-    expect(isPrintSpecOptionDisabled(option("pen_loop")!, foam)).toBe(false);
+    expect(isPrintSpecOptionDisabled(option("none")!, foam)).toBe(false);
     expect(isPrintSpecOptionDisabled(option("vertical")!, diary({ coverFoam: "no" }))).toBe(false);
     expect(option("vertical")?.reason).toBe("З поролоновою обкладинкою можлива лише резинка під ручку");
   });
 
-  it("вибрали поролон — уже вибрана неможлива резинка знімається з причиною", () => {
-    const before = diary({ elastic: "yes", elasticPosition: "vertical" });
+  it("вибрали поролон — уже вибрана застібка знімається з причиною, резинка під ручку ні", () => {
+    const before = diary({ elasticClosure: "vertical", penLoop: "yes" });
     const meta = { auto: [], touched: [] };
     const after = editPrintSpecDraft(PRINT_SPEC_DIARY, before, meta, { coverFoam: "yes" });
-    expect(after.values.elasticPosition).toBe("");
+    expect(after.values.elasticClosure).toBe("");
+    expect(after.values.penLoop).toBe("yes");
     expect(after.dropped).toEqual([
-      { fieldId: "elasticPosition", label: "Вертикальна", reason: "З поролоновою обкладинкою можлива лише резинка під ручку" },
+      { fieldId: "elasticClosure", label: "Вертикальна", reason: "З поролоновою обкладинкою можлива лише резинка під ручку" },
     ]);
-    // Можливе лишається.
-    const pen = editPrintSpecDraft(PRINT_SPEC_DIARY, diary({ elastic: "yes", elasticPosition: "pen_loop" }), meta, {
-      coverFoam: "yes",
+  });
+
+  it("застібку й резинку під ручку можна обрати разом, кожну своїм кольором", () => {
+    const values = diary({
+      elasticClosure: "vertical",
+      elasticClosureColor: "помаранчевий",
+      penLoop: "yes",
+      penLoopColor: "чорний",
     });
-    expect(pen.values.elasticPosition).toBe("pen_loop");
-    expect(pen.dropped).toEqual([]);
+    expect(formatPrintSpecEntries(PRINT_SPEC_DIARY, values).filter((entry) => /elastic|penLoop/i.test(entry.id))).toEqual([
+      expect.objectContaining({ label: "Резинка-застібка", value: "Вертикальна" }),
+      expect.objectContaining({ label: "Колір застібки", value: "помаранчевий" }),
+      expect.objectContaining({ label: "Резинка під ручку", value: "Наявна" }),
+      expect.objectContaining({ label: "Колір резинки під ручку", value: "чорний" }),
+    ]);
+  });
+
+  it("стара резинка одним вибором лягає в застібку або в резинку під ручку", () => {
+    const read = (raw: Record<string, unknown>) => parsePrintSpecValues(PRINT_SPEC_DIARY, raw);
+    expect(read({ elastic: "yes", elasticPosition: "vertical", elasticColor: "помаранчевий" })).toMatchObject({
+      elasticClosure: "vertical",
+      elasticClosureColor: "помаранчевий",
+      penLoop: "no",
+    });
+    expect(read({ elastic: "yes", elasticPosition: "pen_loop", elasticColor: "чорний" })).toMatchObject({
+      elasticClosure: "none",
+      penLoop: "yes",
+      penLoopColor: "чорний",
+    });
+    expect(read({ elastic: "no" })).toMatchObject({ elasticClosure: "none", penLoop: "no" });
+    expect(read({ elastic: "yes" })).toMatchObject({ elasticClosure: "", penLoop: "" });
+    expect(read({}).elasticClosure).toBe("");
   });
 
   it("листівка: ламінація лише від 170 г", () => {
@@ -727,7 +754,7 @@ describe("вимкнені варіанти", () => {
   });
 
   it("звірка не чіпає значення, коли нічого не вимкнено", () => {
-    const values = diary({ coverFoam: "no", elastic: "yes", elasticPosition: "vertical" });
+    const values = diary({ coverFoam: "no", elasticClosure: "vertical" });
     expect(dropDisabledPrintSpecChoices(PRINT_SPEC_DIARY, values).values).toBe(values);
   });
 });
