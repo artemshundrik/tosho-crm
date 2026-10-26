@@ -6098,6 +6098,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      correct_order_invoice: {
+        Args: {
+          p_invoice_date: string
+          p_invoice_number: string
+          p_items: Json
+          p_order_id: string
+        }
+        Returns: Json
+      }
       count_absence_business_days: {
         Args: { _from: string; _to: string; _workspace: string }
         Returns: number

@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -48,13 +49,16 @@ import {
 } from "@/features/orders/orderExecutor";
 import { openCustomerContractFile } from "@/features/orders/customerContractsQueries";
 import type { OrderLegalEntityOption } from "@/features/orders/orderLegalEntityQueries";
+import { getInvoiceCorrectionBlocker } from "@/features/orders/orderInvoice";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { isCashlessPaymentMethod, PAYMENT_METHOD_LABELS } from "@/features/orders/paymentRules";
+import { canIssueOrderInvoice } from "@/lib/permissions";
 import { formatTelegramHandle } from "@/lib/telegramContact";
 import { cn } from "@/lib/utils";
 
 import { CustomerContractEntry } from "./CustomerContractDialog";
 import { InfoHint, RequirementList } from "./OrderHints";
+import { OrderInvoiceCorrectionDialog } from "./OrderInvoiceCorrectionDialog";
 
 export type OrderDocumentAction = { kind: OrderDocumentKind } & ReturnType<typeof getDocumentActionState>;
 
@@ -359,6 +363,7 @@ function DocumentRow({
   onFixRequisites,
   approvals,
   contractEntry,
+  onCorrectInvoice,
 }: {
   record: DerivedOrderRecord;
   document: OrderDocumentAction;
@@ -368,6 +373,8 @@ function DocumentRow({
   approvals: OrderApprovalHandlers;
   /** «Внести підписаний договір» під рядком договору (REQ-322#p39). */
   contractEntry: ReactNode;
+  /** «Виправити рахунок» (REQ-335) — лише бухгалтерії й СЕО; null — пункту немає. */
+  onCorrectInvoice: (() => void) | null;
 }) {
   // Договір поза CRM (p39) — це файл, а не документ, який CRM друкує: «Відкрити» показує скан.
   const externalFile = document.kind === "contract" ? (record.externalContract?.filePath ?? null) : null;
@@ -382,6 +389,8 @@ function DocumentRow({
   const canEditParams =
     (document.kind === "contract" && Boolean(record.contractCreatedAt) && !externalFile) ||
     (document.kind === "specification" && Boolean(record.specificationCreatedAt));
+  const canCorrectInvoice = document.kind === "invoice" && Boolean(record.invoiceNumber) && Boolean(onCorrectInvoice);
+  const correctionBlocker = canCorrectInvoice ? getInvoiceCorrectionBlocker(record) : null;
   const StatusIcon =
     document.actionMode === "blocked"
       ? AlertTriangle
@@ -465,7 +474,7 @@ function DocumentRow({
               <ExternalLink className="h-3.5 w-3.5" />
               Відкрити
             </Button>
-            {canEditParams ? (
+            {canEditParams || canCorrectInvoice ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -477,11 +486,28 @@ function DocumentRow({
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuItem onClick={() => onParams(document.kind)}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Параметри й перестворити
-                  </DropdownMenuItem>
+                <DropdownMenuContent align="end" className="w-60">
+                  {canEditParams ? (
+                    <DropdownMenuItem onClick={() => onParams(document.kind)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Параметри й перестворити
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canCorrectInvoice ? (
+                    <DropdownMenuItem
+                      disabled={Boolean(correctionBlocker)}
+                      onClick={() => onCorrectInvoice?.()}
+                      className="items-start"
+                    >
+                      <Pencil className="mr-2 mt-0.5 h-4 w-4" />
+                      <span className="grid">
+                        Виправити ціну, кількість чи номер
+                        {correctionBlocker ? (
+                          <span className="text-2xs text-muted-foreground">{correctionBlocker}</span>
+                        ) : null}
+                      </span>
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
@@ -504,11 +530,12 @@ export function OrderDocumentsCard({
   approvals,
   issuer,
   teamId,
-  onContractSaved,
+  onRecordChanged,
 }: {
   record: DerivedOrderRecord;
   teamId: string | null | undefined;
-  onContractSaved: () => void;
+  /** Збережено те, що міняє замовлення поза цим записом (договір, виправлений рахунок) — перечитати. */
+  onRecordChanged: () => void;
   approvals: OrderApprovalHandlers;
   issuer: OrderIssuerHandlers | null;
   documentActions: OrderDocumentAction[];
@@ -525,9 +552,16 @@ export function OrderDocumentsCard({
   const readyCount = customerDocs.filter((item) => item.actionMode === "open").length;
   const contractEntry =
     cashless && record.source === "stored" ? (
-      <CustomerContractEntry record={record} teamId={teamId} onSaved={onContractSaved} />
+      <CustomerContractEntry record={record} teamId={teamId} onSaved={onRecordChanged} />
     ) : null;
-  const rowProps = { record, onAction, onParams, onFixRequisites, approvals, contractEntry };
+  // Виправити виписаний рахунок (REQ-335) — ті самі ролі, що вносять номер з BAS.
+  const { userId, accessRole, jobRole } = useAuth();
+  const [correctingInvoice, setCorrectingInvoice] = useState(false);
+  const onCorrectInvoice =
+    teamId && record.source === "stored" && canIssueOrderInvoice(accessRole, jobRole)
+      ? () => setCorrectingInvoice(true)
+      : null;
+  const rowProps = { record, onAction, onParams, onFixRequisites, approvals, contractEntry, onCorrectInvoice };
   const sendBlocker = getSendToCustomerBlocker(record);
 
   return (
@@ -600,6 +634,17 @@ export function OrderDocumentsCard({
           </div>
           <DocumentRow document={techCard} {...rowProps} />
         </section>
+      ) : null}
+
+      {onCorrectInvoice && teamId && record.invoiceNumber ? (
+        <OrderInvoiceCorrectionDialog
+          record={record}
+          teamId={teamId}
+          userId={userId}
+          open={correctingInvoice}
+          onOpenChange={setCorrectingInvoice}
+          onSaved={onRecordChanged}
+        />
       ) : null}
     </>
   );

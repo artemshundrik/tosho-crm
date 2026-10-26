@@ -24,6 +24,30 @@ export const getOrderInvoiceState = (record: OrderInvoiceFields): OrderInvoiceSt
   return "none";
 };
 
+const PAID_STATUSES = new Set(["partially_paid", "awaiting_balance", "fully_paid"]);
+
+/**
+ * Чому виписаний рахунок не можна виправити (REQ-335, вузька версія). Підписана
+ * СП потребує нової СП, а з оплатою незрозуміло, що робити з різницею — обидва
+ * питання ще відкриті. Те саме стереже tosho.correct_order_invoice.
+ */
+export const getInvoiceCorrectionBlocker = (
+  record: Pick<DerivedOrderRecord, "invoiceNumber" | "specificationSignedAt" | "paymentStatus">
+): string | null => {
+  if (!record.invoiceNumber) return "Рахунок ще не виписано";
+  if (record.specificationSignedAt) return "СП уже підписана — для нової ціни потрібна нова СП";
+  if (PAID_STATUSES.has(record.paymentStatus)) return "За рахунком уже є оплата — виправити поки не можна";
+  return null;
+};
+
+/** «403,68», «1 200» → число; порожнє чи не число — null. */
+export const parseMoneyInput = (value: string): number | null => {
+  const normalized = value.replace(/\s+/g, "").replace(",", ".");
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 /** Рахунок потрібен лише на безготівці. */
 export const needsOrderInvoice = (record: Pick<DerivedOrderRecord, "paymentMethodId" | "paymentRail">) =>
   isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail);

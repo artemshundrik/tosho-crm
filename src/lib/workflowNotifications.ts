@@ -755,8 +755,8 @@ export async function notifyOrderInvoiceRequested(params: {
 export async function notifyOrderInvoiceDecided(params: {
   orderId: string;
   orderNumber: string;
-  decision: "issued" | "returned";
-  /** «№ 407 від 15.10.2026» — для виписаного. */
+  decision: "issued" | "returned" | "corrected";
+  /** «№ 407 від 15.10.2026» — для виписаного й виправленого. */
   invoiceLabel?: string | null;
   note?: string | null;
   /** Хто просив, і менеджер замовлення — якщо це різні люди, дізнаються обидва. */
@@ -771,14 +771,20 @@ export async function notifyOrderInvoiceDecided(params: {
   if (recipients.size === 0) return;
   const who = params.deciderName?.trim() || "Бухгалтер";
   const issued = params.decision === "issued";
+  // Виправлений рахунок (REQ-335): замовнику, можливо, пішла стара версія — менеджер має знати.
+  const corrected = params.decision === "corrected";
   await notifyUsers({
     userIds: Array.from(recipients),
-    title: issued
-      ? `Рахунок ${params.invoiceLabel ?? ""} готовий`.replace(/\s+/g, " ")
-      : `Рахунок на ${params.orderNumber} повернули`,
-    body: issued
-      ? `${who} виписав(ла) рахунок на ${params.orderNumber}. Його можна відкрити й надіслати замовнику.`
-      : `${who} повернув(ла) запит рахунку на ${params.orderNumber}: ${params.note?.trim() || "без коментаря"}. Виправте й попросіть ще раз.`,
+    title: corrected
+      ? `Рахунок на ${params.orderNumber} виправлено`
+      : issued
+        ? `Рахунок ${params.invoiceLabel ?? ""} готовий`.replace(/\s+/g, " ")
+        : `Рахунок на ${params.orderNumber} повернули`,
+    body: corrected
+      ? `${who} виправив(ла) рахунок ${params.invoiceLabel ?? ""}: ${params.note?.trim() || ""}. Якщо замовник уже має рахунок — надішліть новий.`.replace(/\s+/g, " ")
+      : issued
+        ? `${who} виписав(ла) рахунок на ${params.orderNumber}. Його можна відкрити й надіслати замовнику.`
+        : `${who} повернув(ла) запит рахунку на ${params.orderNumber}: ${params.note?.trim() || "без коментаря"}. Виправте й попросіть ще раз.`,
     href: `/orders/production/${params.orderId}`,
     type: issued ? "success" : "warning",
     category: "order_invoice_decision",

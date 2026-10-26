@@ -830,6 +830,15 @@ export const formatOrderMoney = (value: number, currency?: string | null) =>
     maximumFractionDigits: 0,
   }).format(value || 0);
 
+/** З копійками — там, де ціна має бути точна до 6 коп (рахунок ТОВ: ціна з ПДВ ділиться на 1,2). */
+export const formatOrderMoneyExact = (value: number, currency?: string | null) =>
+  new Intl.NumberFormat("uk-UA", {
+    style: "currency",
+    currency: isValidCurrency(currency) ? (currency as string).toUpperCase() : "UAH",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value || 0);
+
 export const formatOrderDate = (value?: string | null) => {
   if (!value) return "Не вказано";
   const date = new Date(value);

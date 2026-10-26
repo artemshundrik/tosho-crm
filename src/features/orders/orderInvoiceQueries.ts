@@ -80,3 +80,38 @@ export const issueOrderInvoice = (params: { teamId: string; orderId: string; num
 
 export const returnOrderInvoiceRequest = (params: { teamId: string; orderId: string; note: string }) =>
   updateInvoice(params, { invoice_return_note: params.note.trim() });
+
+export type InvoiceCorrectionResult = {
+  totalBefore: number;
+  totalAfter: number;
+  numberBefore: string | null;
+  numberAfter: string;
+};
+
+/**
+ * Виправлення виписаного рахунку (REQ-335): ціна й кількість позицій, номер і
+ * дата з BAS — однією транзакцією в tosho.correct_order_invoice. Права й межі
+ * (підписана СП, оплата) стереже функція, тут лише виклик.
+ */
+export async function correctOrderInvoice(params: {
+  orderId: string;
+  items: Array<{ id: string; qty: number; unitPrice: number }>;
+  number: string;
+  date: string;
+}): Promise<InvoiceCorrectionResult> {
+  const number = normalizeInvoiceNumber(params.number);
+  const { data, error } = await supabase.schema("tosho").rpc("correct_order_invoice", {
+    p_order_id: params.orderId,
+    p_items: params.items.map((item) => ({ id: item.id, qty: item.qty, unit_price: item.unitPrice })),
+    p_invoice_number: number,
+    p_invoice_date: params.date,
+  });
+  if (error) throw toInvoiceError(error, number);
+  const row = (data ?? {}) as Record<string, unknown>;
+  return {
+    totalBefore: Number(row.total_before) || 0,
+    totalAfter: Number(row.total_after) || 0,
+    numberBefore: typeof row.number_before === "string" ? row.number_before : null,
+    numberAfter: typeof row.number_after === "string" ? row.number_after : number,
+  };
+}

@@ -10,7 +10,7 @@ import { CustomerContractEntry } from "@/features/orders/order-details/CustomerC
 import { OrderItemDocumentNamesField } from "@/features/orders/order-details/OrderItemDocumentNamesField";
 import { getInvoiceContractBlocker } from "@/features/orders/orderDocumentRequirements";
 import { findIndivisiblePrices } from "@/features/orders/orderInvoice";
-import { formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
+import { formatOrderMoneyExact as formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
 
 const todayIso = () => {
   const now = new Date();

@@ -25,6 +25,37 @@ async function currentUserName() {
 }
 
 /**
+ * Рядок у стрічці замовлення й сповіщення — услід за вже збереженим записом.
+ * Їхній збій не відкочує стан, лише попереджає. Спільне для запиту, виписки,
+ * повернення й виправлення рахунку (REQ-335).
+ */
+export async function followUpInvoiceEvent(
+  record: DerivedOrderRecord,
+  teamId: string,
+  title: string,
+  notify: (actorName: string | null) => Promise<void>
+) {
+  try {
+    const actorName = await currentUserName();
+    await Promise.all([
+      logActivity({
+        teamId,
+        action: ORDER_INVOICE_EVENT,
+        entityType: "orders",
+        entityId: record.id,
+        title,
+        href: `/orders/production/${record.id}`,
+        // Стрічка замовлення з прорахунку — це нитка прорахунку: події шукаються за quote_id.
+        metadata: { quote_id: record.linkedQuoteId ?? record.id, order_id: record.id },
+      }),
+      notify(actorName),
+    ]);
+  } catch {
+    toast.warning("Збережено, але сповіщення не надіслалось — скажіть колегам самі.");
+  }
+}
+
+/**
  * Рахунок через бухгалтерію (REQ-322#p10): запит, виписка й повернення.
  * Запис у базу — головне; сповіщення й рядок у стрічці — услід, і їхній збій
  * не відкочує вже збережений стан, лише попереджає.
@@ -44,24 +75,7 @@ export function useOrderInvoiceFlow({
 
   const followUp = async (title: string, notify: (actorName: string | null) => Promise<void>) => {
     if (!record || !teamId) return;
-    try {
-      const actorName = await currentUserName();
-      await Promise.all([
-        logActivity({
-          teamId,
-          action: ORDER_INVOICE_EVENT,
-          entityType: "orders",
-          entityId: record.id,
-          title,
-          href: `/orders/production/${record.id}`,
-          // Стрічка замовлення з прорахунку — це нитка прорахунку: події шукаються за quote_id.
-          metadata: { quote_id: record.linkedQuoteId ?? record.id, order_id: record.id },
-        }),
-        notify(actorName),
-      ]);
-    } catch {
-      toast.warning("Збережено, але сповіщення не надіслалось — скажіть колегам самі.");
-    }
+    await followUpInvoiceEvent(record, teamId, title, notify);
   };
 
   const run = async (

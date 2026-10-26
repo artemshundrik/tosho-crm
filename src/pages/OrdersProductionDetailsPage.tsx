@@ -1570,7 +1570,7 @@ export default function OrdersProductionDetailsPage() {
                   onEmail={openEmailDraft}
                   onTelegram={openTelegramDraft}
                   onViber={openViberDraft}
-                  teamId={teamId} onContractSaved={() => void refreshRecord()}
+                  teamId={teamId} onRecordChanged={() => void refreshRecord()}
                 />
                 {/* Готівка без договору: панель лише там, де договір уже є. Версії пишуться в рядок
                     orders — у незбереженого запису його ще немає. */}
