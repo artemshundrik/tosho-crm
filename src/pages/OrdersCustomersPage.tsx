@@ -3040,11 +3040,37 @@ function CustomersPage({ teamId }: { teamId: string }) {
           delivery_points: serializeCustomerDeliveryPoints(leadForm.deliveryPoints),
         };
 
-        const { error: customerInsertError } = await supabase
+        const { data: insertedCustomer, error: customerInsertError } = await supabase
           .schema("tosho")
           .from("customers")
-          .insert(customerPayload as never);
+          .insert(customerPayload as never)
+          .select("id")
+          .single();
         if (customerInsertError) throw customerInsertError;
+
+        // Лід тримається в прорахунку лише текстом `customer_name` (REQ-193), тож
+        // без цього кроку прорахунки ліда лишались «лідовими» назавжди: чекліст
+        // «Створити замовлення» не бачив ні переведення, ні реквізитів замовника
+        // (REQ-338). Збіг точний, як у тригері перейменування: нечіткий забрав би
+        // чужі прорахунки. Стара назва — на випадок, якщо тригер не встиг.
+        const convertedCustomerId = (insertedCustomer as { id?: string } | null)?.id ?? null;
+        const leadNames = Array.from(
+          new Set([leadForm.companyName.trim(), previousLead?.company_name ?? ""].filter(Boolean))
+        );
+        if (convertedCustomerId && leadNames.length > 0) {
+          const { error: quotesLinkError } = await supabase
+            .schema("tosho")
+            .from("quotes")
+            .update({ customer_id: convertedCustomerId, customer_name: leadForm.companyName.trim() } as never)
+            .eq("team_id", teamId)
+            .is("customer_id", null)
+            .in("customer_name", leadNames);
+          // Замовника вже створено: кинути тут — лишити і ліда, і дубль-замовника.
+          if (quotesLinkError) {
+            console.warn("Failed to link lead quotes to converted customer", quotesLinkError);
+            toast.error("Замовника створено, але прорахунки ліда не привʼязались — напишіть розробнику.");
+          }
+        }
 
         const { error: leadDeleteError } = await supabase
           .schema("tosho")
