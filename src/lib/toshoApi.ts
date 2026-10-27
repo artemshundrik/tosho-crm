@@ -60,6 +60,8 @@ export type QuoteListRow = {
   delivery_details?: Record<string, unknown> | null;
   currency?: string | null;
   total?: number | null;
+  /** Коли прорахунок потрапив у поточний статус — ставить тригер у базі. */
+  status_changed_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   created_by?: string | null;
@@ -430,9 +432,10 @@ export async function listQuotes(params: ListQuotesParams) {
       searchableColumns: string[];
     }> = [
       {
+        // status_changed_at — порядок карток у колонках канбану (REQ-178#p49).
         columns:
-          "id,team_id,customer_id,number,status,title,quote_type,deal_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
-        optionalColumns: ["customer_name", "customer_logo_url"],
+          "id,team_id,customer_id,number,status,title,quote_type,deal_type,print_type,delivery_type,currency,total,created_at,updated_at,status_changed_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+        optionalColumns: ["customer_name", "customer_logo_url", "status_changed_at"],
         searchableColumns: [...baseSearchableColumns, "customer_name", "design_brief"],
       },
       {

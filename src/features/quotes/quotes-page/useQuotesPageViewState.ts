@@ -188,6 +188,10 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
       if (!buckets[normalized]) buckets[normalized] = [];
       buckets[normalized].push(row);
     });
+    // На дошці зверху — те, що останнім потрапило в колонку, а не найновіше
+    // створене: інакше щойно затверджений старий прорахунок тоне (REQ-178#p49).
+    const enteredAt = (row: QuoteListRow) => new Date(row.status_changed_at || row.created_at || 0).getTime();
+    Object.values(buckets).forEach((items) => items.sort((a, b) => enteredAt(b) - enteredAt(a)));
     return buckets;
   }, [filteredAndSortedRows]);
 
