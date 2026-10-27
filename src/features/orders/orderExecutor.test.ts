@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildExecutorFromLegalEntity,
+  grossFromNet,
+  nearestExactNetPrices,
+  netFromGross,
   DEFAULT_ORDER_EXECUTOR,
   executorFromSnapshot,
   getExecutorGaps,
@@ -80,6 +83,21 @@ describe("splitVat", () => {
   });
   it("без ПДВ сума не ділиться", () => {
     expect(splitVat(1200, false)).toEqual({ net: 1200, vat: 0, gross: 1200 });
+  });
+});
+
+describe("ціна без ПДВ ↔ з ПДВ", () => {
+  it("платнику додаємо 20% до копійки, неплатнику — ні", () => {
+    expect(grossFromNet(415, true)).toBe(498);
+    expect(grossFromNet(403.7, true)).toBe(484.44);
+    expect(grossFromNet(415, false)).toBe(415);
+    expect(netFromGross(498, true)).toBe(415);
+    expect(netFromGross(500, false)).toBe(500);
+  });
+  it("копійки не кратні 5 — пропонуємо дві найближчі точні ціни", () => {
+    expect(nearestExactNetPrices(415)).toBeNull();
+    expect(nearestExactNetPrices(403.75)).toBeNull();
+    expect(nearestExactNetPrices(403.73)).toEqual({ down: 403.7, up: 403.75 });
   });
 });
 

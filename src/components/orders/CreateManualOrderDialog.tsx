@@ -48,7 +48,12 @@ import {
   isCashLikePaymentMethod,
   toPayHowValue,
 } from "@/features/orders/paymentRules";
-import { DEFAULT_ORDER_EXECUTOR, splitVat } from "@/features/orders/orderExecutor";
+import {
+  DEFAULT_ORDER_EXECUTOR,
+  grossFromNet,
+  nearestExactNetPrices,
+  netFromGross,
+} from "@/features/orders/orderExecutor";
 import { OrderPayHowSelect } from "@/features/orders/OrderPayHowSelect";
 import {
   findCustomerLastLegalEntityId,
@@ -58,6 +63,7 @@ import {
 import {
   createManualOrder,
   formatOrderMoney,
+  formatOrderMoneyExact,
   listCustomerDesignTasks,
   type CustomerDesignTaskOption,
   type ManualOrderDesignChoice,
@@ -453,7 +459,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
     // Ціну сідимо з каталогу лише коли вона реально задана: у більшості моделей
     // price = 0 (продажна ціна тут не з каталогу), а «0» у полі виглядає як заповнене.
     const catalogPrice = Number(model?.price ?? 0);
-    const seededPrice = catalogPrice > 0 ? String(catalogPrice) : item.unitPrice;
+    const seededPrice = catalogPrice > 0 ? seedPrice(catalogPrice) : item.unitPrice;
     updateItem(item.key, {
       modelId: resolved.modelId,
       variantId: resolved.variantId,
@@ -522,19 +528,32 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
       variantId: null,
       name: found.name,
       imageUrl: found.imageUrl,
-      unitPrice: found.price != null ? String(found.price) : "",
+      unitPrice: found.price ? seedPrice(found.price) : "",
     };
     if (target) updateItem(target.key, patch);
     else setItems((cur) => [...cur, { ...createDraftItem(), ...patch }]);
     setError(null);
   };
 
-  const lineTotal = (item: DraftItem) => (Number(item.qty) || 0) * (Number(item.unitPrice) || 0);
-  const serviceTotal = (service: DraftService) => (Number(service.qty) || 0) * (Number(service.unitPrice) || 0);
-  const orderTotal = useMemo(
-    () => items.reduce((sum, it) => sum + lineTotal(it), 0) + services.reduce((sum, it) => sum + serviceTotal(it), 0),
-    [items, services]
-  );
+  // Безготівка: перед створенням менеджер підтверджує суму й ПДВ — від неї підуть СП і рахунок.
+  const isCashless = isCashlessPaymentMethod(paymentMethodId, null);
+  const shownExecutor =
+    legalEntityOptions.find((option) => option.row.id === shownLegalEntityId)?.executor ?? DEFAULT_ORDER_EXECUTOR;
+  // Платнику ПДВ ціну вписують БЕЗ ПДВ — так її мислять менеджер і бухгалтерія,
+  // а BAS додає податок сам. Замовлення ж зберігає ціну з ПДВ: її рахує CRM (REQ-339).
+  const pricesExclVat = isCashless && shownExecutor.vatPayer;
+  const storedUnitPrice = (entered: string) => grossFromNet(Number(entered) || 0, pricesExclVat);
+  const lineNet = (item: DraftItem) => (Number(item.qty) || 0) * (Number(item.unitPrice) || 0);
+  const lineTotal = (item: DraftItem) => (Number(item.qty) || 0) * storedUnitPrice(item.unitPrice);
+  const serviceNet = (service: DraftService) => (Number(service.qty) || 0) * (Number(service.unitPrice) || 0);
+  const serviceTotal = (service: DraftService) => (Number(service.qty) || 0) * storedUnitPrice(service.unitPrice);
+  const orderTotal =
+    items.reduce((sum, it) => sum + lineTotal(it), 0) + services.reduce((sum, it) => sum + serviceTotal(it), 0);
+  const orderNetTotal =
+    items.reduce((sum, it) => sum + lineNet(it), 0) + services.reduce((sum, it) => sum + serviceNet(it), 0);
+  const orderVatAmount = pricesExclVat ? orderTotal - orderNetTotal : 0;
+  /** Ціна з каталогу — з ПДВ; у поле «без ПДВ» кладемо її нетто. */
+  const seedPrice = (catalogPrice: number) => String(netFromGross(catalogPrice, pricesExclVat));
   const updateService = (key: string, patch: Partial<DraftService>) => {
     setServices((cur) => cur.map((it) => (it.key === key ? { ...it, ...patch } : it)));
   };
@@ -544,11 +563,6 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   );
 
   const hasValidItem = items.some((it) => it.modelId) || services.some((it) => it.name.trim());
-  // Безготівка: перед створенням менеджер підтверджує суму й ПДВ — від неї підуть СП і рахунок.
-  const isCashless = isCashlessPaymentMethod(paymentMethodId, null);
-  const shownExecutor =
-    legalEntityOptions.find((option) => option.row.id === shownLegalEntityId)?.executor ?? DEFAULT_ORDER_EXECUTOR;
-  const orderVat = splitVat(orderTotal, shownExecutor.vatPayer);
   const pricesKey = `${orderTotal}|${currency}|${shownLegalEntityId}`;
   const pricesConfirmed = confirmedPricesKey === pricesKey;
   const canSubmit = Boolean(
@@ -568,7 +582,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
           name: it.name.trim(),
           qty: Number(it.qty) || 0,
           unit: it.unit,
-          unitPrice: Number(it.unitPrice) || 0,
+          unitPrice: storedUnitPrice(it.unitPrice),
           catalogModelId: it.modelId,
           imageUrl: it.imageUrl,
           thumbUrl: it.imageUrl,
@@ -590,7 +604,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
         name: service.name.trim(),
         qty: Number(service.qty) || 0,
         unit: "посл.",
-        unitPrice: Number(service.unitPrice) || 0,
+        unitPrice: storedUnitPrice(service.unitPrice),
         catalogModelId: null,
         kind: "service",
         printApplications: [],
@@ -856,7 +870,10 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-sm font-semibold tabular-nums text-foreground">{formatOrderMoney(lineTotal(item), currency)}</span>
+                      <span className="text-sm font-semibold tabular-nums text-foreground">
+                        {formatOrderMoney(lineNet(item), currency)}
+                        {pricesExclVat ? <span className="ml-1 text-xs font-normal text-muted-foreground">без ПДВ</span> : null}
+                      </span>
                       {item.typeId || item.modelId ? (
                         <HoverTip asChild label="Скинути вибір товару">
                           <Button
@@ -945,8 +962,9 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                       </Select>
                     </div>
                     <div className="col-span-2 space-y-1.5 sm:col-span-1">
-                      <Label className="text-xs text-muted-foreground">Ціна за од.</Label>
+                      <Label className="text-xs text-muted-foreground">{pricesExclVat ? "Ціна за од. без ПДВ" : "Ціна за од."}</Label>
                       <Input value={item.unitPrice} onChange={(e) => updateItem(item.key, { unitPrice: e.target.value })} inputMode="decimal" placeholder="0" />
+                      <NetPriceHint entered={item.unitPrice} active={pricesExclVat} currency={currency} />
                     </div>
                   </div>
 
@@ -1015,13 +1033,16 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                   onChange={(event) => updateService(service.key, { qty: event.target.value })}
                   inputMode="decimal"
                 />
-                <Input
-                  aria-label="Ціна послуги"
-                  value={service.unitPrice}
-                  onChange={(event) => updateService(service.key, { unitPrice: event.target.value })}
-                  inputMode="decimal"
-                  placeholder="Ціна"
-                />
+                <div className="space-y-1">
+                  <Input
+                    aria-label={pricesExclVat ? "Ціна послуги без ПДВ" : "Ціна послуги"}
+                    value={service.unitPrice}
+                    onChange={(event) => updateService(service.key, { unitPrice: event.target.value })}
+                    inputMode="decimal"
+                    placeholder={pricesExclVat ? "Ціна без ПДВ" : "Ціна"}
+                  />
+                  <NetPriceHint entered={service.unitPrice} active={pricesExclVat} currency={currency} />
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1244,10 +1265,10 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                 className="mt-0.5"
               />
               <span>
-                Ціни перевірив: {formatOrderMoney(orderTotal, currency)}
-                {shownExecutor.vatPayer
-                  ? `, у т.ч. ПДВ ${formatOrderMoney(orderVat.vat, currency)}`
-                  : ` без ПДВ (${shownExecutor.shortName})`}
+                Ціни перевірив:{" "}
+                {pricesExclVat
+                  ? `${formatOrderMoneyExact(orderNetTotal, currency)} без ПДВ + ПДВ ${formatOrderMoneyExact(orderVatAmount, currency)} = ${formatOrderMoneyExact(orderTotal, currency)}`
+                  : `${formatOrderMoney(orderTotal, currency)} без ПДВ (${shownExecutor.shortName})`}
                 <span className="block text-xs text-muted-foreground">Від цієї суми підуть СП і рахунок.</span>
               </span>
             </label>
@@ -1258,7 +1279,15 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
 
         <DialogFooter className="items-center justify-between gap-3 border-t border-border/60 px-6 py-4 sm:justify-between">
           <div className="text-sm text-muted-foreground">
-            Разом: <span className="text-base font-semibold text-foreground">{formatOrderMoney(orderTotal, currency)}</span>
+            Разом:{" "}
+            {pricesExclVat ? (
+              <>
+                <span className="text-base font-semibold text-foreground">{formatOrderMoney(orderNetTotal, currency)}</span> без ПДВ ·{" "}
+                <span className="font-medium text-foreground">{formatOrderMoney(orderTotal, currency)}</span> з ПДВ
+              </>
+            ) : (
+              <span className="text-base font-semibold text-foreground">{formatOrderMoney(orderTotal, currency)}</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" size="md" onClick={() => onOpenChange(false)} disabled={submitting}>
@@ -1278,4 +1307,24 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Під полем ціни без ПДВ: скільки це з ПДВ, а якщо ціна з ПДВ не виходить рівно
+ * до копійки (бухгалтерія не округлює) — дві найближчі точні.
+ */
+function NetPriceHint({ entered, active, currency }: { entered: string; active: boolean; currency: CurrencyCode }) {
+  // Так само, як рахують суми вище: інакше підказка й «Разом» розійдуться.
+  const net = Number(entered) || 0;
+  if (!active || net <= 0) return null;
+  const nearest = nearestExactNetPrices(net);
+  if (nearest) {
+    return (
+      <div className="text-xs text-warning-foreground">
+        З ПДВ не ділиться до копійки — візьміть {formatOrderMoneyExact(nearest.down, currency)} або{" "}
+        {formatOrderMoneyExact(nearest.up, currency)}
+      </div>
+    );
+  }
+  return <div className="text-xs text-muted-foreground">з ПДВ {formatOrderMoneyExact(grossFromNet(net, true), currency)}</div>;
 }

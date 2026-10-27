@@ -199,6 +199,32 @@ export const splitVat = (gross: number, vatPayer: boolean) => {
   return { net, vat: amount - net, gross: amount };
 };
 
+/**
+ * Менеджер і бухгалтерія мислять ціною БЕЗ ПДВ (BAS додає податок сам), а
+ * замовлення зберігає ціну З ПДВ (REQ-339). Ці дві функції — перехід між ними.
+ */
+export const grossFromNet = (net: number, vatPayer: boolean) => {
+  const amount = Number(net) || 0;
+  return vatPayer ? Math.round(amount * (1 + VAT_RATE / 100) * 100) / 100 : amount;
+};
+
+export const netFromGross = (gross: number, vatPayer: boolean) => {
+  const amount = Number(gross) || 0;
+  return vatPayer ? Math.round((amount / (1 + VAT_RATE / 100)) * 100) / 100 : amount;
+};
+
+/**
+ * Ціна без ПДВ дає ціну з ПДВ рівно до копійки, лише коли її копійки кратні 5
+ * (×1,2 = кратні 6 коп — вимога бухгалтерії без округлення). Інакше — дві
+ * найближчі придатні; null, якщо ціна вже точна.
+ */
+export const nearestExactNetPrices = (net: number): { down: number; up: number } | null => {
+  const kopecks = Math.round((Number(net) || 0) * 100);
+  const rest = kopecks % 5;
+  if (kopecks <= 0 || rest === 0) return null;
+  return { down: (kopecks - rest) / 100, up: (kopecks - rest + 5) / 100 };
+};
+
 /** Підпис юрособи в інтерфейсі: «ТОВ «АВАНПРІНТ» · з ПДВ». */
 export const executorBadge = (executor: OrderExecutor) =>
   `${executor.shortName} · ${executor.vatPayer ? "з ПДВ" : "без ПДВ"}`;
