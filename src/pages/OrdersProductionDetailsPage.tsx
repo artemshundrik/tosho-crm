@@ -81,6 +81,8 @@ import { buildSpecificationHtml, customerIbanWithBank, toAuthorityGenitive } fro
 import { loadSpecificationItemTexts, resolveVisualizationImageUrls } from "@/features/orders/specificationQueries";
 import { SpecificationItemTextsField } from "@/features/orders/order-details/SpecificationItemTextsField";
 import { SpecificationVisualizationField } from "@/features/orders/order-details/SpecificationVisualizationField";
+import { SpecificationNumberField } from "@/features/orders/order-details/SpecificationNumberField";
+import { parseSpecificationParamsInput } from "@/features/orders/order-details/specificationParamsInput";
 import { formatContractDateParts, formatContractEndDate } from "@/features/orders/contractDateFormat";
 import { itemDocumentName, withDocumentNames } from "@/features/orders/orderItemDocumentNames";
 import { useSpecificationItemTexts } from "@/features/orders/order-details/useSpecificationItemTexts";
@@ -758,6 +760,7 @@ export default function OrdersProductionDetailsPage() {
   const [specIncotermsCode, setSpecIncotermsCode] = useState(DEFAULT_INCOTERMS);
   const [specIncotermsPlaceInput, setSpecIncotermsPlaceInput] = useState("");
   const [specIncludeVisualization, setSpecIncludeVisualization] = useState(true);
+  const [specNumberInput, setSpecNumberInput] = useState("");
   // Доставка живе на прорахунку (quotes.delivery_type/delivery_details);
   // замовлення читає і редагує саме її, щоб обидва екрани показували одне.
   const [orderDelivery, setOrderDelivery] = useState<OrderDeliverySnapshot | null>(null);
@@ -1172,6 +1175,7 @@ export default function OrdersProductionDetailsPage() {
     setSpecIncotermsCode(record.incotermsCode || DEFAULT_INCOTERMS);
     setSpecIncotermsPlaceInput(record.incotermsPlace ?? "");
     setSpecIncludeVisualization(record.specIncludeVisualization !== false);
+    setSpecNumberInput(record.specificationNumber !== null ? String(record.specificationNumber) : "");
     setSpecDialogError(null);
     setSpecDialogOpen(true);
   };
@@ -2035,6 +2039,9 @@ export default function OrdersProductionDetailsPage() {
               ) : null}
             </div>
             <div className="space-y-4">
+            {isCashlessPaymentMethod(specPaymentMethodId) ? (
+              <SpecificationNumberField value={specNumberInput} onChange={setSpecNumberInput} />
+            ) : null}
             <div className="grid gap-2">
               <Label htmlFor="spec-production-days">Строки виробництва (робочих днів)</Label>
               <Input
@@ -2098,24 +2105,18 @@ export default function OrdersProductionDetailsPage() {
             <Button
               onClick={async () => {
                 if (!record) return;
-                const parsedProductionDays = Number(specProductionDaysInput);
-                const productionWorkingDays =
-                  Number.isFinite(parsedProductionDays) && parsedProductionDays > 0
-                    ? Math.round(parsedProductionDays)
-                    : DEFAULT_PRODUCTION_WORK_DAYS;
-                const parsedPrepayment = Number(specPrepaymentPctInput);
-                const prepaymentPct =
-                  Number.isFinite(parsedPrepayment) && parsedPrepayment >= 0 && parsedPrepayment <= 100
-                    ? parsedPrepayment
-                    : null;
-                const parsedBalance = Number(specBalancePctInput);
-                const balancePct =
-                  Number.isFinite(parsedBalance) && parsedBalance >= 0 && parsedBalance <= 100 ? parsedBalance : null;
-                const parsedBalanceDays = Number(specBalanceDaysInput);
-                const balanceDaysAfterShipment =
-                  specBalanceTiming === "after_shipment" && Number.isFinite(parsedBalanceDays) && parsedBalanceDays > 0
-                    ? Math.round(parsedBalanceDays)
-                    : null;
+                const { productionWorkingDays, prepaymentPct, balancePct, balanceDaysAfterShipment, specificationNumber } =
+                  parseSpecificationParamsInput(
+                    {
+                      productionDays: specProductionDaysInput,
+                      prepaymentPct: specPrepaymentPctInput,
+                      balancePct: specBalancePctInput,
+                      balanceTiming: specBalanceTiming,
+                      balanceDays: specBalanceDaysInput,
+                      specificationNumber: specNumberInput,
+                    },
+                    record.specificationNumber
+                  );
                 const prepaymentError = getMinimumPrepaymentError({
                   methodId: specPaymentMethodId,
                   prepaymentPct,
@@ -2149,6 +2150,7 @@ export default function OrdersProductionDetailsPage() {
                     incotermsCode: specIncotermsCode,
                     incotermsPlace,
                     specIncludeVisualization,
+                    specificationNumber,
                   };
                   const nextRecord = { ...patched, docs: normalizeDocumentDocs(patched) };
                   if (record.source === "stored" && teamId) {
@@ -2166,6 +2168,7 @@ export default function OrdersProductionDetailsPage() {
                       incotermsCode: specIncotermsCode,
                       incotermsPlace,
                       specIncludeVisualization,
+                      ...(specificationNumber !== record.specificationNumber ? { specificationNumber } : {}),
                     });
                     setRecord((current) => (current && current.id === record.id ? nextRecord : current));
                     await specItemTexts.save();

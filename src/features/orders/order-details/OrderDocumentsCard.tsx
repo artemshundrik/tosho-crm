@@ -418,7 +418,9 @@ function DocumentRow({
     document.detail ??
     (document.actionMode === "open"
       ? isCreated
-        ? `Створено · ${document.createdDateLabel}`
+        ? document.kind === "specification" && record.specificationNumber !== null
+          ? `№ ${record.specificationNumber} · створено ${document.createdDateLabel}`
+          : `Створено · ${document.createdDateLabel}`
         : document.statusLabel
       : document.actionMode === "create"
         ? "Можна створити"

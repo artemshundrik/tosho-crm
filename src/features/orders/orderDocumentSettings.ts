@@ -22,6 +22,7 @@ export async function updateOrderDocumentSettings(params: {
   contractProductionDays?: number | null;
   contractAutoProlongation?: boolean;
   specIncludeVisualization?: boolean | null;
+  specificationNumber?: number | null;
 }) {
   const payload: Database["tosho"]["Tables"]["orders"]["Update"] = {
     updated_at: new Date().toISOString(),
@@ -41,6 +42,7 @@ export async function updateOrderDocumentSettings(params: {
   if (params.contractProductionDays !== undefined) payload.contract_production_days = params.contractProductionDays;
   if (params.contractAutoProlongation !== undefined) payload.contract_auto_prolongation = params.contractAutoProlongation;
   if (params.specIncludeVisualization !== undefined) payload.spec_include_visualization = params.specIncludeVisualization;
+  if (params.specificationNumber !== undefined) payload.specification_number = params.specificationNumber;
 
   const { error } = await supabase
     .schema("tosho")
