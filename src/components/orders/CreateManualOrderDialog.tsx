@@ -54,6 +54,7 @@ import {
   nearestExactNetPrices,
   netFromGross,
 } from "@/features/orders/orderExecutor";
+import { parseMoneyInput } from "@/features/orders/orderInvoice";
 import { OrderPayHowSelect } from "@/features/orders/OrderPayHowSelect";
 import {
   findCustomerLastLegalEntityId,
@@ -117,7 +118,9 @@ type DraftItem = {
 };
 
 let keySeq = 0;
-const nextKey = (prefix: string) => `${prefix}-${(keySeq += 1)}`;
+/** «322,50», «1 200» з поля → число; клавіатура з українською розкладкою ставить кому. */
+const amountOf = (raw: string) => parseMoneyInput(raw) ?? 0;
+const nextKey = (prefix: string) =>`${prefix}-${(keySeq += 1)}`;
 const createDraftItem = (): DraftItem => ({
   key: nextKey("item"),
   typeId: "",
@@ -542,11 +545,11 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   // Платнику ПДВ ціну вписують БЕЗ ПДВ — так її мислять менеджер і бухгалтерія,
   // а BAS додає податок сам. Замовлення ж зберігає ціну з ПДВ: її рахує CRM (REQ-339).
   const pricesExclVat = isCashless && shownExecutor.vatPayer;
-  const storedUnitPrice = (entered: string) => grossFromNet(Number(entered) || 0, pricesExclVat);
-  const lineNet = (item: DraftItem) => (Number(item.qty) || 0) * (Number(item.unitPrice) || 0);
-  const lineTotal = (item: DraftItem) => (Number(item.qty) || 0) * storedUnitPrice(item.unitPrice);
-  const serviceNet = (service: DraftService) => (Number(service.qty) || 0) * (Number(service.unitPrice) || 0);
-  const serviceTotal = (service: DraftService) => (Number(service.qty) || 0) * storedUnitPrice(service.unitPrice);
+  const storedUnitPrice = (entered: string) => grossFromNet(amountOf(entered), pricesExclVat);
+  const lineNet = (item: DraftItem) => amountOf(item.qty) * amountOf(item.unitPrice);
+  const lineTotal = (item: DraftItem) => amountOf(item.qty) * storedUnitPrice(item.unitPrice);
+  const serviceNet = (service: DraftService) => amountOf(service.qty) * amountOf(service.unitPrice);
+  const serviceTotal = (service: DraftService) => amountOf(service.qty) * storedUnitPrice(service.unitPrice);
   const orderTotal =
     items.reduce((sum, it) => sum + lineTotal(it), 0) + services.reduce((sum, it) => sum + serviceTotal(it), 0);
   const orderNetTotal =
@@ -568,6 +571,13 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   const canSubmit = Boolean(
     teamId && selectedCustomer && hasValidItem && !submitting && (!isCashless || pricesConfirmed)
   );
+  // Сіра кнопка без причини — глухий кут: кажемо, чого бракує безготівці.
+  const submitBlocker =
+    selectedCustomer && hasValidItem && isCashless && !pricesConfirmed
+      ? orderTotal > 0
+        ? "Позначте «Ціни перевірив» вище"
+        : "Вкажіть ціну — від суми підуть СП і рахунок"
+      : null;
 
   const handleSubmit = async () => {
     if (!teamId || !selectedCustomer) {
@@ -580,7 +590,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
         const { methods, positions } = getItemRefs(it);
         return {
           name: it.name.trim(),
-          qty: Number(it.qty) || 0,
+          qty: amountOf(it.qty),
           unit: it.unit,
           unitPrice: storedUnitPrice(it.unitPrice),
           catalogModelId: it.modelId,
@@ -602,7 +612,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
       if (!service.name.trim()) continue;
       payloadItems.push({
         name: service.name.trim(),
-        qty: Number(service.qty) || 0,
+        qty: amountOf(service.qty),
         unit: "посл.",
         unitPrice: storedUnitPrice(service.unitPrice),
         catalogModelId: null,
@@ -1288,6 +1298,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
             ) : (
               <span className="text-base font-semibold text-foreground">{formatOrderMoney(orderTotal, currency)}</span>
             )}
+            {submitBlocker ? <div className="text-xs text-warning-foreground">{submitBlocker}</div> : null}
           </div>
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" size="md" onClick={() => onOpenChange(false)} disabled={submitting}>
@@ -1315,7 +1326,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
  */
 function NetPriceHint({ entered, active, currency }: { entered: string; active: boolean; currency: CurrencyCode }) {
   // Так само, як рахують суми вище: інакше підказка й «Разом» розійдуться.
-  const net = Number(entered) || 0;
+  const net = amountOf(entered);
   if (!active || net <= 0) return null;
   const nearest = nearestExactNetPrices(net);
   if (nearest) {
