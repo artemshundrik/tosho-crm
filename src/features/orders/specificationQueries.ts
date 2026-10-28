@@ -29,9 +29,11 @@ export const resolveVisualizationImageUrls = async (assets: OrderDesignAsset[]):
     }
     if (!asset.storageBucket || !asset.storagePath) continue;
     try {
+      // Оригінал, не прев'ю: прев'ю стиснуте до 640 px, а візуал 16:9 несе дрібний текст
+      // (розміри, тираж), який на друкованій СП розпливається до нечитабельного.
       const signedUrl =
-        (await getSignedAttachmentUrl(asset.storageBucket, asset.storagePath, "preview", 60 * 60)) ??
-        (await getSignedAttachmentUrl(asset.storageBucket, asset.storagePath, "original", 60 * 60));
+        (await getSignedAttachmentUrl(asset.storageBucket, asset.storagePath, "original", 60 * 60)) ??
+        (await getSignedAttachmentUrl(asset.storageBucket, asset.storagePath, "preview", 60 * 60));
       if (signedUrl) urls.push(signedUrl);
     } catch (resolveError) {
       console.error("Failed to resolve visualization signed URL", resolveError);
