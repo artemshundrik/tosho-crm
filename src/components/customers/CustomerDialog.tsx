@@ -605,7 +605,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         <div className="flex-1 overflow-y-auto px-6 pb-6 pt-3 space-y-5">
 
         {/* Identity header — logo + name + payment + manager hub */}
-        <div className="flex items-start gap-4 rounded-xl border border-border/50 bg-card/40 p-4">
+        {/* На телефоні перемикач «Швидко / Повна» переходить окремим рядком: поруч з ним
+            назва замовника лишалась двома словами з трикрапкою. */}
+        <div className="flex flex-wrap items-start gap-4 rounded-xl border border-border/50 bg-card/40 p-4 sm:flex-nowrap">
           <Popover open={logoOpen} onOpenChange={setLogoOpen}>
             <PopoverTrigger asChild>
               <button
@@ -704,12 +706,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </div>
               {form.logoUploadMode === "url" && normalizedLogoUrl ? (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  При збереженні CRM спробує завантажити картинку, конвертує її у WebP `128x128` і збереже у storage.
+                  Під час збереження CRM завантажить картинку й зменшить її до розміру логотипа.
                 </div>
               ) : null}
               {form.logoUploadMode === "file" ? (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  Файл буде конвертовано у WebP `128x128` і збережено у storage.
+                  Під час збереження файл зменшиться до розміру логотипа.
                 </div>
               ) : null}
               {(form.logoUrl.trim() || form.logoFile) ? (
@@ -832,7 +834,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </PopoverContent>
             </Popover>
           </div>
-          <div className="inline-flex shrink-0 items-center gap-0.5 self-start rounded-md bg-background p-0.5">
+          <div className="inline-flex shrink-0 items-center gap-0.5 self-start rounded-md bg-background p-0.5 max-sm:w-full max-sm:[&>button]:flex-1">
             <Button
               type="button"
               size="sm"

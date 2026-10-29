@@ -290,7 +290,7 @@ function ContactColumn({ row, points }: { row: ContractorRow; points: CustomerDe
           key={phone}
           href={`tel:${phone}`}
           onClick={stopRowClick}
-          className="text-xs tabular-nums text-foreground hover:text-primary"
+          className="whitespace-nowrap text-xs tabular-nums text-foreground hover:text-primary"
         >
           {formatUaPhone(phone)}
         </a>
@@ -1199,7 +1199,7 @@ export default function ContractorsPage() {
                 : (activeTab === "contractors" ? "Новий підрядник" : "Новий постачальник")}
               </SheetTitle>
               <SheetDescription>
-              Зберігається в `tosho.contractors` і доступне всій вашій команді.
+              Підрядника одразу побачить уся команда.
               </SheetDescription>
             </SheetHeader>
           </div>
