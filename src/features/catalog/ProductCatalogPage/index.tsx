@@ -11,7 +11,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { PageLoading } from "@/components/app/page-loading";
-import { AlertCircle } from "@/components/icons/appIcons";
+import { AlertCircle, ArrowLeft } from "@/components/icons/appIcons";
+import { cn } from "@/lib/utils";
 import { exportToCSV } from "@/utils/catalogUtils";
 
 // Hooks
@@ -365,12 +366,20 @@ export default function ProductCatalogPage() {
     return <div className="p-6 text-sm text-destructive">{catalogError}</div>;
   }
 
+  /**
+   * Телефон: навігація й моделі не вміщаються поруч — дві колонки по 180px
+   * ламали підписи по слову в рядок. Показуємо одне з двох: спершу категорії,
+   * обрав вид або шукаєш — моделі, зі стрілкою назад.
+   */
+  const phoneShowsModels = Boolean(filters.selectedKindId) || Boolean(filters.globalSearch.trim());
+
   return (
     <div className="mx-auto flex h-[calc(100dvh-7rem)] w-full max-w-[1400px] flex-col pb-20 md:pb-0">
       <div className="min-h-0 flex-1 overflow-hidden rounded-section border border-border bg-card/60">
         {/* Main Layout: Sidebar + Content */}
         <div className="flex h-full min-h-0">
           {/* Compact Sidebar */}
+          <div className={cn("flex min-h-0 max-md:w-full", phoneShowsModels && "max-md:hidden")}>
           <CompactSidebar
             catalog={catalog}
             selectedTypeId={filters.selectedTypeId}
@@ -390,9 +399,21 @@ export default function ProductCatalogPage() {
             onEditType={handleEditType}
             onEditKind={handleEditKind}
           />
+          </div>
 
           {/* Main Content Area */}
-          <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <section className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", !phoneShowsModels && "max-md:hidden")}>
+            <button
+              type="button"
+              onClick={() => {
+                filters.setSelectedKindId("");
+                filters.setGlobalSearch("");
+              }}
+              className="flex shrink-0 items-center gap-2 border-b border-border/40 px-4 py-3 text-sm font-medium text-muted-foreground md:hidden"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Категорії
+            </button>
             {/* Search Bar */}
             <SearchBar
               catalog={catalog}

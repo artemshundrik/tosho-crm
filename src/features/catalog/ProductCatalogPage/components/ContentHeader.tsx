@@ -194,7 +194,8 @@ export function ContentHeader({
             </span>
             <Button variant="outline" size="sm" className="gap-2" onClick={() => setSettingsOpen(true)}>
               <Settings className="h-4 w-4" />
-              Налаштування виду
+              {/* На телефоні — лише значок, інакше шлях «товар › Ел… › Г…» не читався. */}
+              <span className="max-sm:sr-only">Налаштування виду</span>
             </Button>
           </div>
         </div>

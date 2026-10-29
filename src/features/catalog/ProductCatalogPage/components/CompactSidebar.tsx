@@ -110,7 +110,7 @@ export function CompactSidebar({
   };
 
   return (
-    <div className="w-[280px] flex flex-col bg-background border-r border-border/40">
+    <div className="w-full md:w-[280px] flex flex-col bg-background border-r border-border/40">
       {/* Header */}
       <div className="p-4 border-b border-border/40 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">

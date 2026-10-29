@@ -82,7 +82,9 @@ export function SearchBar({
           <PopoverTrigger asChild>
             <Button variant="outline" size="md" className="gap-2">
               <Filter className="h-4 w-4" />
-              Фільтри
+              {/* На телефоні підписи лишаються лише для читача екрана: з ними
+                  «Нова модель» вилазила за край ряду. */}
+              <span className="max-sm:sr-only">Фільтри</span>
               {showOnlyIncomplete && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
             </Button>
           </PopoverTrigger>
@@ -128,9 +130,9 @@ export function SearchBar({
         </DropdownMenu>
 
         {/* Primary */}
-        <Button onClick={onCreateModel} size="md" className="gap-2 ">
+        <Button onClick={onCreateModel} size="md" className="gap-2">
           <Plus className="h-4 w-4" />
-          Нова модель
+          <span className="max-sm:sr-only">Нова модель</span>
         </Button>
       </div>
     </div>
