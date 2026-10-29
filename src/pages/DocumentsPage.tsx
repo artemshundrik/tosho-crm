@@ -8,6 +8,7 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { ChevronLeft, ChevronRight, Files } from "@/components/icons/appIcons";
 import { MobileStatusChips } from "@/components/kanban";
@@ -41,6 +42,7 @@ import { kyivDay } from "@/features/orders/kyivDate";
 import { useOrderRecords } from "@/features/orders/order-list/useOrderRecords";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
+import type { CustomerFilterValue } from "@/lib/customerFilter";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { canManageOrderDocuments } from "@/lib/permissions";
 import { toneDotClass, toneTextClass, type Tone } from "@/lib/statusTones";
@@ -62,7 +64,7 @@ type FiltersState = {
   month?: string | null;
   kind?: string;
   manager?: string;
-  customer?: string;
+  customer?: CustomerFilterValue | null;
   flag?: DocumentFlag | null;
   search?: string;
   cachedAt?: number;
@@ -158,7 +160,10 @@ export default function DocumentsPage() {
   const [month, setMonth] = useState<string | null>(() => (restored ? (restored.month ?? null) : today.slice(0, 7)));
   const [kind, setKind] = useState(() => restored?.kind ?? ALL);
   const [manager, setManager] = useState(() => restored?.manager ?? ALL);
-  const [customer, setCustomer] = useState(() => restored?.customer ?? ALL);
+  // Старий формат (рядок-назва) не відновлюємо: фільтр тепер — вибраний замовник.
+  const [customer, setCustomer] = useState<CustomerFilterValue | null>(() =>
+    restored?.customer && typeof restored.customer === "object" ? restored.customer : null
+  );
   const [flag, setFlag] = useState<DocumentFlag | null>(() => restored?.flag ?? null);
   const [search, setSearch] = useState(() => restored?.search ?? "");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -231,7 +236,7 @@ export default function DocumentsPage() {
       month,
       kind: kind === ALL ? null : (kind as DocumentKind),
       managerUserId: manager === ALL ? null : manager,
-      customerName: customer === ALL ? null : customer,
+      customer,
       flag,
       search,
     }),
@@ -261,10 +266,6 @@ export default function DocumentsPage() {
     }
     return Array.from(map.entries()).sort(([, a], [, b]) => a.label.localeCompare(b.label, "uk"));
   }, [documents, managerOf]);
-  const customerOptions = useMemo(
-    () => Array.from(new Set(documents.map((doc) => doc.customerName))).sort((a, b) => a.localeCompare(b, "uk")),
-    [documents]
-  );
   const kindOptions = useMemo(
     () =>
       (Object.keys(DOCUMENT_KIND_LABELS) as DocumentKind[]).filter(
@@ -310,14 +311,14 @@ export default function DocumentsPage() {
   const resetFilters = useCallback(() => {
     setKind(ALL);
     setManager(ALL);
-    setCustomer(ALL);
+    setCustomer(null);
     setFlag(null);
     setSearch("");
   }, []);
 
   const allTime = Boolean(flag) || Boolean(search.trim()) || !month;
   const activeFilterCount =
-    (kind !== ALL ? 1 : 0) + (manager !== ALL ? 1 : 0) + (customer !== ALL ? 1 : 0) + (flag ? 1 : 0);
+    (kind !== ALL ? 1 : 0) + (manager !== ALL ? 1 : 0) + (customer ? 1 : 0) + (flag ? 1 : 0);
 
   const headerActions = useMemo(
     () => (
@@ -432,13 +433,7 @@ export default function DocumentsPage() {
                 ]}
               />
             ) : null}
-            <ToolbarFilterSelect
-              value={customer}
-              onValueChange={setCustomer}
-              neutralValue={ALL}
-              className="sm:w-[170px]"
-              options={[{ value: ALL, label: "Усі замовники" }, ...customerOptions.map((name) => ({ value: name, label: name }))]}
-            />
+            <CustomerFilterSelect teamId={teamId} value={customer} onChange={setCustomer} />
           </>
         }
         meta={
@@ -456,7 +451,6 @@ export default function DocumentsPage() {
       allTime,
       changeSection,
       customer,
-      customerOptions,
       kind,
       kindOptions,
       loading,
@@ -469,6 +463,7 @@ export default function DocumentsPage() {
       section,
       sectionCounts,
       seesAll,
+      teamId,
       today,
       visible.length,
     ]

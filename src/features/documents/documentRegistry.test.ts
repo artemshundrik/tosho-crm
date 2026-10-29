@@ -82,7 +82,7 @@ const ALL: DocumentFilters = {
   month: null,
   kind: null,
   managerUserId: null,
-  customerName: null,
+  customer: null,
   flag: null,
   search: "",
 };

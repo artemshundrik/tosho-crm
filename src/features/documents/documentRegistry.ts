@@ -4,6 +4,7 @@ import { getClosingDocumentRef, PREPAYMENT_RECEIVED, SHIPPED_ORDER_STATUSES } fr
 import { getOrderNextStep } from "@/features/orders/orderListStages";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { isCashlessPaymentMethod } from "@/features/orders/paymentRules";
+import { customerFilterNames, normalizeCustomerName, type CustomerFilterValue } from "@/lib/customerFilter";
 import type { Tone } from "@/lib/statusTones";
 
 /**
@@ -387,10 +388,15 @@ export type DocumentFilters = {
   month: string | null;
   kind: DocumentKind | null;
   managerUserId: string | null;
-  customerName: string | null;
+  /** Той самий вибір, що в прорахунках: за id замовника або за його назвою. */
+  customer: CustomerFilterValue | null;
   flag: DocumentFlag | null;
   search: string;
 };
+
+const matchesCustomer = (doc: RegistryDocument, value: CustomerFilterValue) =>
+  doc.customerId === value.id ||
+  customerFilterNames(value).some((name) => normalizeCustomerName(name) === normalizeCustomerName(doc.customerName));
 
 const normalize = (value: string | null | undefined) => (value ?? "").trim().toLowerCase();
 
@@ -402,7 +408,7 @@ export function filterDocuments(documents: RegistryDocument[], filters: Document
     if (filters.section !== "all" && doc.section !== filters.section) return false;
     if (filters.kind && doc.kind !== filters.kind) return false;
     if (filters.managerUserId && doc.managerUserId !== filters.managerUserId) return false;
-    if (filters.customerName && doc.customerName !== filters.customerName) return false;
+    if (filters.customer && !matchesCustomer(doc, filters.customer)) return false;
     if (filters.flag && doc.flag !== filters.flag) return false;
     if (useMonth && (doc.documentDate ?? isoDay(doc.createdAt)).slice(0, 7) !== filters.month) return false;
     if (!query) return true;
