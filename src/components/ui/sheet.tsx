@@ -69,9 +69,19 @@ const sheetVariants = cva(
          */
         bottom:
           "inset-x-0 bottom-0 border-x-0 border-b-0 border-t shadow-none data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-        left: "inset-y-0 left-0 h-full w-full border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:w-3/4 sm:max-w-sm",
+        /**
+         * Бічні панелі на всю висоту екрана. В установленому застосунку екран
+         * іде під статус-бар і домашню смужку, тож безпечні зони тримає
+         * прозора рамка зверху й знизу: інакше хрестик ховався під годинником.
+         * Рамка, а не відступ, бо половина панелей ставить собі p-0 — і
+         * відступ зник би разом із ним; фон під прозорою рамкою той самий.
+         * Відкрита клавіатура піднімає низ панелі над собою — разом із
+         * кнопками «Зберегти». h-full прибрано навмисно: висоту дає inset-y-0,
+         * а h-full не дав би низу піднятись.
+         */
+        left: "inset-y-0 left-0 w-full border-r border-t-[length:var(--safe-top)] border-b-[length:env(safe-area-inset-bottom,0px)] border-t-transparent border-b-transparent in-data-[keyboard=open]:bottom-[var(--keyboard-inset)] in-data-[keyboard=open]:border-b-0 data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:w-3/4 sm:max-w-sm",
         right:
-          "inset-y-0 right-0 h-full w-full border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:w-3/4 sm:max-w-sm",
+          "inset-y-0 right-0 w-full border-l border-t-[length:var(--safe-top)] border-b-[length:env(safe-area-inset-bottom,0px)] border-t-transparent border-b-transparent in-data-[keyboard=open]:bottom-[var(--keyboard-inset)] in-data-[keyboard=open]:border-b-0 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:w-3/4 sm:max-w-sm",
       },
     },
     defaultVariants: {

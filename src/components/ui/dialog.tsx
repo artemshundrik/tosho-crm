@@ -94,6 +94,10 @@ const DialogContent = React.forwardRef<
       className={cn(
         "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-20px)] max-w-lg translate-x-[-50%] translate-y-[-50%] notranslate",
         "max-h-[calc(100dvh-1.5rem)]",
+        // iPad: клавіатура закривала нижню половину центрованого вікна. Поки вона
+        // відкрита, центр і стеля рахуються від видимої частини над нею.
+        "md:in-data-[keyboard=open]:top-[calc((100dvh-var(--keyboard-inset))/2)]",
+        "md:in-data-[keyboard=open]:max-h-[calc(100dvh-var(--keyboard-inset)-1.5rem)]",
         "rounded-2xl border border-border/40 bg-card shadow-elevated-lg ring-1 ring-black/5 dark:ring-white/5 outline-none",
         "flex flex-col gap-2 overflow-hidden p-4 sm:gap-3 sm:p-5",
         // ВІДКРИТТЯ: проявлення + легкий приріст масштабу + підйом на 8px.

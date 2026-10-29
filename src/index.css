@@ -409,8 +409,8 @@
      * Відступ під статус-бар. У браузері 0: Safari сам тримає сторінку під
      * рядком стану. В установленому застосунку (PWA) index.html вмикає
      * viewport-fit=cover, і тоді сторінка починається з самого верху екрана —
-     * шапка мусить відступити сама. Запас +14px — під розмиту смугу iOS 27 над
-     * статус-баром і під баг WebKit, коли env() у standalone віддає нуль.
+     * шапка мусить відступити сама — рівно на висоту статус-бару, без запасу:
+     * запас +14px робив шапку помітно вищою, ніж у браузері.
      */
     --safe-top: env(safe-area-inset-top, 0px);
     /* Висота екранної клавіатури — пише src/lib/keyboardInset.ts. */
@@ -439,11 +439,11 @@
        6px, а не 10: заміряно в браузері — підпис «Прорахунки» потребує 67px,
        а вкладка давала 58. Ці 4px з кожного боку разом із вужчими проміжками
        й меншим кружечком AI і є тим, що вміщає повні назви. */
-    --tabbar-inset-x: 6px;
+    --tabbar-inset-x: 16px;
     /* 20px, а не 10: на живому телефоні смуга сиділа надто низько — майже
        впритул до краю. Значення додається до системної безпечної зони,
        тож на айфоні з домашньою смужкою це ~54px, на андроїді без неї — 20. */
-    --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 20px);
+    --tabbar-inset-bottom: max(calc(env(safe-area-inset-bottom, 0px) - 12px), 16px);
     --tabbar-gap: 2px;
     --tabbar-transition: 140ms;
 
@@ -703,11 +703,11 @@
     --tabbar-backdrop-saturate: 1.5;
     --tabbar-radius: 999px;
     --tabbar-height: 56px;
-    --tabbar-inset-x: 6px;
+    --tabbar-inset-x: 16px;
     /* 20px, а не 10: на живому телефоні смуга сиділа надто низько — майже
        впритул до краю. Значення додається до системної безпечної зони,
        тож на айфоні з домашньою смужкою це ~54px, на андроїді без неї — 20. */
-    --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 20px);
+    --tabbar-inset-bottom: max(calc(env(safe-area-inset-bottom, 0px) - 12px), 16px);
     --tabbar-gap: 2px;
     --tabbar-transition: 140ms;
 
@@ -2835,38 +2835,54 @@ html[data-theme-switching]::view-transition-new(root) {
   }
 }
 
-@media (display-mode: standalone) and (pointer: coarse) {
-  :root {
-    --safe-top: calc(max(env(safe-area-inset-top, 0px), 20px) + 14px);
-  }
-}
 
 /*
  * Дії, що з'являються лише при наведенні (меню рядка, «⋯» на картці), на
  * дотиковому екрані не з'являлись ніколи: наведення там немає. Показуємо їх
  * завжди. Ловимо за класом, щоб не правити кожне з місць окремо.
+ *
+ * Крім двох випадків, які при наведенні лише прикрашають: підказок і накладок
+ * з pointer-events-none (приклад питання під пошуком, затемнення аватарки) і
+ * того, що позначено data-hover-only, — кнопки поверх тексту (копіювати номер
+ * прорахунку), яка на дотику назавжди закрила б сам номер.
  */
 @media (hover: none) {
-  [class*="group-hover:opacity-100"],
-  [class*="group-hover/"][class*=":opacity-100"] {
+  :is([class*="group-hover:opacity-100"], [class*="group-hover/"][class*=":opacity-100"]):not([class*="pointer-events-none"]):not([data-hover-only]) {
     opacity: 1;
   }
-  [class*="group-hover:pointer-events-auto"] {
-    pointer-events: auto;
-  }
-  [class*="group-hover:visible"],
-  [class*="group-hover/"][class*=":visible"] {
+  :is([class*="group-hover:visible"], [class*="group-hover/"][class*=":visible"]):not([class*="pointer-events-none"]):not([data-hover-only]) {
     visibility: visible;
+  }
+  /* Невидима, але досі клікабельна: дотик по номеру ловила вона, і замість
+     відкрити прорахунок CRM мовчки копіювала номер. */
+  [data-hover-only] {
+    pointer-events: none;
+  }
+}
+
+/*
+ * Safari на iOS у браузері: в'юпорт закінчується ще за 16pt до плаваючої панелі
+ * адреси, і наші 16px додавались до них — між смугою вкладок і панеллю Safari
+ * висіло ~31pt порожнечі. Тут вистачає 4px. З головного екрана (standalone) і
+ * на Android знизу край екрана, тому там лишається загальне значення.
+ */
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: browser) {
+    :root,
+    .dark {
+      --tabbar-inset-bottom: 4px;
+    }
   }
 }
 
 /*
  * 10–11px на iPad і телефоні не читається з відстані руки. На дотикових
  * екранах найдрібніший текст — 12px; з мишею лишається щільна шкала.
+ * Виняток — підписи смуги вкладок: там 11px, як у iOS, а на 12px «Прорахунки»
+ * й «Замовлення» обрізались.
  */
 @media (pointer: coarse) {
-  .text-2xs,
-  .text-3xs {
+  :is(.text-2xs, .text-3xs):not([data-keep-micro-type] *) {
     font-size: 0.75rem;
   }
 }

@@ -67,6 +67,7 @@ export function HoverCopyText({
           type="button"
           title={copyLabel}
           aria-label={copyLabel}
+          data-hover-only={isOverlayButton || undefined}
           className={cn(
             "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/hover-copy:opacity-100",
             isOverlayButton && "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background/90 backdrop-blur-sm",

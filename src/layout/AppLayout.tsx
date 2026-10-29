@@ -2112,7 +2112,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <div className="md:hidden">
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                   <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" aria-label="Меню">
                       <Menu className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
@@ -2172,7 +2172,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               )}
                               onClick={() => setCmdkOpen(true)}
                             />
-                            <div className="absolute inset-y-0 right-2 flex items-center">
+                            <div className="absolute inset-y-0 right-2 flex items-center pointer-coarse:hidden">
                               <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-border bg-muted/70 px-2.5 font-mono text-3xs font-medium text-muted-foreground">
                                 <span className="text-2xs">⌘</span>K
                               </kbd>

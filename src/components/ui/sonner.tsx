@@ -18,6 +18,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme}
       className="toaster group"
+      // Телефон: 16px від верху в установленому застосунку — це під годинником і
+      // «острівцем». --safe-top там повна безпечна зона, у браузері — нуль.
+      mobileOffset={{ top: "calc(var(--safe-top) + 12px)" }}
       toastOptions={{
         classNames: {
           toast:

@@ -102,7 +102,7 @@ export function TabBar({
         // Смуга тягнеться по всій доступній ширині, а не обіймає вміст: що
         // ширші вкладки, то більше вміщає підпис — «Прорахунки» й «До
         // відвантаження» мусять читатись, а не обриватись трьома крапками.
-        className="flex w-full items-center justify-center gap-1.5"
+        className="flex w-full items-center justify-center gap-2"
         style={{
           paddingLeft: "var(--tabbar-inset-x)",
           paddingRight: "var(--tabbar-inset-x)",
@@ -111,6 +111,8 @@ export function TabBar({
       >
         <nav
           aria-label="Primary"
+          // Підписи лишаються 11px і на дотику — див. правило pointer: coarse в index.css.
+          data-keep-micro-type
           className={cn(
             "relative flex min-w-0 flex-1 items-center gap-[var(--tabbar-gap)]",
             // Прихована смуга мусить і кліки пропускати крізь себе — інакше
