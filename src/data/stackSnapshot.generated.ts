@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-10-29T15:34:42.175Z",
+  "generatedAt": "2026-10-29T16:49:23.402Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -775,7 +775,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "react",
-      "version": "19.2.8",
+      "version": "19.3.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-20T23:28:32+03:00",
@@ -806,7 +806,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "react-dom",
-      "version": "19.2.8",
+      "version": "19.3.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-20T23:28:32+03:00",
