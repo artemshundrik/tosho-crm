@@ -1,8 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { resolveAccessLevel } from "./_lib/assistantAccess";
+import { STACK_DEPENDENCIES } from "../../src/data/stackDependencies.generated";
 import { STACK_SNAPSHOT } from "../../src/data/stackSnapshot.generated";
-import { type StackAdvisory, type AdvisorySeverity } from "../../src/lib/stack";
+import { type StackAdvisory } from "../../src/lib/stack";
+import { advisoriesByPackage, advisoryRequestBodies, parseBulkAdvisories } from "../../src/lib/stackAdvisories";
 
 // Щоденний обхід npm: яка версія кожного нашого пакета вийшла і чи є на неї
 // дірка безпеки. Результат лягає в tosho.stack_versions, звідки його читає
@@ -124,47 +126,46 @@ async function mapWithLimit<T, R>(items: T[], limit: number, worker: (item: T) =
   return results;
 }
 
-const SEVERITIES: AdvisorySeverity[] = ["low", "moderate", "high", "critical"];
-
 /**
- * Дірки безпеки — одним запитом на всі пакети.
+ * Дірки безпеки — у наших пакетах і в усьому, що вони тягнуть у прод.
  *
  * Це той самий ендпоінт, яким користується `npm audit`: на вхід «пакет →
  * встановлені версії», на вихід лише ті, до яких є претензії. Пакети без
  * зауважень у відповіді просто відсутні — саме тому далі ми явно записуємо їм
  * порожній масив, інакше вчорашня дірка висіла б у базі вічно.
+ *
+ * Питаємо й про транзитивні (STACK_DEPENDENCIES), бо саме там сиділи дві дірки
+ * в @tiptap/core: `npm audit --omit=dev` їх бачив, а сторінка — ні. Запитів
+ * кілька (advisoryRequestBodies), і впав хоч один — це «не питали» цілком:
+ * половинна відповідь записала б «чисто» пакетам, про чиї залежності npm так і
+ * не відповів.
  */
-async function fetchAdvisories(
-  installed: Record<string, string[]>,
-  signal: AbortSignal
-): Promise<{ ok: boolean; map: Record<string, StackAdvisory[]> }> {
+async function fetchAdvisories(signal: AbortSignal): Promise<{ ok: boolean; byPackage: Map<string, StackAdvisory[]> }> {
+  const packages = STACK_SNAPSHOT.packages.map(({ name, version }) => ({ name, version }));
   try {
-    const response = await fetch(BULK_ADVISORIES, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(installed),
-      signal,
-    });
-    if (!response.ok) return { ok: false, map: {} };
-    const data = (await response.json()) as Record<string, unknown>;
-    const result: Record<string, StackAdvisory[]> = {};
-    for (const [name, raw] of Object.entries(data)) {
-      if (!Array.isArray(raw)) continue;
-      result[name] = raw.map((entry) => {
-        const item = (entry ?? {}) as { title?: unknown; severity?: unknown; url?: unknown };
-        const severity = typeof item.severity === "string" ? item.severity.toLowerCase() : "";
-        return {
-          title: typeof item.title === "string" ? item.title : "Вразливість",
-          severity: (SEVERITIES as string[]).includes(severity) ? (severity as AdvisorySeverity) : "moderate",
-          url: typeof item.url === "string" ? item.url : null,
-        };
-      });
+    const bodies = advisoryRequestBodies([...packages, ...STACK_DEPENDENCIES]);
+    const parts = await Promise.all(
+      bodies.map(async (body) => {
+        const response = await fetch(BULK_ADVISORIES, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(body),
+          signal,
+        });
+        if (!response.ok) return null;
+        return parseBulkAdvisories(body, await response.json());
+      })
+    );
+    const found = new Map<string, StackAdvisory[]>();
+    for (const part of parts) {
+      if (!part) return { ok: false, byPackage: new Map() };
+      for (const [key, advisories] of part) found.set(key, advisories);
     }
-    return { ok: true, map: result };
+    return { ok: true, byPackage: advisoriesByPackage(packages, STACK_DEPENDENCIES, found) };
   } catch {
     // Не «дірок немає», а «не питали»: різниця критична — на цьому місці
     // мовчазний збій зробив би вразливий пакет чистим у базі й у звіті.
-    return { ok: false, map: {} };
+    return { ok: false, byPackage: new Map() };
   }
 }
 
@@ -270,12 +271,11 @@ export const handler = async (event: HttpEvent) => {
   const timer = setTimeout(() => controller.abort(), DEADLINE_MS);
 
   try {
-    const installed: Record<string, string[]> = {};
-    for (const pkg of packages) installed[pkg.name] = [pkg.version];
+    const installed = new Map(packages.map((pkg) => [pkg.name, pkg.version]));
 
     const [latest, advisories, nodeLts] = await Promise.all([
       mapWithLimit(packages, CONCURRENCY, (pkg) => fetchLatest(pkg.name, controller.signal)),
-      fetchAdvisories(installed, controller.signal),
+      fetchAdvisories(controller.signal),
       fetchNodeLts(controller.signal),
     ]);
 
@@ -342,13 +342,13 @@ export const handler = async (event: HttpEvent) => {
           // вже закрита вразливість висіла б у базі назавжди. Але записувати
           // «чисто» можна ЛИШЕ коли реєстр справді відповів — інакше лишаємо
           // попереднє значення, щоб збій мережі не оголосив стек безпечним.
-          advisories: advisories.ok ? (advisories.map[entry.name] ?? []) : (before?.advisories ?? []),
+          advisories: advisories.ok ? (advisories.byPackage.get(entry.name) ?? []) : (before?.advisories ?? []),
           // Версія, про яку питали, їде разом з відповіддю: без неї сторінка не
           // знає, чи стосуються дірки того, що встановлено ЗАРАЗ, — і після
           // оновлення пакета показувала б стару вразливість як чинну.
           latest_published_at: publishedByName.get(entry.name) ?? before?.latest_published_at ?? null,
           advisories_version: advisories.ok
-            ? (installed[entry.name]?.[0] ?? null)
+            ? (installed.get(entry.name) ?? null)
             : (before?.advisories_version ?? null),
           checked_at: nowIso,
         };
@@ -363,7 +363,9 @@ export const handler = async (event: HttpEvent) => {
       success: true,
       checked: rows.length,
       skipped: packages.length - rows.length,
-      vulnerable: advisories.ok ? Object.keys(advisories.map).length : null,
+      vulnerable: advisories.ok
+        ? [...advisories.byPackage.values()].filter((list) => list.length > 0).length
+        : null,
       publishDates: publishedByName.size,
       advisoriesChecked: advisories.ok,
       ranAt: nowIso,

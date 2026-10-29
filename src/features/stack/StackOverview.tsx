@@ -33,6 +33,7 @@ import {
   SEVERITY_LABEL,
   URGENCY_META,
   buildStackItems,
+  countHoles,
   formatAgoCoarse,
   groupByLayer,
   looksUnused,
@@ -40,6 +41,7 @@ import {
   STALE_PUBLISH_MONTHS,
   groupByUrgency,
   stackTotals,
+  type StackAdvisory,
   type StackItem,
   type StackTotals,
   type StackUrgency,
@@ -246,7 +248,7 @@ function UrgencyHero({ totals }: { totals: StackTotals }) {
         totals.vulnerable > 0 ? (
           <Pill tone="bad">
             <ShieldAlert className="h-3 w-3" />
-            {totals.vulnerable} {pluralWordUk(totals.vulnerable, "діра", "діри", "дір")} безпеки
+            {totals.holes} {pluralWordUk(totals.holes, "діра", "діри", "дір")} безпеки
           </Pill>
         ) : totals.checkedAt === null ? (
           <Pill tone="warn">npm ще не питали</Pill>
@@ -346,6 +348,17 @@ function PlatformFootnote({ platform }: { platform: StackPlatform | null }) {
 /* ─────────────────────────── групи й рядки ─────────────────────────── */
 
 function layerSummary(items: StackItem[]) {
+  // Дірка — першою: шар із нею не «усе свіже», навіть коли всі пакети
+  // найновіші, бо транзитивну лагодить лок, а не версія в package.json.
+  const vulnerable = items.filter((item) => item.worstSeverity).length;
+  if (vulnerable > 0) {
+    return (
+      <span className="text-destructive">
+        <b className="figure font-medium">{vulnerable}</b>{" "}
+        {pluralWordUk(vulnerable, "з дірою", "з дірами", "з дірами")} безпеки
+      </span>
+    );
+  }
   const breaking = items.filter((item) => item.state === "major").length;
   if (breaking > 0) {
     return (
@@ -600,7 +613,7 @@ function StackRow({ item }: { item: StackItem }) {
           {/* Дірки вже відсортовані за важкістю (buildStackItems), тож перша —
               саме та, чию важкість називає чипс поруч. */}
           {item.worstSeverity
-            ? `${item.advisories[0]?.title ?? ""}${
+            ? `${item.advisories[0] ? advisoryLine(item.advisories[0]) : ""}${
                 item.advisories.length > 1 ? ` · і ще ${item.advisories.length - 1}` : ""
               }`
             : (item.note ??
@@ -646,6 +659,14 @@ function StackRow({ item }: { item: StackItem }) {
 }
 
 /**
+ * Дірка одним рядком. Транзитивна називає, де саме сидить: «@tiptap/core» у
+ * package.json немає, і без імені людина шукала б дірку в нашому пакеті.
+ */
+function advisoryLine(advisory: StackAdvisory): string {
+  return advisory.dependency ? `у ${advisory.dependency.name}: ${advisory.title}` : advisory.title;
+}
+
+/**
  * Картка пакета — відповідь на «а що це взагалі таке».
  *
  * У рядку є місце рівно на назву, версію й стан. Але дивлячись на
@@ -686,6 +707,46 @@ function StackRowPopover({ item }: { item: StackItem }) {
           <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{item.description}</p>
         ) : item.note ? (
           <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{item.note}</p>
+        ) : null}
+
+        {item.advisories.length > 0 ? (
+          /* Повний перелік: у рядку на нього місця немає — там лише перша
+             дірка й «і ще N». Посилання тільки https: адреса приходить від npm
+             через базу, і javascript: у href ставати не повинен ні за яких умов. */
+          <ul className="mt-3 grid gap-2 border-t border-border/40 pt-2.5">
+            {item.advisories.map((advisory, index) => (
+              <li
+                key={`${advisory.dependency?.name ?? ""}|${advisory.url ?? advisory.title}|${index}`}
+                className="text-2xs leading-snug"
+              >
+                <span className="inline-flex items-center gap-1 text-destructive">
+                  <ShieldAlert className="h-3 w-3" />
+                  {SEVERITY_LABEL[advisory.severity]}
+                </span>
+                {" · "}
+                {advisory.url?.startsWith("https://") ? (
+                  <a
+                    href={advisory.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline-offset-4 hover:underline"
+                  >
+                    {advisory.title}
+                  </a>
+                ) : (
+                  advisory.title
+                )}
+                {advisory.dependency ? (
+                  <span className="block text-muted-foreground">
+                    у залежності{" "}
+                    <span className="figure">
+                      {advisory.dependency.name} {advisory.dependency.version}
+                    </span>
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         ) : null}
 
         <dl className="mt-3 grid gap-1.5 border-t border-border/40 pt-2.5 text-2xs">
@@ -809,11 +870,12 @@ const ASIDE_TITLE = "text-3xs font-bold uppercase tracking-widest text-muted-for
  */
 function EffortCard({ items }: { items: StackItem[] }) {
   const counts = useMemo(() => {
-    let security = 0;
+    // Різні дірки, а не пакети з ними: одна в @tiptap/core висить на всіх
+    // наших tiptap-пакетах, але лагодити її одну.
+    const security = countHoles(items);
     let breaking = 0;
     let rest = 0;
     for (const item of items) {
-      if (item.worstSeverity) security += 1;
       if (item.state === "major") breaking += 1;
       else if (item.state === "minor" || item.state === "patch") rest += 1;
     }

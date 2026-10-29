@@ -10,7 +10,10 @@
  * тип поломки, від якого сторінка мала б захищати.
  *
  * ЩО ЗВІРЯЄМО. Перелік пакетів, встановлені версії — те, що має бути точним
- * завжди, — і те, що жоден шар не вгаданий евристикою.
+ * завжди, — і те, що жоден шар не вгаданий евристикою. Плюс перелік
+ * транзитивних прод-залежностей (src/data/stackDependencies.generated.ts): з
+ * нього крон питає npm про дірки, і застарілий перелік означав би питати про
+ * версії, яких у проді вже немає, а про нові мовчати.
  *
  * Кількість тестів і заглушок теж лежить у знімку, але вона оновлюється разом
  * із ним і застаріває безболісно: «1083 тести» замість 1090 нікого не введе в
@@ -26,8 +29,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { prodTransitiveDependencies, renderDependenciesModule } from "./lib/prodDependencyTree.mjs";
+
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const SNAPSHOT = join(ROOT, "src/data/stackSnapshot.generated.ts");
+const DEPENDENCIES = join(ROOT, "src/data/stackDependencies.generated.ts");
 
 if (!existsSync(SNAPSHOT)) {
   console.error("[стек] знімка немає — зроби npm run stack:snapshot");
@@ -104,4 +110,23 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`[стек] знімок збігається з локом: ${inSnapshot.size} пакетів.`);
+/**
+ * Перелік транзитивних звіряємо цілим текстом: генератор пише його без дати,
+ * тож однаковий лок дає байт у байт однаковий файл. Будь-яка різниця — це
+ * лок, що пішов уперед без `npm run stack:snapshot`.
+ */
+const dependencies = prodTransitiveDependencies(lock, pkg);
+const dependenciesActual = existsSync(DEPENDENCIES) ? readFileSync(DEPENDENCIES, "utf8") : null;
+if (dependenciesActual !== renderDependenciesModule(dependencies)) {
+  console.error(
+    dependenciesActual === null
+      ? "[стек] ✖ переліку транзитивних залежностей немає — крон не питатиме npm про дірки в них."
+      : "[стек] ✖ перелік транзитивних залежностей розійшовся з package-lock — крон питає npm не про ті версії."
+  );
+  console.error("[стек]   Полагодь однією командою: npm run stack:snapshot");
+  process.exit(1);
+}
+
+console.log(
+  `[стек] знімок збігається з локом: ${inSnapshot.size} пакетів і ${dependencies.length} транзитивних залежностей.`
+);

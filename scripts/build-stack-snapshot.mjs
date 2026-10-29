@@ -31,8 +31,12 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { prodTransitiveDependencies, renderDependenciesModule } from "./lib/prodDependencyTree.mjs";
+
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const OUT = join(ROOT, "src/data/stackSnapshot.generated.ts");
+/** Транзитивні прод-залежності — окремим файлом, бо читає їх лише крон. */
+const OUT_DEPENDENCIES = join(ROOT, "src/data/stackDependencies.generated.ts");
 
 /* ─────────────────────────── шари ─────────────────────────── */
 
@@ -760,7 +764,17 @@ export const STACK_SNAPSHOT: StackSnapshot = ${JSON.stringify(snapshot, null, 2)
 
 writeFileSync(OUT, file, "utf8");
 
+const dependencies = prodTransitiveDependencies(lock, pkg);
+writeFileSync(OUT_DEPENDENCIES, renderDependenciesModule(dependencies), "utf8");
+
 console.log(`[стек] знімок оновлено: ${packages.length} пакетів + ${runtimes.length} рантайм, ${snapshot.tests ?? "?"} тестів.`);
+console.log(`[стек]   транзитивних прод-залежностей: ${dependencies.length} — про дірки в них теж питає крон`);
+const orphans = dependencies.filter((entry) => entry.via.length === 0);
+if (orphans.length > 0) {
+  // Дірку в такому пакеті крон знайде, але показати її нема на чиєму рядку.
+  console.log("[стек] ⚠ прод-залежність, до якої не дійшов обхід від наших пакетів:");
+  for (const entry of orphans) console.log(`[стек]     ${entry.name}@${entry.version}`);
+}
 for (const layer of Object.keys(LAYERS)) {
   console.log(`[стек]   ${layer}: ${packages.filter((p) => p.layer === layer).length}`);
 }

@@ -124,6 +124,23 @@ export type StackAdvisory = {
   title: string;
   severity: AdvisorySeverity;
   url?: string | null;
+  /**
+   * Дірка не в самому пакеті, а в тому, що він тягне за собою.
+   *
+   * Лікується оновленням НАШОГО пакета (або `npm update`), а не цього, — тому
+   * дірка висить на рядку нашого пакета, а тут лише сказано, де вона насправді.
+   */
+  dependency?: { name: string; version: string } | null;
+};
+
+/**
+ * Транзитивна прод-залежність і наші пакети, через які вона приїхала.
+ * Генерує scripts/build-stack-snapshot.mjs у src/data/stackDependencies.generated.ts.
+ */
+export type StackDependency = {
+  name: string;
+  version: string;
+  via: string[];
 };
 
 /** Рядок tosho.stack_versions — відповідь npm, покладена кроном у базу. */
@@ -423,6 +440,10 @@ export const STALE_PUBLISH_MONTHS = 24;
 export function urgencyOf(item: StackItem): StackUrgency {
   if (item.state === "major") return "breaking";
   if (item.state === "minor" || item.state === "patch") return "available";
+  // Дірка — завжди робота, навіть коли сам пакет найновіший: транзитивну
+  // лагодить свіжий лок (`npm update`), і в згорнутому «нічого робити» їй не
+  // місце.
+  if (item.worstSeverity) return "available";
   // «pinned» і «unknown» — не робота: перше правильне за визначенням, друге ще
   // не з'ясоване. Обидва в «свіже», щоб не роздувати список справ вигаданим.
   return "fresh";
@@ -471,10 +492,33 @@ export type StackTotals = {
   pinned: number;
   /** Скільки пакетів мають хоч одну відкриту дірку безпеки. */
   vulnerable: number;
+  /**
+   * Скільки РІЗНИХ дірок — саме це число стоїть у «N дір безпеки».
+   *
+   * Не те саме, що `vulnerable`: дірку в @tiptap/core тягнуть чотири наші
+   * пакети, і рядків з нею чотири, а лагодити — одну.
+   */
+  holes: number;
   worstSeverity: AdvisorySeverity | null;
   /** Найсвіжіший момент перевірки серед усіх рядків — «перевірено N тому». */
   checkedAt: string | null;
 };
+
+/**
+ * Різні дірки серед усіх пакетів.
+ *
+ * Одна дірка — це пакет, у якому вона сидить, плюс сама вразливість. Через
+ * скількох наших пакетів вона приїхала, на кількість не впливає.
+ */
+export function countHoles(items: StackItem[]): number {
+  const keys = new Set<string>();
+  for (const item of items) {
+    for (const advisory of item.advisories) {
+      keys.add(`${advisory.dependency?.name ?? item.name}|${advisory.url ?? advisory.title}`);
+    }
+  }
+  return keys.size;
+}
 
 export function stackTotals(items: StackItem[]): StackTotals {
   const totals: StackTotals = {
@@ -486,6 +530,7 @@ export function stackTotals(items: StackItem[]): StackTotals {
     unknown: 0,
     pinned: 0,
     vulnerable: 0,
+    holes: countHoles(items),
     worstSeverity: null,
     checkedAt: null,
   };
@@ -615,7 +660,7 @@ export function stackSummaryText(totals: StackTotals): string {
 
   const security =
     totals.vulnerable > 0
-      ? `${totals.vulnerable} ${pluralWordUk(totals.vulnerable, "діра", "діри", "дір")} безпеки (${
+      ? `${totals.holes} ${pluralWordUk(totals.holes, "діра", "діри", "дір")} безпеки (${
           SEVERITY_LABEL[totals.worstSeverity ?? "low"]
         })`
       : "дірок безпеки немає";

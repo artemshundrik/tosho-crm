@@ -307,6 +307,13 @@ describe("групування", () => {
     expect(sortItems(withHole)[0].name).toBe("z-hole");
   });
 
+  it("найновіший пакет із транзитивною діркою не ховається в «свіже»", () => {
+    const hole = { title: "XSS", severity: "moderate" as const, url: null, dependency: { name: "b", version: "1.0.0" } };
+    const item = buildStackItems(snapshot([pkg("a", "1.0.0")]), [row("a", "1.0.0", [hole], "1.0.0")])[0];
+    expect(item.state).toBe("fresh");
+    expect(urgencyOf(item)).toBe("available");
+  });
+
   it("urgencyOf не плутає невідоме з відставанням", () => {
     const unknown = buildStackItems(snapshot([pkg("new-one", "1.0.0")]), [])[0];
     expect(urgencyOf(unknown)).toBe("fresh");
@@ -332,7 +339,25 @@ describe("stackTotals", () => {
     expect(totals.patch).toBe(1);
     expect(totals.fresh).toBe(1);
     expect(totals.vulnerable).toBe(1);
+    expect(totals.holes).toBe(1);
     expect(totals.worstSeverity).toBe("high");
+  });
+
+  it("одну транзитивну дірку в кількох наших пакетах рахує одною", () => {
+    const tiptap = {
+      title: "XSS",
+      severity: "moderate" as const,
+      url: "https://github.com/advisories/GHSA-cp6q",
+      dependency: { name: "@tiptap/core", version: "3.30.0" },
+    };
+    const shared = buildStackItems(snapshot([pkg("@tiptap/react", "3.30.0"), pkg("@tiptap/starter-kit", "3.30.0")]), [
+      row("@tiptap/react", "3.30.0", [tiptap], "3.30.0"),
+      row("@tiptap/starter-kit", "3.30.0", [tiptap], "3.30.0"),
+    ]);
+    const totals = stackTotals(shared);
+    expect(totals.vulnerable).toBe(2);
+    expect(totals.holes).toBe(1);
+    expect(stackSummaryText(totals)).toBe("Стек: усе свіже, 1 діра безпеки (середня)");
   });
 
   it("без жодної перевірки checkedAt лишається null — це «не питали», а не «щойно»", () => {

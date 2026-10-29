@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-10-29T16:49:23.402Z",
+  "generatedAt": "2026-10-29T17:27:59.933Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -490,7 +490,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Редактор технічного завдання: жирний, списки, посилання.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 2,
+      "usedIn": 4,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
     {
@@ -505,7 +505,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Базовий набір можливостей редактора ТЗ.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 1,
+      "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
     {
@@ -533,10 +533,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "19.3.0",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-08-20T23:28:32+03:00",
+      "bumpedAt": "2026-10-29T18:55:38+02:00",
       "bumpCommit": {
-        "sha": "9aa6579f",
-        "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
+        "sha": "6c5ffb82",
+        "subject": "CRM працює на React 19.3: сторінки не чекають одна на одну під час важкого перемальовування"
       },
       "description": "Опис типів React для перевірки типів.",
       "homepage": null,
@@ -549,10 +549,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "19.3.0",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-08-20T23:28:32+03:00",
+      "bumpedAt": "2026-10-29T18:55:38+02:00",
       "bumpCommit": {
-        "sha": "9aa6579f",
-        "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
+        "sha": "6c5ffb82",
+        "subject": "CRM працює на React 19.3: сторінки не чекають одна на одну під час важкого перемальовування"
       },
       "description": "Опис типів react-dom.",
       "homepage": null,
@@ -778,14 +778,14 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "19.3.1",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2026-08-20T23:28:32+03:00",
+      "bumpedAt": "2026-10-29T18:55:38+02:00",
       "bumpCommit": {
-        "sha": "9aa6579f",
-        "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
+        "sha": "6c5ffb82",
+        "subject": "CRM працює на React 19.3: сторінки не чекають одна на одну під час важкого перемальовування"
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 390,
+      "usedIn": 391,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -809,10 +809,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "19.3.1",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2026-08-20T23:28:32+03:00",
+      "bumpedAt": "2026-10-29T18:55:38+02:00",
       "bumpCommit": {
-        "sha": "9aa6579f",
-        "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
+        "sha": "6c5ffb82",
+        "subject": "CRM працює на React 19.3: сторінки не чекають одна на одну під час важкого перемальовування"
       },
       "description": "Частина React, яка власне малює в браузері.",
       "homepage": "https://react.dev/",
@@ -983,7 +983,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Складальник: перетворює сотні файлів коду на кілька, які розуміє браузер. Він же тримає локальний сервер для перевірок.",
       "homepage": "https://vite.dev",
-      "usedIn": 5,
+      "usedIn": 6,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vite.dev&sz=128"
     },
@@ -999,7 +999,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 270,
+      "usedIn": 272,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1060,12 +1060,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 3278,
-  "testFiles": 268,
+  "tests": 3292,
+  "testFiles": 270,
   "lintStubs": 28,
   "node": "24",
   "netlifyFunctions": 50,
-  "sourceLines": 331715,
+  "sourceLines": 331947,
   "automation": {
     "workflows": [
       {
