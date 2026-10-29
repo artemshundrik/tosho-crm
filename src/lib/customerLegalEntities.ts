@@ -247,6 +247,18 @@ export const getPrimaryCustomerLegalEntity = (value: CustomerLegalEntity[]) => {
   return primary ?? null;
 };
 
+/**
+ * Юрособа картки, з якої беруть реквізити договір і СП замовлення.
+ *
+ * Замовлення знімає реквізити з картки при створенні, але джерело правди — картка:
+ * виправлену в ній назву чи IBAN документи мають підхопити (29.10.2026 СП «ТОВ БОН
+ * ФРУКТ» не бачила, що в картці вже «ТОВ «БОН ФРУКТ»»). Знімок лишається запасним
+ * для лідів і юросіб, яких у картці вже немає. Шукаємо за ЄДРПОУ знімка, щоб у
+ * документі не змішались поля двох різних юросіб замовника.
+ */
+export const pickOrderLegalEntity = (entities: CustomerLegalEntity[], orderTaxId: string) =>
+  (orderTaxId ? entities.find((entity) => entity.taxId.trim() === orderTaxId) : undefined) ?? entities[0] ?? null;
+
 export const formatCustomerLegalEntitySummary = (
   entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId">
 ) => {

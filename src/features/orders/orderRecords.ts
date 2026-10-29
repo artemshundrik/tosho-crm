@@ -22,6 +22,7 @@ import {
   formatCustomerLegalEntityTitle,
   isVatPayerRate,
   parseCustomerLegalEntities,
+  pickOrderLegalEntity,
 } from "@/lib/customerLegalEntities";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -1653,39 +1654,46 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         !customer && leadLookupName
           ? storedLeadByLookup.get(normalizeLookupKey(leadLookupName)) ?? null
           : null;
-      const primaryLegalEntity = customer ? parseCustomerLegalEntities(customer)[0] ?? null : null;
+      // Картка виграє у знімка замовлення — див. pickOrderLegalEntity.
+      const orderTaxIdSnapshot = order.customer_tax_id?.trim?.() || "";
+      const primaryLegalEntity = customer ? pickOrderLegalEntity(parseCustomerLegalEntities(customer), orderTaxIdSnapshot) : null;
       const orderSignatoryParts = (order.signatory_label ?? "").split(",");
       const customerSignatoryName =
-        orderSignatoryParts[0]?.trim() ||
         primaryLegalEntity?.signatoryName?.trim() ||
+        orderSignatoryParts[0]?.trim() ||
         customer?.signatory_name?.trim?.() ||
         lead?.signatory_name?.trim?.() ||
         null;
       const customerSignatoryPosition =
-        orderSignatoryParts.slice(1).join(",").trim() ||
         primaryLegalEntity?.signatoryPosition?.trim() ||
+        orderSignatoryParts.slice(1).join(",").trim() ||
         customer?.signatory_position?.trim?.() ||
         lead?.signatory_position?.trim?.() ||
         null;
       const customerTaxId =
-        order.customer_tax_id?.trim?.() ||
         primaryLegalEntity?.taxId?.trim() ||
+        orderTaxIdSnapshot ||
         customer?.tax_id?.trim?.() ||
         null;
       const customerVatId = primaryLegalEntity?.vatId?.trim() || null;
       const customerVatRate = primaryLegalEntity?.vatRate || null;
       const customerIban =
-        order.customer_iban?.trim?.() ||
         primaryLegalEntity?.iban?.trim() ||
+        order.customer_iban?.trim?.() ||
         customer?.iban?.trim?.() ||
         null;
       const customerLegalAddress =
-        order.customer_legal_address?.trim?.() ||
         primaryLegalEntity?.legalAddress?.trim() ||
+        order.customer_legal_address?.trim?.() ||
         null;
       const customerSignatoryAuthority =
-        order.customer_signatory_authority?.trim?.() ||
         primaryLegalEntity?.signatoryAuthority?.trim() ||
+        order.customer_signatory_authority?.trim?.() ||
+        null;
+      const legalEntityLabel =
+        (primaryLegalEntity?.legalName.trim() ? formatCustomerLegalEntityTitle(primaryLegalEntity) : "") ||
+        order.legal_entity_label?.trim?.() ||
+        customer?.legal_name?.trim?.() ||
         null;
       const paymentMethodId =
         normalizePaymentMethodId(order.payment_method_id) ||
@@ -1703,7 +1711,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       const orderDocuments = getOrderDocuments(order);
       const contractReady = Boolean(
         order.party_type !== "lead" &&
-          (order.legal_entity_label?.trim() || customer?.legal_name?.trim?.()) &&
+          legalEntityLabel &&
           customerTaxId &&
           customerIban &&
           customerLegalAddress &&
@@ -1768,15 +1776,12 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         contactPhone: order.contact_phone?.trim?.() || null,
         contactTelegram:
           parseCustomerContacts(customer).find((entry) => (entry.telegram ?? "").trim())?.telegram?.trim() || null,
-        legalEntityLabel:
-          order.legal_entity_label?.trim?.() ||
-          (primaryLegalEntity ? formatCustomerLegalEntityTitle(primaryLegalEntity) : customer?.legal_name?.trim?.()) ||
-          null,
+        legalEntityLabel,
         customerTaxId,
         customerVatId,
         customerVatRate,
         customerIban,
-        customerBankDetails: order.customer_bank_details?.trim?.() || primaryLegalEntity?.bankName.trim() || null,
+        customerBankDetails: primaryLegalEntity?.bankName.trim() || order.customer_bank_details?.trim?.() || null,
         customerLegalAddress,
         customerSignatoryName,
         customerSignatoryPosition,

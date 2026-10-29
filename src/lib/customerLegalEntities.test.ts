@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { formatVatRateLabel, isVatPayerRate, splitSignatoryFullName } from "./customerLegalEntities";
+import {
+  createEmptyCustomerLegalEntity,
+  formatVatRateLabel,
+  isVatPayerRate,
+  pickOrderLegalEntity,
+  splitSignatoryFullName,
+} from "./customerLegalEntities";
 
 /**
  * Розбір ПІБ визначає, що потрапить у договір: підпис «Д.О. Буйна» будується з
@@ -129,5 +135,24 @@ describe("formatVatRateLabel", () => {
   it("звичайні ставки лишаються числом", () => {
     expect(formatVatRateLabel("20")).toBe("20%");
     expect(formatVatRateLabel("7")).toBe("7%");
+  });
+});
+
+describe("pickOrderLegalEntity", () => {
+  const entity = (legalName: string, taxId: string) => ({ ...createEmptyCustomerLegalEntity(), legalName, taxId });
+
+  it("бере юрособу картки з тим самим ЄДРПОУ, що в знімку замовлення", () => {
+    const entities = [entity("ТОВ «Інша»", "11111111"), entity("ТОВ «БОН ФРУКТ»", "41052689")];
+    expect(pickOrderLegalEntity(entities, "41052689")?.legalName).toBe("ТОВ «БОН ФРУКТ»");
+  });
+
+  it("без збігу або без знімка бере першу юрособу картки", () => {
+    const entities = [entity("ТОВ «Перша»", "11111111"), entity("ТОВ «Друга»", "22222222")];
+    expect(pickOrderLegalEntity(entities, "99999999")?.legalName).toBe("ТОВ «Перша»");
+    expect(pickOrderLegalEntity(entities, "")?.legalName).toBe("ТОВ «Перша»");
+  });
+
+  it("порожня картка — null, тоді документ візьме знімок замовлення", () => {
+    expect(pickOrderLegalEntity([], "41052689")).toBeNull();
   });
 });
