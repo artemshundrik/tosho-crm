@@ -132,6 +132,12 @@ describe("buildDocumentRegistry", () => {
     expect(spec.alert?.tone).toBe("danger");
   });
 
+  it("СП, створена сьогодні, ще не «увага»: її ніхто не встиг підписати", () => {
+    const [spec] = buildDocumentRegistry([order({ specificationCreatedAt: "2026-10-29T11:50:00Z" })], [], TODAY);
+    expect(spec.flag).toBeNull();
+    expect(spec.status).toMatchObject({ label: "Не підписано", tone: "warning", detail: "сьогодні" });
+  });
+
   it("завершене замовлення не тягне непідписані документи в плитку", () => {
     const [spec] = buildDocumentRegistry(
       [order({ specificationCreatedAt: "2026-09-01T09:00:00Z", orderStatus: "completed", paymentStatus: "fully_paid" })],
@@ -141,24 +147,49 @@ describe("buildDocumentRegistry", () => {
     expect(spec.flag).toBeNull();
   });
 
-  it("оплачений рахунок без ВН — «Без закривального»; з номером ВН — ні", () => {
+  it("відвантажене без ВН — «Без закривального»; оплачене, але не відвантажене, чи з номером ВН — ні", () => {
     const paid = { invoiceNumber: "412", invoiceCreatedAt: "2026-10-20T08:15:00Z", paymentStatus: "fully_paid" };
-    const [invoice] = buildDocumentRegistry([order(paid)], [], TODAY);
-    expect(invoice.flag).toBe("noClosing");
-    expect(invoice.alert?.text).toContain("видаткової накладної");
+    const [waiting] = buildDocumentRegistry([order(paid)], [], TODAY);
+    expect(waiting.flag).toBeNull();
+    expect(waiting.alert).toBeNull();
 
-    const docs = buildDocumentRegistry([order({ ...paid, waybillNumber: "РН-0000012", waybillDate: "2026-10-28" })], [], TODAY);
+    const shipped = { ...paid, orderStatus: "shipped", deliveryStatus: "shipped" };
+    const [invoice] = buildDocumentRegistry([order(shipped)], [], TODAY);
+    expect(invoice.flag).toBe("noClosing");
+    expect(invoice.alert?.text).toBe("Відвантажено, а видаткової накладної ще немає.");
+
+    const docs = buildDocumentRegistry([order({ ...shipped, waybillNumber: "РН-0000012", waybillDate: "2026-10-28" })], [], TODAY);
     expect(docs.find((doc) => doc.kind === "invoice")?.flag).toBeNull();
     expect(docs.find((doc) => doc.kind === "waybill")).toMatchObject({ number: "РН-0000012", createdAtPrecise: false });
   });
 
   it("готівковому замовленню закривальний не потрібен", () => {
     const [invoice] = buildDocumentRegistry(
-      [order({ invoiceNumber: "1", invoiceCreatedAt: "2026-10-20T08:15:00Z", paymentStatus: "fully_paid", paymentMethodId: "cash", paymentRail: "Готівкові / на карту" })],
+      [order({ invoiceNumber: "1", invoiceCreatedAt: "2026-10-20T08:15:00Z", paymentStatus: "fully_paid", orderStatus: "shipped", paymentMethodId: "cash", paymentRail: "Готівкові / на карту" })],
       [],
       TODAY
     );
     expect(invoice.flag).toBeNull();
+  });
+
+  it("рахунок, що чекає оплату: до 5 днів сірий, з 5 жовтий, з 14 червоний з попередженням", () => {
+    const invoiceAt = (createdAt: string) =>
+      buildDocumentRegistry([order({ invoiceNumber: "9", invoiceCreatedAt: createdAt })], [], TODAY)[0];
+    expect(invoiceAt("2026-10-26T09:00:00Z").status).toMatchObject({ tone: "neutral", detail: "3 дн." });
+    expect(invoiceAt("2026-10-23T09:00:00Z").status).toMatchObject({ tone: "warning", detail: "6 дн." });
+    const overdue = invoiceAt("2026-09-04T09:00:00Z");
+    expect(overdue.status).toMatchObject({ tone: "danger", detail: "55 дн." });
+    expect(overdue.alert).toEqual({ tone: "danger", text: "Рахунок чекає оплату 55 дн. від внесення номера." });
+  });
+
+  it("рахунок на 0 грн каже, що в замовленні немає суми", () => {
+    const [invoice] = buildDocumentRegistry(
+      [order({ total: 0, invoiceNumber: "003", invoiceCreatedAt: "2026-10-28T12:47:00Z" })],
+      [],
+      TODAY
+    );
+    expect(invoice.alert?.tone).toBe("warning");
+    expect(invoice.alert?.text).toContain("немає суми");
   });
 
   it("договір поза CRM: закінчується за 63 дні без пролонгації — плитка; з пролонгацією — ні", () => {

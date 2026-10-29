@@ -81,6 +81,10 @@ export type RegistryDocument = {
 const DAY_MS = 86_400_000;
 const EXPIRING_WINDOW_DAYS = 90;
 const LONG_WAIT_DAYS = 5;
+/** Щойно створений договір чи СП ще ніхто не встиг підписати — це не «увага». */
+const UNSIGNED_FLAG_AFTER_DAYS = 1;
+/** Рахунок, що чекає оплату: з 5 днів жовтіє, з 14 червоніє. */
+const INVOICE_OVERDUE_DAYS = 14;
 
 /** «2026-10-14» або ISO → «14.10.2026». */
 export const formatDocumentDate = (value: string | null | undefined) => {
@@ -102,7 +106,7 @@ const isoDay = kyivIsoDay;
 const daysBetween = (fromIso: string, toIso: string) =>
   Math.max(0, Math.round((Date.parse(isoDay(toIso)) - Date.parse(isoDay(fromIso))) / DAY_MS));
 
-const waitedDetail = (days: number) => (days === 0 ? "з сьогодні" : `${days} дн.`);
+const waitedDetail = (days: number) => (days === 0 ? "сьогодні" : `${days} дн.`);
 
 const waitStatus = (label: string, sinceIso: string, todayIso: string) => {
   const days = daysBetween(sinceIso, todayIso);
@@ -145,8 +149,8 @@ function signableDocument(
 ): RegistryDocument {
   const { record, todayIso, active } = ctx;
   const signed = Boolean(input.signedAt);
-  const flag: DocumentFlag | null = !signed && active ? "unsigned" : null;
   const wait = waitStatus("Не підписано", input.createdAt, todayIso);
+  const flag: DocumentFlag | null = !signed && active && wait.days >= UNSIGNED_FLAG_AFTER_DAYS ? "unsigned" : null;
   const status = signed
     ? { tone: "success" as Tone, label: "Підписано", detail: signedNote(input.signedAt!, input.via) }
     : ctx.cancelled
@@ -194,18 +198,21 @@ function invoiceDocument(ctx: OrderContext): RegistryDocument | null {
   const partial = !paid && PREPAYMENT_RECEIVED.has(record.paymentStatus);
   const closing = getClosingDocumentRef(record);
   const shipped = SHIPPED_ORDER_STATUSES.has(record.orderStatus) || record.deliveryStatus === "shipped";
+  // ВН чи акт виписують при відвантаженні: оплачене, але ще не відвантажене — звичайний стан, не тривога.
   const noClosing =
-    !ctx.cancelled &&
-    !closing.number &&
-    (paid || shipped) &&
-    isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail);
+    !ctx.cancelled && !closing.number && shipped && isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail);
+  const waitedDays = daysBetween(createdAt, todayIso);
+  const waitingTone: Tone =
+    waitedDays >= INVOICE_OVERDUE_DAYS ? "danger" : waitedDays >= LONG_WAIT_DAYS ? "warning" : "neutral";
   const status = paid
     ? { tone: "success" as Tone, label: "Оплачено", detail: null }
     : partial
       ? { tone: "info" as Tone, label: "Оплачено частково", detail: null }
       : ctx.cancelled
         ? { tone: "neutral" as Tone, label: "Замовлення скасовано", detail: null }
-        : { tone: "neutral" as Tone, label: "Чекає оплату", detail: waitedDetail(daysBetween(createdAt, todayIso)) };
+        : { tone: waitingTone, label: "Чекає оплату", detail: waitedDetail(waitedDays) };
+  const overdue = !paid && !partial && !ctx.cancelled && waitedDays >= INVOICE_OVERDUE_DAYS;
+  const noSum = !(record.total > 0);
   const events: DocumentEvent[] = [];
   if (record.invoiceRequestedAt) {
     events.push({ at: record.invoiceRequestedAt, precise: true, text: "попросили рахунок", userId: record.invoiceRequestedBy });
@@ -231,8 +238,12 @@ function invoiceDocument(ctx: OrderContext): RegistryDocument | null {
     ],
     flag: noClosing ? "noClosing" : null,
     alert: noClosing
-      ? { tone: "danger", text: `${paid ? "Оплачено" : "Відвантажено"}, а ${closing.kind === "act" ? "акта" : "видаткової накладної"} ще немає.` }
-      : null,
+      ? { tone: "danger", text: `Відвантажено, а ${closing.kind === "act" ? "акта" : "видаткової накладної"} ще немає.` }
+      : noSum
+        ? { tone: "warning", text: "У замовленні немає суми — рахунок показує 0 грн. Перевірте позиції замовлення." }
+        : overdue
+          ? { tone: "danger", text: `Рахунок чекає оплату ${waitedDays} дн. від внесення номера.` }
+          : null,
     events,
   };
 }

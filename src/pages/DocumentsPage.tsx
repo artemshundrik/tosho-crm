@@ -92,8 +92,8 @@ const SECTIONS: { id: SectionFilter; label: string }[] = [
 
 // short — для телефона: третина ширини не вміщає «Договори закінчуються».
 const TILES: { flag: DocumentFlag; label: string; short: string; tone: Tone; hint: string }[] = [
-  { flag: "unsigned", label: "Не підписано", short: "Не підписано", tone: "warning", hint: "договори й СП активних замовлень" },
-  { flag: "noClosing", label: "Без закривального", short: "Без ВН/акта", tone: "danger", hint: "оплачено чи відвантажено, ВН або акта немає" },
+  { flag: "unsigned", label: "Не підписано", short: "Не підписано", tone: "warning", hint: "договори й СП активних замовлень, створені до сьогодні" },
+  { flag: "noClosing", label: "Без закривального", short: "Без ВН/акта", tone: "danger", hint: "відвантажено, а ВН або акта немає" },
   { flag: "expiring", label: "Договори закінчуються", short: "Закінчуються", tone: "accent", hint: "у найближчі 90 днів, без пролонгації" },
 ];
 
@@ -316,7 +316,10 @@ export default function DocumentsPage() {
     setSearch("");
   }, []);
 
-  const allTime = Boolean(flag) || Boolean(search.trim()) || !month;
+  // Плитка й пошук діють за весь час, тож місяць тоді вимкнено: інакше стрілки
+  // непомітно міняли б його, і після очищення пошуку раптом відкривався б інший місяць.
+  const monthLocked = Boolean(flag) || Boolean(search.trim());
+  const allTime = monthLocked || !month;
   const activeFilterCount =
     (kind !== ALL ? 1 : 0) + (manager !== ALL ? 1 : 0) + (customer ? 1 : 0) + (flag ? 1 : 0);
 
@@ -359,29 +362,34 @@ export default function DocumentsPage() {
         filters={
           <>
             <div
-              className={cn(TOOLBAR_FILTER, "inline-flex items-center gap-0 px-0", month && !allTime && TOOLBAR_CONTROL_ACTIVE)}
+              className={cn(
+                TOOLBAR_FILTER,
+                "inline-flex items-center gap-0 px-0",
+                month && !allTime && TOOLBAR_CONTROL_ACTIVE,
+                monthLocked && "opacity-60"
+              )}
               role="group"
               aria-label="Місяць"
+              title={monthLocked ? "Плитка чи пошук показують за весь час — місяць зараз не діє" : undefined}
             >
               <Button
                 variant="ghost"
                 size="iconSm"
                 aria-label="Попередній місяць"
                 className="h-full rounded-r-none"
+                disabled={monthLocked}
                 onClick={() => setMonth((value) => shiftMonth(value ?? today.slice(0, 7), -1))}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <button
                 type="button"
-                className={cn("min-w-[124px] px-1 text-center text-sm font-medium", month && allTime && "text-muted-foreground")}
-                title={
-                  month && allTime
-                    ? "Плитка чи пошук показують за весь час — місяць зараз не діє"
-                    : month
-                      ? "Показати за весь час"
-                      : "Показати поточний місяць"
-                }
+                disabled={monthLocked}
+                className={cn(
+                  "min-w-[124px] px-1 text-center text-sm font-medium disabled:cursor-default",
+                  monthLocked && "text-muted-foreground"
+                )}
+                title={monthLocked ? undefined : month ? "Показати за весь час" : "Показати поточний місяць"}
                 onClick={() => setMonth((value) => (value ? null : today.slice(0, 7)))}
               >
                 {month ? monthLabel(month) : "За весь час"}
@@ -391,6 +399,7 @@ export default function DocumentsPage() {
                 size="iconSm"
                 aria-label="Наступний місяць"
                 className="h-full rounded-l-none"
+                disabled={monthLocked}
                 onClick={() => setMonth((value) => shiftMonth(value ?? today.slice(0, 7), 1))}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -457,6 +466,7 @@ export default function DocumentsPage() {
       manager,
       managerOptions,
       month,
+      monthLocked,
       refreshing,
       resetFilters,
       search,

@@ -132,9 +132,12 @@ export function DocumentPreview({ doc, manager, accountant, resolvePerson, onOpe
             <Row label="Менеджер">
               <PersonLine person={manager} empty="не призначено" />
             </Row>
-            <Row label="Бухгалтер">
-              <PersonLine person={accountant} empty={doc.kind === "invoice" ? "не відомо" : "—"} />
-            </Row>
+            {/* У договору й СП бухгалтера немає — рядок із прочерком лише відволікав. */}
+            {doc.section === "accounting" ? (
+              <Row label="Бухгалтер">
+                <PersonLine person={accountant} empty="не відомо" />
+              </Row>
+            ) : null}
             <Row label="Внесено">
               <span className="figure">{formatMoment(doc.createdAt, doc.createdAtPrecise)}</span>
             </Row>
