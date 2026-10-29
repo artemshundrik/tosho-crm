@@ -3,14 +3,19 @@ import { closeDialog, dialog, expectDialogClosed, waitForPageBody } from "./help
 
 const DESIGN = "/design";
 const columns = ".kanban-column-surface";
+/**
+ * Шість колонок: скасовані виведені з дошки в окремий список (REQ-138).
+ * Одна константа на всі сценарії — з тієї ж причини, що й BOARD_COLUMNS у
+ * quotes.spec.ts: число в кожній перевірці окремо оновлюють не всюди.
+ */
+const BOARD_COLUMNS = 6;
 
 test.describe("Дизайн", () => {
   test("дошка дизайну відкривається, дизайн-задача теж", async ({ page }) => {
     await page.goto(DESIGN);
     await waitForPageBody(page, page.locator(columns));
 
-    // Шість колонок: скасовані виведені з дошки в окремий список (REQ-138).
-    await expect(page.locator(columns)).toHaveCount(6);
+    await expect(page.locator(columns)).toHaveCount(BOARD_COLUMNS);
 
     await page.locator("[data-kanban-card='true']").first().click();
     await page.waitForURL(/\/design\/[0-9a-f-]{36}$/, { timeout: 30_000 });
@@ -39,6 +44,6 @@ test.describe("Дизайн", () => {
 
     await closeDialog(page, "cancel");
     await expectDialogClosed(page);
-    await expect(page.locator(columns)).toHaveCount(6);
+    await expect(page.locator(columns)).toHaveCount(BOARD_COLUMNS);
   });
 });

@@ -14,26 +14,31 @@ const ESTIMATES = "/orders/estimates";
 const QUOTE_NUMBER = /\b[A-Z]{2}-\d{4}-\d{4}\b/;
 
 const columns = "[data-quote-status-column]";
+/**
+ * Чотири колонки — не випадкове число. Скасовані з дошки виведені в окремий
+ * список (REQ-138), а «Новий» прибрано зовсім: прорахунок народжується вже
+ * «На прорахунку» (REQ-299). Якщо тут стане пʼять, це або повернули колонку,
+ * або реєстр канбанів розійшовся зі сторінкою.
+ *
+ * Одна константа, а не число в кожному сценарії: 21.09.2026 колонку прибрали й
+ * оновили три перевірки з чотирьох, а пропущена четверта тримала нічний прогін
+ * червоним 38 ночей поспіль — і щоранку однаковий лист учив його не читати.
+ */
+const BOARD_COLUMNS = 4;
 
 test.describe("Прорахунки", () => {
   test("дошка відкривається й перемикається між списком і канбаном", async ({ page }) => {
     await page.goto(ESTIMATES);
     await waitForPageBody(page, page.locator(columns));
 
-    /**
-     * Чотири колонки — не випадкове число. Скасовані з дошки виведені в окремий
-     * список (REQ-138), а «Новий» прибрано зовсім: прорахунок народжується вже
-     * «На прорахунку» (REQ-299). Якщо тут стане пʼять, це або повернули колонку,
-     * або реєстр канбанів розійшовся зі сторінкою.
-     */
-    await expect(page.locator(columns)).toHaveCount(4);
+    await expect(page.locator(columns)).toHaveCount(BOARD_COLUMNS);
 
     await page.getByRole("button", { name: "Таблиця" }).click();
     await expect(page.getByRole("table")).toBeVisible();
     await expect(page.locator(columns)).toHaveCount(0);
 
     await page.getByRole("button", { name: "Канбан" }).click();
-    await expect(page.locator(columns)).toHaveCount(4);
+    await expect(page.locator(columns)).toHaveCount(BOARD_COLUMNS);
   });
 
   test("картка прорахунку відкривається за UUID", async ({ page, guard }) => {
@@ -93,7 +98,7 @@ test.describe("Прорахунки", () => {
       await expectDialogClosed(page);
 
       // Дошка на місці й та сама: колонки не зникали, каркас не повертався.
-      await expect(page.locator(columns)).toHaveCount(4);
+      await expect(page.locator(columns)).toHaveCount(BOARD_COLUMNS);
       const flicker = await flickerReport(page);
       await stopWatchingFlicker(page);
 
@@ -114,6 +119,6 @@ test.describe("Прорахунки", () => {
 
     await page.getByRole("button", { name: "Очистити пошук" }).click();
     await expect(search).toHaveValue("");
-    await expect(page.locator(columns)).toHaveCount(5, { timeout: 30_000 });
+    await expect(page.locator(columns)).toHaveCount(BOARD_COLUMNS, { timeout: 30_000 });
   });
 });
