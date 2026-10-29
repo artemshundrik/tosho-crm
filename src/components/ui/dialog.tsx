@@ -1,3 +1,4 @@
+import { canAutoFocus } from "@/lib/keyboardInset";
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "@/components/icons/appIcons";
@@ -68,7 +69,7 @@ type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, hideClose = false, dismissible = false, isDirty, overlayClassName, onInteractOutside, onEscapeKeyDown, ...props }, ref) => {
+>(({ className, children, hideClose = false, dismissible = false, isDirty, overlayClassName, onInteractOutside, onEscapeKeyDown, onOpenAutoFocus, ...props }, ref) => {
   const guard = useUnsavedGuard({ enabled: !dismissible, isDirty });
   // Прихований Close, щоб закрити модалку з-під вікна підтвердження: покласти
   // `DialogClose` всередину AlertDialog не можна — там він підхопить контекст
@@ -81,6 +82,15 @@ const DialogContent = React.forwardRef<
 
     <DialogPrimitive.Content
       ref={ref}
+      onOpenAutoFocus={(event) => {
+        onOpenAutoFocus?.(event);
+        // На дотику перше поле у фокусі — це клавіатура на пів екрана ще до
+        // того, як людина побачила вікно. Фокус лишаємо на самому вікні.
+        if (!event.defaultPrevented && !canAutoFocus()) {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
+        }
+      }}
       className={cn(
         "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-20px)] max-w-lg translate-x-[-50%] translate-y-[-50%] notranslate",
         "max-h-[calc(100dvh-1.5rem)]",
@@ -123,10 +133,10 @@ const DialogContent = React.forwardRef<
         // `w-[calc(100vw-20px)]` — це утиліти тієї ж ваги, і без важливості
         // вони перемагають за порядком у зібраному CSS. Заміряно: без `!`
         // вікно лишалось центрованим і вилазило на 27px під край екрана.
-        "max-md:!inset-x-0 max-md:!bottom-0 max-md:!top-auto max-md:!w-full max-md:!max-w-none",
+        "max-md:!inset-x-0 max-md:!bottom-[var(--keyboard-inset)] max-md:!top-auto max-md:!w-full max-md:!max-w-none",
         "max-md:!translate-x-0 max-md:!translate-y-0",
-        "max-md:!max-h-[88dvh] max-md:!rounded-b-none max-md:!rounded-t-[28px] max-md:!border-x-0 max-md:!border-b-0",
-        "max-md:pb-[calc(env(safe-area-inset-bottom)+1rem)]",
+        "max-md:!max-h-[min(88dvh,calc(100dvh-var(--keyboard-inset)-var(--safe-top)-12px))] max-md:!rounded-b-none max-md:!rounded-t-[28px] max-md:!border-x-0 max-md:!border-b-0",
+        "max-md:pb-[calc(env(safe-area-inset-bottom)+1rem)] in-data-[keyboard=open]:max-md:pb-4",
         /*
          * Знизу вгору — і згори вниз. Жест той самий, що в аркушів.
          *

@@ -2089,7 +2089,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             // left їде разом із шириною сайдбара (та сама крива й затримка з
             // var(--sb-w-delay)); кольори лишаються на своїх швидких 200мс.
             // Шапка не ховається, z-30 — див. layout/pageChrome.ts.
-            "fixed top-[var(--view-as-offset,0px)] right-0 z-30 border-b border-border/40",
+            // pt під статус-бар: в установленому застосунку фон шапки тягнеться до
+            // самого верху екрана, а не лишає прозору смугу (див. --safe-top).
+            "fixed top-0 pt-[calc(var(--safe-top)+var(--view-as-offset,0px))] right-0 z-30 border-b border-border/40",
             "[transition:left_280ms_cubic-bezier(0.32,0.72,0,1),background-color_200ms_linear,backdrop-filter_200ms_linear,border-color_200ms_linear]",
             "motion-reduce:transition-none",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
@@ -2120,7 +2122,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     hideClose
                     dismissible
                     className={cn(
-                      "min-h-[100dvh] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 backdrop-blur-xl",
+                      "min-h-[100dvh] pt-[var(--safe-top)] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 backdrop-blur-xl",
                       "pb-[env(safe-area-inset-bottom)] will-change-transform",
                       "data-[state=open]:duration-slow data-[state=closed]:duration-base data-[state=open]:ease-out data-[state=closed]:ease-in"
                     )}
@@ -2527,7 +2529,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                */
               : hasToolbarAboveContent
                 ? "pt-[calc(var(--app-header-base-height)+var(--view-as-offset,0px))]"
-                : "pt-[calc(76px+var(--view-as-offset,0px))]"
+                : "pt-[calc(76px+var(--safe-top)+var(--view-as-offset,0px))]"
           )}
           data-canvas-mode={isCanvasMode ? "on" : "off"}
         >
@@ -2614,7 +2616,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           усіх наявних точок входу — прибрано лише візуальну кнопку.
           Щоб повернути — досить змінити прапорець на !hideToShoAiLauncher. */}
       {SHOW_AI_LAUNCHER && !hideToShoAiLauncher ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-docked flex justify-end px-4 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+14px)] md:right-0 md:px-5 md:pb-5">
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-docked flex justify-end in-data-[keyboard=open]:hidden px-4 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+14px)] md:right-0 md:px-5 md:pb-5">
           <div className="flex flex-col items-end gap-2">
             <ToShoAiLauncherButton
               variant="nova"

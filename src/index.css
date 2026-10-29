@@ -404,7 +404,17 @@
      * шапки. Перша спроба взяла саме 76 — і між шапкою застосунку й шапкою
      * таблиці лишалась смуга в 19px, крізь яку проїжджали рядки.
      */
-    --app-header-base-height: 57px;
+    --app-header-base-height: calc(57px + var(--safe-top));
+    /*
+     * Відступ під статус-бар. У браузері 0: Safari сам тримає сторінку під
+     * рядком стану. В установленому застосунку (PWA) index.html вмикає
+     * viewport-fit=cover, і тоді сторінка починається з самого верху екрана —
+     * шапка мусить відступити сама. Запас +14px — під розмиту смугу iOS 27 над
+     * статус-баром і під баг WebKit, коли env() у standalone віддає нуль.
+     */
+    --safe-top: env(safe-area-inset-top, 0px);
+    /* Висота екранної клавіатури — пише src/lib/keyboardInset.ts. */
+    --keyboard-inset: 0px;
     /*
      * Смуга режиму «Дивитись як» зсуває шапку вниз, а разом із нею — і межу,
      * від якої відштовхуються липкі шапки таблиць. Тут значення базове, а
@@ -734,7 +744,7 @@
   html,
   body,
   #root {
-    min-height: 100vh;
+    min-height: 100dvh;
     background-color: hsl(var(--page-underlay-bg));
     margin: 0;
     padding: 0;
@@ -2807,5 +2817,25 @@ html[data-theme-switching]::view-transition-new(root) {
     animation: none;
     width: 100%;
     opacity: 0.7;
+  }
+}
+
+/*
+ * iOS збільшує сторінку, щойно фокус потрапляє в поле зі шрифтом дрібнішим за
+ * 16px, — і назад не повертає: в установленому застосунку масштаб залипав на
+ * всю сесію. 16px лише на дотикових пристроях; з мишею лишається щільний шрифт.
+ * Поза @layer навмисно: має перемогти утиліти text-xs/text-sm.
+ */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+}
+
+@media (display-mode: standalone) and (pointer: coarse) {
+  :root {
+    --safe-top: calc(max(env(safe-area-inset-top, 0px), 20px) + 14px);
   }
 }

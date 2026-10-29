@@ -7,6 +7,7 @@ import { IconContext } from "@phosphor-icons/react";
 import "@fontsource-variable/inter";
 import "./index.css";
 import App from "./App";
+import { installKeyboardInset } from "./lib/keyboardInset";
 import { AuthProvider } from "./auth/AuthProvider";
 
 const queryClient = new QueryClient({
@@ -23,6 +24,8 @@ const queryClient = new QueryClient({
 // Значки Phosphor за замовчуванням мають розмір 1em; Lucide, з якого переїхали
 // (REQ-275), мав 24. Значок без класу розміру лишається таким, яким був.
 const ICON_DEFAULTS = { size: 24, weight: "regular", color: "currentColor", mirrored: false } as const;
+
+installKeyboardInset();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <IconContext.Provider value={ICON_DEFAULTS}>

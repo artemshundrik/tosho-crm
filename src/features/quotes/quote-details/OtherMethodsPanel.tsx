@@ -1,3 +1,4 @@
+import { canAutoFocus } from "@/lib/keyboardInset";
 import * as React from "react";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Loader2, Search } from "@/components/icons/appIcons";
@@ -122,7 +123,7 @@ export function OtherMethodsPanel({
         <Input
           controlSize="sm"
           value={query}
-          autoFocus
+          autoFocus={canAutoFocus()}
           aria-label="Пошук методу"
           placeholder="Пошук методу"
           className="rounded-full pl-8 text-sm"

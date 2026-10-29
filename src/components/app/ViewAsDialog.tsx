@@ -1,3 +1,4 @@
+import { canAutoFocus } from "@/lib/keyboardInset";
 import { useEffect, useMemo, useState } from "react";
 import { Briefcase, Eye, Search } from "@/components/icons/appIcons";
 import { useAuth } from "@/auth/AuthProvider";
@@ -179,7 +180,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             onChange={(event) => setQuery(event.target.value)}
             placeholder={tab === "person" ? "Пошук за іменем або посадою" : "Пошук посади"}
             className="pl-9"
-            autoFocus
+            autoFocus={canAutoFocus()}
           />
         </div>
 

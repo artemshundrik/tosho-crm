@@ -4,6 +4,7 @@
  * Dialog for creating new catalog types and kinds (categories and subcategories)
  */
 
+import { canAutoFocus } from "@/lib/keyboardInset";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -144,7 +145,7 @@ export function CategoryDialog({
               onChange={(e) => onCategoryNameChange(e.target.value)}
               placeholder={mode === "type" ? "Наприклад: Сумки" : "Наприклад: Шопери"}
               onKeyDown={(e) => e.key === "Enter" && onSave()}
-              autoFocus
+              autoFocus={canAutoFocus()}
             />
           </div>
         </div>

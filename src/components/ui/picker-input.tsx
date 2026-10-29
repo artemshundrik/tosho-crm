@@ -1,3 +1,4 @@
+import { canAutoFocus } from "@/lib/keyboardInset";
 import * as React from "react";
 import { format, parse, isValid } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -221,7 +222,7 @@ function PickerPanel({
           startMonth={new Date(Math.min(currentYear - 80, selectedYear), 0)}
           endMonth={new Date(Math.max(currentYear + 10, selectedYear), 11)}
           locale={uk}
-          autoFocus
+          autoFocus={canAutoFocus()}
           classNames={{
             // «Сьогодні» — лише крапка під числом, без заливки й обводки: обводка
             // сперечалась із заливкою обраного дня, коли це один і той самий день.

@@ -1,3 +1,4 @@
+import { canAutoFocus } from "@/lib/keyboardInset";
 import * as React from "react";
 import { Check, Plus, Search, Tag } from "@/components/icons/appIcons";
 
@@ -203,7 +204,7 @@ function KindList({
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Пошук виду"
           className="rounded-full pl-8 text-sm"
-          autoFocus
+          autoFocus={canAutoFocus()}
         />
       </div>
       <div className="max-h-72 overflow-y-auto">

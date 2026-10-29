@@ -7,6 +7,7 @@
  * value back into model/variant/sku/image/supplier details.
  */
 
+import { canAutoFocus } from "@/lib/keyboardInset";
 import * as React from "react";
 import { Check, ChevronDown, ChevronRight, Package, Search, Shirt } from "@/components/icons/appIcons";
 import { Badge } from "@/components/ui/badge";
@@ -222,7 +223,7 @@ export const CatalogModelPicker: React.FC<CatalogModelPickerProps> = ({
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Пошук моделі, модифікації або артикулу"
               className="rounded-full pl-8 text-sm"
-              autoFocus
+              autoFocus={canAutoFocus()}
             />
           </div>
           <div

@@ -1,3 +1,4 @@
+import { canAutoFocus } from "@/lib/keyboardInset";
 import * as React from "react";
 import { Check, RefreshCw, Search } from "@/components/icons/appIcons";
 
@@ -132,7 +133,7 @@ export function QuoteItemModelSwap({
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <Input
             value={query}
-            autoFocus
+            autoFocus={canAutoFocus()}
             controlSize="md"
             aria-label="Пошук товару в каталозі"
             placeholder="Назва або артикул…"

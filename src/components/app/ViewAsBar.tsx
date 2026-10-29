@@ -58,7 +58,7 @@ export function ViewAsBar({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "fixed top-0 right-0 z-banner flex h-[var(--view-as-offset)] items-center gap-2 border-b text-xs",
+        "fixed top-[var(--safe-top)] right-0 z-banner flex h-[var(--view-as-offset)] items-center gap-2 border-b text-xs",
         "px-4 md:px-5 lg:px-6",
         observing ? "tone-info" : "tone-accent",
         className

@@ -90,7 +90,9 @@ export function TabBar({
   const content = (
     <div
       className={cn(
-        "fixed inset-x-0 bottom-0 z-floating flex justify-center md:hidden pointer-events-none transform-gpu",
+        // Відкрита клавіатура — смуги немає: інакше вона висить над клавіатурою й
+        // з'їдає третину того, що лишилось від екрана.
+        "fixed inset-x-0 bottom-0 z-floating flex justify-center md:hidden pointer-events-none transform-gpu in-data-[keyboard=open]:hidden",
         "transition-[opacity,transform] duration-base ease-out",
         isHidden ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
       )}

@@ -1,3 +1,4 @@
+import { canAutoFocus } from "@/lib/keyboardInset";
 import * as React from "react";
 import { ChevronDown, Check } from "@/components/icons/appIcons";
 import { EntityAvatar } from "@/components/app/avatar-kit";
@@ -190,7 +191,7 @@ export function CustomerFilterSelect({
   const searchInput = (
     <Input
       ref={inputRef}
-      autoFocus
+      autoFocus={canAutoFocus()}
       value={search}
       onChange={(event) => setSearch(event.target.value)}
       onKeyDown={onKeyDown}
