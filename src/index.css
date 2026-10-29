@@ -481,7 +481,8 @@
   }
 
   /* 48rem = брейкпоінт md. Від нього — 32px поле/кнопка і 28px дрібна кнопка. */
-  @media (min-width: 48rem) {
+  /* Лише з мишею: на iPad (палець) поле й кнопка лишаються 40/36px. */
+  @media (min-width: 48rem) and (pointer: fine) {
     :root {
       --control-h: 2rem;
       --control-h-sm: 1.75rem;
@@ -2837,5 +2838,24 @@ html[data-theme-switching]::view-transition-new(root) {
 @media (display-mode: standalone) and (pointer: coarse) {
   :root {
     --safe-top: calc(max(env(safe-area-inset-top, 0px), 20px) + 14px);
+  }
+}
+
+/*
+ * Дії, що з'являються лише при наведенні (меню рядка, «⋯» на картці), на
+ * дотиковому екрані не з'являлись ніколи: наведення там немає. Показуємо їх
+ * завжди. Ловимо за класом, щоб не правити кожне з місць окремо.
+ */
+@media (hover: none) {
+  [class*="group-hover:opacity-100"],
+  [class*="group-hover/"][class*=":opacity-100"] {
+    opacity: 1;
+  }
+  [class*="group-hover:pointer-events-auto"] {
+    pointer-events: auto;
+  }
+  [class*="group-hover:visible"],
+  [class*="group-hover/"][class*=":visible"] {
+    visibility: visible;
   }
 }

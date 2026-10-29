@@ -39,6 +39,12 @@ import { skipNextKanbanChoreography } from "./KanbanCardList";
 
 /** Скільки треба протягнути, щоб це вважалось перетягуванням, а не кліком. */
 const DRAG_THRESHOLD_PX = 5;
+/**
+ * Палець бере картку довгим натисканням (iPad): звичайний свайп лишається
+ * прокруткою колонки, а затримка відрізняє «хочу взяти» від «гортаю».
+ */
+const TOUCH_HOLD_MS = 380;
+const TOUCH_SLOP_PX = 8;
 
 /** Нахил за рухом. Множник на швидкість і стеля, щоб картка не крутилась дзиґою. */
 const TILT_PER_VELOCITY = 0.4;
@@ -402,7 +408,11 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
     window.addEventListener("pointermove", handleMove);
     window.addEventListener("pointerup", handleUp);
     window.addEventListener("pointercancel", handleCancel);
+    // Поки картку тягне палець, сторінка не прокручується під ним.
+    const blockScroll = (event: TouchEvent) => event.preventDefault();
+    window.addEventListener("touchmove", blockScroll, { passive: false });
     return () => {
+      window.removeEventListener("touchmove", blockScroll);
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
       window.removeEventListener("pointercancel", handleCancel);
@@ -550,14 +560,39 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
       return {
         "data-kanban-item": id,
         onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
-          // Тільки основна кнопка миші й перо. Палець лишається за бортом
-          // свідомо: на телефоні дошка й так інша (MobileStatusBoard), а
-          // перехоплення дотику зламало б прокрутку колонки.
-          if (event.button !== 0 || event.pointerType === "touch") return;
+          if (event.button !== 0) return;
           // Кнопки, меню й посилання всередині картки тягнути не мають.
           if ((event.target as HTMLElement).closest("button, a, input, textarea, [role='menuitem']")) return;
 
           const card = event.currentTarget;
+          if (event.pointerType === "touch") {
+            // На телефоні дошка інша (MobileStatusBoard); це шлях для iPad.
+            let last = event.nativeEvent;
+            const stop = () => {
+              window.clearTimeout(timer);
+              window.removeEventListener("pointermove", track);
+              window.removeEventListener("pointerup", stop);
+              window.removeEventListener("pointercancel", stop);
+            };
+            const track = (moveEvent: PointerEvent) => {
+              last = moveEvent;
+              if (
+                Math.abs(moveEvent.clientX - event.clientX) > TOUCH_SLOP_PX ||
+                Math.abs(moveEvent.clientY - event.clientY) > TOUCH_SLOP_PX
+              ) {
+                stop();
+              }
+            };
+            const timer = window.setTimeout(() => {
+              stop();
+              navigator.vibrate?.(10);
+              startDrag(card, id, last);
+            }, TOUCH_HOLD_MS);
+            window.addEventListener("pointermove", track);
+            window.addEventListener("pointerup", stop);
+            window.addEventListener("pointercancel", stop);
+            return;
+          }
           const startX = event.clientX;
           const startY = event.clientY;
 
