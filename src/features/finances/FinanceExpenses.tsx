@@ -1371,18 +1371,20 @@ function ExpenseDialog({
   // Рахунок списання витрати із закупки — ті самі правила, що в оплаті закупки й у
   // запобіжнику бази: активний гривневий рахунок юрособи витрати. Поточний лишаємо,
   // щоб вибір не «зник» у старої витрати.
+  const editingAccountId = editing?.accountId;
+  const editingLegalEntityId = editing?.legalEntityId;
   const accountOptions = React.useMemo(
     () =>
       purchaseLocked
         ? accounts.filter(
             (a) =>
-              a.id === editing?.accountId ||
+              a.id === editingAccountId ||
               (a.isActive &&
                 a.currency === "UAH" &&
-                (!a.legalEntityId || !editing?.legalEntityId || a.legalEntityId === editing.legalEntityId))
+                (!a.legalEntityId || !editingLegalEntityId || a.legalEntityId === editingLegalEntityId))
           )
         : accounts,
-    [accounts, purchaseLocked, editing?.accountId, editing?.legalEntityId]
+    [accounts, purchaseLocked, editingAccountId, editingLegalEntityId]
   );
   const [categoryId, setCategoryId] = React.useState(editing?.categoryId ?? "");
   const [amount, setAmount] = React.useState(editing ? String(editing.amount) : "");

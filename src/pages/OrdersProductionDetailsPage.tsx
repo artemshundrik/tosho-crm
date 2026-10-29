@@ -770,17 +770,14 @@ export default function OrdersProductionDetailsPage() {
     () => orderDelivery?.deliveryDetails ?? parseQuoteDeliveryDetails(null),
     [orderDelivery]
   );
+  // Поля ТТН окремо: залежності з `record?.` компілятор не впізнає й вимикається для всієї сторінки.
+  const ttnNumber = record?.npTtnNumber;
+  const ttnRef = record?.npTtnRef ?? null;
+  const ttnCost = record?.npTtnCost ?? null;
+  const ttnEstimatedDelivery = record?.npTtnEstimatedDelivery ?? null;
   const ttnExisting = useMemo(
-    () =>
-      record?.npTtnNumber
-        ? {
-            number: record.npTtnNumber,
-            ref: record.npTtnRef,
-            cost: record.npTtnCost,
-            estimatedDelivery: record.npTtnEstimatedDelivery,
-          }
-        : null,
-    [record?.npTtnNumber, record?.npTtnRef, record?.npTtnCost, record?.npTtnEstimatedDelivery]
+    () => (ttnNumber ? { number: ttnNumber, ref: ttnRef, cost: ttnCost, estimatedDelivery: ttnEstimatedDelivery } : null),
+    [ttnNumber, ttnRef, ttnCost, ttnEstimatedDelivery]
   );
   // Мемо обовʼязкове: новий масив на кожен рендер перезапускав би ефект діалогу.
   const ttnCatalogModelIds = useMemo(
@@ -861,7 +858,8 @@ export default function OrdersProductionDetailsPage() {
     } catch (loadError: unknown) {
       setError(loadError instanceof Error ? loadError.message : "Не вдалося відкрити замовлення.");
     }
-  }, [id, teamId, userId]);
+    // setRecord у списку не для React, а для компілятора: без нього він не зберігає мемо.
+  }, [id, teamId, userId, setRecord]);
 
   // Оплати замовлення (REQ-322#p26): вносить бухгалтерія, статус оплати рахує база.
   const paymentPanel = useOrderPaymentPanel({ record, teamId, userId, canEnter: canIssueInvoice, onChanged: refreshRecord });

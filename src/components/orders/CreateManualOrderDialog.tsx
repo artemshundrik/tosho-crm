@@ -254,7 +254,10 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const resetForm = useCallback(() => {
+  // Кожне відкриття — чиста форма. Тіло прямо в ефекті, а не в useCallback: ручна
+  // мемоізація тут не збігалась із виведеною компілятором і вимикала його для всього вікна.
+  useEffect(() => {
+    if (!open) return;
     setCustomerOpen(false);
     setCustomerSearch("");
     setCustomerResults([]);
@@ -281,11 +284,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
     setError(null);
     setSubmitting(false);
     setManagerUserId(userId ?? "");
-  }, [userId]);
-
-  useEffect(() => {
-    if (open) resetForm();
-  }, [open, resetForm]);
+  }, [open, userId]);
 
   useEffect(() => {
     if (!open || !teamId) return;
@@ -396,11 +395,10 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   }, [open, teamId, selectedCustomer]);
 
   // На готівці передоплата не менше 50% (погоджено СЕО 14.10.2026), тож «100% після
-  // готовності» зникає зі списку, а вже обрана недоступна умова скидається на 70/30.
+  // готовності» зникає зі списку, а вже обрана недоступна умова скидається на 70/30 —
+  // ще під час рендера (70/30 дозволено завжди, тож це один крок, а не цикл).
   const paymentTermsOptions = useMemo(() => getAllowedPaymentTermsOptions(paymentMethodId), [paymentMethodId]);
-  useEffect(() => {
-    if (!paymentTermsOptions.some((option) => option.id === paymentTerms)) setPaymentTerms("70/30");
-  }, [paymentTermsOptions, paymentTerms]);
+  if (!paymentTermsOptions.some((option) => option.id === paymentTerms)) setPaymentTerms("70/30");
 
   const handleCurrencyChange = (next: CurrencyCode) => {
     setCurrency(next);

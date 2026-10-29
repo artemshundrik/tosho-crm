@@ -25,6 +25,13 @@ export type QuotesTableColumnsController = {
   reset: (id: QuotesColumnId) => void;
 };
 
+/**
+ * Те, що потрібно ручкам ширини, — без `containerRef`. Окремо навмисно: що стоїть
+ * у `ref={}`, React Compiler вважає рефом, а з ним і весь об'єкт, звідки його
+ * взято, — і `controller={...}` у заголовку ставав «читанням рефа під час рендера».
+ */
+export type QuotesColumnsResizer = Omit<QuotesTableColumnsController, "containerRef">;
+
 const storageKey = (id: QuotesColumnId) => `${QUOTES_COLUMNS_STORAGE_KEY}:${id}`;
 
 /**

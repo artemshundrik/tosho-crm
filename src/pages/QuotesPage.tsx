@@ -636,7 +636,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [kanbanPreviewsLoading, setKanbanPreviewsLoading] = useState(false);
   /** Лічильники статусів з бази за поточним менеджером і пошуком (не залежать від вкладки). */
   const [quoteStatusCounts, setQuoteStatusCounts] = useState<Record<string, number> | null>(null);
-  const quotesColumns = useQuotesTableColumns();
+  const { containerRef: quotesTableRef, ...quotesColumns } = useQuotesTableColumns(); // чому окремо — QuotesColumnsResizer
   const statusCountsRequestIdRef = useRef(0);
   const [kanbanPreviewVisibleCountByColumn, setKanbanPreviewVisibleCountByColumn] = useState<Record<string, number>>(
     () => Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
@@ -5318,7 +5318,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               {isNarrowViewport ? (
                 <AppSectionLoader label="Завантаження прорахунків..." variant="table" />
               ) : (
-                <div ref={quotesColumns.containerRef}>
+                <div ref={quotesTableRef}>
                   <QuotesTableSkeleton />
                 </div>
               )}
@@ -5525,7 +5525,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </div>
             ) : (
             /* overflow-x-auto знято: він був контейнером скролу й гасив липку шапку. */
-            <div ref={quotesColumns.containerRef}>
+            <div ref={quotesTableRef}>
               <Table
                 variant="list"
                 size="md"

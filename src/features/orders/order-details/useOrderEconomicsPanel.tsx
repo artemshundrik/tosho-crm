@@ -76,8 +76,17 @@ export function useOrderEconomicsPanel({
 
   const [purchases, setPurchases] = useState<OrderPurchase[]>([]);
   const [none, setNone] = useState<{ byName: string | null } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(orderId));
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  // Інше замовлення — порожньо й «вантажиться» ще в цьому рендері, а не ефектом слідом.
+  const [shownOrderId, setShownOrderId] = useState(orderId);
+  if (shownOrderId !== orderId) {
+    setShownOrderId(orderId);
+    setPurchases([]);
+    setNone(null);
+    setLoadedFor(null);
+    setLoading(Boolean(orderId));
+  }
   const [saving, setSaving] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [payTarget, setPayTarget] = useState<{ mode: "pay" | "cancel"; purchase: OrderPurchase } | null>(null);
@@ -89,28 +98,39 @@ export function useOrderEconomicsPanel({
   const hintsRequested = useRef(false);
   const loadToken = useRef(0);
 
+  // Запит і його застосування — окремо від стану: першому завантаженню в ефекті
+  // компілятор не дозволяє кликати функцію з setState усередині.
+  const fetchInto = useCallback((id: string) => {
+    const token = ++loadToken.current;
+    return Promise.all([listOrderPurchases(id), getOrderPurchasesNone(id)]).then(
+      ([list, noneState]) => (token === loadToken.current ? { list, noneState } : null),
+      (error: unknown) => {
+        if (token === loadToken.current) toast.error(errorText(error));
+        return null;
+      }
+    );
+  }, []);
+
   const reload = useCallback(async () => {
     if (!orderId) return;
-    const token = ++loadToken.current;
-    try {
-      const [list, noneState] = await Promise.all([listOrderPurchases(orderId), getOrderPurchasesNone(orderId)]);
-      if (token !== loadToken.current) return;
-      setPurchases(list);
-      setNone(noneState);
-      setLoadedFor(orderId);
-    } catch (error) {
-      if (token === loadToken.current) toast.error(errorText(error));
-    }
-  }, [orderId]);
+    const result = await fetchInto(orderId);
+    if (!result) return;
+    setPurchases(result.list);
+    setNone(result.noneState);
+    setLoadedFor(orderId);
+  }, [orderId, fetchInto]);
 
   useEffect(() => {
-    setPurchases([]);
-    setNone(null);
-    setLoadedFor(null);
     if (!orderId) return;
-    setLoading(true);
-    void reload().finally(() => setLoading(false));
-  }, [orderId, reload]);
+    void fetchInto(orderId)
+      .then((result) => {
+        if (!result) return;
+        setPurchases(result.list);
+        setNone(result.noneState);
+        setLoadedFor(orderId);
+      })
+      .finally(() => setLoading(false));
+  }, [orderId, fetchInto]);
 
   // Повернулись у вкладку — перечитуємо: склад міг підтвердити отримання в іншій
   // сесії, і застарілі причини не мають тримати картку ВН закритою до F5.

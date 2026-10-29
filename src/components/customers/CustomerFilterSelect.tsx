@@ -46,28 +46,25 @@ export function CustomerFilterSelect({
   const [search, setSearch] = React.useState("");
   const [parties, setParties] = React.useState<QuotePartyOption[]>([]);
   const [highlight, setHighlight] = React.useState(0);
-  const [selectedLogo, setSelectedLogo] = React.useState<string | null>(null);
+  // Лого пам'ятає, чиє воно: інший замовник — і старе не показується, поки не прийде нове.
+  const [logoFor, setLogoFor] = React.useState<{ id: string; logo: string | null } | null>(null);
   const isNarrow = useIsNarrowViewport();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
 
   const valueId = value?.id ?? null;
   const valueName = value?.name ?? "";
+  const selectedLogo = teamId && valueId && logoFor?.id === valueId ? logoFor.logo : null;
   React.useEffect(() => {
-    if (!teamId || !valueId) {
-      setSelectedLogo(null);
-      return;
-    }
+    if (!teamId || !valueId) return;
     let cancelled = false;
     void searchQuoteParties(teamId, valueName)
       .then((found) => {
         if (!cancelled)
-          setSelectedLogo(
-            found.find((party) => party.id === valueId)?.logo_url ?? null,
-          );
+          setLogoFor({ id: valueId, logo: found.find((party) => party.id === valueId)?.logo_url ?? null });
       })
       .catch(() => {
-        if (!cancelled) setSelectedLogo(null);
+        if (!cancelled) setLogoFor({ id: valueId, logo: null });
       });
     return () => {
       cancelled = true;

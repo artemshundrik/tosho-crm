@@ -61,12 +61,24 @@ export function useOrderPayments({
 }) {
   const orderId = enabled && record ? record.id : null;
   const [payments, setPayments] = useState<OrderPayment[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(orderId));
   const [saving, setSaving] = useState(false);
   const [checkRequested, setCheckRequested] = useState(false);
   const pending = useRef<PendingFollowUp[]>([]);
   const recordRef = useRef(record);
-  recordRef.current = record;
+  useEffect(() => {
+    recordRef.current = record;
+  }, [record]);
+
+  // Інше замовлення — порожній список і «вантажиться» ще в цьому рендері, а не
+  // ефектом слідом: так не блимає список попереднього замовлення.
+  const [shownOrderId, setShownOrderId] = useState(orderId);
+  if (shownOrderId !== orderId) {
+    setShownOrderId(orderId);
+    setPayments([]);
+    setCheckRequested(false);
+    setLoading(Boolean(orderId));
+  }
 
   const flushPending = useCallback(() => {
     const queue = pending.current;
@@ -87,14 +99,28 @@ export function useOrderPayments({
   }, [orderId]);
 
   useEffect(() => {
-    setPayments([]);
-    setCheckRequested(false);
     // Відкладене попереднього замовлення виконується одразу, а не наздоганяє нове.
     flushPending();
     if (!orderId) return;
-    setLoading(true);
-    void reload().finally(() => setLoading(false));
-  }, [orderId, reload, flushPending]);
+    let active = true;
+    // Запит прямо тут, а не через reload(): компілятор вважає синхронним setState
+    // усе, що кличе функцію з setState усередині, навіть після await.
+    listOrderPayments(orderId)
+      .then(
+        (rows) => {
+          if (active) setPayments(rows);
+        },
+        (error) => {
+          if (active) toast.error(toOrderPaymentError(error).message);
+        }
+      )
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [orderId, flushPending]);
 
   useEffect(() => {
     window.addEventListener("pagehide", flushPending);

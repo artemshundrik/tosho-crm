@@ -175,9 +175,12 @@ function KindList({
   const [search, setSearch] = React.useState("");
   const needle = search.trim().toLowerCase();
 
-  React.useEffect(() => {
+  // Закрили — пошук порожній ще в цьому рендері, а не ефектом слідом.
+  const [wasOpen, setWasOpen] = React.useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (!open) setSearch("");
-  }, [open]);
+  }
 
   const groups = React.useMemo(() => {
     const byType = new Map<string, { typeName: string; kinds: KindOption[] }>();

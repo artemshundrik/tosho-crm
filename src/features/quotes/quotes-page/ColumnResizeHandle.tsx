@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { QUOTES_COLUMNS, quotesColumnWidth, type QuotesColumnId } from "@/features/quotes/quotes-page/quotesTableColumns";
 import type {
   QuotesColumnBounds,
-  QuotesTableColumnsController,
+  QuotesColumnsResizer,
 } from "@/features/quotes/quotes-page/useQuotesTableColumns";
 
 const KEYBOARD_STEP = 8;
@@ -21,7 +21,7 @@ export function ColumnResizeHandle({
   controller,
 }: {
   columnId: QuotesColumnId;
-  controller: QuotesTableColumnsController;
+  controller: QuotesColumnsResizer;
 }) {
   const [bounds, setBounds] = React.useState<QuotesColumnBounds | null>(null);
   const [dragging, setDragging] = React.useState(false);
@@ -115,7 +115,7 @@ export function ResizableHead({
   children,
 }: {
   columnId: QuotesColumnId;
-  controller: QuotesTableColumnsController;
+  controller: QuotesColumnsResizer;
   className?: string;
   children?: React.ReactNode;
 }) {

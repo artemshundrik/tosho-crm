@@ -23,11 +23,20 @@ export function useSpecificationItemTexts(teamId: string | null, record: Derived
   const recordId = record?.id ?? null;
   const items = record?.items ?? null;
 
+  // Почалось нове завантаження — «вантажиться» й чисто ще в цьому рендері.
+  const loadKey = enabled && teamId && recordId ? items : null;
+  const [startedFor, setStartedFor] = useState<typeof items>(null);
+  if (startedFor !== loadKey) {
+    setStartedFor(loadKey);
+    if (loadKey) {
+      setLoading(true);
+      setDirty(false);
+    }
+  }
+
   useEffect(() => {
     if (!enabled || !teamId || !recordId || !items) return;
     let cancelled = false;
-    setLoading(true);
-    setDirty(false);
     loadSpecificationItemTexts(teamId, [{ id: recordId, source: "stored", items }])
       .then((next) => {
         if (!cancelled) setTexts(next);

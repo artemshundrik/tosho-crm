@@ -10,20 +10,19 @@ import { listPendingPurchaseReceipts, type PendingReceipts } from "@/features/or
  * для тосту про закупки (мережа, або в людини немає права - база скаже 42501).
  */
 export function useSupplierDocuments(teamId: string | null | undefined, enabled: boolean): PendingReceipts | null {
-  const [data, setData] = useState<PendingReceipts | null>(null);
+  // Відповідь пам'ятає свою команду: вимкнено чи команда інша — віддаємо null
+  // одразу, без скидання стану ефектом.
+  const [loaded, setLoaded] = useState<{ teamId: string; data: PendingReceipts | null } | null>(null);
 
   useEffect(() => {
-    if (!enabled || !teamId) {
-      setData(null);
-      return;
-    }
+    if (!enabled || !teamId) return;
     let cancelled = false;
     listPendingPurchaseReceipts(teamId).then(
       (result) => {
-        if (!cancelled) setData(result);
+        if (!cancelled) setLoaded({ teamId, data: result });
       },
       () => {
-        if (!cancelled) setData(null);
+        if (!cancelled) setLoaded({ teamId, data: null });
       }
     );
     return () => {
@@ -31,5 +30,5 @@ export function useSupplierDocuments(teamId: string | null | undefined, enabled:
     };
   }, [teamId, enabled]);
 
-  return data;
+  return enabled && teamId && loaded?.teamId === teamId ? loaded.data : null;
 }
