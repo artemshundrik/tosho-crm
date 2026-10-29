@@ -74,6 +74,8 @@ export default function ResetPasswordPage() {
               placeholder="you@gmail.com"
               autoComplete="email"
               type="email"
+              autoCapitalize="none"
+              autoCorrect="off"
             />
           </div>
 
