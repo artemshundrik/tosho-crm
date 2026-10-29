@@ -9,11 +9,11 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-09-18T10:10:33.342Z",
+  "generatedAt": "2026-10-29T15:34:42.175Z",
   "packages": [
     {
       "name": "@babel/core",
-      "version": "8.0.1",
+      "version": "8.0.9",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-29T14:12:19+03:00",
@@ -29,7 +29,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@babel/eslint-parser",
-      "version": "8.0.1",
+      "version": "8.0.7",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-29T14:12:19+03:00",
@@ -44,7 +44,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@babel/parser",
-      "version": "8.0.4",
+      "version": "8.0.8",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-09-06T16:16:14+03:00",
@@ -74,7 +74,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@babel/preset-typescript",
-      "version": "8.0.1",
+      "version": "8.0.7",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-29T14:12:19+03:00",
@@ -134,7 +134,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@playwright/test",
-      "version": "1.62.1",
+      "version": "1.64.1",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-24T21:22:52+03:00",
@@ -149,7 +149,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-alert-dialog",
-      "version": "1.1.23",
+      "version": "1.2.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -164,7 +164,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-avatar",
-      "version": "1.2.6",
+      "version": "1.3.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -179,7 +179,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-checkbox",
-      "version": "1.3.11",
+      "version": "1.4.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -194,7 +194,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-dialog",
-      "version": "1.1.23",
+      "version": "1.3.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -209,7 +209,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-dropdown-menu",
-      "version": "2.1.24",
+      "version": "2.2.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -224,7 +224,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-label",
-      "version": "2.1.15",
+      "version": "2.1.17",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -239,7 +239,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-popover",
-      "version": "1.1.23",
+      "version": "1.3.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -254,7 +254,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-select",
-      "version": "2.3.7",
+      "version": "2.4.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -269,7 +269,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-separator",
-      "version": "1.1.15",
+      "version": "1.2.0",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -284,7 +284,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-slot",
-      "version": "1.3.3",
+      "version": "1.5.0",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -299,7 +299,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-tabs",
-      "version": "1.1.21",
+      "version": "1.2.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -314,7 +314,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@react-pdf/renderer",
-      "version": "4.7.0",
+      "version": "4.9.0",
       "layer": "platform",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -324,12 +324,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Збирає PDF-документи — рахунки, специфікації, договори.",
       "homepage": null,
-      "usedIn": 3,
+      "usedIn": 5,
       "iconUrl": "https://github.com/diegomura.png?size=64"
     },
     {
       "name": "@supabase/supabase-js",
-      "version": "2.112.3",
+      "version": "2.118.0",
       "layer": "data",
       "dev": false,
       "bumpedAt": "2026-08-23T19:46:50+03:00",
@@ -339,7 +339,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 97,
+      "usedIn": 102,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -359,7 +359,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tanstack/react-query",
-      "version": "5.102.1",
+      "version": "5.105.0",
       "layer": "data",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -369,12 +369,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Памʼятає, що вже завантажено, і не питає базу двічі. Через нього ходять майже всі запити.",
       "homepage": "https://tanstack.com/query",
-      "usedIn": 26,
+      "usedIn": 29,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
       "name": "@tanstack/react-virtual",
-      "version": "3.14.10",
+      "version": "3.14.24",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-21T12:32:46+03:00",
@@ -404,7 +404,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@testing-library/react",
-      "version": "16.3.2",
+      "version": "16.3.3",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-24T15:50:59+03:00",
@@ -414,12 +414,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 46,
+      "usedIn": 60,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
       "name": "@testing-library/user-event",
-      "version": "14.6.6",
+      "version": "14.6.8",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-24T15:50:59+03:00",
@@ -429,12 +429,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Клікає й друкує в тестах так, як це робить людина, — з наведенням, фокусом і клавіатурою, а не одним синтетичним кліком.",
       "homepage": null,
-      "usedIn": 17,
+      "usedIn": 20,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
       "name": "@tiptap/extension-link",
-      "version": "3.30.2",
+      "version": "3.32.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
@@ -449,7 +449,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tiptap/extension-underline",
-      "version": "3.30.2",
+      "version": "3.32.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
@@ -464,7 +464,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tiptap/pm",
-      "version": "3.30.2",
+      "version": "3.32.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
@@ -480,7 +480,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tiptap/react",
-      "version": "3.30.2",
+      "version": "3.32.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
@@ -495,7 +495,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tiptap/starter-kit",
-      "version": "3.30.2",
+      "version": "3.32.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T22:56:04+03:00",
@@ -510,7 +510,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@types/node",
-      "version": "24.10.3",
+      "version": "24.19.2",
       "layer": "platform",
       "dev": true,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -530,7 +530,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@types/react",
-      "version": "19.2.18",
+      "version": "19.3.0",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-20T23:28:32+03:00",
@@ -546,7 +546,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@types/react-dom",
-      "version": "19.2.4",
+      "version": "19.3.0",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-20T23:28:32+03:00",
@@ -577,7 +577,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@vitejs/plugin-react",
-      "version": "6.1.0",
+      "version": "6.1.2",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-23T21:10:41+03:00",
@@ -663,12 +663,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Робота з датами: дедлайни, періоди, «3 дні тому».",
       "homepage": null,
-      "usedIn": 11,
+      "usedIn": 14,
       "iconUrl": "https://github.com/date-fns.png?size=64"
     },
     {
       "name": "dompurify",
-      "version": "3.4.14",
+      "version": "3.4.17",
       "layer": "data",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -683,7 +683,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "eslint",
-      "version": "10.9.1",
+      "version": "10.13.0",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-25T18:41:40+03:00",
@@ -714,7 +714,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "jsdom",
-      "version": "30.0.1",
+      "version": "30.1.3",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-09-06T12:34:19+03:00",
@@ -730,7 +730,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "netlify-cli",
-      "version": "27.5.0",
+      "version": "27.16.0",
       "layer": "platform",
       "dev": true,
       "bumpedAt": "2026-09-06T13:02:27+03:00",
@@ -745,7 +745,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "oxlint",
-      "version": "1.80.0",
+      "version": "1.90.0",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-29T14:12:19+03:00",
@@ -760,7 +760,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "pdfjs-dist",
-      "version": "6.2.108",
+      "version": "6.4.299",
       "layer": "platform",
       "dev": false,
       "bumpedAt": "2026-08-23T18:14:42+03:00",
@@ -785,13 +785,13 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 331,
+      "usedIn": 390,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
     {
       "name": "react-day-picker",
-      "version": "10.0.1",
+      "version": "10.0.2",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T22:41:44+03:00",
@@ -816,13 +816,13 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Частина React, яка власне малює в браузері.",
       "homepage": "https://react.dev/",
-      "usedIn": 11,
+      "usedIn": 12,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
     {
       "name": "react-easy-crop",
-      "version": "6.2.3",
+      "version": "6.2.4",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-09-06T12:43:29+03:00",
@@ -837,7 +837,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "react-router-dom",
-      "version": "7.18.2",
+      "version": "7.18.5",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -847,7 +847,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Адреси сторінок: що показати на /orders/estimates і як переходити між розділами без перезавантаження.",
       "homepage": null,
-      "usedIn": 62,
+      "usedIn": 69,
       "iconUrl": "https://github.com/remix-run.png?size=64"
     },
     {
@@ -882,17 +882,17 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "sharp",
-      "version": "0.35.4",
+      "version": "0.35.5",
       "layer": "platform",
       "dev": false,
-      "bumpedAt": "2026-08-23T18:14:42+03:00",
+      "bumpedAt": "2026-09-18T13:11:45+03:00",
       "bumpCommit": {
-        "sha": "3bc001d2",
-        "subject": "Закрито дві дірки безпеки: присланий PDF більше не виконує чужий код у вкладці"
+        "sha": "68e2ea30",
+        "subject": "Закрито дірку безпеки в обробці картинок: підроблене зображення з чужого сайту більше не може виконати код на сервері"
       },
       "description": "Обробка зображень на сервері: стискає й переганяє у webp картинки каталогу.",
       "homepage": "https://sharp.pixelplumbing.com",
-      "usedIn": 9,
+      "usedIn": 10,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sharp.pixelplumbing.com&sz=128"
     },
     {
@@ -907,12 +907,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Спливні повідомлення в кутку: «Збережено», «Не вийшло».",
       "homepage": "https://sonner.emilkowal.ski/",
-      "usedIn": 68,
+      "usedIn": 90,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
     },
     {
       "name": "tailwind-merge",
-      "version": "3.6.0",
+      "version": "3.7.0",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-08-23T17:47:00+03:00",
@@ -973,7 +973,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "vite",
-      "version": "8.2.2",
+      "version": "8.3.5",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-08-23T21:10:41+03:00",
@@ -989,7 +989,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "vitest",
-      "version": "5.0.0",
+      "version": "5.0.5",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-09-06T12:34:19+03:00",
@@ -999,7 +999,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 206,
+      "usedIn": 270,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1030,12 +1030,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Читає ексельки клієнтів прямо в браузері: з них імпортуються позиції прорахунку. Береться з офіційного CDN SheetJS, а не з npm, — у npm лишилась версія 2022 року з дірками розбору, а розбираємо ми саме чужі файли.",
       "homepage": "https://sheetjs.com/",
-      "usedIn": 2,
+      "usedIn": 12,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sheetjs.com&sz=128"
     },
     {
       "name": "zod",
-      "version": "4.4.3",
+      "version": "4.6.7",
       "layer": "platform",
       "dev": false,
       "bumpedAt": "2026-08-24T13:52:17+03:00",
@@ -1045,7 +1045,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Перевіряє, що дані, які прийшли ззовні, справді такі, як ми чекаємо: серверні функції звіряють із нею тіло запиту.",
       "homepage": "https://zod.dev",
-      "usedIn": 27,
+      "usedIn": 29,
       "iconUrl": "https://www.google.com/s2/favicons?domain=zod.dev&sz=128"
     }
   ],
@@ -1060,12 +1060,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 2565,
-  "testFiles": 204,
-  "lintStubs": 29,
+  "tests": 3278,
+  "testFiles": 268,
+  "lintStubs": 28,
   "node": "24",
-  "netlifyFunctions": 46,
-  "sourceLines": 295272,
+  "netlifyFunctions": 50,
+  "sourceLines": 331715,
   "automation": {
     "workflows": [
       {
