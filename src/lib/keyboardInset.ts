@@ -43,7 +43,8 @@ export function installKeyboardInset() {
 /** autoFocus лише там, де є миша: на дотику фокус викликає клавіатуру й зум. */
 export function canAutoFocus() {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
-  return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  // Вимикаємо лише там, де дотик явний; невідоме середовище — як з мишею.
+  return !window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 }
 
 /**

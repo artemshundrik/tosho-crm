@@ -18,7 +18,7 @@ const CSS = readFileSync(path.resolve(process.cwd(), "src/index.css"), "utf8");
 describe("висота контролу — одна змінна", () => {
   it("телефон 40px, від md — 32px", () => {
     expect(CSS).toMatch(/--control-h:\s*2\.5rem/);
-    expect(CSS).toMatch(/@media \(min-width: 48rem\)\s*\{\s*:root\s*\{[^}]*--control-h:\s*2rem/);
+    expect(CSS).toMatch(/@media \(min-width: 48rem\) and \(pointer: fine\)\s*\{\s*:root\s*\{[^}]*--control-h:\s*2rem/);
   });
 });
 
