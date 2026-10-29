@@ -143,16 +143,39 @@ describe("pickOrderLegalEntity", () => {
 
   it("бере юрособу картки з тим самим ЄДРПОУ, що в знімку замовлення", () => {
     const entities = [entity("ТОВ «Інша»", "11111111"), entity("ТОВ «БОН ФРУКТ»", "41052689")];
-    expect(pickOrderLegalEntity(entities, "41052689")?.legalName).toBe("ТОВ «БОН ФРУКТ»");
+    expect(pickOrderLegalEntity(entities, { taxId: "41052689" })?.legalName).toBe("ТОВ «БОН ФРУКТ»");
   });
 
-  it("без збігу або без знімка бере першу юрособу картки", () => {
+  it("ЄДРПОУ з пробілами чи іншим записом — та сама юрособа", () => {
+    const entities = [entity("ТОВ «Інша»", "11111111"), entity("ТОВ «БОН ФРУКТ»", "4105 2689")];
+    expect(pickOrderLegalEntity(entities, { taxId: " 41052689 " })?.legalName).toBe("ТОВ «БОН ФРУКТ»");
+  });
+
+  it("у картці виправили ЄДРПОУ — знаходить за назвою", () => {
+    const entities = [entity("ТОВ «Інша»", "11111111"), entity("ТОВ «БОН ФРУКТ»", "41052689")];
+    expect(pickOrderLegalEntity(entities, { taxId: "4105268", label: "ТОВ \"Бон Фрукт\"" })?.legalName).toBe(
+      "ТОВ «БОН ФРУКТ»"
+    );
+  });
+
+  it("юрособи замовлення серед кількох немає — null, а не перша чужа", () => {
     const entities = [entity("ТОВ «Перша»", "11111111"), entity("ТОВ «Друга»", "22222222")];
-    expect(pickOrderLegalEntity(entities, "99999999")?.legalName).toBe("ТОВ «Перша»");
-    expect(pickOrderLegalEntity(entities, "")?.legalName).toBe("ТОВ «Перша»");
+    expect(pickOrderLegalEntity(entities, { taxId: "99999999", label: "ТОВ «Третя»" })).toBeNull();
+  });
+
+  it("одна юрособа в картці — вона, навіть коли виправили і код, і назву", () => {
+    const entities = [entity("ТОВ «БОН ФРУКТ»", "41052689")];
+    expect(pickOrderLegalEntity(entities, { taxId: "4105268", label: "ТОВ БОН ФРУКТ ЛТД" })?.legalName).toBe(
+      "ТОВ «БОН ФРУКТ»"
+    );
+  });
+
+  it("знімок без реквізитів — перша, як при створенні замовлення", () => {
+    const entities = [entity("ТОВ «Перша»", "11111111"), entity("ТОВ «Друга»", "22222222")];
+    expect(pickOrderLegalEntity(entities, { taxId: "", label: null })?.legalName).toBe("ТОВ «Перша»");
   });
 
   it("порожня картка — null, тоді документ візьме знімок замовлення", () => {
-    expect(pickOrderLegalEntity([], "41052689")).toBeNull();
+    expect(pickOrderLegalEntity([], { taxId: "41052689" })).toBeNull();
   });
 });

@@ -247,17 +247,48 @@ export const getPrimaryCustomerLegalEntity = (value: CustomerLegalEntity[]) => {
   return primary ?? null;
 };
 
+const taxIdDigits = (value: string | null | undefined) => (value ?? "").replace(/\D+/g, "");
+const comparableLegalName = (value: string | null | undefined) =>
+  (value ?? "")
+    .toLowerCase()
+    .replace(/[«»"'„“”ʼ’`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 /**
  * Юрособа картки, з якої беруть реквізити договір і СП замовлення.
  *
  * Замовлення знімає реквізити з картки при створенні, але джерело правди — картка:
  * виправлену в ній назву чи IBAN документи мають підхопити (29.10.2026 СП «ТОВ БОН
- * ФРУКТ» не бачила, що в картці вже «ТОВ «БОН ФРУКТ»»). Знімок лишається запасним
- * для лідів і юросіб, яких у картці вже немає. Шукаємо за ЄДРПОУ знімка, щоб у
- * документі не змішались поля двох різних юросіб замовника.
+ * ФРУКТ» не бачила, що в картці вже «ТОВ «БОН ФРУКТ»»). Юрособу знімка шукаємо за
+ * ЄДРПОУ, потім за назвою: виправлений в одному з двох полів одрук її не губить.
+ *
+ * Не знайшли серед кількох — null, і документ бере знімок. Перша юрособа картки
+ * тут була б чужою: договір пішов би з її назвою й IBAN (картка 341). Одна юрособа
+ * в картці — вона й є, навіть якщо в ній виправили і код, і назву.
  */
-export const pickOrderLegalEntity = (entities: CustomerLegalEntity[], orderTaxId: string) =>
-  (orderTaxId ? entities.find((entity) => entity.taxId.trim() === orderTaxId) : undefined) ?? entities[0] ?? null;
+export const pickOrderLegalEntity = (
+  entities: CustomerLegalEntity[],
+  snapshot: { taxId?: string | null; label?: string | null }
+) => {
+  if (entities.length === 0) return null;
+  const taxId = taxIdDigits(snapshot.taxId);
+  const label = comparableLegalName(snapshot.label);
+  // Знімок без реквізитів — так само, як при створенні замовлення: перша юрособа.
+  if (!taxId && !label) return entities[0];
+  const byTaxId = taxId ? entities.find((entity) => taxIdDigits(entity.taxId) === taxId) : undefined;
+  if (byTaxId) return byTaxId;
+  const byName = label
+    ? entities.find(
+        (entity) =>
+          Boolean(entity.legalName.trim()) &&
+          (comparableLegalName(entity.legalName) === label ||
+            comparableLegalName(formatCustomerLegalEntityTitle(entity)) === label)
+      )
+    : undefined;
+  if (byName) return byName;
+  return entities.length === 1 ? entities[0] : null;
+};
 
 export const formatCustomerLegalEntitySummary = (
   entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId">

@@ -22,9 +22,9 @@ import {
   formatCustomerLegalEntityTitle,
   isVatPayerRate,
   parseCustomerLegalEntities,
-  pickOrderLegalEntity,
 } from "@/lib/customerLegalEntities";
 import { supabase } from "@/lib/supabaseClient";
+import { resolveOrderRequisites } from "./orderRequisites";
 import {
   listQuoteRunsForQuotes,
   listCatalogModelsByIds,
@@ -1657,47 +1657,41 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         !customer && leadLookupName
           ? storedLeadByLookup.get(normalizeLookupKey(leadLookupName)) ?? null
           : null;
-      // Картка виграє у знімка замовлення — див. pickOrderLegalEntity.
-      const orderTaxIdSnapshot = order.customer_tax_id?.trim?.() || "";
-      const primaryLegalEntity = customer ? pickOrderLegalEntity(parseCustomerLegalEntities(customer), orderTaxIdSnapshot) : null;
-      const orderSignatoryParts = (order.signatory_label ?? "").split(",");
-      const customerSignatoryName =
-        primaryLegalEntity?.signatoryName?.trim() ||
-        orderSignatoryParts[0]?.trim() ||
-        customer?.signatory_name?.trim?.() ||
-        lead?.signatory_name?.trim?.() ||
-        null;
-      const customerSignatoryPosition =
-        primaryLegalEntity?.signatoryPosition?.trim() ||
-        orderSignatoryParts.slice(1).join(",").trim() ||
-        customer?.signatory_position?.trim?.() ||
-        lead?.signatory_position?.trim?.() ||
-        null;
-      const customerTaxId =
-        primaryLegalEntity?.taxId?.trim() ||
-        orderTaxIdSnapshot ||
-        customer?.tax_id?.trim?.() ||
-        null;
-      const customerVatId = primaryLegalEntity?.vatId?.trim() || null;
-      const customerVatRate = primaryLegalEntity?.vatRate || null;
-      const customerIban =
-        primaryLegalEntity?.iban?.trim() ||
-        order.customer_iban?.trim?.() ||
-        customer?.iban?.trim?.() ||
-        null;
-      const customerLegalAddress =
-        primaryLegalEntity?.legalAddress?.trim() ||
-        order.customer_legal_address?.trim?.() ||
-        null;
-      const customerSignatoryAuthority =
-        primaryLegalEntity?.signatoryAuthority?.trim() ||
-        order.customer_signatory_authority?.trim?.() ||
-        null;
-      const legalEntityLabel =
-        (primaryLegalEntity?.legalName.trim() ? formatCustomerLegalEntityTitle(primaryLegalEntity) : "") ||
-        order.legal_entity_label?.trim?.() ||
-        customer?.legal_name?.trim?.() ||
-        null;
+      // Картка виграє у знімка, поки СП не підписана — див. resolveOrderRequisites.
+      const requisites = resolveOrderRequisites({
+        entities: customer ? parseCustomerLegalEntities(customer) : [],
+        snapshot: {
+          legalEntityLabel: order.legal_entity_label,
+          taxId: order.customer_tax_id,
+          iban: order.customer_iban,
+          bankDetails: order.customer_bank_details,
+          legalAddress: order.customer_legal_address,
+          signatoryLabel: order.signatory_label,
+          signatoryAuthority: order.customer_signatory_authority,
+        },
+        customer: customer
+          ? {
+              legalName: customer.legal_name,
+              taxId: customer.tax_id,
+              iban: customer.iban,
+              signatoryName: customer.signatory_name,
+              signatoryPosition: customer.signatory_position,
+            }
+          : null,
+        lead: lead ? { signatoryName: lead.signatory_name, signatoryPosition: lead.signatory_position } : null,
+        signed: Boolean(order.specification_signed_at),
+      });
+      const {
+        legalEntityLabel,
+        taxId: customerTaxId,
+        vatId: customerVatId,
+        vatRate: customerVatRate,
+        iban: customerIban,
+        legalAddress: customerLegalAddress,
+        signatoryName: customerSignatoryName,
+        signatoryPosition: customerSignatoryPosition,
+        signatoryAuthority: customerSignatoryAuthority,
+      } = requisites;
       const paymentMethodId =
         normalizePaymentMethodId(order.payment_method_id) ||
         (isCashlessPaymentMethod(null, order.payment_method_label) ? "bank_uah" : "cash");
@@ -1784,7 +1778,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         customerVatId,
         customerVatRate,
         customerIban,
-        customerBankDetails: primaryLegalEntity?.bankName.trim() || order.customer_bank_details?.trim?.() || null,
+        customerBankDetails: requisites.bankDetails,
         customerLegalAddress,
         customerSignatoryName,
         customerSignatoryPosition,
