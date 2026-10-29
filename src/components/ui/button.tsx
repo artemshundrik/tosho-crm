@@ -191,7 +191,8 @@ const buttonVariants = cva(
         sm: "h-(--control-h-sm) rounded-lg px-2.5 text-xs gap-1.5 [&_svg]:size-3.5",
         md: "h-(--control-h) rounded-lg px-3 text-sm gap-1.5 [&_svg]:size-4",
         lg: "h-10 rounded-lg px-4 text-sm gap-2 [&_svg]:size-4",
-        iconXs: "h-6 w-6 rounded-md px-0 [&_svg]:size-3.5",
+        // На дотику 24px не влучити: зона зростає до 36px, вигляд лишається.
+        iconXs: "h-6 w-6 rounded-md px-0 [&_svg]:size-3.5 pointer-coarse:h-9 pointer-coarse:w-9",
         iconSm: "h-(--control-h-sm) w-(--control-h-sm) rounded-lg px-0 [&_svg]:size-3.5",
         /** @deprecated той самий розмір, що `icon`; лишено, щоб не ламати виклики. */
         iconMd: "h-(--control-h) w-(--control-h) rounded-lg px-0 [&_svg]:size-4",

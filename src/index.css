@@ -2859,3 +2859,14 @@ html[data-theme-switching]::view-transition-new(root) {
     visibility: visible;
   }
 }
+
+/*
+ * 10–11px на iPad і телефоні не читається з відстані руки. На дотикових
+ * екранах найдрібніший текст — 12px; з мишею лишається щільна шкала.
+ */
+@media (pointer: coarse) {
+  .text-2xs,
+  .text-3xs {
+    font-size: 0.75rem;
+  }
+}

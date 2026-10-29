@@ -1,4 +1,5 @@
 // src/layout/AppLayout.tsx
+import { prefersCollapsedSidebar } from "@/lib/keyboardInset";
 import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -1004,7 +1005,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [floatingLauncherBlocked, setFloatingLauncherBlocked] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("app_sidebar_collapsed") === "1";
+      const stored = localStorage.getItem("app_sidebar_collapsed");
+      return stored !== null ? stored === "1" : prefersCollapsedSidebar();
     } catch {
       return false;
     }

@@ -8,6 +8,7 @@ import "@fontsource-variable/inter";
 import "./index.css";
 import App from "./App";
 import { installKeyboardInset } from "./lib/keyboardInset";
+import { installTouchTitles } from "./lib/touchTitles";
 import { AuthProvider } from "./auth/AuthProvider";
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ const queryClient = new QueryClient({
 const ICON_DEFAULTS = { size: 24, weight: "regular", color: "currentColor", mirrored: false } as const;
 
 installKeyboardInset();
+installTouchTitles();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <IconContext.Provider value={ICON_DEFAULTS}>

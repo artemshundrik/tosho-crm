@@ -45,3 +45,13 @@ export function canAutoFocus() {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
   return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 }
+
+/**
+ * Перший візит із вертикального iPad: розгорнутий сайдбар з'їдав 232 з 834px, і
+ * фільтри з колонками ламались у два рядки. Згорнутий за замовчуванням; вибір
+ * людини далі пам'ятається як раніше.
+ */
+export function prefersCollapsedSidebar() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(pointer: coarse) and (max-width: 1100px)").matches;
+}
