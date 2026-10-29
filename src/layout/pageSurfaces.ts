@@ -204,6 +204,7 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "contractors", path: "/contractors", page: "src/pages/ContractorsPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "stock", path: "/stock/samples", page: "src/pages/SampleStockPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "finances", path: "/finances", page: "src/pages/FinancesPage.tsx", toolbar: "none", shape: "dashboard", canvas: true },
+  { id: "documents", path: "/documents", page: "src/pages/DocumentsPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "marketing", path: "/marketing", page: "src/pages/MarketingPage.tsx", toolbar: "full", shape: "grid" },
 
   { id: "members-access", path: "/settings/members", page: "src/pages/TeamMembersPage.tsx", toolbar: "compact", shape: "split", canvas: true },

@@ -158,6 +158,7 @@ const SupplierPage = lazyWithRetry(() => import("./pages/SupplierPage"));
 const SampleStockPage = lazyWithRetry(() => import("./pages/SampleStockPage"));
 const FinancesPage = lazyWithRetry(() => import("./pages/FinancesPage"));
 const MarketingPage = lazyWithRetry(() => import("./pages/MarketingPage"));
+const DocumentsPage = lazyWithRetry(() => import("./pages/DocumentsPage"));
 const OverviewPage = lazyWithRetry(() =>
   import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
 );
@@ -360,6 +361,7 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/contractors", scope: "page", group: "operations", test: (value) => value.startsWith("/contractors") },
     { pattern: "/stock/samples", scope: "page", group: "operations", test: (value) => value.startsWith("/stock/samples") },
     { pattern: "/finances", scope: "page", group: "operations", test: (value) => value.startsWith("/finances") },
+    { pattern: "/documents", scope: "page", group: "operations", test: (value) => value.startsWith("/documents") },
   ];
 
   const matched = routeMatchers.find((entry) => entry.test(normalized));
@@ -1154,6 +1156,16 @@ function AppRoutes() {
             <ModuleRouteGate moduleKey="finance">
               <RouteSuspense shell>
                 <FinancesPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="documents"
+          element={
+            <ModuleRouteGate moduleKey="documents">
+              <RouteSuspense shell>
+                <DocumentsPage />
               </RouteSuspense>
             </ModuleRouteGate>
           }

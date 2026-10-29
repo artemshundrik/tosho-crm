@@ -26,6 +26,7 @@ export const ROUTES = {
   contractors: "/contractors",
   sampleStock: "/stock/samples",
   finances: "/finances",
+  documents: "/documents",
   marketing: "/marketing",
   team: "/team",
 

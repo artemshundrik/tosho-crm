@@ -32,6 +32,7 @@ export type ModuleKey =
   | "vchasno"
   | "vchasno_send"
   | "marketing"
+  | "documents"
   | "team"
   | "members_access"
   | "nova_poshta"
@@ -146,6 +147,12 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     // `tosho.has_payroll_access` і політик `tosho.payroll_entries`.
     roleDecides: (ctx) => hasPayrollAccess(ctx.accessRole, ctx.jobRole),
   },
+  {
+    key: "documents",
+    label: "Документи",
+    group: "finance",
+    hint: "Реєстр договорів, СП, рахунків, ВН і актів. Менеджер бачить лише свої замовлення",
+  },
   { key: "vchasno", label: "Вчасно — завантаження", group: "finance" },
   {
     key: "vchasno_send",
@@ -220,6 +227,13 @@ export const MODULE_KEYS = MODULE_DEFINITIONS.map((item) => item.key);
 /** Продажі: замовник → прорахунок → замовлення, плюс каталог і дизайн-дошка. */
 const SALES_MENU: ModuleKey[] = ["overview", "customers", "quotes", "orders", "catalog", "design"];
 
+/**
+ * Менеджерам ще й «Документи» — реєстр документів їхніх замовлень. Не в
+ * SALES_MENU, бо його беруть і дизайнер, і виробництво: у них немає своїх
+ * замовлень, тож розділ показав би їм порожню сторінку.
+ */
+const SALES_MANAGER_MENU: ModuleKey[] = [...SALES_MENU, "documents"];
+
 /** Бухгалтерія: документи ходять навколо замовлення, від складу до підрядника. */
 const ACCOUNTING_MENU: ModuleKey[] = [
   "overview",
@@ -231,6 +245,7 @@ const ACCOUNTING_MENU: ModuleKey[] = [
   "logistics",
   "stock",
   "contractors",
+  "documents",
   "vchasno",
 ];
 
@@ -239,13 +254,13 @@ const MARKETING_MENU: ModuleKey[] = ["overview", "design", "marketing"];
 
 const ROLE_MENUS: Record<string, ModuleKey[]> = {
   // — Продажі —
-  manager: SALES_MENU,
-  sales_manager: SALES_MENU,
-  junior_sales_manager: SALES_MENU,
-  top_manager: SALES_MENU,
-  office_manager: SALES_MENU,
+  manager: SALES_MANAGER_MENU,
+  sales_manager: SALES_MANAGER_MENU,
+  junior_sales_manager: SALES_MANAGER_MENU,
+  top_manager: SALES_MANAGER_MENU,
+  office_manager: SALES_MANAGER_MENU,
   // PM веде замовлення далі за менеджера — звідси склад зразків і підрядники.
-  pm: [...SALES_MENU, "stock", "contractors"],
+  pm: [...SALES_MANAGER_MENU, "stock", "contractors"],
 
   // — Дизайн —
   // Дизайнер працює з прорахунку: там і ТЗ, і замовник, і моделі з каталогу.

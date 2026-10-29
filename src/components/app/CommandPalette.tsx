@@ -19,6 +19,7 @@ import {
   Factory,
   FolderKanban,
   History,
+  Files,
   Megaphone,
   Package,
   Palette,
@@ -452,6 +453,15 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
         ],
         to: "/finances",
         icon: Banknote,
+      },
+      {
+        key: "route-documents",
+        label: "Документи",
+        description: "Реєстр договорів, специфікацій, рахунків, ВН і актів",
+        kindLabel: "Сторінка",
+        keywords: ["документи", "documents", "договір", "договори", "специфікація", "сп", "реєстр", "підпис"],
+        to: "/documents",
+        icon: Files,
       },
       {
         key: "route-marketing",

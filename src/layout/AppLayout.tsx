@@ -18,6 +18,7 @@ import {
   Layers3,
   LayoutGrid,
   Plug,
+  Files,
   Megaphone,
   Menu,
   Palette,
@@ -555,13 +556,8 @@ const baseSidebarLinks: SidebarLink[] = [
     icon: Banknote,
     moduleKey: "finance",
   },
-  {
-    label: "Маркетинг",
-    to: ROUTES.marketing,
-    group: "operations",
-    icon: Megaphone,
-    moduleKey: "marketing",
-  },
+  { label: "Документи", to: ROUTES.documents, group: "operations", icon: Files, moduleKey: "documents" },
+  { label: "Маркетинг", to: ROUTES.marketing, group: "operations", icon: Megaphone, moduleKey: "marketing" },
   // Акаунт
   //
   // Заміри 2026-08-05: власник бачив 17 пунктів, CEO — 14, решта — 8. При

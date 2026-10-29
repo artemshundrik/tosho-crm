@@ -127,6 +127,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.finances,
       showPageHeader: false,
     };
+  if (pathname.startsWith(ROUTES.documents))
+    return {
+      title: "Документи",
+      subtitle: "Договори, специфікації, рахунки, видаткові накладні й акти в одному реєстрі.",
+      breadcrumbLabel: "Документи",
+      breadcrumbTo: ROUTES.documents,
+      showPageHeader: false,
+    };
   if (pathname.startsWith(ROUTES.marketing))
     return {
       title: "Маркетинг",
