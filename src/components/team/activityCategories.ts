@@ -74,7 +74,8 @@ const ACTION_LABELS: Record<string, string> = {
 
 // System/noise rows that are not a meaningful person action (e.g. a promo banner
 // impression with an empty title) — filtered out of activity views.
-const NOISE_ACTIONS = new Set(["telegram_promo_shown"]);
+export const NOISE_ACTION_KEYS = ["telegram_promo_shown"] as const;
+const NOISE_ACTIONS = new Set<string>(NOISE_ACTION_KEYS);
 
 export function isNoiseActivity(action: string | null, title: string | null): boolean {
   const a = (action ?? "").trim().toLowerCase();

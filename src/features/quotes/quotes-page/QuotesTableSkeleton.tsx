@@ -30,7 +30,7 @@ export function QuotesTableSkeleton() {
             </TableHead>
             <TableHead style={{ width: quotesColumnWidth("status") }}>{QUOTES_COLUMNS.status.label}</TableHead>
             <TableHead style={{ width: quotesColumnWidth("deadline") }}>{QUOTES_COLUMNS.deadline.label}</TableHead>
-            <TableHead className="w-[64px] text-center">Менеджер</TableHead>
+            <TableHead className="w-[88px] text-center">Менеджер</TableHead>
             <TableHead className="w-[44px]" />
           </TableRow>
         </TableHeader>

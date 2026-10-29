@@ -5564,7 +5564,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <ResizableHead columnId="total" controller={quotesColumns} className="!pr-6 text-right font-semibold" />
                     <ResizableHead columnId="status" controller={quotesColumns} className="font-semibold" />
                     <ResizableHead columnId="deadline" controller={quotesColumns} className="font-semibold" />
-                    <TableHead className="w-[64px] font-semibold">
+                    <TableHead className="w-[88px] font-semibold">
                       <div className="flex items-center justify-center">Менеджер</div>
                     </TableHead>
                     <TableHead className="w-[44px]"></TableHead>

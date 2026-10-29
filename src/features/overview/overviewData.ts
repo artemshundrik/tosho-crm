@@ -1,3 +1,4 @@
+import { isNoiseActivity, NOISE_ACTION_KEYS } from "@/components/team/activityCategories";
 import { listCustomerLeadLogoDirectory, normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { supabase } from "@/lib/supabaseClient";
 import { listQuotes } from "@/lib/toshoApi";
@@ -279,6 +280,10 @@ async function readActivity(teamId: string) {
         .from("activity_log")
         .select(columns)
         .eq("team_id", teamId)
+        // Службові події (показ промо) відсіюються в запиті, а не після: їх буває
+        // більше за ліміт, і тоді «Останні дії» складались би з одного шуму.
+        // `action is null` окремо — інакше not.in викинув би й рядки без дії.
+        .or(`action.is.null,action.not.in.(${NOISE_ACTION_KEYS.join(",")})`)
         .order("created_at", { ascending: false })
         .limit(ACTIVITY_LIMIT),
     [
@@ -402,21 +407,23 @@ export async function loadOverviewData(params: { teamId: string | null; userId: 
     parseDesignTask(row, { memberByUserId, partyByTypedId, partyByNormalizedName, quoteById })
   );
 
-  const activity: OverviewActivityRow[] = activityRows.map((row) => {
-    const actorName = row.actor_name?.trim() || "Користувач";
-    const member =
-      (row.user_id ? memberByUserId.get(row.user_id) : null) ??
-      memberByNormalizedName.get(normalizeLookupKey(actorName)) ??
-      null;
-    return {
-      id: row.id,
-      title: row.title?.trim() || row.action?.trim() || "Подія",
-      actorName: member?.label ?? actorName,
-      avatarUrl: member?.avatarUrl ?? null,
-      href: row.href ?? "/activity",
-      at: formatDateTime(row.created_at),
-    };
-  });
+  const activity: OverviewActivityRow[] = activityRows
+    .filter((row) => !isNoiseActivity(row.action ?? null, row.title ?? null))
+    .map((row) => {
+      const actorName = row.actor_name?.trim() || "Користувач";
+      const member =
+        (row.user_id ? memberByUserId.get(row.user_id) : null) ??
+        memberByNormalizedName.get(normalizeLookupKey(actorName)) ??
+        null;
+      return {
+        id: row.id,
+        title: row.title?.trim() || row.action?.trim() || "Подія",
+        actorName: member?.label ?? actorName,
+        avatarUrl: member?.avatarUrl ?? null,
+        href: row.href ?? "/activity",
+        at: formatDateTime(row.created_at),
+      };
+    });
 
   return { quotes, designTasks, activity };
 }

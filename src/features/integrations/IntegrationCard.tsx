@@ -82,7 +82,8 @@ function Metric({ metric }: { metric: IntegrationMetric | null }) {
           {metric.value}
         </span>
       </div>
-      <div className="truncate text-3xs uppercase tracking-caps-tight text-muted-foreground">{metric.label}</div>
+      {/* Два рядки, а не трикрапка: на телефоні третина картки вужча за «ТТН за місяць». */}
+      <div className="line-clamp-2 text-3xs uppercase tracking-caps-tight text-muted-foreground">{metric.label}</div>
     </div>
   );
 }

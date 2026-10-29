@@ -1205,7 +1205,10 @@ export default function NotificationsPage() {
               size="md"
               onClick={() => openNotification(n)}
               className={cn(
-                "group h-auto w-full justify-start p-0 text-left hover:bg-transparent",
+                // whitespace-normal: кнопка за замовчуванням не переносить рядків, і
+                // без цього line-clamp не працював — заголовок і опис просто
+                // зрізались краєм картки без трьох крапок.
+                "group h-auto w-full justify-start whitespace-normal p-0 text-left hover:bg-transparent",
                 !n.read && "data-[state=active]:ring-0"
               )}
             >

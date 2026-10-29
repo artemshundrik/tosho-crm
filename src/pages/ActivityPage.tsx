@@ -22,6 +22,7 @@ import {
   type ActivityRow,
 } from "@/lib/activity";
 import { listTeamMembers } from "@/lib/toshoApi";
+import { isNoiseActivity } from "@/components/team/activityCategories";
 import { Activity, FileText, Palette, Users } from "@/components/icons/appIcons";
 
 type FilterMode = "all" | "quotes" | "design" | "team" | "other";
@@ -138,8 +139,10 @@ export default function ActivityPage() {
   }, [teamId, userId]);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return items;
-    return items.filter((i) => i.type === filter);
+    // Службові рядки (показ промо тощо) — не дія людини; команда їх уже ховає.
+    const meaningful = items.filter((i) => !isNoiseActivity(i.action ?? null, i.title));
+    if (filter === "all") return meaningful;
+    return meaningful.filter((i) => i.type === filter);
   }, [items, filter]);
 
   const grouped = useMemo(() => {
@@ -172,7 +175,7 @@ export default function ActivityPage() {
           </Button>
         }
         filters={
-          <SegmentedGroup className={cn(SEGMENTED_GROUP, "h-auto flex-wrap")}>
+          <SegmentedGroup className={cn(SEGMENTED_GROUP, "max-w-full overflow-x-auto [scrollbar-width:none]")}>
             {FILTER_TABS.map((tab) => (
               <Button
                 key={tab.value}
@@ -225,7 +228,7 @@ export default function ActivityPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <div className="rounded-section border border-border bg-card/60 p-5">
+      <div className="rounded-section border border-border bg-card/60 p-3 sm:p-5">
         <div>
           {filtered.length === 0 ? (
             <div className="rounded-inner border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
@@ -249,26 +252,26 @@ export default function ActivityPage() {
                           variant="card"
                           size="md"
                           onClick={() => item.href && navigate(item.href)}
-                          className={cn(
-                            "h-auto p-5",
-                          )}
+                          // whitespace-normal і w-full: кнопка за замовчуванням не
+                          // переносить рядків, і на телефоні час виїжджав за картку.
+                          className="h-auto w-full justify-start whitespace-normal p-3 text-left sm:p-5"
                         >
-                          <div className="flex items-start gap-4">
-                            <div className="flex items-center gap-3 pt-0.5">
+                          <div className="flex w-full min-w-0 items-start gap-3 sm:gap-4">
+                            <div className="flex shrink-0 items-center gap-3 pt-0.5">
                               <AvatarBase
                                 src={item.avatar_url}
                                 name={item.actor || item.title || "User"}
                                 fallback={initialsForItem(item)}
                                 variant="sm"
                               />
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground">
+                              <div className="hidden h-10 w-10 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground sm:flex">
                                 <Icon className="h-5 w-5" />
                               </div>
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-3">
-                                <span className="text-sm font-semibold text-foreground truncate">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <span className="max-w-full break-words text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
                                   {item.title}
                                 </span>
                                 <Badge tone={badge.tone} size="sm" pill>
@@ -282,7 +285,7 @@ export default function ActivityPage() {
                               ) : null}
                             </div>
 
-                            <div className="self-start pt-0.5 text-xs text-muted-foreground whitespace-nowrap">
+                            <div className="shrink-0 self-start pt-0.5 text-xs text-muted-foreground whitespace-nowrap">
                               {formatActivityClock(item.created_at)}
                             </div>
                           </div>
