@@ -148,16 +148,19 @@ export function UnifiedPageToolbar({
       {(topLeft || topRight) ? (
         <div
           className={cn(
-            "flex flex-col gap-3 lg:flex-row lg:items-center",
+            // lg:flex-wrap + незтискувана ліва частина: коли вкладки й кнопки
+            // не вміщаються в рядок (iPad у ландшафті з розгорнутим сайдбаром),
+            // кнопки переходять на новий рядок, а не наїжджають на вкладки.
+            "flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center",
             topLeft && topRight ? "lg:justify-between" : topRight ? "lg:justify-end" : undefined,
             topRowClassName
           )}
         >
-          {topLeft ? <div className={cn("min-w-0", topLeftClassName)}>{topLeft}</div> : null}
+          {topLeft ? <div className={cn("min-w-0 lg:shrink-0", topLeftClassName)}>{topLeft}</div> : null}
           {topRight ? (
             <div
               className={cn(
-                "flex w-full flex-col gap-2 self-stretch sm:flex-row sm:items-center sm:justify-end lg:w-auto lg:self-auto",
+                "flex w-full flex-col gap-2 self-stretch sm:flex-row sm:items-center sm:justify-end lg:ml-auto lg:w-auto lg:self-auto",
                 topRightClassName
               )}
             >
@@ -168,9 +171,9 @@ export function UnifiedPageToolbar({
       ) : null}
 
       {(search || filters || meta) ? (
-        <div className={cn("flex flex-col gap-3 xl:flex-row xl:items-center", bottomRowClassName)}>
+        <div className={cn("flex flex-col gap-3 lg:flex-row lg:items-center", bottomRowClassName)}>
           {search ? (
-            <div className={cn("w-full xl:max-w-[370px] xl:flex-none", searchClassName)}>
+            <div className={cn("w-full lg:max-w-[320px] lg:flex-none xl:max-w-[370px]", searchClassName)}>
               {search}
             </div>
           ) : null}
@@ -185,7 +188,7 @@ export function UnifiedPageToolbar({
             </div>
           ) : null}
           {meta ? (
-            <div className={cn("flex items-center gap-2 xl:ml-auto xl:flex-none", metaClassName)}>{meta}</div>
+            <div className={cn("flex items-center gap-2 lg:ml-auto lg:flex-none", metaClassName)}>{meta}</div>
           ) : null}
         </div>
       ) : null}
