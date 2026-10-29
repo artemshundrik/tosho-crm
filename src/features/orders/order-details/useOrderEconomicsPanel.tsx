@@ -98,38 +98,55 @@ export function useOrderEconomicsPanel({
   const hintsRequested = useRef(false);
   const loadToken = useRef(0);
 
+  // Яке замовлення зараз на екрані. Перечитування, яке запізнилось від попереднього
+  // (запис закупки ще йшов, а користувач перейшов далі), нове замовлення не чіпає.
+  const currentOrderId = useRef(orderId);
+  useEffect(() => {
+    currentOrderId.current = orderId;
+  }, [orderId]);
+
   // Запит і його застосування — окремо від стану: першому завантаженню в ефекті
-  // компілятор не дозволяє кликати функцію з setState усередині.
+  // компілятор не дозволяє кликати функцію з setState усередині. «stale» — відповідь
+  // перекрив новіший запит: «вантажиться» тоді знімає він, а не цей.
   const fetchInto = useCallback((id: string) => {
     const token = ++loadToken.current;
     return Promise.all([listOrderPurchases(id), getOrderPurchasesNone(id)]).then(
-      ([list, noneState]) => (token === loadToken.current ? { list, noneState } : null),
+      ([list, noneState]) => (token === loadToken.current ? { list, noneState } : ("stale" as const)),
       (error: unknown) => {
-        if (token === loadToken.current) toast.error(errorText(error));
-        return null;
+        if (token !== loadToken.current) return "stale" as const;
+        toast.error(errorText(error));
+        return "failed" as const;
       }
     );
   }, []);
 
   const reload = useCallback(async () => {
-    if (!orderId) return;
+    if (!orderId || currentOrderId.current !== orderId) return;
     const result = await fetchInto(orderId);
-    if (!result) return;
-    setPurchases(result.list);
-    setNone(result.noneState);
-    setLoadedFor(orderId);
+    if (result === "stale" || currentOrderId.current !== orderId) return;
+    if (result !== "failed") {
+      setPurchases(result.list);
+      setNone(result.noneState);
+      setLoadedFor(orderId);
+    }
+    setLoading(false);
   }, [orderId, fetchInto]);
 
   useEffect(() => {
     if (!orderId) return;
-    void fetchInto(orderId)
-      .then((result) => {
-        if (!result) return;
+    let active = true;
+    void fetchInto(orderId).then((result) => {
+      if (!active || result === "stale") return;
+      if (result !== "failed") {
         setPurchases(result.list);
         setNone(result.noneState);
         setLoadedFor(orderId);
-      })
-      .finally(() => setLoading(false));
+      }
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
   }, [orderId, fetchInto]);
 
   // Повернулись у вкладку — перечитуємо: склад міг підтвердити отримання в іншій

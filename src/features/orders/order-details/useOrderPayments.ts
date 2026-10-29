@@ -89,12 +89,20 @@ export function useOrderPayments({
     }
   }, []);
 
+  // Яке замовлення зараз на екрані: оплати, перечитані для попереднього (запис ще
+  // йшов, а користувач перейшов далі), у список нового не лягають.
+  const currentOrderId = useRef(orderId);
+  useEffect(() => {
+    currentOrderId.current = orderId;
+  }, [orderId]);
+
   const reload = useCallback(async () => {
     if (!orderId) return;
     try {
-      setPayments(await listOrderPayments(orderId));
+      const rows = await listOrderPayments(orderId);
+      if (currentOrderId.current === orderId) setPayments(rows);
     } catch (error) {
-      toast.error(toOrderPaymentError(error).message);
+      if (currentOrderId.current === orderId) toast.error(toOrderPaymentError(error).message);
     }
   }, [orderId]);
 
