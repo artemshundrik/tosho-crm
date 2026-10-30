@@ -30,6 +30,7 @@ import {
   loadForeignOrderQuotes,
   loadOrderAppendTargets,
   loadOrderedQuoteItemNumbers,
+  roundMoney,
   toOrderItemPayload,
   type OrderAppendTarget,
 } from "./orderQuoteLinks";
@@ -1959,7 +1960,7 @@ export async function createOrderFromApprovedQuote(params: {
 
   const orderId = crypto.randomUUID();
   const nowIso = new Date().toISOString();
-  const orderTotal = selectedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const orderTotal = roundMoney(selectedItems.reduce((sum, item) => sum + roundMoney(item.lineTotal), 0));
 
   const orderNumber = await getNextOrderNumber(params.teamId);
   const orderPayload = {
@@ -2127,7 +2128,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
 
   const currency = isValidCurrency(params.currency) ? params.currency.toUpperCase() : "UAH";
   const paymentMethodId = normalizePaymentMethodId(params.paymentMethodId) || "cash";
-  const orderTotal = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const orderTotal = roundMoney(items.reduce((sum, item) => sum + roundMoney(item.qty * item.unitPrice), 0));
   const orderNumber = await getNextOrderNumber(params.teamId);
 
   // «Є друк» = хоч один товар має нанесення (як у прорахунку — похідне, без окремого прапорця).
@@ -2239,7 +2240,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     qty: item.qty,
     unit: item.unit,
     unit_price: item.unitPrice,
-    line_total: item.qty * item.unitPrice,
+    line_total: roundMoney(item.qty * item.unitPrice),
     methods: item.prints.length > 0 ? item.prints : null,
     catalog_model_id: item.catalogModelId,
     image_url: item.imageUrl,

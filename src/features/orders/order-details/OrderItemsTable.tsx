@@ -29,7 +29,8 @@ export function OrderItemsTable({
         <TableBody>
           {record.items.map((item, index) => (
             <TableRow key={item.id}>
-              <TableCell className="text-center font-medium text-muted-foreground">{item.position || index + 1}</TableCell>
+              {/* Номер рядка, як у СП: position — порядок, а не номер (з прорахунку приходить його позиція, 3 і 4). */}
+              <TableCell className="text-center font-medium text-muted-foreground">{index + 1}</TableCell>
               <TableCell className="font-medium text-foreground">
                 <div className="flex items-center gap-3">
                   {item.thumbUrl || item.imageUrl ? (

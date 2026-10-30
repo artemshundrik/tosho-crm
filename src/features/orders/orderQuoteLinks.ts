@@ -93,6 +93,13 @@ export async function loadOrderAppendTargets(
     }));
 }
 
+/**
+ * До копійки. 28 × 686.98 у JS дає 19235.440000000002, і так воно лягало в numeric:
+ * сума замовлення виходила на волосину більша за оплату, і повна оплата не ставала
+ * «Оплачено повністю» (TO-1026-0011, 30.10.2026).
+ */
+export const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
 /** Рядок order_items із позиції прорахунку — і для нового замовлення, і для докладання. */
 export const toOrderItemPayload = (item: DerivedOrderItem) => ({
   quote_item_id: item.quoteItemId ?? item.id,
@@ -101,7 +108,7 @@ export const toOrderItemPayload = (item: DerivedOrderItem) => ({
   qty: item.qty,
   unit: item.unit,
   unit_price: item.unitPrice,
-  line_total: item.lineTotal,
+  line_total: roundMoney(item.lineTotal),
   methods: item.methodsSummary ? [{ label: item.methodsSummary }] : null,
   catalog_model_id: item.catalogModelId ?? null,
   image_url: item.imageUrl ?? null,

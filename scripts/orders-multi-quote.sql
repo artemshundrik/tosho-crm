@@ -157,7 +157,9 @@ begin
     _added := _added + 1;
   end loop;
 
-  select coalesce(sum(i.line_total), 0) into _total from tosho.order_items i where i.order_id = _order.id;
+  -- round: старі рядки бувають із хвостом float (19235.440000000002), а оплата
+  -- порівнюється з сумою як «сплачено >= сума» — без округлення повна оплата не повна.
+  select round(coalesce(sum(i.line_total), 0), 2) into _total from tosho.order_items i where i.order_id = _order.id;
 
   -- orders_guard_total пускає зміну суми лише під цим прапорцем (той самий,
   -- що й у виправленні рахунку): сума рахується тут із позицій, а не з клієнта.
@@ -251,3 +253,18 @@ begin
   return new;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Копійки з хвостом float (додано 30.10.2026, повторне застосування --again).
+--
+-- Клієнт писав line_total як qty × ціна у JS: 28 × 686.98 = 19235.440000000002,
+-- і numeric зберігав це як є. Сума TO-1026-0011 вийшла 35284.830000000002, а
+-- order_payment_status_from_sum рахує «сплачено >= сума» — оплата рівно
+-- 35284.83 не стала б «Оплачено повністю». Код тепер округлює (roundMoney у
+-- orderQuoteLinks.ts), функція вище — теж; тут вирівнюємо те, що вже лягло.
+-- Ідемпотентно: другий прогін нічого не знаходить.
+-- ---------------------------------------------------------------------------
+select set_config('tosho.invoice_correction', 'on', true);
+update tosho.order_items set line_total = round(line_total, 2) where line_total <> round(line_total, 2);
+update tosho.orders set total = round(total, 2) where total <> round(total, 2);
+select set_config('tosho.invoice_correction', 'off', true);
