@@ -130,6 +130,7 @@ const MUTATING_RPCS = new Set([
   "accept_workspace_invite",
   "acquire_entity_lock",
   "adjust_sample_stock_item",
+  "append_quote_items_to_order",
   "archive_activity_log_all",
   "bot_submit_absence",
   "cancel_order_payment",

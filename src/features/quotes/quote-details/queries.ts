@@ -30,6 +30,7 @@ import {
   createOrderFromApprovedQuote,
   loadOrderCreationDraft,
 } from "@/features/orders/orderRecords";
+import { findOrderByQuoteItems } from "@/features/orders/orderQuoteLinks";
 import {
   getSignedAttachmentUrl,
   removeAttachmentWithVariants,
@@ -1945,13 +1946,16 @@ export async function fetchQuoteOrderRef(
       .select("id, quote_number")
       .eq("team_id", teamId)
       .eq("quote_id", quoteId)
+      .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle<{ id: string; quote_number: string | null }>();
     if (error) throw error;
-    return {
-      ok: true,
-      data: data ? { id: data.id, quoteNumber: data.quote_number ?? null } : null,
-    };
+    if (data) return { ok: true, data: { id: data.id, quoteNumber: data.quote_number ?? null } };
+
+    // Прорахунок, чиї позиції доклали в чуже замовлення (REQ-344), за orders.quote_id не знайти —
+    // шукаємо через самі позиції.
+    const order = await findOrderByQuoteItems(teamId, quoteId);
+    return { ok: true, data: order ? { id: order.id, quoteNumber: order.quote_number ?? null } : null };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося перевірити замовлення.") };
   }

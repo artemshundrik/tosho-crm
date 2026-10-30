@@ -346,7 +346,7 @@ const CEILINGS = {
   // правило «що злітає при зміні виду» винесене в `modelSwapPatch.ts` і вкрите
   // тестами; у сторінці лишився один рядок протягування метаданих позиції —
   // виносити тут більше нічого.
-  "src/pages/QuoteDetailsPage.tsx": 6345,
+  "src/pages/QuoteDetailsPage.tsx": 6174,
   "src/pages/QuotesPage.tsx": 6953,
   "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,

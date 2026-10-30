@@ -24,6 +24,16 @@ import {
   parseCustomerLegalEntities,
 } from "@/lib/customerLegalEntities";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  describeOrderItemConflict,
+  discardEmptyOrder,
+  loadForeignOrderQuotes,
+  loadOrderAppendTargets,
+  loadOrderedQuoteItemNumbers,
+  toOrderItemPayload,
+  type OrderAppendTarget,
+} from "./orderQuoteLinks";
+import { getNextOrderNumber } from "./orderNumbers";
 import { resolveOrderRequisites } from "./orderRequisites";
 import {
   listQuoteRunsForQuotes,
@@ -640,6 +650,10 @@ export type OrderCreationDraft = {
   quoteNumber: string;
   readiness: DerivedOrderRecord;
   selectableItems: DerivedOrderItem[];
+  /** quote_item_id → номер замовлення, у яке позиція вже пішла. Такі позиції не обираються. */
+  orderedItemNumbers: Record<string, string>;
+  /** Відкриті замовлення того ж замовника й валюти: рахунок не запитано, СП не підписана. */
+  appendTargets: OrderAppendTarget[];
 };
 
 /** Одне нанесення (друк) на товарі — метод/позиція з каталогу, розмір у мм. */
@@ -1462,10 +1476,20 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       listCustomerContracts(teamId, storedCustomerIds),
     ] as const);
     if (storedCustomersResult.error) throw storedCustomersResult.error;
+
+    // Позиції, докладені з інших прорахунків (REQ-344), тягнуть і свої прорахунки.
+    const foreign = await loadForeignOrderQuotes({
+      teamId,
+      orderQuoteItemIds: orderItems.map((item) => item.quote_item_id),
+      knownQuoteItemIds: new Set((storedQuoteItems ?? []).map((item) => item.id)),
+      knownQuoteIds: storedQuoteIds,
+    });
+    const orderedQuoteIds = new Set([...storedQuoteIds, ...foreign.quoteIds]);
+
     const storedQuoteItemById = new Map<string, QuoteItemExportRow>();
     const storedCatalogModelIds = new Set<string>();
     const storedMethodIds = new Set<string>();
-    (storedQuoteItems ?? []).forEach((item) => {
+    [...(storedQuoteItems ?? []), ...foreign.quoteItems].forEach((item) => {
       storedQuoteItemById.set(item.id, item);
       if (typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()) {
         storedCatalogModelIds.add(item.catalog_model_id.trim());
@@ -1508,7 +1532,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       itemsByOrderId.set(orderId, list);
     });
     const linkedQuoteById = new Map(linkedQuotes.map((quote) => [quote.id, quote]));
-    const linkedRunsByQuoteId = new Map(linkedQuoteRuns.map((entry) => [entry.quoteId, entry.runs]));
+    const linkedRunsByQuoteId = new Map([...linkedQuoteRuns, ...foreign.quoteRuns].map((entry) => [entry.quoteId, entry.runs]));
     const storedCustomerById = new Map<string, CustomerRecord>();
     (((storedCustomersResult.data ?? []) as unknown) as CustomerRecord[]).forEach((customer) => {
       storedCustomerById.set(customer.id, customer);
@@ -1521,10 +1545,10 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       if (legalKey) storedLeadByLookup.set(legalKey, lead);
     });
     const designAssetsByQuoteId = new Map<string, { visualization: OrderDesignAsset[]; layout: OrderDesignAsset[] }>();
-    for (const row of (((designTaskRows.data ?? []) as unknown) as Array<{
+    for (const row of ([...(designTaskRows.data ?? []), ...foreign.designTaskRows] as unknown) as Array<{
       entity_id?: string | null;
       metadata?: Record<string, unknown> | null;
-    }>)) {
+    }>) {
       const metadata = row.metadata ?? {};
       const quoteId =
         typeof metadata.quote_id === "string" && metadata.quote_id.trim()
@@ -1532,7 +1556,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
           : typeof row.entity_id === "string" && row.entity_id.trim()
             ? row.entity_id.trim()
             : "";
-      if (!quoteId || !storedQuoteIds.includes(quoteId)) continue;
+      if (!quoteId || !orderedQuoteIds.has(quoteId)) continue;
       const statusRaw = typeof metadata.status === "string" ? metadata.status.trim().toLowerCase() : "new";
       if (!(statusRaw in DESIGN_STATUS_LABELS) || statusRaw !== "approved") continue;
       const existing = designAssetsByQuoteId.get(quoteId) ?? { visualization: [], layout: [] };
@@ -1570,9 +1594,16 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       const manager = order.manager_user_id ? memberById.get(order.manager_user_id) : null;
       const baseItems = itemsByOrderId.get(order.id) ?? [];
       const linkedQuote = order.quote_id ? linkedQuoteById.get(order.quote_id) ?? null : null;
-      const linkedRuns = order.quote_id ? linkedRunsByQuoteId.get(order.quote_id) ?? [] : [];
+      // Прорахунки замовлення — усі, з яких прийшли його позиції, а не лише той, з якого почали.
+      const orderQuoteIds = new Set<string>(order.quote_id ? [order.quote_id] : []);
+      baseItems.forEach((item) => {
+        const sourceQuoteId = item.quoteItemId ? storedQuoteItemById.get(item.quoteItemId)?.quote_id : null;
+        if (sourceQuoteId) orderQuoteIds.add(sourceQuoteId);
+      });
       const items = baseItems.map((item) => {
         const quoteItem = item.quoteItemId ? storedQuoteItemById.get(item.quoteItemId) ?? null : null;
+        const itemQuoteId = quoteItem?.quote_id ?? order.quote_id ?? null;
+        const linkedRuns = itemQuoteId ? linkedRunsByQuoteId.get(itemQuoteId) ?? [] : [];
         const catalogModelId = quoteItem?.catalog_model_id?.trim?.() || item.catalogModelId?.trim?.() || "";
         const catalogModel = catalogModelId ? storedCatalogModelsById.get(catalogModelId) ?? null : null;
         const attachmentImage = parseQuoteItemAttachmentImage(quoteItem?.attachment);
@@ -1632,7 +1663,17 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         Boolean(order.has_approved_layout) ||
         !requiresDesignApproval ||
         Boolean(linkedDesignTask && isLayoutApprovedByTask(linkedDesignTask));
-      const quoteDesignAssets = order.quote_id ? designAssetsByQuoteId.get(order.quote_id) : null;
+      const orderQuoteDesignAssets = Array.from(orderQuoteIds).flatMap((quoteId) => {
+        const assets = designAssetsByQuoteId.get(quoteId);
+        return assets ? [assets] : [];
+      });
+      const quoteDesignAssets =
+        orderQuoteDesignAssets.length > 0
+          ? {
+              visualization: orderQuoteDesignAssets.flatMap((assets) => assets.visualization),
+              layout: orderQuoteDesignAssets.flatMap((assets) => assets.layout),
+            }
+          : null;
       const linkedTaskAssets =
         linkedDesignTask?.status === "approved"
           ? {
@@ -1855,8 +1896,9 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       } satisfies DerivedOrderRecord;
     });
 
-    const storedQuoteIdSet = new Set(storedQuoteIds);
-    const derivedPendingRecords = approvedQuoteDerivedOrders.filter((record) => !storedQuoteIdSet.has(record.quoteId));
+    // Прорахунок, хоч одна позиція якого вже в замовленні, у «чекають замовлення» не показуємо:
+    // решту його позицій додають із картки прорахунку.
+    const derivedPendingRecords = approvedQuoteDerivedOrders.filter((record) => !orderedQuoteIds.has(record.quoteId));
 
     return [...storedRecords, ...derivedPendingRecords];
   }
@@ -1871,14 +1913,22 @@ export async function loadOrderCreationDraft(teamId: string, quoteId: string, us
     throw new Error("Замовлення можна створити тільки із затвердженого прорахунку.");
   }
 
+  const selectableItems = readiness.items.map((item) => ({
+    ...item,
+    quoteItemId: item.quoteItemId ?? item.id,
+  }));
+  const [orderedItemNumbers, appendTargets] = await Promise.all([
+    loadOrderedQuoteItemNumbers(teamId, selectableItems.map((item) => item.quoteItemId ?? item.id)),
+    loadOrderAppendTargets(teamId, readiness.customerId, readiness.currency),
+  ]);
+
   return {
     quoteId,
     quoteNumber: readiness.quoteNumber,
     readiness,
-    selectableItems: readiness.items.map((item) => ({
-      ...item,
-      quoteItemId: item.quoteItemId ?? item.id,
-    })),
+    selectableItems,
+    orderedItemNumbers,
+    appendTargets,
   } satisfies OrderCreationDraft;
 }
 
@@ -1890,7 +1940,12 @@ export async function createOrderFromApprovedQuote(params: {
 }) {
   const draft = await loadOrderCreationDraft(params.teamId, params.quoteId, params.userId);
   const selectedIds = new Set(params.selectedQuoteItemIds.filter(Boolean));
-  const selectedItems = draft.selectableItems.filter((item) => selectedIds.has(item.quoteItemId ?? item.id));
+  // Позиції, що вже пішли в інше замовлення, вдруге не продаємо (REQ-344): з прорахунку
+  // можна взяти частину зараз, а решту — пізніше окремим замовленням.
+  const selectedItems = draft.selectableItems.filter((item) => {
+    const id = item.quoteItemId ?? item.id;
+    return selectedIds.has(id) && !draft.orderedItemNumbers[id];
+  });
 
   if (draft.readiness.partyType !== "customer") {
     throw new Error("Не можна створити замовлення на ліда. Спочатку переведіть його у замовника.");
@@ -1899,26 +1954,7 @@ export async function createOrderFromApprovedQuote(params: {
     throw new Error(`Не можна створити замовлення. Блокери: ${draft.readiness.blockers.join(", ")}.`);
   }
   if (selectedItems.length === 0) {
-    throw new Error("Виберіть хоча б одну позицію для переносу в замовлення.");
-  }
-
-  const existingOrderQuery = await supabase
-    .schema("tosho")
-    .from("orders")
-    .select("id")
-    .eq("team_id", params.teamId)
-    .eq("quote_id", params.quoteId)
-    .limit(1)
-    .maybeSingle<{ id: string }>();
-
-  if (existingOrderQuery.error) {
-    if (isMissingOrdersRelationMessage(existingOrderQuery.error.message)) {
-      throw new Error("Таблиці замовлень ще не створені. Запустіть scripts/orders-schema.sql.");
-    }
-    throw existingOrderQuery.error;
-  }
-  if (existingOrderQuery.data?.id) {
-    return { id: existingOrderQuery.data.id, created: false as const };
+    throw new Error("Виберіть хоча б одну позицію, якої ще немає в замовленні.");
   }
 
   const orderId = crypto.randomUUID();
@@ -1987,25 +2023,18 @@ export async function createOrderFromApprovedQuote(params: {
   }
 
   const orderItemsPayload = selectedItems.map((item, index) => ({
+    ...toOrderItemPayload(item),
     id: crypto.randomUUID(),
     team_id: params.teamId,
     order_id: orderId,
-    quote_item_id: item.quoteItemId ?? item.id,
     position: Number(item.position ?? index + 1) || index + 1,
-    name: item.name,
-    description: item.description ?? null,
-    qty: item.qty,
-    unit: item.unit,
-    unit_price: item.unitPrice,
-    line_total: item.lineTotal,
-    methods: item.methodsSummary ? [{ label: item.methodsSummary }] : null,
-    catalog_model_id: item.catalogModelId ?? null,
-    image_url: item.imageUrl ?? null,
-    thumb_url: item.thumbUrl ?? null,
   }));
 
   const { error: insertItemsError } = await supabase.schema("tosho").from("order_items").insert(orderItemsPayload);
   if (insertItemsError) {
+    await discardEmptyOrder(params.teamId, orderId, orderNumber);
+    const conflict = describeOrderItemConflict(insertItemsError);
+    if (conflict) throw conflict;
     if (isMissingOrdersRelationMessage(insertItemsError.message) || isMissingOrdersColumnMessage(insertItemsError.message)) {
       throw new Error("Таблиці позицій замовлень не мають полів для СП. Запустіть оновлений scripts/orders-schema.sql.");
     }
@@ -2013,31 +2042,6 @@ export async function createOrderFromApprovedQuote(params: {
   }
 
   return { id: orderId, created: true as const };
-}
-
-const getManualOrderMonthCode = (date = new Date()) => {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = String(date.getFullYear()).slice(-2);
-  return `${month}${year}`;
-};
-
-/**
- * Наступний номер замовлення `TO-{MMYY}-{0000}` (ToSho Order), з прорахунку чи без: TS-… лишається
- * за прорахунком. quote_number НЕ унікальний, тож достатньо best-effort max+1 у межах місяця.
- */
-async function getNextOrderNumber(teamId: string) {
-  const monthCode = getManualOrderMonthCode();
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("orders")
-    .select("quote_number")
-    .eq("team_id", teamId)
-    .like("quote_number", `TO-${monthCode}-%`)
-    .order("quote_number", { ascending: false })
-    .limit(1);
-  if (error && !isMissingOrdersRelationMessage(error.message)) throw error;
-  const last = Number.parseInt(((data ?? [])[0] as { quote_number?: string | null } | undefined)?.quote_number?.split("-")[2] ?? "", 10);
-  return `TO-${monthCode}-${String(Number.isFinite(last) && last >= 1 ? last + 1 : 1).padStart(4, "0")}`;
 }
 
 /**

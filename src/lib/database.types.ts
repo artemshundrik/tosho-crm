@@ -6098,6 +6098,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      append_quote_items_to_order: {
+        Args: { p_items: Json; p_order_id: string; p_quote_id: string }
+        Returns: Json
+      }
       correct_order_invoice: {
         Args: {
           p_invoice_date: string

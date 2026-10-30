@@ -54,6 +54,7 @@ const RULES = [
       "src/lib/designTaskQuoteItem.ts": "сам модуль правила",
       "src/features/quotes/quote-details/queries.ts": "редактор прорахунку — усі позиції, не одна",
       "src/features/orders/orderRecords.ts": "позиції замовлення, інша сутність",
+      "src/features/orders/orderQuoteLinks.ts": "звідки позиції замовлення: прорахунок кожної позиції (REQ-344)",
       "src/pages/QuotesPage.tsx": "дошка прорахунків показує ВСІ товари прорахунку",
       "netlify/functions/tosho-ai.ts": "асистент створює й читає позиції прорахунку",
     },
