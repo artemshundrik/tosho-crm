@@ -783,7 +783,8 @@ export async function notifyOrderInvoiceDecided(params: {
     body: corrected
       ? `${who} виправив(ла) рахунок ${params.invoiceLabel ?? ""}: ${params.note?.trim() || ""}. Якщо замовник уже має рахунок — надішліть новий.`.replace(/\s+/g, " ")
       : issued
-        ? `${who} виписав(ла) рахунок на ${params.orderNumber}. Його можна відкрити й надіслати замовнику.`
+        ? // Бухгалтер міг змінити ціну на запиті (картка 345) — менеджер має побачити це в сповіщенні.
+          `${who} виписав(ла) рахунок на ${params.orderNumber}${params.note?.trim() ? ` і змінив(ла) ${params.note.trim()}` : ""}. Його можна відкрити й надіслати замовнику.`
         : `${who} повернув(ла) запит рахунку на ${params.orderNumber}: ${params.note?.trim() || "без коментаря"}. Виправте й попросіть ще раз.`,
     href: `/orders/production/${params.orderId}`,
     type: issued ? "success" : "warning",

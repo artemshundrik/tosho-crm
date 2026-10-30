@@ -35,6 +35,16 @@ export const getInvoiceCorrectionBlocker = (
   record: Pick<DerivedOrderRecord, "invoiceNumber" | "specificationSignedAt" | "paymentStatus">
 ): string | null => {
   if (!record.invoiceNumber) return "Рахунок ще не виписано";
+  return getInvoicePriceBlocker(record);
+};
+
+/**
+ * Ті самі межі для ціни на запиті рахунку (картка 345): бухгалтер править ціну
+ * й кількість до виписки, якщо ні СП, ні оплата цього не забороняють.
+ */
+export const getInvoicePriceBlocker = (
+  record: Pick<DerivedOrderRecord, "specificationSignedAt" | "paymentStatus">
+): string | null => {
   if (record.specificationSignedAt) return "СП уже підписана — для нової ціни потрібна нова СП";
   if (PAID_STATUSES.has(record.paymentStatus)) return "За рахунком уже є оплата — виправити поки не можна";
   return null;

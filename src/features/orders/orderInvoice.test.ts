@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   findIndivisiblePrices,
   getInvoiceCorrectionBlocker,
+  getInvoicePriceBlocker,
   getOrderInvoiceState,
   parseMoneyInput,
 } from "./orderInvoice";
@@ -49,6 +50,15 @@ describe("getInvoiceCorrectionBlocker", () => {
     expect(getInvoiceCorrectionBlocker({ ...issued, invoiceNumber: null })).toBe("Рахунок ще не виписано");
     expect(getInvoiceCorrectionBlocker({ ...issued, specificationSignedAt: "2026-10-26" })).toMatch(/СП уже підписана/);
     expect(getInvoiceCorrectionBlocker({ ...issued, paymentStatus: "partially_paid" })).toMatch(/оплата/);
+  });
+});
+
+describe("getInvoicePriceBlocker", () => {
+  it("на запиті без номера ціну можна, з підписаною СП чи оплатою — ні", () => {
+    const requested = { specificationSignedAt: null, paymentStatus: "awaiting_payment" };
+    expect(getInvoicePriceBlocker(requested)).toBeNull();
+    expect(getInvoicePriceBlocker({ ...requested, specificationSignedAt: "2026-10-30" })).toMatch(/СП уже підписана/);
+    expect(getInvoicePriceBlocker({ ...requested, paymentStatus: "fully_paid" })).toMatch(/оплата/);
   });
 });
 

@@ -2,8 +2,14 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { getInvoiceContractBlocker } from "@/features/orders/orderDocumentRequirements";
-import { formatOrderDate, formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
 import {
+  formatOrderDate,
+  formatOrderMoney,
+  formatOrderMoneyExact,
+  type DerivedOrderRecord,
+} from "@/features/orders/orderRecords";
+import {
+  correctOrderInvoice,
   issueOrderInvoice,
   requestOrderInvoice,
   returnOrderInvoiceRequest,
@@ -13,6 +19,8 @@ import { logActivity } from "@/lib/activityLogger";
 import { getCurrentUser } from "@/lib/currentUser";
 import { buildUserNameFromMetadata, type UserNameMetadata } from "@/lib/userName";
 import { notifyOrderInvoiceDecided, notifyOrderInvoiceRequested } from "@/lib/workflowNotifications";
+
+export type InvoiceItemDraft = { id: string; qty: number; unitPrice: number };
 
 /** Подія для стрічки замовлення — у білому списку THREAD_EVENT_ACTIONS. */
 export const ORDER_INVOICE_EVENT = "order_invoice";
@@ -65,11 +73,14 @@ export function useOrderInvoiceFlow({
   teamId,
   userId,
   onPatched,
+  onRecordChanged,
 }: {
   record: DerivedOrderRecord | null;
   teamId: string | null | undefined;
   userId: string | null | undefined;
   onPatched: (patch: OrderInvoicePatch) => void;
+  /** Виписка з новими цінами змінює позиції й суму — замовлення треба перечитати. */
+  onRecordChanged: () => void;
 }) {
   const [busy, setBusy] = useState<"request" | "issue" | "return" | null>(null);
 
@@ -125,18 +136,42 @@ export function useOrderInvoiceFlow({
       "Запит рахунку надіслано в бухгалтерію"
     );
 
-  const issue = (number: string, date: string) =>
-    run(
+  /**
+   * «Рахунок виписано». Якщо бухгалтер на запиті змінив ціну чи кількість
+   * (картка 345), позиції, номер і дата лягають однією транзакцією через
+   * tosho.correct_order_invoice — і менеджер одразу бачить рахунок із новою ціною.
+   */
+  const issue = (number: string, date: string, items?: InvoiceItemDraft[]) => {
+    let priceNote: string | null = null;
+    return run(
       "issue",
-      () => issueOrderInvoice({ teamId: teamId!, orderId: record!.id, number, date }),
+      async () => {
+        if (!items) return issueOrderInvoice({ teamId: teamId!, orderId: record!.id, number, date });
+        const result = await correctOrderInvoice({ orderId: record!.id, items, number, date });
+        if (result.totalBefore !== result.totalAfter) {
+          const money = (value: number) => formatOrderMoneyExact(value, record!.currency);
+          priceNote = `сума ${money(result.totalBefore)} → ${money(result.totalAfter)}`;
+        }
+        onRecordChanged();
+        return {
+          invoiceNumber: result.numberAfter,
+          invoiceDate: date,
+          invoiceCreatedAt: new Date().toISOString(),
+          invoiceRequestedAt: record!.invoiceRequestedAt,
+          invoiceRequestedBy: record!.invoiceRequestedBy,
+          invoiceReturnedAt: null,
+          invoiceReturnNote: null,
+        };
+      },
       async (patch) => {
         const label = `№ ${patch.invoiceNumber} від ${formatOrderDate(patch.invoiceDate ?? date)}`;
-        await followUp(`Виписав(ла) рахунок ${label}`, (actorName) =>
+        await followUp(`Виписав(ла) рахунок ${label}${priceNote ? `: ${priceNote}` : ""}`, (actorName) =>
           notifyOrderInvoiceDecided({
             orderId: record!.id,
             orderNumber: record!.quoteNumber,
             decision: "issued",
             invoiceLabel: label,
+            note: priceNote,
             recipientUserIds: [patch.invoiceRequestedBy, record!.managerUserId],
             deciderName: actorName,
             actorUserId: userId,
@@ -145,6 +180,7 @@ export function useOrderInvoiceFlow({
       },
       "Рахунок виписано — менеджер отримає сповіщення"
     );
+  };
 
   const returnRequest = (note: string) =>
     run(

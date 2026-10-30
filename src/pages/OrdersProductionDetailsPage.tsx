@@ -713,6 +713,8 @@ export default function OrdersProductionDetailsPage() {
         const next = { ...current, ...patch };
         return { ...next, docs: normalizeDocumentDocs(next) };
       }),
+    // refreshRecord оголошено нижче; викликається лише після виписки, коли він уже є.
+    onRecordChanged: () => void refreshRecord(),
   });
   const legalEntity = useOrderLegalEntity({
     record,
