@@ -280,7 +280,7 @@ export default function ActivityPage() {
                               </div>
                               {item.actor ? (
                                 <div className="mt-2 text-xs text-muted-foreground">
-                                  Зробив: <span className="font-medium text-foreground">{item.actor}</span>
+                                  <span className="font-medium text-foreground">{item.actor}</span>
                                 </div>
                               ) : null}
                             </div>

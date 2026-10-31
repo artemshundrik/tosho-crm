@@ -123,7 +123,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   {
     key: "team_absences",
     label: "Заявки на відсутність",
-    description: "Запити на відпустку / day-off, рішення по них і лікарняні",
+    description: "Запити на відпустку чи відгул, рішення по них і лікарняні",
   },
   {
     key: "probation",

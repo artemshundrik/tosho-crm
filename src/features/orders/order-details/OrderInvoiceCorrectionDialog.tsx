@@ -115,7 +115,7 @@ export function OrderInvoiceCorrectionDialog({
       ]
         .filter(Boolean)
         .join(", ");
-      void followUpInvoiceEvent(record, teamId, `Виправив(ла) рахунок ${label}${summary ? `: ${summary}` : ""}`, (actorName) =>
+      void followUpInvoiceEvent(record, teamId, `Рахунок ${label} виправлено${summary ? `: ${summary}` : ""}`, (actorName) =>
         notifyOrderInvoiceDecided({
           orderId: record.id,
           orderNumber: record.quoteNumber,

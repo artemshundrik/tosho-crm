@@ -1515,7 +1515,7 @@ export function TeamPage() {
                   />
                   <p className="mt-3 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
                     Відпустка міряється календарними днями — вихідні всередині неї
-                    квоту списують. Day-off і лікарняний рахуються робочими. Свята не
+                    квоту списують. Відгул і лікарняний рахуються робочими. Свята не
                     списують нічого.
                   </p>
                 </CardContent>
@@ -1985,7 +1985,7 @@ export function TeamPage() {
                 <EmptyRow
                   icon={CalendarDays}
                   title="За цей рік відсутностей не записано"
-                  hint="Відпустку чи day-off можна попросити кнопкою вгорі."
+                  hint="Відпустку чи відгул можна попросити кнопкою вгорі."
                   actionLabel="Запросити відсутність"
                   onAction={() => openAbsenceDialog({ mode: "request", userId: userId ?? undefined })}
                 />

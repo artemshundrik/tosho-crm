@@ -51,7 +51,7 @@ export type TeamAbsence = {
 
 export const TEAM_ABSENCE_KIND_OPTIONS: Array<{ value: TeamAbsenceKind; label: string }> = [
   { value: "vacation", label: "Відпустка" },
-  { value: "day_off", label: "Day-off" },
+  { value: "day_off", label: "Відгул" },
   { value: "sick_leave", label: "Лікарняний" },
   { value: "wfh", label: "З дому" },
   { value: "other", label: "Інше" },
@@ -59,7 +59,7 @@ export const TEAM_ABSENCE_KIND_OPTIONS: Array<{ value: TeamAbsenceKind; label: s
 
 export const TEAM_ABSENCE_KIND_LABELS: Record<TeamAbsenceKind, string> = {
   sick_leave: "Лікарняний",
-  day_off: "Day-off",
+  day_off: "Відгул",
   vacation: "Відпустка",
   wfh: "З дому",
   other: "Інше",

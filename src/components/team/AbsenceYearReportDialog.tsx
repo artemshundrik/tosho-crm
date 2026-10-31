@@ -160,7 +160,7 @@ export function AbsenceYearReportDialog({
   const handleCopy = async () => {
     setCopying(true);
     try {
-      const header = ["Людина", "Роль", "Відпустка", "Ліміт", "Day-off", "Ліміт", "Лікарняні", "Ліміт", "Інше", "Разом"];
+      const header = ["Людина", "Роль", "Відпустка", "Ліміт", "Відгул", "Ліміт", "Лікарняні", "Ліміт", "Інше", "Разом"];
       const body = rows.map((row) =>
         [
           row.name,
@@ -214,7 +214,7 @@ export function AbsenceYearReportDialog({
           <DialogTitle>Відсутності за {year} рік</DialogTitle>
           <DialogDescription>
             Використано за погодженими записами. Відпустка — календарними днями
-            (вихідні всередині рахуються), day-off і лікарняний — робочими. Свята
+            (вихідні всередині рахуються), відгул і лікарняний — робочими. Свята
             не списують нічого.
           </DialogDescription>
         </DialogHeader>

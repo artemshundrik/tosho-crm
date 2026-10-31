@@ -165,7 +165,7 @@ export function useOrderInvoiceFlow({
       },
       async (patch) => {
         const label = `№ ${patch.invoiceNumber} від ${formatOrderDate(patch.invoiceDate ?? date)}`;
-        await followUp(`Виписав(ла) рахунок ${label}${priceNote ? `: ${priceNote}` : ""}`, (actorName) =>
+        await followUp(`Рахунок ${label} виписано${priceNote ? `: ${priceNote}` : ""}`, (actorName) =>
           notifyOrderInvoiceDecided({
             orderId: record!.id,
             orderNumber: record!.quoteNumber,

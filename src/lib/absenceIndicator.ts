@@ -98,7 +98,7 @@ export const MIN_ICON_BADGE_SIZE = 32;
 const KIND_LABEL: Record<AbsenceIndicatorKind, string> = {
   vacation: "у відпустці",
   sick_leave: "на лікарняному",
-  day_off: "day-off",
+  day_off: "на відгулі",
   wfh: "працює з дому",
   other: "відсутній",
 };

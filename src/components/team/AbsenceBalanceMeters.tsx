@@ -216,7 +216,7 @@ function Meter({
 
 const SHORT_LABELS: Record<QuotaAbsenceKind, string> = {
   vacation: "відп.",
-  day_off: "day-off",
+  day_off: "відг.",
   sick_leave: "лік.",
 };
 

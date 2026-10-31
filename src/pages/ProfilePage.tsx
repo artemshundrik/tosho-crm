@@ -1670,7 +1670,7 @@ export function ProfilePage() {
                   <AbsenceBalanceMeters balance={myBalance} entries={balanceEntries} year={year} />
                   <p className="mt-3 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
                     Відпустка міряється календарними днями — вихідні всередині неї квоту списують.
-                    Day-off і лікарняний рахуються робочими. Свята не списують нічого.
+                    Відгул і лікарняний рахуються робочими. Свята не списують нічого.
                   </p>
                 </>
               )}
@@ -1697,7 +1697,7 @@ export function ProfilePage() {
                 <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center">
                   <p className="text-sm font-medium text-foreground">Цього року заявок ще не було</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Відпустка, day-off чи лікарняний — кнопка «Подати заявку» вгорі.
+                    Відпустка, відгул чи лікарняний — кнопка «Подати заявку» вгорі.
                   </p>
                 </div>
               ) : (

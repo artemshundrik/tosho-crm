@@ -4939,7 +4939,7 @@ export default function DesignPage() {
                 className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
-                <span className="hidden xl:inline">Kanban</span>
+                <span className="hidden xl:inline">Дошка</span>
               </Button>
               <Button
                 variant="segmented"

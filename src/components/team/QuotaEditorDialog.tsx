@@ -157,7 +157,7 @@ export function QuotaEditorDialog({
           <DialogTitle>Квоти на {year}</DialogTitle>
           <DialogDescription>
             Відпустка рахується КАЛЕНДАРНИМИ днями (свята всередині не
-            списуються), day-off і лікарняний — робочими. За замовчуванням{" "}
+            списуються), відгул і лікарняний — робочими. За замовчуванням{" "}
             {DEFAULT_ABSENCE_QUOTAS.vacation} / {DEFAULT_ABSENCE_QUOTAS.day_off} /{" "}
             {DEFAULT_ABSENCE_QUOTAS.sick_leave}.
           </DialogDescription>
@@ -167,7 +167,7 @@ export function QuotaEditorDialog({
           <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_64px_64px_64px] items-center gap-2 border-b border-border/50 bg-card px-1 pb-2 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Людина</span>
             <span className="text-center">Відп.</span>
-            <span className="text-center">Day-off</span>
+            <span className="text-center">Відгул</span>
             <span className="text-center">Лік.</span>
           </div>
 
@@ -215,7 +215,7 @@ export function QuotaEditorDialog({
                       controlSize="sm"
                       className="text-center tabular-nums"
                       value={draft.dayOff}
-                      aria-label={`Day-off — ${person.name}`}
+                      aria-label={`Відгул — ${person.name}`}
                       onChange={(event) => setField(person.userId, "dayOff", event.target.value)}
                     />
                     <Input

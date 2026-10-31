@@ -53,7 +53,7 @@ type FinanceSection = {
 };
 
 const FINANCE_SECTIONS: FinanceSection[] = [
-  { id: "dashboard", label: "Дашборд", icon: TrendingUp, description: "Фінансова картина по контурах: заробили, витратили, дебіторка, прибуток, маржа." },
+  { id: "dashboard", label: "Огляд", icon: TrendingUp, description: "Фінансова картина по контурах: заробили, витратили, дебіторка, прибуток, маржа." },
   { id: "sales", label: "Реєстр продажів", icon: Receipt, description: "Рахунки клієнтам, оплати та документи реалізації (видаткові/акти)." },
   { id: "expenses", label: "Витрати", icon: PiggyBank, description: "Сталі (щомісячні) та змінні витрати, постачальники, розподіл на замовлення." },
   { id: "payroll", label: "Виплати команді", icon: Users, description: "Зарплати, ФОП-договори, місячні акти та статус виплат." },

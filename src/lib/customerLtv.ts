@@ -121,7 +121,7 @@ export type RfmSegment =
   | "none";
 
 export const RFM_SEGMENT_LABELS: Record<RfmSegment, string> = {
-  champion: "Champion",
+  champion: "Ядро",
   new: "Новий",
   loyal: "Лояльний",
   at_risk: "Зникає",
