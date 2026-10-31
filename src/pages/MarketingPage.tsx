@@ -318,7 +318,9 @@ const getRecordKey = (taskId: string, fileId: string) => `${taskId}:${fileId}`;
 
 // Count pill for filter chips — a self-contained badge so the number reads as
 // separate from the label instead of colliding with it ("Нове 3", not "Нове3").
+// Нуль не показуємо: «0» у фільтрі — шум, порожній фільтр і так приглушений.
 function CountPill({ value, active }: { value: number; active?: boolean }) {
+  if (value === 0) return null;
   return (
     <span
       className={cn(
@@ -1249,6 +1251,7 @@ export default function MarketingPage() {
                 key={status}
                 size="sm"
                 active={statusFilter === status}
+                className={cn(statusCounts[status] === 0 && statusFilter !== status && "text-muted-foreground/70")}
                 icon={<Icon className="h-3.5 w-3.5" />}
                 onClick={() => setStatusFilter((prev) => (prev === status ? "all" : status))}
               >
