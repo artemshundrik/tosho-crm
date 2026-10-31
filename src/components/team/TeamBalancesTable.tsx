@@ -1,4 +1,6 @@
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { TableTitleCell } from "@/components/app/table-kit";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 import { toneBadgeClass } from "@/lib/statusTones";
@@ -155,30 +157,30 @@ export function TeamBalancesTable({
   onOpenPerson?: (userId: string) => void;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[620px]">
-        <thead>
-          <tr className="border-b border-border/60 text-3xs uppercase tracking-wide text-muted-foreground">
-            <th className="px-4 py-2 text-left font-semibold">Людина</th>
-            {QUOTA_ABSENCE_KINDS.map((kind) => (
-              <th key={kind} className="px-3 py-2 text-right font-semibold">
-                {TEAM_ABSENCE_KIND_LABELS[kind]}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border/40">
-          {people.map((person) => {
-            const balance = balances.get(person.userId) ?? null;
-            const entries = entriesByUser.get(person.userId);
-            return (
-              <tr
-                key={person.userId}
-                className={cn("group", onOpenPerson && "cursor-pointer hover:bg-muted/40")}
-                onClick={onOpenPerson ? () => onOpenPerson(person.userId) : undefined}
-              >
-                <td className="px-4 py-2">
-                  <div className="flex items-center gap-2.5">
+    <Table variant="list" className="min-w-[620px]">
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          <TableHead>Людина</TableHead>
+          {QUOTA_ABSENCE_KINDS.map((kind) => (
+            <TableHead key={kind} className="text-right">
+              {TEAM_ABSENCE_KIND_LABELS[kind]}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {people.map((person) => {
+          const balance = balances.get(person.userId) ?? null;
+          const entries = entriesByUser.get(person.userId);
+          return (
+            <TableRow
+              key={person.userId}
+              className={cn("group", onOpenPerson && "cursor-pointer")}
+              onClick={onOpenPerson ? () => onOpenPerson(person.userId) : undefined}
+            >
+              <TableCell>
+                <TableTitleCell
+                  leading={
                     <AvatarBase
                       src={person.avatarUrl}
                       name={person.name}
@@ -186,34 +188,32 @@ export function TeamBalancesTable({
                       assetVariant="xs"
                       size={28}
                     />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-xs font-medium text-foreground">{person.name}</span>
-                        {person.absenceToday ? (
-                          <span
-                            className={cn(
-                              "shrink-0 rounded-full border px-1.5 py-px text-3xs font-semibold",
-                              toneBadgeClass[TEAM_ABSENCE_KIND_TONE[person.absenceToday.kind]]
-                            )}
-                          >
-                            зараз
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="truncate text-3xs text-muted-foreground">{person.roleLabel}</div>
-                    </div>
-                  </div>
-                </td>
-                {QUOTA_ABSENCE_KINDS.map((kind) => (
-                  <td key={kind} className="px-3 py-2 text-right">
-                    <Cell kind={kind} balance={balance} entries={entries?.[kind]} year={year} />
-                  </td>
-                ))}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  }
+                  title={person.name}
+                  adornment={
+                    person.absenceToday ? (
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full border px-1.5 py-px text-3xs font-semibold",
+                          toneBadgeClass[TEAM_ABSENCE_KIND_TONE[person.absenceToday.kind]]
+                        )}
+                      >
+                        зараз
+                      </span>
+                    ) : null
+                  }
+                  meta={[person.roleLabel]}
+                />
+              </TableCell>
+              {QUOTA_ABSENCE_KINDS.map((kind) => (
+                <TableCell key={kind} className="text-right">
+                  <Cell kind={kind} balance={balance} entries={entries?.[kind]} year={year} />
+                </TableCell>
+              ))}
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }

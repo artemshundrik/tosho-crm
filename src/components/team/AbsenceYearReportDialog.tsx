@@ -3,6 +3,8 @@ import { Copy } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { TableEmptyRow, TableTitleCell } from "@/components/app/table-kit";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -185,7 +187,7 @@ export function AbsenceYearReportDialog({
     }
   };
 
-  const cell = "px-2 py-1.5 text-right tabular-nums";
+  const cell = "text-right";
 
   /**
    * Крихітна шкала поруч із числом: таблиця з самими нулями читалась як
@@ -220,79 +222,77 @@ export function AbsenceYearReportDialog({
         </DialogHeader>
 
         <div className="max-h-[56vh] overflow-auto rounded-inner border border-border/50">
-          <table className="w-full text-xs">
-            <thead className="sticky top-0 z-10 bg-card">
-              <tr className="border-b border-border/60 text-3xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-2 py-2 text-left font-semibold">Людина</th>
+          {/* bare: скрол дає рамка вікна, тож липка шапка рахується від неї (top-0),
+              а не від шапки сторінки, як у stickyHeader. */}
+          <Table bare className="[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-card">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Людина</TableHead>
                 {QUOTA_ABSENCE_KINDS.map((kind) => (
-                  <th key={kind} className="px-2 py-2 text-right font-semibold">
+                  <TableHead key={kind} className="text-right">
                     {TEAM_ABSENCE_KIND_LABELS[kind]}
-                  </th>
+                  </TableHead>
                 ))}
-                <th className="px-2 py-2 text-right font-semibold">Інше</th>
-                <th className="px-2 py-2 text-right font-semibold">Разом</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/40">
+                <TableHead className="text-right">Інше</TableHead>
+                <TableHead className="text-right">Разом</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">
-                    Немає кого показати.
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={6}>Немає кого показати.</TableEmptyRow>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.userId} className="hover:bg-muted/40">
-                    <td className="px-2 py-1.5">
-                      <div className="flex items-center gap-2.5">
-                        <AvatarBase
-                          src={row.avatarUrl}
-                          name={row.name}
-                          fallback={row.initials}
-                          assetVariant="xs"
-                          size={28}
-                        />
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-foreground">{row.name}</div>
-                          <div className="truncate text-3xs text-muted-foreground">{row.roleLabel}</div>
-                        </div>
-                      </div>
-                    </td>
+                  <TableRow key={row.userId}>
+                    <TableCell>
+                      <TableTitleCell
+                        leading={
+                          <AvatarBase
+                            src={row.avatarUrl}
+                            name={row.name}
+                            fallback={row.initials}
+                            assetVariant="xs"
+                            size={28}
+                          />
+                        }
+                        title={row.name}
+                        meta={[row.roleLabel]}
+                      />
+                    </TableCell>
                     {QUOTA_ABSENCE_KINDS.map((kind) => {
                       const over = row.used[kind] > row.quota[kind];
                       return (
-                        <td key={kind} className={cn(cell, over && "text-warning-foreground")}>
+                        <TableCell key={kind} className={cn(cell, over && "text-warning-foreground")}>
                           {meter(row.used[kind], row.quota[kind], kind)}
-                        </td>
+                        </TableCell>
                       );
                     })}
-                    <td className={cn(cell, !row.used.other && "text-muted-foreground")}>
+                    <TableCell className={cn(cell, !row.used.other && "text-muted-foreground")}>
                       {row.used.other || "—"}
-                    </td>
-                    <td className={cn(cell, "font-semibold", row.total === 0 && "text-muted-foreground")}>
+                    </TableCell>
+                    <TableCell className={cn(cell, "font-medium", row.total === 0 && "text-muted-foreground")}>
                       {row.total}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
+            </TableBody>
             {rows.length > 0 ? (
-              <tfoot className="border-t border-border/60 bg-muted/30">
-                <tr className="font-semibold">
-                  <td className="px-2 py-2 text-left">Разом по команді</td>
+              <TableFooter>
+                <TableRow className="font-medium hover:bg-transparent">
+                  <TableCell>Разом по команді</TableCell>
                   {QUOTA_ABSENCE_KINDS.map((kind) => (
-                    <td key={kind} className={cell}>
+                    <TableCell key={kind} className={cell}>
                       {totals[kind]}
-                    </td>
+                    </TableCell>
                   ))}
-                  <td className={cell}>{totals.other}</td>
-                  <td className={cell}>
+                  <TableCell className={cell}>{totals.other}</TableCell>
+                  <TableCell className={cell}>
                     {Object.values(totals).reduce((sum, value) => sum + value, 0)}
-                  </td>
-                </tr>
-              </tfoot>
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
             ) : null}
-          </table>
+          </Table>
         </div>
 
         <DialogFooter>

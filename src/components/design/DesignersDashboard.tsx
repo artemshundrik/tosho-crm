@@ -2036,7 +2036,7 @@ export function DesignersDashboard({
           <div className="overflow-x-auto px-3 pb-2 pt-2">
             {tableMode === "month" ? (
               <div className="min-w-[960px] px-2">
-                <div className="grid grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_22px] items-center gap-3 border-b border-border/50 px-2 py-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">
+                <div className="grid grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_22px] items-center gap-3 border-b border-border/50 px-2 py-2 text-xs font-medium text-muted-foreground">
                   <span>#</span>
                   <span>Дизайнер</span>
                   <span title="Усі задачі / з них із таймером">У роботі</span>
@@ -2140,20 +2140,20 @@ export function DesignersDashboard({
               <table className="w-full min-w-[860px] border-separate border-spacing-0.5">
                 <thead>
                   <tr>
-                    <th className="px-2 py-1.5 text-left text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">Дизайнер</th>
+                    <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">Дизайнер</th>
                     {months.map((month, index) => (
                       <th
                         key={month.value}
                         className={cn(
-                          "px-2 py-1.5 text-center text-3xs font-semibold uppercase tracking-caps",
-                          index === mi ? "text-primary" : "text-muted-foreground/80"
+                          "px-2 py-1.5 text-center text-xs font-medium",
+                          index === mi ? "text-primary" : "text-muted-foreground"
                         )}
                       >
                         {monthShort(month.value)}
                         {index === mi ? " •" : ""}
                       </th>
                     ))}
-                    <th className="px-2 py-1.5 text-center text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">
+                    <th className="px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">
                       Δ {months.length} міс
                     </th>
                   </tr>
@@ -2288,17 +2288,17 @@ export function DesignersDashboard({
               <table className="w-full min-w-[720px] border-separate border-spacing-0.5">
                 <thead>
                   <tr>
-                    <th className="px-2 py-1.5 text-left text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">Дизайнер</th>
+                    <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground">Дизайнер</th>
                     {fileExtColumns.map((ext) => (
-                      <th key={ext} className="px-2 py-1.5 text-center text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">
+                      <th key={ext} className="px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">
                         {ext}
                       </th>
                     ))}
                     {hasOtherExts ? (
-                      <th className="px-2 py-1.5 text-center text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">Інші</th>
+                      <th className="px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">Інші</th>
                     ) : null}
-                    <th className="px-2 py-1.5 text-center text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">Всього</th>
-                    <th className="px-2 py-1.5 text-left text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80" style={{ minWidth: 130 }}>
+                    <th className="px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">Всього</th>
+                    <th className="px-2 py-1.5 text-left text-xs font-medium text-muted-foreground" style={{ minWidth: 130 }}>
                       Вид
                     </th>
                   </tr>
