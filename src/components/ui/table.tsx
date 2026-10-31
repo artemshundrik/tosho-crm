@@ -44,28 +44,35 @@ const Table = React.forwardRef<
     bare?: boolean;
   }
 >(({ className, variant = "list", size = "md", stickyHeader = false, bare = false, ...props }, ref) => {
-  const sizeClasses = {
-    sm: "[&_tbody_tr]:h-12 [&_th]:h-10 [&_th]:px-4 [&_td]:px-4 [&_td]:py-2.5",
-    md: "[&_tbody_tr]:h-14 [&_th]:h-11 [&_th]:px-6 [&_td]:px-6 [&_td]:py-3.5",
-    lg: "[&_tbody_tr]:h-16 [&_th]:h-12 [&_th]:px-6 [&_td]:px-6 [&_td]:py-4",
-  };
+  /*
+   * ОДНА ЩІЛЬНІСТЬ НА ВСІ ТАБЛИЦІ (хвиля Б1 UI-аудиту, 01.11.2026). Доти
+   * sm/md/lg давали рядок 48/56/64 і відступ 16/24, а сторінки ще й
+   * перебивали їх своїми класами — тож рядок був від 40 до 109 px. Тепер
+   * рядок 44 (з двома лініями тексту росте сам, ~52), шапка 36, відступ 12
+   * і 16 у першої колонки. `size` лишився в API, але щільність не міняє:
+   * так само виглядати мають усі таблиці, а не лише нові.
+   */
+  const densityClasses = [
+    "[&_tbody_tr]:h-11 [&_th]:h-9 [&_th]:px-3 [&_td]:px-3 [&_td]:py-1.5",
+    "[&_th:first-child]:pl-4 [&_td:first-child]:pl-4 [&_th:last-child]:pr-4 [&_td:last-child]:pr-4",
+  ].join(" ");
+
+  // Заголовок колонки: звичайні літери, 12 px, сірий. Великі літери з
+  // розрядкою лишились лише в мітках секцій карток.
+  const headClasses = "[&_th]:text-xs [&_th]:font-medium [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-muted-foreground";
 
   const variantClasses = {
     list: [
-      "[&_thead]:bg-muted/45",
-      "[&_th]:text-2xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-caps-tight [&_th]:text-muted-foreground",
-      "[&_tbody_tr]:border-border/35 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/20",
+      headClasses,
+      "[&_tbody_tr]:border-border/50 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30",
     ].join(" "),
     analytics: [
-      "[&_thead]:bg-background/80",
-      "[&_th]:text-2xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-caps-tight [&_th]:text-muted-foreground",
-      "[&_tbody_tr:hover]:bg-background/75",
-      "[&_tbody_td]:tabular-nums",
+      headClasses,
+      "[&_tbody_tr:hover]:bg-muted/30",
     ].join(" "),
     compact: [
-      "[&_thead]:bg-muted/38",
-      "[&_th]:text-2xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-caps-tight [&_th]:text-muted-foreground",
-      "[&_tbody_tr]:border-border/35 [&_tbody_tr:hover]:bg-muted/16",
+      headClasses,
+      "[&_tbody_tr]:border-border/50 [&_tbody_tr:hover]:bg-muted/30",
     ].join(" "),
   };
 
@@ -97,9 +104,10 @@ const Table = React.forwardRef<
     <table
       ref={ref}
       className={cn(
-        "w-full caption-bottom text-sm",
+        // Рівні цифри в усіх таблицях: суми й кількості вирівнюються по розрядах.
+        "w-full caption-bottom text-sm tabular-nums",
         variantClasses[variant],
-        sizeClasses[size],
+        densityClasses,
         stickyClasses,
         className
       )}
@@ -119,7 +127,7 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b [&_tr]:border-border/40", className)} {...props} />
+  <thead ref={ref} className={cn("[&_tr]:border-b [&_tr]:border-border", className)} {...props} />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -172,7 +180,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-11 px-6 text-left align-middle text-2xs font-semibold uppercase tracking-caps-tight text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "h-9 px-3 text-left align-middle text-xs font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}
@@ -187,7 +195,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "px-6 py-3.5 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "px-3 py-1.5 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}

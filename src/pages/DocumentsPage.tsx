@@ -577,7 +577,7 @@ export default function DocumentsPage() {
               <Table variant="list" size="sm" stickyHeader className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[112px] pl-6">Тип</TableHead>
+                    <TableHead className="w-[112px]">Тип</TableHead>
                     <TableHead className="w-[150px]">Документ</TableHead>
                     <TableHead className="w-auto">Замовник · підстава</TableHead>
                     <TableHead className="w-[184px]">Стан</TableHead>

@@ -241,7 +241,7 @@ export default function OrdersQueuePage() {
           <Table variant="list" size="sm" stickyHeader className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[140px] pl-6">Прорахунок</TableHead>
+                <TableHead className="w-[140px]">Прорахунок</TableHead>
                 <TableHead className="w-auto">Замовник · що</TableHead>
                 <TableHead className="w-[112px] text-right">Сума</TableHead>
                 <TableHead className="w-[104px]">Оплата</TableHead>

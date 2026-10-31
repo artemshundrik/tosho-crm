@@ -3516,10 +3516,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
                       колонки стискаються на вузькому екрані, зате шапка
                       липне — без цього обгортка з overflow-auto лишалась би
                       контейнером скролу й гасила липкість. */}
-                  <Table variant="list" size="md" stickyHeader className="table-fixed [&_td]:px-4 [&_th]:px-4">
+                  <Table variant="list" size="md" stickyHeader className="table-fixed">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-[24%] pl-6">Компанія</TableHead>
+                        <TableHead className="w-[24%]">Компанія</TableHead>
                         <TableHead className="w-[76px] px-2">Тип</TableHead>
                         <TableHead className="w-[26%] pl-2">Юрособа</TableHead>
                         <TableHead className="w-[13%]">Сайт</TableHead>
@@ -3530,7 +3530,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             type="button"
                             onClick={cycleLtvSort}
                             className={cn(
-                              "ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 -mr-1.5 font-medium uppercase text-2xs tracking-wide transition-colors",
+                              "ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 -mr-1.5 font-medium transition-colors",
                               "hover:bg-muted/60 cursor-pointer",
                               ltvSortDirection !== "default" ? "text-foreground bg-muted/40" : "text-muted-foreground hover:text-foreground"
                             )}
@@ -3797,10 +3797,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table variant="list" size="md" stickyHeader className="table-fixed [&_td]:px-4 [&_th]:px-4">
+                  <Table variant="list" size="md" stickyHeader className="table-fixed">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-[20%] pl-6">Компанія</TableHead>
+                        <TableHead className="w-[20%]">Компанія</TableHead>
                         <TableHead className="w-[12%]">Контакт</TableHead>
                         <TableHead className="w-[16%]">Email</TableHead>
                         <TableHead className="w-[12%]">Телефони</TableHead>

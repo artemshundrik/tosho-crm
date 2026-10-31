@@ -7,7 +7,7 @@ const ROWS = 10;
 
 /**
  * Скелет таблиці прорахунків: ті самі колонки, ширини (з тих самих CSS-змінних)
- * і рядки по 40 px, що й у справжній таблиці, тож вміст не стрибає, коли дані
+ * і рядки по 44 px, що й у справжній таблиці, тож вміст не стрибає, коли дані
  * приїдуть. Стоїть усередині обгортки, де `useQuotesTableColumns` пише ширини.
  */
 export function QuotesTableSkeleton() {
@@ -17,7 +17,7 @@ export function QuotesTableSkeleton() {
         variant="list"
         size="md"
         stickyHeader
-        className="table-fixed [&_th]:px-3 [&_td]:px-3 [&_th]:h-9 [&_td]:py-0 [&_tbody_tr]:h-10"
+        className="table-fixed"
       >
         <TableHeader>
           <TableRow className="hover:bg-transparent">

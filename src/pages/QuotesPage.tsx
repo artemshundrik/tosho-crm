@@ -5175,7 +5175,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           /* overflow-x-auto знято: саме він був контейнером скролу й гасив
              липку шапку. Колонки без min-width, тож стискаються самі. */
           <div>
-            <Table variant="list" size="md" stickyHeader className="[&_th]:px-5 [&_td]:px-5">
+            <Table variant="list" size="md" stickyHeader>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[12px]"></TableHead>
@@ -5530,7 +5530,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 variant="list"
                 size="md"
                 stickyHeader
-                className="table-fixed [&_th]:px-3 [&_td]:px-3 [&_th]:h-9 [&_td]:py-0 [&_tbody_tr]:h-10"
+                className="table-fixed"
               >
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -5551,7 +5551,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       <button
                         type="button"
                         onClick={() => handleSort("number")}
-                        className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps-tight hover:text-foreground transition-colors"
+                        className="flex items-center gap-1.5 hover:text-foreground transition-colors"
                       >
                         Номер
                         {sortBy === "number" && (

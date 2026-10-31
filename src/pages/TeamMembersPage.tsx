@@ -1945,7 +1945,7 @@ export function TeamMembersPage() {
               Клік по рядку веде в картку людини (/team/:userId), а не
               розкриває панель поруч: картка тепер одна на застосунок. */}
             <div className="hidden border-t border-border/60 pb-8 lg:block">
-              <Table variant="list" size="md" className="[&_td]:px-4 [&_th]:px-4">
+              <Table variant="list" size="md">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableTextHeaderCell widthClass="w-[24%]" className="pl-6">Користувач</TableTextHeaderCell>
@@ -2155,7 +2155,7 @@ export function TeamMembersPage() {
             )}
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <Table variant="list" size="md" className="[&_td]:px-4 [&_th]:px-4">
+            <Table variant="list" size="md">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableTextHeaderCell widthClass="w-[40%]" className="pl-6">

@@ -438,7 +438,7 @@ function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: 
       <Table variant="list" size="md" stickyHeader>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[34%] pl-6">Товар</TableHead>
+            <TableHead className="w-[34%]">Товар</TableHead>
             <TableHead className="w-[15%]">Колір</TableHead>
             <TableHead className="w-[12%] text-right">Залишок</TableHead>
             <TableHead className="w-[13%] text-right">Ціна</TableHead>
