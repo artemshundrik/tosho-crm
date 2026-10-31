@@ -61,13 +61,13 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
       {
         id: "quote-deadline",
         label: "Quote Deadline",
-        description: "Спеціалізований badge для дедлайнів клієнта й внутрішніх дедлайнів.",
+        description: "Дата дедлайну на картках: тихий текст без заливки, колір лише для «скоро» й «прострочено».",
         items: [
-          { label: "Без дедлайну", note: "Нейтральний дедлайн", className: "quote-neutral-badge", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
-          { label: "Майбутній", note: "Є запас по часу", className: "quote-neutral-badge", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
-          { label: "Скоро", note: "Наближається дедлайн", className: "quote-warning-badge", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
-          { label: "Сьогодні", note: "Потрібна увага сьогодні", className: "quote-warning-badge", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
-          { label: "Прострочено", note: "Дедлайн порушено", className: "quote-danger-badge", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
+          { label: "Без дедлайну", note: "Тихий текст без заливки", className: "border-transparent bg-transparent px-0 text-muted-foreground", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
+          { label: "Майбутній", note: "Є запас по часу", className: "border-transparent bg-transparent px-0 text-muted-foreground", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
+          { label: "Скоро", note: "Наближається дедлайн", className: "border-transparent bg-transparent px-0 tone-text-warning", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
+          { label: "Сьогодні", note: "Потрібна увага сьогодні", className: "border-transparent bg-transparent px-0 tone-text-warning", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
+          { label: "Прострочено", note: "Дедлайн порушено", className: "border-transparent bg-transparent px-0 tone-text-danger", variant: "outline", source: ["src/features/quotes/components/QuoteDeadlineBadge.tsx", "src/index.css"] },
         ],
       },
       {
