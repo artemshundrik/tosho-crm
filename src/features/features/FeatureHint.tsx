@@ -41,8 +41,11 @@ type Props = {
    * `inline` — звичайний рядок у потоці, для списків і меню.
    */
   variant?: "floating" | "inline";
-  /** З якого боку від кнопки малювати. Лише для floating. */
-  side?: "top" | "bottom";
+  /**
+   * З якого боку від кнопки малювати. Лише для floating. `left` — для кнопок
+   * у рядку дій: над ними підказка накривала сусідні кнопки.
+   */
+  side?: "top" | "bottom" | "left";
   /** Вирівнювання по горизонталі відносно кнопки. Лише для floating. */
   align?: "start" | "end";
   /** Дія за кліком по підказці — напр. відкрити налаштування. */
@@ -245,8 +248,13 @@ export function FeatureHint({
         "panel-reveal absolute z-30 flex w-max max-w-[240px] items-start gap-1.5 rounded-lg border border-primary/30 bg-popover px-2.5 py-1.5",
         // Поповер під кнопкою заходить згори вниз, над кнопкою — знизу вгору:
         // рух завжди «від тригера», інакше підказка ніби наповзає збоку.
-        side === "top" ? "bottom-full mb-2 [--panel-reveal-shift:0_0.375rem]" : "top-full mt-2",
-        align === "end" ? "right-0" : "left-0",
+        // Ліворуч центруємо полями, а не translate: translate зайнятий згасанням.
+        side === "left"
+          ? "inset-y-0 right-full my-auto mr-2 h-fit [--panel-reveal-shift:0.375rem_0]"
+          : side === "top"
+            ? "bottom-full mb-2 [--panel-reveal-shift:0_0.375rem]"
+            : "top-full mt-2",
+        side !== "left" && (align === "end" ? "right-0" : "left-0"),
         className
       )}
     >

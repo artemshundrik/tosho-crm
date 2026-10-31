@@ -165,6 +165,7 @@ export function useDictationField({
       {isSupported && !isRecording && !isTranscribing ? (
         <FeatureHint
           featureKey="voice_dictation"
+          side="left"
           text="Замість друкувати — надиктуй. Натисни мікрофон і говори."
         />
       ) : null}
