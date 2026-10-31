@@ -67,7 +67,7 @@ import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } 
 import {
   Image as ImageIcon,
   Loader2,
-  PlusCircle,
+  Plus,
   Trash2,
   Unlink,
   User,
@@ -1079,7 +1079,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 title="Контакти"
                 action={
                   <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addContact}>
-                    <PlusCircle className="mr-1 h-4 w-4" />
+                    <Plus className="mr-1 h-4 w-4" />
                     Додати контакт
                   </Button>
                 }
@@ -1193,7 +1193,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   Додайте реквізити для рахунків і договорів.
                 </div>
                 <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addLegalEntity}>
-                  <PlusCircle className="mr-1 h-4 w-4" />
+                  <Plus className="mr-1 h-4 w-4" />
                   Додати юр. особу
                 </Button>
               </div>

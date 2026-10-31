@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Archive, CheckCheck, Inbox, KanbanSquare, Lightbulb, ListChecks, PlusCircle, Trash2, XCircle } from "@/components/icons/appIcons";
+import { Archive, CheckCheck, Inbox, KanbanSquare, Lightbulb, ListChecks, Plus, Trash2, XCircle } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -449,7 +449,7 @@ export default function DevRequestsPage() {
         mobileFilterCount={filters.zones.size + filters.themes.size}
         mobilePrimary={
           <Button onClick={openCreate} size="icon" aria-label="Новий запит" className="h-11 w-11 shrink-0">
-            <PlusCircle className="h-5 w-5" />
+            <Plus className="h-5 w-5" />
           </Button>
         }
         topLeft={
@@ -534,7 +534,7 @@ export default function DevRequestsPage() {
             onClick={openCreate}
             className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
           >
-            <PlusCircle className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
             Новий запит
           </Button>
         }

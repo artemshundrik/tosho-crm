@@ -1,4 +1,4 @@
-import { MapPin, PlusCircle, Star, Trash2 } from "@/components/icons/appIcons";
+import { MapPin, Plus, Star, Trash2 } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +55,7 @@ export function DeliveryPointsSection({
           Адреси доставки
         </h4>
         <Button type="button" variant="ghost" size="sm" className="shrink-0 px-2 text-xs" onClick={onAdd}>
-          <PlusCircle className="mr-1 h-4 w-4" />
+          <Plus className="mr-1 h-4 w-4" />
           Додати адресу
         </Button>
       </div>

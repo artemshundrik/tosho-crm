@@ -29,7 +29,7 @@ import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses } from "@/features/quotes/quotes-page/config";
 import { DESIGN_STATUS_LABELS } from "@/lib/designTaskStatus";
 import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } from "@/lib/designTaskType";
-import { Building2, Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "@/components/icons/appIcons";
+import { Building2, Check, Image as ImageIcon, Plus, Trash2, User, UserPlus } from "@/components/icons/appIcons";
 import { PackageCheck, ReceiptText } from "@/components/icons/appIcons";
 import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
 import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
@@ -792,7 +792,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     <div className="flex h-8 items-center justify-between">
                       <Label>Телефон {contactMissing ? <span className="text-destructive">*</span> : null}</Label>
                       <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addPhone}>
-                        <PlusCircle className="mr-1 h-4 w-4" />
+                        <Plus className="mr-1 h-4 w-4" />
                         Додати номер
                       </Button>
                     </div>
@@ -941,7 +941,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       <div className="flex h-8 items-center justify-between">
                         <Label>Телефон {contactMissing ? <span className="text-destructive">*</span> : null}</Label>
                         <Button type="button" variant="ghost" size="sm" className="px-2 text-xs" onClick={addPhone}>
-                          <PlusCircle className="mr-1 h-4 w-4" />
+                          <Plus className="mr-1 h-4 w-4" />
                           Додати номер
                         </Button>
                       </div>

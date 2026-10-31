@@ -52,7 +52,7 @@ import {
   ChevronRight,
   Loader2,
   MoreHorizontal,
-  PlusCircle,
+  Plus,
   RefreshCw,
   Trash2,
 } from "@/components/icons/appIcons";
@@ -966,7 +966,7 @@ export default function ContractorsPage() {
           disabled={schemaMissing}
           className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
         >
-          <PlusCircle className="h-4 w-4" />
+          <Plus className="h-4 w-4" />
           {activeTab === "contractors" ? "Новий підрядник" : "Новий постачальник"}
         </Button>
       }

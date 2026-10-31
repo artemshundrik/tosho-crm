@@ -56,7 +56,7 @@ import {
   Lock,
   MoreHorizontal,
   Package,
-  PlusCircle,
+  Plus,
   Trash2,
   Unlock,
 } from "@/components/icons/appIcons";
@@ -745,7 +745,7 @@ export default function SampleStockPage() {
           disabled={schemaMissing}
           className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
         >
-          <PlusCircle className="h-4 w-4" />
+          <Plus className="h-4 w-4" />
           Новий товар
         </Button>
       }

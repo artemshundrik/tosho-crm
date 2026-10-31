@@ -89,7 +89,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader2, MoreHorizontal, PlusCircle, Trash2, Unlink, Users } from "@/components/icons/appIcons";
+import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader2, MoreHorizontal, Plus, Trash2, Unlink, Users } from "@/components/icons/appIcons";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 import { formatTelegramHandle, normalizeTelegramUsername } from "@/lib/telegramContact";
 import { getLeadContactIssue, leadContactLabel } from "@/components/customers/leadContact";
@@ -103,6 +103,8 @@ import {
 import type { TableInsert } from "@/lib/dbTables";
 import { toast } from "sonner";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { EmptyFieldAction } from "@/components/app/EmptyFieldAction";
+import { ExternalSiteLink } from "@/components/app/ExternalSiteLink";
 
 type CustomerRow = {
   id: string;
@@ -1361,8 +1363,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
     if (!primary || !hasCustomerLegalEntityIdentity(primary)) return null;
     return formatOwnershipTypeLabel(primary.ownershipType) || null;
   };
-  const hasCustomerMissingRequisites = (row: CustomerRow) =>
-    !hasCustomerLegalEntityDocumentEssentials(getCustomerPrimaryLegalEntity(row));
   const getCustomerMissingRequisitesLabel = (row: CustomerRow) => {
     const missing = getCustomerLegalEntityDocumentMissingFields(getCustomerPrimaryLegalEntity(row));
     if (missing.length === 0) return null;
@@ -1370,9 +1370,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
   };
   const renderPrimaryEntityLabel = (row: CustomerRow) => {
     const primary = getCustomerPrimaryLegalEntity(row);
-    if (!primary) return "Не вказано";
-    if (!hasCustomerLegalEntityIdentity(primary)) return "Реквізити не заповнені";
-    if (!hasCustomerLegalEntityDocumentEssentials(primary)) return primary.legalName.trim() || "Реквізити не заповнені";
+    if (!primary || !hasCustomerLegalEntityIdentity(primary)) return null;
+    if (!hasCustomerLegalEntityDocumentEssentials(primary)) return primary.legalName.trim() || null;
     return formatCustomerLegalEntityTitle(primary);
   };
 
@@ -3193,7 +3192,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           onClick={activeTab === "customers" ? openCreate : openCreateLead}
           className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
         >
-          <PlusCircle className="h-4 w-4" />
+          <Plus className="h-4 w-4" />
           {activeTab === "customers" ? "Новий замовник" : "Новий лід"}
         </Button>
       }
@@ -3378,17 +3377,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
                     (() => {
                       const legalEntities = getCustomerLegalEntities(row);
                       const primaryEntity = getCustomerPrimaryLegalEntity(row);
-                      const missingRequisites = hasCustomerMissingRequisites(row);
                       const missingRequisitesLabel = getCustomerMissingRequisitesLabel(row);
                       const missingRequisitesTooltip = missingRequisitesLabel ?? "Реквізити не заповнені";
 
                       return (
                         <div
                           key={row.id}
-                          className={cn(
-                            "rounded-inner border bg-card p-4",
-                            missingRequisites ? "border-warning-soft-border/80" : "border-border"
-                          )}
+                          className="rounded-inner border border-border bg-card p-4"
                           onClick={() => openEdit(row)}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -3484,25 +3479,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             </div>
                           </div>
                           <div className="mt-3 grid grid-cols-1 gap-2 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">
-                                {legalEntities.length > 1 ? "Основна юр. особа:" : "Юр. особа:"}
-                              </span>{" "}
-                              <span>
-                                {renderPrimaryEntityLabel(row)}
-                              </span>
-                            </div>
-                            {missingRequisitesLabel ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge
-                                  tone="warning"
-                                  variant="outline"
-                                  className="rounded-full px-2.5 py-1 text-2xs font-medium normal-case tracking-normal"
-                                  title={missingRequisitesTooltip}
-                                >
-                                  Реквізити не заповнені
-                                </Badge>
+                            {renderPrimaryEntityLabel(row) ? (
+                              <div>
+                                <span className="text-muted-foreground">
+                                  {legalEntities.length > 1 ? "Основна юр. особа:" : "Юр. особа:"}
+                                </span>{" "}
+                                <span>{renderPrimaryEntityLabel(row)}</span>
                               </div>
+                            ) : null}
+                            {missingRequisitesLabel ? (
+                              <EmptyFieldAction label="Додати реквізити" title={missingRequisitesTooltip} onClick={() => openEdit(row)} className="justify-self-start" />
                             ) : null}
                             {primaryEntity?.taxId ? (
                               <div>
@@ -3518,19 +3504,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                 Також: {legalEntities.slice(1).map((entity) => formatCustomerLegalEntitySummary(entity)).join(", ")}
                               </div>
                             ) : null}
-                            {row.website ? (
-                              <div className="sm:col-span-2">
-                                <a
-                                  href={row.website}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-primary underline underline-offset-2"
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  {row.website}
-                                </a>
-                              </div>
-                            ) : null}
+                            {row.website ? <ExternalSiteLink url={row.website} className="sm:col-span-2" /> : null}
                           </div>
                         </div>
                       );
@@ -3586,7 +3560,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         const legalEntities = getCustomerLegalEntities(row);
                         const primaryEntity = getCustomerPrimaryLegalEntity(row);
                         const primaryEntityType = getCustomerPrimaryLegalEntityType(row);
-                        const missingRequisites = hasCustomerMissingRequisites(row);
                         const missingRequisitesLabel = getCustomerMissingRequisitesLabel(row);
                         const missingRequisitesTooltip = missingRequisitesLabel ?? "Реквізити не заповнені";
 
@@ -3595,7 +3568,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             key={row.id}
                             className={cn(
                               "group cursor-pointer border-b border-border/30 last:border-0 transition-colors",
-                              missingRequisites ? "border-l-2 border-l-warning-soft-border/80 hover:bg-muted/30" : "hover:bg-muted/30"
+                              "hover:bg-muted/30"
                             )}
                             onClick={() => openEdit(row)}
                           >
@@ -3627,20 +3600,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             </TableCell>
                             <TableCell className="align-top pl-2 max-w-[360px]">
                               <div className="space-y-1">
-                                <div className="truncate font-medium text-foreground">
-                                  {renderPrimaryEntityLabel(row)}
-                                </div>
+                                {renderPrimaryEntityLabel(row) ? (
+                                  <div className="truncate font-medium text-foreground">{renderPrimaryEntityLabel(row)}</div>
+                                ) : null}
                                 {missingRequisitesLabel ? (
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <Badge
-                                      tone="warning"
-                                      variant="outline"
-                                      className="rounded-full px-2 py-0.5 text-2xs font-medium normal-case tracking-normal"
-                                      title={missingRequisitesTooltip}
-                                    >
-                                      Реквізити не заповнені
-                                    </Badge>
-                                  </div>
+                                  <EmptyFieldAction label="Додати реквізити" title={missingRequisitesTooltip} onClick={() => openEdit(row)} />
                                 ) : null}
                                 {(primaryEntity && hasCustomerLegalEntityDocumentEssentials(primaryEntity) && primaryEntity.taxId) || legalEntities.length > 1 ? (
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -3657,17 +3621,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                               </div>
                             </TableCell>
                             <TableCell className="align-top max-w-[220px]">
-                              {row.website ? (
-                                <a
-                                  href={row.website}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="block truncate text-primary underline underline-offset-2"
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  {row.website}
-                                </a>
-                              ) : null}
+                              {row.website ? <ExternalSiteLink url={row.website} className="block" /> : null}
                             </TableCell>
                             <TableCell className="align-top">{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
                             {/* LTV (MVP) */}
@@ -3837,19 +3791,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         {lead.telegram ? <div><span className="text-muted-foreground">Telegram:</span> {formatTelegramHandle(lead.telegram)}</div> : null}
                         <div><span className="text-muted-foreground">Джерело:</span> {lead.source ?? "Не вказано"}</div>
                         <div><span className="text-muted-foreground">Менеджер:</span> {resolveManagerLabel(lead.manager_user_id, lead.manager) || "Не вказано"}</div>
-                        {lead.website ? (
-                          <div>
-                            <a
-                              href={lead.website}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary underline underline-offset-2"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              {lead.website}
-                            </a>
-                          </div>
-                        ) : null}
+                        {lead.website ? <ExternalSiteLink url={lead.website} className="block" /> : null}
                       </div>
                     </div>
                   ))}
@@ -3913,16 +3855,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                           </TableCell>
                           <TableCell>
                             {lead.website ? (
-                              <a
-                                href={lead.website}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block truncate text-primary underline underline-offset-2"
-                                title={lead.website}
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                {lead.website}
-                              </a>
+                              <ExternalSiteLink url={lead.website} className="block" />
                             ) : (
                               "Не вказано"
                             )}
