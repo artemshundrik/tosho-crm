@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TABLE_MONEY_TEXT, TABLE_RECORD_NUMBER_TEXT } from "@/components/app/table-kit";
 import { useModalMount } from "@/components/ui/modal-mount";
 import { cn } from "@/lib/utils";
 import { useKanbanDrag } from "@/components/kanban/kanbanDrag";
@@ -5526,12 +5527,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ) : (
             /* overflow-x-auto знято: він був контейнером скролу й гасив липку шапку. */
             <div ref={quotesTableRef}>
-              <Table
-                variant="list"
-                size="md"
-                stickyHeader
-                className="table-fixed"
-              >
+              <Table variant="list" size="md" stickyHeader className="table-fixed">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="w-[40px]">
@@ -5613,7 +5609,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           >
                             <HoverCopyText
                               value={row.number}
-                              textClassName="font-mono text-sm text-muted-foreground group-hover:text-foreground group-hover:underline underline-offset-2"
+                              textClassName={TABLE_RECORD_NUMBER_TEXT}
                               successMessage="Номер прорахунку скопійовано"
                               copyLabel="Скопіювати номер прорахунку"
                             >
@@ -5684,7 +5680,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             preview={kanbanProductByQuoteId[row.id]}
                           />
                         </TableCell>
-                        <TableCell className="whitespace-nowrap !pr-6 text-right text-sm tabular-nums">
+                        <TableCell className={cn("whitespace-nowrap !pr-6", TABLE_MONEY_TEXT)}>
                           <QuoteTotalCellContent
                             preview={kanbanProductByQuoteId[row.id]}
                             previewsLoading={kanbanPreviewsLoading}

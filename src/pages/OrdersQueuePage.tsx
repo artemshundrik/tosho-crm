@@ -19,6 +19,7 @@ import { isCashlessPaymentMethod } from "@/features/orders/paymentRules";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
 import { ROUTES } from "@/layout/routes";
+import { TABLE_MONEY_TEXT, TABLE_RECORD_NUMBER_TEXT } from "@/components/app/table-kit";
 import { cn } from "@/lib/utils";
 
 /**
@@ -254,12 +255,12 @@ export default function OrdersQueuePage() {
               {visible.map((record) => {
                 const action = queueAction(record);
                 return (
-                  <TableRow key={record.id} className="cursor-pointer hover:bg-muted/10" onClick={() => open(record)}>
-                    <TableCell className="pl-6 font-mono text-sm font-semibold">{record.quoteNumber}</TableCell>
+                  <TableRow key={record.id} className="group cursor-pointer" onClick={() => open(record)}>
+                    <TableCell className={TABLE_RECORD_NUMBER_TEXT}>{record.quoteNumber}</TableCell>
                     <TableCell>
                       <CustomerWithItems record={record} />
                     </TableCell>
-                    <TableCell className="figure text-right font-semibold">
+                    <TableCell className={TABLE_MONEY_TEXT}>
                       {formatOrderMoney(record.total, record.currency)}
                     </TableCell>
                     <TableCell>
@@ -282,12 +283,12 @@ export default function OrdersQueuePage() {
                         {action.label}
                       </Button>
                     </TableCell>
-                    <TableCell className="pr-6">
+                    <TableCell>
                       <AvatarBase
                         src={record.managerAvatarUrl ?? null}
                         name={record.managerLabel}
                         fallback={initials(record.managerLabel)}
-                        size={22}
+                        size={24}
                         className="shrink-0 border-border/60"
                         fallbackClassName="text-3xs font-semibold"
                       />

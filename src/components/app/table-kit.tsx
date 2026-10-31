@@ -230,3 +230,12 @@ export function TableTitleCell({ leading, title, adornment, meta, className }: T
     </div>
   );
 }
+
+/**
+ * Номер запису в таблиці (TS-…, TO-…, № документа) — однаково на всіх
+ * списках: моно, сірий, на наведенні рядка чорніє. Рядок має клас `group`.
+ */
+export const TABLE_RECORD_NUMBER_TEXT = "font-mono text-sm text-muted-foreground transition-colors group-hover:text-foreground";
+
+/** Гроші в таблиці: праворуч, рівні цифри, середня вага — однаково скрізь. */
+export const TABLE_MONEY_TEXT = "figure text-right font-medium text-foreground";

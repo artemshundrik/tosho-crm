@@ -2,6 +2,7 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
+import { TABLE_MONEY_TEXT, TABLE_RECORD_NUMBER_TEXT } from "@/components/app/table-kit";
 import { TableCell, TableRow } from "@/components/ui/table";
 import {
   ORDER_TURN_LABELS,
@@ -168,10 +169,10 @@ export function OrderListTableRow({ view, onOpen, selected, selectBlocker, onTog
   const { record, step } = view;
   return (
     <TableRow
-      className={cn("relative cursor-pointer hover:bg-muted/10", view.mine && "bg-primary/[0.04]")}
+      className={cn("group relative cursor-pointer", view.mine && "bg-primary/[0.04]")}
       onClick={() => onOpen(record)}
     >
-      <TableCell className="relative pl-6" onClick={(event) => event.stopPropagation()}>
+      <TableCell className="relative" onClick={(event) => event.stopPropagation()}>
         {view.mine ? <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-primary" aria-hidden /> : null}
         <Checkbox
           checked={selected}
@@ -184,7 +185,7 @@ export function OrderListTableRow({ view, onOpen, selected, selectBlocker, onTog
       <TableCell>
         <HoverCopyText
           value={record.quoteNumber}
-          textClassName="font-mono text-sm font-semibold text-foreground"
+          textClassName={TABLE_RECORD_NUMBER_TEXT}
           successMessage="Номер замовлення скопійовано"
           copyLabel="Скопіювати номер замовлення"
         >
@@ -194,7 +195,7 @@ export function OrderListTableRow({ view, onOpen, selected, selectBlocker, onTog
       <TableCell>
         <CustomerWithItems record={record} />
       </TableCell>
-      <TableCell className="figure text-right font-semibold text-foreground">
+      <TableCell className={TABLE_MONEY_TEXT}>
         {formatOrderMoney(record.total, record.currency)}
       </TableCell>
       <TableCell>
@@ -220,8 +221,8 @@ export function OrderListTableRow({ view, onOpen, selected, selectBlocker, onTog
           ) : null}
         </div>
       </TableCell>
-      <TableCell className="pr-6">
-        <ManagerAvatar record={record} size={22} />
+      <TableCell>
+        <ManagerAvatar record={record} size={24} />
       </TableCell>
     </TableRow>
   );

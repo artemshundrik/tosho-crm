@@ -1,5 +1,6 @@
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
+import { TABLE_MONEY_TEXT, TABLE_RECORD_NUMBER_TEXT } from "@/components/app/table-kit";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { toneDotClass, toneTextClass } from "@/lib/statusTones";
@@ -109,7 +110,7 @@ type RowProps = {
 export function DocumentDayRow({ label, colSpan }: { label: string; colSpan: number }) {
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={colSpan} className="h-8 bg-muted/30 py-0 pl-6 text-xs font-semibold text-muted-foreground">
+      <TableCell colSpan={colSpan} className="h-8 bg-muted/30 py-0 text-xs font-medium text-muted-foreground">
         {label}
       </TableCell>
     </TableRow>
@@ -119,16 +120,16 @@ export function DocumentDayRow({ label, colSpan }: { label: string; colSpan: num
 export function DocumentTableRow({ doc, manager, accountant, selected, onOpen }: RowProps) {
   return (
     <TableRow
-      className={cn("relative cursor-pointer hover:bg-muted/10", selected && "bg-primary/[0.05] hover:bg-primary/[0.05]")}
+      className={cn("group relative cursor-pointer", selected && "bg-primary/[0.05] hover:bg-primary/[0.05]")}
       onClick={() => onOpen(doc)}
       aria-selected={selected}
     >
-      <TableCell className="relative pl-6">
+      <TableCell className="relative">
         {selected ? <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-primary" aria-hidden /> : null}
         <DocumentKindBadge doc={doc} />
       </TableCell>
       <TableCell>
-        <div className="truncate font-mono text-sm font-semibold text-foreground" title={doc.number}>
+        <div className={cn("truncate", TABLE_RECORD_NUMBER_TEXT)} title={doc.number}>
           {doc.number}
         </div>
         <div className="truncate text-xs text-muted-foreground">від {formatDocumentDate(doc.documentDate)}</div>
@@ -142,14 +143,14 @@ export function DocumentTableRow({ doc, manager, accountant, selected, onOpen }:
           <DocumentStatusText doc={doc} />
         </div>
       </TableCell>
-      <TableCell className="figure text-right font-semibold text-foreground">{formatDocumentSum(doc)}</TableCell>
-      <TableCell className="@max-4xl:pr-6">
+      <TableCell className={TABLE_MONEY_TEXT}>{formatDocumentSum(doc)}</TableCell>
+      <TableCell>
         <span className="flex -space-x-1.5">
           <PersonAvatar person={manager} role="Менеджер" />
           <PersonAvatar person={accountant} role="Бухгалтер" />
         </span>
       </TableCell>
-      <TableCell className="figure pr-6 text-right text-xs text-muted-foreground @max-4xl:hidden">{formatDocumentTime(doc)}</TableCell>
+      <TableCell className="figure text-right text-xs text-muted-foreground @max-4xl:hidden">{formatDocumentTime(doc)}</TableCell>
     </TableRow>
   );
 }
