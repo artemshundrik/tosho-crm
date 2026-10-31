@@ -1,4 +1,4 @@
-import { isNoiseActivity, NOISE_ACTION_KEYS } from "@/components/team/activityCategories";
+import { activityTitle, isNoiseActivity, NOISE_ACTION_KEYS } from "@/components/team/activityCategories";
 import { listCustomerLeadLogoDirectory, normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { supabase } from "@/lib/supabaseClient";
 import { listQuotes } from "@/lib/toshoApi";
@@ -417,7 +417,7 @@ export async function loadOverviewData(params: { teamId: string | null; userId: 
         null;
       return {
         id: row.id,
-        title: row.title?.trim() || row.action?.trim() || "Подія",
+        title: activityTitle(row.title?.trim() || row.action?.trim() || "Подія"),
         actorName: member?.label ?? actorName,
         avatarUrl: member?.avatarUrl ?? null,
         href: row.href ?? "/activity",

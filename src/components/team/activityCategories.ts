@@ -84,6 +84,18 @@ export function isNoiseActivity(action: string | null, title: string | null): bo
   return false;
 }
 
+// Старі записи журналу про рахунок писались від особи («Виправив(ла) рахунок
+// № 455 …»); нові — безособово («Рахунок № 455 … виправлено»). Переписуємо
+// старі при показі, щоб стрічка говорила одною мовою, а журнал лишався як є.
+const LEGACY_INVOICE_TITLE = /^(Виправив|Виписав)\(ла\) рахунок (.+?)(: .*)?$/;
+
+export function activityTitle(title: string): string {
+  const match = title.match(LEGACY_INVOICE_TITLE);
+  if (!match) return title;
+  const verb = match[1] === "Виправив" ? "виправлено" : "виписано";
+  return `Рахунок ${match[2]} ${verb}${match[3] ?? ""}`;
+}
+
 export function actionLabel(action: string | null): string {
   const raw = (action ?? "").trim();
   const a = raw.toLowerCase();

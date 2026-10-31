@@ -22,7 +22,7 @@ import {
   type ActivityRow,
 } from "@/lib/activity";
 import { listTeamMembers } from "@/lib/toshoApi";
-import { isNoiseActivity } from "@/components/team/activityCategories";
+import { activityTitle, isNoiseActivity } from "@/components/team/activityCategories";
 import { Activity, FileText, Palette, Users } from "@/components/icons/appIcons";
 
 type FilterMode = "all" | "quotes" | "design" | "team" | "other";
@@ -272,7 +272,7 @@ export default function ActivityPage() {
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                 <span className="max-w-full break-words text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
-                                  {item.title}
+                                  {activityTitle(item.title)}
                                 </span>
                                 <Badge tone={badge.tone} size="sm" pill>
                                   {badge.label}

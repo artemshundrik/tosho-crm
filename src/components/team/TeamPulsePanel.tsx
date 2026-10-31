@@ -26,6 +26,7 @@ import {
   SEGMENTED_TRIGGER_SM,
 } from "@/components/ui/controlStyles";
 import {
+  activityTitle,
   CATEGORY_META,
   categorizeAction,
   isNoiseActivity,
@@ -289,7 +290,7 @@ export function TeamPulsePanel({
     for (const row of scoped) {
       const userId = row.user_id ?? "";
       const event: PulseEvent = {
-        title: row.title?.trim() || row.action?.trim() || "Дія в CRM",
+        title: activityTitle(row.title?.trim() || row.action?.trim() || "Дія в CRM"),
         action: row.action ?? null,
         entityType: row.entity_type ?? null,
         href: row.href ?? null,

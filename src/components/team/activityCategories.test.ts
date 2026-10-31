@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   actionLabel,
+  activityTitle,
   categorizeAction,
   categoryColor,
   entityLabel,
@@ -110,5 +111,17 @@ describe("entityLabel", () => {
     expect(entityLabel(null)).toBeNull();
     expect(entityLabel("")).toBeNull();
     expect(entityLabel("telegram_promo")).toBeNull();
+  });
+});
+
+describe("activityTitle", () => {
+  it("переписує старі записи про рахунок безособово", () => {
+    expect(activityTitle("Виправив(ла) рахунок № 455 від 30.10.2026: сума 1 → 2")).toBe(
+      "Рахунок № 455 від 30.10.2026 виправлено: сума 1 → 2",
+    );
+    expect(activityTitle("Виписав(ла) рахунок № 7 від 01.11.2026")).toBe("Рахунок № 7 від 01.11.2026 виписано");
+  });
+  it("решту не чіпає", () => {
+    expect(activityTitle("Статус: В роботі → Готово")).toBe("Статус: В роботі → Готово");
   });
 });
