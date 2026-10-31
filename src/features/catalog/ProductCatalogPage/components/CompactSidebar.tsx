@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ChevronDown, ChevronRight, Edit2, Package, Plus, Printer } from "@/components/icons/appIcons";
+import { ChevronDown, ChevronRight, Edit2, Package, Plus, Printer } from "@/components/icons/appIcons";
 import type { CatalogType, QuoteType } from "@/types/catalog";
 
 /**
@@ -20,15 +20,19 @@ import type { CatalogType, QuoteType } from "@/types/catalog";
 const TREE_FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25";
 const TREE_ICON_BUTTON = cn("rounded transition-colors hover:bg-muted", TREE_FOCUS);
 
-/** Small warning pill showing how many models in a category/kind are incomplete. */
+/**
+ * Тиха позначка незавершених моделей: крапка бурштиновим і сіра цифра.
+ * Жовтий трикутник стояв майже біля кожного рядка дерева і перестав
+ * щось означати.
+ */
 function IncompleteBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
     <span
-      className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full bg-warning-soft px-1.5 text-3xs font-semibold leading-none text-warning-foreground"
+      className="inline-flex shrink-0 items-center gap-1 text-3xs font-medium tabular-nums leading-none text-muted-foreground"
       title={`${count} незавершених`}
     >
-      <AlertTriangle className="h-2.5 w-2.5" />
+      <span className="h-1.5 w-1.5 rounded-full tone-dot-warning" aria-hidden />
       {count}
     </span>
   );
@@ -363,10 +367,11 @@ export function CompactSidebar({
         </div>
         {incompleteModels > 0 && (
           <div className="flex items-center justify-between text-sm">
-            <span className="tone-text-warning">
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full tone-dot-warning" aria-hidden />
               Незавершених:
             </span>
-            <span className="font-semibold tabular-nums tone-text-warning">
+            <span className="font-semibold tabular-nums">
               {incompleteModels}
             </span>
           </div>
