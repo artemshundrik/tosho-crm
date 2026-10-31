@@ -26,7 +26,6 @@ import {
   X as CloseIcon,
   Search,
   ShieldAlert,
-  Truck,
   Users,
   X,
   BadgeCheck,
@@ -532,7 +531,7 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: AddressBook, moduleKey: "customers" },
   { label: "Прорахунки", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "quotes" },
   { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory, moduleKey: "orders" },
-  { label: "До відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "shipping" },
+  // «До відвантаження» поки заглушка — з меню прибрано, адреса й ⌘K лишаються.
   // Операції
   { label: "Каталог", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban, moduleKey: "catalog" },
   { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette, moduleKey: "design" },
