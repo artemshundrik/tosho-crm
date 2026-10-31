@@ -270,6 +270,12 @@ function formatMoney(value: number, currency = "UAH") {
   }).format(value);
 }
 
+// Нуль у грошах — це «ціну не вказано», а не «безкоштовно»: показуємо тире.
+function MoneyValue({ value }: { value: number }) {
+  if (!value) return <span className="text-muted-foreground">—</span>;
+  return <>{formatMoney(value)}</>;
+}
+
 function normalizeFormFromRow(row?: SampleStockItemRow | null): SampleStockFormState {
   if (!row) return EMPTY_FORM;
   return {
@@ -316,11 +322,13 @@ function QuantityCell({ row }: { row: SampleStockItemRow }) {
   const available = getAvailableQuantity(row);
   return (
     <div className="space-y-1 tabular-nums">
-      <div className="text-base font-semibold">{formatQuantity(quantity)}</div>
-      <div className="text-xs text-muted-foreground">
-        Доступно {formatQuantity(available)}
-        {reserved > 0 ? ` · резерв ${formatQuantity(reserved)}` : ""}
-      </div>
+      <div className="font-semibold">{formatQuantity(quantity)}</div>
+      {/* «Доступно» має сенс лише поруч із резервом — інакше це те саме число. */}
+      {reserved > 0 ? (
+        <div className="text-xs text-muted-foreground">
+          Доступно {formatQuantity(available)} · резерв {formatQuantity(reserved)}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -404,8 +412,8 @@ function StockCardsMobile({ rows, handlers }: { rows: SampleStockItemRow[]; hand
             </div>
             <div>
               <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Ціна / сума</div>
-              <div className="font-medium">{formatMoney(toNumber(row.unit_price))}</div>
-              <div className="text-xs text-muted-foreground">{formatMoney(getTotalValue(row))}</div>
+              <div className="font-medium tabular-nums"><MoneyValue value={toNumber(row.unit_price)} /></div>
+              <div className="text-xs text-muted-foreground tabular-nums"><MoneyValue value={getTotalValue(row)} /></div>
             </div>
             <div>
               <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Колір</div>
@@ -432,10 +440,10 @@ function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: 
           <TableRow>
             <TableHead className="w-[34%] pl-6">Товар</TableHead>
             <TableHead className="w-[15%]">Колір</TableHead>
-            <TableHead className="w-[16%]">Залишок</TableHead>
-            <TableHead className="w-[12%]">Ціна</TableHead>
-            <TableHead className="w-[12%]">Сума</TableHead>
-            <TableHead className="w-[14%]">Місце</TableHead>
+            <TableHead className="w-[12%] text-right">Залишок</TableHead>
+            <TableHead className="w-[13%] text-right">Ціна</TableHead>
+            <TableHead className="w-[14%] text-right">Сума</TableHead>
+            <TableHead className="w-[14%] pl-8">Місце</TableHead>
             <TableHead className="w-12" />
           </TableRow>
         </TableHeader>
@@ -451,14 +459,13 @@ function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: 
               </TableCell>
               <TableCell className="align-top">
                 <div className="font-medium">{row.color?.trim() || "—"}</div>
-                {row.category?.trim() ? <div className="text-xs text-muted-foreground">{row.category}</div> : null}
               </TableCell>
-              <TableCell className="align-top">
+              <TableCell className="align-top text-right">
                 <QuantityCell row={row} />
               </TableCell>
-              <TableCell className="align-top tabular-nums">{formatMoney(toNumber(row.unit_price))}</TableCell>
-              <TableCell className="align-top tabular-nums font-medium">{formatMoney(getTotalValue(row))}</TableCell>
-              <TableCell className="align-top">{row.location?.trim() || <span className="text-muted-foreground">—</span>}</TableCell>
+              <TableCell className="align-top text-right tabular-nums"><MoneyValue value={toNumber(row.unit_price)} /></TableCell>
+              <TableCell className="align-top text-right tabular-nums font-medium"><MoneyValue value={getTotalValue(row)} /></TableCell>
+              <TableCell className="align-top pl-8">{row.location?.trim() || <span className="text-muted-foreground">—</span>}</TableCell>
               <TableCell
                 className="pr-4 text-right align-top opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
                 onClick={(event) => event.stopPropagation()}
