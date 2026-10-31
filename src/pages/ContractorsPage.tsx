@@ -38,6 +38,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableTitleCell } from "@/components/app/table-kit";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -156,7 +157,8 @@ function normalizeReminderRepeat(value?: string | null): ContractorReminderRepea
 }
 
 /** Скільки послуг влазить у рядок до «+N». У базі максимум 4, тож поки не спрацьовує. */
-const SERVICE_TAGS_IN_ROW = 4;
+// Рядок таблиці — в одну лінію (хвиля Б1): решта послуг у розгорнутому рядку.
+const SERVICE_TAGS_IN_ROW = 2;
 
 const stopRowClick = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
@@ -250,17 +252,17 @@ function ContractorMeta({ row }: { row: ContractorRow }) {
 }
 
 /** Послуги пілюлями — той самий вигляд, що й у формі, щоб таблиця й дровер збігались. */
-function ServiceTags({ value, limit }: { value?: string | null; limit?: number }) {
+function ServiceTags({ value, limit, nowrap = false }: { value?: string | null; limit?: number; nowrap?: boolean }) {
   const tags = splitTags(value ?? "");
   if (tags.length === 0) return <span className="text-muted-foreground">—</span>;
   const shown = limit ? tags.slice(0, limit) : tags;
   const hidden = tags.length - shown.length;
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className={cn("flex gap-1", nowrap ? "flex-nowrap overflow-hidden" : "flex-wrap")}>
       {shown.map((tag) => (
         <span
           key={tag}
-          className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-2xs font-medium text-foreground"
+          className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-2xs font-medium text-foreground"
         >
           {tag}
         </span>
@@ -306,6 +308,23 @@ function ContactColumn({ row, points }: { row: ContractorRow; points: CustomerDe
   );
 }
 
+/**
+ * «Звʼязок» у рядку таблиці — перший телефон і лічильник решти. Усі телефони,
+ * пошта й сайт — у розгорнутому рядку: рядок лишається в одну лінію.
+ */
+function ContactCell({ row }: { row: ContractorRow }) {
+  const [firstPhone, ...restPhones] = row.phones ?? [];
+  if (!firstPhone) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className="whitespace-nowrap text-xs tabular-nums">
+      <a href={`tel:${firstPhone}`} onClick={stopRowClick} className="text-foreground hover:text-primary">
+        {formatUaPhone(firstPhone)}
+      </a>
+      {restPhones.length > 0 ? <span className="ml-1.5 text-muted-foreground">+{restPhones.length}</span> : null}
+    </span>
+  );
+}
+
 function DetailField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
@@ -338,9 +357,33 @@ function ContractorDetail({
   const ownership = row.ownership_type?.trim() ?? "";
   const legacyDelivery = splitIntoLines(row.delivery_info);
 
+  const contact = splitIntoLines(row.contact_name).join(", ");
+  const phones = row.phones ?? [];
+  const links = collectContractorLinks(row);
+
   return (
     <div className="rounded-inner bg-muted/40 p-3.5">
       <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+        {contact || phones.length > 0 || links.length > 0 ? (
+          <DetailField label="Звʼязок">
+            <div className="space-y-0.5">
+              {contact ? <div className="font-medium">{contact}</div> : null}
+              {phones.map((phone) => (
+                <div key={phone}>
+                  <a href={`tel:${phone}`} onClick={stopRowClick} className="tabular-nums hover:text-primary">
+                    {formatUaPhone(phone)}
+                  </a>
+                </div>
+              ))}
+              {links.map((link) => (
+                <div key={link.key}>
+                  <MetaLink label={link.label} href={link.href} />
+                </div>
+              ))}
+            </div>
+          </DetailField>
+        ) : null}
+
         <DetailField label="Точки доставки">
           {points.length === 0 ? (
             <span className="text-muted-foreground">Не вказано</span>
@@ -517,9 +560,9 @@ function ContractorsTable({
               варіанту за специфічністю, тож крізь заголовок просвічували рядки. */}
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[46%]">{title}</TableHead>
-              <TableHead className="w-[26%]">Послуги</TableHead>
-              <TableHead className="w-[20%]">Звʼязок</TableHead>
+              <TableHead className="w-[48%]">{title}</TableHead>
+              <TableHead className="w-[30%]">Послуги</TableHead>
+              <TableHead className="w-[14%]">Звʼязок</TableHead>
               <TableHead className="w-[92px]" />
             </TableRow>
           </TableHeader>
@@ -533,19 +576,22 @@ function ContractorsTable({
                     className={cn("group cursor-pointer", expanded && "border-b-0")}
                     onClick={() => onToggle(row.id)}
                   >
-                    <TableCell className="align-top">
-                      <div className="min-w-0">
-                        <div className="font-medium leading-snug">{row.name ?? "Без назви"}</div>
-                        <ContractorMeta row={row} />
-                      </div>
+                    <TableCell>
+                      <TableTitleCell
+                        title={row.name ?? "Без назви"}
+                        meta={[
+                          splitIntoLines(row.contact_name).join(", "),
+                          splitIntoLines(row.address).join(", ") || collectContractorLinks(row)[0]?.label,
+                        ]}
+                      />
                     </TableCell>
-                    <TableCell className="align-top">
-                      <ServiceTags value={row.services} limit={SERVICE_TAGS_IN_ROW} />
+                    <TableCell>
+                      <ServiceTags value={row.services} limit={SERVICE_TAGS_IN_ROW} nowrap />
                     </TableCell>
-                    <TableCell className="align-top">
-                      <ContactColumn row={row} points={points} />
+                    <TableCell>
+                      <ContactCell row={row} />
                     </TableCell>
-                    <TableCell className="align-top" onClick={stopRowClick}>
+                    <TableCell onClick={stopRowClick}>
                       <div className="flex items-center justify-end gap-0.5">
                         <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                           <RowActions onEdit={() => onEdit(row)} onDelete={() => onDelete(row)} />

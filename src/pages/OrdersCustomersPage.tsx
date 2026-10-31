@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableTitleCell } from "@/components/app/table-kit";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   CustomerDialog,
@@ -3525,7 +3526,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         <TableHead className="w-[13%]">Сайт</TableHead>
                         <TableHead className="w-[12%]">Менеджер</TableHead>
                         {/* LTV (MVP) */}
-                        <TableHead className="w-[120px] text-right pr-2">
+                        <TableHead className="w-[196px] text-right pr-2">
                           <button
                             type="button"
                             onClick={cycleLtvSort}
@@ -3572,23 +3573,21 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             )}
                             onClick={() => openEdit(row)}
                           >
-                            <TableCell className="pl-6">
-                              <div className="flex min-w-0 items-center gap-3">
-                                <EntityAvatar
-                                  src={row.logo_url ?? null}
-                                  name={row.name ?? row.legal_name ?? "Компанія"}
-                                  fallback={getInitials(row.name ?? row.legal_name)}
-                                  size={36}
-                                />
-                                <div className="min-w-0">
-                                  <div className="truncate font-medium">{row.name ?? "Не вказано"}</div>
-                                  {legalEntities.length > 1 ? (
-                                    <div className="text-xs text-muted-foreground">{legalEntities.length} юр. ос.</div>
-                                  ) : null}
-                                </div>
-                              </div>
+                            <TableCell>
+                              <TableTitleCell
+                                leading={
+                                  <EntityAvatar
+                                    src={row.logo_url ?? null}
+                                    name={row.name ?? row.legal_name ?? "Компанія"}
+                                    fallback={getInitials(row.name ?? row.legal_name)}
+                                    size={28}
+                                  />
+                                }
+                                title={row.name ?? "Не вказано"}
+                                meta={[legalEntities.length > 1 ? `${legalEntities.length} юр. ос.` : null]}
+                              />
                             </TableCell>
-                            <TableCell className="align-top px-2">
+                            <TableCell className="px-2">
                               {primaryEntityType ? (
                                 <Badge
                                   variant="outline"
@@ -3598,34 +3597,32 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                 </Badge>
                               ) : null}
                             </TableCell>
-                            <TableCell className="align-top pl-2 max-w-[360px]">
-                              <div className="space-y-1">
-                                {renderPrimaryEntityLabel(row) ? (
-                                  <div className="truncate font-medium text-foreground">{renderPrimaryEntityLabel(row)}</div>
-                                ) : null}
-                                {missingRequisitesLabel ? (
-                                  <EmptyFieldAction label="Додати реквізити" title={missingRequisitesTooltip} onClick={() => openEdit(row)} />
-                                ) : null}
-                                {(primaryEntity && hasCustomerLegalEntityDocumentEssentials(primaryEntity) && primaryEntity.taxId) || legalEntities.length > 1 ? (
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    {primaryEntity && hasCustomerLegalEntityDocumentEssentials(primaryEntity) && primaryEntity.taxId ? (
-                                      <span>{`Код ${primaryEntity.taxId}`}</span>
-                                    ) : null}
-                                    {legalEntities.length > 1 ? (
-                                      <span className="rounded-full border border-border/70 px-2 py-0.5">
-                                        +{legalEntities.length - 1} ще
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                              </div>
+                            <TableCell className="pl-2">
+                              {/* Два рядки максимум: юрназва і сірий «Код · +N ще». Без
+                                  юрназви — лише дія «Додати реквізити». */}
+                              {renderPrimaryEntityLabel(row) ? (
+                                <TableTitleCell
+                                  title={renderPrimaryEntityLabel(row)}
+                                  meta={[
+                                    primaryEntity && hasCustomerLegalEntityDocumentEssentials(primaryEntity) && primaryEntity.taxId
+                                      ? `Код ${primaryEntity.taxId}`
+                                      : null,
+                                    missingRequisitesLabel ? (
+                                      <EmptyFieldAction key="add" label="Додати реквізити" title={missingRequisitesTooltip} onClick={() => openEdit(row)} />
+                                    ) : null,
+                                    legalEntities.length > 1 ? `+${legalEntities.length - 1} ще` : null,
+                                  ]}
+                                />
+                              ) : missingRequisitesLabel ? (
+                                <EmptyFieldAction label="Додати реквізити" title={missingRequisitesTooltip} onClick={() => openEdit(row)} />
+                              ) : null}
                             </TableCell>
-                            <TableCell className="align-top max-w-[220px]">
+                            <TableCell className="max-w-[220px]">
                               {row.website ? <ExternalSiteLink url={row.website} className="block" /> : null}
                             </TableCell>
-                            <TableCell className="align-top">{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
+                            <TableCell>{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
                             {/* LTV (MVP) */}
-                            <TableCell className="align-top text-right pr-2 tabular-nums">
+                            <TableCell className="text-right pr-2">
                               {(() => {
                                 const ltv = customerLtvMap.get(row.id);
                                 const segment = customerSegmentMap.get(row.id) ?? "none";
@@ -3633,14 +3630,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                   return <span className="text-muted-foreground">—</span>;
                                 }
                                 return (
-                                  <div className="flex flex-col items-end gap-0.5">
-                                    <span
-                                      className="font-medium"
-                                      title={buildCustomerLtvTooltip(ltv)}
-                                    >
-                                      {formatOrderMoney(ltv.lifetimeRevenue, ltv.currency)}
-                                      {ltv.mixedCurrencies ? <sup className="ml-0.5 text-muted-foreground">*</sup> : null}
-                                    </span>
+                                  <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                                     {segment !== "none" ? (
                                       <Badge
                                         tone={RFM_SEGMENT_TONE[segment]}
@@ -3650,6 +3640,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                         {RFM_SEGMENT_LABELS[segment]}
                                       </Badge>
                                     ) : null}
+                                    <span
+                                      className="font-medium"
+                                      title={buildCustomerLtvTooltip(ltv)}
+                                    >
+                                      {formatOrderMoney(ltv.lifetimeRevenue, ltv.currency)}
+                                      {ltv.mixedCurrencies ? <sup className="ml-0.5 text-muted-foreground">*</sup> : null}
+                                    </span>
                                   </div>
                                 );
                               })()}

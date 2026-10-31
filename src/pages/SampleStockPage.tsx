@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/sheet";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableTitleCell } from "@/components/app/table-kit";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
@@ -297,22 +298,17 @@ function normalizeFormFromRow(row?: SampleStockItemRow | null): SampleStockFormS
 
 function ProductIdentity({ row }: { row: SampleStockItemRow }) {
   return (
-    <div className="min-w-0">
-      <div className="flex items-center gap-2">
-        <div className="min-w-0 font-medium text-foreground">{row.name?.trim() || "Без назви"}</div>
-        {getStatusBadge(row)}
-      </div>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        {row.sku?.trim() ? <span>Артикул: {row.sku}</span> : null}
-        {row.category?.trim() ? <span>{row.category}</span> : null}
-        {row.visual_ref?.trim() ? <span>Візуал: {row.visual_ref}</span> : null}
-      </div>
-      {row.specifications?.trim() || row.comments?.trim() ? (
-        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-          {[row.specifications?.trim(), row.comments?.trim()].filter(Boolean).join(" · ")}
-        </div>
-      ) : null}
-    </div>
+    <TableTitleCell
+      title={row.name?.trim() || "Без назви"}
+      adornment={getStatusBadge(row)}
+      meta={[
+        row.sku?.trim() ? `Артикул: ${row.sku.trim()}` : null,
+        row.category?.trim(),
+        row.visual_ref?.trim() ? `Візуал: ${row.visual_ref.trim()}` : null,
+        row.specifications?.trim(),
+        row.comments?.trim(),
+      ]}
+    />
   );
 }
 
@@ -443,7 +439,7 @@ function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: 
             <TableHead className="w-[12%] text-right">Залишок</TableHead>
             <TableHead className="w-[13%] text-right">Ціна</TableHead>
             <TableHead className="w-[14%] text-right">Сума</TableHead>
-            <TableHead className="w-[14%] pl-8">Місце</TableHead>
+            <TableHead className="w-[14%]">Місце</TableHead>
             <TableHead className="w-12" />
           </TableRow>
         </TableHeader>
@@ -451,23 +447,23 @@ function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: 
           {rows.map((row) => (
             <TableRow
               key={row.id}
-              className="group cursor-pointer hover:bg-muted/10"
+              className="group cursor-pointer"
               onClick={() => handlers.onEdit(row)}
             >
-              <TableCell className="pl-6 align-top">
+              <TableCell>
                 <ProductIdentity row={row} />
               </TableCell>
-              <TableCell className="align-top">
-                <div className="font-medium">{row.color?.trim() || "—"}</div>
+              <TableCell>
+                <div className="truncate font-medium" title={row.color?.trim() || undefined}>{row.color?.trim() || "—"}</div>
               </TableCell>
-              <TableCell className="align-top text-right">
+              <TableCell className="text-right">
                 <QuantityCell row={row} />
               </TableCell>
-              <TableCell className="align-top text-right tabular-nums"><MoneyValue value={toNumber(row.unit_price)} /></TableCell>
-              <TableCell className="align-top text-right tabular-nums font-medium"><MoneyValue value={getTotalValue(row)} /></TableCell>
-              <TableCell className="align-top pl-8">{row.location?.trim() || <span className="text-muted-foreground">—</span>}</TableCell>
+              <TableCell className="text-right"><MoneyValue value={toNumber(row.unit_price)} /></TableCell>
+              <TableCell className="text-right font-medium"><MoneyValue value={getTotalValue(row)} /></TableCell>
+              <TableCell>{row.location?.trim() || <span className="text-muted-foreground">—</span>}</TableCell>
               <TableCell
-                className="pr-4 text-right align-top opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                className="text-right opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
                 onClick={(event) => event.stopPropagation()}
               >
                 <StockRowActions row={row} handlers={handlers} />

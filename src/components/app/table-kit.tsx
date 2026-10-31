@@ -185,3 +185,48 @@ export function TableLoadingRow({ colSpan, label = "Завантаження..."
     </TableRow>
   );
 }
+
+type TableTitleCellProps = {
+  /** Аватар, лого чи значок ліворуч — 20–28 px. */
+  leading?: React.ReactNode;
+  title: React.ReactNode;
+  /** Бейдж або позначка одразу за назвою. */
+  adornment?: React.ReactNode;
+  /** Сірий рядок під назвою: частини йдуть через « · », порожні відкидаються. */
+  meta?: Array<React.ReactNode | string | null | undefined | false>;
+  className?: string;
+};
+
+/**
+ * Головна клітинка рядка: назва і ОДИН сірий рядок під нею (хвиля Б1).
+ *
+ * Обидва рядки обрізаються в одну лінію, тож рядок таблиці не буває вищим
+ * за ~52 px — доти склад і підрядники складали вміст у три-чотири лінії, і
+ * рядок ріс до 109 px. Повний текст — у підказці й у картці запису.
+ */
+export function TableTitleCell({ leading, title, adornment, meta, className }: TableTitleCellProps) {
+  const parts = (meta ?? []).filter((part): part is React.ReactNode => part !== null && part !== undefined && part !== false && part !== "");
+  const metaText = parts.every((part) => typeof part === "string") ? (parts as string[]).join(" · ") : undefined;
+  return (
+    <div className={cn("flex min-w-0 items-center gap-2.5", className)}>
+      {leading}
+      <div className="min-w-0 flex-1">
+        {/* h-5: бейдж за назвою (22 px) не піднімає рядок вище за текст. */}
+        <div className="flex h-5 min-w-0 items-center gap-2">
+          <span className="truncate font-medium text-foreground">{title}</span>
+          {adornment}
+        </div>
+        {parts.length > 0 ? (
+          <div className="truncate text-xs text-muted-foreground" title={metaText}>
+            {parts.map((part, index) => (
+              <React.Fragment key={index}>
+                {index > 0 ? " · " : null}
+                {part}
+              </React.Fragment>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
