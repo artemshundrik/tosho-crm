@@ -152,7 +152,9 @@ export function OrderLaunchPathCard({
           <span className="tone-warning rounded-md border px-2 py-0.5 text-xs font-semibold">{path.blocker}</span>
         ) : null}
       </div>
-      <ol className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))]">
+      {/* Від sm кроки завжди в один ряд рівними колонками: auto-fit з мінімумом
+          170px на вужчому вікні переносив п'ятий крок у другий ряд. */}
+      <ol className="grid sm:auto-cols-fr sm:grid-flow-col">
         {path.steps.map((step, index) => (
           <li
             key={step.key}
