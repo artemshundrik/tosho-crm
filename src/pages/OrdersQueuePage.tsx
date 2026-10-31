@@ -62,6 +62,8 @@ const paymentChip = (record: DerivedOrderRecord) =>
       ? "безготівка"
       : "готівка";
 
+// Один рядок замість ряду чипів: оку треба лише те, чого бракує. Виконане
+// видно в підказці, а «Усе готово» — коли бракувати нічого.
 function RequirementChips({ record }: { record: DerivedOrderRecord }) {
   const steps = record.readinessSteps
     .map((step) => ({ ...step, short: shortLabel(step.label) }))
@@ -69,38 +71,19 @@ function RequirementChips({ record }: { record: DerivedOrderRecord }) {
   // Не за способом оплати: лід без картки замовника ще може потребувати реквізитів (REQ-322#p4).
   const needsRequisites = steps.some((step) => step.short === "Реквізити");
   const missing = steps.filter((step) => !step.done);
-  const done = steps.filter((step) => step.done);
-  // Коли чогось бракує, виконане згортаємо в один чип: рядок пояснює саме нестачу.
-  const doneChips =
-    missing.length > 0 && done.length > 1
-      ? [{ key: "done", text: `${done.length} готово`, title: done.map((step) => step.label).join("\n") }]
-      : done.map((step) => ({ key: step.label, text: step.short, title: step.label }));
+  const doneTitle = steps.filter((step) => step.done).map((step) => `✓ ${step.label}`).join("\n");
+  if (missing.length > 0) {
+    return (
+      <div className="min-w-0 text-xs" title={[missing.map((step) => step.label).join("\n"), doneTitle].filter(Boolean).join("\n")}>
+        <span className="tone-text-warning font-medium">Бракує:</span>{" "}
+        <span className="text-foreground">{missing.map((step) => step.short).join(", ")}</span>
+      </div>
+    );
+  }
   return (
-    <div className="flex min-w-0 flex-wrap gap-1">
-      {missing.map((step) => (
-        <span
-          key={step.label}
-          title={step.label}
-          className="tone-warning inline-flex h-[22px] items-center rounded-md border px-1.5 text-xs font-semibold"
-        >
-          {step.short}
-        </span>
-      ))}
-      {doneChips.map((chip) => (
-        <span
-          key={chip.key}
-          title={chip.title}
-          className="tone-success-subtle tone-text-success inline-flex h-[22px] items-center gap-1 rounded-md px-1.5 text-xs"
-        >
-          <Check className="h-3 w-3" aria-hidden />
-          {chip.text}
-        </span>
-      ))}
-      {!needsRequisites ? (
-        <span className="inline-flex h-[22px] items-center text-xs text-muted-foreground">
-          реквізити й договір не потрібні
-        </span>
-      ) : null}
+    <div className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground" title={doneTitle || undefined}>
+      <Check className="tone-text-success h-3.5 w-3.5 shrink-0" aria-hidden />
+      Усе готово{needsRequisites ? "" : " · реквізити й договір не потрібні"}
     </div>
   );
 }
@@ -242,7 +225,7 @@ export default function OrdersQueuePage() {
                     {items.qty ? ` · ${items.qty}` : ""} · {paymentChip(record)}
                   </div>
                   <RequirementChips record={record} />
-                  <Button size="sm" variant={record.readinessColumn === "ready" ? "primary" : "outline"} onClick={() => open(record)}>
+                  <Button size="sm" variant="outline" onClick={() => open(record)}>
                     {action.label}
                   </Button>
                 </div>
@@ -290,7 +273,7 @@ export default function OrdersQueuePage() {
                     <TableCell className="text-right">
                       <Button
                         size="xs"
-                        variant={record.readinessColumn === "ready" ? "primary" : "outline"}
+                        variant="outline"
                         onClick={(event) => {
                           event.stopPropagation();
                           open(record);
