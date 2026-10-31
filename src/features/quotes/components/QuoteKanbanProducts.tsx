@@ -57,8 +57,14 @@ const FULL_ROWS = 3;
  */
 const THUMB_LIMIT = 5;
 
-const productDisplayName = (product: QuoteKanbanProduct) =>
-  product.variantName ? `${product.name} · ${product.variantName}` : product.name;
+// Варіант дописуємо, лише коли він щось додає: у частини позицій назва
+// варіанта дослівно повторює назву товару, і картка показувала «X · X».
+const productDisplayName = (product: QuoteKanbanProduct) => {
+  const variant = product.variantName?.trim();
+  if (!variant) return product.name;
+  if (product.name.toLocaleLowerCase("uk").includes(variant.toLocaleLowerCase("uk"))) return product.name;
+  return `${product.name} · ${variant}`;
+};
 
 type QuoteKanbanProductsProps = {
   preview?: QuoteKanbanProductPreview;

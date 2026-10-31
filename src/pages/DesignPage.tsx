@@ -4513,8 +4513,10 @@ export default function DesignPage() {
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+            {/* «Задача» над номером задачі нічого не казала — це вся дошка.
+                Підпис лишився лише там, де номер чужий: номер прорахунку. */}
+            {isLinkedQuote ? <div className="text-xs font-semibold text-muted-foreground">Прорахунок</div> : null}
+            <div className={cn("flex flex-wrap items-center gap-2", isLinkedQuote && "mt-0.5")}>
               {isLinkedQuote ? (
                 <HoverCopyText
                   value={getTaskDisplayNumber(task)}

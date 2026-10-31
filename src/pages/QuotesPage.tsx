@@ -4826,10 +4826,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </HoverCopyText>
           </div>
           <div className="flex max-w-[150px] flex-wrap items-center justify-end gap-1.5 shrink-0">
-            <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-3xs font-semibold">
-              {Icon ? <Icon className="h-3 w-3" /> : null}
+            <span className="inline-flex h-6 items-center gap-1 text-xs font-medium text-muted-foreground">
+              {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
               {quoteTypeLabel(row.quote_type)}
-            </div>
+            </span>
             {membership?.kp_count ? (
               <Badge
                 variant="outline"
@@ -5491,13 +5491,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <QuoteDeadlineBadge tone={deadlineBadge.tone} label={deadlineBadge.label} />
-                      <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
                         {(() => {
                           const TypeIcon = quoteTypeIcon(row.quote_type);
                           return TypeIcon ? <TypeIcon className="h-3.5 w-3.5" /> : null;
                         })()}
                         {quoteTypeLabel(row.quote_type)}
-                      </div>
+                      </span>
                       {membership?.kp_count ? (
                         <Badge
                           variant="outline"
