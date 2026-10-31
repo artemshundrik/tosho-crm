@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoiceActivityTitle } from "@/components/team/activityCategories";
 import { toast } from "sonner";
 
 import { AlertTriangle } from "@/components/icons/appIcons";
@@ -115,7 +116,7 @@ export function OrderInvoiceCorrectionDialog({
       ]
         .filter(Boolean)
         .join(", ");
-      void followUpInvoiceEvent(record, teamId, `Рахунок ${label} виправлено${summary ? `: ${summary}` : ""}`, (actorName) =>
+      void followUpInvoiceEvent(record, teamId, invoiceActivityTitle("виправлено", label, summary), (actorName) =>
         notifyOrderInvoiceDecided({
           orderId: record.id,
           orderNumber: record.quoteNumber,

@@ -84,16 +84,26 @@ export function isNoiseActivity(action: string | null, title: string | null): bo
   return false;
 }
 
+/**
+ * Рядок журналу про рахунок: дієслово одразу після номера, бо в стрічці
+ * заголовок обрізається, і «виправлено» в кінці зникало — два різні записи
+ * виглядали однаково. `label` — «№ 455 від 30 жовт. 2026».
+ */
+export function invoiceActivityTitle(verb: "виправлено" | "виписано", label: string, note?: string | null): string {
+  const [number, ...date] = label.split(" від ");
+  const when = date.length ? ` · від ${date.join(" від ")}` : "";
+  return `Рахунок ${number} ${verb}${when}${note ? `: ${note}` : ""}`;
+}
+
 // Старі записи журналу про рахунок писались від особи («Виправив(ла) рахунок
-// № 455 …»); нові — безособово («Рахунок № 455 … виправлено»). Переписуємо
-// старі при показі, щоб стрічка говорила одною мовою, а журнал лишався як є.
-const LEGACY_INVOICE_TITLE = /^(Виправив|Виписав)\(ла\) рахунок (.+?)(: .*)?$/;
+// № 455 …»). Переписуємо їх при показі, щоб стрічка говорила одною мовою,
+// а сам журнал лишався як є.
+const LEGACY_INVOICE_TITLE = /^(Виправив|Виписав)\(ла\) рахунок (.+?)(?:: (.*))?$/;
 
 export function activityTitle(title: string): string {
   const match = title.match(LEGACY_INVOICE_TITLE);
   if (!match) return title;
-  const verb = match[1] === "Виправив" ? "виправлено" : "виписано";
-  return `Рахунок ${match[2]} ${verb}${match[3] ?? ""}`;
+  return invoiceActivityTitle(match[1] === "Виправив" ? "виправлено" : "виписано", match[2], match[3]);
 }
 
 export function actionLabel(action: string | null): string {

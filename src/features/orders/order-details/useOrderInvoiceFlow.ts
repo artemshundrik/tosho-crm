@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoiceActivityTitle } from "@/components/team/activityCategories";
 import { toast } from "sonner";
 
 import { getInvoiceContractBlocker } from "@/features/orders/orderDocumentRequirements";
@@ -165,7 +166,7 @@ export function useOrderInvoiceFlow({
       },
       async (patch) => {
         const label = `№ ${patch.invoiceNumber} від ${formatOrderDate(patch.invoiceDate ?? date)}`;
-        await followUp(`Рахунок ${label} виписано${priceNote ? `: ${priceNote}` : ""}`, (actorName) =>
+        await followUp(invoiceActivityTitle("виписано", label, priceNote), (actorName) =>
           notifyOrderInvoiceDecided({
             orderId: record!.id,
             orderNumber: record!.quoteNumber,
