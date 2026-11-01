@@ -83,7 +83,6 @@ import { notifyUsers } from "@/lib/designTaskActivity";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 import { fetchInboxOpenCount } from "@/features/inbox/inboxThreads";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useTheme } from "@/hooks/useTheme";
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
 import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
@@ -103,7 +102,6 @@ import { DesignerEarningsWidget } from "@/components/design/DesignerEarningsWidg
 import { ViewAsBar } from "@/components/app/ViewAsBar";
 import { pageChromeStyle, usePageChrome } from "@/layout/pageChrome";
 import { AppDropdown } from "@/components/app/AppDropdown";
-import { NotificationsMenu } from "@/components/app/NotificationsMenu";
 import {
   DesignerFloatingTimerWidget,
   DesignerHeaderTimerWidget,
@@ -111,6 +109,7 @@ import {
 } from "@/components/app/DesignerTimerWidget";
 import { resolveAiSuggestions } from "@/lib/aiSuggestions";
 import { toast } from "sonner";
+import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
 import { ToShoAiMark, ToShoAiWordmark } from "@/features/tosho-ai/ToShoAiWordmark";
 
 // Консоль ToSho AI (110+ KB) — lazy: SheetContent демонтується в закритому
@@ -135,7 +134,6 @@ import { buildToShoAiRouteContext, saveToShoAiLastContext } from "@/lib/toshoAi"
 
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { PageReveal } from "@/components/app/PageReveal";
-import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
 import { TabBar } from "@/components/app/TabBar";
 import { TabBarSettingsSheet } from "@/components/app/TabBarSettingsSheet";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
@@ -999,7 +997,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       return false;
     }
   });
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [usdRateOpen, setUsdRateOpen] = useState(false);
   // Тема живе у своєму хуку: він же тримає в злагоді обидва перемикачі (шапка
   // й мобільне меню) і стежить за налаштуванням ОС. Тут потрібне лише те, що
@@ -1007,7 +1004,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const { resolved: theme } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [inboxOpenCount, setInboxOpenCount] = useState<number | null>(null);
-  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [realtimeDisabled, setRealtimeDisabled] = useState(() => isRealtimeDisabledForSession());
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(() => readInAppNotificationPreferences().enabled);
   const [inAppNotificationSoundEnabled, setInAppNotificationSoundEnabled] = useState(
@@ -1015,7 +1011,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   );
   const shownInAppNotificationIdsRef = useRef<Set<string>>(new Set());
   const lastInAppNotificationSoundAtRef = useRef(0);
-  const push = usePushNotifications(userId);
   const [, setActivityUnreadCount] = useState(0);
   const [usdUahRate, setUsdUahRate] = useState<number | null>(null);
   const [eurUahRate, setEurUahRate] = useState<number | null>(null);
@@ -1288,7 +1283,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   const loadNotifications = React.useCallback(async () => {
     if (!userId) return;
-    setNotificationsLoading(true);
     const [{ data, error }, openThreads] = await Promise.all([
       supabase.from("notifications").select("id, title, body, href, created_at, read_at, type").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
       // Число на дзвонику — відкриті справи «Вхідних», як на сторінці (REQ-346#p2).
@@ -1296,7 +1290,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     ]);
     if (!error) setNotifications(((data || []) as NotificationRow[]).map(mapNotificationRow));
     setInboxOpenCount(openThreads);
-    setNotificationsLoading(false);
   }, [userId]);
 
   const playInAppNotificationSound = React.useCallback(async () => {
@@ -1721,7 +1714,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   const unreadCount = inboxOpenCount ?? notifications.filter((n) => !n.read).length;
   const sidebarCounts = useSidebarWorkCounts(teamId, unreadCount);
-  const unreadNotifications = notifications.filter((n) => !n.read);
   const hideToShoAiLauncher = toshoAiOpen || mobileMenuOpen || cmdkOpen || floatingLauncherBlocked;
 
   /** Вміст помічника — один на обидві поверхні, щоб вони не розходились. */
@@ -1807,21 +1799,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       </SheetContent>
     </Sheet>
   );
-
-  const markAllRead = async () => {
-    if (!userId || unreadCount === 0) return;
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("user_id", userId)
-      .is("read_at", null);
-    if (!error) {
-      void loadNotifications();
-      toast.success("Усі сповіщення прочитані");
-    } else {
-      toast.error("Не вдалося оновити сповіщення");
-    }
-  };
 
   return (
     <WorkspacePresenceProvider value={workspacePresence}>
@@ -2010,7 +1987,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   )}
 >
   <SidebarFeaturePlate collapsed={sidebarCollapsed} />
-  <UserMenu compact={sidebarCollapsed} />
+  <UserMenu compact={sidebarCollapsed} fxWarning={fxError ?? fxStaleWarning} />
 </div>
       </aside>
 
@@ -2206,7 +2183,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                         </div>
 
                         <div className="mt-2 border-t border-border/70 pt-4">
-                          <UserMenu mobile onNavigate={() => setMobileMenuOpen(false)} />
+                          <UserMenu mobile onNavigate={() => setMobileMenuOpen(false)} fxWarning={fxError ?? fxStaleWarning} />
                         </div>
                       </div>
                     </div>
@@ -2236,7 +2213,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
             {/* CENTER SEARCH
                 Компактна фіксована ширина, а не max-w-[520px]: праворуч живуть
-                плашка виробітку дизайнера, таймер, курси й дзвіночок, і широке
+                плашка виробітку дизайнера, таймер і курси, і широке
                 поле забирало в них місце. Сама середня колонка сітки центрована
                 по вікну, тож ширина назви сторінки ліворуч на неї не впливає —
                 кнопка не стрибає між сторінками. */}
@@ -2273,25 +2250,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     капсула всередині прямокутника — тим паче. */}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none relative inline-flex h-6 shrink-0 items-center gap-1.5 overflow-hidden rounded-md border border-ai-accent/25 bg-ai-accent/[0.08] px-2.5 text-2xs font-medium text-ai-accent transition-colors duration-base group-hover:border-ai-accent/45 group-hover:bg-ai-accent/15"
+                  className="pointer-events-none inline-flex shrink-0 items-center gap-1 pr-1 text-xs text-muted-foreground transition-colors duration-base group-hover:text-foreground"
                 >
-                  {/* Блиск сам пробігає раз на сім із половиною секунд — щоб про
-                      можливість спитати згадували й ті, хто сюди не наводить.
-
-                      Маска гасить смугу біля лівого й правого країв: без неї
-                      блиск виринає й зникає об рамку різким зрізом, і рух
-                      читається як дешевий банер. Позицію веде ТІЛЬКИ анімація —
-                      статичний -translate-x-full тут ставити не можна: у
-                      Tailwind v4 translate і transform різні властивості, вони
-                      склались би й зсунули всю траєкторію. */}
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg [mask-image:linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)] motion-reduce:hidden"
-                  >
-                    <span className="absolute inset-y-0 left-0 w-full animate-ai-shimmer bg-[linear-gradient(100deg,transparent_0%,hsl(var(--ai-accent)/0.10)_35%,hsl(var(--ai-accent)/0.42)_50%,hsl(var(--ai-accent)/0.10)_65%,transparent_100%)] blur-[1px]" />
-                  </span>
-                  <ToShoAiMark className="relative h-3.5 w-3.5 [&>path:last-child]:animate-ai-spark motion-reduce:[&>path:last-child]:animate-none" />
-                  <span className="relative">ToSho AI</span>
+                  <ToShoAiMark className="h-3.5 w-3.5" />
+                  спитати ToSho AI
                 </span>
               </button>
 
@@ -2308,25 +2270,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
             {/* RIGHT ACTIONS */}
             <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0 md:justify-self-end md:gap-2">
-              {/* ПЕРШИЙ У ГРУПІ — і це не про красу, а про REQ-25.
-                  Група має ml-auto й shrink-0: коли елемент усередині росте,
-                  вона розширюється ВЛІВО, штовхаючи все, що стоїть лівіше.
-                  Кнопка онлайну — єдина тут із мінливою шириною (аватарок то
-                  одна, то дванадцять), і поки вона стояла після курсу, курс
-                  їздив на 51 px сам собою, без жодної дії людини. Тепер ліворуч
-                  від неї лишається сам пошук — а він гнучкий і стискається без
-                  наслідків. Ширину кнопки фіксувати не треба: хай аватарок буде
-                  скільки є. Не переставляйте її назад.
-
-                  На ТЕЛЕФОНІ її немає (картка 146): там шапка вміщає лише назву
-                  сторінки й дві дії, і список присутніх з'їдав усе місце. Це
-                  єдина різниця — на десктопі кнопка лишається такою, якою була. */}
               {isNarrowViewport ? null : (
-                <OnlineNowDropdown
-                  entries={workspacePresence.onlineEntries}
-                  loading={workspacePresence.loading}
-                  compact
-                />
+                <OnlineNowDropdown entries={workspacePresence.onlineEntries} loading={workspacePresence.loading} compact />
               )}
 
               {/* Заробіток — поруч із таймером; сам вирішує, чи показуватись
@@ -2356,9 +2301,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                       }
                       title={fxError ?? fxStaleWarning ?? "Мінфін міжбанк · продаж"}
                     >
-                      {fxError || fxStaleWarning ? (
-                        <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-danger-foreground" />
-                      ) : null}
                       <FxTickerItem code="USD" rate={usdUahRate} delta={usdUahDelta} />
                       {/* Волосяна лінія замість крапки: роздільник має розділяти,
                           а не читатись як ще один символ у ряду цифр. */}
@@ -2429,21 +2371,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               {/* Theme toggle */}
               <ThemeSwitcher className="hidden md:inline-flex" />
 
-              <NotificationsMenu
-                open={notificationsOpen}
-                onOpenChange={setNotificationsOpen}
-                items={unreadNotifications}
-                unreadCount={unreadCount}
-                loading={notificationsLoading}
-                push={push}
-                onOpenItem={openNotification}
-                onMarkAllRead={markAllRead}
-                onOpenTelegramSetup={() => {
-                  setNotificationsOpen(false);
-                  navigate(ROUTES.profile);
-                }}
-                onOpenAll={() => navigate("/notifications")}
-              />
+
 
             </div>
           </div>

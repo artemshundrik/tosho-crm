@@ -275,12 +275,8 @@ export default function OrdersProductionPage() {
             <Plus className="h-5 w-5" />
           </Button>
         }
-        topRight={
-          <Button onClick={() => setCreateOrderOpen(true)} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
-            <Plus className="h-4 w-4" />
-            Створити замовлення
-          </Button>
-        }
+        // Вкладок у замовлень немає, тож окремий верхній рядок тримав одну
+        // кнопку над порожнім місцем (хвиля В3) — вона стоїть у кінці рядка пошуку.
         search={
           <ToolbarSearch
             value={search}
@@ -354,12 +350,20 @@ export default function OrdersProductionPage() {
             </ToolbarFilterBar>
           </>
         }
+        // Вкладок у замовлень немає, тож окремий верхній рядок тримав одну
+        // кнопку над порожнім місцем (хвиля В3) — вона стоїть у кінці рядка пошуку.
         meta={
+          <>
           <ToolbarMeta
             count={filteredViews.length}
             unit={["замовлення", "замовлення", "замовлень"]}
             extra={formatOrderMoney(filteredViews.reduce((sum, { record }) => sum + record.total, 0), "UAH")}
           />
+          <Button onClick={() => setCreateOrderOpen(true)} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
+            <Plus className="h-4 w-4" />
+            Створити замовлення
+          </Button>
+          </>
         }
       />
     ),

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, LogOut, MoreVertical, Newspaper, User } from "@/components/icons/appIcons";
+import { Eye, LogOut, MoreVertical, Newspaper, ShieldAlert, User } from "@/components/icons/appIcons";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { ViewAsDialog } from "@/components/app/ViewAsDialog";
@@ -30,6 +30,8 @@ type UserMenuProps = {
   mobile?: boolean;
   onNavigate?: () => void;
   compact?: boolean;
+  /** Курс не оновився — попередження переїхало з шапки сюди (хвиля В3, картка 346). */
+  fxWarning?: string | null;
 };
 
 type UserState = {
@@ -43,7 +45,7 @@ type UserState = {
 
 let cachedUserData: UserState | null = null;
 
-export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMenuProps) {
+export function UserMenu({ mobile = false, onNavigate, compact = false, fxWarning }: UserMenuProps) {
   const navigate = useNavigate();
   // Режим «Дивитись як» — owner і CEO (canUseViewAs рахується від РЕАЛЬНИХ
   // прав, тож із увімкненого режиму його не можна «загубити»).
@@ -190,6 +192,22 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
       },
     ];
 
+    if (fxWarning) {
+      items.push({ type: "separator" });
+      items.push({
+        key: "fx-warning",
+        label: (
+          <span className="flex min-w-0 items-start gap-2" title={fxWarning}>
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger-foreground" />
+            <span className="min-w-0">
+              <span className="block">Курс не оновився</span>
+              <span className="block truncate text-xs text-muted-foreground">{fxWarning}</span>
+            </span>
+          </span>
+        ),
+      });
+    }
+
     if (canUseViewAs) {
       items.push({ type: "separator" });
       items.push({
@@ -219,7 +237,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
     // handleLogout перестворюється щорендеру й у залежностях спричинив би
     // нескінченне перебудовування меню — його поведінка від рендерів не залежить.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canUseViewAs, navigate, viewAs]);
+  }, [canUseViewAs, fxWarning, navigate, viewAs]);
 
   // === Мобільна версія ===
   if (mobile) {
