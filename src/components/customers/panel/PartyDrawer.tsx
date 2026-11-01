@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { Maximize2, X } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { DRAWER_OVERLAY, Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 
 /**
@@ -29,7 +29,7 @@ export function PartyDrawer(props: {
         side={narrow ? "bottom" : "right"}
         dismissible
         hideClose
-        overlayClassName="bg-foreground/25 backdrop-blur-[6px]"
+        overlayClassName={DRAWER_OVERLAY}
         className={
           narrow
             ? "h-[90dvh] gap-0 rounded-t-2xl p-0"

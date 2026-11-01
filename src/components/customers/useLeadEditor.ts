@@ -51,6 +51,7 @@ export type LeadEditorDialogProps = Pick<
   | "onOpenCalculation"
   | "onOpenOrder"
   | "onOpenDesignTask"
+  | "fullMode"
 >;
 
 type LinkedState = {
@@ -106,9 +107,11 @@ export const useLeadEditor = (options?: { onSaved?: (result: LeadEditorSavedResu
   );
 
   /** false — ліда немає (видалили або перевели в замовника). */
+  const [fullMode, setFullMode] = React.useState(false);
   const openForLead = React.useCallback(
-    async (leadId: string): Promise<boolean> => {
+    async (leadId: string, options?: { full?: boolean }): Promise<boolean> => {
       if (!leadId) return false;
+      setFullMode(Boolean(options?.full));
       if (!teamId) {
         setError("Не вдалося визначити команду.");
         setOpen(true);
@@ -228,6 +231,7 @@ export const useLeadEditor = (options?: { onSaved?: (result: LeadEditorSavedResu
 
   const editorProps: LeadEditorDialogProps = {
     open,
+    fullMode,
     onOpenChange: setOpen,
     teamId,
     duplicateHintExcludeId: editingId,

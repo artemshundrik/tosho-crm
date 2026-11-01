@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 
 import { ChevronDown, ChevronUp, Eye, Maximize2, X } from "@/components/icons/appIcons";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { DRAWER_OVERLAY, Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { cn } from "@/lib/utils";
@@ -11,12 +10,10 @@ import { cn } from "@/lib/utils";
  * Прев'ю справи збоку (хвиля В1, REQ-346#p1): прорахунок, замовлення,
  * дизайн-задача — без переходу на сторінку.
  *
- * ЧОМУ НЕ ДРОВЕР. `SheetContent` модальний: затемнює список, ловить фокус і
- * забирає клавіатуру. Прев'ю існує заради протилежного — гортати справи J/K,
- * не губити прокрутку й не перезавантажувати список, тож на десктопі це
- * звичайна колонка поверх правого краю, без підкладки й без пастки фокуса.
- * На телефоні список під шторкою однаково не видно, і там це нижній аркуш
- * на 90% висоти, що закривається свайпом униз.
+ * ДРОВЕР З РОЗМИТТЯМ, як шторка замовника (REQ-349): Артем хоче одну логіку
+ * для всіх бічних карток. Список під підкладкою не перезавантажується й не
+ * губить прокрутку, а J/K гортають справи — клавіші слухає документ.
+ * На телефоні — нижній аркуш на 90% висоти, що закривається свайпом униз.
  *
  * Адреса не міняється: прев'ю — погляд, а не перехід. Замка редагування
  * прев'ю не бере.
@@ -106,32 +103,32 @@ export function EntityPeek(props: EntityPeekProps) {
     );
   }
 
-  // Портал у body: `.page-reveal` має постійний will-change: transform, і
-  // `fixed` усередині сторінки рахувався б від неї, а не від вікна — панель
-  // їхала б разом із прокруткою. Під шапкою застосунку, щоб дзвоник і пошук
-  // лишались під рукою.
-  return createPortal(
-    <aside
-      aria-label={`Прев'ю: ${props.number}`}
-      className={cn(
-        "fixed bottom-0 right-0 top-[var(--app-header-height)] z-40 flex w-[440px] max-w-[calc(100vw-48px)] flex-col border-l border-t border-border bg-card shadow-elevated-panel",
-        props.closing
-          ? "pointer-events-none duration-base ease-in animate-out fill-mode-forwards slide-out-to-right"
-          : "duration-slow ease-out animate-in slide-in-from-right"
-      )}
-    >
-      <PeekBody {...props} />
-      <footer className="flex shrink-0 items-center gap-3 border-t border-border px-4 py-2 text-2xs text-muted-foreground">
-        {props.footer ?? (
-          <>
-            <span><Kbd>J</Kbd> <Kbd>K</Kbd> гортати</span>
-            <span><Kbd>Enter</Kbd> відкрити</span>
-            <span><Kbd>Esc</Kbd> закрити</span>
-          </>
-        )}
-      </footer>
-    </aside>,
-    document.body
+  // Шторка над розмитою підкладкою — та сама, що в замовника (PartyDrawer):
+  // одна логіка для всіх бічних карток. Клавіші J/K/Enter/Esc ловить документ.
+  return (
+    <Sheet open={!props.closing} onOpenChange={(open) => (open ? undefined : props.onClose())}>
+      <SheetContent
+        side="right"
+        dismissible
+        hideClose
+        overlayClassName={DRAWER_OVERLAY}
+        className="flex w-[480px] max-w-[calc(100vw-24px)] flex-col gap-0 p-0 sm:max-w-[480px]"
+        aria-describedby={undefined}
+        aria-label={`Прев'ю: ${props.number}`}
+      >
+        <SheetTitle className="sr-only">{props.number}</SheetTitle>
+        <PeekBody {...props} />
+        <footer className="flex shrink-0 items-center gap-3 border-t border-border px-4 py-2 text-2xs text-muted-foreground">
+          {props.footer ?? (
+            <>
+              <span><Kbd>J</Kbd> <Kbd>K</Kbd> гортати</span>
+              <span><Kbd>Enter</Kbd> відкрити</span>
+              <span><Kbd>Esc</Kbd> закрити</span>
+            </>
+          )}
+        </footer>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -232,7 +229,7 @@ function PeekBottomSheet(props: EntityPeekProps) {
         side="bottom"
         dismissible
         hideClose
-        overlayClassName="bg-background/60 backdrop-blur-md"
+        overlayClassName={DRAWER_OVERLAY}
         className="h-[90dvh] gap-0 rounded-b-none rounded-t-2xl p-0"
         style={dragY ? { transform: `translateY(${dragY}px)`, transition: "none" } : undefined}
         aria-describedby={undefined}

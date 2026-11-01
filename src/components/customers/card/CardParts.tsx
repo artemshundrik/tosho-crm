@@ -18,11 +18,11 @@ import { cn } from "@/lib/utils";
 
 /** Класи для `Input`/`DigitsInput`/`PrefixField`, щоб поле стало «на місці». */
 export const INLINE_CONTROL = cn(
-  "border-transparent bg-transparent hover:border-border hover:bg-muted/40",
+  "border-border bg-card hover:border-foreground/30",
   "focus-visible:border-foreground/50 focus-within:border-foreground/50",
-  "read-only:hover:border-transparent read-only:hover:bg-transparent",
 );
-export const INLINE_NEED = "border-warning-soft-border bg-warning-soft/40 hover:border-warning-soft-border";
+/** Бракує для рахунку: лише обводка, без жовтого фону — бейдж «для рахунку» поруч і так каже. */
+export const INLINE_NEED = "border-warning-soft-border hover:border-warning-soft-border";
 
 export type PartyFieldTone = "default" | "need" | "bad";
 

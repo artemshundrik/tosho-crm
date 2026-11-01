@@ -126,6 +126,8 @@ export type LeadDialogProps = {
   onOpenCalculation?: (id: string) => void;
   onOpenOrder?: (id: string) => void;
   onOpenDesignTask?: (id: string) => void;
+  /** Відкрити одразу на «Повна», а не «Швидко». */
+  fullMode?: boolean;
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
@@ -206,12 +208,17 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   onOpenCalculation,
   onOpenOrder,
   onOpenDesignTask,
+  fullMode = false,
 }) => {
   const relatedTotalCount = calculations.length + orders.length + designTasks.length;
   const [ownershipOpen, setOwnershipOpen] = React.useState(false);
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [managerOpen, setManagerOpen] = React.useState(false);
-  const [quickMode, setQuickMode] = React.useState(true);
+  const [quickMode, setQuickMode] = React.useState(!fullMode);
+  // Відкрили з ⤢ шторки ліда — одразу повна форма, а не та сама коротка.
+  React.useEffect(() => {
+    if (open) setQuickMode(!fullMode);
+  }, [fullMode, open]);
   // Ковзна плашка для вкладок картки: TabsList від Radix не наш div, тож
   // механіку вдягаємо хуком, а не обгорткою.
   const { ref: segmentedRef, indicator: segmentedIndicator } = useSegmentedSlider<HTMLDivElement>();

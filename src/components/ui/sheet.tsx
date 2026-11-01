@@ -16,6 +16,13 @@ const SheetClose = SheetPrimitive.Close
 
 const SheetPortal = SheetPrimitive.Portal
 
+/**
+ * Підкладка бічних шторок і прев'ю справ: той самий затемнювач теми
+ * (`--overlay-scrim` — свій у світлій і темній) плюс розмиття. Одне місце,
+ * щоб шторка замовника й прев'ю прорахунку не розходились.
+ */
+export const DRAWER_OVERLAY = "bg-[hsl(var(--overlay-scrim))] backdrop-blur-[6px]"
+
 const SheetOverlay = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>

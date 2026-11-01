@@ -134,7 +134,7 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
           onClose={() => setPanel(null)}
           onOpenFull={() => {
             setPanel(null);
-            void openForLead(panel.id);
+            void openForLead(panel.id, { full: true });
           }}
           onSaved={notifySaved}
           onConverted={(customerId) => openForCustomer(customerId, panel.fallbackName)}
