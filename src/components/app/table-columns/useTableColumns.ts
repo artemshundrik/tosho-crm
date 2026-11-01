@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { readStoredWidth, writeStoredWidth } from "@/lib/storedWidth";
 import {
   resolveTableColumnWidths,
-  tableColumnMax,
+  tableColumnBounds,
   type TableColumnWidths,
   type TableColumnsSpec,
 } from "@/components/app/table-columns/tableColumns";
@@ -99,24 +99,23 @@ export function useTableColumns<Id extends string>(spec: TableColumnsSpec<Id>): 
   const effective = (): TableColumnWidths<Id> =>
     effectiveRef.current ?? resolveTableColumnWidths(spec, readWanted(), elementRef.current?.clientWidth ?? 0);
 
-  const measure = (id: Id): TableColumnBounds => {
-    const widths = effective();
-    const width = elementRef.current?.clientWidth ?? 0;
-    const others = spec.ids.reduce((acc, key) => (key === id ? acc : acc + widths[key]), 0);
-    const room = width - spec.fixedPx - spec.flexMinPx - others;
-    const min = spec.columns[id].min;
-    return { now: widths[id], min, max: Math.max(min, widths[id], Math.min(tableColumnMax(spec.columns[id]), room)) };
-  };
+  const measure = (id: Id): TableColumnBounds =>
+    tableColumnBounds(spec, effective(), readWanted(), elementRef.current?.clientWidth ?? 0, id);
+
+  // Через резолвер, а не «решта як була»: інакше назва не віддавала б місце,
+  // яке забрала сусідня колонка, і таблиця вилазила б за край до першого ресайзу.
+  const withWidth = (id: Id, px: number) =>
+    resolveTableColumnWidths(spec, { ...readWanted(), [id]: px }, elementRef.current?.clientWidth ?? 0);
 
   const preview = (id: Id, px: number) => {
-    writeVars({ ...effective(), [id]: Math.round(px) });
+    writeVars(withWidth(id, Math.round(px)));
   };
 
   const commit = (id: Id, px: number) => {
     const rounded = Math.round(px);
+    writeVars(withWidth(id, rounded));
     wantedRef.current = { ...readWanted(), [id]: rounded };
     writeStoredWidth(storageKey(id), rounded);
-    writeVars({ ...effective(), [id]: rounded });
   };
 
   const reset = (id: Id) => {

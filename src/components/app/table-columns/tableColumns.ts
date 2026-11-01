@@ -50,6 +50,38 @@ export const tableColumnWidth = <Id extends string>(spec: TableColumnsSpec<Id>, 
   `var(--${spec.varPrefix}-${id}, ${spec.columns[id].def}px)`;
 
 /**
+ * Стеля колонки. У назви (`grow`) її немає: на широкому екрані вона й так займає
+ * все вільне місце (Артем, 01.11.2026), і стеля лише для натягнутої руками
+ * ширини обрізала б її після перезавантаження — до 640 з тих 780, що людина
+ * поставила.
+ */
+const columnCap = <Id extends string>(spec: TableColumnsSpec<Id>, id: Id) =>
+  id === spec.grow ? Number.POSITIVE_INFINITY : tableColumnMax(spec.columns[id]);
+
+/**
+ * Межі, в яких тягнеться колонка зараз. Поки назву не тягнули, вона гумова:
+ * сусідня колонка росте її коштом, аж до мінімуму назви. Без цього на широкому
+ * екрані розширити не можна було нічого — назва вже з'їла весь запас.
+ */
+export function tableColumnBounds<Id extends string>(
+  spec: TableColumnsSpec<Id>,
+  widths: TableColumnWidths<Id>,
+  wanted: Partial<Record<Id, number>>,
+  containerWidth: number,
+  id: Id
+) {
+  const donor = spec.grow && spec.grow !== id && wanted[spec.grow] === undefined ? spec.grow : null;
+  const others = spec.ids.reduce(
+    (acc, key) => (key === id ? acc : acc + (key === donor ? spec.columns[key].min : widths[key])),
+    0
+  );
+  const room = containerWidth - spec.fixedPx - spec.flexMinPx - others;
+  const now = widths[id];
+  const min = spec.columns[id].min;
+  return { now, min, max: Math.max(min, now, Math.min(columnCap(spec, id), room)) };
+}
+
+/**
  * Побажані ширини → ті, що вміщаються в контейнер. Якщо не вміщаються —
  * стискаємо пропорційно запасу над мінімумом кожної колонки, тож жодна не
  * вужча за свій мінімум, а горизонтальної прокрутки не буде (хіба що сам
@@ -63,7 +95,7 @@ export function resolveTableColumnWidths<Id extends string>(
   const base = {} as TableColumnWidths<Id>;
   for (const id of spec.ids) {
     const column = spec.columns[id];
-    base[id] = Math.min(tableColumnMax(column), Math.max(column.min, wanted[id] ?? column.def));
+    base[id] = Math.min(columnCap(spec, id), Math.max(column.min, wanted[id] ?? column.def));
   }
   const sum = spec.ids.reduce((acc, id) => acc + base[id], 0);
   const minSum = spec.ids.reduce((acc, id) => acc + spec.columns[id].min, 0);
