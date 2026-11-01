@@ -12,6 +12,9 @@ import { Check } from "@/components/icons/appIcons";
 import { MobileStatusChips } from "@/components/kanban";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
+import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
+import { ORDERS_QUEUE_TABLE_COLUMNS } from "@/features/orders/order-list/ordersQueueTableColumns";
 import { CustomerWithItems, summarizeOrderItems } from "@/features/orders/order-list/OrderListRows";
 import { useOrderRecords } from "@/features/orders/order-list/useOrderRecords";
 import { formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
@@ -98,6 +101,7 @@ const queueAction = (record: DerivedOrderRecord): { label: string; to: string } 
 };
 
 export default function OrdersQueuePage() {
+  const { containerRef: queueTableRef, ...queueColumns } = useTableColumns(ORDERS_QUEUE_TABLE_COLUMNS); // чому окремо — TableColumnsResizer
   const navigate = useNavigate();
   const { teamId, session, userId } = useAuth();
   const isNarrowViewport = useIsNarrowViewport();
@@ -225,14 +229,15 @@ export default function OrdersQueuePage() {
             <QueueEmpty tab={tab} />
           </div>
         ) : (
+          <div ref={queueTableRef}>
           <Table variant="list" size="sm" stickyHeader className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[140px]">Прорахунок</TableHead>
+                <ResizableHead spec={ORDERS_QUEUE_TABLE_COLUMNS} columnId="number" controller={queueColumns} />
                 <TableHead className="w-auto">Замовник · що</TableHead>
-                <TableHead className="w-[112px] text-right">Сума</TableHead>
-                <TableHead className="w-[104px]">Оплата</TableHead>
-                <TableHead className="w-[320px]">Що треба для замовлення</TableHead>
+                <ResizableHead spec={ORDERS_QUEUE_TABLE_COLUMNS} columnId="total" controller={queueColumns} className="text-right" />
+                <ResizableHead spec={ORDERS_QUEUE_TABLE_COLUMNS} columnId="payment" controller={queueColumns} />
+                <ResizableHead spec={ORDERS_QUEUE_TABLE_COLUMNS} columnId="needs" controller={queueColumns} />
                 <TableHead className="w-[176px]" aria-label="Дія" />
                 <TableHead className="w-[52px] pr-6" aria-label="Менеджер" />
               </TableRow>
@@ -284,6 +289,7 @@ export default function OrdersQueuePage() {
               })}
             </TableBody>
           </Table>
+          </div>
         )}
       </PageCanvasBody>
     </PageCanvas>

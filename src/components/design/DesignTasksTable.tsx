@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
+import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
+import { DESIGN_TABLE_COLUMNS } from "@/components/design/designTasksTableColumns";
 import { TABLE_RECORD_NUMBER_TEXT, TableEmptyRow, TableLoadingRow, TableTitleCell } from "@/components/app/table-kit";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { PeekRowButton } from "@/components/app/peek/EntityPeek";
@@ -67,20 +70,21 @@ export function DesignTasksTable<T extends DesignTableTask>({
   onPeek,
   onHover,
 }: DesignTasksTableProps<T>) {
+  const { containerRef: tableRef, ...columns } = useTableColumns(DESIGN_TABLE_COLUMNS); // чому окремо — TableColumnsResizer
   return (
     // Без рамки, на всю ширину — як таблиця прорахунків. Ширина тримається
     // обгорткою: min-width на самій таблиці з table-fixed телефон ігнорує.
     <div className="overflow-x-auto">
-      <div className="min-w-[1180px]">
+      <div ref={tableRef} className="min-w-[1180px]">
       <Table variant="list" bare className="table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[136px]">Номер</TableHead>
+            <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="number" controller={columns} />
             <TableHead>Задача</TableHead>
-            <TableHead className="w-[17%]">Замовник</TableHead>
-            <TableHead className="w-[20%]">Товар</TableHead>
-            <TableHead className="w-[176px]">Статус</TableHead>
-            <TableHead className="w-[150px]">Виконавець</TableHead>
+            <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="customer" controller={columns} />
+            <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="product" controller={columns} />
+            <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="status" controller={columns} />
+            <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="assignee" controller={columns} />
             <TableHead className="w-[96px] text-right">Дедлайн</TableHead>
           </TableRow>
         </TableHeader>

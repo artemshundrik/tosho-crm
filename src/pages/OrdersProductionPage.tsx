@@ -17,6 +17,9 @@ import { CreateManualOrderDialog } from "@/components/orders/CreateManualOrderDi
 import { Button } from "@/components/ui/button";
 import { TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
+import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
+import { ORDERS_TABLE_COLUMNS } from "@/features/orders/order-list/ordersTableColumns";
 import {
   getSpecificationGroupBlocker,
   getSpecificationRecordBlocker,
@@ -99,6 +102,7 @@ const paymentKind = (record: DerivedOrderRecord): PaymentFilter =>
 const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
 
 export default function OrdersProductionPage() {
+  const { containerRef: ordersTableRef, ...ordersColumns } = useTableColumns(ORDERS_TABLE_COLUMNS); // чому окремо — TableColumnsResizer
   const navigate = useNavigate();
   const navigationType = useNavigationType();
   const { teamId, session, userId, accessRole, jobRole } = useAuth();
@@ -453,16 +457,17 @@ export default function OrdersProductionPage() {
           </div>
         ) : (
           // overflow-x-auto не ставимо: він гасить липку шапку таблиці.
+          <div ref={ordersTableRef}>
           <Table variant="list" size="sm" stickyHeader className="table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[52px] pl-6" aria-label="Обрати для СП" />
-                <TableHead className="w-[140px]">Номер</TableHead>
+                <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="number" controller={ordersColumns} />
                 <TableHead className="w-auto">Замовник · що замовили</TableHead>
-                <TableHead className="w-[112px] text-right">Сума</TableHead>
-                <TableHead className="w-[132px]">Оплата</TableHead>
-                <TableHead className="w-[116px]">Документи</TableHead>
-                <TableHead className="w-[300px]">Що далі · чий хід</TableHead>
+                <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="total" controller={ordersColumns} className="text-right" />
+                <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="payment" controller={ordersColumns} />
+                <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="documents" controller={ordersColumns} />
+                <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="next" controller={ordersColumns} />
                 <TableHead className="w-[56px] pr-6" aria-label="Менеджер" />
               </TableRow>
             </TableHeader>
@@ -482,6 +487,7 @@ export default function OrdersProductionPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </PageCanvasBody>
 

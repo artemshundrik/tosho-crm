@@ -1,11 +1,9 @@
 import React from "react";
+
 import { TableHead } from "@/components/ui/table";
+import { tableColumnWidth, type TableColumnsSpec } from "@/components/app/table-columns/tableColumns";
+import type { TableColumnBounds, TableColumnsResizer } from "@/components/app/table-columns/useTableColumns";
 import { cn } from "@/lib/utils";
-import { QUOTES_COLUMNS, quotesColumnWidth, type QuotesColumnId } from "@/features/quotes/quotes-page/quotesTableColumns";
-import type {
-  QuotesColumnBounds,
-  QuotesColumnsResizer,
-} from "@/features/quotes/quotes-page/useQuotesTableColumns";
 
 const KEYBOARD_STEP = 8;
 const KEYBOARD_STEP_LARGE = 16;
@@ -16,16 +14,17 @@ const KEYBOARD_STEP_LARGE = 16;
  * заголовок, подвійний клік — типова ширина. Заголовок-батько має бути
  * `relative group/head`; ширину ручка пише в CSS-змінну повз React.
  */
-export function ColumnResizeHandle({
+export function ColumnResizeHandle<Id extends string>({
   columnId,
+  label,
   controller,
 }: {
-  columnId: QuotesColumnId;
-  controller: QuotesColumnsResizer;
+  columnId: Id;
+  label: string;
+  controller: TableColumnsResizer<Id>;
 }) {
-  const [bounds, setBounds] = React.useState<QuotesColumnBounds | null>(null);
+  const [bounds, setBounds] = React.useState<TableColumnBounds | null>(null);
   const [dragging, setDragging] = React.useState(false);
-  const label = QUOTES_COLUMNS[columnId].label;
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -107,22 +106,28 @@ export function ColumnResizeHandle({
   );
 }
 
-/** Заголовок колонки зі зміною ширини: ширина з CSS-змінної, ручка на правій межі. */
-export function ResizableHead({
+/**
+ * Заголовок колонки зі зміною ширини: ширина з CSS-змінної, ручка на правій
+ * межі. Таблиця має бути `table-fixed`, а її обгортка — під `containerRef`.
+ */
+export function ResizableHead<Id extends string>({
+  spec,
   columnId,
   controller,
   className,
   children,
 }: {
-  columnId: QuotesColumnId;
-  controller: QuotesColumnsResizer;
+  spec: TableColumnsSpec<Id>;
+  columnId: Id;
+  controller: TableColumnsResizer<Id>;
   className?: string;
   children?: React.ReactNode;
 }) {
+  const label = spec.columns[columnId].label;
   return (
-    <TableHead className={cn("group/head relative", className)} style={{ width: quotesColumnWidth(columnId) }}>
-      {children ?? QUOTES_COLUMNS[columnId].label}
-      <ColumnResizeHandle columnId={columnId} controller={controller} />
+    <TableHead className={cn("group/head relative", className)} style={{ width: tableColumnWidth(spec, columnId) }}>
+      {children ?? label}
+      <ColumnResizeHandle columnId={columnId} label={label} controller={controller} />
     </TableHead>
   );
 }

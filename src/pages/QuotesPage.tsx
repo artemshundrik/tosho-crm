@@ -202,9 +202,10 @@ import { QuoteViewsBar } from "@/features/quotes/quotes-page/QuoteViewsBar";
 import { formatQuoteGroupsSum, getDeadlineBadge, groupQuoteRows, isQuoteBurning, parseDateOnly } from "@/features/quotes/quotes-page/quoteTableGroups";
 import { useQuotesScopeCache } from "@/features/quotes/quotes-page/useQuotesScopeCache";
 import { QuoteGroupHeaderRow, QuoteItemsCellContent, QuoteMembershipBadges, QuoteTotalCellContent } from "@/features/quotes/quotes-page/QuoteListCells";
-import { ResizableHead } from "@/features/quotes/quotes-page/ColumnResizeHandle";
+import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
 import { QuotesTableSkeleton } from "@/features/quotes/quotes-page/QuotesTableSkeleton";
-import { useQuotesTableColumns } from "@/features/quotes/quotes-page/useQuotesTableColumns";
+import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
+import { QUOTES_TABLE_COLUMNS } from "@/features/quotes/quotes-page/quotesTableColumns";
 import { QUOTES_COLUMN_WIDTH } from "@/lib/kanbanColumnWidth";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { getCurrentUserId } from "@/lib/currentUser";
@@ -636,7 +637,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [kanbanPreviewsLoading, setKanbanPreviewsLoading] = useState(false);
   /** Лічильники статусів з бази за поточним менеджером і пошуком (не залежать від вкладки). */
   const [quoteStatusCounts, setQuoteStatusCounts] = useState<Record<string, number> | null>(null);
-  const { containerRef: quotesTableRef, ...quotesColumns } = useQuotesTableColumns(); // чому окремо — QuotesColumnsResizer
+  const { containerRef: quotesTableRef, ...quotesColumns } = useTableColumns(QUOTES_TABLE_COLUMNS); // чому окремо — TableColumnsResizer
   const statusCountsRequestIdRef = useRef(0);
   const [kanbanPreviewVisibleCountByColumn, setKanbanPreviewVisibleCountByColumn] = useState<Record<string, number>>(
     () => Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
@@ -5337,7 +5338,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         aria-label="Вибрати всі"
                       />
                     </TableHead>
-                    <ResizableHead columnId="number" controller={quotesColumns}>
+                    <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="number" controller={quotesColumns}>
                       <button
                         type="button"
                         onClick={() => handleSort("number")}
@@ -5349,11 +5350,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         )}
                       </button>
                     </ResizableHead>
-                    <ResizableHead columnId="customer" controller={quotesColumns} className="font-semibold" />
+                    <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="customer" controller={quotesColumns} className="font-semibold" />
                     <TableHead>Що рахуємо</TableHead>
-                    <ResizableHead columnId="total" controller={quotesColumns} className="!pr-6 text-right font-semibold" />
-                    <ResizableHead columnId="status" controller={quotesColumns} className="font-semibold" />
-                    <ResizableHead columnId="deadline" controller={quotesColumns} className="font-semibold" />
+                    <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="total" controller={quotesColumns} className="!pr-6 text-right font-semibold" />
+                    <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="status" controller={quotesColumns} className="font-semibold" />
+                    <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="deadline" controller={quotesColumns} className="font-semibold" />
                     <TableHead className="w-[88px] font-semibold">
                       <div className="flex items-center justify-center">Менеджер</div>
                     </TableHead>

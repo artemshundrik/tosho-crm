@@ -36,6 +36,9 @@ import {
   TableEmptyRow,
   TableTextHeaderCell,
 } from "@/components/app/table-kit";
+import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
+import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
+import { TEAM_MEMBERS_TABLE_COLUMNS } from "@/features/team/teamMembersTableColumns";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -414,6 +417,7 @@ export function TeamMembersPage() {
    * картка людини живе окремим маршрутом (`/team/:userId`).
    */
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
+  const { containerRef: membersTableRef, ...membersColumns } = useTableColumns(TEAM_MEMBERS_TABLE_COLUMNS);
   const { entries } = useWorkspacePresence();
   const { teamId } = useAuth();
   /**
@@ -1932,15 +1936,16 @@ export function TeamMembersPage() {
               Клік по рядку веде в картку людини (/team/:userId), а не
               розкриває панель поруч: картка тепер одна на застосунок. */}
             <div className="hidden border-t border-border/60 pb-8 lg:block">
-              <Table variant="list" size="md">
+              <div ref={membersTableRef}>
+              <Table variant="list" size="md" className="table-fixed">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableTextHeaderCell widthClass="w-[24%]" className="pl-6">Користувач</TableTextHeaderCell>
-                    <TableTextHeaderCell>Доступ</TableTextHeaderCell>
-                    <TableTextHeaderCell>Посада</TableTextHeaderCell>
-                    <TableTextHeaderCell>Статус</TableTextHeaderCell>
-                    <TableTextHeaderCell>День народження</TableTextHeaderCell>
-                    <TableTextHeaderCell widthClass="w-[20%]">Робота / Випробувальний</TableTextHeaderCell>
+                    <TableTextHeaderCell className="pl-6">Користувач</TableTextHeaderCell>
+                    <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="access" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
+                    <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="position" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
+                    <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="status" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
+                    <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="birthday" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
+                    <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="work" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
                     <TableActionHeaderCell />
                   </TableRow>
                 </TableHeader>
@@ -2051,6 +2056,7 @@ export function TeamMembersPage() {
                   )}
                 </TableBody>
               </Table>
+              </div>
             </div>
           </>
         ) : null}

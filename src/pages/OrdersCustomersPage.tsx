@@ -13,6 +13,9 @@ import {
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableTitleCell } from "@/components/app/table-kit";
+import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
+import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
+import { CUSTOMERS_TABLE_COLUMNS, LEADS_TABLE_COLUMNS } from "@/features/orders/customersTableColumns";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   CustomerDialog,
@@ -500,6 +503,8 @@ function clearLegacyCustomersPageCache(teamId: string) {
 }
 
 function CustomersPage({ teamId }: { teamId: string }) {
+  const { containerRef: customersTableRef, ...customersColumns } = useTableColumns(CUSTOMERS_TABLE_COLUMNS); // чому окремо — TableColumnsResizer
+  const { containerRef: leadsTableRef, ...leadsColumns } = useTableColumns(LEADS_TABLE_COLUMNS);
   const location = useLocation();
   const navigate = useNavigate();
   const navigationType = useNavigationType();
@@ -3514,7 +3519,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                     })()
                   ))}
                 </div>
-                <div className="hidden md:block">
+                <div ref={customersTableRef} className="hidden md:block">
                   {/* Горизонтальний скрол знято свідомо (рішення Артема):
                       колонки стискаються на вузькому екрані, зате шапка
                       липне — без цього обгортка з overflow-auto лишалась би
@@ -3522,13 +3527,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   <Table variant="list" size="md" stickyHeader className="table-fixed">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-[24%]">Компанія</TableHead>
+                        <TableHead className="w-auto">Компанія</TableHead>
                         <TableHead className="w-[76px] px-2">Тип</TableHead>
-                        <TableHead className="w-[26%] pl-2">Юрособа</TableHead>
-                        <TableHead className="w-[13%]">Сайт</TableHead>
-                        <TableHead className="w-[12%]">Менеджер</TableHead>
+                        <ResizableHead spec={CUSTOMERS_TABLE_COLUMNS} columnId="entity" controller={customersColumns} className="pl-2" />
+                        <ResizableHead spec={CUSTOMERS_TABLE_COLUMNS} columnId="site" controller={customersColumns} />
+                        <ResizableHead spec={CUSTOMERS_TABLE_COLUMNS} columnId="manager" controller={customersColumns} />
                         {/* LTV (MVP) */}
-                        <TableHead className="w-[196px] text-right pr-2">
+                        <ResizableHead spec={CUSTOMERS_TABLE_COLUMNS} columnId="ltv" controller={customersColumns} className="text-right pr-2">
                           <button
                             type="button"
                             onClick={cycleLtvSort}
@@ -3554,7 +3559,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                               <ChevronsUpDown className="h-3 w-3 opacity-50" />
                             )}
                           </button>
-                        </TableHead>
+                        </ResizableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -3795,17 +3800,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
                     </div>
                   ))}
                 </div>
-                <div className="hidden md:block">
+                <div ref={leadsTableRef} className="hidden md:block">
                   <Table variant="list" size="md" stickyHeader className="table-fixed">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-[20%]">Компанія</TableHead>
-                        <TableHead className="w-[12%]">Контакт</TableHead>
-                        <TableHead className="w-[16%]">Email</TableHead>
-                        <TableHead className="w-[12%]">Телефони</TableHead>
-                        <TableHead className="w-[10%]">Джерело</TableHead>
-                        <TableHead className="w-[14%]">Сайт</TableHead>
-                        <TableHead className="w-[11%]">Менеджер</TableHead>
+                        <TableHead className="w-auto">Компанія</TableHead>
+                        {LEADS_TABLE_COLUMNS.ids.map((id) => <ResizableHead key={id} spec={LEADS_TABLE_COLUMNS} columnId={id} controller={leadsColumns} />)}
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>

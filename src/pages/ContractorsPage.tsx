@@ -37,6 +37,9 @@ import {
 } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableTitleCell } from "@/components/app/table-kit";
+import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
+import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
+import { CONTRACTORS_TABLE_COLUMNS } from "@/features/suppliers/contractorsTableColumns";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -515,6 +518,7 @@ function ContractorsTable({
   onEdit: (row: ContractorRow) => void;
   onDelete: (row: ContractorRow) => void;
 }) {
+  const { containerRef: tableRef, ...columns } = useTableColumns(CONTRACTORS_TABLE_COLUMNS);
   return (
     <>
       <div className="space-y-2.5 md:hidden">
@@ -541,7 +545,7 @@ function ContractorsTable({
         ))}
       </div>
 
-      <div className="hidden md:block">
+      <div className="hidden md:block" ref={tableRef}>
         <Table
           variant="list"
           size="md"
@@ -559,8 +563,8 @@ function ContractorsTable({
           <TableHeader>
             <TableRow>
               <TableHead>{title}</TableHead>
-              <TableHead className="w-[34%]">Послуги</TableHead>
-              <TableHead className="w-[196px]">Звʼязок</TableHead>
+              <ResizableHead spec={CONTRACTORS_TABLE_COLUMNS} columnId="services" controller={columns} />
+              <ResizableHead spec={CONTRACTORS_TABLE_COLUMNS} columnId="contact" controller={columns} />
               <TableHead className="w-[92px]" />
             </TableRow>
           </TableHeader>

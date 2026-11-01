@@ -173,7 +173,9 @@ export function UnifiedPageToolbar({
       {(search || filters || meta) ? (
         <div className={cn("flex flex-col gap-3 lg:flex-row lg:items-center", bottomRowClassName)}>
           {search ? (
-            <div className={cn("w-full lg:max-w-[320px] lg:flex-none xl:max-w-[370px]", searchClassName)}>
+            // Між lg і xl пошук вужчий: на 1100 px 320 px пошуку разом із
+            // замовником, чипом фільтрів і лічильником ламали ряд на два.
+            <div className={cn("w-full lg:max-w-[260px] lg:flex-none xl:max-w-[320px] min-[1600px]:max-w-[370px]", searchClassName)}>
               {search}
             </div>
           ) : null}

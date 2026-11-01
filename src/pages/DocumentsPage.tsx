@@ -13,6 +13,9 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { MobileStatusChips } from "@/components/kanban";
 import { Sheet, SheetBody, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
+import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
+import { DOCUMENTS_TABLE_COLUMNS } from "@/features/documents/documentsTableColumns";
 import { DocumentPreview } from "@/features/documents/DocumentPreview";
 import {
   DocumentDayRow,
@@ -144,6 +147,7 @@ export default function DocumentsPage() {
   const seesAll = canManageOrderDocuments(accessRole, jobRole);
   const isNarrowViewport = useIsNarrowViewport();
   const fitsTable = useMediaMatch(TABLE_MIN_WIDTH);
+  const { containerRef: tableRef, ...columns } = useTableColumns(DOCUMENTS_TABLE_COLUMNS); // чому окремо — TableColumnsResizer
   const inlinePreview = useMediaMatch(INLINE_PREVIEW_MIN_WIDTH);
   const [sheetOpen, setSheetOpen] = useState(false);
   const { records, loading, refreshing, error } = useOrderRecords(teamId, userId);
@@ -534,15 +538,15 @@ export default function DocumentsPage() {
         ) : (
           <div className="flex min-w-0 items-start border-t border-border/60">
             {/* overflow-x-auto не ставимо: він гасить липку шапку таблиці. */}
-            <div className="@container min-w-0 flex-1">
+            <div ref={tableRef} className="@container min-w-0 flex-1">
               <Table variant="list" size="sm" stickyHeader className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[112px]">Тип</TableHead>
-                    <TableHead className="w-[150px]">Документ</TableHead>
+                    <ResizableHead spec={DOCUMENTS_TABLE_COLUMNS} columnId="kind" controller={columns} />
+                    <ResizableHead spec={DOCUMENTS_TABLE_COLUMNS} columnId="number" controller={columns} />
                     <TableHead className="w-auto">Замовник · підстава</TableHead>
-                    <TableHead className="w-[184px]">Стан</TableHead>
-                    <TableHead className="w-[112px] text-right">Сума</TableHead>
+                    <ResizableHead spec={DOCUMENTS_TABLE_COLUMNS} columnId="status" controller={columns} />
+                    <ResizableHead spec={DOCUMENTS_TABLE_COLUMNS} columnId="total" controller={columns} className="text-right" />
                     <TableHead className="w-[64px] @max-4xl:pr-6">Відп.</TableHead>
                     <TableHead className="w-[64px] pr-6 text-right @max-4xl:hidden">Час</TableHead>
                   </TableRow>

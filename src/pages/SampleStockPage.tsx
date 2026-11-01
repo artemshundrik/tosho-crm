@@ -37,6 +37,9 @@ import {
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableTitleCell } from "@/components/app/table-kit";
+import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
+import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
+import { SAMPLE_STOCK_TABLE_COLUMNS } from "@/lib/sampleStockTableColumns";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
@@ -427,19 +430,20 @@ function StockCardsMobile({ rows, handlers }: { rows: SampleStockItemRow[]; hand
 }
 
 function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: StockRowHandlers }) {
+  const { containerRef: tableRef, ...columns } = useTableColumns(SAMPLE_STOCK_TABLE_COLUMNS); // чому окремо — TableColumnsResizer
   return (
-    <div className="hidden md:block">
+    <div ref={tableRef} className="hidden md:block">
       {/* Колонки у відсотках, горизонтальний скрол не потрібен — умова для
           stickyHeader виконана. */}
-      <Table variant="list" size="md" stickyHeader>
+      <Table variant="list" size="md" stickyHeader className="table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[34%]">Товар</TableHead>
-            <TableHead className="w-[15%]">Колір</TableHead>
-            <TableHead className="w-[12%] text-right">Залишок</TableHead>
-            <TableHead className="w-[13%] text-right">Ціна</TableHead>
-            <TableHead className="w-[14%] text-right">Сума</TableHead>
-            <TableHead className="w-[14%]">Місце</TableHead>
+            <TableHead>Товар</TableHead>
+            <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="color" controller={columns} />
+            <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="qty" controller={columns} className="text-right" />
+            <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="price" controller={columns} className="text-right" />
+            <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="total" controller={columns} className="text-right" />
+            <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="location" controller={columns} />
             <TableHead className="w-12" />
           </TableRow>
         </TableHeader>
