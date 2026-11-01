@@ -46,7 +46,11 @@ export type EntityPeekProps = {
  * E і H, а J/K гортають сповіщення, не справи, — тож прев'ю своїх не ставить.
  * На телефоні нічого не міняється: там це той самий нижній аркуш.
  */
-export const PeekInlineContext = createContext<{ footer: ReactNode } | null>(null);
+export const PeekInlineContext = createContext<{
+  footer: ReactNode;
+  /** На телефоні клавіш немає — дії сторінки («готово», «завтра») стають кнопками під аркушем. */
+  sheetFooter?: ReactNode;
+} | null>(null);
 
 const isTypingTarget = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
@@ -212,6 +216,7 @@ export function PeekSection({ title, aside, children }: { title: string; aside?:
  * відпустили нижче 120 px — закрили, вище — повернули на місце.
  */
 function PeekBottomSheet(props: EntityPeekProps) {
+  const sheetFooter = useContext(PeekInlineContext)?.sheetFooter;
   const [dragY, setDragY] = useState(0);
   const startYRef = useRef<number | null>(null);
 
@@ -251,6 +256,11 @@ function PeekBottomSheet(props: EntityPeekProps) {
           <span aria-hidden className="h-1 w-10 rounded-full bg-muted-foreground/30" />
         </div>
         <PeekBody {...props} showNav={false} />
+        {sheetFooter ? (
+          <footer className="flex shrink-0 items-center gap-2 border-t border-border px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {sheetFooter}
+          </footer>
+        ) : null}
       </SheetContent>
     </Sheet>
   );

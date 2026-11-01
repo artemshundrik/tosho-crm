@@ -290,12 +290,17 @@ export default function MyTurnPage() {
               })
             )}
           </div>
-          <div className="hidden min-w-0 flex-1 md:block">
-            {detail ?? (
-              <div className="grid h-full place-items-center text-sm text-muted-foreground">Оберіть справу ліворуч</div>
-            )}
-          </div>
-          {narrow ? detail : null}
+          {/* Одна справа — одне місце: схована колонка на телефоні теж
+              змонтувала б аркуш, і їх виходило два. */}
+          {narrow ? (
+            detail
+          ) : (
+            <div className="hidden min-w-0 flex-1 md:block">
+              {detail ?? (
+                <div className="grid h-full place-items-center text-sm text-muted-foreground">Оберіть справу ліворуч</div>
+              )}
+            </div>
+          )}
         </div>
       </PageCanvasBody>
     </PageCanvas>

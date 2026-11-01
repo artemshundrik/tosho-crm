@@ -82,7 +82,7 @@ import { getAgencyLogo } from "@/lib/agencyAssets";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
-import { fetchInboxOpenCount } from "@/features/inbox/inboxThreads";
+import { fetchInboxOpenCount, useInboxCountRefresh } from "@/features/inbox/useInboxCountRefresh";
 import { useTheme } from "@/hooks/useTheme";
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
 import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
@@ -1291,7 +1291,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     if (!error) setNotifications(((data || []) as NotificationRow[]).map(mapNotificationRow));
     setInboxOpenCount(openThreads);
   }, [userId]);
-
+  useInboxCountRefresh(userId, notifications, setInboxOpenCount);
   const playInAppNotificationSound = React.useCallback(async () => {
     if (typeof window === "undefined") return;
     if (!inAppNotificationSoundEnabled) return;

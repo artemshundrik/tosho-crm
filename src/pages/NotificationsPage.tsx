@@ -363,6 +363,9 @@ export default function NotificationsPage() {
             )}
           </div>
           {/* Обидві колонки гортаються самі: список їде, справа стоїть. */}
+          {/* Телефон — лише аркуш нижче: схована колонка теж змонтувала б свій
+              аркуш (вони порталяться в body), і їх виходило два. */}
+          {!narrow ? (
           <div className="hidden min-w-0 flex-1 md:block">
             {selected ? (
               <InboxDetail
@@ -381,6 +384,7 @@ export default function NotificationsPage() {
               <div className="grid h-full place-items-center text-sm text-muted-foreground">Оберіть сповіщення ліворуч</div>
             )}
           </div>
+          ) : null}
           {narrow && selected ? (
             <InboxDetail
               thread={selected}
@@ -480,6 +484,16 @@ function InboxDetail({ thread, members, teamId, userId, accessRole, jobRole, onD
       accessRole={accessRole}
       jobRole={jobRole}
       footer={footer}
+      sheetFooter={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onSnooze} disabled={!actionable}>
+            Завтра
+          </Button>
+          <Button className="flex-1" onClick={onDone} disabled={thread.state === "done"}>
+            Готово
+          </Button>
+        </>
+      }
       onOpenFull={onOpenFull}
       onClose={onClose}
       fallback={(missing) => <InboxNotificationDetail thread={thread} onOpenFull={onOpenFull} missing={missing} />}

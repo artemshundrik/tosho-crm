@@ -22,6 +22,8 @@ type EntityPeekPaneProps = {
   jobRole: string | null;
   /** Рядок клавіш під справою — у кожної сторінки свої. */
   footer: ReactNode;
+  /** Те саме для аркуша на телефоні — кнопками, бо клавіш там немає. */
+  sheetFooter?: ReactNode;
   onOpenFull: () => void;
   onClose: () => void;
   /** Справу зрушили з прев'ю (статус прорахунку) — сторінці час перечитати свій список. */
@@ -43,6 +45,7 @@ export function EntityPeekPane({
   accessRole,
   jobRole,
   footer,
+  sheetFooter,
   onOpenFull,
   onClose,
   onChanged,
@@ -115,5 +118,5 @@ export function EntityPeekPane({
     content = fallback(Boolean(ref));
   }
 
-  return <PeekInlineContext.Provider value={{ footer }}>{content}</PeekInlineContext.Provider>;
+  return <PeekInlineContext.Provider value={{ footer, sheetFooter }}>{content}</PeekInlineContext.Provider>;
 }
