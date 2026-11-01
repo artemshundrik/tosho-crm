@@ -140,6 +140,20 @@ describe("один адресат на сигнал", () => {
   });
 });
 
+describe("хід PM", () => {
+  it("чужі прострочення — не його хід, а перевірка й розподіл — його", () => {
+    const quotes = [
+      quote({ id: "q1", assignedTo: "manager", deadlineAt: daysAgo(2) }),
+      quote({ id: "q2", assignedTo: null }),
+    ];
+    const designTasks = [design({ id: "d1", status: "pm_review", managerUserId: "manager" })];
+    expect(turn("pm", "pm", { quotes, designTasks }).map((i) => i.id).sort()).toEqual([
+      "design-review:d1",
+      "quote-unassigned:q2",
+    ]);
+  });
+});
+
 describe("turnSubject", () => {
   it("бере погляд і права з посади людини", () => {
     expect(turnSubject({ userId: "c", accessRole: "member", jobRole: "seo" })).toEqual({

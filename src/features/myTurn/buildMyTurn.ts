@@ -94,7 +94,7 @@ const LANE_WEIGHT: Record<OverviewLane, number> = { now: 0, today: 1, later: 2 }
 export function buildMyTurn(
   source: Omit<OverviewSource, "lens"> & { lens: OverviewLens; orders: DerivedOrderRecord[]; viewer: OrderListViewer }
 ): OverviewQueueItem[] {
-  const queue = buildQueue({ ...source, lens: myTurnLens(source.lens) });
+  const queue = buildQueue({ ...source, lens: myTurnLens(source.lens), personal: true });
   const chief = source.lens === "chief" ? chiefTurnItems(source) : [];
   const orders = buildOrderTurnItems(source.orders, source.viewer, source.now);
   return [...queue, ...chief, ...orders].sort(

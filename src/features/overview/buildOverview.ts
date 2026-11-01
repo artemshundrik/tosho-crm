@@ -98,6 +98,14 @@ export type OverviewSource = {
   designTasks: OverviewDesignInput[];
   /** Скільки подій у стрічці — для приписки героя. */
   activityCount: number;
+  /**
+   * Лише своє, навіть для погляду, що бачить команду. Так «Мій хід» PM
+   * збирається з тих самих правил, що й Огляд PM, але без чужих прострочень:
+   * у них є свої виконавці, а командну картину й далі показує Огляд.
+   * Робота самого PM (перевірити, роздати) від цього не зникає — її сигнали
+   * читають команду напряму.
+   */
+  personal?: boolean;
 };
 
 const ACTIVE_QUOTE_STATUSES = new Set(["estimating", "estimated", "awaiting_approval"]);
@@ -211,13 +219,15 @@ const rollup = (params: {
 };
 
 /** Мій прорахунок, чи, для командних поглядів, будь-чий. */
+const seesTeamHere = (source: OverviewSource) => lensSeesTeam(source.lens) && !source.personal;
+
 const quotesInScope = (source: OverviewSource) =>
-  lensSeesTeam(source.lens) || !source.userId
+  seesTeamHere(source) || !source.userId
     ? source.quotes
     : source.quotes.filter((quote) => quote.assignedTo === source.userId);
 
 const designInScope = (source: OverviewSource) =>
-  lensSeesTeam(source.lens) || !source.userId
+  seesTeamHere(source) || !source.userId
     ? source.designTasks
     : source.designTasks.filter((task) => task.assigneeUserId === source.userId);
 
