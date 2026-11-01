@@ -6,7 +6,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { usePageCache } from "@/hooks/usePageCache";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -757,8 +757,9 @@ export default function SampleStockPage() {
       }
       filters={
         <div className="grid w-full gap-2 sm:flex sm:w-auto">
+          <ToolbarFilterBar>
           <ToolbarFilterSelect
-            value={statusFilter}
+            label="Статус" value={statusFilter}
             onValueChange={(value) => setStatusFilter(value as StockStatusFilter)}
             neutralValue="all"
             className="sm:w-[170px]"
@@ -768,7 +769,7 @@ export default function SampleStockPage() {
             }))}
           />
           <ToolbarFilterSelect
-            value={categoryFilter}
+            label="Категорія" value={categoryFilter}
             onValueChange={setCategoryFilter}
             neutralValue={ALL_CATEGORIES_FILTER}
             className="sm:w-[190px]"
@@ -778,7 +779,7 @@ export default function SampleStockPage() {
             ]}
           />
           <ToolbarFilterSelect
-            value={locationFilter}
+            label="Місце" value={locationFilter}
             onValueChange={setLocationFilter}
             neutralValue={ALL_LOCATIONS_FILTER}
             className="sm:w-[180px]"
@@ -787,6 +788,7 @@ export default function SampleStockPage() {
               ...locationOptions.map((location) => ({ value: location, label: location })),
             ]}
           />
+          </ToolbarFilterBar>
         </div>
       }
       meta={

@@ -7,7 +7,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { usePageCache } from "@/hooks/usePageCache";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { Button } from "@/components/ui/button";
 import {
   SEGMENTED_GROUP,
@@ -1026,8 +1026,9 @@ export default function ContractorsPage() {
         />
       }
       filters={
+        <ToolbarFilterBar>
         <ToolbarFilterSelect
-          value={serviceFilter}
+          label="Послуга" value={serviceFilter}
           onValueChange={setServiceFilter}
           neutralValue={ALL_SERVICES_FILTER}
           className="sm:w-[220px]"
@@ -1036,6 +1037,7 @@ export default function ContractorsPage() {
             ...serviceOptions.map((service) => ({ value: service, label: service })),
           ]}
         />
+        </ToolbarFilterBar>
       }
       meta={
         <ToolbarMeta

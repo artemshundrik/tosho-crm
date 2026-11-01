@@ -153,7 +153,7 @@ import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
 import { customerFilterKey, type CustomerFilterValue } from "@/lib/customerFilter";
-import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import {
   DELIVERY_TYPE_OPTIONS,
@@ -4635,7 +4635,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         filters={
           <>
             {contentView !== "sets" ? (
-              <>
+              <ToolbarFilterBar>
                 {/*
                   ФІЛЬТР ЛИШАЄТЬСЯ ПОВНИМ, зі «Скасовано» включно, — і це єдиний
                   шлях до скасованих прорахунків. Окремої кнопки в тулбарі під
@@ -4647,7 +4647,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 */}
                 {viewMode === "kanban" ? (
                   <ToolbarFilterSelect
-                    value={effectiveStatus}
+                    label="Статус" value={effectiveStatus}
                     onValueChange={setStatusFilter}
                     neutralValue="all"
                     className="sm:w-[170px]"
@@ -4687,7 +4687,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </div>
                 ) : (
                   <ToolbarFilterSelect
-                    value={managerFilter}
+                    label="Менеджер" value={managerFilter}
                     onValueChange={setManagerFilter}
                     neutralValue={ALL_MANAGERS_FILTER}
                     className="sm:w-[210px]"
@@ -4701,7 +4701,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   />
                 )}
                 <CustomerFilterSelect teamId={teamId} value={customerFilter} onChange={setCustomerFilter} />
-              </>
+              </ToolbarFilterBar>
             ) : (
               <>
                 <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>

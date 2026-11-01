@@ -32,7 +32,7 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MobileStatusChips } from "@/components/kanban";
 import { MOBILE_CHIPS_ROW } from "@/layout/mobileRhythm";
-import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import {
   SEGMENTED_GROUP,
@@ -1374,9 +1374,9 @@ export function TeamPage() {
         }
         filters={
           tab === "people" ? (
-            <>
+            <ToolbarFilterBar>
               <ToolbarFilterSelect
-                value={roleFilter}
+                label="Роль" value={roleFilter}
                 onValueChange={setRoleFilter}
                 neutralValue="all"
                 className="sm:w-[190px]"
@@ -1386,7 +1386,7 @@ export function TeamPage() {
                 ]}
               />
               <ToolbarFilterSelect
-                value={peopleFilter}
+                label="Присутність" value={peopleFilter}
                 onValueChange={(next) => setPeopleFilter(next as PeopleFilter)}
                 neutralValue="all"
                 className="sm:w-[170px]"
@@ -1409,7 +1409,7 @@ export function TeamPage() {
                   { value: "birthday", label: "За днем народження" },
                 ]}
               />
-            </>
+            </ToolbarFilterBar>
           ) : undefined
         }
         meta={

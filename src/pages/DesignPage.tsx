@@ -75,7 +75,7 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
 import { listCustomerDesignTaskActivityRows, useCustomerQuoteIds } from "@/features/design/customerTaskRows";
 import { customerFilterKey, taskMatchesCustomerFilter, type CustomerFilterValue } from "@/lib/customerFilter";
-import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanCardList, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard } from "@/components/kanban";
 import { CancelledDesignTasksList } from "@/components/design/CancelledDesignTasksList";
@@ -4955,6 +4955,7 @@ export default function DesignPage() {
         }
         filters={
           <>
+            <ToolbarFilterBar>
             {/*
               ФІЛЬТР ЛИШАЄТЬСЯ ПОВНИМ, зі «Скасовано» включно, — і це єдиний
               шлях до скасованих задач. Окремої кнопки під них у тулбарі немає:
@@ -4962,7 +4963,7 @@ export default function DesignPage() {
               щодня, а фільтр робить те саме й нічого не коштує.
             */}
             <ToolbarFilterSelect
-              value={statusFilter}
+              label="Статус" value={statusFilter}
               onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}
               neutralValue="all"
               className="sm:w-[180px]"
@@ -4978,7 +4979,7 @@ export default function DesignPage() {
 
             {viewMode !== "assignee" ? (
               <ToolbarFilterSelect
-                value={designerFilter}
+                label="Дизайнер" value={designerFilter}
                 onValueChange={setDesignerFilter}
                 neutralValue={ALL_DESIGNERS_FILTER}
                 className="sm:w-[220px]"
@@ -5018,7 +5019,7 @@ export default function DesignPage() {
               </div>
             ) : (
               <ToolbarFilterSelect
-                value={managerFilter}
+                label="Менеджер" value={managerFilter}
                 onValueChange={setManagerFilter}
                 neutralValue={ALL_MANAGERS_FILTER}
                 className="sm:w-[220px]"
@@ -5032,6 +5033,7 @@ export default function DesignPage() {
               />
             )}
             <CustomerFilterSelect teamId={effectiveTeamId} value={customerFilter} onChange={setCustomerFilter} />
+            </ToolbarFilterBar>
           </>
         }
         meta={

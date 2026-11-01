@@ -7,7 +7,7 @@ import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { ChevronLeft, ChevronRight, Files } from "@/components/icons/appIcons";
@@ -361,6 +361,7 @@ export default function DocumentsPage() {
         }
         filters={
           <>
+            <ToolbarFilterBar>
             <div
               className={cn(
                 TOOLBAR_FILTER,
@@ -406,7 +407,7 @@ export default function DocumentsPage() {
               </Button>
             </div>
             <ToolbarFilterSelect
-              value={kind}
+              label="Тип" value={kind}
               onValueChange={setKind}
               neutralValue={ALL}
               className="sm:w-[150px]"
@@ -417,7 +418,7 @@ export default function DocumentsPage() {
             />
             {seesAll ? (
               <ToolbarFilterSelect
-                value={manager}
+                label="Менеджер" value={manager}
                 onValueChange={setManager}
                 neutralValue={ALL}
                 className="sm:w-[170px]"
@@ -443,6 +444,7 @@ export default function DocumentsPage() {
               />
             ) : null}
             <CustomerFilterSelect teamId={teamId} value={customer} onChange={setCustomer} />
+            </ToolbarFilterBar>
           </>
         }
         meta={

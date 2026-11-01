@@ -352,7 +352,7 @@ const CEILINGS = {
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
   // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
-  "src/pages/OrdersCustomersPage.tsx": 4277,
+  "src/pages/OrdersCustomersPage.tsx": 4154,
   "src/pages/TeamMembersPage.tsx": 2633,
   "src/pages/OrdersProductionDetailsPage.tsx": 2251,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2848,

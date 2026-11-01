@@ -1,12 +1,16 @@
 import * as React from "react";
-import { Check, ChevronDown, FilterX, Loader2, Search, X } from "@/components/icons/appIcons";
+import { Check, ChevronDown, FilterX, Loader2, Plus, Search, X } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { Input } from "@/components/ui/input";
 import { TOOLBAR_CONTROL, TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -181,6 +185,11 @@ type ToolbarFilterSelectProps = {
   contentClassName?: string;
   ariaLabel?: string;
   disabled?: boolean;
+  /**
+   * Назва виміру для `ToolbarFilterBar`: «Менеджер», «Статус». Без неї фільтр
+   * у смузі лишається випадайком на виду (так живуть сортування).
+   */
+  label?: string;
 };
 
 /**
@@ -320,6 +329,124 @@ export function ToolbarMeta({
       <span className="tabular-nums">{count}</span>
       {countLabel ? <span className="text-muted-foreground">{countLabel}</span> : null}
       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+    </div>
+  );
+}
+
+/**
+ * Смуга фільтрів (хвиля Б2): фільтри не займають місця, поки не застосовані.
+ *
+ * Діти — звичайні `ToolbarFilterSelect`. Той, що має `label` і `neutralValue`,
+ * у нейтральному значенні ховається за «+ Фільтр», а застосований стає чипом
+ * «Менеджер: Дар'я М.» із хрестиком. Решта дітей (сортування без `label`,
+ * власні контроли на кшталт пошуку замовника) малюється як є, ПЕРЕД чипами:
+ * постійні контроли не стрибають, коли з'являється чи зникає чип.
+ *
+ * Доти кожна сторінка тримала на виду 2–4 випадайки по 170–240 px з «Всі …»
+ * навіть без жодного фільтра, і таблиця починалась на різній висоті.
+ *
+ * На телефоні діти малюються як є: там вони живуть в аркуші «Фільтри та
+ * вигляд», де повний випадайко зручніший за меню з підменю.
+ */
+export function ToolbarFilterBar({ children }: { children: React.ReactNode }) {
+  const isNarrow = useIsNarrowViewport();
+  if (isNarrow) return <>{children}</>;
+
+  const managed: ToolbarFilterSelectProps[] = [];
+  const rest: React.ReactNode[] = [];
+  React.Children.forEach(children, (child) => {
+    if (React.isValidElement<ToolbarFilterSelectProps>(child) && child.type === ToolbarFilterSelect) {
+      const props = child.props;
+      if (props.label && props.neutralValue !== undefined) {
+        managed.push(props);
+        return;
+      }
+    }
+    if (child !== null && child !== undefined && child !== false) rest.push(child);
+  });
+  const active = managed.filter((filter) => filter.value !== filter.neutralValue);
+  const idle = managed.filter((filter) => filter.value === filter.neutralValue && !filter.disabled);
+
+  return (
+    <>
+      {rest}
+      {active.map((filter) => (
+        <ToolbarFilterChip key={filter.label} {...filter} />
+      ))}
+      {idle.length > 0 ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" className={cn(TOOLBAR_FILTER, "text-muted-foreground")}>
+              <Plus className="h-3.5 w-3.5" />
+              Фільтр
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[200px]">
+            {idle.map((filter) => (
+              <DropdownMenuSub key={filter.label}>
+                <DropdownMenuSubTrigger className="rounded-lg text-[13px]">{filter.label}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-[320px] min-w-[200px] overflow-y-auto">
+                  <FilterOptionItems filter={filter} />
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </>
+  );
+}
+
+function FilterOptionItems({ filter }: { filter: ToolbarFilterSelectProps }) {
+  return (
+    <>
+      {filter.options
+        .filter((option) => option.value !== filter.neutralValue)
+        .map((option) => {
+          const OptionIcon = option.icon;
+          return (
+            <DropdownMenuItem
+              key={option.value}
+              disabled={option.disabled}
+              onSelect={() => filter.onValueChange(option.value)}
+              className="gap-2 rounded-lg text-[13px]"
+            >
+              <Check className={cn("h-3.5 w-3.5 shrink-0", option.value === filter.value ? "opacity-100" : "opacity-0")} />
+              {OptionIcon ? <OptionIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> : null}
+              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+            </DropdownMenuItem>
+          );
+        })}
+    </>
+  );
+}
+
+/** Застосований фільтр: «Назва: значення» — клік міняє значення, хрестик скидає. */
+function ToolbarFilterChip(filter: ToolbarFilterSelectProps) {
+  const selected = filter.options.find((option) => option.value === filter.value);
+  const SelectedIcon = selected?.icon;
+  return (
+    <div className={cn(TOOLBAR_FILTER, TOOLBAR_CONTROL_ACTIVE, "inline-flex w-auto max-w-[280px] items-center gap-0 px-0")}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="flex h-full min-w-0 items-center gap-1.5 pl-3 pr-1.5 text-sm">
+            <span className="shrink-0 text-muted-foreground">{filter.label}:</span>
+            {SelectedIcon ? <SelectedIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> : null}
+            <span className="min-w-0 truncate">{selected?.label ?? filter.placeholder ?? filter.value}</span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-[320px] min-w-[200px]">
+          <FilterOptionItems filter={filter} />
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <button
+        type="button"
+        aria-label={`Скинути фільтр «${filter.label}»`}
+        onClick={() => filter.neutralValue !== undefined && filter.onValueChange(filter.neutralValue)}
+        className="grid h-full shrink-0 place-items-center pl-1 pr-2.5 text-muted-foreground hover:text-foreground"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }

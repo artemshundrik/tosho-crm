@@ -26,7 +26,7 @@ import {
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { usePageCache } from "@/hooks/usePageCache";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { InlineLoading } from "@/components/app/loading-primitives";
 import { listCustomerQuotes, listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
@@ -3206,12 +3206,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
       }
       filters={
         <>
+        <ToolbarFilterBar>
         {/* Сегмент — між пошуком і менеджером, як просив Артем: спершу «кого
             саме» за поведінкою, потім «чий». Показуємо лише коли є дані LTV:
             без них усі 100% замовників були б «Без замовлень». */}
         {activeTab === "customers" && hasAnyLtv ? (
           <ToolbarFilterSelect
-            value={segmentFilter}
+            label="Сегмент" value={segmentFilter}
             onValueChange={(value) => setSegmentFilter(value as RfmSegment | "all")}
             neutralValue="all"
             className="sm:w-[190px]"
@@ -3250,7 +3251,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           </div>
         ) : (
           <ToolbarFilterSelect
-            value={activeTab === "customers" ? customerManagerFilter : leadManagerFilter}
+            label="Менеджер" value={activeTab === "customers" ? customerManagerFilter : leadManagerFilter}
             onValueChange={(value) => {
               if (activeTab === "customers") setCustomerManagerFilter(value);
               else setLeadManagerFilter(value);
@@ -3266,6 +3267,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             ]}
           />
         )}
+        </ToolbarFilterBar>
         </>
       }
       meta={

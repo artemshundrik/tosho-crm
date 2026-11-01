@@ -48,7 +48,7 @@ import {
 } from "@/lib/attachmentPreview";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { StackHoverPreview } from "@/components/app/StackHoverPreview";
@@ -1164,8 +1164,9 @@ export default function MarketingPage() {
         }
         filters={
           <>
+            <ToolbarFilterBar>
             <ToolbarFilterSelect
-              value={designerFilter}
+              label="Дизайнер" value={designerFilter}
               onValueChange={setDesignerFilter}
               neutralValue="all"
               ariaLabel="Автор дизайну"
@@ -1184,7 +1185,7 @@ export default function MarketingPage() {
               ]}
             />
             <ToolbarFilterSelect
-              value={managerFilter}
+              label="Менеджер" value={managerFilter}
               onValueChange={setManagerFilter}
               neutralValue="all"
               ariaLabel="Менеджер"
@@ -1214,6 +1215,7 @@ export default function MarketingPage() {
                 { value: "customer", label: "За замовником" },
               ]}
             />
+            </ToolbarFilterBar>
           </>
         }
         meta={<ToolbarMeta count={groups.length} countLabel="візуалів" loading={loading} />}

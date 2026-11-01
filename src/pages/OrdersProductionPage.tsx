@@ -8,7 +8,7 @@ import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { Factory, FileText, Plus } from "@/components/icons/appIcons";
 import { MobileStatusChips } from "@/components/kanban";
@@ -304,7 +304,9 @@ export default function OrdersProductionPage() {
               Мій хід
               <span className="figure text-xs">{myTurnCount}</span>
             </Button>
+            <ToolbarFilterBar>
             <ToolbarFilterSelect
+              label="Менеджер"
               value={managerFilter}
               onValueChange={setManagerFilter}
               neutralValue={ALL}
@@ -330,6 +332,7 @@ export default function OrdersProductionPage() {
               ]}
             />
             <ToolbarFilterSelect
+              label="Замовник"
               value={customerFilter}
               onValueChange={setCustomerFilter}
               neutralValue={ALL}
@@ -337,6 +340,7 @@ export default function OrdersProductionPage() {
               options={[{ value: ALL, label: "Всі замовники" }, ...customerOptions.map((name) => ({ value: name, label: name }))]}
             />
             <ToolbarFilterSelect
+              label="Оплата"
               value={paymentFilter}
               onValueChange={(value) => setPaymentFilter(value as PaymentFilter)}
               neutralValue="all"
@@ -350,6 +354,7 @@ export default function OrdersProductionPage() {
               className="sm:w-[160px]"
               options={SORT_OPTIONS}
             />
+            </ToolbarFilterBar>
           </>
         }
         meta={<ToolbarMeta count={filteredViews.length} countLabel="знайдено" />}
