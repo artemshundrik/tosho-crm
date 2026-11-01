@@ -229,9 +229,13 @@ import { execFileSync } from "node:child_process";
  *   синхронний setState, навіть якщо той стоїть після await. Скидання стану
  *   на зміну замовлення переїхало в рендер (патерн «попереднє значення в
  *   стані»), а перше завантаження — прямо в ефект.
+ *
+ * - 01.11.2026: set-state-in-effect 187 → 186. Одна знахідка пішла з правками
+ *   цього дня (фільтр «Менеджер» одним хуком замість стану з ефектом на двох
+ *   сторінках, прев'ю списків); межу опущено слідом.
  */
 const ALLOWED_PER_RULE = {
-  "react-hooks/set-state-in-effect": 187,
+  "react-hooks/set-state-in-effect": 186,
   "react-hooks/preserve-manual-memoization": 32,
   "react-hooks/refs": 15,
   "react-hooks/immutability": 3,

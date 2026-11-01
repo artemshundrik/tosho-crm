@@ -25,6 +25,10 @@ export function useEntityPeek<T>(items: readonly T[], getId: (item: T) => string
 
   const index = peekId ? items.findIndex((item) => getId(item) === peekId) : -1;
   const item = index >= 0 ? items[index] : null;
+  // Справа зникла зі списку — забуваємо її, а не ховаємо: інакше прев'ю
+  // відкривалось саме, щойно вона поверталась (інша вкладка, фільтр). Стан
+  // правиться під час рендера, а не ефектом — так React Compiler його приймає.
+  if (peekId !== null && index < 0 && !closing) setPeekId(null);
 
   const open = useCallback((id: string | null) => {
     if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
@@ -43,8 +47,6 @@ export function useEntityPeek<T>(items: readonly T[], getId: (item: T) => string
     if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
   }, []);
 
-  // Справа зникла зі списку (фільтр, видалення) — панель просто не показується;
-  // скидати стан ефектом не треба, це похідне значення.
   const shownId = index >= 0 ? peekId : null;
 
   const toggle = useCallback(

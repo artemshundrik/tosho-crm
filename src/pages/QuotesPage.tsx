@@ -2904,7 +2904,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const tableGroups = useMemo(() => groupQuoteRows(filteredAndSortedRows, (row) => kanbanProductByQuoteId[row.id]?.listTotal), [filteredAndSortedRows, kanbanProductByQuoteId]);
   const tableRows = useMemo(() => tableGroups.flatMap((group) => group.rows), [tableGroups]);
   const listSumLabel = viewMode === "table" && contentView !== "sets" ? formatQuoteGroupsSum(tableGroups, formatMoney) : undefined;
-  const quotePeek = useEntityPeek(viewMode === "kanban" && boardRows.length ? boardRows : tableRows, quoteRowId);
+  // J/K — лише по тих, що відкриваються: чужий прорахунок у списку стоїть із замком, а прев'ю показало б його коментар і ТЗ.
+  const peekRows = useMemo(() => (viewMode === "kanban" && boardRows.length ? boardRows : tableRows).filter(canOpenQuoteRow), [boardRows, canOpenQuoteRow, tableRows, viewMode]);
+  const quotePeek = useEntityPeek(peekRows, quoteRowId);
   const peekRow = quotePeek.item;
   const desktopKanbanViewportHeight = useKanbanViewportHeight(desktopKanbanViewportRef, {
     enabled: viewMode === "kanban",
