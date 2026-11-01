@@ -265,6 +265,9 @@ export default function OrdersProductionPage() {
       <UnifiedPageToolbar
         mobileCompact
         mobileFilterCount={activeFilterCount}
+        // Поле вужче за звичайне: у рядку ще й «Створити замовлення», і без
+        // цього «Фільтр» падав на другий ряд.
+        searchClassName="lg:max-w-[260px] xl:max-w-[280px]"
         mobilePrimary={
           <Button
             onClick={() => setCreateOrderOpen(true)}
@@ -354,11 +357,15 @@ export default function OrdersProductionPage() {
         // кнопку над порожнім місцем (хвиля В3) — вона стоїть у кінці рядка пошуку.
         meta={
           <>
+          {/* Число й сума дублюють картку «У роботі» під рядком, тож на
+              вужчих екранах поступаються місцем фільтрам. */}
+          <span className="hidden 2xl:contents">
           <ToolbarMeta
             count={filteredViews.length}
             unit={["замовлення", "замовлення", "замовлень"]}
             extra={formatOrderMoney(filteredViews.reduce((sum, { record }) => sum + record.total, 0), "UAH")}
           />
+          </span>
           <Button onClick={() => setCreateOrderOpen(true)} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
             <Plus className="h-4 w-4" />
             Створити замовлення
