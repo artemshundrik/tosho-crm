@@ -1,4 +1,5 @@
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { PartyHoverCard } from "@/components/app/PartyHoverCard";
 import { PeekRowButton } from "@/components/app/peek/EntityPeek";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -48,12 +49,29 @@ export function CustomerWithItems({ record }: { record: DerivedOrderRecord }) {
   const items = summarizeOrderItems(record);
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <EntityAvatar
-        src={record.customerLogoUrl}
-        name={record.customerName}
-        fallback={initials(record.customerName)}
-        size={28}
-      />
+      {/* Як у прорахунках: наведення — коротка картка, з неї — шторка замовника.
+          У ліда в замовленні id немає, тож йому лише логотип. */}
+      <PartyHoverCard
+        target={
+          record.customerId && record.partyType === "customer"
+            ? {
+                kind: "customer",
+                id: record.customerId,
+                name: record.customerName,
+                logoUrl: record.customerLogoUrl,
+                managerLabel: record.managerLabel || null,
+                managerAvatarUrl: record.managerAvatarUrl,
+              }
+            : null
+        }
+      >
+        <EntityAvatar
+          src={record.customerLogoUrl}
+          name={record.customerName}
+          fallback={initials(record.customerName)}
+          size={28}
+        />
+      </PartyHoverCard>
       <div className="min-w-0">
         <div className="truncate text-sm font-medium text-foreground">{record.customerName}</div>
         <div className="truncate text-xs text-muted-foreground" title={items.name}>

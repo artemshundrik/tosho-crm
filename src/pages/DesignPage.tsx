@@ -33,7 +33,7 @@ import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog"
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { toAvatarAbsence, type AvatarAbsence } from "@/lib/absenceIndicator";
 import { PersonHoverCard, toPersonHoverCardData } from "@/components/app/PersonHoverCard";
-import { PartyHoverCard } from "@/components/app/PartyHoverCard";
+import { PartyHoverCard, type PartyHoverTarget } from "@/components/app/PartyHoverCard";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   APPROVAL_GATE_HINT,
@@ -4454,6 +4454,19 @@ export default function DesignPage() {
     setEstimateReason("");
   };
 
+  /** Замовник під курсором — однаково на дошці й у таблиці. */
+  const getTaskPartyTarget = (task: DesignTask): PartyHoverTarget | null =>
+    task.customerId && task.customerType
+      ? {
+          kind: task.customerType,
+          id: task.customerId,
+          name: task.customerName ?? "Замовник / Лід",
+          logoUrl: task.customerLogoUrl ?? null,
+          managerLabel: task.quoteManagerUserId ? memberById[task.quoteManagerUserId] ?? null : null,
+          managerAvatarUrl: task.quoteManagerUserId ? getMemberAvatar(task.quoteManagerUserId) : null,
+        }
+      : null;
+
   const renderTaskCard = (task: DesignTask, options?: { draggable?: boolean }) => {
     const isLinkedQuote = isUuid(task.quoteId);
     const isAttachedFromStandalone = isTaskAttachedFromStandalone(task) && isLinkedQuote;
@@ -4703,20 +4716,7 @@ export default function DesignPage() {
         </div>
         {task.title ? <div className="mt-1 line-clamp-2 text-md font-medium">{task.title}</div> : null}
         <div className="mt-1.5 flex min-w-0 items-center gap-2">
-          <PartyHoverCard
-            target={
-              task.customerId && task.customerType
-                ? {
-                    kind: task.customerType,
-                    id: task.customerId,
-                    name: task.customerName ?? "Замовник / Лід",
-                    logoUrl: task.customerLogoUrl ?? null,
-                    managerLabel: task.quoteManagerUserId ? memberById[task.quoteManagerUserId] ?? null : null,
-                    managerAvatarUrl: task.quoteManagerUserId ? getMemberAvatar(task.quoteManagerUserId) : null,
-                  }
-                : null
-            }
-          >
+          <PartyHoverCard target={getTaskPartyTarget(task)}>
             <EntityAvatar
               src={task.customerLogoUrl ?? null}
               name={task.customerName ?? "Замовник / Лід"}
@@ -5196,6 +5196,7 @@ export default function DesignPage() {
           displayNumber={getTaskDisplayNumber}
           assigneeLabel={getTaskAssigneeLabel}
           assigneeAvatar={getTaskAssigneeAvatar}
+          partyTarget={getTaskPartyTarget}
           deadline={(task) => {
             const label = task.designDeadline ? formatDeadlineShort(task.designDeadline) : null;
             return label ? <QuoteDeadlineBadge tone={getDeadlineBadge(task.designDeadline).tone} label={label} compact /> : null;

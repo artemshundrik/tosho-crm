@@ -5,6 +5,7 @@ import { useTableColumns } from "@/components/app/table-columns/useTableColumns"
 import { DESIGN_TABLE_COLUMNS } from "@/components/design/designTasksTableColumns";
 import { TABLE_RECORD_NUMBER_TEXT, TableEmptyRow, TableLoadingRow, TableTitleCell } from "@/components/app/table-kit";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { PartyHoverCard, type PartyHoverTarget } from "@/components/app/PartyHoverCard";
 import { PeekRowButton } from "@/components/app/peek/EntityPeek";
 import { Button } from "@/components/ui/button";
 import { Package, User } from "@/components/icons/appIcons";
@@ -34,6 +35,8 @@ type DesignTasksTableProps<T extends DesignTableTask> = {
   displayNumber: (task: T) => string;
   assigneeLabel: (task: T) => string;
   assigneeAvatar: (task: T) => string | null;
+  /** Замовник під курсором — та сама картка, що на дошці й у прорахунках. */
+  partyTarget?: (task: T) => PartyHoverTarget | null;
   /** Бейдж дедлайну — той самий, що на картці дошки. */
   deadline: (task: T) => ReactNode;
   /** Привʼязана до прорахунку окрема задача — позначка, як на картці. */
@@ -59,6 +62,7 @@ export function DesignTasksTable<T extends DesignTableTask>({
   displayNumber,
   assigneeLabel,
   assigneeAvatar,
+  partyTarget,
   deadline,
   attached,
   onOpen,
@@ -126,12 +130,14 @@ export function DesignTasksTable<T extends DesignTableTask>({
                 <TableCell>
                   <TableTitleCell
                     leading={
-                      <EntityAvatar
-                        src={task.customerLogoUrl ?? null}
-                        name={task.customerName ?? "Замовник"}
-                        fallback={getInitials(task.customerName)}
-                        size={24}
-                      />
+                      <PartyHoverCard target={partyTarget?.(task) ?? null}>
+                        <EntityAvatar
+                          src={task.customerLogoUrl ?? null}
+                          name={task.customerName ?? "Замовник"}
+                          fallback={getInitials(task.customerName)}
+                          size={24}
+                        />
+                      </PartyHoverCard>
                     }
                     title={task.customerName ?? "Не вказано"}
                   />
