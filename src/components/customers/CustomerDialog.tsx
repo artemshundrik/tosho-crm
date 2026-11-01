@@ -1447,9 +1447,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       <div className="grid gap-2">
                         <Label>IBAN <span className="text-3xs font-normal text-muted-foreground">не обовʼязково</span></Label>
                         <IbanInput
-                          value={activeLegalEntity.iban}
+                          value={activeLegalEntity.iban} bankName={activeLegalEntity.bankName}
                           onChange={(iban) => updateLegalEntity(activeLegalEntityIndex, { iban })}
-                        />
+                          onUseBank={(bankName) => updateLegalEntity(activeLegalEntityIndex, { bankName })} />
                       </div>
                       <div className="grid gap-2">
                         <Label>Банк <span className="text-3xs font-normal text-muted-foreground">для реквізитів СП</span></Label>
