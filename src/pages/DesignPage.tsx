@@ -141,7 +141,8 @@ import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { Clock3, ExternalLink, LayoutGrid, ListFilter, PencilLine, Users } from "@/components/icons/appIcons";
+import { Clock3, ExternalLink, LayoutGrid, ListFilter, PencilLine, Table2, Users } from "@/components/icons/appIcons";
+import { DesignTasksTable } from "@/components/design/DesignTasksTable";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { MAX_BRIEF_FILES, planBriefFiles } from "@/features/design/briefFiles";
@@ -201,7 +202,12 @@ type DesignTaskListActivityRow = {
 
 type CustomerOption = CustomerLeadOption;
 
-type DesignViewMode = "kanban" | "assignee";
+type DesignViewMode = "kanban" | "table" | "assignee";
+const DESIGN_VIEW_OPTIONS = [
+  { value: "kanban", label: "Дошка", icon: LayoutGrid },
+  { value: "table", label: "Таблиця", icon: Table2 },
+  { value: "assignee", label: "Дизайнери", icon: Users },
+] as const;
 type DesignContentView = "all" | "linked" | "standalone";
 type DesignCompletedPeriod = "7d" | "30d" | "month" | "quarter";
 
@@ -4865,26 +4871,12 @@ export default function DesignPage() {
         }
         mobileViewSwitch={
           <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full")}>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={viewMode === "kanban"}
-              onClick={() => setViewMode("kanban")}
-              className={cn(SEGMENTED_TRIGGER, "flex-1 gap-2")}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              Kanban
-            </Button>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={viewMode === "assignee"}
-              onClick={() => setViewMode("assignee")}
-              className={cn(SEGMENTED_TRIGGER, "flex-1 gap-2")}
-            >
-              <Users className="h-3.5 w-3.5" />
-              Дизайнери
-            </Button>
+            {DESIGN_VIEW_OPTIONS.map(({ value, label, icon: Icon }) => (
+              <Button key={value} variant="segmented" size="xs" aria-pressed={viewMode === value} onClick={() => setViewMode(value)} className={cn(SEGMENTED_TRIGGER, "flex-1 gap-2")}>
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </Button>
+            ))}
           </SegmentedGroup>
         }
         mobilePrimary={
@@ -4931,26 +4923,12 @@ export default function DesignPage() {
         topRight={
           <>
             <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
-              <Button
-                variant="segmented"
-                size="xs"
-                aria-pressed={viewMode === "kanban"}
-                onClick={() => setViewMode("kanban")}
-                className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                <span className="hidden xl:inline">Дошка</span>
-              </Button>
-              <Button
-                variant="segmented"
-                size="xs"
-                aria-pressed={viewMode === "assignee"}
-                onClick={() => setViewMode("assignee")}
-                className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
-              >
-                <Users className="h-3.5 w-3.5" />
-              <span className="hidden xl:inline">Дизайнери</span>
-              </Button>
+              {DESIGN_VIEW_OPTIONS.map(({ value, label, icon: Icon }) => (
+                <Button key={value} variant="segmented" size="xs" aria-pressed={viewMode === value} onClick={() => setViewMode(value)} className={cn(SEGMENTED_TRIGGER, "gap-1.5")} aria-label={label} title={label}>
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">{label}</span>
+                </Button>
+              ))}
             </SegmentedGroup>
             <Button
               className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
@@ -5292,6 +5270,25 @@ export default function DesignPage() {
         </EstimatesKanbanCanvas>
       ) : null}
 
+
+      {viewMode === "table" ? (
+        <DesignTasksTable
+          tasks={filteredTasks}
+          loading={boardSkeletonShown}
+          displayNumber={getTaskDisplayNumber}
+          assigneeLabel={getTaskAssigneeLabel}
+          assigneeAvatar={getTaskAssigneeAvatar}
+          deadline={(task) => {
+            const label = task.designDeadline ? formatDeadlineShort(task.designDeadline) : null;
+            return label ? <QuoteDeadlineBadge tone={getDeadlineBadge(task.designDeadline).tone} label={label} compact /> : null;
+          }}
+          attached={(task) => isTaskAttachedFromStandalone(task) && isUuid(task.quoteId)}
+          onOpen={openTask}
+          onPreload={preloadDesignTaskRoute}
+          onMore={hasMoreTasks ? () => void loadTasks({ append: true, force: true }) : undefined}
+          moreBusy={loading || refreshing}
+        />
+      ) : null}
 
       {viewMode === "assignee" ? (
         <DesignersDashboard
