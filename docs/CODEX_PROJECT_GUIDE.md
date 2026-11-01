@@ -265,6 +265,7 @@ Current UI contract:
 - `/notifications`
 - `/team`
 - `/orders/customers`
+- `/orders/customers/:id?section=overview|contacts|requisites|delivery|work|files` — сторінка замовника: реквізити (під замком розділу), контакти й доставка правляться тут; бічна панель веде сюди «Повна картка»
 - `/orders/estimates`
 - `/orders/estimates/:id`
 - `/orders/production`

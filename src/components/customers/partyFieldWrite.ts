@@ -29,6 +29,31 @@ export type CustomerFieldPatch = Partial<
   >
 >;
 
+/** Розділи, які сторінка замовника править формою з «Зберегти». */
+export type CustomerSection = "requisites" | "contacts" | "delivery";
+
+/** Колонки розділу — див. `customerSectionColumns` у partyCardSave.ts. */
+export type CustomerSectionPatch = Partial<
+  Pick<
+    TableUpdate<"customers">,
+    | "legal_entities"
+    | "legal_name"
+    | "ownership_type"
+    | "vat_rate"
+    | "tax_id"
+    | "iban"
+    | "signatory_name"
+    | "signatory_position"
+    | "contacts"
+    | "contact_name"
+    | "contact_position"
+    | "contact_phone"
+    | "contact_email"
+    | "contact_birthday"
+    | "delivery_points"
+  >
+>;
+
 export type LeadFieldPatch = Partial<
   Pick<TableUpdate<"leads">, "payment_type" | "notes" | "reminder_at" | "reminder_comment">
 >;
@@ -65,6 +90,16 @@ const caught = (error: unknown): FieldWriteResult => ({
 });
 
 export async function writeCustomerFields(customerId: string, patch: CustomerFieldPatch): Promise<FieldWriteResult> {
+  try {
+    const response = await supabase.schema("tosho").from("customers").update(patch).eq("id", customerId).select("id");
+    return toResult(response, "Замовника вже немає або він вам недоступний");
+  } catch (error) {
+    return caught(error);
+  }
+}
+
+/** Запис розділу сторінки замовника — тими самими правилами, що й поле панелі. */
+export async function writeCustomerSection(customerId: string, patch: CustomerSectionPatch): Promise<FieldWriteResult> {
   try {
     const response = await supabase.schema("tosho").from("customers").update(patch).eq("id", customerId).select("id");
     return toResult(response, "Замовника вже немає або він вам недоступний");

@@ -18,6 +18,7 @@ import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { notifyCustomerLeadManagerAssigned } from "@/lib/workflowNotifications";
 import type { TableInsert } from "@/lib/dbTables";
 import type { CustomerFormState } from "./CustomerDialog";
+import type { CustomerSection, CustomerSectionPatch } from "./partyFieldWrite";
 import type { LeadFormState } from "./LeadDialog";
 import { getLeadContactIssue } from "./leadContact";
 import { getLeadConversionMissingFields } from "./leadRecord";
@@ -98,6 +99,51 @@ const managerChangedFromAnother = (previous: PartyPreviousState, manager: PartyM
     ? previous.managerUserId !== manager.userId
     : Boolean(previous?.managerLabel && previous.managerLabel !== manager.label));
 
+/**
+ * Колонки одного розділу картки: реквізити (масив юросіб + копія основної в
+ * окремих колонках), контакти (масив + перший контакт у колонках) чи
+ * доставка. Сторінка замовника пише розділ лише цими колонками — так правка
+ * реквізитів не затирає нотаток, які колега тим часом змінив у панелі.
+ */
+export function customerSectionColumns(section: CustomerSection, form: CustomerFormState): CustomerSectionPatch {
+  if (section === "requisites") {
+    const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
+    const primary = getPrimaryCustomerLegalEntity(form.legalEntities);
+    return {
+      legal_entities: legalEntities.length > 0 ? legalEntities : null,
+      legal_name: primary?.legal_name ?? null,
+      ownership_type: primary?.ownership_type ?? null,
+      vat_rate: primary?.vat_rate ?? null,
+      tax_id: primary?.tax_id ?? null,
+      iban: primary?.iban ?? null,
+      signatory_name: primary?.signatory_name ?? null,
+      signatory_position: primary?.signatory_position ?? null,
+    };
+  }
+  if (section === "contacts") {
+    const contacts = form.contacts
+      .map((contact) => ({
+        name: contact.name.trim(),
+        position: contact.position.trim(),
+        phone: contact.phone.trim(),
+        email: contact.email.trim(),
+        birthday: normalizeCustomerBirthday(contact.birthday),
+        telegram: normalizeTelegramUsername(contact.telegram),
+      }))
+      .filter((contact) => Object.values(contact).some(Boolean));
+    const primary = contacts[0] ?? null;
+    return {
+      contacts: contacts.length > 0 ? contacts : null,
+      contact_name: primary?.name || null,
+      contact_position: primary?.position || null,
+      contact_phone: primary?.phone || null,
+      contact_email: primary?.email || null,
+      contact_birthday: primary?.birthday || null,
+    };
+  }
+  return { delivery_points: serializeCustomerDeliveryPoints(form.deliveryPoints) };
+}
+
 export async function saveCustomerCard(input: {
   teamId: string;
   customerId: string | null;
@@ -109,19 +155,6 @@ export async function saveCustomerCard(input: {
   actor: PartyActor;
 }): Promise<{ logoUrl: string | null }> {
   const { teamId, customerId, form, manager, fallbackManagerLabel, previous, actor } = input;
-  const contacts = form.contacts
-    .map((contact) => ({
-      name: contact.name.trim(),
-      position: contact.position.trim(),
-      phone: contact.phone.trim(),
-      email: contact.email.trim(),
-      birthday: normalizeCustomerBirthday(contact.birthday),
-      telegram: normalizeTelegramUsername(contact.telegram),
-    }))
-    .filter((contact) => Object.values(contact).some(Boolean));
-  const primaryContact = contacts[0] ?? null;
-  const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
-  const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
 
   const optimizedLogoUrl = await ingestLogo({
     teamId,
@@ -137,25 +170,14 @@ export async function saveCustomerCard(input: {
     team_id: teamId,
     name: form.name.trim(),
     payment_type: form.paymentType,
-    legal_name: primaryLegalEntity?.legal_name ?? null,
     manager: customerId ? (manager.label || null) : (manager.label || fallbackManagerLabel || null),
     manager_user_id: manager.userId,
-    ownership_type: primaryLegalEntity?.ownership_type ?? null,
-    vat_rate: primaryLegalEntity?.vat_rate ?? null,
-    tax_id: primaryLegalEntity?.tax_id ?? null,
     website: form.website.trim() || null,
     source: form.source.trim() || null,
-    iban: primaryLegalEntity?.iban ?? null,
     logo_url: optimizedLogoUrl,
-    legal_entities: legalEntities.length > 0 ? legalEntities : null,
-    contacts: contacts.length > 0 ? contacts : null,
-    contact_name: primaryContact?.name || null,
-    contact_position: primaryContact?.position || null,
-    contact_phone: primaryContact?.phone || null,
-    contact_email: primaryContact?.email || null,
-    contact_birthday: primaryContact?.birthday || null,
-    signatory_name: primaryLegalEntity?.signatory_name ?? null,
-    signatory_position: primaryLegalEntity?.signatory_position ?? null,
+    ...customerSectionColumns("requisites", form),
+    ...customerSectionColumns("contacts", form),
+    ...customerSectionColumns("delivery", form),
     accountant_name: form.accountantName.trim() || null,
     accountant_email: form.accountantEmail.trim() || null,
     accountant_edrpou: form.accountantEdrpou.trim() || null,
@@ -165,7 +187,6 @@ export async function saveCustomerCard(input: {
     event_at: form.eventDate || null,
     event_comment: form.eventComment.trim() || null,
     notes: form.notes.trim() || null,
-    delivery_points: serializeCustomerDeliveryPoints(form.deliveryPoints),
   };
 
   // Стара схема без частини колонок: зберігаємо хоча б назву, а не падаємо.

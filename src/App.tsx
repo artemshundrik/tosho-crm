@@ -144,6 +144,7 @@ const ProfilePage = lazyWithRetry(() =>
 );
 const OrdersEstimatesPage = lazyWithRetry(() => import("./pages/OrdersEstimatesPage"));
 const OrdersCustomersPage = lazyWithRetry(() => import("./pages/OrdersCustomersPage"));
+const CustomerPage = lazyWithRetry(() => import("./pages/CustomerPage"));
 const OrdersEstimateDetailsPage = lazyWithRetry(() => import("./pages/OrdersEstimateDetailsPage"));
 const ProductCatalogPage = lazyWithRetry(() => import("./features/catalog/ProductCatalogPage"));
 const OrdersProductionPage = lazyWithRetry(() => import("./pages/OrdersProductionPage"));
@@ -1045,6 +1046,16 @@ function AppRoutes() {
             <ModuleRouteGate moduleKey="customers">
               <RouteSuspense shell>
                 <OrdersCustomersPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="orders/customers/:id"
+          element={
+            <ModuleRouteGate moduleKey="customers">
+              <RouteSuspense shell>
+                <CustomerPage />
               </RouteSuspense>
             </ModuleRouteGate>
           }

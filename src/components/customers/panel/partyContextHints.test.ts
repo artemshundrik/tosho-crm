@@ -35,6 +35,15 @@ describe("getPartyContextHints", () => {
     expect(hints).toEqual([{ kind: "approved_zero_total", quoteId: "q1", quoteNumber: "TS-1026-0029" }]);
   });
 
+  it("суми ще не пораховано (total = null) — про «0 ₴» не кажемо", () => {
+    const hints = getPartyContextHints({
+      records: records({ calculations: [quote({ status: "approved", total: null })] }),
+      hasDeliveryPoint: true,
+      now: NOW,
+    });
+    expect(hints).toEqual([]);
+  });
+
   it("КП на погодженні без руху понад 60 днів", () => {
     const stale = getPartyContextHints({
       records: records({ calculations: [quote({ status: "awaiting_approval", updated_at: daysAgo(61) })] }),

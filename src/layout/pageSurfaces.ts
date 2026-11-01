@@ -187,6 +187,9 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "person", path: "/team/:userId", page: "src/pages/PersonProfilePage.tsx", toolbar: "none", shape: "detail", maxWidth: 1180 },
   { id: "team", path: "/team", page: "src/pages/TeamPage.tsx", toolbar: "full", shape: "dashboard" },
 
+  // Перед «/orders/customers»: збіг нежорсткий, без власного запису картка
+  // замовника отримала б каркас таблиці зі смугою фільтрів.
+  { id: "customer", path: "/orders/customers/:id", page: "src/pages/CustomerPage.tsx", toolbar: "none", shape: "detail", maxWidth: 1180 },
   { id: "customers", path: "/orders/customers", page: "src/pages/OrdersCustomersPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "quote-details", path: "/orders/estimates/:id", page: "src/pages/OrdersEstimateDetailsPage.tsx", toolbar: "none", shape: "quote-record", canvas: true },
   { id: "quotes", path: "/orders/estimates", page: "src/pages/OrdersEstimatesPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: boardColumnCount("quotes"), columnWidth: QUOTES_COLUMN_WIDTH }, view: { storageKey: "quotes_view_mode", boardValue: "kanban", fallbackShape: "table" } },

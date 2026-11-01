@@ -43,3 +43,7 @@ export const ROUTES = {
   // Старі адреси (/releases, /dev-requests, /admin/observability) лишились
   // редиректами заради закладок і href у вже розісланих сповіщеннях.
 } as const;
+
+/** Сторінка замовника; `section` — розділ, що відкривається першим. */
+export const customerPagePath = (id: string, section?: string) =>
+  `${ROUTES.ordersCustomers}/${id}${section ? `?section=${section}` : ""}`;

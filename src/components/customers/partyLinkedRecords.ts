@@ -170,7 +170,9 @@ export async function loadPartyLinkedRecords(params: {
   const normalizedNames = new Set(candidateNames.map((value) => normalizePartyMatch(value)));
 
   const quotedCalculations = await loadCalculations(teamId, target, candidateNames, normalizedNames);
-  onCalculations?.(quotedCalculations);
+  // Суми тут ще сирі (`quotes.total`, у свіжих — 0): віддаємо «не пораховано»,
+  // інакше підказка «погоджено, але сума 0 ₴» блимає, поки рахуються тиражі.
+  onCalculations?.(quotedCalculations.map((row) => ({ ...row, total: null })));
   const quoteIds = new Set(quotedCalculations.map((row) => row.id).filter(Boolean));
 
   const [ordersResult, designTasksResult, totalsResult] = await Promise.allSettled([

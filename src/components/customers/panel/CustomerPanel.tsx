@@ -6,14 +6,13 @@ import { EntityAvatar } from "@/components/app/avatar-kit";
 import { EntityPeek, Kbd } from "@/components/app/peek/EntityPeek";
 import { Button } from "@/components/ui/button";
 import { formatCustomerLegalEntityTitle } from "@/lib/customerLegalEntities";
-import { readEntityLock, requestEntityLockRelease, sectionLockType, type EntityLockResult } from "@/lib/entityLock";
+import { requestEntityLockRelease, sectionLockType } from "@/lib/entityLock";
 import { isDesignerJobRole } from "@/lib/permissions";
-import type { CustomerFormState } from "../CustomerDialog";
-import { customerRowToForm, loadCustomerRow, type CustomerRecord } from "../customerCardLoad";
+import { customerPagePath } from "@/layout/routes";
 import type { PartyCardSavedResult } from "../partyCardContext";
 import { writeCustomerFields, type CustomerFieldPatch } from "../partyFieldWrite";
-import { loadPartyLinkedRecords, type PartyLinkedRecords } from "../partyLinkedRecords";
 import { customerReadinessInput, getPartyReadiness, type PartyReadinessKey } from "../partyReadiness";
+import { useCustomerCard } from "../useCustomerCard";
 import { usePartyFieldSave } from "../usePartyFieldSave";
 import {
   AccountantCard,
@@ -48,9 +47,6 @@ import { ReadinessBlock } from "./ReadinessBlock";
  * реквізитів, і без «немає доступу»: йому це просто не потрібно.
  */
 
-const EMPTY_RECORDS: PartyLinkedRecords = { calculations: [], orders: [], designTasks: [], ltvEntry: null };
-type LoadState = "loading" | "ready" | "error" | "gone";
-
 const JUMP_SECTION: Record<PartyReadinessKey, "requisites" | "contacts"> = {
   ownership: "requisites",
   taxId: "requisites",
@@ -72,62 +68,15 @@ export function CustomerPanel(props: {
   const navigate = useNavigate();
   const designer = isDesignerJobRole(jobRole);
 
-  const [state, setState] = useState<LoadState>("loading");
-  const [attempt, setAttempt] = useState(0);
-  const [row, setRow] = useState<CustomerRecord | null>(null);
-  const [form, setForm] = useState<CustomerFormState | null>(null);
-  const [records, setRecords] = useState<PartyLinkedRecords>(EMPTY_RECORDS);
-  const [recordsLoading, setRecordsLoading] = useState(true);
-  const [lock, setLock] = useState<EntityLockResult | null>(null);
+  const { state, row, form, update, records, recordsLoading, foreignLock: lock, retry: reload } = useCustomerCard({
+    teamId,
+    userId,
+    customerId,
+  });
   const [releaseRequested, setReleaseRequested] = useState(false);
   const [accountantOpen, setAccountantOpen] = useState(false);
   const [paymentSet, setPaymentSet] = useState(true);
-
-  useEffect(() => {
-    if (!teamId) return;
-    let cancelled = false;
-    setState("loading");
-    setRecordsLoading(true);
-    void (async () => {
-      try {
-        const { data, error } = await loadCustomerRow(teamId, customerId);
-        if (cancelled) return;
-        if (error) throw error;
-        if (!data) {
-          setState("gone");
-          return;
-        }
-        setRow(data);
-        setPaymentSet(Boolean(data.payment_type));
-        setForm(customerRowToForm(data, data.manager ?? ""));
-        setState("ready");
-
-        readEntityLock({ teamId, entityType: sectionLockType("customer", "requisites"), entityId: customerId })
-          .then((found) => {
-            const live = found && found.lockedBy !== userId && (!found.expiresAt || new Date(found.expiresAt) > new Date());
-            if (!cancelled) setLock(live ? found : null);
-          })
-          .catch(() => undefined);
-
-        const linked = await loadPartyLinkedRecords({
-          teamId,
-          userId,
-          target: { kind: "customer", id: customerId, names: [data.name, data.legal_name] },
-          onCalculations: (calculations) => {
-            if (!cancelled) setRecords((current) => ({ ...current, calculations }));
-          },
-        });
-        if (!cancelled) setRecords(linked);
-      } catch {
-        if (!cancelled) setState((current) => (current === "ready" ? current : "error"));
-      } finally {
-        if (!cancelled) setRecordsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [attempt, customerId, teamId, userId]);
+  useEffect(() => setPaymentSet(Boolean(row?.payment_type)), [row]);
 
   const formRef = useRef(form);
   formRef.current = form;
@@ -155,9 +104,8 @@ export function CustomerPanel(props: {
   const [reminderAt, setReminderAt] = useState<string | null>(null);
   useEffect(() => setReminderAt(row?.reminder_at ?? null), [row]);
 
-  const update = (patch: Partial<CustomerFormState>) => setForm((current) => (current ? { ...current, ...patch } : current));
   const openPage = useCallback(
-    (section?: string) => navigate(`/orders/customers/${customerId}${section ? `?section=${section}` : ""}`),
+    (section?: string) => navigate(customerPagePath(customerId, section)),
     [customerId, navigate],
   );
 
@@ -235,7 +183,7 @@ export function CustomerPanel(props: {
                 : "Схоже, зник звʼязок. Те, що ви бачили, нікуди не поділось."}
             </p>
             {state === "error" ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)}>
+              <Button type="button" variant="outline" size="sm" onClick={reload}>
                 Спробувати ще
               </Button>
             ) : null}
@@ -322,7 +270,7 @@ export function CustomerPanel(props: {
                   loading={recordsLoading}
                   onOpenQuote={(id) => navigate(`/orders/estimates/${id}`)}
                   onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
-                  onShowAll={() => openPage("deals")}
+                  onShowAll={() => openPage("work")}
                 />
                 <NotesSection
                   notes={form.notes}

@@ -205,7 +205,7 @@ function PeekBody({
 }
 
 /** Розділ тіла прев'ю: сірий підпис і вміст, розділені лінією від сусідів. */
-export function PeekSection({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+export function PeekSection({ title, aside, children }: { title: ReactNode; aside?: ReactNode; children: ReactNode }) {
   return (
     <section className="space-y-2 border-b border-border px-4 py-3 last:border-b-0">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">

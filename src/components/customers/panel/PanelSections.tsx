@@ -422,16 +422,21 @@ export function DealsSection(props: {
   onOpenQuote: (id: string) => void;
   onOpenOrder: (id: string) => void;
   onShowAll: () => void;
+  /** Скільки рядків показати; сторінка замовника показує всі. */
+  limit?: number;
+  /** Сторінка ставить сюди фільтр «Усе / Прорахунки / Замовлення». */
+  title?: ReactNode;
 }) {
+  const limit = props.limit ?? 5;
   const rows: DealRow[] = [
     ...props.records.orders.map((item) => ({ kind: "order" as const, item })),
     ...props.records.calculations.map((item) => ({ kind: "quote" as const, item })),
   ].sort((a, b) => new Date(b.item.created_at ?? 0).getTime() - new Date(a.item.created_at ?? 0).getTime());
   return (
     <PeekSection
-      title="Прорахунки й замовлення"
+      title={props.title ?? "Прорахунки й замовлення"}
       aside={
-        rows.length > 5 ? (
+        rows.length > limit ? (
           <Button type="button" variant="ghost" size="xxs" onClick={props.onShowAll}>
             Усі {rows.length}
           </Button>
@@ -440,7 +445,7 @@ export function DealsSection(props: {
     >
       {props.loading && rows.length === 0 ? <div className="h-9 animate-pulse rounded-md bg-muted" /> : null}
       {!props.loading && rows.length === 0 ? <p className="text-sm text-muted-foreground">Ще нічого немає.</p> : null}
-      {rows.slice(0, 5).map(({ kind, item }) => {
+      {rows.slice(0, limit).map(({ kind, item }) => {
         const status = (item.status ?? "").toLowerCase();
         const label =
           kind === "quote"

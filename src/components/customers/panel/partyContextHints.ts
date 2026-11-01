@@ -43,7 +43,8 @@ export function getPartyContextHints(input: {
 
   for (const quote of records.calculations) {
     const status = quote.status ?? "";
-    if (APPROVED.has(status) && Number(quote.total ?? 0) === 0) {
+    // null — суму ще рахують з тиражів; «0 ₴» кажемо лише про пораховану.
+    if (APPROVED.has(status) && quote.total != null && Number(quote.total) === 0) {
       hints.push({ kind: "approved_zero_total", quoteId: quote.id, quoteNumber: quote.number ?? "Прорахунок" });
       continue;
     }
