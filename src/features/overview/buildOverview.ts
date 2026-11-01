@@ -82,7 +82,11 @@ export type OverviewDesignInput = {
   status: string;
   assigneeUserId: string | null;
   assigneeLabel: string | null;
+  /** Менеджер замовника — той, хто веде розмову з клієнтом про цей дизайн. */
+  managerUserId: string | null;
   createdAt: string | null;
+  /** Коли задача увійшла в поточний статус; у старих задач порожньо. */
+  statusChangedAt: string | null;
   deadlineAt: string | null;
 };
 
@@ -251,6 +255,49 @@ const freshTeamQuotes = (source: OverviewSource) =>
 const freshTeamDesign = (source: OverviewSource) =>
   source.designTasks.filter((task) => !isStaleDesign(task, source.now));
 
+/**
+ * Скільки дизайн лежить у клієнта — від дня, коли його туди віддали.
+ *
+ * Від створення задачі рахувати не можна: задача, яку тиждень малювали й
+ * учора показали, виглядала б так, ніби клієнт мовчить тиждень. Старі задачі
+ * без дати переходу рахуються від створення — інакшої дати в них немає.
+ */
+const clientReviewAge = (task: OverviewDesignInput, now: Date) => daysSince(task.statusChangedAt ?? task.createdAt, now);
+
+/**
+ * Прорахунки без відповідального — поштучно, для того, хто їх розподіляє.
+ *
+ * НЕ ДЛЯ КОЖНОГО МЕНЕДЖЕРА. Нічия справа не є ходом кожного: коли вона висить
+ * у восьми чергах одночасно, кожен із восьми вважає, що її візьме хтось інший.
+ * Тому вона адресована лише тому, хто роздає роботу, — PM в Огляді й власнику
+ * та СЕО в «Моєму ході».
+ */
+export const buildUnassignedQuoteItems = (source: OverviewSource): OverviewQueueItem[] =>
+  freshTeamQuotes(source)
+    .filter((quote) => isActiveQuote(quote.status) && !quote.assignedTo)
+    .flatMap((quote) => {
+      const age = daysSince(quote.createdAt, source.now);
+      if (age === null || age < QUOTE_UNASSIGNED_STALE_DAYS) return [];
+      return [
+        {
+          id: `quote-unassigned:${quote.id}`,
+          entityKey: quote.id,
+          lane: "today" as OverviewLane,
+          chip: "Прорахунок",
+          chipTone: "neutral" as Tone,
+          code: quote.number,
+          title: `${quoteTitle(quote)} — без відповідального`,
+          subtitle: QUOTE_STATUS_LABEL[quote.status] ?? quote.status,
+          when: formatAge(age),
+          whenTone: "warning" as Tone,
+          to: `/orders/estimates/${quote.id}`,
+          entityName: quote.customerName ?? quote.number,
+          entityLogoUrl: quote.customerLogoUrl,
+          rank: -age,
+        },
+      ];
+    });
+
 const SIGNALS: Signal[] = [
   {
     // Прострочений дедлайн прорахунку — найгостріше, що є в модулі.
@@ -319,34 +366,11 @@ const SIGNALS: Signal[] = [
         }),
   },
   {
-    // Нікому не належить — отже, ним ніхто й не займеться.
+    // Нікому не належить — отже, ним ніхто й не займеться. Адресат — той, хто
+    // розподіляє, а не всі менеджери разом (див. buildUnassignedQuoteItems).
     id: "quote-unassigned",
-    lenses: ["sales", "pm", "general"],
-    build: (source) =>
-      freshTeamQuotes(source)
-        .filter((quote) => isActiveQuote(quote.status) && !quote.assignedTo)
-        .flatMap((quote) => {
-          const age = daysSince(quote.createdAt, source.now);
-          if (age === null || age < QUOTE_UNASSIGNED_STALE_DAYS) return [];
-          return [
-            {
-              id: `quote-unassigned:${quote.id}`,
-              entityKey: quote.id,
-              lane: "today" as OverviewLane,
-              chip: "Прорахунок",
-              chipTone: "neutral" as Tone,
-              code: quote.number,
-              title: `${quoteTitle(quote)} — без відповідального`,
-              subtitle: QUOTE_STATUS_LABEL[quote.status] ?? quote.status,
-              when: formatAge(age),
-              whenTone: "warning" as Tone,
-              to: `/orders/estimates/${quote.id}`,
-              entityName: quote.customerName ?? quote.number,
-              entityLogoUrl: quote.customerLogoUrl,
-              rank: -age,
-            },
-          ];
-        }),
+    lenses: ["pm"],
+    build: buildUnassignedQuoteItems,
   },
   {
     // Мій прорахунок чекає ціни. Для командних поглядів це рутина, не затик.
@@ -503,14 +527,16 @@ const SIGNALS: Signal[] = [
         }),
   },
   {
-    // Дизайн у клієнта задовго — нагадати має менеджер, а не дизайнер.
+    // Дизайн у клієнта задовго — нагадати має менеджер, а не дизайнер. І саме
+    // менеджер ЦЬОГО замовника: раніше рядок отримували всі погляди продажів
+    // разом, і власник бачив у своєму ході чужих клієнтів.
     id: "design-client-silent",
     lenses: ["sales", "general"],
     build: (source) =>
       freshTeamDesign(source)
-        .filter((task) => task.status === "client_review")
+        .filter((task) => task.status === "client_review" && Boolean(source.userId) && task.managerUserId === source.userId)
         .flatMap((task) => {
-          const age = daysSince(task.createdAt, source.now);
+          const age = clientReviewAge(task, source.now);
           if (age === null || age < DESIGN_CLIENT_REVIEW_STALE_DAYS) return [];
           return [
             {
@@ -690,7 +716,7 @@ const SIGNALS: Signal[] = [
         subtitle: `Понад ${DESIGN_CLIENT_REVIEW_STALE_DAYS} дні без відповіді — час нагадати`,
         count: freshTeamDesign(source).filter((task) => {
           if (task.status !== "client_review") return false;
-          const age = daysSince(task.createdAt, source.now);
+          const age = clientReviewAge(task, source.now);
           return age !== null && age >= DESIGN_CLIENT_REVIEW_STALE_DAYS;
         }).length,
         to: "/design",

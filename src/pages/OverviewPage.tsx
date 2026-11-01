@@ -12,6 +12,7 @@ import { usePageData } from "@/hooks/usePageData";
 
 import { buildOverview } from "@/features/overview/buildOverview";
 import { OverviewAside } from "@/features/overview/OverviewAside";
+import { OverviewPeople } from "@/features/overview/OverviewPeople";
 import { OverviewQueue } from "@/features/overview/OverviewQueue";
 import { SupplierDocumentsCard, canSeeSupplierDocumentsCard } from "@/features/overview/SupplierDocumentsCard";
 import { useSupplierDocuments } from "@/features/overview/useSupplierDocuments";
@@ -57,9 +58,12 @@ const greetingFor = (hour: number) => {
  * дизайн-задачі.
  */
 export function OverviewPage() {
-  const { teamId, userId, accessRole, jobRole } = useAuth();
+  const { teamId, userId, accessRole, jobRole, permissions } = useAuth();
 
   const lens = useMemo(() => resolveOverviewLens({ accessRole, jobRole }), [accessRole, jobRole]);
+
+  // Чужий хід — лише власнику й СЕО (картка 347), навіть якщо адмін теж дивиться згори.
+  const showPeople = lens === "chief" && (permissions.isSuperAdmin || permissions.isSeo);
 
   // «Документи постачальників» - лише тим, хто веде замовлення чи приймає товар.
   const showSupplierDocuments = canSeeSupplierDocumentsCard(accessRole, jobRole);
@@ -176,7 +180,10 @@ export function OverviewPage() {
               а контекст стає рядом карток під нею. Другої гілки розмітки немає
               навмисно: React комітить обидві, скільки б `hidden` на них не було. */}
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
-            <OverviewQueue items={view.queue} total={view.queueTotal} emptyText={view.hero.emptyText} />
+            <div className="grid min-w-0 grid-cols-1 gap-4">
+              <OverviewQueue items={view.queue} total={view.queueTotal} emptyText={view.hero.emptyText} />
+              {showPeople ? <OverviewPeople teamId={teamId} userId={userId} overview={safeData} /> : null}
+            </div>
             <div className="grid min-w-0 grid-cols-1 gap-4">
               {supplierDocuments ? <SupplierDocumentsCard data={supplierDocuments} now={now} /> : null}
               <OverviewAside

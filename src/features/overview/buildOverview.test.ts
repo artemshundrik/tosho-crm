@@ -38,7 +38,9 @@ const design = (patch: Partial<OverviewDesignInput> = {}): OverviewDesignInput =
   status: "in_progress",
   assigneeUserId: ME,
   assigneeLabel: "Олег",
+  managerUserId: ME,
   createdAt: iso(1),
+  statusChangedAt: null,
   deadlineAt: null,
   ...patch,
 });

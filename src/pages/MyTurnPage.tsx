@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { EntityAvatar } from "@/components/app/avatar-kit";
@@ -8,17 +8,16 @@ import { Kbd } from "@/components/app/peek/EntityPeek";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { CheckCircle2 } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EntityPeekPane } from "@/features/inbox/EntityPeekPane";
 import { parseInboxEntity } from "@/features/inbox/inboxThreads";
-import { buildMyTurn } from "@/features/myTurn/buildMyTurn";
+import { buildMyTurn, turnSubject } from "@/features/myTurn/buildMyTurn";
 import { setMyTurnCount } from "@/features/myTurn/myTurnCount";
 import { loadDerivedOrders, type DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { createEmptyOverviewData, loadOverviewData, type OverviewData } from "@/features/overview/overviewData";
 import { OVERVIEW_LANES, OVERVIEW_LANE_LABEL, OVERVIEW_LANE_TONE, type OverviewQueueItem } from "@/features/overview/overviewModel";
-import { resolveOverviewLens } from "@/features/overview/overviewRoles";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { usePageData } from "@/hooks/usePageData";
-import { canApproveOrderLaunch, canIssueOrderInvoice } from "@/lib/permissions";
 import { toneDotClass, toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -29,7 +28,16 @@ import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "
  * дизайн і замовлення — одним списком. Ліворуч черга рядками по 38 px,
  * праворуч справа з головною дією, як у «Вхідних». Зробив з прев'ю — черга
  * перечитується, і рядок зникає сам. Огляд лишається командним пульсом.
+ *
+ * «Чий хід» (картка 347): власник і СЕО можуть відкрити тут чергу будь-кого з
+ * команди — ту саму, що бачить сама людина, складену за правилами її посади.
+ * Решта бачить лише свою: чужа черга — не їхня справа, а для керівника це
+ * спосіб дізнатися, що на людині висить, не питаючи її. Діяти з неї можна
+ * лише від свого імені, як із будь-якої картки.
  */
+
+/** Ключ у адресі: посилання з таблиці «По людях» в Огляді веде саме сюди. */
+const WHO_PARAM = "who";
 
 type MyTurnData = OverviewData & { orders: DerivedOrderRecord[] };
 
@@ -37,18 +45,13 @@ const isTypingTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
 export default function MyTurnPage() {
-  const { teamId, userId, accessRole, jobRole } = useAuth();
+  const { teamId, userId, accessRole, jobRole, permissions } = useAuth();
   const navigate = useNavigate();
   const narrow = useIsNarrowViewport();
-  const lens = useMemo(() => resolveOverviewLens({ accessRole, jobRole }), [accessRole, jobRole]);
-  const viewer = useMemo(
-    () => ({
-      userId,
-      canIssueInvoice: canIssueOrderInvoice(accessRole, jobRole),
-      canApproveLaunch: canApproveOrderLaunch(jobRole),
-    }),
-    [accessRole, jobRole, userId]
-  );
+  const canSeeOthers = permissions.isSuperAdmin || permissions.isSeo;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const whoParam = canSeeOthers ? searchParams.get(WHO_PARAM) : null;
+  const whoId = whoParam && whoParam !== userId ? whoParam : null;
 
   const { data, loading, showSkeleton, refetch } = usePageData<MyTurnData>({
     cacheKey: `my-turn:${teamId ?? "none"}:${userId ?? "none"}`,
@@ -65,32 +68,17 @@ export default function MyTurnPage() {
     refetchOnFocus: true,
   });
 
-  const items = useMemo(() => {
-    const source = data ?? { ...createEmptyOverviewData(), orders: [] };
-    return buildMyTurn({
-      now: new Date(),
-      userId,
-      lens,
-      quotes: source.quotes,
-      designTasks: source.designTasks,
-      activityCount: source.activity.length,
-      orders: source.orders,
-      viewer,
-    });
-  }, [data, lens, userId, viewer]);
+  // `undefined` — ще нічого не обрано (на десктопі тоді перша справа),
+  // `null` — закрили панель руками.
+  const [selectedId, setSelectedId] = useState<string | null | undefined>(undefined);
 
-  useEffect(() => {
-    if (data) setMyTurnCount(items.length);
-  }, [data, items.length]);
-
-  const [members, setMembers] = useState<WorkspaceMemberDisplayRow[]>([]);
+  const [members, setMembers] = useState<WorkspaceMemberDisplayRow[] | null>(null);
   useEffect(() => {
     if (!userId) return;
     let active = true;
     void (async () => {
       const workspaceId = await resolveWorkspaceId(userId);
-      if (!workspaceId) return;
-      const list = await listWorkspaceMembersForDisplay(workspaceId).catch(() => []);
+      const list = workspaceId ? await listWorkspaceMembersForDisplay(workspaceId).catch(() => []) : [];
       if (active) setMembers(list);
     })();
     return () => {
@@ -98,9 +86,60 @@ export default function MyTurnPage() {
     };
   }, [userId]);
 
-  // `undefined` — ще нічого не обрано (на десктопі тоді перша справа),
-  // `null` — закрили панель руками.
-  const [selectedId, setSelectedId] = useState<string | null | undefined>(undefined);
+  // Звільнених у перемикачі немає: їхній хід уже нічий.
+  const colleagues = useMemo(
+    () =>
+      (members ?? []).filter(
+        (member) =>
+          member.userId !== userId && member.employmentStatus !== "inactive" && member.employmentStatus !== "rejected"
+      ),
+    [members, userId]
+  );
+  const whoMember = whoId ? (members ?? []).find((member) => member.userId === whoId) ?? null : null;
+
+  const subject = useMemo(
+    () =>
+      whoMember
+        ? turnSubject({ userId: whoMember.userId, accessRole: whoMember.accessRole, jobRole: whoMember.jobRole })
+        : turnSubject({ userId, accessRole, jobRole }),
+    [whoMember, userId, accessRole, jobRole]
+  );
+
+  const items = useMemo(() => {
+    const source = data ?? { ...createEmptyOverviewData(), orders: [] };
+    return buildMyTurn({
+      now: new Date(),
+      userId: subject.viewer.userId ?? null,
+      lens: subject.lens,
+      quotes: source.quotes,
+      designTasks: source.designTasks,
+      activityCount: source.activity.length,
+      orders: source.orders,
+      viewer: subject.viewer,
+    });
+  }, [data, subject]);
+
+  // Число в меню — завжди МІЙ хід, а не того, на кого я дивлюсь.
+  useEffect(() => {
+    if (data && !whoId) setMyTurnCount(items.length);
+  }, [data, items.length, whoId]);
+
+  const switchWho = useCallback(
+    (value: string) => {
+      setSelectedId(undefined);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === userId) next.delete(WHO_PARAM);
+          else next.set(WHO_PARAM, value);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams, userId]
+  );
+
   const selected =
     selectedId === null
       ? null
@@ -149,7 +188,8 @@ export default function MyTurnPage() {
   // Висота рамки — від її верху до низу вікна, як у «Вхідних».
   const frameRef = useRef<HTMLDivElement>(null);
   const [frameTop, setFrameTop] = useState(150);
-  const skeleton = showSkeleton || loading;
+  // Чужий хід не показуємо, поки не знаємо, чий він: інакше на мить промайнув би свій.
+  const skeleton = showSkeleton || loading || (Boolean(whoId) && members === null);
   useLayoutEffect(() => {
     const measure = () => {
       const top = frameRef.current?.getBoundingClientRect().top;
@@ -173,7 +213,7 @@ export default function MyTurnPage() {
   const detail = selected ? (
     <EntityPeekPane
       entity={parseInboxEntity(selected.to)}
-      members={members}
+      members={members ?? []}
       teamId={teamId}
       userId={userId}
       accessRole={accessRole}
@@ -204,10 +244,32 @@ export default function MyTurnPage() {
           style={{ "--turn-height": `calc(100dvh - ${frameTop}px)` } as CSSProperties}
         >
           <div className="min-w-0 md:w-[440px] md:shrink-0 md:overflow-y-auto md:overscroll-contain md:border-r md:border-border">
-            {items.length === 0 ? (
+            {canSeeOthers ? (
+              <div className="flex items-center gap-2 px-3 pt-3">
+                <span className="text-xs text-muted-foreground">Чий хід</span>
+                <Select value={whoMember?.userId ?? userId ?? ""} onValueChange={switchWho}>
+                  <SelectTrigger controlSize="sm" active={Boolean(whoMember)} className="w-auto min-w-[160px]" aria-label="Чий хід показати">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {userId ? <SelectItem value={userId}>Мій</SelectItem> : null}
+                    {colleagues.map((member) => (
+                      <SelectItem key={member.userId} value={member.userId}>
+                        {member.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            {whoId && !whoMember ? (
+              <div className="px-6 py-16 text-center text-sm text-muted-foreground">Такої людини в команді немає.</div>
+            ) : items.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-6 py-16 text-center text-sm text-muted-foreground">
                 <CheckCircle2 className="size-6" />
-                Твій хід порожній — усе, що чекало тебе, зроблено.
+                {whoMember
+                  ? `${whoMember.label}: хід порожній, зараз нічого не чекає.`
+                  : "Твій хід порожній — усе, що чекало тебе, зроблено."}
               </div>
             ) : (
               OVERVIEW_LANES.map((lane) => {

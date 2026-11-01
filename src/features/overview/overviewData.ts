@@ -188,6 +188,7 @@ type LinkedQuote = {
   customerLogoUrl: string | null;
   customerId: string | null;
   customerType: "customer" | "lead" | null;
+  assignedTo: string | null;
 };
 
 function parseDesignTask(
@@ -239,7 +240,11 @@ function parseDesignTask(
     status,
     assigneeUserId,
     assigneeLabel: assigneeMeta?.label ?? firstNonEmptyString(metadata.assignee_label),
+    // Той самий ключ, за яким фільтр «Менеджер» на сторінці дизайну; у задач, де
+    // його не записали, менеджер — відповідальний за прорахунок.
+    managerUserId: firstNonEmptyString(metadata.manager_user_id) ?? linkedQuote?.assignedTo ?? null,
     createdAt: row.created_at ?? null,
+    statusChangedAt: firstNonEmptyString(metadata.status_changed_at),
     // Обидва ключі живі: старіші задачі писали `deadline`, новіші — `design_deadline`.
     deadlineAt: firstNonEmptyString(metadata.design_deadline, metadata.deadline),
   };
@@ -301,6 +306,7 @@ type LinkedQuoteRow = {
   customer_name?: string | null;
   customer_logo_url?: string | null;
   title?: string | null;
+  assigned_to?: string | null;
 };
 
 async function readLinkedQuotes(teamId: string, quoteIds: string[]) {
@@ -310,11 +316,11 @@ async function readLinkedQuotes(teamId: string, quoteIds: string[]) {
     (columns) => supabase.schema("tosho").from("quotes").select(columns).eq("team_id", teamId).in("id", quoteIds),
     [
       {
-        columns: "id,number,customer_id,customer_name,customer_logo_url,title",
+        columns: "id,number,customer_id,customer_name,customer_logo_url,title,assigned_to",
         optionalColumns: ["customer_name", "customer_logo_url"],
       },
-      { columns: "id,number,customer_id,customer_name,title", optionalColumns: ["customer_name"] },
-      { columns: "id,number,customer_id,title", optionalColumns: [] },
+      { columns: "id,number,customer_id,customer_name,title,assigned_to", optionalColumns: ["customer_name"] },
+      { columns: "id,number,customer_id,title,assigned_to", optionalColumns: [] },
     ]
   );
 }
@@ -394,6 +400,7 @@ export async function loadOverviewData(params: { teamId: string | null; userId: 
         customerName,
         customerLogoUrl: party?.logoUrl ?? normalizeCustomerLogoUrl(row.customer_logo_url ?? null),
         customerId,
+        assignedTo: firstNonEmptyString(row.assigned_to),
         customerType: customerId
           ? "customer"
           : customerName
