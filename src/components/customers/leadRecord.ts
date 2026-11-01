@@ -2,6 +2,7 @@ import type { LeadFormState } from "./LeadDialog";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { getLocalReminderDateInputValue, getLocalReminderTimeInputValue } from "@/lib/reminderDateTime";
 import { parseCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
+import { getPartyReadiness, leadReadinessInput } from "./partyReadiness";
 
 /**
  * Рядок ліда, перелік колонок під нього й вимоги до переведення в замовника.
@@ -106,20 +107,10 @@ export const getFallbackLeadColumnsVariant = (variant: LeadColumnsVariant, messa
  * адресу й підписанта навіть на «Готівці». Договору й рахунку на юрособу там
  * не буде, тож і питати про них нема чого. Телефон лишається: доставка й звʼязок.
  */
-export const getLeadConversionMissingFields = (form: LeadFormState, phones: string[]) => {
-  const cash = form.paymentType === "cash";
-  const missing: string[] = [];
-  if (!cash) {
-    if (!form.ownershipType.trim()) missing.push("форма власності");
-    if (!form.taxId.trim()) missing.push(form.ownershipType === "fop" ? "ІПН" : "ЄДРПОУ / ІПН");
-    if (!form.legalAddress.trim()) missing.push(form.ownershipType === "fop" ? "прописка" : "юридична адреса");
-    if (!form.iban.trim()) missing.push("IBAN");
-    if (!form.signatoryPosition.trim()) missing.push("посада підписанта");
-  }
-  if (!phones.length) missing.push("телефон");
-  if (!cash && !form.email.trim()) missing.push("email");
-  return missing;
-};
+export const getLeadConversionMissingFields = (form: LeadFormState, phones: string[]) =>
+  getPartyReadiness(leadReadinessInput(form, phones))
+    .items.filter((item) => !item.done)
+    .map((item) => item.label);
 
 /** Порожня форма ліда; менеджер — той, хто створює. */
 export const createEmptyLeadForm = (manager?: { label: string; id: string }): LeadFormState => ({
