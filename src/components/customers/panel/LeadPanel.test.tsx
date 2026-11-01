@@ -160,6 +160,33 @@ describe("LeadPanel", () => {
     expect(onConverted).toHaveBeenCalledWith("c-new");
   });
 
+  it("нотатка, дописана поки чекає «Скасувати», переходить у замовника", async () => {
+    mocks.loadLeadRow.mockResolvedValue({ ...MAS_SEEDS, payment_type: "cash" });
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Перевести в замовники" }));
+
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "Перевести" }));
+    const notes = screen.getByLabelText("Нотатки");
+    fireEvent.change(notes, { target: { value: "Дзвонити після 14:00" } });
+    fireEvent.blur(notes);
+    await act(async () => {
+      vi.advanceTimersByTime(6_000);
+    });
+    expect(mocks.saveLeadCard.mock.calls[0][0].form.notes).toBe("Дзвонити після 14:00");
+  });
+
+  it("поки переведення чекає, повна картка ліда не відкривається", async () => {
+    mocks.loadLeadRow.mockResolvedValue({ ...MAS_SEEDS, payment_type: "cash" });
+    const onOpenFull = vi.fn();
+    renderPanel({ onOpenFull });
+    fireEvent.click(await screen.findByRole("button", { name: "Перевести в замовники" }));
+    fireEvent.click(screen.getByRole("button", { name: "Перевести" }));
+    fireEvent.keyDown(document, { key: "Enter" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onOpenFull).not.toHaveBeenCalled();
+  });
+
   it("«Скасувати» в панелі — у базу нічого не йде", async () => {
     mocks.loadLeadRow.mockResolvedValue({ ...MAS_SEEDS, payment_type: "cash" });
     renderPanel();

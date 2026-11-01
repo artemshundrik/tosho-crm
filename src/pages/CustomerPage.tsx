@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -33,7 +33,9 @@ import { ReadinessBlock } from "@/components/customers/panel/ReadinessBlock";
 import { writeCustomerFields, type CustomerFieldPatch, type CustomerSection } from "@/components/customers/partyFieldWrite";
 import { customerReadinessInput, getPartyReadiness, type PartyReadinessKey } from "@/components/customers/partyReadiness";
 import { useCustomerCard } from "@/components/customers/useCustomerCard";
+import { customerRowToForm, loadCustomerRow } from "@/components/customers/customerCardLoad";
 import { usePartyFieldSave } from "@/components/customers/usePartyFieldSave";
+import { useCustomerEditor } from "@/components/customers/useCustomerEditor";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { ROUTES } from "@/layout/routes";
@@ -93,6 +95,9 @@ const sectionFields = (section: CustomerSection, form: CustomerFormState): Parti
       ? { contacts: form.contacts }
       : { deliveryPoints: form.deliveryPoints };
 
+// Назва, менеджер, лого й джерело — у повній формі, сторінка їх не редагує.
+const CustomerDialog = lazy(() => import("@/components/customers/CustomerDialog").then((m) => ({ default: m.CustomerDialog })));
+
 export default function CustomerPage() {
   const { id = "" } = useParams<{ id: string }>();
   const [params, setParams] = useSearchParams();
@@ -118,6 +123,12 @@ export default function CustomerPage() {
     },
     [announce, setForm],
   );
+  const fullEditor = useCustomerEditor({
+    onSaved: () => {
+      card.retry();
+      announce();
+    },
+  });
   const editor = useCustomerPageForm({ customerId: id, saved: form, onSaved });
   const editorRef = useRef(editor);
   editorRef.current = editor;
@@ -136,9 +147,28 @@ export default function CustomerPage() {
     },
   });
   const { startEdit, close } = editor;
+  // Замок узято — перечитуємо реквізити: колега міг зберегти їх після того,
+  // як ця сторінка відкрилась, і чернетка зі старого стану відкотила б його.
+  const formRef = useRef(form);
+  formRef.current = form;
+  const refreshingRef = useRef(false);
   useEffect(() => {
-    if (lockWanted && lock.acquired && editor.editing !== "requisites") startEdit("requisites");
-  }, [editor.editing, lock.acquired, lockWanted, startEdit]);
+    if (!lockWanted || !lock.acquired || editor.editing === "requisites" || refreshingRef.current || !teamId) return;
+    refreshingRef.current = true;
+    void (async () => {
+      const current = formRef.current;
+      let base: CustomerFormState | undefined;
+      try {
+        const { data } = await loadCustomerRow(teamId, id);
+        if (data && current) base = { ...current, ...sectionFields("requisites", customerRowToForm(data, current.manager)) };
+      } catch {
+        base = undefined;
+      }
+      if (base) setForm(base);
+      startEdit("requisites", base);
+      refreshingRef.current = false;
+    })();
+  }, [editor.editing, id, lock.acquired, lockWanted, setForm, startEdit, teamId]);
   useEffect(() => {
     if (!lock.releasedReason) return;
     close();
@@ -414,7 +444,17 @@ export default function CustomerPage() {
           <h1 className="truncate text-xl font-semibold">{name}</h1>
           {subtitle.length ? <p className="truncate text-sm text-muted-foreground">{subtitle.join(" · ")}</p> : null}
         </div>
+        {id ? (
+          <Button type="button" variant="outline" size="sm" className="ml-auto shrink-0" onClick={() => fullEditor.openForCustomer(id)}>
+            Змінити основне
+          </Button>
+        ) : null}
       </header>
+      {fullEditor.isOpen ? (
+        <Suspense fallback={null}>
+          <CustomerDialog {...fullEditor.editorProps} />
+        </Suspense>
+      ) : null}
 
       {card.state === "loading" ? (
         <div aria-busy className="mt-6 space-y-3">

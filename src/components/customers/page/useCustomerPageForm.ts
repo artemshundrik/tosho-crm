@@ -65,10 +65,12 @@ export function useCustomerPageForm(params: {
     return () => window.removeEventListener("beforeunload", warn);
   }, [isDirty]);
 
+  /** `base` — щойно перечитаний замовник: чернетка з нього, а не зі стану на відкритті сторінки. */
   const startEdit = useCallback(
-    (section: CustomerSection) => {
-      if (!saved) return;
-      setDraft(saved);
+    (section: CustomerSection, base?: CustomerFormState) => {
+      const from = base ?? saved;
+      if (!from) return;
+      setDraft(from);
       setError(null);
       setEditing(section);
     },

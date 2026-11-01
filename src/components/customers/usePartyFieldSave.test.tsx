@@ -28,19 +28,24 @@ afterEach(() => {
 });
 
 describe("usePartyFieldSave", () => {
-  it("пізня відповідь старого запиту не перезаписує стан нового", async () => {
+  it("поле пишеться по черзі: поки летить запит, чекає лише остання правка, і вона йде останньою", async () => {
     const { write, pending } = controlledWrite();
     const { result } = renderHook(() => usePartyFieldSave(write));
 
     act(() => result.current.save("payment_type", { payment_type: "cash" }));
     act(() => result.current.save("payment_type", { payment_type: "invoice" }));
+    act(() => result.current.save("payment_type", { payment_type: "cash" }));
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(result.current.stateOf("payment_type").state).toBe("saving");
+
+    await act(async () => pending[0].resolve({ ok: true }));
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(pending[1].patch).toEqual({ payment_type: "cash" });
     expect(result.current.stateOf("payment_type").state).toBe("saving");
 
     await act(async () => pending[1].resolve({ ok: true }));
+    expect(write).toHaveBeenCalledTimes(2);
     expect(result.current.stateOf("payment_type").state).toBe("saved");
-
-    await act(async () => pending[0].resolve({ ok: false, reason: "network", message: "Не зберіглось" }));
-    expect(result.current.stateOf("payment_type")).toEqual({ state: "saved", message: null });
   });
 
   it("помилка — «error» з текстом, а retry повторює той самий патч", async () => {

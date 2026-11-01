@@ -104,9 +104,13 @@ export function CustomerPanel(props: {
   const [reminderAt, setReminderAt] = useState<string | null>(null);
   useEffect(() => setReminderAt(row?.reminder_at ?? null), [row]);
 
+  // Панель живе над маршрутами (PartyCardHost) — сторінка відкривається без неї.
   const openPage = useCallback(
-    (section?: string) => navigate(customerPagePath(customerId, section)),
-    [customerId, navigate],
+    (section?: string) => {
+      onClose();
+      navigate(customerPagePath(customerId, section));
+    },
+    [customerId, navigate, onClose],
   );
 
   const readiness = useMemo(() => (form ? getPartyReadiness(customerReadinessInput(form)) : null), [form]);

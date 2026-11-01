@@ -3,6 +3,8 @@ export { validateCustomerForm, hasCustomerFieldErrors, type CustomerFieldErrors 
 export { LeadDialog } from "./LeadDialog";
 export { CustomerLeadPicker } from "./CustomerLeadPicker";
 export { useCustomerLeadCreate } from "./useCustomerLeadCreate";
+export { useCustomerEditor } from "./useCustomerEditor";
+export type { CustomerEditorDialogProps, CustomerEditorSavedResult } from "./useCustomerEditor";
 export {
   getCreatedCustomerLeadLabel,
   toCustomerLeadOption,

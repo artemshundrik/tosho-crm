@@ -6,14 +6,11 @@ import type { FieldWriteResult } from "./partyFieldWrite";
  * Стан збереження кожного поля панелі окремо: «зберігаю», «збережено», «не
  * зберіглось — Повторити».
  *
- * ЛІЧИЛЬНИК ЗАПИТІВ НА ПОЛЕ. Людина клацає «Рахунок → Готівка → Рахунок»
- * швидше, ніж відповідає база. Відповіді приходять у довільному порядку, тож
- * стан поля бере лише відповідь ОСТАННЬОГО запиту цього поля; пізня відповідь
- * старого запиту ігнорується, і індикатор не застрягає на ній.
- *
- * Що саме опиниться в базі при перегоні запитів — вирішує порядок їх приходу
- * на сервер; запити йдуть по черзі кліків, тож останній клік і пишеться
- * останнім.
+ * ЧЕРГА НА ПОЛЕ. Людина клацає «Рахунок → Готівка → Рахунок» швидше, ніж
+ * відповідає база. Паралельні запити могли б закомітитись не в тому порядку й
+ * лишити в базі «Готівку», поки екран каже «Рахунок». Тому поле пише по
+ * одному: поки запит летить, чекає лише ОСТАННЯ правка, і вона йде, щойно
+ * попередній повернувся. Стан поля бере відповідь останнього запиту.
  */
 
 export type FieldSaveState = "idle" | "saving" | "saved" | "error";
@@ -26,6 +23,8 @@ export function usePartyFieldSave<P>(write: (patch: P) => Promise<FieldWriteResu
   const [statuses, setStatuses] = useState<Record<string, FieldStatus>>({});
   const sequence = useRef<Record<string, number>>({});
   const lastPatch = useRef<Record<string, P>>({});
+  const inFlight = useRef<Record<string, boolean>>({});
+  const queued = useRef<Record<string, P>>({});
   const fadeTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const writeRef = useRef(write);
   writeRef.current = write;
@@ -41,14 +40,19 @@ export function usePartyFieldSave<P>(write: (patch: P) => Promise<FieldWriteResu
     setStatuses((prev) => ({ ...prev, [field]: status }));
   }, []);
 
-  const save = useCallback(
+  const send = useCallback(
     (field: string, patch: P) => {
       const id = (sequence.current[field] ?? 0) + 1;
       sequence.current[field] = id;
-      lastPatch.current[field] = patch;
-      clearTimeout(fadeTimers.current[field]);
-      setStatus(field, { state: "saving", message: null });
+      inFlight.current[field] = true;
       void writeRef.current(patch).then((result) => {
+        inFlight.current[field] = false;
+        if (field in queued.current) {
+          const next = queued.current[field];
+          delete queued.current[field];
+          send(field, next);
+          return;
+        }
         if (sequence.current[field] !== id) return;
         if (!result.ok) {
           setStatus(field, { state: "error", message: result.message });
@@ -61,6 +65,20 @@ export function usePartyFieldSave<P>(write: (patch: P) => Promise<FieldWriteResu
       });
     },
     [setStatus],
+  );
+
+  const save = useCallback(
+    (field: string, patch: P) => {
+      lastPatch.current[field] = patch;
+      clearTimeout(fadeTimers.current[field]);
+      setStatus(field, { state: "saving", message: null });
+      if (inFlight.current[field]) {
+        queued.current[field] = patch;
+        return;
+      }
+      send(field, patch);
+    },
+    [send, setStatus],
   );
 
   const stateOf = useCallback((field: string): FieldStatus => statuses[field] ?? IDLE, [statuses]);

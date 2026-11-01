@@ -135,6 +135,21 @@ describe("CustomerPage", () => {
     expect(screen.getByLabelText("Юридична назва")).toHaveValue("РЕЧІ ПЛЮС");
   });
 
+  it("«Змінити» перечитує замовника: правка колеги, збережена після відкриття сторінки, не відкочується", async () => {
+    renderPage("?section=requisites");
+    await screen.findByTestId("customer-section-requisites");
+    const fresh = { ...ROW, legal_entities: [{ ...LEGAL_ENTITY, legal_name: "РЕЧІ ВІД КОЛЕГИ" }], legal_name: "РЕЧІ ВІД КОЛЕГИ" };
+    mocks.loadCustomerRow.mockResolvedValue({ data: fresh, error: null });
+    fireEvent.click(screen.getByRole("button", { name: "Змінити" }));
+    expect(await screen.findByDisplayValue("РЕЧІ ВІД КОЛЕГИ")).toBeInTheDocument();
+  });
+
+  it("назву, менеджера, лого й джерело можна змінити: «Змінити основне» відкриває повну форму", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Змінити основне" }));
+    expect(await screen.findByText("Редагувати замовника")).toBeInTheDocument();
+  });
+
   it("зберігає лише колонки реквізитів", async () => {
     renderPage("?section=requisites");
     fireEvent.click(await screen.findByRole("button", { name: "Змінити" }));

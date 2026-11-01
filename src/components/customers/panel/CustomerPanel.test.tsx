@@ -52,10 +52,10 @@ const ROW: CustomerRecord = {
 
 const EMPTY_LINKED = { calculations: [], orders: [], designTasks: [], ltvEntry: null };
 
-function renderPanel() {
+function renderPanel(onClose: () => void = () => {}) {
   return render(
     <MemoryRouter>
-      <CustomerPanel customerId="c1" fallbackName="Червоний маркет" onClose={() => {}} />
+      <CustomerPanel customerId="c1" fallbackName="Червоний маркет" onClose={onClose} />
     </MemoryRouter>,
   );
 }
@@ -74,6 +74,14 @@ describe("CustomerPanel", () => {
     renderPanel();
     expect(screen.getByText("Червоний маркет")).toBeInTheDocument();
     expect(screen.getByTestId("party-panel-skeleton")).toBeInTheDocument();
+  });
+
+  it("перехід на сторінку замовника закриває панель — вона не висить над сторінкою", async () => {
+    const onClose = vi.fn();
+    renderPanel(onClose);
+    const block = await screen.findByTestId("readiness-block");
+    fireEvent.click(within(block).getAllByRole("button", { name: "Додати" })[0]);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("на «Рахунку» без IBAN — «Готово 6 з 7» і пункт «IBAN»", async () => {

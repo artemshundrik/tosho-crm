@@ -349,10 +349,17 @@ export async function saveLeadCard(input: {
     referred_by: form.referredBy?.trim() || null,
   } as TableInsert<"leads">;
 
-  const writeLead = (body: TableInsert<"leads">) =>
-    leadId
-      ? supabase.schema("tosho").from("leads").update(body).eq("id", leadId).eq("team_id", teamId)
-      : supabase.schema("tosho").from("leads").insert(body as never);
+  // update з .select("id"): нуль рядків = ліда вже немає (перевели в іншій
+  // вкладці чи вікні). Без цієї перевірки переведення створювало другого
+  // замовника — уже без прорахунків.
+  const writeLead = async (body: TableInsert<"leads">) => {
+    if (!leadId) return await supabase.schema("tosho").from("leads").insert(body as never);
+    const result = await supabase.schema("tosho").from("leads").update(body).eq("id", leadId).eq("team_id", teamId).select("id");
+    if (!result.error && (result.data?.length ?? 0) === 0) {
+      throw new Error(convertToCustomer ? "Ліда вже переведено або видалено — оновіть список." : "Ліда вже немає — оновіть список.");
+    }
+    return result;
+  };
 
   let managerFieldsPersisted = true;
   let { error: writeError } = await writeLead(payload);

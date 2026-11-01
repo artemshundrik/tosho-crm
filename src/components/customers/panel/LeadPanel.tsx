@@ -163,12 +163,14 @@ export function LeadPanel(props: {
   const [reminderAt, setReminderAt] = useState<string | null>(null);
   useEffect(() => setReminderAt(row?.reminder_at ?? null), [row]);
 
-  // Форма, з якою натиснули «Перевести»: поля з форми переведення поверх картки.
-  const convertFormRef = useRef<LeadFormState | null>(null);
+  // Поля з форми переведення. Кладуться поверх картки В МОМЕНТ ЗАПИСУ, не
+  // натискання: нотатка чи нагадування, дописані за ці 6 с, теж переходять.
+  const convertPatchRef = useRef<LeadConversionPatch | null>(null);
   const toastIdRef = useRef<string | number | null>(null);
 
   const runConversion = useCallback(async () => {
-    const merged = convertFormRef.current;
+    const patch = convertPatchRef.current;
+    const merged: LeadFormState | null = patch && formRef.current ? { ...formRef.current, ...patch } : null;
     if (!teamId || !merged) return;
     if (toastIdRef.current !== null) toast.dismiss(toastIdRef.current);
     if (mountedRef.current) setConverting(true);
@@ -216,6 +218,11 @@ export function LeadPanel(props: {
   }, [leadId, row, teamId, userId]);
 
   const conversion = useDeferredConversion(runConversion, CONVERSION_DELAY_MS);
+  // Повна картка посеред очікування розмонтувала б панель (переведення піде
+  // одразу) і відкрила б «Зберегти і перевести» того самого ліда — двічі.
+  const openFull = useCallback(() => {
+    if (!conversion.pending) onOpenFull();
+  }, [conversion.pending, onOpenFull]);
 
   const cancelConversion = useCallback(() => {
     conversion.cancel();
@@ -233,7 +240,7 @@ export function LeadPanel(props: {
       return;
     }
     setConvertError(null);
-    convertFormRef.current = merged;
+    convertPatchRef.current = patch;
     setForm(merged);
     setScreen("card");
     conversion.start();
@@ -292,7 +299,7 @@ export function LeadPanel(props: {
         ) : null
       }
       onClose={onClose}
-      onOpenFull={onOpenFull}
+      onOpenFull={openFull}
       footer={
         <>
           <span><Kbd>Enter</Kbd> повна картка</span>
@@ -385,13 +392,13 @@ export function LeadPanel(props: {
                 </ReadinessBlock>
               </>
             )}
-            <ContactsSection contacts={leadContact(form)} accountant={{ name: "", email: "" }} onEdit={onOpenFull} />
+            <ContactsSection contacts={leadContact(form)} accountant={{ name: "", email: "" }} onEdit={openFull} />
             <DealsSection
               records={records}
               loading={recordsLoading}
               onOpenQuote={(id) => navigate(`/orders/estimates/${id}`)}
               onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
-              onShowAll={onOpenFull}
+              onShowAll={openFull}
             />
             <NotesSection
               notes={form.notes}
