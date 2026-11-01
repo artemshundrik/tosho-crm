@@ -9,7 +9,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { STATUS_OPTIONS, formatStatusLabel, statusClasses, statusIcons } from "@/features/quotes/quote-details/config";
+import { EntityPropButton } from "@/components/app/headers/EntityHeader";
+import { STATUS_OPTIONS, formatStatusLabel, statusIcons } from "@/features/quotes/quote-details/config";
+import { quoteStatusDotClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,28 +64,19 @@ export function QuoteStatusControl({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            // На телефоні контрол вужчий: номер прорахунку і статус мають стати
-            // в один рядок на 375 px, інакше шапка росте до трьох рядків.
-            "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-semibold transition-[filter] hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 sm:gap-1.5 sm:px-2.5 sm:text-sm",
-            statusClasses[currentStatus] ?? statusClasses.new
-          )}
-          aria-label={`Статус: ${formatStatusLabel(currentStatus)}. Змінити`}
-        >
-          {/* Іконку на телефоні ховаємо: статус там і так кольоровий і
-              підписаний, а 20 px вирішують, чи стане він у рядок поруч із номером. */}
-          {createElement(statusIcons[currentStatus] ?? Clock, { className: "hidden h-3.5 w-3.5 sm:block" })}
+        {/* Стан — чипом у рядку властивостей (хвиля Б3), а не кольоровою
+            кнопкою поруч із діями: синя «Пораховано ▾» читалась як головна дія. */}
+        <EntityPropButton aria-label={`Статус: ${formatStatusLabel(currentStatus)}. Змінити`}>
+          <span className={cn("h-2 w-2 shrink-0 rounded-full", quoteStatusDotClass[currentStatus] ?? quoteStatusDotClass.new)} />
           <span className="truncate">{formatStatusLabel(currentStatus)}</span>
           {busy ? (
             <Loader2 className="h-3 w-3 animate-spin" />
           ) : (
-            <ChevronDown className="h-3 w-3 opacity-70" />
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
           )}
-        </button>
+        </EntityPropButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[268px]">
+      <DropdownMenuContent align="start" className="w-[268px]">
         {blockReason ? (
           <>
             {/* Текст стану замість мертвої кнопки: людина бачить, чого саме бракує. */}

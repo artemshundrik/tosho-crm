@@ -1,55 +1,108 @@
-import type { ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+
+import { ArrowLeft } from "@/components/icons/appIcons";
+import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { cn } from "@/lib/utils";
 
-type EntityHeaderProps = {
-  topBar?: ReactNode;
-  title: ReactNode;
-  subtitle?: ReactNode;
-  meta?: ReactNode;
-  viewers?: ReactNode;
-  actions?: ReactNode;
-  hint?: ReactNode;
-  className?: string;
-};
-
+/**
+ * Шапка картки запису (хвиля Б3): прорахунок, дизайн-задача, замовлення.
+ *
+ * ЧОМУ ОДНА. Три картки мали три будови: у прорахунку номер стояв замість назви,
+ * а статус синьою кнопкою виглядав як головна дія; у дизайн-задачі властивості
+ * сповзали в чотири рядки, бо ділили ширину з кнопками; у замовленні знову
+ * інакше. Тепер будова одна, а картка віддає лише вміст рядків:
+ *
+ *   1. крихти «Розділ / НОМЕР» і дії праворуч (одна чорна — наступний крок);
+ *   2. людська назва;
+ *   3. властивості одним рядком чипів (`EntityProp`), стан — теж чип.
+ *
+ * Вкладки під шапкою лишаються спільним `TabBar` — він живе в тілі сторінки,
+ * бо в кожної картки свій спосіб тримати вміст вкладок.
+ */
 export function EntityHeader({
-  topBar,
-  title,
-  subtitle,
-  meta,
-  viewers,
+  section,
+  onBack,
+  number,
+  numberCopyMessage,
   actions,
-  hint,
+  title,
+  properties,
   className,
-}: EntityHeaderProps) {
+}: {
+  /** Назва розділу в крихтах — і кнопка «назад» до нього. */
+  section: string;
+  onBack: () => void;
+  /** Номер запису: моно, копіюється наведенням. */
+  number: string;
+  numberCopyMessage: string;
+  actions?: ReactNode;
+  title?: ReactNode;
+  properties?: ReactNode;
+  className?: string;
+}) {
   return (
-    <section
-      className={cn(
-        "@container rounded-xl border border-border/60 bg-gradient-to-r from-card/95 via-card/85 to-primary/5 p-4 md:p-5",
-        className
-      )}
-    >
-      {/*
-        Назва й дії в один ряд — коли вміщає САМА ШАПКА, а не вікно (REQ-294).
-        Шапка стоїть у лівій колонці сторінки-запису, і з рейкою поруч вона буває
-        вузькою при широкому вікні: з `lg:` дії стискались нижче свого вмісту й
-        плашка стану лягала просто на назву задачі. Тому дії не стискаються
-        (`shrink-0` — поступається назва, вона обрізається), а вужче 45rem
-        стають під назву.
-      */}
-      <div className="flex flex-col gap-4 @min-[45rem]:flex-row @min-[45rem]:items-start @min-[45rem]:justify-between">
-        <div className="min-w-0 space-y-3">
-          {topBar ? <div className="flex flex-wrap items-center gap-2">{topBar}</div> : null}
-          <div className="space-y-1">
-            <div className="text-2xl font-semibold tracking-tight">{title}</div>
-            {subtitle ? <div className="text-sm text-muted-foreground">{subtitle}</div> : null}
-          </div>
-          {viewers}
-          {meta ? <div className="flex flex-wrap items-center gap-2 text-sm">{meta}</div> : null}
-        </div>
-        {actions ? <div className="flex shrink-0 flex-wrap gap-2 @min-[45rem]:justify-end">{actions}</div> : null}
+    <header className={cn("@container space-y-2 pb-3 pt-2", className)}>
+      <div className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-2">
+        <nav aria-label="Крихти" className="flex min-w-0 shrink-0 items-center gap-1 text-sm text-muted-foreground">
+          <button
+            type="button"
+            onClick={onBack}
+            className="-ml-1.5 inline-flex h-7 items-center gap-1.5 rounded-md pl-1.5 pr-1 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            {section}
+          </button>
+          <span aria-hidden className="text-muted-foreground/60">/</span>
+          <HoverCopyText
+            value={number}
+            textClassName="font-mono text-sm tabular-nums text-foreground"
+            successMessage={numberCopyMessage}
+            copyLabel="Скопіювати номер"
+          >
+            {number}
+          </HoverCopyText>
+        </nav>
+        {actions ? <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">{actions}</div> : null}
       </div>
-      {hint ? <div className="mt-3 text-xs text-muted-foreground">{hint}</div> : null}
-    </section>
+      {title ? <div className="min-w-0 text-xl font-semibold leading-tight tracking-tight text-foreground">{title}</div> : null}
+      {properties ? <div className="flex min-w-0 flex-wrap items-center gap-1.5">{properties}</div> : null}
+    </header>
   );
 }
+
+/** Чип властивості: рамка, 28 px, підпис сірим. Клікабельний — `EntityPropButton`. */
+export const ENTITY_PROP =
+  "inline-flex h-7 max-w-full shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground";
+
+const ENTITY_PROP_INTERACTIVE =
+  "cursor-pointer transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-background";
+
+export function EntityProp({
+  label,
+  children,
+  className,
+}: {
+  label?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={cn(ENTITY_PROP, className)}>
+      {label ? <span className="text-muted-foreground">{label}</span> : null}
+      {children}
+    </span>
+  );
+}
+
+/** Той самий чип кнопкою — для стану, типу, дедлайну: змінюється кліком по ньому. */
+export const EntityPropButton = forwardRef<
+  HTMLButtonElement,
+  ButtonHTMLAttributes<HTMLButtonElement> & { label?: ReactNode }
+>(function EntityPropButton({ label, children, className, type = "button", ...props }, ref) {
+  return (
+    <button ref={ref} type={type} className={cn(ENTITY_PROP, ENTITY_PROP_INTERACTIVE, className)} {...props}>
+      {label ? <span className="text-muted-foreground">{label}</span> : null}
+      {children}
+    </button>
+  );
+});

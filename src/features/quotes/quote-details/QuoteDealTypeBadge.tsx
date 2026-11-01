@@ -1,3 +1,4 @@
+import { ENTITY_PROP } from "@/components/app/headers/EntityHeader";
 import { Check, ChevronDown } from "@/components/icons/appIcons";
 
 import {
@@ -50,8 +51,8 @@ export function QuoteDealTypeBadge({
       </span>
     </>
   );
-  const base =
-    "inline-flex h-8 max-w-[280px] shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-muted px-2.5 text-2xs font-medium text-foreground";
+  // Чип властивості шапки картки (хвиля Б3).
+  const base = cn(ENTITY_PROP, "max-w-[280px]");
 
   if (disabled || !onChange) {
     return <span className={base}>{label}</span>;
@@ -65,7 +66,7 @@ export function QuoteDealTypeBadge({
             type="button"
             className={cn(
               base,
-              "transition-colors hover:border-border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+              "transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
             )}
           >
             {label}

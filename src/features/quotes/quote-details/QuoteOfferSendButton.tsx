@@ -1,5 +1,6 @@
 import { ChevronDown, Download, FileDown, Printer, Send } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,13 +39,22 @@ export function QuoteOfferSendButton(props: {
   onOpen: () => void;
   onQuick: (format: OfferFormat) => void;
   disabled?: boolean;
+  /** Головна дія картки — чорна (хвиля Б3); поруч зі «Створити замовлення» — звичайна. */
+  primary?: boolean;
 }) {
+  // Половинки — ghost-кнопки; на чорному тлі їм треба світлий текст і світлий ховер.
+  const half = props.primary ? "text-background hover:bg-background/15 hover:text-background" : "";
   return (
-    <div className="flex h-8 items-stretch overflow-hidden rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-foreground/20 focus-within:ring-offset-1 focus-within:ring-offset-background">
+    <div
+      className={cn(
+        "flex h-8 items-stretch overflow-hidden rounded-lg border focus-within:ring-2 focus-within:ring-foreground/20 focus-within:ring-offset-1 focus-within:ring-offset-background",
+        props.primary ? "border-foreground bg-foreground" : "border-border bg-background"
+      )}
+    >
       <Button
         variant="ghost"
         size="sm"
-        className="h-full gap-2 rounded-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+        className={cn("h-full gap-2 rounded-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0", half)}
         disabled={props.disabled}
         onClick={props.onOpen}
       >
@@ -55,13 +65,13 @@ export function QuoteOfferSendButton(props: {
       </Button>
       {/* Риска з відступами зверху й знизу, а не від краю до краю: контрол
           низький, і лінія на всю висоту зливалася б із рамкою. */}
-      <span aria-hidden className="my-1.5 w-px bg-border" />
+      <span aria-hidden className={cn("my-1.5 w-px", props.primary ? "bg-background/25" : "bg-border")} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
-            className="h-full rounded-none border-0 px-2 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className={cn("h-full rounded-none border-0 px-2 focus-visible:ring-0 focus-visible:ring-offset-0", half)}
             aria-label="Обрати формат без вікна"
             disabled={props.disabled}
           >

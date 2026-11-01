@@ -33,13 +33,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Loader2,
-  ArrowLeft,
-  Clock,
   Timer,
   Play,
   Pause,
   CalendarDays,
-  CalendarClock,
   Building2,
   Eye,
   Upload,
@@ -129,7 +126,8 @@ import {
   resolveDesignOutputVersion,
 } from "@/lib/designOutputVersion";
 import { LiveCursorsLayer } from "@/components/app/LiveCursorsLayer";
-import { EntityHeader } from "@/components/app/headers/EntityHeader";
+import { EntityHeader, EntityProp, EntityPropButton } from "@/components/app/headers/EntityHeader";
+import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { useRecordPageHeight } from "@/hooks/useRecordPageHeight";
@@ -154,7 +152,7 @@ import {
   type DesignStatus,
   type DesignTaskAction,
 } from "@/lib/designTaskStatus";
-import { designStatusBadgeClass, toneSubtleClass, type Tone } from "@/lib/statusTones";
+import { designStatusDotClass, toneSubtleClass, type Tone } from "@/lib/statusTones";
 import { DESIGN_STATUS_ICON_BY_STATUS, DESIGN_STATUS_ICON_COLOR_BY_STATUS } from "@/lib/designStatusIcons";
 import {
   notifyDesignTaskCollaboratorsChanged,
@@ -862,8 +860,6 @@ function buildDesignTaskPageCachePayload(params: {
 }
 
 const statusLabels = DESIGN_STATUS_LABELS;
-
-const statusColors = designStatusBadgeClass;
 
 const allStatuses = DESIGN_ALL_STATUSES;
 const parseDesignStatus = (value: unknown, fallback: DesignStatus = "new"): DesignStatus => {
@@ -9682,36 +9678,16 @@ export default function DesignTaskPage() {
       <ThreadDockProvider>
       <div className="grid grid-cols-1 record-split:relative [--record-rail-w:21.25rem] record-wide:[--record-rail-w:25.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1.75fr)_var(--record-rail-w)] record-split:items-start record-split:overflow-hidden">
         <div className="min-w-0 space-y-4 record-split:min-h-0 record-split:h-full record-split:overflow-y-auto">
+      {/* Шапка картки — спільна будова (хвиля Б3): крихти й дії, назва, один ряд властивостей. */}
       <EntityHeader
-        className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 sm:px-5 md:px-6 xl:px-8"
-        topBar={null}
+        className="px-4 pb-0 sm:px-5 md:px-6 xl:px-8"
+        section="Дизайн"
+        onBack={() => navigate("/design")}
+        number={taskHeaderTitle}
+        numberCopyMessage="Номер дизайн-задачі скопійовано"
         title={
-          <div className="flex flex-wrap items-baseline gap-2 leading-tight">
-            <HoverTip asChild label="Назад до дошки">
-              <Button
-                variant="ghost"
-                size="iconSm"
-                onClick={() => navigate("/design")}
-                className="shrink-0 self-center text-muted-foreground"
-                aria-label="Назад до дошки"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </HoverTip>
-            <HoverCopyText
-              value={taskHeaderTitle}
-              className="max-w-full"
-              textClassName="font-mono text-[17px] font-medium tracking-tight text-primary md:text-[18px]"
-              buttonStyle="overlay"
-              buttonClassName="h-6 w-6 rounded-md"
-              successMessage="Номер дизайн-задачі скопійовано"
-              copyLabel="Скопіювати номер дизайн-задачі"
-            >
-              {taskHeaderTitle}
-            </HoverCopyText>
-            <span className="text-foreground/45 leading-none">-</span>
-            {canEditTaskTitle ? (
-              <div className="min-w-0 flex-1">
+          canEditTaskTitle ? (
+            <div className="min-w-0">
                 <Input
                   ref={titleInputRef}
                   value={titleDraft}
@@ -9727,29 +9703,26 @@ export default function DesignTaskPage() {
                   onKeyDown={handleInlineTitleKeyDown}
                   disabled={renameSaving || designTaskLockedByOther}
                   className={cn(
-                    "h-auto min-w-0 rounded-none border-transparent bg-transparent px-0 py-0 text-[20px] font-medium tracking-tight outline-none ring-0 transition-colors md:text-[20px]",
+                    "h-auto min-w-0 rounded-none border-transparent bg-transparent px-0 py-0 text-xl font-semibold tracking-tight outline-none ring-0 transition-colors md:text-xl",
                     "cursor-text overflow-visible text-ellipsis whitespace-nowrap hover:border-transparent hover:bg-transparent focus:border-transparent focus:bg-transparent focus-visible:border-transparent focus-visible:ring-0",
                     titleEditing ? "text-foreground" : "text-foreground hover:text-foreground/90"
                   )}
                   placeholder="Вкажіть назву задачі"
                   title={taskHeaderName}
                 />
-                {renameError ? <div className="mt-1 text-xs text-destructive">{renameError}</div> : null}
-              </div>
-            ) : (
-              <span className="min-w-0 flex-1 truncate text-[20px] font-medium tracking-tight md:text-[20px]" title={taskHeaderName}>
-                {taskHeaderName}
-              </span>
-            )}
-          </div>
+                {renameError ? <div className="mt-1 text-xs font-normal text-destructive">{renameError}</div> : null}
+            </div>
+          ) : (
+            <span className="block truncate" title={taskHeaderName}>{taskHeaderName}</span>
+          )
         }
-        subtitle={null}
-        meta={
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Badge className={cn("px-2.5 py-1 text-xs font-semibold", statusColors[task.status])}>
+        properties={
+          <>
+            <EntityProp>
+              <span className={cn("h-2 w-2 shrink-0 rounded-full", designStatusDotClass[task.status])} />
               {statusLabels[task.status]}
-            </Badge>
-            <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1.5">
+            </EntityProp>
+            <EntityProp>
               <AvatarBase
                 src={getMemberAvatar(task.assigneeUserId)}
                 name={getMemberLabel(task.assigneeUserId)}
@@ -9759,9 +9732,9 @@ export default function DesignTaskPage() {
                 inactive={task.assigneeUserId ? (memberInactiveById[task.assigneeUserId] ?? false) : false}
               />
               <span className="truncate max-w-[160px]">{getMemberLabel(task.assigneeUserId)}</span>
-            </Badge>
+            </EntityProp>
             {taskCollaborators.length > 0 ? (
-              <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1.5">
+              <EntityProp>
                 <span className="flex items-center -space-x-1.5">
                   {taskCollaborators.slice(0, 2).map((entry) => (
                     <AvatarBase
@@ -9778,17 +9751,11 @@ export default function DesignTaskPage() {
                 <span className="truncate max-w-[180px]">
                   {taskCollaborators.length > 1 ? `Співвиконавці · ${taskCollaborators.length}` : "Співвиконавець"}
                 </span>
-              </Badge>
+              </EntityProp>
             ) : null}
             <Popover open={headerTypePopoverOpen} onOpenChange={setHeaderTypePopoverOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="px-2.5 text-xs gap-1.5"
-                  disabled={typeSaving || designTaskLockedByOther}
-                >
+                <EntityPropButton disabled={typeSaving || designTaskLockedByOther}>
                   {task.designTaskType ? (
                     (() => {
                       const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
@@ -9799,7 +9766,7 @@ export default function DesignTaskPage() {
                   )}
                   <span>{task.designTaskType ? DESIGN_TASK_TYPE_LABELS[task.designTaskType] : "Тип задачі"}</span>
                   {typeSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                </Button>
+                </EntityPropButton>
               </PopoverTrigger>
               <PopoverContent className="w-72 p-2" align="start">
                 <div className="space-y-1">
@@ -9858,43 +9825,29 @@ export default function DesignTaskPage() {
               onDraftCommit={applyDeadlineDraft}
               saving={deadlineSaving}
               trigger={
-                <Button
-                  ref={deadlineTriggerRef}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={cn("px-2.5 text-xs gap-1", deadlineLabel.className)}
-                  disabled={deadlineSaving || designTaskLockedByOther}
-                >
-                  <CalendarClock className="h-3.5 w-3.5" />
-                  Дедлайн: {deadlineLabel.label}
-                </Button>
+                <EntityPropButton ref={deadlineTriggerRef} label="Дедлайн" disabled={deadlineSaving || designTaskLockedByOther}>
+                  <span className={deadlineLabel.className}>{deadlineLabel.label}</span>
+                </EntityPropButton>
               }
             />
-            <Badge
-              variant="outline"
-              className={cn(
-                "px-2.5 py-1 text-xs gap-1",
-                isTimerRunning ? "border-success-soft-border text-success-foreground bg-success-soft" : ""
-              )}
+            {/* Таймер і естімейт — один чип «витрачено / заплановано»: окремими
+                вони не влазили в рядок поруч із рейкою. Клік — змінити естімейт. */}
+            <EntityPropButton
+              className={cn("tabular-nums", isTimerRunning && "border-success-soft-border bg-success-soft text-success-foreground")}
+              disabled={designTaskLockedByOther}
+              onClick={() => void openManualEstimateDialog()}
+              title={estimateLabel === "Не вказано" ? "Додати естімейт" : "Змінити естімейт"}
             >
               <Timer className="h-3.5 w-3.5" />
               {timerElapsedLabel}
-            </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 px-2.5 text-xs"
-              disabled={designTaskLockedByOther}
-              onClick={() => void openManualEstimateDialog()}
-            >
-              <Clock className="h-3.5 w-3.5" />
-              {estimateLabel === "Не вказано" ? "Додати естімейт" : `Естімейт: ${estimateLabel}`}
-            </Button>
-          </div>
+              <span className="text-muted-foreground">
+                {estimateLabel === "Не вказано" ? "+ естімейт" : `/ ${estimateLabel}`}
+              </span>
+            </EntityPropButton>
+          </>
         }
         actions={
-          <div className="flex shrink-0 items-start gap-2">
+          <>
             {/* У вузькому вигляді смуга живе в липкій панелі внизу — інакше вона видима двічі. */}
             {renderTaskActionBar({ className: "hidden record-split:flex" })}
             <DropdownMenu>
@@ -9950,9 +9903,8 @@ export default function DesignTaskPage() {
                 ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+          </>
         }
-        hint={null}
       />
 
       <EntityLockBanner
@@ -9966,44 +9918,22 @@ export default function DesignTaskPage() {
       {/* У вузькому вигляді сторінку скролить вікно, і `top-0` ховав смугу ПІД
           шапкою застосунку — тож там вона липне під обв'язкою. Там же кнопка
           «Обговорення»: смуга видна завжди, хоч би куди догортали. */}
-      <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 flex items-center gap-2 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur record-split:top-0 sm:px-5 md:px-6 xl:px-8 xl:pr-10">
-        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {designTaskTabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeDesignTab === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => setActiveDesignTab(tab.value)}
-                className={cn(
-                  "relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-                  isActive
-                    ? "border-primary/35 bg-primary/10 text-primary"
-                    : "border-border/45 bg-background text-muted-foreground hover:border-border hover:bg-muted/30 hover:text-foreground"
-                )}
-                aria-pressed={isActive}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{tab.label}</span>
-                {tab.badge ? (
-                  <span
-                    className={cn(
-                      "max-w-[120px] truncate rounded-md px-1.5 py-0.5 text-2xs font-semibold leading-none",
-                      isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {tab.badge}
-                  </span>
-                ) : null}
-                {tab.attention ? (
-                  <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background" />
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-        {effectiveTeamId ? <ThreadDockButton look="tab" className="mb-1" /> : null}
+      <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 flex items-center gap-2 border-b border-border/50 bg-background/95 px-4 backdrop-blur record-split:top-0 sm:px-5 md:px-6 xl:px-8 xl:pr-10">
+        {/* Вкладки підкресленням, як на прорахунку й замовленні (хвиля Б3), а не рамковими кнопками. */}
+        <TabBar value={activeDesignTab} wrapperClassName="min-w-0 flex-1">
+          {designTaskTabs.map((tab) => (
+            <TabBarItem key={tab.value} value={tab.value} onSelect={(next) => setActiveDesignTab(next as DesignTaskPageTab)}>
+              <span>{tab.label}</span>
+              {tab.badge ? (
+                <span className="inline-flex h-[18px] min-w-[18px] max-w-[120px] items-center justify-center truncate rounded-md bg-muted px-1.5 text-2xs tabular-nums text-muted-foreground">
+                  {tab.badge}
+                </span>
+              ) : null}
+              {tab.attention ? <span className="h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden /> : null}
+            </TabBarItem>
+          ))}
+        </TabBar>
+        {effectiveTeamId ? <ThreadDockButton look="tab" /> : null}
       </div>
 
       <div className="space-y-8 px-4 sm:px-5 md:px-6 xl:px-8 xl:pr-10">

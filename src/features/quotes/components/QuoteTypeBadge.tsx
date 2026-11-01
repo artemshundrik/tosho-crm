@@ -1,5 +1,6 @@
 import { createElement } from "react";
 
+import { ENTITY_PROP } from "@/components/app/headers/EntityHeader";
 import { quoteTypeIcon, quoteTypeLabel } from "@/features/quotes/quotes-page/config";
 
 type QuoteTypeBadgeProps = {
@@ -27,10 +28,11 @@ type QuoteTypeBadgeProps = {
  */
 export function QuoteTypeBadge({ quoteType }: QuoteTypeBadgeProps) {
   const Icon = quoteTypeIcon(quoteType);
+  // Чип властивості в шапці картки (хвиля Б3) — та сама форма, що й решта рядка.
   return (
-    <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-3xs font-semibold">
-      {Icon ? createElement(Icon, { className: "h-3 w-3" }) : null}
+    <span className={ENTITY_PROP}>
+      {Icon ? createElement(Icon, { className: "h-3.5 w-3.5 text-muted-foreground" }) : null}
       {quoteTypeLabel(quoteType)}
-    </div>
+    </span>
   );
 }

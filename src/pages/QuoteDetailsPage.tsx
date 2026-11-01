@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageLoading } from "@/components/app/page-loading";
 import { Button } from "@/components/ui/button";
-import { HoverCopyText } from "@/components/ui/hover-copy-text";
+import { EntityHeader, EntityProp, EntityPropButton } from "@/components/app/headers/EntityHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
@@ -50,7 +50,6 @@ import {
 } from "@/lib/attachmentPreview";
 import { downloadFileToDevice } from "@/lib/downloadFileToDevice";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
-import { HoverTip } from "@/components/ui/hover-tip";
 import {
   formatPrintProductSummary,
   getPrintProductConfig,
@@ -266,7 +265,6 @@ import {
 } from "@/features/quotes/quote-details/queries";
 import { QuoteTypeBadge } from "@/features/quotes/components/QuoteTypeBadge";
 import type { QuoteDeadlineTone } from "@/features/quotes/components/QuoteDeadlineBadge";
-import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { CustomerLeadQuickViewDialog } from "@/components/customers";
 import {
@@ -3876,8 +3874,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     label: string;
     icon: AppIcon;
     badge?: string | number | null;
-    /** Колір підпису, коли він означає СТАН (дедлайн). Інакше — приглушений. */
-    badgeToneClass?: string | null;
     attention?: boolean;
     mobileOnly?: boolean;
     soon?: boolean;
@@ -3900,8 +3896,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       value: "deadlines",
       label: "Дедлайни",
       icon: Calendar,
-      badge: deadlineTabBadge?.label ?? null,
-      badgeToneClass: deadlineTabBadge?.toneClass ?? null,
       attention: Boolean(deadlineError || !quote.deadline_at),
     },
     {
@@ -3943,123 +3937,43 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       >
       <div className="grid grid-cols-1 record-split:relative [--record-rail-w:21.25rem] record-wide:[--record-rail-w:23.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1fr)_var(--record-rail-w)] record-split:overflow-hidden">
         <div className="flex min-w-0 flex-col record-split:h-full record-split:min-h-0 record-split:overflow-hidden">
-      {/* Без власної риски (REQ-175#p47): одразу під шапкою йде смуга вкладок,
-          і в неї своя нижня межа. Дві горизонтальні лінії за 40 px одна від
-          одної читались як порожня перекладина між номером справи й вкладками.
-          У вузькому вигляді липне ПІД обв'язкою застосунку: з `top-0` ховалась за нею. */}
-      <header className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-40 bg-background/95 backdrop-blur record-split:static record-split:shrink-0 record-split:bg-transparent record-split:backdrop-blur-none">
-        {/*
-          Поле шапки — те саме, що в <main> (REQ-175#p50).
-
-          Було px-4/5/6 проти px-2/2.5/3 у тіла: на широкому екрані кнопка
-          «назад» і номер справи стояли за 24 px від краю колонки, а вкладки,
-          заголовок секції й картка — за 12. Тобто ліва межа сторінки ламалась
-          рівно там, де закінчується шапка, і симетрично ламалась права.
-        */}
-        <div className="px-2 py-2 md:px-2.5 lg:px-3 2xl:px-4">
-          {/*
-            Один ряд і на телефоні теж.
-            Було: колонка до lg — тобто на телефоні номер стояв окремим рядком,
-            а під ним на всю ширину лягала смуга дій. Дві третини висоти екрана
-            над контентом займала шапка. Тепер це один ряд, що переноситься лише
-            коли справді не влазить, а дії тримаються праворуч у будь-якій ширині.
-          */}
-          <div className="flex min-h-10 flex-wrap items-center gap-x-2 gap-y-2 sm:gap-x-3">
-            {/* Номер і кнопка назад — те, що не має стискатись ніколи. */}
-            <div className="flex shrink-0 items-center gap-2 lg:gap-3">
-              <HoverTip asChild label="Назад">
-                <Button
-                  variant="ghost"
-                  size="iconSm"
-                  onClick={() => navigate("/orders/estimates")}
-                  className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label="Назад"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-              </HoverTip>
-
-              <HoverCopyText
-                value={quote.number ?? quote.id}
-                textClassName="tabular-nums text-[15px] font-medium tracking-wide text-foreground sm:text-[17px]"
-                successMessage="Номер прорахунку скопійовано"
-                copyLabel="Скопіювати номер прорахунку"
-              >
-                {quote.number ?? quote.id}
-              </HoverCopyText>
-            </div>
-
-            {/*
-              Мітки (тип, КП/набори, хто дивиться) на телефоні їдуть власним
-              рядком під номером — `order-3 w-full`. Інакше вони змагаються за
-              ширину зі статусом і номер обрізається до «TS-0226…», хоча саме
-              номер тут головний. На lg усе повертається в один ряд.
-            */}
-            <div className="order-3 w-full lg:order-none lg:w-auto">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <QuoteTypeBadge quoteType={quote.quote_type} />
-                  {/* Тип УГОДИ поруч із типом ТОВАРУ: два типи однієї картки,
-                      і поруч око їх зв'язує (REQ-182). Тільки на поліграфії —
-                      на мерчі шкала не діє. */}
-                  {dealType ? (
-                    <QuoteDealTypeBadge
-                      value={dealType}
-                      disabled={!canEditQuoteContent || savingDealType}
-                      onChange={handleDealTypeChange}
-                    />
-                  ) : null}
-                  {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
-                    <>
-                      {quoteSetMembership.kp_names.map((name) => (
-                        <QuoteKindBadge key={`header-kp-${name}`} kind="kp" label={name} />
-                      ))}
-                      {quoteSetMembership.set_names.map((name) => (
-                        <QuoteKindBadge key={`header-set-${name}`} kind="set" label={name} />
-                      ))}
-                    </>
-                  ) : null}
-
-              </div>
-            </div>
-
-            <div className="order-2 ml-auto flex shrink-0 items-center gap-1.5 lg:order-none">
-              <QuoteUnsavedRunChip runs={unsavedRuns} onFocus={(id) => focusOnPage(`quote-run-${id}`, "error")} />
-              <QuoteMarkupGateChip blocking={markupGateRuns} dealType={dealType} onFocus={(id) => focusOnPage(`quote-run-${id}`)} />
-              <QuoteRunChoiceChip items={runChoiceItems} onFocus={(id) => focusOnPage(`quote-item-${id}`)} />
-              {teamId ? <ThreadDockButton /> : null}
-              {currentStatus === "approved" ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={openCreateOrderDialog}
-                >
-                  <FileDown className="h-4 w-4" />
-                  {/* На телефоні лишається сама іконка: підпис із трьох слів
-                      з'їдав рядок, а поруч стоїть статус, який важливіший. */}
-                  <span className="truncate max-sm:sr-only">Створити замовлення</span>
-                </Button>
-              ) : null}
-              <QuoteOfferSend
-                teamId={teamId}
-                quote={quote}
-                managerName={quote?.assigned_to ? memberById.get(quote.assigned_to) ?? null : null}
-              />
-              <QuoteStatusControl
-                currentStatus={currentStatus}
-                busy={statusBusy}
-                blockReason={statusBlockReason}
-                nextStatus={nextAction.nextStatus}
-                nextActionLabel={nextAction.ctaLabel}
-                onPrimaryAction={handlePrimaryStatusAction}
-                onPickStatus={(status) => void handleQuickStatusChange(status, "")}
-                onOpenStatusDialog={openStatusDialog}
-                onOpenCancelDialog={() => setCancelDialogOpen(true)}
-                blockAction={quoteLockStatusAction(canEditQuoteContent)}
-              />
+      {/* Шапка картки — спільна будова (хвиля Б3). Не липне: три рядки липкої
+          шапки з'їдали б телефон, тож липне лише смуга вкладок під нею. */}
+      <EntityHeader
+        className="px-2 md:px-2.5 lg:px-3 2xl:px-4 record-split:shrink-0"
+        section="Прорахунки"
+        onBack={() => navigate("/orders/estimates")}
+        number={quote.number ?? quote.id}
+        numberCopyMessage="Номер прорахунку скопійовано"
+        title={[quote.customer_name?.trim() || "Без замовника", items[0]?.title ? `${items[0].title}${items.length > 1 ? ` і ще ${items.length - 1}` : ""}` : null].filter(Boolean).join(" · ")}
+        actions={
+          <>
+            <QuoteUnsavedRunChip runs={unsavedRuns} onFocus={(id) => focusOnPage(`quote-run-${id}`, "error")} />
+            <QuoteMarkupGateChip blocking={markupGateRuns} dealType={dealType} onFocus={(id) => focusOnPage(`quote-run-${id}`)} />
+            <QuoteRunChoiceChip items={runChoiceItems} onFocus={(id) => focusOnPage(`quote-item-${id}`)} />
+            {teamId ? <ThreadDockButton /> : null}
+            {/* Наступний крок статусу — звичайною кнопкою; «на погодження» не дублюємо: його робить надсилання. */}
+            {nextAction.nextStatus && nextAction.nextStatus !== "awaiting_approval" && !statusBlockReason ? (
+              <Button variant="outline" size="sm" className="max-sm:hidden" disabled={statusBusy} onClick={handlePrimaryStatusAction}>
+                {nextAction.ctaLabel}
+              </Button>
+            ) : null}
+            <QuoteOfferSend
+              teamId={teamId}
+              quote={quote}
+              managerName={quote?.assigned_to ? memberById.get(quote.assigned_to) ?? null : null}
+              primary={currentStatus !== "approved"}
+            />
+            {/* Затверджений прорахунок — наступний крок замовлення, і саме він чорний. */}
+            {currentStatus === "approved" ? (
+              <Button size="sm" className="gap-2" onClick={openCreateOrderDialog}>
+                <FileDown className="h-4 w-4" />
+                <span className="truncate max-sm:sr-only">Створити замовлення</span>
+              </Button>
+            ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="iconSm">
+                  <Button variant="ghost" size="iconSm" aria-label="Ще дії з прорахунком">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -4121,10 +4035,36 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+        properties={
+          <>
+            <QuoteStatusControl
+              currentStatus={currentStatus}
+              busy={statusBusy}
+              blockReason={statusBlockReason}
+              nextStatus={nextAction.nextStatus}
+              nextActionLabel={nextAction.ctaLabel}
+              onPrimaryAction={handlePrimaryStatusAction}
+              onPickStatus={(status) => void handleQuickStatusChange(status, "")}
+              onOpenStatusDialog={openStatusDialog}
+              onOpenCancelDialog={() => setCancelDialogOpen(true)}
+              blockAction={quoteLockStatusAction(canEditQuoteContent)}
+            />
+            <QuoteTypeBadge quoteType={quote.quote_type} />
+            {/* Тип угоди — лише на поліграфії: на мерчі шкала не діє (REQ-182). */}
+            {dealType ? (
+              <QuoteDealTypeBadge value={dealType} disabled={!canEditQuoteContent || savingDealType} onChange={handleDealTypeChange} />
+            ) : null}
+            {/* Дедлайн один раз — тут, а не ще й приписом на вкладці. */}
+            <EntityPropButton label="Відповідь" onClick={() => setActiveQuoteTab("deadlines")}>
+              <span className={cn("tabular-nums", deadlineTabBadge?.toneClass ?? "text-muted-foreground")}>{deadlineTabBadge?.label ?? "не задано"}</span>
+            </EntityPropButton>
+            {quoteSetMembership?.kp_names.map((name) => <EntityProp key={`kp-${name}`} label="КП">{name}</EntityProp>)}
+            {quoteSetMembership?.set_names.map((name) => <EntityProp key={`set-${name}`} label="Набір">{name}</EntityProp>)}
+          </>
+        }
+      />
 
         <main
           className={cn(
@@ -4146,7 +4086,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             губилась серед них. Тепер активна тримається вагою тексту і тонкою
             рискою знизу — рядок вкладок перестав сперечатися зі смугою дій.
           */}
-          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
+          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
             <TabBar value={activeQuoteTab}>
               {quotePageTabs.map((tab) => {
                 return (
@@ -4170,8 +4110,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     {tab.badge ? (
                       <span
                         className={cn(
-                          "inline-flex h-[18px] min-w-[18px] max-w-[104px] items-center justify-center truncate rounded-md bg-muted px-1.5 text-2xs tabular-nums",
-                          tab.badgeToneClass ?? "text-muted-foreground"
+                          "inline-flex h-[18px] min-w-[18px] max-w-[104px] items-center justify-center truncate rounded-md bg-muted px-1.5 text-2xs tabular-nums text-muted-foreground"
                         )}
                       >
                         {tab.badge}

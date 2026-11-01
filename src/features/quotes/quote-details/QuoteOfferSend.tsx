@@ -16,6 +16,7 @@ export function QuoteOfferSend(props: {
   teamId: string;
   quote: QuoteOfferSource | null;
   managerName?: string | null;
+  primary?: boolean;
 }) {
   const offer = useQuoteOfferSend(props);
 
@@ -35,6 +36,7 @@ export function QuoteOfferSend(props: {
       ) : null}
       <QuoteOfferSendButton
         disabled={!props.quote}
+        primary={props.primary}
         onOpen={offer.openDialog}
         onQuick={(format) => void offer.runQuick(format)}
       />

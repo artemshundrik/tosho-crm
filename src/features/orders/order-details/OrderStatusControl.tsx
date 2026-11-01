@@ -1,3 +1,4 @@
+import { EntityProp, EntityPropButton } from "@/components/app/headers/EntityHeader";
 import { Check, ChevronDown, Loader2 } from "@/components/icons/appIcons";
 import {
   DropdownMenu,
@@ -8,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ORDER_STATUS_SECTIONS } from "@/features/orders/config";
-import { toneBadgeClass, toneDotClass, type Tone } from "@/lib/statusTones";
+import { toneDotClass, type Tone } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,29 +49,28 @@ export function OrderStatusControl({
   const current = sectionItems("primary").find((item) => item.id === values.orderStatus);
   const tone = (current?.tone ?? "neutral") as Tone;
   const label = current?.label ?? "Нове";
-  const chipClass = cn(
-    "inline-flex h-8 min-w-0 max-w-[10rem] items-center gap-1.5 rounded-lg border px-2.5 text-sm font-semibold sm:max-w-none",
-    toneBadgeClass[tone]
-  );
+  // Стан — чипом у рядку властивостей шапки картки (хвиля Б3): крапка тону й слово.
+  const dot = <span className={cn("h-2 w-2 shrink-0 rounded-full", toneDotClass[tone])} />;
 
-  if (readOnly) return <span className={chipClass}>{label}</span>;
+  if (readOnly) {
+    return (
+      <EntityProp>
+        {dot}
+        {label}
+      </EntityProp>
+    );
+  }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            chipClass,
-            "transition-[filter] hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-          )}
-          aria-label={`Статус: ${label}. Змінити`}
-        >
+        <EntityPropButton aria-label={`Статус: ${label}. Змінити`}>
+          {dot}
           <span className="truncate">{label}</span>
-          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3 opacity-70" />}
-        </button>
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+        </EntityPropButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="max-h-[70vh] w-[268px] overflow-y-auto">
+      <DropdownMenuContent align="start" className="max-h-[70vh] w-[268px] overflow-y-auto">
         {GROUPS.map((group, index) => (
           <div key={group.field}>
             {index > 0 ? <DropdownMenuSeparator /> : null}

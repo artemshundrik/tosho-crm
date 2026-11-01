@@ -5,12 +5,11 @@ import { PageLoading } from "@/components/app/page-loading";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { HoverCopyText } from "@/components/ui/hover-copy-text";
+import { EntityHeader, EntityProp } from "@/components/app/headers/EntityHeader";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { HoverTip } from "@/components/ui/hover-tip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1361,43 +1360,16 @@ export default function OrdersProductionDetailsPage() {
       >
       <div className="grid grid-cols-1 record-split:relative [--record-rail-w:21.25rem] record-wide:[--record-rail-w:23.75rem] record-split:h-(--record-page-h) record-split:grid-cols-[minmax(0,1fr)_var(--record-rail-w)] record-split:overflow-hidden">
         <div className="flex min-w-0 flex-col record-split:h-full record-split:min-h-0 record-split:overflow-hidden">
-      <header className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-40 bg-background/95 backdrop-blur record-split:static record-split:shrink-0 record-split:bg-transparent record-split:backdrop-blur-none">
-        <div className="px-2 py-2 md:px-2.5 lg:px-3 2xl:px-4">
-          <div className="flex min-h-10 flex-wrap items-center gap-x-1.5 gap-y-2 sm:gap-x-3">
-            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 lg:gap-3">
-              <HoverTip asChild label="До списку замовлень">
-                <Button
-                  variant="ghost"
-                  size="iconSm"
-                  onClick={() => navigate("/orders/production")}
-                  className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label="До списку замовлень"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-              </HoverTip>
-              <HoverCopyText
-                value={record.quoteNumber}
-                textClassName="tabular-nums text-[15px] font-medium tracking-wide text-foreground sm:text-[17px]"
-                successMessage="Номер замовлення скопійовано"
-                copyLabel="Скопіювати номер замовлення"
-              >
-                {record.quoteNumber}
-              </HoverCopyText>
-            </div>
-            <div className="order-3 flex w-full flex-wrap items-center gap-1.5 lg:order-none lg:w-auto">
-              {/* Вузько права колонка схована у «Деталях» — замовника показуємо тут, щоб було видно, чиє це. */}
-              <span className="mr-1 min-w-0 max-w-full truncate text-sm font-medium text-foreground record-split:hidden">
-                {record.customerName}
-              </span>
-              <span className="rounded-md border border-border/70 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-                {paymentMethodChip}
-              </span>
-              {termsChip ? (
-                <span className="tone-info rounded-md border px-2 py-0.5 text-xs font-semibold">{termsChip}</span>
-              ) : null}
-            </div>
-            <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
+      {/* Шапка картки — спільна будова (хвиля Б3); не липне, липнуть вкладки. */}
+      <EntityHeader
+        className="px-2 md:px-2.5 lg:px-3 2xl:px-4 record-split:shrink-0"
+        section="Замовлення"
+        onBack={() => navigate("/orders/production")}
+        number={record.quoteNumber}
+        numberCopyMessage="Номер замовлення скопійовано"
+        title={[record.customerName, record.items[0]?.name ? `${record.items[0].name}${record.items.length > 1 ? ` і ще ${record.items.length - 1}` : ""}` : null].filter(Boolean).join(" · ")}
+        actions={
+          <>
               {teamId ? <ThreadDockButton /> : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1423,17 +1395,6 @@ export default function OrdersProductionDetailsPage() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <OrderStatusControl
-                values={{
-                  orderStatus: record.orderStatus,
-                  paymentStatus: record.paymentStatus,
-                  deliveryStatus: record.deliveryStatus,
-                }}
-                busy={statusSaving}
-                readOnly={record.source !== "stored"}
-                paymentLocked={paymentPanel.paymentLocked}
-                onChange={(field, value) => void handleStatusChange(field, value)}
-              />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="iconSm" aria-label="Ще дії із замовленням">
@@ -1462,10 +1423,26 @@ export default function OrdersProductionDetailsPage() {
                   ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+        properties={
+          <>
+            <OrderStatusControl
+              values={{
+                orderStatus: record.orderStatus,
+                paymentStatus: record.paymentStatus,
+                deliveryStatus: record.deliveryStatus,
+              }}
+              busy={statusSaving}
+              readOnly={record.source !== "stored"}
+              paymentLocked={paymentPanel.paymentLocked}
+              onChange={(field, value) => void handleStatusChange(field, value)}
+            />
+            <EntityProp label="Оплата">{paymentMethodChip}</EntityProp>
+            {termsChip ? <EntityProp>{termsChip}</EntityProp> : null}
+          </>
+        }
+      />
 
         <main
           className={cn(
@@ -1473,7 +1450,7 @@ export default function OrdersProductionDetailsPage() {
             activeTab === "details" ? "pb-0" : "pb-10"
           )}
         >
-          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
+          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
             <TabBar value={activeTab}>
               {orderTabs.map((tab) => (
                 <TabBarItem
