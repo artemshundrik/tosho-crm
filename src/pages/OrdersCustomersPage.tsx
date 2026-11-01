@@ -50,7 +50,6 @@ import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "
 import { isInactiveEmployment } from "@/lib/employment";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
-import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import {
   createEmptyCustomerLegalEntity,
   formatCustomerLegalEntitySummary,
@@ -61,7 +60,6 @@ import {
   hasCustomerLegalEntityIdentity,
   parseCustomerLegalEntities,
 } from "@/lib/customerLegalEntities";
-import { parseCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
 import {
   areCompanyNamesEquivalent,
   buildCompanySearchVariants,
@@ -69,12 +67,8 @@ import {
   normalizeCompanyNameLooseKey,
   scoreCompanyNameMatch,
 } from "@/lib/companyNameSearch";
-import {
-  getLocalReminderDateInputValue,
-  getLocalReminderTimeInputValue,
-} from "@/lib/reminderDateTime";
-import { loadPartyLinkedRecords, type PartyLinkedTarget } from "@/components/customers/partyLinkedRecords";
 import { saveCustomerCard, saveLeadCard, validateLeadCard } from "@/components/customers/partyCardSave";
+import { useOpenPartyCard } from "@/components/customers/partyCardContext";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -90,7 +84,6 @@ import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/co
 import { formatTelegramHandle } from "@/lib/telegramContact";
 import { leadContactLabel } from "@/components/customers/leadContact";
 import {
-  buildLeadFormFromRow,
   createEmptyLeadForm,
   getFallbackLeadColumnsVariant,
   getLeadColumns,
@@ -212,36 +205,6 @@ const createInitialCustomerFormState = (manager = "", managerId = ""): CustomerF
   accountantEmail: "",
   accountantEdrpou: "",
 });
-
-const parseCustomerContacts = (row?: Partial<CustomerRow> | null): CustomerContact[] => {
-  const raw = Array.isArray(row?.contacts) ? row?.contacts : [];
-  const normalized = raw
-    .map((entry) => {
-      const contact = typeof entry === "object" && entry ? (entry as Partial<CustomerContact>) : null;
-      return {
-        name: contact?.name?.trim() ?? "",
-        position: contact?.position?.trim() ?? "",
-        phone: contact?.phone?.trim() ?? "",
-        email: contact?.email?.trim() ?? "",
-        birthday: contact?.birthday?.trim() ?? "",
-        telegram: contact?.telegram?.trim() ?? "",
-      };
-    })
-    .filter((contact) => Object.values(contact).some(Boolean));
-
-  if (normalized.length > 0) return normalized;
-
-  const legacy = {
-    name: row?.contact_name?.trim?.() ?? "",
-    position: row?.contact_position?.trim?.() ?? "",
-    phone: row?.contact_phone?.trim?.() ?? "",
-    email: row?.contact_email?.trim?.() ?? "",
-    birthday: row?.contact_birthday?.trim?.() ?? "",
-    telegram: "",
-  };
-
-  return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CUSTOMER_CONTACT }];
-};
 
 const getInitials = (value?: string | null) => {
   if (!value) return "?";
@@ -1279,77 +1242,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadFormError(null);
   }, [currentManagerLabel, defaultManagerName, userId]);
 
-  const applyLinkedRecords = useCallback(
-    async (target: PartyLinkedTarget) => {
-      setLinkedQuotesLoading(true);
-      try {
-        const records = await loadPartyLinkedRecords({ teamId, userId, target, onCalculations: setLinkedQuotes });
-        setLinkedQuotes(records.calculations);
-        setLinkedOrders(records.orders);
-        setLinkedDesignTasks(records.designTasks);
-      } catch {
-        setLinkedQuotes([]);
-        setLinkedOrders([]);
-        setLinkedDesignTasks([]);
-      } finally {
-        setLinkedQuotesLoading(false);
-      }
-    },
-    [teamId, userId]
-  );
-
-  const loadCustomerLinkedEntities = useCallback(
-    (customer: Pick<CustomerRow, "id" | "name" | "legal_name">) =>
-      applyLinkedRecords({ kind: "customer", id: customer.id, names: [customer.name, customer.legal_name] }),
-    [applyLinkedRecords]
-  );
-
-  const loadLeadLinkedEntities = useCallback(
-    (lead: Pick<LeadRow, "company_name" | "legal_name">) =>
-      applyLinkedRecords({ kind: "lead", names: [lead.company_name, lead.legal_name] }),
-    [applyLinkedRecords]
-  );
-
   const openCreate = useCallback(() => {
     setEditingId(null);
     resetForm();
     setDialogOpen(true);
   }, [resetForm]);
-
-  const openEdit = useCallback((row: CustomerRow) => {
-    const contacts = parseCustomerContacts(row);
-    setEditingId(row.id);
-    setForm({
-      name: row.name ?? "",
-      paymentType: row.payment_type === "cash" ? "cash" : "invoice",
-      source: row.source ?? "",
-      manager: resolveManagerLabel(row.manager_user_id, row.manager),
-      managerId: row.manager_user_id ?? "",
-      website: row.website ?? "",
-      logoUrl: normalizeCustomerLogoUrl(row.logo_url) ?? "",
-      logoFile: null,
-      logoUploadMode: "url",
-      legalEntities: parseCustomerLegalEntities(row),
-      contacts,
-      deliveryPoints: parseCustomerDeliveryPoints(row.delivery_points),
-      reminderDate: getLocalReminderDateInputValue(row.reminder_at),
-      reminderTime: getLocalReminderTimeInputValue(row.reminder_at),
-      reminderComment: row.reminder_comment ?? "",
-      eventName: row.event_name ?? "",
-      eventDate: row.event_at ? row.event_at.slice(0, 10) : "",
-      eventComment: row.event_comment ?? "",
-      notes: row.notes ?? "",
-      accountantName: row.accountant_name ?? "",
-      accountantEmail: row.accountant_email ?? "",
-      accountantEdrpou: row.accountant_edrpou ?? "",
-    });
-    setFormError(null);
-    // Чужа картка відкривається чистою: помилки показуємо лише після того, як
-    // людина сама спробувала зберегти саме цю форму.
-    setSubmitAttempted(false);
-    setDialogOpen(true);
-    void loadCustomerLinkedEntities({ id: row.id, name: row.name, legal_name: row.legal_name });
-  }, [loadCustomerLinkedEntities, resolveManagerLabel]);
 
   const openDelete = (row: CustomerRow) => {
     setDeleteTarget(row);
@@ -1362,16 +1259,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
     resetLeadForm();
     setLeadDialogOpen(true);
   }, [resetLeadForm]);
-
-  const openEditLead = useCallback((lead: LeadRow) => {
-    setLeadEditingId(lead.id);
-    setLeadForm(
-      buildLeadFormFromRow(lead, resolveManagerLabel(lead.manager_user_id, lead.manager) || (currentManagerLabel || defaultManagerName))
-    );
-    setLeadFormError(null);
-    setLeadDialogOpen(true);
-    void loadLeadLinkedEntities({ company_name: lead.company_name, legal_name: lead.legal_name });
-  }, [currentManagerLabel, defaultManagerName, loadLeadLinkedEntities, resolveManagerLabel]);
 
   const openDeleteLead = (lead: LeadRow) => {
     setLeadDeleteTarget(lead);
@@ -1852,6 +1739,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
     if (leadsLoading || leadsRefreshing || !leadsHasMore) return;
     void loadLeads({ append: true });
   }, [leadsHasMore, leadsLoading, leadsRefreshing, loadLeads]);
+
+  // Клік по рядку відкриває ту саму панель, що й з прорахунку (REQ-349#p8).
+  const openPartyCard = useOpenPartyCard();
+  const openEdit = useCallback(
+    (row: Pick<CustomerRow, "id" | "name">) =>
+      openPartyCard?.({ customerId: row.id, name: row.name }, { onSaved: () => void loadCustomers() }),
+    [loadCustomers, openPartyCard]
+  );
+  const openEditLead = useCallback(
+    (lead: Pick<LeadRow, "id" | "company_name">) =>
+      openPartyCard?.({ leadId: lead.id, name: lead.company_name }, { onSaved: () => void Promise.all([loadLeads(), loadCustomers()]) }),
+    [loadCustomers, loadLeads, openPartyCard]
+  );
 
   // Infinite scroll: auto-load the next page when the bottom sentinel nears the
   // viewport. Loads the same batches as the "Показати ще" button (which stays as
