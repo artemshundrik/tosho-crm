@@ -34,6 +34,7 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
 import { cn } from "@/lib/utils";
 import { QuoteRequiredValue } from "./QuoteRequiredValue";
+import { quoteItemCatalogTypeIds, quoteTypeLock, type QuoteTypeItem } from "@/features/quotes/quote-details/quoteTypeConstraint";
 import { QuoteDealTypePicker } from "@/features/quotes/components/QuoteDealTypePicker";
 import {
   DEFAULT_DEAL_TYPE,
@@ -525,6 +526,8 @@ export interface NewQuoteDialogProps {
   currentUserId?: string;
   restrictPartySelectionToOwn?: boolean;
   currentManagerLabel?: string;
+  /** Що дозволяють позиції, крім головної (її вид форма і так переобирає). */
+  quoteTypeLockItems?: ReadonlyArray<QuoteTypeItem>;
 }
 
 /**
@@ -595,6 +598,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   currentUserId,
   restrictPartySelectionToOwn = false,
   currentManagerLabel,
+  quoteTypeLockItems,
 }) => {
   const isEditMode = mode === "edit";
   /** Чи вже тиснули «Зберегти»: до першого натиску вікно нічого не червонить. */
@@ -2044,12 +2048,18 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 >
                   {QUOTE_TYPES.map((type) => {
                     const active = quoteType === type.value;
+                    const lock = quoteTypeLockItems
+                      ? quoteTypeLock(initialValues?.quoteType, quoteItemCatalogTypeIds(quoteTypeLockItems, catalogTypes), catalogTypes)
+                      : null;
+                    const locked = Boolean(lock && !lock.allowed.has(type.value));
                     return (
                       <button
                         key={type.value}
                         type="button"
                         role="radio"
                         aria-checked={active}
+                        disabled={locked}
+                        title={locked ? lock?.reason ?? undefined : undefined}
                         onClick={() => {
                           setQuoteType(type.value);
                           setCategoryId("");
@@ -2064,7 +2074,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                           "inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-all",
                           active
                             ? "bg-primary/10 text-primary"
-                            : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
+                            : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+                          locked && "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted-foreground"
                         )}
                       >
                         <type.icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground")} />

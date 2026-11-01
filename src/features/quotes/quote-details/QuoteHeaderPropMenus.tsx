@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { QUOTE_TYPE_OPTIONS, quoteTypeIcon, quoteTypeLabel } from "@/features/quotes/quotes-page/config";
 import { type DeadlineTabBadge } from "@/features/quotes/quote-details/deadlineLabels";
+import { quoteItemCatalogTypeIds, quoteTypeLock, type QuoteTypeItem, type QuoteTypeCatalog } from "@/features/quotes/quote-details/quoteTypeConstraint";
 import { updateQuote } from "@/lib/toshoApi";
 import { cn } from "@/lib/utils";
 
@@ -27,15 +28,21 @@ export function QuoteTypePropMenu({
   teamId,
   value,
   disabled,
+  items,
+  catalogTypes,
   onSaved,
 }: {
   quoteId: string;
   teamId: string;
+  /** Вид іде за позиціями: товари не позначити поліграфією й навпаки. */
+  items: ReadonlyArray<QuoteTypeItem>;
+  catalogTypes: QuoteTypeCatalog;
   value: string | null | undefined;
   disabled?: boolean;
   onSaved: (next: string) => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const lock = quoteTypeLock(value, quoteItemCatalogTypeIds(items, catalogTypes), catalogTypes);
   const Icon = quoteTypeIcon(value);
   const label = (
     <>
@@ -69,12 +76,23 @@ export function QuoteTypePropMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
         {QUOTE_TYPE_OPTIONS.map((option) => (
-          <DropdownMenuItem key={option.id} onSelect={() => void pick(option.id)} className="gap-2">
+          <DropdownMenuItem
+            key={option.id}
+            disabled={!lock.allowed.has(option.id)}
+            onSelect={() => void pick(option.id)}
+            className="gap-2"
+          >
             <Check className={cn("h-3.5 w-3.5", option.id === value ? "opacity-100" : "opacity-0")} />
             {createElement(option.icon, { className: "h-3.5 w-3.5 text-muted-foreground" })}
             {option.label}
           </DropdownMenuItem>
         ))}
+        {lock.reason && QUOTE_TYPE_OPTIONS.some((option) => !lock.allowed.has(option.id)) ? (
+          <>
+            <DropdownMenuSeparator />
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">{lock.reason}</p>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -2284,7 +2284,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
           return (typeRows ?? []).map((row) => ({
             id: row.id,
-            name: row.name,
+            name: row.name, quote_type: row.quote_type ?? null,
             kinds: kindsByType.get(row.id) ?? [],
           }));
         };
@@ -3990,7 +3990,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               onOpenCancelDialog={() => setCancelDialogOpen(true)}
               blockAction={quoteLockStatusAction(canEditQuoteContent)}
             />
-            <QuoteTypePropMenu quoteId={quoteId} teamId={teamId} value={quote.quote_type} disabled={!canEditQuoteContent} onSaved={(next) => setQuote((current) => (current ? { ...current, quote_type: next } : current))} />
+            <QuoteTypePropMenu quoteId={quoteId} teamId={teamId} value={quote.quote_type} disabled={!canEditQuoteContent} items={items} catalogTypes={catalogTypes} onSaved={(next) => setQuote((current) => (current ? { ...current, quote_type: next } : current))} />
             {/* Тип угоди — лише на поліграфії: на мерчі шкала не діє (REQ-182). */}
             {dealType ? (
               <QuoteDealTypeBadge value={dealType} disabled={!canEditQuoteContent || savingDealType} onChange={handleDealTypeChange} />
@@ -6024,7 +6024,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         customersLoading={editQuoteCustomersLoading}
         onCustomerSearch={setEditQuoteCustomerSearch}
         teamMembers={teamMembers}
-        catalogTypes={catalogTypes}
+        catalogTypes={catalogTypes} quoteTypeLockItems={items.slice(1)}
         currentUserId={userId ?? undefined}
       />
 

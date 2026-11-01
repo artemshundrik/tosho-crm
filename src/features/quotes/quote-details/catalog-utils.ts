@@ -40,6 +40,8 @@ export type CatalogKind = {
 export type CatalogType = {
   id: string;
   name: string;
+  /** Поліграфія чи ні — за ним вид прорахунку йде за позиціями. */
+  quote_type?: string | null;
   kinds: CatalogKind[];
 };
 
