@@ -5351,14 +5351,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       </button>
                     </ResizableHead>
                     <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="customer" controller={quotesColumns} className="font-semibold" />
-                    <TableHead>Що рахуємо</TableHead>
+                    <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="title" controller={quotesColumns} className="font-semibold" />
                     <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="total" controller={quotesColumns} className="!pr-6 text-right font-semibold" />
                     <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="status" controller={quotesColumns} className="font-semibold" />
                     <ResizableHead spec={QUOTES_TABLE_COLUMNS} columnId="deadline" controller={quotesColumns} className="font-semibold" />
                     <TableHead className="w-[88px] font-semibold">
                       <div className="flex items-center justify-center">Менеджер</div>
                     </TableHead>
-                    <TableHead className="w-[48px]"></TableHead>
+                    <TableHead className="min-w-[48px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

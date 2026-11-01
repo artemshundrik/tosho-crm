@@ -463,12 +463,12 @@ export default function OrdersProductionPage() {
               <TableRow>
                 <TableHead className="w-[52px] pl-6" aria-label="Обрати для СП" />
                 <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="number" controller={ordersColumns} />
-                <TableHead className="w-auto">Замовник · що замовили</TableHead>
+                <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="title" controller={ordersColumns} />
                 <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="total" controller={ordersColumns} className="text-right" />
                 <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="payment" controller={ordersColumns} />
                 <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="documents" controller={ordersColumns} />
                 <ResizableHead spec={ORDERS_TABLE_COLUMNS} columnId="next" controller={ordersColumns} />
-                <TableHead className="w-[56px] pr-6" aria-label="Менеджер" />
+                <TableHead className="min-w-[56px] pr-6" aria-label="Менеджер" />
               </TableRow>
             </TableHeader>
             <TableBody>

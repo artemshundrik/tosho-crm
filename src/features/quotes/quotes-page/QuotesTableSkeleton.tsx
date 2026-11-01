@@ -24,14 +24,14 @@ export function QuotesTableSkeleton() {
             <TableHead className="w-[40px]" />
             <TableHead style={{ width: quotesColumnWidth("number") }}>{QUOTES_COLUMNS.number.label}</TableHead>
             <TableHead style={{ width: quotesColumnWidth("customer") }}>{QUOTES_COLUMNS.customer.label}</TableHead>
-            <TableHead>Що рахуємо</TableHead>
+            <TableHead style={{ width: quotesColumnWidth("title") }}>{QUOTES_COLUMNS.title.label}</TableHead>
             <TableHead style={{ width: quotesColumnWidth("total") }} className="!pr-6 text-right">
               {QUOTES_COLUMNS.total.label}
             </TableHead>
             <TableHead style={{ width: quotesColumnWidth("status") }}>{QUOTES_COLUMNS.status.label}</TableHead>
             <TableHead style={{ width: quotesColumnWidth("deadline") }}>{QUOTES_COLUMNS.deadline.label}</TableHead>
             <TableHead className="w-[88px] text-center">Менеджер</TableHead>
-            <TableHead className="w-[44px]" />
+            <TableHead className="min-w-[44px]" />
           </TableRow>
         </TableHeader>
         <TableBody>

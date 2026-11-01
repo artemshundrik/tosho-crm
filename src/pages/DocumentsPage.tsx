@@ -544,11 +544,11 @@ export default function DocumentsPage() {
                   <TableRow>
                     <ResizableHead spec={DOCUMENTS_TABLE_COLUMNS} columnId="kind" controller={columns} />
                     <ResizableHead spec={DOCUMENTS_TABLE_COLUMNS} columnId="number" controller={columns} />
-                    <TableHead className="w-auto">Замовник · підстава</TableHead>
+                    <ResizableHead spec={DOCUMENTS_TABLE_COLUMNS} columnId="customer" controller={columns} />
                     <ResizableHead spec={DOCUMENTS_TABLE_COLUMNS} columnId="status" controller={columns} />
                     <ResizableHead spec={DOCUMENTS_TABLE_COLUMNS} columnId="total" controller={columns} className="text-right" />
                     <TableHead className="w-[64px] @max-4xl:pr-6">Відп.</TableHead>
-                    <TableHead className="w-[64px] pr-6 text-right @max-4xl:hidden">Час</TableHead>
+                    <TableHead className="min-w-[64px] pr-6 text-right @max-4xl:hidden">Час</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

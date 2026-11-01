@@ -80,12 +80,12 @@ export function DesignTasksTable<T extends DesignTableTask>({
         <TableHeader>
           <TableRow>
             <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="number" controller={columns} />
-            <TableHead>Задача</TableHead>
+            <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="title" controller={columns} />
             <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="customer" controller={columns} />
             <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="product" controller={columns} />
             <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="status" controller={columns} />
             <ResizableHead spec={DESIGN_TABLE_COLUMNS} columnId="assignee" controller={columns} />
-            <TableHead className="w-[96px] text-right">Дедлайн</TableHead>
+            <TableHead className="min-w-[96px] text-right">Дедлайн</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

@@ -562,10 +562,12 @@ function ContractorsTable({
               варіанту за специфічністю, тож крізь заголовок просвічували рядки. */}
           <TableHeader>
             <TableRow>
-              <TableHead>{title}</TableHead>
+              <ResizableHead spec={CONTRACTORS_TABLE_COLUMNS} columnId="name" controller={columns}>
+                {title}
+              </ResizableHead>
               <ResizableHead spec={CONTRACTORS_TABLE_COLUMNS} columnId="services" controller={columns} />
               <ResizableHead spec={CONTRACTORS_TABLE_COLUMNS} columnId="contact" controller={columns} />
-              <TableHead className="w-[92px]" />
+              <TableHead className="min-w-[92px]" />
             </TableRow>
           </TableHeader>
           <TableBody>

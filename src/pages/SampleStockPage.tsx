@@ -438,13 +438,13 @@ function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: 
       <Table variant="list" size="md" stickyHeader className="table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead>Товар</TableHead>
+            <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="product" controller={columns} />
             <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="color" controller={columns} />
             <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="qty" controller={columns} className="text-right" />
             <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="price" controller={columns} className="text-right" />
             <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="total" controller={columns} className="text-right" />
             <ResizableHead spec={SAMPLE_STOCK_TABLE_COLUMNS} columnId="location" controller={columns} />
-            <TableHead className="w-12" />
+            <TableHead className="min-w-12" />
           </TableRow>
         </TableHeader>
         <TableBody>

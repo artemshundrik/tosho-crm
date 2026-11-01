@@ -234,12 +234,12 @@ export default function OrdersQueuePage() {
             <TableHeader>
               <TableRow>
                 <ResizableHead spec={ORDERS_QUEUE_TABLE_COLUMNS} columnId="number" controller={queueColumns} />
-                <TableHead className="w-auto">Замовник · що</TableHead>
+                <ResizableHead spec={ORDERS_QUEUE_TABLE_COLUMNS} columnId="title" controller={queueColumns} />
                 <ResizableHead spec={ORDERS_QUEUE_TABLE_COLUMNS} columnId="total" controller={queueColumns} className="text-right" />
                 <ResizableHead spec={ORDERS_QUEUE_TABLE_COLUMNS} columnId="payment" controller={queueColumns} />
                 <ResizableHead spec={ORDERS_QUEUE_TABLE_COLUMNS} columnId="needs" controller={queueColumns} />
                 <TableHead className="w-[176px]" aria-label="Дія" />
-                <TableHead className="w-[52px] pr-6" aria-label="Менеджер" />
+                <TableHead className="min-w-[52px] pr-6" aria-label="Менеджер" />
               </TableRow>
             </TableHeader>
             <TableBody>

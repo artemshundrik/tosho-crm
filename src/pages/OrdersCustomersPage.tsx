@@ -3527,7 +3527,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   <Table variant="list" size="md" stickyHeader className="table-fixed">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-auto">Компанія</TableHead>
+                        <ResizableHead spec={CUSTOMERS_TABLE_COLUMNS} columnId="company" controller={customersColumns} />
                         <TableHead className="w-[76px] px-2">Тип</TableHead>
                         <ResizableHead spec={CUSTOMERS_TABLE_COLUMNS} columnId="entity" controller={customersColumns} className="pl-2" />
                         <ResizableHead spec={CUSTOMERS_TABLE_COLUMNS} columnId="site" controller={customersColumns} />
@@ -3560,7 +3560,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             )}
                           </button>
                         </ResizableHead>
-                        <TableHead className="w-12"></TableHead>
+                        <TableHead className="min-w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -3804,9 +3804,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   <Table variant="list" size="md" stickyHeader className="table-fixed">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-auto">Компанія</TableHead>
                         {LEADS_TABLE_COLUMNS.ids.map((id) => <ResizableHead key={id} spec={LEADS_TABLE_COLUMNS} columnId={id} controller={leadsColumns} />)}
-                        <TableHead className="w-12"></TableHead>
+                        <TableHead className="min-w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

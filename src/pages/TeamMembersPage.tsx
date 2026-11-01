@@ -1940,13 +1940,13 @@ export function TeamMembersPage() {
               <Table variant="list" size="md" className="table-fixed">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableTextHeaderCell className="pl-6">Користувач</TableTextHeaderCell>
+                    <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="user" controller={membersColumns} className="pl-6 text-xs font-medium text-muted-foreground" />
                     <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="access" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
                     <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="position" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
                     <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="status" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
                     <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="birthday" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
                     <ResizableHead spec={TEAM_MEMBERS_TABLE_COLUMNS} columnId="work" controller={membersColumns} className="text-xs font-medium text-muted-foreground" />
-                    <TableActionHeaderCell />
+                    <TableActionHeaderCell widthClass="min-w-[96px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>

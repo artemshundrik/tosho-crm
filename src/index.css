@@ -2887,3 +2887,38 @@ html[data-theme-switching]::view-transition-new(root) {
     font-size: 0.75rem;
   }
 }
+
+/*
+ * Обрізаний текст згасає, а не закінчується трьома крапками (Артем, 01.11.2026:
+ * «три крапки бісять»). Перевизначено сам `truncate`, тож це скрізь, де він є.
+ *
+ * ЧОМУ НЕ ПРОСТО МАСКА. Маска на кожному `truncate` гасила б і останні літери
+ * короткого тексту, що влазить: span у флексі стискається до вмісту, і його
+ * правий край — це вже текст. Згасати треба лише тоді, коли текст справді
+ * обрізано, а CSS не має селектора «переповнено».
+ *
+ * ТРЮК. `overflow: hidden` робить елемент контейнером прокрутки, а часова шкала
+ * `scroll(self inline)` активна лише тоді, коли є що прокручувати, тобто коли
+ * текст не влазить. Анімація з однаковими кадрами на такій шкалі = маска рівно
+ * в тих місцях, де раніше з'являлись три крапки, і ніде більше.
+ *
+ * Де шкал прокрутки немає (Firefox), лишаються звичні три крапки.
+ * Багаторядкове `line-clamp` не чіпаємо: там крапки лишаються.
+ */
+@keyframes truncate-fade {
+  from,
+  to {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  @layer utilities {
+    .truncate {
+      text-overflow: clip;
+      animation: truncate-fade linear both;
+      animation-timeline: scroll(self inline);
+    }
+  }
+}

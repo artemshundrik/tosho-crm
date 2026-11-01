@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { readStoredWidth, writeStoredWidth } from "@/lib/storedWidth";
 import {
   resolveTableColumnWidths,
+  tableColumnMax,
   type TableColumnWidths,
   type TableColumnsSpec,
 } from "@/components/app/table-columns/tableColumns";
@@ -104,7 +105,7 @@ export function useTableColumns<Id extends string>(spec: TableColumnsSpec<Id>): 
     const others = spec.ids.reduce((acc, key) => (key === id ? acc : acc + widths[key]), 0);
     const room = width - spec.fixedPx - spec.flexMinPx - others;
     const min = spec.columns[id].min;
-    return { now: widths[id], min, max: Math.max(min, room) };
+    return { now: widths[id], min, max: Math.max(min, widths[id], Math.min(tableColumnMax(spec.columns[id]), room)) };
   };
 
   const preview = (id: Id, px: number) => {
