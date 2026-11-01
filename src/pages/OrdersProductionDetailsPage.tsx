@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CustomerDialog, useCustomerEditor } from "@/components/customers";
+import { useOpenPartyCard } from "@/components/customers/partyCardContext";
 import {
   ORDER_INCOTERMS_OPTIONS,
   ORDER_PAYMENT_METHOD_OPTIONS,
@@ -895,11 +895,8 @@ export default function OrdersProductionDetailsPage() {
     };
   }, [id, teamId, userId]);
 
-  const { openForCustomer: openCustomerEditor, editorProps: customerEditorProps } = useCustomerEditor({
-    onSaved: () => {
-      void refreshRecord();
-    },
-  });
+  // Клік по замовнику — повна картка на місці, і для ліда теж (REQ-348).
+  const openPartyCard = useOpenPartyCard();
 
 
   const handleStatusChange = async (field: "orderStatus" | "paymentStatus" | "deliveryStatus", value: string) => {
@@ -1319,7 +1316,19 @@ export default function OrdersProductionDetailsPage() {
         : record.paymentMethodId === "crypto"
           ? "Криптовалюта"
           : record.paymentRail;
-  const openCustomerCard = record.customerId ? () => void openCustomerEditor(record.customerId!) : null;
+  // Для ліда customer_id замовлення — це id ліда, або його немає зовсім (тоді шукаємо за назвою).
+  const partyHover = record.customerId
+    ? { kind: record.partyType, id: record.customerId, name: record.customerName, logoUrl: record.customerLogoUrl ?? null }
+    : null;
+  const openCustomerCard = () =>
+    openPartyCard?.(
+      {
+        customerId: record.partyType === "customer" ? record.customerId : null,
+        leadId: record.partyType === "lead" ? record.customerId : null,
+        name: record.customerName,
+      },
+      { onSaved: () => void refreshRecord() }
+    );
   const orderTabs: { value: OrderPageTab; label: string; badge?: string | number | null; mobileOnly?: boolean }[] = [
     { value: "launch", label: "Запуск", badge: `${launchPath.steps.filter((step) => step.state === "done").length}/${launchPath.steps.length}` },
     { value: "items", label: "Позиції", badge: record.items.length || null },
@@ -1662,7 +1671,8 @@ export default function OrdersProductionDetailsPage() {
                   : { label: "Відвантаження", short: "—", tone: "none", title: "Відвантаження: ще ні" },
               ]}
               extras={partyExtras}
-              onOpenParty={openCustomerCard ?? (() => undefined)}
+              partyHover={partyHover}
+              onOpenParty={openCustomerCard}
               onOpenDeadlines={() => setActiveTab("launch")}
             />
             <OrderPaymentCard record={record} ledger={paymentPanel.ledger} />
@@ -2175,7 +2185,6 @@ export default function OrdersProductionDetailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <CustomerDialog {...customerEditorProps} />
       {teamId && record ? (
         <OrderDeliveryDialog
           open={deliveryDialogOpen}

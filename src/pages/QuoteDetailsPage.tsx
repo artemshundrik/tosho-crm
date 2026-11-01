@@ -265,7 +265,7 @@ import {
 import { QuoteDeadlinePropMenu, QuoteTypePropMenu } from "@/features/quotes/quote-details/QuoteHeaderPropMenus";
 import type { QuoteDeadlineTone } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
-import { CustomerLeadQuickViewDialog } from "@/components/customers";
+import { usePartyCardForName } from "@/components/customers/usePartyLeadId";
 import {
   type CatalogKind,
   type CatalogMethod,
@@ -722,7 +722,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [quoteOrderRef, setQuoteOrderRef] = useState<QuoteOrderRef | null>(null);
   const [deleteItemTarget, setDeleteItemTarget] = useState<QuoteItem | null>(null);
   const [deleteItemBusy, setDeleteItemBusy] = useState(false);
-  const [partyCardOpen, setPartyCardOpen] = useState(false);
 
   const getAttachmentStorageKey = useCallback((
     attachment: Pick<QuoteAttachment, "storageBucket" | "storagePath">,
@@ -2422,6 +2421,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     setLoading(false);
   }, [quoteId, teamId]);
+
+  // Клік по замовнику — повна картка на місці, наведення на лого — довідка (REQ-348).
+  const quoteParty = usePartyCardForName({ teamId, customerId: quote?.customer_id, name: quote?.customer_name, logoUrl: quote?.customer_logo_url, onSaved: loadQuote });
 
   const loadDesignTask = useCallback(async () => {
     if (!quoteId || !teamId) {
@@ -5303,7 +5305,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 buildDeadlineTrackItem("Відвантаження", quote?.customer_deadline_at ?? null),
               ]}
               extras={sideExtras}
-              onOpenParty={() => setPartyCardOpen(true)}
+              partyHover={quoteParty.hoverTarget}
+              onOpenParty={quoteParty.openCard}
               onOpenDeadlines={() => setActiveQuoteTab("deadlines")}
             />
 
@@ -5968,16 +5971,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           }}
         />
       ) : null}
-
-      <CustomerLeadQuickViewDialog
-        open={partyCardOpen}
-        onOpenChange={setPartyCardOpen}
-        teamId={quote?.team_id ?? ""}
-        userId={userId}
-        customerId={quote?.customer_id ?? null}
-        customerName={quote?.customer_name ?? null}
-        customerLogoUrl={quote?.customer_logo_url ?? null}
-      />
 
       <QuoteItemChoiceDialog
         open={itemChoice.open}

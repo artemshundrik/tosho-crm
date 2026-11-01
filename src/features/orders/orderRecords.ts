@@ -2300,7 +2300,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
 
 /**
  * Список дизайн-задач Замовника для «Обрати готовий дизайн».
- * Union двох ознак (як у CustomerLeadQuickViewDialog):
+ * Union двох ознак (як у картці замовника, partyLinkedRecords):
  *   metadata.customer_id === customerId  АБО  metadata.quote_id ∈ (прорахунки цього замовника).
  */
 export async function listCustomerDesignTasks(teamId: string, customerId: string): Promise<CustomerDesignTaskOption[]> {

@@ -39,7 +39,7 @@ const DEBOUNCE_MS = 350;
 /** Коротше — надто широко: на двох літерах у списку опиниться пів бази. */
 const MIN_QUERY = 3;
 
-/** Той самий ключ, що в CustomerLeadQuickViewDialog: імена в картках пишуть руками. */
+/** Імена менеджерів у картках пишуть руками: регістр і пробіли не рахуються. */
 const normalizeMemberKey = (value?: string | null) => (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
 type HintState = { matches: CompanyHintMatch[]; loading: boolean };

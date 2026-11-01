@@ -29,8 +29,10 @@ export function HoverTip({
   ready = true,
   maxReadyWaitMs = 450,
   asChild = false,
+  interactive = false,
 }: {
-  label: React.ReactNode;
+  /** Функція отримує `close` — для бульбашки з кнопкою, що відкриває щось інше. */
+  label: React.ReactNode | ((close: () => void) => React.ReactNode);
   children: React.ReactNode;
   side?: "top" | "bottom" | "left" | "right";
   /** Класи ТРИГЕРА (обгортки навколо children). */
@@ -57,6 +59,14 @@ export function HoverTip({
    * взагалі. Дитина має бути ОДНИМ елементом, що приймає ref і DOM-пропси.
    */
   asChild?: boolean;
+  /**
+   * Бульбашка з кнопками (картка замовника з «Відкрити картку», REQ-348):
+   * курсор можна завести всередину, і вона не закриється, поки він там.
+   * Кліки всередині НЕ спливають до тригера: бульбашка в порталі, але React
+   * веде події деревом компонентів — без цього клік по кнопці відкривав би
+   * ще й картку канбану, на якій стоїть лого, а натискання брало б її в drag.
+   */
+  interactive?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   // Ідентифікатор бульбашки: він потрібен, щоб ПРИВ'ЯЗАТИ підказку до
@@ -121,6 +131,13 @@ export function HoverTip({
   // натиснути»): у робочому стані пояснювати нічого, а порожня бульбашка
   // під курсором виглядала б як помилка.
   if (!label) return <>{children}</>;
+  const close = () => {
+    wantsOpen.current = false;
+    cancelWait();
+    cancelClose();
+    setOpen(false);
+  };
+  const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -167,18 +184,29 @@ export function HoverTip({
       )}
       <PopoverContent
         id={tipId}
-        role="tooltip"
+        role={interactive ? "dialog" : "tooltip"}
         side={side}
         align="center"
         sideOffset={6}
         // Підказка нічого не ловить: кліки й ховер мають лишатися в тригері.
         onOpenAutoFocus={(event) => event.preventDefault()}
+        {...(interactive
+          ? {
+              onMouseEnter: show,
+              onMouseLeave: hide,
+              onClick: stop,
+              onPointerDown: stop,
+              onMouseDown: stop,
+              onKeyDown: stop,
+            }
+          : {})}
         className={cn(
-          "pointer-events-none w-auto max-w-[240px] rounded-md border-border/60 px-2.5 py-1.5 text-xs leading-snug text-popover-foreground shadow-menu",
+          "w-auto max-w-[240px] rounded-md border-border/60 px-2.5 py-1.5 text-xs leading-snug text-popover-foreground shadow-menu",
+          !interactive && "pointer-events-none",
           contentClassName
         )}
       >
-        {label}
+        {typeof label === "function" ? label(close) : label}
       </PopoverContent>
     </Popover>
   );

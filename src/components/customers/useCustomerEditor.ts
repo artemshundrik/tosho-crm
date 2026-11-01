@@ -1,31 +1,19 @@
 import * as React from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
-import type { CustomerContact, CustomerDialogProps, CustomerFormState } from "./CustomerDialog";
-import {
-  createEmptyCustomerLegalEntity,
-  getPrimaryCustomerLegalEntity,
-  parseCustomerLegalEntities,
-  serializeCustomerLegalEntities,
-} from "@/lib/customerLegalEntities";
-import {
-  getCustomerLogoImportErrorMessage,
-  ingestCustomerLogoFromFile,
-  ingestCustomerLogoFromUrl,
-  normalizeCustomerLogoUrl,
-  removeManagedCustomerLogoByUrl,
-} from "@/lib/customerLogo";
-import {
-  buildReminderAtIso,
-  getLocalReminderDateInputValue,
-  getLocalReminderTimeInputValue,
-} from "@/lib/reminderDateTime";
-import { parseCustomerDeliveryPoints, serializeCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
-import { normalizeTelegramUsername } from "@/lib/telegramContact";
+import type { CustomerContact, CustomerDialogProps, CustomerFormState, CustomerLinkedItem } from "./CustomerDialog";
+import { createEmptyCustomerLegalEntity, parseCustomerLegalEntities } from "@/lib/customerLegalEntities";
+import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
+import { getLocalReminderDateInputValue, getLocalReminderTimeInputValue } from "@/lib/reminderDateTime";
+import { parseCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import type { TableUpdate } from "@/lib/dbTables";
+import type { CustomerLtvEntry, RfmSegment } from "@/lib/customerLtv";
+import { hasCustomerFieldErrors, validateCustomerForm } from "./customerValidation";
+import { saveCustomerCard, type PartyPreviousState } from "./partyCardSave";
+import { loadPartyLinkedRecords } from "./partyLinkedRecords";
 
 type CustomerRecord = {
   id: string;
@@ -160,18 +148,6 @@ const parseContactsFromRow = (row: CustomerRecord): CustomerContact[] => {
   return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CONTACT }];
 };
 
-const normalizeBirthday = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  const dotted = trimmed.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?$/);
-  if (!dotted) return trimmed;
-  const [, day, month, year] = dotted;
-  const normalizedDay = String(Number(day)).padStart(2, "0");
-  const normalizedMonth = String(Number(month)).padStart(2, "0");
-  return year ? `${year}-${normalizedMonth}-${normalizedDay}` : `${normalizedDay}.${normalizedMonth}`;
-};
-
 type TeamMemberOption = { id: string; label: string; avatarUrl?: string | null };
 
 export type CustomerEditorSavedResult = {
@@ -188,6 +164,8 @@ export type CustomerEditorDialogProps = Pick<
   CustomerDialogProps,
   | "open"
   | "onOpenChange"
+  | "teamId"
+  | "duplicateHintExcludeId"
   | "form"
   | "setForm"
   | "ownershipOptions"
@@ -195,22 +173,55 @@ export type CustomerEditorDialogProps = Pick<
   | "teamMembers"
   | "saving"
   | "error"
+  | "fieldErrors"
   | "title"
   | "description"
   | "submitLabel"
   | "onSubmit"
+  | "calculations"
+  | "orders"
+  | "designTasks"
+  | "linkedLoading"
+  | "onOpenCalculation"
+  | "onOpenOrder"
+  | "onOpenDesignTask"
+  | "ltvEntry"
+  | "ltvSegment"
 >;
 
+type LinkedState = {
+  calculations: CustomerLinkedItem[];
+  orders: CustomerLinkedItem[];
+  designTasks: CustomerLinkedItem[];
+  ltvEntry: CustomerLtvEntry | null;
+  ltvSegment?: RfmSegment;
+};
+
+const EMPTY_LINKED: LinkedState = { calculations: [], orders: [], designTasks: [], ltvEntry: null };
+
+/**
+ * Повна картка замовника поза сторінкою «Замовники» — та сама форма, ті самі
+ * правила збереження (`saveCustomerCard`) і ті самі зв'язані списки (REQ-348).
+ *
+ * Форма показується після ОДНОГО запиту (сам замовник); прорахунки, замовлення
+ * й LTV доїжджають уже всередині відкритої картки.
+ */
 export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
   const { teamId, userId } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<CustomerFormState>(buildEmptyForm);
   const [saving, setSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = React.useState(false);
   const [teamMembers, setTeamMembers] = React.useState<TeamMemberOption[]>([]);
-  const previousLogoUrlRef = React.useRef<string | null>(null);
+  const [linked, setLinked] = React.useState<LinkedState>(EMPTY_LINKED);
+  const [linkedLoading, setLinkedLoading] = React.useState(false);
+  const previousRef = React.useRef<PartyPreviousState>(null);
+  // Відповідь на старе відкриття не має перезаписати картку, відкриту пізніше.
+  const requestRef = React.useRef(0);
   const onSavedRef = React.useRef(options?.onSaved);
 
   React.useEffect(() => {
@@ -250,9 +261,12 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
         setOpen(true);
         return;
       }
+      const request = ++requestRef.current;
       setEditingId(customerId);
       setForm(buildEmptyForm());
       setError(null);
+      setSubmitAttempted(false);
+      setLinked(EMPTY_LINKED);
       setLoading(true);
       setOpen(true);
       try {
@@ -263,20 +277,26 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
           .eq("team_id", teamId)
           .eq("id", customerId)
           .maybeSingle<CustomerRecord>();
+        if (request !== requestRef.current) return;
         if (loadError) throw loadError;
         if (!data) {
           setError("Не вдалося завантажити дані замовника.");
           return;
         }
-        previousLogoUrlRef.current = data.logo_url ?? null;
         const resolvedMember = data.manager_user_id
           ? teamMembers.find((member) => member.id === data.manager_user_id)
           : undefined;
+        const managerLabel = resolvedMember?.label ?? (data.manager ?? "");
+        previousRef.current = {
+          logoUrl: data.logo_url ?? null,
+          managerUserId: data.manager_user_id?.trim() || null,
+          managerLabel,
+        };
         setForm({
           name: data.name ?? "",
           paymentType: data.payment_type === "cash" ? "cash" : "invoice",
           source: data.source ?? "",
-          manager: resolvedMember?.label ?? (data.manager ?? ""),
+          manager: managerLabel,
           managerId: data.manager_user_id ?? "",
           website: data.website ?? "",
           logoUrl: normalizeCustomerLogoUrl(data.logo_url) ?? "",
@@ -296,31 +316,49 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
           accountantEmail: data.accountant_email ?? "",
           accountantEdrpou: data.accountant_edrpou ?? "",
         });
+        setLoading(false);
+
+        setLinkedLoading(true);
+        try {
+          const records = await loadPartyLinkedRecords({
+            teamId,
+            userId,
+            target: { kind: "customer", id: customerId, names: [data.name, data.legal_name] },
+            onCalculations: (calculations) => {
+              if (request === requestRef.current) setLinked((current) => ({ ...current, calculations }));
+            },
+          });
+          if (request === requestRef.current) setLinked(records);
+        } catch {
+          if (request === requestRef.current) setLinked(EMPTY_LINKED);
+        } finally {
+          if (request === requestRef.current) setLinkedLoading(false);
+        }
       } catch (err: unknown) {
+        if (request !== requestRef.current) return;
         const message =
           err instanceof Error && err.message
             ? err.message
             : "Не вдалося завантажити дані замовника.";
         setError(message);
       } finally {
-        setLoading(false);
+        if (request === requestRef.current) setLoading(false);
       }
     },
-    [teamId, teamMembers]
+    [teamId, teamMembers, userId]
   );
+
+  const fieldErrors = React.useMemo(() => validateCustomerForm(form, { isNew: false }), [form]);
 
   const submit = React.useCallback(async () => {
     if (!teamId || !editingId) {
       setError("Не вдалося визначити замовника для збереження.");
       return;
     }
-    if (!form.name.trim()) {
-      setError("Вкажіть назву компанії.");
-      return;
-    }
-    const normalizedLogoUrl = normalizeCustomerLogoUrl(form.logoUrl);
-    if (form.logoUploadMode === "url" && form.logoUrl.trim() && !normalizedLogoUrl) {
-      setError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
+    // Як на сторінці «Замовники»: усі проблеми форми видно одразу.
+    setSubmitAttempted(true);
+    if (hasCustomerFieldErrors(fieldErrors)) {
+      setError(null);
       return;
     }
 
@@ -331,100 +369,21 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
     const selectedMember = form.managerId
       ? teamMembers.find((member) => member.id === form.managerId)
       : teamMembers.find((member) => member.label === managerLabelRaw);
-    const selectedManagerLabel = selectedMember?.label ?? managerLabelRaw;
-    const selectedManagerUserId = selectedMember?.id ?? (form.managerId.trim() || null);
-
-    const contacts = form.contacts
-      .map((contact) => ({
-        name: contact.name.trim(),
-        position: contact.position.trim(),
-        phone: contact.phone.trim(),
-        email: contact.email.trim(),
-        birthday: normalizeBirthday(contact.birthday),
-        telegram: normalizeTelegramUsername(contact.telegram),
-      }))
-      .filter((contact) => Object.values(contact).some(Boolean));
-    const primaryContact = contacts[0] ?? null;
-    const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
-    const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
-
-    let optimizedLogoUrl: string | null;
-    try {
-      if (form.logoUploadMode === "file" && form.logoFile) {
-        const optimized = await ingestCustomerLogoFromFile({
-          teamId,
-          file: form.logoFile,
-          entityType: "customer",
-          entityId: editingId,
-          preferredName: form.name.trim(),
-        });
-        optimizedLogoUrl = optimized.logoUrl;
-      } else if (normalizedLogoUrl) {
-        const optimized = await ingestCustomerLogoFromUrl({
-          teamId,
-          sourceUrl: normalizedLogoUrl,
-          entityType: "customer",
-          entityId: editingId,
-          preferredName: form.name.trim(),
-        });
-        optimizedLogoUrl = optimized.logoUrl;
-      } else {
-        optimizedLogoUrl = null;
-      }
-    } catch (logoError: unknown) {
-      setSaving(false);
-      setError(getCustomerLogoImportErrorMessage(logoError, "логотип"));
-      return;
-    }
-
-    const payload: TableUpdate<"customers"> = {
-      name: form.name.trim(),
-      payment_type: form.paymentType,
-      source: form.source.trim() || null,
-      legal_name: primaryLegalEntity?.legal_name ?? null,
-      manager: selectedManagerLabel || null,
-      manager_user_id: selectedManagerUserId,
-      ownership_type: primaryLegalEntity?.ownership_type ?? null,
-      vat_rate: primaryLegalEntity?.vat_rate ?? null,
-      tax_id: primaryLegalEntity?.tax_id ?? null,
-      website: form.website.trim() || null,
-      iban: primaryLegalEntity?.iban ?? null,
-      logo_url: optimizedLogoUrl,
-      legal_entities: legalEntities.length > 0 ? legalEntities : null,
-      contacts: contacts.length > 0 ? contacts : null,
-      contact_name: primaryContact?.name || null,
-      contact_position: primaryContact?.position || null,
-      contact_phone: primaryContact?.phone || null,
-      contact_email: primaryContact?.email || null,
-      contact_birthday: primaryContact?.birthday || null,
-      signatory_name: primaryLegalEntity?.signatory_name ?? null,
-      signatory_position: primaryLegalEntity?.signatory_position ?? null,
-      accountant_name: form.accountantName.trim() || null,
-      accountant_email: form.accountantEmail.trim() || null,
-      accountant_edrpou: form.accountantEdrpou.trim() || null,
-      reminder_at: buildReminderAtIso(form.reminderDate, form.reminderTime),
-      reminder_comment: form.reminderComment.trim() || null,
-      event_name: form.eventName.trim() || null,
-      event_at: form.eventDate || null,
-      event_comment: form.eventComment.trim() || null,
-      notes: form.notes.trim() || null,
-      delivery_points: serializeCustomerDeliveryPoints(form.deliveryPoints),
-    };
 
     try {
-      const { error: updateError } = await supabase
-        .schema("tosho")
-        .from("customers")
-        .update(payload)
-        .eq("id", editingId)
-        .eq("team_id", teamId);
-      if (updateError) throw updateError;
-
-      const previousLogoUrl = previousLogoUrlRef.current;
-      if (previousLogoUrl && previousLogoUrl !== optimizedLogoUrl) {
-        void removeManagedCustomerLogoByUrl(previousLogoUrl);
-      }
-      previousLogoUrlRef.current = optimizedLogoUrl;
+      const { logoUrl } = await saveCustomerCard({
+        teamId,
+        customerId: editingId,
+        form,
+        manager: {
+          label: selectedMember?.label ?? managerLabelRaw,
+          userId: selectedMember?.id ?? (form.managerId.trim() || null),
+        },
+        fallbackManagerLabel: "",
+        previous: previousRef.current,
+        actor: { userId: userId ?? null, name: teamMembers.find((member) => member.id === userId)?.label ?? "" },
+      });
+      previousRef.current = previousRef.current ? { ...previousRef.current, logoUrl } : null;
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
@@ -433,7 +392,7 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
       onSavedRef.current?.({
         id: editingId,
         name: form.name.trim(),
-        logoUrl: optimizedLogoUrl,
+        logoUrl,
       });
       setOpen(false);
     } catch (err: unknown) {
@@ -443,11 +402,21 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
     } finally {
       setSaving(false);
     }
-  }, [editingId, form, teamId, teamMembers]);
+  }, [editingId, fieldErrors, form, teamId, teamMembers, userId]);
+
+  const openLinked = React.useCallback(
+    (path: string) => {
+      setOpen(false);
+      navigate(path);
+    },
+    [navigate]
+  );
 
   const editorProps: CustomerEditorDialogProps = {
     open,
     onOpenChange: setOpen,
+    teamId,
+    duplicateHintExcludeId: editingId,
     form,
     setForm,
     ownershipOptions: OWNERSHIP_OPTIONS,
@@ -455,10 +424,19 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
     teamMembers,
     saving: saving || loading,
     error,
+    fieldErrors: submitAttempted ? fieldErrors : undefined,
     title: "Редагувати замовника",
-    description: "Оновіть дані замовника — зміни одразу застосуються в інших картках.",
     submitLabel: "Зберегти",
     onSubmit: () => void submit(),
+    calculations: linked.calculations,
+    orders: linked.orders,
+    designTasks: linked.designTasks,
+    linkedLoading,
+    ltvEntry: linked.ltvEntry,
+    ltvSegment: linked.ltvSegment,
+    onOpenCalculation: (id) => openLinked(`/orders/estimates/${id}`),
+    onOpenOrder: (id) => openLinked(`/orders/production/${id}`),
+    onOpenDesignTask: (id) => openLinked(`/design/${id}`),
   };
 
   return {

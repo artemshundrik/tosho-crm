@@ -134,8 +134,8 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
         label: "Design Type, Deadlines, Outputs",
         description: "Тип задачі, дедлайни та ознаки погодження матеріалів.",
         items: [
-          { label: "Візуалізація", note: "Тип дизайн-задачі", variant: "outline", source: ["src/lib/designTaskType.ts", "src/pages/DesignTaskPage.tsx", "src/components/customers/CustomerLeadQuickViewDialog.tsx"] },
-          { label: "Креатив", note: "Окремий тип дизайн-задачі", variant: "outline", source: ["src/lib/designTaskType.ts", "src/pages/DesignTaskPage.tsx", "src/components/customers/CustomerLeadQuickViewDialog.tsx"] },
+          { label: "Візуалізація", note: "Тип дизайн-задачі", variant: "outline", source: ["src/lib/designTaskType.ts", "src/pages/DesignTaskPage.tsx"] },
+          { label: "Креатив", note: "Окремий тип дизайн-задачі", variant: "outline", source: ["src/lib/designTaskType.ts", "src/pages/DesignTaskPage.tsx"] },
           { label: "Візуал", note: "Design output kind", variant: "default", className: "text-3xs", source: ["src/pages/DesignTaskPage.tsx"] },
           { label: "Макет", note: "Design output kind", variant: "outline", className: "text-3xs", source: ["src/pages/DesignTaskPage.tsx"] },
           { label: "Погоджено: 2", note: "Кількість погоджених матеріалів", variant: "outline", className: "text-3xs border-success/40 bg-success/10 text-success-foreground", source: ["src/pages/DesignTaskPage.tsx"] },

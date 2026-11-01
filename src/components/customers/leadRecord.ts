@@ -1,4 +1,7 @@
 import type { LeadFormState } from "./LeadDialog";
+import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
+import { getLocalReminderDateInputValue, getLocalReminderTimeInputValue } from "@/lib/reminderDateTime";
+import { parseCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
 
 /**
  * Рядок ліда, перелік колонок під нього й вимоги до переведення в замовника.
@@ -117,3 +120,72 @@ export const getLeadConversionMissingFields = (form: LeadFormState, phones: stri
   if (!cash && !form.email.trim()) missing.push("email");
   return missing;
 };
+
+/** Порожня форма ліда; менеджер — той, хто створює. */
+export const createEmptyLeadForm = (manager?: { label: string; id: string }): LeadFormState => ({
+  companyName: "",
+  paymentType: "invoice",
+  legalName: "",
+  ownershipType: "",
+  logoUrl: "",
+  logoFile: null,
+  logoUploadMode: "url",
+  firstName: "",
+  lastName: "",
+  email: "",
+  phones: [""],
+  telegram: "",
+  source: "",
+  website: "",
+  manager: manager?.label ?? "",
+  managerId: manager?.id ?? "",
+  taxId: "",
+  legalAddress: "",
+  iban: "",
+  signatoryName: "",
+  signatoryPosition: "",
+  reminderDate: "",
+  reminderTime: "",
+  reminderComment: "",
+  eventName: "",
+  eventDate: "",
+  eventComment: "",
+  notes: "",
+  deliveryPoints: [],
+});
+
+/**
+ * Форма з рядка ліда. Підпис менеджера вирішує той, хто викликає: сторінка
+ * «Замовники» вміє впізнавати менеджера за псевдонімом, картка деінде — ні.
+ */
+export const buildLeadFormFromRow = (lead: LeadRow, managerLabel: string): LeadFormState => ({
+  companyName: lead.company_name ?? "",
+  paymentType: lead.payment_type === "cash" ? "cash" : "invoice",
+  legalName: lead.legal_name ?? "",
+  ownershipType: lead.ownership_type ?? "",
+  taxId: lead.tax_id ?? "",
+  legalAddress: lead.legal_address ?? "",
+  logoUrl: normalizeCustomerLogoUrl(lead.logo_url) ?? "",
+  logoFile: null,
+  logoUploadMode: "url",
+  firstName: lead.first_name ?? "",
+  lastName: lead.last_name ?? "",
+  email: lead.email ?? "",
+  phones: lead.phone_numbers?.length ? lead.phone_numbers : [""],
+  telegram: lead.telegram ?? "",
+  source: lead.source ?? "",
+  website: lead.website ?? "",
+  manager: managerLabel,
+  managerId: lead.manager_user_id ?? "",
+  iban: lead.iban ?? "",
+  signatoryName: lead.signatory_name ?? "",
+  signatoryPosition: lead.signatory_position ?? "",
+  reminderDate: getLocalReminderDateInputValue(lead.reminder_at),
+  reminderTime: getLocalReminderTimeInputValue(lead.reminder_at),
+  reminderComment: lead.reminder_comment ?? "",
+  eventName: lead.event_name ?? "",
+  eventDate: lead.event_at ? lead.event_at.slice(0, 10) : "",
+  eventComment: lead.event_comment ?? "",
+  notes: lead.notes ?? "",
+  deliveryPoints: parseCustomerDeliveryPoints(lead.delivery_points),
+});

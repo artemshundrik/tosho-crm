@@ -39,7 +39,7 @@ Module `"orders"` gates the nav entries. RLS is enabled in `scripts/access-locko
 
 ## Known issues (see `docs/AUDIT-2026-07-11.md` #5–6)
 
-- **Perf P1 — `loadDerivedOrders` is the app's hot path (~10 call sites) with no cache:** finances (`features/finances/api.ts:260`, `FinanceDashboard.tsx:70`, `FinanceMargin.tsx:74`), `CustomerLeadQuickViewDialog.tsx:515`, `CommandPalette.tsx:649` (rebuilds on debounced keystrokes), `OrdersProductionPage.tsx:391`, `OrdersProductionDetailsPage.tsx:1182,1201`, `OrdersCustomersPage.tsx:669,1475,1582`, plus `loadOrderCreationDraft`/`createOrderFromApprovedQuote` from `QuoteDetailsPage.tsx`.
+- **Perf P1 — `loadDerivedOrders` is the app's hot path (~10 call sites) with no cache:** finances (`features/finances/api.ts:260`, `FinanceDashboard.tsx:70`, `FinanceMargin.tsx:74`), `components/customers/partyLinkedRecords.ts`, `CommandPalette.tsx:649` (rebuilds on debounced keystrokes), `OrdersProductionPage.tsx:391`, `OrdersProductionDetailsPage.tsx:1182,1201`, `OrdersCustomersPage.tsx:669,1475,1582`, plus `loadOrderCreationDraft`/`createOrderFromApprovedQuote` from `QuoteDetailsPage.tsx`.
   - **Double N+1:** one `getQuoteRuns` query per quote (`orderRecords.ts:650` and `:1027`). Fix: batch one `.in("quote_id", …)` like `listQuoteItemsForQuotes`.
   - **Unbounded:** `listStoredOrders` (`:528`) and approved `listQuotes` (`:582`) have no `.limit` — grow forever, always loaded whole.
   - **"Load everything to display one":** detail page builds the full dataset to `.find(id)`, twice.

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { DateTimePicker, deadlineUrgencyTone } from "@/components/ui/picker-input";
 import { PageLoading } from "@/components/app/page-loading";
 import { useNavigate, useParams } from "react-router-dom";
@@ -229,10 +229,8 @@ import {
   normalizeMentionKey,
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
-
-const CustomerLeadQuickViewDialog = lazy(() =>
-  import("@/components/customers").then((module) => ({ default: module.CustomerLeadQuickViewDialog }))
-);
+import { useOpenPartyCard } from "@/components/customers/partyCardContext";
+import { PartyHoverCard } from "@/components/app/PartyHoverCard";
 
 type DesignTask = {
   id: string;
@@ -1436,7 +1434,32 @@ export default function DesignTaskPage() {
   const [dropboxFolderReachable, setDropboxFolderReachable] = useState<boolean | null>(null);
   const [dropboxFinalLabelDrafts, setDropboxFinalLabelDrafts] = useState<Record<string, string>>({});
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
-  const [partyCardOpen, setPartyCardOpen] = useState(false);
+  // Клік по замовнику — повна картка на місці, наведення на лого — довідка (REQ-348).
+  // customerId задачі — це id ЛІДА, коли metadata.customer_type = "lead".
+  const openPartyCard = useOpenPartyCard();
+  const taskPartyKind: "customer" | "lead" =
+    typeof task?.metadata?.customer_type === "string" && task.metadata.customer_type.trim().toLowerCase() === "lead"
+      ? "lead"
+      : "customer";
+  const taskPartyHover = useMemo(
+    () =>
+      task?.customerId
+        ? {
+            kind: taskPartyKind,
+            id: task.customerId,
+            name: task.customerName ?? "",
+            logoUrl: task.customerLogoUrl ?? null,
+          }
+        : null,
+    [task?.customerId, task?.customerLogoUrl, task?.customerName, taskPartyKind]
+  );
+  const openTaskParty = useCallback(() => {
+    openPartyCard?.({
+      customerId: taskPartyKind === "customer" ? task?.customerId : null,
+      leadId: taskPartyKind === "lead" ? task?.customerId : null,
+      name: task?.customerName,
+    });
+  }, [openPartyCard, task?.customerId, task?.customerName, taskPartyKind]);
   const [historyRows, setHistoryRows] = useState<ActivityRow[]>([]);
   const [quoteMentionComments, setQuoteMentionComments] = useState<QuoteMentionComment[]>([]);
   const [quoteMentionsLoading, setQuoteMentionsLoading] = useState(false);
@@ -11685,7 +11708,7 @@ export default function DesignTaskPage() {
             <div className={cn("design-task-detail-list px-3 pb-2", detailsCollapsed && "hidden")}>
               <button
                 type="button"
-                onClick={() => setPartyCardOpen(true)}
+                onClick={openTaskParty}
                 className="group design-task-detail-row w-full text-left focus-visible:outline-none"
                 data-interactive="true"
               >
@@ -11694,7 +11717,9 @@ export default function DesignTaskPage() {
                   Замовник
                 </span>
                 <div className="design-task-detail-value relative">
-                  <EntityAvatar src={task.customerLogoUrl ?? null} name={task.customerName ?? undefined} fallback={getInitials(task.customerName)} size={24} />
+                  <PartyHoverCard target={taskPartyHover} side="left">
+                    <EntityAvatar src={task.customerLogoUrl ?? null} name={task.customerName ?? undefined} fallback={getInitials(task.customerName)} size={24} />
+                  </PartyHoverCard>
                   <span className="truncate">{task.customerName ?? "Не вказано"}</span>
                   <span className="pointer-events-none absolute right-0 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-background/90 text-muted-foreground opacity-0 backdrop-blur-sm transition group-hover:opacity-100">
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -12704,20 +12729,6 @@ export default function DesignTaskPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {partyCardOpen ? (
-        <Suspense fallback={null}>
-          <CustomerLeadQuickViewDialog
-            open={partyCardOpen}
-            onOpenChange={setPartyCardOpen}
-            teamId={effectiveTeamId ?? ""}
-            userId={userId}
-            customerId={task?.customerId ?? null}
-            customerName={task?.customerName ?? null}
-            customerLogoUrl={task?.customerLogoUrl ?? null}
-          />
-        </Suspense>
-      ) : null}
 
       <ConfirmDialog
         open={bulkDeleteDialog.open}

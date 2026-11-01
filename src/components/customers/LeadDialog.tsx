@@ -705,7 +705,8 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               </Popover>
             </div>
           </div>
-          <div className="inline-flex shrink-0 items-center gap-0.5 self-start rounded-md bg-background p-0.5 max-sm:w-full max-sm:[&>button]:flex-1">
+          {/* Перемикач виду, не дані: без позначки захист від закриття питав «Закрити без збереження?» у неторканій картці. */}
+          <div data-unsaved-ignore className="inline-flex shrink-0 items-center gap-0.5 self-start rounded-md bg-background p-0.5 max-sm:w-full max-sm:[&>button]:flex-1">
             <Button
               type="button"
               size="sm"
@@ -834,7 +835,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 </div>
               </div>
               </SectionCard>
-              <Button size="sm" type="button" variant="outline" className="text-xs" onClick={() => setQuickMode(false)}>
+              <Button data-unsaved-ignore size="sm" type="button" variant="outline" className="text-xs" onClick={() => setQuickMode(false)}>
                 Відкрити повну картку
               </Button>
             </div>

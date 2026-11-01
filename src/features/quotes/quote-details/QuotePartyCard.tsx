@@ -6,6 +6,7 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import type { QuoteDeadlineTone } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { cn } from "@/lib/utils";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { PartyHoverCard, type PartyHoverTarget } from "@/components/app/PartyHoverCard";
 
 /**
  * «Хто це» і «коли треба» — шапка бокової колонки прорахунку.
@@ -38,6 +39,9 @@ type QuotePartyCardProps = {
   createdAt?: string | null;
   deadlines: QuoteDeadlineTrackItem[];
   extras: QuotePartyExtra[];
+  /** Коротка довідка під курсором на лого — як на канбані (REQ-348). */
+  partyHover?: PartyHoverTarget | null;
+  /** Клік відкриває повну картку замовника на місці. */
   onOpenParty: () => void;
   onOpenDeadlines: () => void;
 };
@@ -52,6 +56,7 @@ export function QuotePartyCard({
   createdAt,
   deadlines,
   extras,
+  partyHover = null,
   onOpenParty,
   onOpenDeadlines,
 }: QuotePartyCardProps) {
@@ -65,12 +70,14 @@ export function QuotePartyCard({
         {/* 36 px — це рівно висота двох рядків поруч: назва (13.5/16) плюс рядок
             менеджера (11/15) із проміжком. На 28 аватар «висів» проти них, і блок
             читався як три різні висоти замість одного рядка. */}
-        <EntityAvatar
-          src={customerLogoUrl ?? null}
-          name={customerName ?? "Замовник / Лід"}
-          fallback={customerInitials}
-          size={36}
-        />
+        <PartyHoverCard target={partyHover} side="left">
+          <EntityAvatar
+            src={customerLogoUrl ?? null}
+            name={customerName ?? "Замовник / Лід"}
+            fallback={customerInitials}
+            size={36}
+          />
+        </PartyHoverCard>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-md font-semibold leading-tight">
             {customerName ?? "Замовник не вказаний"}

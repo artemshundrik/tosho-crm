@@ -32,7 +32,7 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { InlineLoading } from "@/components/app/loading-primitives";
-import { listCustomerQuotes, listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
+import { listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { loadDerivedOrders, formatOrderMoney } from "@/features/orders/orderRecords";
 // LTV (MVP, frontend-only): see src/lib/customerLtv.ts
 import {
@@ -50,26 +50,18 @@ import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "
 import { isInactiveEmployment } from "@/lib/employment";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
-import {
-  getCustomerLogoImportErrorMessage,
-  ingestCustomerLogoFromFile,
-  ingestCustomerLogoFromUrl,
-  normalizeCustomerLogoUrl,
-  removeManagedCustomerLogoByUrl,
-} from "@/lib/customerLogo";
+import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import {
   createEmptyCustomerLegalEntity,
   formatCustomerLegalEntitySummary,
   formatCustomerLegalEntityTitle,
   formatOwnershipTypeLabel,
   getCustomerLegalEntityDocumentMissingFields,
-  getPrimaryCustomerLegalEntity,
   hasCustomerLegalEntityDocumentEssentials,
   hasCustomerLegalEntityIdentity,
   parseCustomerLegalEntities,
-  serializeCustomerLegalEntities,
 } from "@/lib/customerLegalEntities";
-import { parseCustomerDeliveryPoints, serializeCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
+import { parseCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
 import {
   areCompanyNamesEquivalent,
   buildCompanySearchVariants,
@@ -78,11 +70,11 @@ import {
   scoreCompanyNameMatch,
 } from "@/lib/companyNameSearch";
 import {
-  buildReminderAtIso,
   getLocalReminderDateInputValue,
   getLocalReminderTimeInputValue,
 } from "@/lib/reminderDateTime";
-import { notifyCustomerLeadManagerAssigned } from "@/lib/workflowNotifications";
+import { loadPartyLinkedRecords, type PartyLinkedTarget } from "@/components/customers/partyLinkedRecords";
+import { saveCustomerCard, saveLeadCard, validateLeadCard } from "@/components/customers/partyCardSave";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -95,16 +87,16 @@ import {
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader2, MoreHorizontal, Plus, Trash2, Unlink, Users } from "@/components/icons/appIcons";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
-import { formatTelegramHandle, normalizeTelegramUsername } from "@/lib/telegramContact";
-import { getLeadContactIssue, leadContactLabel } from "@/components/customers/leadContact";
+import { formatTelegramHandle } from "@/lib/telegramContact";
+import { leadContactLabel } from "@/components/customers/leadContact";
 import {
+  buildLeadFormFromRow,
+  createEmptyLeadForm,
   getFallbackLeadColumnsVariant,
   getLeadColumns,
-  getLeadConversionMissingFields,
   type LeadColumnsVariant,
   type LeadRow,
 } from "@/components/customers/leadRecord";
-import type { TableInsert } from "@/lib/dbTables";
 import { toast } from "sonner";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { EmptyFieldAction } from "@/components/app/EmptyFieldAction";
@@ -314,18 +306,6 @@ const parseCustomerContacts = (row?: Partial<CustomerRow> | null): CustomerConta
   };
 
   return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CUSTOMER_CONTACT }];
-};
-
-const normalizeCustomerBirthday = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  const dotted = trimmed.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?$/);
-  if (!dotted) return trimmed;
-  const [, day, month, year] = dotted;
-  const normalizedDay = String(Number(day)).padStart(2, "0");
-  const normalizedMonth = String(Number(month)).padStart(2, "0");
-  return year ? `${year}-${normalizedMonth}-${normalizedDay}` : `${normalizedDay}.${normalizedMonth}`;
 };
 
 const getInitials = (value?: string | null) => {
@@ -595,37 +575,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [leadDeleteTarget, setLeadDeleteTarget] = useState<LeadRow | null>(null);
   const [leadDeleteBusy, setLeadDeleteBusy] = useState(false);
   const [leadDeleteError, setLeadDeleteError] = useState<string | null>(null);
-  const [leadForm, setLeadForm] = useState<LeadFormState>({
-    companyName: "",
-    paymentType: "invoice",
-    legalName: "",
-    ownershipType: "",
-    logoUrl: "",
-    logoFile: null,
-    logoUploadMode: "url",
-    firstName: "",
-    lastName: "",
-    email: "",
-    phones: [""],
-    telegram: "",
-    source: "",
-    website: "",
-    manager: "",
-    managerId: "",
-    taxId: "",
-    legalAddress: "",
-    iban: "",
-    signatoryName: "",
-    signatoryPosition: "",
-    reminderDate: "",
-    reminderTime: "",
-    reminderComment: "",
-    eventName: "",
-    eventDate: "",
-    eventComment: "",
-    notes: "",
-    deliveryPoints: [],
-  });
+  const [leadForm, setLeadForm] = useState<LeadFormState>(() => createEmptyLeadForm());
   const customerDropboxColumnsAvailableRef = useRef<boolean | null>(null);
   const [customerDropboxLinks, setCustomerDropboxLinks] = useState<Record<string, CustomerDropboxLink>>(() =>
     readCustomerDropboxLinks(teamId)
@@ -1390,301 +1340,40 @@ function CustomersPage({ teamId }: { teamId: string }) {
   }, [currentManagerLabel, defaultManagerName, userId]);
 
   const resetLeadForm = useCallback(() => {
-    setLeadForm({
-      companyName: "",
-      paymentType: "invoice",
-      legalName: "",
-      ownershipType: "",
-      logoUrl: "",
-      logoFile: null,
-      logoUploadMode: "url",
-      firstName: "",
-      lastName: "",
-      email: "",
-      phones: [""],
-      telegram: "",
-      source: "",
-      website: "",
-      manager: currentManagerLabel || defaultManagerName,
-      managerId: userId ?? "",
-      taxId: "",
-      legalAddress: "",
-      iban: "",
-      signatoryName: "",
-      signatoryPosition: "",
-      reminderDate: "",
-      reminderTime: "",
-      reminderComment: "",
-      eventName: "",
-      eventDate: "",
-      eventComment: "",
-      notes: "",
-      deliveryPoints: [],
-    });
+    setLeadForm(createEmptyLeadForm({ label: currentManagerLabel || defaultManagerName, id: userId ?? "" }));
     setLeadFormError(null);
   }, [currentManagerLabel, defaultManagerName, userId]);
 
-  const loadCustomerLinkedEntities = useCallback(async (customer: Pick<CustomerRow, "id" | "name" | "legal_name">) => {
-    setLinkedQuotesLoading(true);
-    try {
-      const candidateNames = Array.from(
-        new Set([customer.name ?? "", customer.legal_name ?? ""].map((value) => value.trim()).filter(Boolean))
-      );
-      const normalizedNames = new Set(candidateNames.map((value) => normalizePartyMatch(value)));
-      const [quotesById, quotesByName, quotesByTitle] = await Promise.allSettled([
-        listCustomerQuotes({ teamId, customerId: customer.id, limit: 100 }),
-        candidateNames.length > 0
-          ? supabase
-              .schema("tosho")
-              .from("quotes")
-              .select("id,number,status,total,created_at,customer_id,customer_name,title")
-              .eq("team_id", teamId)
-              .in("customer_name", candidateNames)
-              .order("created_at", { ascending: false })
-              .limit(200)
-          : Promise.resolve({ data: [], error: null }),
-        candidateNames.length > 0
-          ? supabase
-              .schema("tosho")
-              .from("quotes")
-              .select("id,number,status,total,created_at,customer_id,customer_name,title")
-              .eq("team_id", teamId)
-              .in("title", candidateNames)
-              .order("created_at", { ascending: false })
-              .limit(200)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-      const quoteMap = new Map<string, QuoteHistoryRow>();
-      if (quotesById.status === "fulfilled") {
-        for (const row of quotesById.value as QuoteHistoryRow[]) quoteMap.set(row.id, row);
-      }
-      const mergeNamedQuotes = (rows: Array<{
-        id: string;
-        number?: string | null;
-        status?: string | null;
-        total?: number | null;
-        created_at?: string | null;
-        customer_id?: string | null;
-        customer_name?: string | null;
-        title?: string | null;
-      }>) => {
-        rows.forEach((row) => {
-          if (
-            row.customer_id === customer.id ||
-            normalizedNames.has(normalizePartyMatch(row.customer_name ?? row.title ?? null))
-          ) {
-            quoteMap.set(row.id, row);
-          }
-        });
-      };
-      if (quotesByName.status === "fulfilled") {
-        mergeNamedQuotes(((quotesByName.value.data ?? []) as unknown) as Array<{
-          id: string;
-          number?: string | null;
-          status?: string | null;
-          total?: number | null;
-          created_at?: string | null;
-          customer_id?: string | null;
-          customer_name?: string | null;
-          title?: string | null;
-        }>);
-      }
-      if (quotesByTitle.status === "fulfilled") {
-        mergeNamedQuotes(((quotesByTitle.value.data ?? []) as unknown) as Array<{
-          id: string;
-          number?: string | null;
-          status?: string | null;
-          total?: number | null;
-          created_at?: string | null;
-          customer_id?: string | null;
-          customer_name?: string | null;
-          title?: string | null;
-        }>);
-      }
-      const rows = Array.from(quoteMap.values()).sort(
-        (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
-      );
-      setLinkedQuotes(rows as QuoteHistoryRow[]);
-      const quoteIds = rows.map((row) => row.id).filter(Boolean);
-      const [ordersResult, designTasksResult] = await Promise.allSettled([
-        loadDerivedOrders(teamId, userId),
-        supabase
-          .from("activity_log")
-          .select("id,title,created_at,status:metadata->>status,design_task_number:metadata->>design_task_number,design_task_type:metadata->>design_task_type,entity_id,customer_id:metadata->>customer_id,customer_name:metadata->>customer_name,quote_id:metadata->>quote_id")
-          .eq("team_id", teamId)
-          .eq("action", "design_task")
-          .order("created_at", { ascending: false })
-          .limit(500),
-      ]);
-      if (ordersResult.status === "fulfilled") {
-        setLinkedOrders(
-          ordersResult.value
-            .filter(
-              (row) =>
-                row.customerId === customer.id ||
-                quoteIds.includes(row.quoteId) ||
-                normalizedNames.has(normalizePartyMatch(row.customerName))
-            )
-            .map((row) => ({
-              id: row.id,
-              number: row.quoteNumber,
-              status: row.orderStatus,
-              total: row.total,
-              created_at: row.createdAt,
-            }))
-        );
-      } else {
-        console.warn("Failed to load related customer orders", ordersResult.reason);
+  const applyLinkedRecords = useCallback(
+    async (target: PartyLinkedTarget) => {
+      setLinkedQuotesLoading(true);
+      try {
+        const records = await loadPartyLinkedRecords({ teamId, userId, target, onCalculations: setLinkedQuotes });
+        setLinkedQuotes(records.calculations);
+        setLinkedOrders(records.orders);
+        setLinkedDesignTasks(records.designTasks);
+      } catch {
+        setLinkedQuotes([]);
         setLinkedOrders([]);
-      }
-      if (designTasksResult.status === "fulfilled") {
-        const taskRows = ((designTasksResult.value.data ?? []) as unknown) as Array<{
-          id: string;
-          title?: string | null;
-          created_at?: string | null;
-          status?: string | null;
-          design_task_number?: string | null;
-          design_task_type?: string | null;
-          customer_id?: string | null;
-          customer_name?: string | null;
-          quote_id?: string | null;
-          entity_id?: string | null;
-        }>;
-        setLinkedDesignTasks(
-          taskRows
-            .filter((row) => {
-              const linkedQuoteId = row.quote_id ?? row.entity_id ?? null;
-              return (
-                row.customer_id === customer.id ||
-                (linkedQuoteId ? quoteIds.includes(linkedQuoteId) : false) ||
-                normalizedNames.has(normalizePartyMatch(row.customer_name ?? null))
-              );
-            })
-            .map((row) => ({
-            id: row.id,
-            number: row.design_task_number ?? null,
-            title: row.title ?? "Дизайн-задача",
-            status: row.status ?? "new",
-            subtitle: row.design_task_type ? `Тип: ${row.design_task_type}` : null,
-            created_at: row.created_at ?? null,
-          }))
-        );
-      } else {
-        console.warn("Failed to load related customer design tasks", designTasksResult.reason);
         setLinkedDesignTasks([]);
+      } finally {
+        setLinkedQuotesLoading(false);
       }
-    } catch {
-      setLinkedQuotes([]);
-      setLinkedOrders([]);
-      setLinkedDesignTasks([]);
-    } finally {
-      setLinkedQuotesLoading(false);
-    }
-  }, [teamId, userId]);
+    },
+    [teamId, userId]
+  );
 
-  const loadLeadLinkedEntities = useCallback(async (lead: Pick<LeadRow, "company_name" | "legal_name">) => {
-    const candidateNames = Array.from(
-      new Set([lead.company_name ?? "", lead.legal_name ?? ""].map((value) => value.trim()).filter(Boolean))
-    );
-    const normalizedNames = new Set(candidateNames.map((value) => normalizePartyMatch(value)));
-    setLinkedQuotesLoading(true);
-    try {
-      const quotesQuery = supabase
-        .schema("tosho")
-        .from("quotes")
-        .select("id,number,status,total,created_at,customer_id,customer_name,title")
-        .eq("team_id", teamId)
-        .is("customer_id", null)
-        .order("created_at", { ascending: false })
-        .limit(200);
-      const { data: rawQuotes, error: quotesError } = await quotesQuery;
-      if (quotesError) throw quotesError;
-      const quoteRows = ((rawQuotes ?? []) as unknown) as Array<{
-        id: string;
-        number?: string | null;
-        status?: string | null;
-        total?: number | null;
-        created_at?: string | null;
-        customer_name?: string | null;
-        title?: string | null;
-      }>;
-      const matchingQuotes = quoteRows.filter((row) =>
-        normalizedNames.has(normalizePartyMatch(row.customer_name ?? row.title ?? null))
-      );
-      const quoteIds = matchingQuotes.map((row) => row.id).filter(Boolean);
-      setLinkedQuotes(matchingQuotes as QuoteHistoryRow[]);
-      const [ordersResult, designTasksResult] = await Promise.allSettled([
-        loadDerivedOrders(teamId, userId),
-        supabase
-          .from("activity_log")
-          .select("id,title,created_at,status:metadata->>status,design_task_number:metadata->>design_task_number,design_task_type:metadata->>design_task_type,entity_id,customer_name:metadata->>customer_name,quote_id:metadata->>quote_id")
-          .eq("team_id", teamId)
-          .eq("action", "design_task")
-          .order("created_at", { ascending: false })
-          .limit(500),
-      ]);
-      if (ordersResult.status === "fulfilled") {
-        setLinkedOrders(
-          ordersResult.value
-            .filter(
-              (row) =>
-                quoteIds.includes(row.quoteId) ||
-                normalizedNames.has(normalizePartyMatch(row.customerName))
-            )
-            .map((row) => ({
-              id: row.id,
-              number: row.quoteNumber,
-              status: row.orderStatus,
-              total: row.total,
-              created_at: row.createdAt,
-            }))
-        );
-      } else {
-        console.warn("Failed to load related lead orders", ordersResult.reason);
-        setLinkedOrders([]);
-      }
-      if (designTasksResult.status === "fulfilled") {
-        const taskRows = ((designTasksResult.value.data ?? []) as unknown) as Array<{
-          id: string;
-          title?: string | null;
-          created_at?: string | null;
-          status?: string | null;
-          design_task_number?: string | null;
-          design_task_type?: string | null;
-          customer_name?: string | null;
-          quote_id?: string | null;
-          entity_id?: string | null;
-        }>;
-        setLinkedDesignTasks(
-          taskRows
-            .filter((row) => {
-              const linkedQuoteId = row.quote_id ?? row.entity_id ?? null;
-              return (
-                (linkedQuoteId ? quoteIds.includes(linkedQuoteId) : false) ||
-                normalizedNames.has(normalizePartyMatch(row.customer_name ?? null))
-              );
-            })
-            .map((row) => ({
-            id: row.id,
-            number: row.design_task_number ?? null,
-            title: row.title ?? "Дизайн-задача",
-            status: row.status ?? "new",
-            subtitle: row.design_task_type ? `Тип: ${row.design_task_type}` : null,
-            created_at: row.created_at ?? null,
-          }))
-        );
-      } else {
-        console.warn("Failed to load related lead design tasks", designTasksResult.reason);
-        setLinkedDesignTasks([]);
-      }
-    } catch {
-      setLinkedQuotes([]);
-      setLinkedOrders([]);
-      setLinkedDesignTasks([]);
-    } finally {
-      setLinkedQuotesLoading(false);
-    }
-  }, [teamId, userId]);
+  const loadCustomerLinkedEntities = useCallback(
+    (customer: Pick<CustomerRow, "id" | "name" | "legal_name">) =>
+      applyLinkedRecords({ kind: "customer", id: customer.id, names: [customer.name, customer.legal_name] }),
+    [applyLinkedRecords]
+  );
+
+  const loadLeadLinkedEntities = useCallback(
+    (lead: Pick<LeadRow, "company_name" | "legal_name">) =>
+      applyLinkedRecords({ kind: "lead", names: [lead.company_name, lead.legal_name] }),
+    [applyLinkedRecords]
+  );
 
   const openCreate = useCallback(() => {
     setEditingId(null);
@@ -1741,37 +1430,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   const openEditLead = useCallback((lead: LeadRow) => {
     setLeadEditingId(lead.id);
-    setLeadForm({
-      companyName: lead.company_name ?? "",
-      paymentType: lead.payment_type === "cash" ? "cash" : "invoice",
-      legalName: lead.legal_name ?? "",
-      ownershipType: lead.ownership_type ?? "",
-      taxId: lead.tax_id ?? "",
-      legalAddress: lead.legal_address ?? "",
-      logoUrl: normalizeCustomerLogoUrl(lead.logo_url) ?? "",
-      logoFile: null,
-      logoUploadMode: "url",
-      firstName: lead.first_name ?? "",
-      lastName: lead.last_name ?? "",
-      email: lead.email ?? "",
-      phones: lead.phone_numbers?.length ? lead.phone_numbers : [""],
-      telegram: lead.telegram ?? "",
-      source: lead.source ?? "",
-      website: lead.website ?? "",
-      manager: resolveManagerLabel(lead.manager_user_id, lead.manager) || (currentManagerLabel || defaultManagerName),
-      managerId: lead.manager_user_id ?? "",
-      iban: lead.iban ?? "",
-      signatoryName: lead.signatory_name ?? "",
-      signatoryPosition: lead.signatory_position ?? "",
-      reminderDate: getLocalReminderDateInputValue(lead.reminder_at),
-      reminderTime: getLocalReminderTimeInputValue(lead.reminder_at),
-      reminderComment: lead.reminder_comment ?? "",
-      eventName: lead.event_name ?? "",
-      eventDate: lead.event_at ? lead.event_at.slice(0, 10) : "",
-      eventComment: lead.event_comment ?? "",
-      notes: lead.notes ?? "",
-      deliveryPoints: parseCustomerDeliveryPoints(lead.delivery_points),
-    });
+    setLeadForm(
+      buildLeadFormFromRow(lead, resolveManagerLabel(lead.manager_user_id, lead.manager) || (currentManagerLabel || defaultManagerName))
+    );
     setLeadFormError(null);
     setLeadDialogOpen(true);
     void loadLeadLinkedEntities({ company_name: lead.company_name, legal_name: lead.legal_name });
@@ -2546,8 +2207,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
       return;
     }
 
-    const normalizedLogoUrl = normalizeCustomerLogoUrl(form.logoUrl);
-
     setSaving(true);
     setFormError(null);
 
@@ -2557,205 +2216,27 @@ function CustomersPage({ teamId }: { teamId: string }) {
       ? memberById.get(form.managerId)?.label ?? managerValue
       : selectedManagerMember?.label ?? managerValue;
     const selectedManagerUserId = selectedManagerMember?.userId ?? (form.managerId.trim() || null);
-    const contacts = form.contacts
-      .map((contact) => ({
-        name: contact.name.trim(),
-        position: contact.position.trim(),
-        phone: contact.phone.trim(),
-        email: contact.email.trim(),
-        birthday: normalizeCustomerBirthday(contact.birthday),
-        telegram: normalizeTelegramUsername(contact.telegram),
-      }))
-      .filter((contact) => Object.values(contact).some(Boolean));
-
-    const primaryContact = contacts[0] ?? null;
-    const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
-    const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
-    let optimizedLogoUrl: string | null;
     const previousCustomer = editingId ? rows.find((row) => row.id === editingId) ?? null : null;
     const previousCustomerManagerMember = previousCustomer
       ? resolveManagerMember(previousCustomer.manager_user_id, previousCustomer.manager)
       : null;
-    const previousCustomerManagerUserId =
-      previousCustomerManagerMember?.userId ?? previousCustomer?.manager_user_id?.trim() ?? null;
-    const previousCustomerManagerLabel = previousCustomer
-      ? resolveManagerLabel(previousCustomer.manager_user_id, previousCustomer.manager)
-      : "";
-    const previousLogoUrl =
-      previousCustomer?.logo_url ?? null;
 
     try {
-      if (form.logoUploadMode === "file" && form.logoFile) {
-        const optimized = await ingestCustomerLogoFromFile({
-          teamId,
-          file: form.logoFile,
-          entityType: "customer",
-          entityId: editingId,
-          preferredName: form.name.trim(),
-        });
-        optimizedLogoUrl = optimized.logoUrl;
-      } else if (normalizedLogoUrl) {
-        const optimized = await ingestCustomerLogoFromUrl({
-          teamId,
-          sourceUrl: normalizedLogoUrl,
-          entityType: "customer",
-          entityId: editingId,
-          preferredName: form.name.trim(),
-        });
-        optimizedLogoUrl = optimized.logoUrl;
-      } else {
-        optimizedLogoUrl = null;
-      }
-    } catch (error: unknown) {
-      setSaving(false);
-      setFormError(getCustomerLogoImportErrorMessage(error, "логотип"));
-      return;
-    }
-
-    const payload: TableInsert<"customers"> = {
-      team_id: teamId,
-      name: form.name.trim(),
-      legal_name: primaryLegalEntity?.legal_name ?? null,
-      manager: editingId
-        ? (selectedManagerLabel || null)
-        : (selectedManagerLabel || currentManagerLabel || defaultManagerName || null),
-      manager_user_id: selectedManagerUserId,
-      ownership_type: primaryLegalEntity?.ownership_type ?? null,
-      vat_rate: primaryLegalEntity?.vat_rate ?? null,
-      tax_id: primaryLegalEntity?.tax_id ?? null,
-      website: form.website.trim() || null,
-      source: form.source.trim() || null,
-      iban: primaryLegalEntity?.iban ?? null,
-      logo_url: optimizedLogoUrl,
-      legal_entities: legalEntities.length > 0 ? legalEntities : null,
-      contacts: contacts.length > 0 ? contacts : null,
-      contact_name: primaryContact?.name || null,
-      contact_position: primaryContact?.position || null,
-      contact_phone: primaryContact?.phone || null,
-      contact_email: primaryContact?.email || null,
-      contact_birthday: primaryContact?.birthday || null,
-      signatory_name: primaryLegalEntity?.signatory_name ?? null,
-      signatory_position: primaryLegalEntity?.signatory_position ?? null,
-      accountant_name: form.accountantName.trim() || null,
-      accountant_email: form.accountantEmail.trim() || null,
-      accountant_edrpou: form.accountantEdrpou.trim() || null,
-      reminder_at: buildReminderAtIso(form.reminderDate, form.reminderTime),
-      reminder_comment: form.reminderComment.trim() || null,
-      event_name: form.eventName.trim() || null,
-      event_at: form.eventDate || null,
-      event_comment: form.eventComment.trim() || null,
-      notes: form.notes.trim() || null,
-      delivery_points: serializeCustomerDeliveryPoints(form.deliveryPoints),
-    };
-
-    const basePayload: Record<string, unknown> = {
-      name: form.name.trim(),
-      legal_name: primaryLegalEntity?.legal_name ?? null,
-    };
-
-    const removeOptionalFields = () => {
-      const clone = { ...payload };
-      delete clone.manager;
-      delete clone.manager_user_id;
-      delete clone.ownership_type;
-      delete clone.vat_rate;
-      delete clone.tax_id;
-      delete clone.website;
-      delete clone.iban;
-      delete clone.logo_url;
-      delete clone.legal_entities;
-      delete clone.contacts;
-      delete clone.contact_name;
-      delete clone.contact_position;
-      delete clone.contact_phone;
-      delete clone.contact_email;
-      delete clone.contact_birthday;
-      delete clone.signatory_name;
-      delete clone.signatory_position;
-      delete clone.accountant_name;
-      delete clone.accountant_email;
-      delete clone.accountant_edrpou;
-      delete clone.reminder_at;
-      delete clone.reminder_comment;
-      delete clone.event_name;
-      delete clone.event_at;
-      delete clone.event_comment;
-      delete clone.notes;
-      delete clone.delivery_points;
-      return clone;
-    };
-
-    let managerFieldsPersisted = true;
-
-    try {
-      if (editingId) {
-        const { error: updateError } = await supabase
-          .schema("tosho")
-          .from("customers")
-          .update(payload)
-          .eq("id", editingId)
-          .eq("team_id", teamId);
-        if (updateError) {
-          const message = updateError.message ?? "";
-          if (message.includes("column")) {
-            managerFieldsPersisted = false;
-            const fallbackPayload = removeOptionalFields();
-            const { error: fallbackError } = await supabase
-              .schema("tosho")
-              .from("customers")
-              .update(fallbackPayload)
-              .eq("id", editingId)
-              .eq("team_id", teamId);
-            if (fallbackError) throw fallbackError;
-          } else {
-            throw updateError;
-          }
-        }
-      } else {
-        const { error: insertError } = await supabase
-          .schema("tosho")
-          .from("customers")
-          .insert(payload as never);
-        if (insertError) {
-          const message = insertError.message ?? "";
-          if (message.includes("column")) {
-            const fallbackPayload = { ...basePayload, team_id: teamId };
-            const { error: fallbackError } = await supabase
-              .schema("tosho")
-              .from("customers")
-              .insert(fallbackPayload as never);
-            if (fallbackError) throw fallbackError;
-          } else {
-            throw insertError;
-          }
-        }
-      }
-
-      if (editingId && previousLogoUrl && previousLogoUrl !== optimizedLogoUrl) {
-        void removeManagedCustomerLogoByUrl(previousLogoUrl);
-      }
-
-      const customerManagerChangedFromAnother =
-        Boolean(selectedManagerUserId) &&
-        (previousCustomerManagerUserId
-          ? previousCustomerManagerUserId !== selectedManagerUserId
-          : Boolean(previousCustomerManagerLabel && previousCustomerManagerLabel !== selectedManagerLabel));
-
-      if (editingId && managerFieldsPersisted && customerManagerChangedFromAnother) {
-        try {
-          await notifyCustomerLeadManagerAssigned({
-            entityType: "customer",
-            entityId: editingId,
-            entityName: form.name.trim(),
-            newManagerUserId: selectedManagerUserId,
-            previousManagerLabel: previousCustomerManagerLabel,
-            actorUserId: userId,
-            actorName: currentManagerLabel || defaultManagerName,
-          });
-        } catch (notifyError) {
-          console.warn("Failed to notify customer manager assignment", notifyError);
-        }
-      }
+      await saveCustomerCard({
+        teamId,
+        customerId: editingId,
+        form,
+        manager: { label: selectedManagerLabel, userId: selectedManagerUserId },
+        fallbackManagerLabel: currentManagerLabel || defaultManagerName,
+        previous: previousCustomer
+          ? {
+              logoUrl: previousCustomer.logo_url ?? null,
+              managerUserId: previousCustomerManagerMember?.userId ?? previousCustomer.manager_user_id?.trim() ?? null,
+              managerLabel: resolveManagerLabel(previousCustomer.manager_user_id, previousCustomer.manager),
+            }
+          : null,
+        actor: { userId, name: currentManagerLabel || defaultManagerName },
+      });
 
       setDialogOpen(false);
       resetForm();
@@ -2771,327 +2252,50 @@ function CustomersPage({ teamId }: { teamId: string }) {
   };
 
   const handleSaveLead = async (options?: { convertToCustomer?: boolean }) => {
-    if (!leadForm.companyName.trim()) {
-      setLeadFormError("Вкажіть назву компанії.");
+    const issue = validateLeadCard(leadForm, { leadId: leadEditingId, convertToCustomer: options?.convertToCustomer });
+    if (issue) {
+      setLeadFormError(issue);
       return;
-    }
-    if (!leadForm.firstName.trim()) {
-      setLeadFormError("Вкажіть імʼя.");
-      return;
-    }
-    if (!leadForm.source.trim()) {
-      setLeadFormError("Вкажіть джерело.");
-      return;
-    }
-
-    const normalizedLogoUrl = normalizeCustomerLogoUrl(leadForm.logoUrl);
-    if (leadForm.logoUploadMode === "url" && leadForm.logoUrl.trim() && !normalizedLogoUrl) {
-      setLeadFormError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
-      return;
-    }
-
-    const phones = leadForm.phones.map((phone) => phone.trim()).filter(Boolean);
-    const leadTelegram = normalizeTelegramUsername(leadForm.telegram);
-    /**
-     * Телефон АБО Telegram (REQ-298) — правило спільне з формою й зі швидким
-     * створенням із прорахунку. Для переведення в замовника номер і далі
-     * обовʼязковий: це стереже getLeadConversionMissingFields нижче.
-     */
-    const contactIssue = getLeadContactIssue({ phones, telegram: leadForm.telegram });
-    if (contactIssue) {
-      setLeadFormError(contactIssue);
-      return;
-    }
-    if (options?.convertToCustomer && !leadEditingId) {
-      setLeadFormError("Спочатку створіть ліда, потім переведіть його в замовника.");
-      return;
-    }
-    if (options?.convertToCustomer) {
-      const missing = getLeadConversionMissingFields(leadForm, phones);
-      if (missing.length > 0) {
-        setLeadFormError(`Щоб перевести ліда в замовника, заповніть: ${missing.join(", ")}.`);
-        return;
-      }
     }
 
     setLeadSaving(true);
     setLeadFormError(null);
 
-    let optimizedLogoUrl: string | null;
     const previousLead = leadEditingId ? leads.find((lead) => lead.id === leadEditingId) ?? null : null;
-    const previousLeadManagerMember = previousLead
-      ? resolveManagerMember(previousLead.manager_user_id, previousLead.manager)
-      : null;
-    const previousLeadManagerUserId =
-      previousLeadManagerMember?.userId ?? previousLead?.manager_user_id?.trim() ?? null;
-    const previousLeadManagerLabel = previousLead
-      ? resolveManagerLabel(previousLead.manager_user_id, previousLead.manager)
-      : "";
-    const previousLogoUrl =
-      previousLead?.logo_url ?? null;
-
-    try {
-      if (leadForm.logoUploadMode === "file" && leadForm.logoFile) {
-        const optimized = await ingestCustomerLogoFromFile({
-          teamId,
-          file: leadForm.logoFile,
-          entityType: "lead",
-          entityId: leadEditingId,
-          preferredName: leadForm.companyName.trim(),
-        });
-        optimizedLogoUrl = optimized.logoUrl;
-      } else if (normalizedLogoUrl) {
-        const optimized = await ingestCustomerLogoFromUrl({
-          teamId,
-          sourceUrl: normalizedLogoUrl,
-          entityType: "lead",
-          entityId: leadEditingId,
-          preferredName: leadForm.companyName.trim(),
-        });
-        optimizedLogoUrl = optimized.logoUrl;
-      } else {
-        optimizedLogoUrl = null;
-      }
-    } catch (error: unknown) {
-      setLeadSaving(false);
-      setLeadFormError(getCustomerLogoImportErrorMessage(error, "логотип"));
-      return;
-    }
-
     const managerValue = leadForm.manager.trim();
     const selectedManagerMember = resolveManagerMember(leadForm.managerId, managerValue);
-    const selectedManagerLabel = leadForm.managerId
-      ? memberById.get(leadForm.managerId)?.label ?? managerValue
-      : selectedManagerMember?.label ?? managerValue;
-    const selectedManagerUserId = selectedManagerMember?.userId ?? (leadForm.managerId.trim() || null);
-    const payload: TableInsert<"leads"> = {
-      team_id: teamId,
-      company_name: leadForm.companyName.trim(),
-      payment_type: leadForm.paymentType,
-      legal_name: leadForm.legalName.trim() || null,
-      ownership_type: leadForm.ownershipType || null,
-      tax_id: leadForm.taxId.trim() || null,
-      legal_address: leadForm.legalAddress.trim() || null,
-      logo_url: optimizedLogoUrl,
-      first_name: leadForm.firstName.trim(),
-      last_name: leadForm.lastName.trim() || null,
-      email: leadForm.email.trim() || null,
-      phone_numbers: phones,
-      telegram: leadTelegram || null,
-      source: leadForm.source.trim(),
-      website: leadForm.website.trim() || null,
-      manager: selectedManagerLabel || currentManagerLabel || defaultManagerName || null,
-      manager_user_id: selectedManagerUserId,
-      iban: leadForm.iban.trim() || null,
-      signatory_name: leadForm.signatoryName.trim() || null,
-      signatory_position: leadForm.signatoryPosition.trim() || null,
-      reminder_at: buildReminderAtIso(leadForm.reminderDate, leadForm.reminderTime),
-      reminder_comment: leadForm.reminderComment.trim() || null,
-      event_name: leadForm.eventName.trim() || null,
-      event_at: leadForm.eventDate || null,
-      event_comment: leadForm.eventComment.trim() || null,
-      notes: leadForm.notes.trim() || null,
-      delivery_points: serializeCustomerDeliveryPoints(leadForm.deliveryPoints),
-    };
-
-    let managerFieldsPersisted = true;
 
     try {
-      if (leadEditingId) {
-        const { error: updateError } = await supabase
-          .schema("tosho")
-          .from("leads")
-          .update(payload)
-          .eq("id", leadEditingId)
-          .eq("team_id", teamId);
-        if (updateError) {
-          const message = updateError.message ?? "";
-          if (message.includes("column") && message.includes("logo_url")) {
-            const fallbackPayload = { ...payload };
-            delete fallbackPayload.logo_url;
-            const { error: fallbackError } = await supabase
-              .schema("tosho")
-              .from("leads")
-              .update(fallbackPayload)
-              .eq("id", leadEditingId)
-              .eq("team_id", teamId);
-            if (fallbackError) throw fallbackError;
-          } else if (message.includes("column") && message.includes("manager_user_id")) {
-            managerFieldsPersisted = false;
-            const fallbackPayload = { ...payload };
-            delete fallbackPayload.manager_user_id;
-            const { error: fallbackError } = await supabase
-              .schema("tosho")
-              .from("leads")
-              .update(fallbackPayload)
-              .eq("id", leadEditingId)
-              .eq("team_id", teamId);
-            if (fallbackError) throw fallbackError;
-          } else {
-            throw updateError;
-          }
-        }
-      } else {
-        const { error: insertError } = await supabase
-          .schema("tosho")
-          .from("leads")
-          .insert(payload as never);
-        if (insertError) {
-          const message = insertError.message ?? "";
-          if (message.includes("column") && message.includes("logo_url")) {
-            const fallbackPayload = { ...payload };
-            delete fallbackPayload.logo_url;
-            const { error: fallbackError } = await supabase
-              .schema("tosho")
-              .from("leads")
-              .insert(fallbackPayload as never);
-            if (fallbackError) throw fallbackError;
-          } else if (message.includes("column") && message.includes("manager_user_id")) {
-            const fallbackPayload = { ...payload };
-            delete fallbackPayload.manager_user_id;
-            const { error: fallbackError } = await supabase
-              .schema("tosho")
-              .from("leads")
-              .insert(fallbackPayload as never);
-            if (fallbackError) throw fallbackError;
-          } else {
-            throw insertError;
-          }
-        }
-      }
-
-      if (leadEditingId && previousLogoUrl && previousLogoUrl !== optimizedLogoUrl) {
-        void removeManagedCustomerLogoByUrl(previousLogoUrl);
-      }
-
-      const leadManagerChangedFromAnother =
-        Boolean(selectedManagerUserId) &&
-        (previousLeadManagerUserId
-          ? previousLeadManagerUserId !== selectedManagerUserId
-          : Boolean(previousLeadManagerLabel && previousLeadManagerLabel !== selectedManagerLabel));
-
-      if (leadEditingId && !options?.convertToCustomer && managerFieldsPersisted && leadManagerChangedFromAnother) {
-        try {
-          await notifyCustomerLeadManagerAssigned({
-            entityType: "lead",
-            entityId: leadEditingId,
-            entityName: leadForm.companyName.trim(),
-            newManagerUserId: selectedManagerUserId,
-            previousManagerLabel: previousLeadManagerLabel,
-            actorUserId: userId,
-            actorName: currentManagerLabel || defaultManagerName,
-          });
-        } catch (notifyError) {
-          console.warn("Failed to notify lead manager assignment", notifyError);
-        }
-      }
-
-      if (options?.convertToCustomer && leadEditingId) {
-        const contactName = [leadForm.firstName.trim(), leadForm.lastName.trim()].filter(Boolean).join(" ");
-        const conversionLegalEntity = {
-          ...createEmptyCustomerLegalEntity(),
-          ownershipType: leadForm.ownershipType.trim(),
-          legalName: leadForm.legalName.trim() || leadForm.companyName.trim(),
-          taxId: leadForm.taxId.trim(),
-          legalAddress: leadForm.legalAddress.trim(),
-          iban: leadForm.iban.trim(),
-          signatoryName: leadForm.signatoryName.trim(),
-          signatoryPosition: leadForm.signatoryPosition.trim(),
-        };
-        const legalEntities = serializeCustomerLegalEntities([conversionLegalEntity]);
-        const primaryLegalEntity = legalEntities[0] ?? null;
-        const contacts = [
-          {
-            name: contactName || leadForm.companyName.trim(),
-            position: leadForm.signatoryPosition.trim(),
-            phone: phones[0] ?? "",
-            email: leadForm.email.trim(),
-            birthday: "",
-            telegram: leadTelegram,
-          },
-        ];
-        const customerPayload: Record<string, unknown> = {
-          team_id: teamId,
-          name: leadForm.companyName.trim(),
-          // Спосіб оплати й джерело їдуть із ліда (REQ-329). Без них лід на
-          // «Готівці» ставав замовником «Рахунок», а замовника без джерела
-          // форма потім не давала зберегти навіть після правки однієї літери.
-          payment_type: leadForm.paymentType,
-          source: leadForm.source.trim() || null,
-          legal_name: primaryLegalEntity?.legal_name ?? null,
-          manager: selectedManagerLabel || currentManagerLabel || defaultManagerName || null,
-          manager_user_id: selectedManagerUserId,
-          ownership_type: primaryLegalEntity?.ownership_type ?? null,
-          vat_rate: primaryLegalEntity?.vat_rate ?? null,
-          tax_id: primaryLegalEntity?.tax_id ?? null,
-          website: leadForm.website.trim() || null,
-          iban: primaryLegalEntity?.iban ?? null,
-          logo_url: optimizedLogoUrl,
-          legal_entities: legalEntities.length > 0 ? legalEntities : null,
-          contacts,
-          contact_name: contacts[0]?.name || null,
-          contact_position: contacts[0]?.position || null,
-          contact_phone: contacts[0]?.phone || null,
-          contact_email: contacts[0]?.email || null,
-          contact_birthday: null,
-          signatory_name: primaryLegalEntity?.signatory_name ?? null,
-          signatory_position: primaryLegalEntity?.signatory_position ?? null,
-          reminder_at: buildReminderAtIso(leadForm.reminderDate, leadForm.reminderTime),
-          reminder_comment: leadForm.reminderComment.trim() || null,
-          event_name: leadForm.eventName.trim() || null,
-          event_at: leadForm.eventDate || null,
-          event_comment: leadForm.eventComment.trim() || null,
-          notes: leadForm.notes.trim() || null,
-          delivery_points: serializeCustomerDeliveryPoints(leadForm.deliveryPoints),
-        };
-
-        const { data: insertedCustomer, error: customerInsertError } = await supabase
-          .schema("tosho")
-          .from("customers")
-          .insert(customerPayload as never)
-          .select("id")
-          .single();
-        if (customerInsertError) throw customerInsertError;
-
-        // Лід тримається в прорахунку лише текстом `customer_name` (REQ-193), тож
-        // без цього кроку прорахунки ліда лишались «лідовими» назавжди: чекліст
-        // «Створити замовлення» не бачив ні переведення, ні реквізитів замовника
-        // (REQ-338). Збіг точний, як у тригері перейменування: нечіткий забрав би
-        // чужі прорахунки. Стара назва — на випадок, якщо тригер не встиг.
-        const convertedCustomerId = (insertedCustomer as { id?: string } | null)?.id ?? null;
-        const leadNames = Array.from(
-          new Set([leadForm.companyName.trim(), previousLead?.company_name ?? ""].filter(Boolean))
-        );
-        if (convertedCustomerId && leadNames.length > 0) {
-          const { error: quotesLinkError } = await supabase
-            .schema("tosho")
-            .from("quotes")
-            .update({ customer_id: convertedCustomerId, customer_name: leadForm.companyName.trim() } as never)
-            .eq("team_id", teamId)
-            .is("customer_id", null)
-            .in("customer_name", leadNames);
-          // Замовника вже створено: кинути тут — лишити і ліда, і дубль-замовника.
-          if (quotesLinkError) {
-            console.warn("Failed to link lead quotes to converted customer", quotesLinkError);
-            toast.error("Замовника створено, але прорахунки ліда не привʼязались — напишіть розробнику.");
-          }
-        }
-
-        const { error: leadDeleteError } = await supabase
-          .schema("tosho")
-          .from("leads")
-          .delete()
-          .eq("id", leadEditingId)
-          .eq("team_id", teamId);
-        if (leadDeleteError) throw leadDeleteError;
-
-        toast.success("Ліда переведено в замовника.");
-      }
+      const { convertedCustomerId } = await saveLeadCard({
+        teamId,
+        leadId: leadEditingId,
+        form: leadForm,
+        manager: {
+          label: leadForm.managerId
+            ? memberById.get(leadForm.managerId)?.label ?? managerValue
+            : selectedManagerMember?.label ?? managerValue,
+          userId: selectedManagerMember?.userId ?? (leadForm.managerId.trim() || null),
+        },
+        fallbackManagerLabel: currentManagerLabel || defaultManagerName,
+        previous: previousLead
+          ? {
+              logoUrl: previousLead.logo_url ?? null,
+              managerUserId:
+                resolveManagerMember(previousLead.manager_user_id, previousLead.manager)?.userId ??
+                (previousLead.manager_user_id?.trim() || null),
+              managerLabel: resolveManagerLabel(previousLead.manager_user_id, previousLead.manager),
+              companyName: previousLead.company_name ?? null,
+            }
+          : null,
+        actor: { userId: userId ?? null, name: currentManagerLabel || defaultManagerName },
+        convertToCustomer: options?.convertToCustomer,
+      });
+      if (convertedCustomerId) toast.success("Ліда переведено в замовника.");
 
       setLeadDialogOpen(false);
       resetLeadForm();
       await loadLeads();
-      if (options?.convertToCustomer) {
+      if (convertedCustomerId) {
         await loadCustomers();
       }
       if (typeof window !== "undefined") {

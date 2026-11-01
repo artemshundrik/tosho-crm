@@ -1,8 +1,10 @@
 import * as React from "react";
-import { Globe, Loader2, Mail, Phone, Send, User } from "@/components/icons/appIcons";
+import { ArrowUpRight, Globe, Loader2, Mail, Phone, Send, User } from "@/components/icons/appIcons";
 
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { Button } from "@/components/ui/button";
+import { useOpenPartyCard } from "@/components/customers/partyCardContext";
 import { cn } from "@/lib/utils";
 import { toneBadgeClass } from "@/lib/statusTones";
 import { loadPartyHoverInfo, type PartyHoverInfo, type PartyKind } from "@/lib/partyHoverInfo";
@@ -41,7 +43,18 @@ function Line({ icon: Icon, children }: { icon: typeof Phone; children: React.Re
   );
 }
 
-function CardBody({ target, info, loading }: { target: PartyHoverTarget; info: PartyHoverInfo | null; loading: boolean }) {
+function CardBody({
+  target,
+  info,
+  loading,
+  onOpenCard,
+}: {
+  target: PartyHoverTarget;
+  info: PartyHoverInfo | null;
+  loading: boolean;
+  /** Повна картка з редагуванням на місці, без переходу в «Замовники» (REQ-348). */
+  onOpenCard?: () => void;
+}) {
   const name = info?.name || target.name;
   const contacts = [
     info?.phone ? { icon: Phone, value: info.phone } : null,
@@ -112,6 +125,13 @@ function CardBody({ target, info, loading }: { target: PartyHoverTarget; info: P
           Контактів не вказано
         </div>
       )}
+
+      {onOpenCard ? (
+        <Button type="button" variant="secondary" size="xs" className="mt-2.5 w-full" onClick={onOpenCard}>
+          Відкрити картку
+          <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -132,6 +152,7 @@ export function PartyHoverCard({
   // а спінер лишився фолбеком для повільної мережі (ліміт очікування).
   const [settled, setSettled] = React.useState(false);
   const requestedRef = React.useRef<string | null>(null);
+  const openPartyCard = useOpenPartyCard();
 
   const handleEnter = React.useCallback(() => {
     if (!target) return;
@@ -151,10 +172,25 @@ export function PartyHoverCard({
 
   return (
     <HoverTip
-      label={<CardBody target={target} info={info} loading={loading} />}
+      label={(close) => (
+        <CardBody
+          target={target}
+          info={info}
+          loading={loading}
+          onOpenCard={
+            openPartyCard
+              ? () => {
+                  close();
+                  openPartyCard(target.kind === "customer" ? { customerId: target.id } : { leadId: target.id });
+                }
+              : undefined
+          }
+        />
+      )}
       side={side}
       contentClassName="max-w-none rounded-xl p-3"
       ready={settled}
+      interactive={Boolean(openPartyCard)}
     >
       {/* Запит стартує на вході курсора, а не на відкритті бульбашки: так
           контакти встигають приїхати до того, як людина їх шукатиме. */}

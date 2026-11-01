@@ -34,6 +34,7 @@ import {
   type ModuleKey,
 } from "@/lib/moduleAccess";
 import { getCurrentUser } from "@/lib/currentUser";
+import { PartyCardProvider } from "@/components/customers/PartyCardProvider";
 
 // =======================
 // Helpers UI
@@ -607,7 +608,10 @@ function ProtectedAppLayout({
           перевірки сесії: між ними немає порожнього кадру, бо `AppShell`
           тримає естафету завантаження. */}
       <Suspense fallback={<AppShell />}>
-        <AppLayout />
+        {/* Картка замовника, відкрита кліком будь-де в застосунку (REQ-348). */}
+        <PartyCardProvider>
+          <AppLayout />
+        </PartyCardProvider>
       </Suspense>
     </RequireAuth>
   );
