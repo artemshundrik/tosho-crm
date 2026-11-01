@@ -27,7 +27,6 @@ If older docs conflict with current code, current code wins.
 - **Велика картка живе чеклістом.** Не закривається одним заходом — заведи `checklist`: деплой не закриє картку з незакритими пунктами.
 - **Дрібницю записуй, навіть коли робиш її одразу.** Спершу рядок у полицю «Дрібниці: <напрям>» (скіл `tosho-request`), потім робота, потім `Закриває: REQ-N#pM`. Не «або-або»: і те, і те.
 - **Тему коміта пиши людською — її читає керівництво.** Що тепер працює інакше з погляду користувача CRM, а не як це зроблено. Технічне — у тіло коміта.
-- **Складне й «було → стало → буде» — картинкою, не полотном.** Пропозиція з варіантами, зміна потоку, екрана чи структури даних, порівняння «до і після» — показуй. Від дешевшого: таблиця `Було | Стало` у markdown (без інструментів) → схема просто в розмові (`show_widget`, SVG/HTML без файлів і публікації) → Artifact лише тоді, коли сторінку перешлють комусь або до неї повертатимуться. Під картинкою — два-три речення висновку, не її переказ.
 - **Робота робиться тут, не в Cowork.** Cowork і Telegram — вхід: завести задачу, глянути чергу, посунути статус. Виконання — сесія з текою репозиторію.
 - Tosho schema, not `public`, unless code explicitly says otherwise.
 - Quote details route is UUID-based: `/orders/estimates/:id` (NOT `TS-0326-XXXX`).
@@ -46,7 +45,7 @@ If older docs conflict with current code, current code wins.
 
 ## Large files navigation
 
-`QuoteDetailsPage.tsx` (~6047 рядків), `DesignTaskPage.tsx` (~12799), `QuotesPage.tsx` (~6724), `DesignPage.tsx` (~5980) — станом на 01.11.2026. `Read` ріже по 2000 рядків, тож стрибай за офсетами з [docs/LARGE_FILES_MAP.md](docs/LARGE_FILES_MAP.md), а не скануй з першого рядка.
+`QuoteDetailsPage.tsx` (~6049 рядків), `DesignTaskPage.tsx` (~12799), `QuotesPage.tsx` (~6695), `DesignPage.tsx` (~5944) — станом на 01.11.2026. `Read` ріже по 2000 рядків, тож стрибай за офсетами з [docs/LARGE_FILES_MAP.md](docs/LARGE_FILES_MAP.md), а не скануй з першого рядка.
 
 ## Skills
 
