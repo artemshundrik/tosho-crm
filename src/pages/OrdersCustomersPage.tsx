@@ -101,6 +101,18 @@ import { toast } from "sonner";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { EmptyFieldAction } from "@/components/app/EmptyFieldAction";
 import { ExternalSiteLink } from "@/components/app/ExternalSiteLink";
+import {
+  buildCustomerDropboxBrandPath,
+  buildCustomerDropboxClientPath,
+  extractCustomerDropboxLinks,
+  isMissingCustomerDropboxColumnsError,
+  normalizeCustomerDropboxPath,
+  readCustomerDropboxLinks,
+  writeCustomerDropboxLinks,
+  type CustomerDropboxAction,
+  type CustomerDropboxLink,
+  type DropboxManageCreateClientResponse,
+} from "@/components/customers/customerDropbox";
 
 type CustomerRow = {
   id: string;
@@ -166,83 +178,6 @@ type LinkedDesignTaskRow = {
   subtitle?: string | null;
   created_at?: string | null;
 };
-
-type DropboxManageCreateClientResponse = {
-  ok: boolean;
-  clientPath?: string | null;
-  clientSharedUrl?: string | null;
-  sharedUrl?: string | null;
-  error?: string | null;
-};
-
-type CustomerDropboxLink = {
-  clientPath: string;
-  clientSharedUrl: string;
-};
-
-type CustomerDropboxAction = "open" | "create" | "attach" | "detach";
-
-function getCustomerDropboxStorageKey(teamId: string) {
-  return `customers-dropbox-links:${teamId}`;
-}
-
-function readCustomerDropboxLinks(teamId: string): Record<string, CustomerDropboxLink> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(getCustomerDropboxStorageKey(teamId));
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, CustomerDropboxLink>;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeCustomerDropboxLinks(teamId: string, payload: Record<string, CustomerDropboxLink>) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(getCustomerDropboxStorageKey(teamId), JSON.stringify(payload));
-  } catch {
-    // ignore persistence issues
-  }
-}
-
-function normalizeCustomerDropboxPath(path: string) {
-  return path.trim().replace(/^\/+/, "").replace(/\/+$/, "");
-}
-
-function buildCustomerDropboxClientPath(clientFolderName: string) {
-  const normalizedFolderName = normalizeCustomerDropboxPath(clientFolderName);
-  return `Tosho Team Folder/Замовники/${normalizedFolderName}`;
-}
-
-function buildCustomerDropboxBrandPath(clientPath: string) {
-  return `${normalizeCustomerDropboxPath(clientPath)}/Бренд`;
-}
-
-function extractCustomerDropboxLinks(rows: CustomerRow[]) {
-  const links: Record<string, CustomerDropboxLink> = {};
-  rows.forEach((row) => {
-    const clientPath = normalizeCustomerDropboxPath(row.dropbox_client_path ?? "");
-    const sharedUrl = (row.dropbox_shared_url ?? "").trim();
-    if (!row.id || !clientPath || !sharedUrl) return;
-    links[row.id] = {
-      clientPath,
-      clientSharedUrl: sharedUrl,
-    };
-  });
-  return links;
-}
-
-function isMissingCustomerDropboxColumnsError(error: unknown) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === "object" && error !== null && typeof (error as { message?: unknown }).message === "string"
-        ? ((error as { message: string }).message)
-        : "";
-  return /column/i.test(message) && /dropbox_(client_path|brand_path|shared_url)/i.test(message);
-}
 
 const EMPTY_CUSTOMER_CONTACT: CustomerContact = {
   name: "",

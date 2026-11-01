@@ -3,10 +3,9 @@ import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { findParty } from "@/lib/partyNameMatch";
-import { CustomerDialog } from "./CustomerDialog";
 import { LeadDialog } from "./LeadDialog";
-import { useCustomerEditor } from "./useCustomerEditor";
 import { useLeadEditor } from "./useLeadEditor";
+import { CustomerPanel } from "./panel/CustomerPanel";
 import type { PartyCardRequest } from "./PartyCardProvider";
 import type { PartyCardSavedResult } from "./partyCardContext";
 
@@ -47,13 +46,12 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
     onSavedRef.current?.(result);
   }, []);
 
-  const customerEditor = useCustomerEditor({
-    onSaved: React.useCallback(
-      (saved: { id: string; name: string; logoUrl: string | null }) =>
-        notifySaved({ kind: "customer", ...saved, convertedCustomerId: null }),
-      [notifySaved]
-    ),
-  });
+  // Замовник відкривається бічною панеллю (REQ-349); лід поки що — вікном.
+  const [customerPanel, setCustomerPanel] = React.useState<{ id: string; fallbackName: string | null } | null>(null);
+  const openForCustomer = React.useCallback(
+    (id: string, fallbackName: string | null) => setCustomerPanel({ id, fallbackName }),
+    []
+  );
   const leadEditor = useLeadEditor({
     onSaved: React.useCallback(
       (saved: { id: string; name: string; logoUrl: string | null; convertedCustomerId: string | null }) =>
@@ -62,13 +60,13 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
     ),
   });
 
-  const { openForCustomer } = customerEditor;
   const { openForLead, closeEditor: closeLeadEditor } = leadEditor;
   const handledNonceRef = React.useRef(0);
 
   React.useEffect(() => {
     if (handledNonceRef.current === request.nonce) return;
     handledNonceRef.current = request.nonce;
+    setCustomerPanel(null);
     const { customerId, leadId, name } = request.target;
     const trimmedName = name?.trim() ?? "";
     const openByName = () => {
@@ -83,13 +81,13 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
             toast.error(`Не знайшли «${trimmedName}» серед замовників і лідів.`);
             return;
           }
-          if (party.kind === "customer") void openForCustomer(party.id);
+          if (party.kind === "customer") openForCustomer(party.id, trimmedName);
           else void openForLead(party.id);
         })
         .catch(() => toast.error("Не вдалося знайти картку замовника."));
     };
     if (customerId) {
-      void openForCustomer(customerId);
+      openForCustomer(customerId, trimmedName || null);
       return;
     }
     if (leadId) {
@@ -106,7 +104,15 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
 
   return (
     <>
-      <CustomerDialog {...customerEditor.editorProps} />
+      {customerPanel ? (
+        <CustomerPanel
+          key={customerPanel.id}
+          customerId={customerPanel.id}
+          fallbackName={customerPanel.fallbackName}
+          onClose={() => setCustomerPanel(null)}
+          onSaved={notifySaved}
+        />
+      ) : null}
       <LeadDialog {...leadEditor.editorProps} />
     </>
   );

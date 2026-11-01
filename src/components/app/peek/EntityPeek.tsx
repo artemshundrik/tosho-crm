@@ -38,6 +38,8 @@ export type EntityPeekProps = {
   onNext?: () => void;
   /** Панель виїжджає (`useEntityPeek().closing`): грає анімацію й не ловить клік. */
   closing?: boolean;
+  /** Свій рядок підказок унизу замість «J K гортати» — у панелі без гортання. */
+  footer?: ReactNode;
 };
 
 /**
@@ -120,9 +122,13 @@ export function EntityPeek(props: EntityPeekProps) {
     >
       <PeekBody {...props} />
       <footer className="flex shrink-0 items-center gap-3 border-t border-border px-4 py-2 text-2xs text-muted-foreground">
-        <span><Kbd>J</Kbd> <Kbd>K</Kbd> гортати</span>
-        <span><Kbd>Enter</Kbd> відкрити</span>
-        <span><Kbd>Esc</Kbd> закрити</span>
+        {props.footer ?? (
+          <>
+            <span><Kbd>J</Kbd> <Kbd>K</Kbd> гортати</span>
+            <span><Kbd>Enter</Kbd> відкрити</span>
+            <span><Kbd>Esc</Kbd> закрити</span>
+          </>
+        )}
       </footer>
     </aside>,
     document.body

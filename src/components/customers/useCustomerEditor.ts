@@ -1,152 +1,15 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
-import type { CustomerContact, CustomerDialogProps, CustomerFormState, CustomerLinkedItem } from "./CustomerDialog";
-import { createEmptyCustomerLegalEntity, parseCustomerLegalEntities } from "@/lib/customerLegalEntities";
-import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
-import { getLocalReminderDateInputValue, getLocalReminderTimeInputValue } from "@/lib/reminderDateTime";
-import { parseCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
+import type { CustomerDialogProps, CustomerFormState, CustomerLinkedItem } from "./CustomerDialog";
+import { buildEmptyForm, customerRowToForm, loadCustomerRow } from "./customerCardLoad";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import type { CustomerLtvEntry, RfmSegment } from "@/lib/customerLtv";
 import { hasCustomerFieldErrors, validateCustomerForm } from "./customerValidation";
 import { saveCustomerCard, type PartyPreviousState } from "./partyCardSave";
 import { loadPartyLinkedRecords } from "./partyLinkedRecords";
-
-type CustomerRecord = {
-  id: string;
-  team_id?: string | null;
-  name?: string | null;
-  payment_type?: string | null;
-  source?: string | null;
-  legal_name?: string | null;
-  manager?: string | null;
-  manager_user_id?: string | null;
-  ownership_type?: string | null;
-  vat_rate?: number | null;
-  tax_id?: string | null;
-  website?: string | null;
-  iban?: string | null;
-  logo_url?: string | null;
-  legal_entities?: unknown;
-  contact_name?: string | null;
-  contact_position?: string | null;
-  contact_phone?: string | null;
-  contact_email?: string | null;
-  contact_birthday?: string | null;
-  contacts?: CustomerContact[] | null;
-  signatory_name?: string | null;
-  signatory_position?: string | null;
-  accountant_name?: string | null;
-  accountant_email?: string | null;
-  accountant_edrpou?: string | null;
-  reminder_at?: string | null;
-  reminder_comment?: string | null;
-  event_name?: string | null;
-  event_at?: string | null;
-  event_comment?: string | null;
-  notes?: string | null;
-  delivery_points?: unknown;
-};
-
-const CUSTOMER_COLUMNS = [
-  "id",
-  "team_id",
-  "name",
-  "payment_type",
-  "source",
-  "legal_name",
-  "manager",
-  "manager_user_id",
-  "ownership_type",
-  "vat_rate",
-  "tax_id",
-  "website",
-  "iban",
-  "logo_url",
-  "legal_entities",
-  "contact_name",
-  "contact_position",
-  "contact_phone",
-  "contact_email",
-  "contact_birthday",
-  "contacts",
-  "signatory_name",
-  "signatory_position",
-  "accountant_name",
-  "accountant_email",
-  "accountant_edrpou",
-  "reminder_at",
-  "reminder_comment",
-  "event_name",
-  "event_at",
-  "event_comment",
-  "notes",
-  "delivery_points",
-].join(",");
-
-const EMPTY_CONTACT: CustomerContact = {
-  name: "",
-  position: "",
-  phone: "",
-  email: "",
-  birthday: "",
-  telegram: "",
-};
-
-const buildEmptyForm = (): CustomerFormState => ({
-  name: "",
-  paymentType: "invoice",
-  source: "",
-  manager: "",
-  managerId: "",
-  website: "",
-  logoUrl: "",
-  logoFile: null,
-  logoUploadMode: "url",
-  legalEntities: [createEmptyCustomerLegalEntity()],
-  contacts: [{ ...EMPTY_CONTACT }],
-  deliveryPoints: [],
-  reminderDate: "",
-  reminderTime: "",
-  reminderComment: "",
-  eventName: "",
-  eventDate: "",
-  eventComment: "",
-  notes: "",
-  accountantName: "",
-  accountantEmail: "",
-  accountantEdrpou: "",
-});
-
-const parseContactsFromRow = (row: CustomerRecord): CustomerContact[] => {
-  const raw = Array.isArray(row.contacts) ? row.contacts : [];
-  const normalized = raw
-    .map((entry) => {
-      const contact = typeof entry === "object" && entry ? (entry as Partial<CustomerContact>) : null;
-      return {
-        name: contact?.name?.trim() ?? "",
-        position: contact?.position?.trim() ?? "",
-        phone: contact?.phone?.trim() ?? "",
-        email: contact?.email?.trim() ?? "",
-        birthday: contact?.birthday?.trim() ?? "",
-        telegram: contact?.telegram?.trim() ?? "",
-      };
-    })
-    .filter((contact) => Object.values(contact).some(Boolean));
-  if (normalized.length > 0) return normalized;
-  const legacy = {
-    name: row.contact_name?.trim() ?? "",
-    position: row.contact_position?.trim() ?? "",
-    phone: row.contact_phone?.trim() ?? "",
-    email: row.contact_email?.trim() ?? "",
-    birthday: row.contact_birthday?.trim() ?? "",
-    telegram: "",
-  };
-  return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CONTACT }];
-};
 
 type TeamMemberOption = { id: string; label: string; avatarUrl?: string | null };
 
@@ -270,13 +133,7 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
       setLoading(true);
       setOpen(true);
       try {
-        const { data, error: loadError } = await supabase
-          .schema("tosho")
-          .from("customers")
-          .select(CUSTOMER_COLUMNS)
-          .eq("team_id", teamId)
-          .eq("id", customerId)
-          .maybeSingle<CustomerRecord>();
+        const { data, error: loadError } = await loadCustomerRow(teamId, customerId);
         if (request !== requestRef.current) return;
         if (loadError) throw loadError;
         if (!data) {
@@ -292,30 +149,7 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
           managerUserId: data.manager_user_id?.trim() || null,
           managerLabel,
         };
-        setForm({
-          name: data.name ?? "",
-          paymentType: data.payment_type === "cash" ? "cash" : "invoice",
-          source: data.source ?? "",
-          manager: managerLabel,
-          managerId: data.manager_user_id ?? "",
-          website: data.website ?? "",
-          logoUrl: normalizeCustomerLogoUrl(data.logo_url) ?? "",
-          logoFile: null,
-          logoUploadMode: "url",
-          legalEntities: parseCustomerLegalEntities(data),
-          contacts: parseContactsFromRow(data),
-          deliveryPoints: parseCustomerDeliveryPoints(data.delivery_points),
-          reminderDate: getLocalReminderDateInputValue(data.reminder_at),
-          reminderTime: getLocalReminderTimeInputValue(data.reminder_at),
-          reminderComment: data.reminder_comment ?? "",
-          eventName: data.event_name ?? "",
-          eventDate: data.event_at ? data.event_at.slice(0, 10) : "",
-          eventComment: data.event_comment ?? "",
-          notes: data.notes ?? "",
-          accountantName: data.accountant_name ?? "",
-          accountantEmail: data.accountant_email ?? "",
-          accountantEdrpou: data.accountant_edrpou ?? "",
-        });
+        setForm(customerRowToForm(data, managerLabel));
         setLoading(false);
 
         setLinkedLoading(true);

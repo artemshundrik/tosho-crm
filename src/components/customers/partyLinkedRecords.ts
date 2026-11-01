@@ -1,7 +1,8 @@
 import { supabase } from "@/lib/supabaseClient";
-import { listCustomerQuotes } from "@/lib/toshoApi";
 import { normalizePartyMatch } from "@/lib/partyNameMatch";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
+import { computeQuoteListTotal } from "@/features/quotes/quotes-page/quoteListTotal";
+import { listQuoteItemPreviewsForQuotes, listQuoteRunPreviewsForQuotes } from "@/lib/toshoApi";
 import { aggregateCustomerLtv, buildSegmentMap, type CustomerLtvEntry, type RfmSegment } from "@/lib/customerLtv";
 import type { CustomerLinkedItem } from "./CustomerDialog";
 
@@ -22,16 +23,27 @@ export type PartyLinkedTarget =
   | { kind: "customer"; id: string; names: Array<string | null | undefined> }
   | { kind: "lead"; names: Array<string | null | undefined> };
 
+/**
+ * Рядок списку плюс те, з чого панель картки виводить підказки
+ * (`partyContextHints`): коли прорахунок востаннє рухався, чи відвантажене й
+ * оплачене замовлення.
+ */
+export type PartyLinkedItem = CustomerLinkedItem & {
+  updated_at?: string | null;
+  delivery_status?: string | null;
+  payment_status?: string | null;
+};
+
 export type PartyLinkedRecords = {
-  calculations: CustomerLinkedItem[];
-  orders: CustomerLinkedItem[];
+  calculations: PartyLinkedItem[];
+  orders: PartyLinkedItem[];
   designTasks: CustomerLinkedItem[];
   /** Лише для замовника: LTV рахується з тих самих замовлень, що й список. */
   ltvEntry: CustomerLtvEntry | null;
   ltvSegment?: RfmSegment;
 };
 
-type NamedQuoteRow = CustomerLinkedItem & {
+type NamedQuoteRow = PartyLinkedItem & {
   customer_id?: string | null;
   customer_name?: string | null;
   title?: string | null;
@@ -50,14 +62,15 @@ type DesignTaskLogRow = {
   entity_id?: string | null;
 };
 
-const QUOTE_COLUMNS = "id,number,status,total,created_at,customer_id,customer_name,title";
+const QUOTE_COLUMNS = "id,number,status,total,created_at,updated_at,customer_id,customer_name,title";
 
-const toLinkedQuote = ({ id, number, status, total, created_at }: NamedQuoteRow): CustomerLinkedItem => ({
+const toLinkedQuote = ({ id, number, status, total, created_at, updated_at }: NamedQuoteRow): PartyLinkedItem => ({
   id,
   number,
   status,
   total,
   created_at,
+  updated_at,
 });
 
 async function loadCalculations(
@@ -65,7 +78,7 @@ async function loadCalculations(
   target: PartyLinkedTarget,
   candidateNames: string[],
   normalizedNames: Set<string>
-): Promise<CustomerLinkedItem[]> {
+): Promise<PartyLinkedItem[]> {
   if (target.kind === "lead") {
     const { data, error } = await supabase
       .schema("tosho")
@@ -93,13 +106,20 @@ async function loadCalculations(
           .limit(200)
       : Promise.resolve({ data: [], error: null });
   const [quotesById, quotesByName, quotesByTitle] = await Promise.allSettled([
-    listCustomerQuotes({ teamId, customerId: target.id, limit: 100 }),
+    supabase
+      .schema("tosho")
+      .from("quotes")
+      .select(QUOTE_COLUMNS)
+      .eq("team_id", teamId)
+      .eq("customer_id", target.id)
+      .order("created_at", { ascending: false })
+      .limit(100),
     byNameQuery("customer_name"),
     byNameQuery("title"),
   ]);
-  const quoteMap = new Map<string, CustomerLinkedItem>();
+  const quoteMap = new Map<string, PartyLinkedItem>();
   if (quotesById.status === "fulfilled") {
-    for (const row of quotesById.value as NamedQuoteRow[]) quoteMap.set(row.id, toLinkedQuote(row));
+    for (const row of (quotesById.value.data ?? []) as unknown as NamedQuoteRow[]) quoteMap.set(row.id, toLinkedQuote(row));
   }
   for (const result of [quotesByName, quotesByTitle]) {
     if (result.status !== "fulfilled") continue;
@@ -114,11 +134,33 @@ async function loadCalculations(
   );
 }
 
+/**
+ * Сума продажу прорахунків — з тиражів, як у таблиці прорахунків
+ * (`computeQuoteListTotal`). `quotes.total` у свіжих прорахунках лишається
+ * нулем: з ним панель казала «погоджено, але сума 0 ₴» про прорахунок на
+ * 13 тис. Не вийшло дочитати тиражі — лишаємо `quotes.total`, як було.
+ */
+async function loadQuoteSaleTotals(teamId: string, quoteIds: string[]): Promise<Map<string, number>> {
+  const totals = new Map<string, number>();
+  if (quoteIds.length === 0) return totals;
+  const [items, runs] = await Promise.all([
+    listQuoteItemPreviewsForQuotes({ teamId, quoteIds }),
+    listQuoteRunPreviewsForQuotes({ quoteIds }),
+  ]);
+  for (const quoteId of quoteIds) {
+    const quoteItems = items.filter((item) => item.quote_id === quoteId);
+    if (quoteItems.length === 0) continue;
+    const total = computeQuoteListTotal(quoteItems, runs.filter((run) => run.quote_id === quoteId));
+    if (total) totals.set(quoteId, total.amount);
+  }
+  return totals;
+}
+
 export async function loadPartyLinkedRecords(params: {
   teamId: string;
   userId?: string | null;
   target: PartyLinkedTarget;
-  onCalculations?: (rows: CustomerLinkedItem[]) => void;
+  onCalculations?: (rows: PartyLinkedItem[]) => void;
 }): Promise<PartyLinkedRecords> {
   const { teamId, userId, target, onCalculations } = params;
   const customerId = target.kind === "customer" ? target.id : null;
@@ -127,11 +169,11 @@ export async function loadPartyLinkedRecords(params: {
   );
   const normalizedNames = new Set(candidateNames.map((value) => normalizePartyMatch(value)));
 
-  const calculations = await loadCalculations(teamId, target, candidateNames, normalizedNames);
-  onCalculations?.(calculations);
-  const quoteIds = new Set(calculations.map((row) => row.id).filter(Boolean));
+  const quotedCalculations = await loadCalculations(teamId, target, candidateNames, normalizedNames);
+  onCalculations?.(quotedCalculations);
+  const quoteIds = new Set(quotedCalculations.map((row) => row.id).filter(Boolean));
 
-  const [ordersResult, designTasksResult] = await Promise.allSettled([
+  const [ordersResult, designTasksResult, totalsResult] = await Promise.allSettled([
     loadDerivedOrders(teamId, userId),
     supabase
       .from("activity_log")
@@ -142,9 +184,18 @@ export async function loadPartyLinkedRecords(params: {
       .eq("action", "design_task")
       .order("created_at", { ascending: false })
       .limit(500),
+    loadQuoteSaleTotals(teamId, Array.from(quoteIds)),
   ]);
 
-  let orders: CustomerLinkedItem[] = [];
+  let calculations = quotedCalculations;
+  if (totalsResult.status === "fulfilled") {
+    const totals = totalsResult.value;
+    calculations = quotedCalculations.map((row) => (totals.has(row.id) ? { ...row, total: totals.get(row.id) } : row));
+  } else {
+    console.warn("Failed to load quote sale totals", totalsResult.reason);
+  }
+
+  let orders: PartyLinkedItem[] = [];
   let ltvEntry: CustomerLtvEntry | null = null;
   let ltvSegment: RfmSegment | undefined;
   if (ordersResult.status === "fulfilled") {
@@ -161,6 +212,8 @@ export async function loadPartyLinkedRecords(params: {
         status: row.orderStatus,
         total: row.total,
         created_at: row.createdAt,
+        delivery_status: row.deliveryStatus,
+        payment_status: row.paymentStatus,
       }));
     if (customerId) {
       // Сегмент відносний (квінтиль серед усіх замовників), тому рахуємо по всіх.
