@@ -51,7 +51,7 @@ const withSignatoryName = (entity: CustomerLegalEntity): CustomerLegalEntity => 
 
 function Field(props: { id: string; label: ReactNode; issue?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={props.className ?? "grid min-w-0 gap-1.5"}>
+    <div className={props.className ?? "grid min-w-0 content-start gap-1.5"}>
       <Label htmlFor={props.id}>{props.label}</Label>
       {props.children}
       {props.issue ? <p className="text-xs text-destructive">{props.issue}</p> : null}

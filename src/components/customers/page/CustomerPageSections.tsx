@@ -156,11 +156,11 @@ export function ContactsEditor(props: { contacts: CustomerContact[]; onChange: (
               ) : null}
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-1.5">
                 <Label htmlFor={id("name")}>Імʼя контакту</Label>
                 <Input id={id("name")} value={contact.name} onChange={(event) => patch(index, { name: event.target.value })} placeholder="Імʼя та прізвище" />
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-1.5">
                 <Label htmlFor={id("position")}>Посада</Label>
                 <Select value={contact.position} onValueChange={(position) => patch(index, { position })}>
                   <SelectTrigger id={id("position")}>
@@ -175,15 +175,15 @@ export function ContactsEditor(props: { contacts: CustomerContact[]; onChange: (
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-1.5">
                 <Label>Номер телефону</Label>
                 <PhoneInput value={contact.phone} onChange={(phone) => patch(index, { phone })} />
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-1.5">
                 <Label>Email</Label>
                 <EmailInput value={contact.email} onChange={(email) => patch(index, { email })} placeholder="name@company.com" />
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-1.5">
                 <Label htmlFor={id("birthday")}>День народження</Label>
                 <Input
                   id={id("birthday")}
@@ -194,7 +194,7 @@ export function ContactsEditor(props: { contacts: CustomerContact[]; onChange: (
                   placeholder="дд.мм або дд.мм.рррр"
                 />
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-1.5">
                 <Label>Telegram</Label>
                 <TelegramInput value={contact.telegram} onChange={(telegram) => patch(index, { telegram })} />
               </div>
