@@ -43,13 +43,13 @@ export function useEntityPeek<T>(items: readonly T[], getId: (item: T) => string
     if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
   }, []);
 
-  useEffect(() => {
-    if (peekId && index < 0) open(null);
-  }, [peekId, index, open]);
+  // Справа зникла зі списку (фільтр, видалення) — панель просто не показується;
+  // скидати стан ефектом не треба, це похідне значення.
+  const shownId = index >= 0 ? peekId : null;
 
   const toggle = useCallback(
-    (id: string) => (peekId === id && !closing ? close() : open(id)),
-    [peekId, closing, close, open]
+    (id: string) => (shownId === id && !closing ? close() : open(id)),
+    [shownId, closing, close, open]
   );
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export function useEntityPeek<T>(items: readonly T[], getId: (item: T) => string
 
   return {
     /** Відкрита справа; поки панель виїжджає — уже null, щоб рядок не світився. */
-    peekId: closing ? null : peekId,
+    peekId: closing ? null : shownId,
     item,
     closing,
     open,

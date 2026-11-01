@@ -81,7 +81,9 @@ export function useInboxEntity(
   const { teamId, userId, canIssueInvoice, canApproveLaunch } = context;
   const cacheRef = useRef(new Map<string, Loaded>());
   const ordersRef = useRef<Promise<DerivedOrderRecord[]> | null>(null);
-  const [, setVersion] = useState(0);
+  // cacheRef — що вже запитано (читають лише ефект і обробники), results — що
+  // вже приїхало (читає рендер). Рендер не лізе в ref.
+  const [results, setResults] = useState<ReadonlyMap<string, Loaded>>(() => new Map());
   const key = ref ? `${ref.kind}:${ref.id}` : null;
 
   const load = useCallback(
@@ -89,7 +91,7 @@ export function useInboxEntity(
       if (!teamId) return;
       const settle = (value: Loaded) => {
         cacheRef.current.set(cacheKey, value);
-        setVersion((current) => current + 1);
+        setResults((current) => new Map(current).set(cacheKey, value));
       };
       try {
         if (target.kind === "quote") {
@@ -143,11 +145,15 @@ export function useInboxEntity(
       const cacheKey = `${target.kind}:${target.id}`;
       if (target.kind === "order") ordersRef.current = null;
       cacheRef.current.set(cacheKey, { status: "loading" });
-      setVersion((current) => current + 1);
+      setResults((current) => {
+        const next = new Map(current);
+        next.delete(cacheKey);
+        return next;
+      });
       void load(target, cacheKey);
     },
     [load]
   );
 
-  return { loaded: key ? cacheRef.current.get(key) ?? { status: "loading" as const } : null, invalidate };
+  return { loaded: key ? results.get(key) ?? { status: "loading" as const } : null, invalidate };
 }

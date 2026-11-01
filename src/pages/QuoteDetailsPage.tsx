@@ -796,7 +796,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const quoteManagerUserId = quote?.assigned_to?.trim() || null;
   const quoteCreatedByUserId = quote?.created_by?.trim() || null;
-  const effectiveManagerId = quoteManagerUserId || quoteCreatedByUserId || userId || null;
   const viewerJobRole = normalizeJobRole(jobRole);
   const canOpenCurrentQuote = canOpenQuoteDetails({
     userId,
@@ -806,6 +805,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     permissions,
   });
   const canViewSummarySection = canViewQuoteSummary({
+    userId,
+    quoteManagerUserId,
+    quoteCreatedByUserId,
+    viewerJobRole,
+    permissions,
+  });
+  const canEditQuoteContent = canEditQuoteContentFor({
     userId,
     quoteManagerUserId,
     quoteCreatedByUserId,
@@ -825,13 +831,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     return resolveNumericRate(result.data, DEFAULT_MANAGER_RATE);
   }, []);
-  const canEditQuoteContent = canEditQuoteContentFor({
-    userId,
-    quoteManagerUserId,
-    quoteCreatedByUserId,
-    viewerJobRole,
-    permissions,
-  });
+  const effectiveManagerId = quoteManagerUserId || quoteCreatedByUserId || userId || null;
   const canManagerDeleteOwnDesignerBriefFiles = userId !== null && quoteManagerUserId === userId;
   // Керівник прибирає будь-який файл справи — та сама пара, що видаляє чужі
   // повідомлення в обговоренні цієї ж картки, і той самий набір, що пропускає
@@ -846,10 +846,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     [canDeleteAnyQuoteAttachment, canManagerDeleteOwnDesignerBriefFiles, userId]
   );
 
-  const loadCurrentManagerRate = useCallback(async () => {
-    if (!effectiveManagerId) return;
+  // Менеджер — аргументом, а не залежністю: компілятор вважає, що виклики прав
+  // вище можуть змінити userId, і не зберігав би useCallback із ним.
+  const loadCurrentManagerRate = useCallback(async (managerId: string | null) => {
+    if (!managerId) return;
 
-    const result = await fetchManagerRate(effectiveManagerId);
+    const result = await fetchManagerRate(managerId);
     if (!result.ok) {
       console.error("Failed to load current manager rate", result.message);
       setFetchedManagerRate(null);
@@ -858,7 +860,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     // Зведення НЕ таке, як у getManagerRateForUser вище: тут збережений нуль
     // теж стає типовою ставкою. Різницю лишено як була (REQ-109).
     setFetchedManagerRate(Math.max(0, Number(result.data) || DEFAULT_MANAGER_RATE));
-  }, [effectiveManagerId]);
+  }, []);
 
   useEffect(() => {
     // Обгортка навмисна, не прикрашання: правило set-state-in-effect вважає
@@ -867,9 +869,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     // loadCurrentManagerRate не лишилось жодного setState до await. Обгортка
     // дає це побачити, не повертаючи заглушку лінту (REQ-109).
     void (async () => {
-      await loadCurrentManagerRate();
+      await loadCurrentManagerRate(effectiveManagerId);
     })();
-  }, [loadCurrentManagerRate]);
+  }, [effectiveManagerId, loadCurrentManagerRate]);
 
   const currentManagerRate = effectiveManagerId
     ? fetchedManagerRate ?? DEFAULT_MANAGER_RATE
@@ -877,7 +879,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     const handleWindowFocus = () => {
-      void loadCurrentManagerRate();
+      void loadCurrentManagerRate(effectiveManagerId);
     };
 
     window.addEventListener("focus", handleWindowFocus);
@@ -887,7 +889,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleWindowFocus);
     };
-  }, [loadCurrentManagerRate]);
+  }, [effectiveManagerId, loadCurrentManagerRate]);
 
   const getRunTotal = (run: QuoteRun) => {
     const qty = Number(run.quantity) || 0;
