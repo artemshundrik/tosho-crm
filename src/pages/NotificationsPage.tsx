@@ -12,6 +12,7 @@ import {
 } from "@/components/icons/appIcons";
 import { toast } from "sonner";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { FEED_ROW } from "@/components/app/table-kit";
 import {
   disableRealtimeForSession,
   enableRealtimeForSession,
@@ -173,17 +174,6 @@ function statusIconButtonClass(tone: SettingsTone) {
   );
 }
 
-function notificationCardToneClass(item: NotificationItem) {
-  const lowerTitle = item.title.toLowerCase();
-  if (lowerTitle.includes("день народження")) return item.read ? "bg-card/90" : "tone-accent-subtle";
-  if (lowerTitle.includes("відпуст")) return item.read ? "bg-card/90" : "tone-info-subtle";
-  if (item.read) return "bg-card/90";
-  if (item.tone === "success") return "tone-success-subtle";
-  if (item.tone === "warning") return "tone-warning-subtle";
-  if (item.tone === "info") return "tone-info-subtle";
-  return "tone-neutral-subtle";
-}
-
 function normalizeNotificationMatchText(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -294,10 +284,7 @@ function getCompactNotificationDescription(item: NotificationItem) {
   return item.description;
 }
 
-const NOTIFICATION_AVATAR_SIZE = 48;
-const NOTIFICATION_BADGE_CLASS =
-  "absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full border sm:-bottom-2 sm:-right-2 sm:h-7 sm:w-7";
-const NOTIFICATION_AVATAR_SHELL_CLASS = "relative mt-0.5 flex h-12 w-12 shrink-0 items-start justify-start";
+const NOTIFICATION_AVATAR_SIZE = 28;
 
 export default function NotificationsPage() {
   const { userId, teamId, accessRole, jobRole } = useAuth();
@@ -1156,7 +1143,7 @@ export default function NotificationsPage() {
           Поки немає сповіщень.
         </div>
       ) : (
-        <div className="mt-4 space-y-3 md:mt-5">
+        <div className="-mx-4 -mb-4 mt-0 md:-mx-5 md:-mb-5">
           {filtered.map((n) => {
             const avatar = getNotificationAvatarMeta(n);
             const compactDescription = getCompactNotificationDescription(n);
@@ -1197,89 +1184,50 @@ export default function NotificationsPage() {
               matchedQuoteParty?.logoUrl ||
               matchedParty?.logoUrl ||
               null;
+            const avatarName = member?.label || companyAvatarName;
             return (
-            <Button
-              key={n.id}
-              type="button"
-              variant="ghost"
-              size="md"
-              onClick={() => openNotification(n)}
-              className={cn(
-                // whitespace-normal: кнопка за замовчуванням не переносить рядків, і
-                // без цього line-clamp не працював — заголовок і опис просто
-                // зрізались краєм картки без трьох крапок.
-                "group h-auto w-full justify-start whitespace-normal p-0 text-left hover:bg-transparent",
-                !n.read && "data-[state=active]:ring-0"
-              )}
-            >
-              <div
-                className={cn(
-                  "flex w-full items-start gap-3 rounded-xl border border-border/60 p-3 transition-colors duration-base ease-out hover:bg-muted/28 sm:gap-4 sm:p-4",
-                  notificationCardToneClass(n),
-                  !n.read && ""
-                )}
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => openNotification(n)}
+                className={cn(FEED_ROW, "min-h-12 py-1.5 pl-3")}
+                title={compactDescription ? `${n.title} — ${compactDescription}` : n.title}
               >
+                {/* Непрочитане — крапка (хвиля Б1), без кольорової заливки картки. */}
+                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", n.read ? "bg-transparent" : "bg-primary")} aria-hidden />
                 {member?.avatarDisplayUrl ? (
-                  <div className={NOTIFICATION_AVATAR_SHELL_CLASS}>
-                    <AvatarBase
-                      src={member.avatarDisplayUrl}
-                      name={member.label}
-                      fallback={avatar.initials}
-                      size={NOTIFICATION_AVATAR_SIZE}
-                      className="border-border/70"
-                      fallbackClassName="text-sm font-semibold"
-                    />
-                    <span className={cn(NOTIFICATION_BADGE_CLASS, avatar.badgeClass)}>
-                      {avatar.icon}
-                    </span>
-                  </div>
-                ) : companyAvatarName ? (
-                  <div className={NOTIFICATION_AVATAR_SHELL_CLASS}>
-                    <EntityAvatar
-                      src={companyAvatarLogoUrl}
-                      name={companyAvatarName}
-                      fallback={getInitials(companyAvatarName)}
-                      size={NOTIFICATION_AVATAR_SIZE}
-                      className="border-border/70"
-                    />
-                    <span className={cn(NOTIFICATION_BADGE_CLASS, avatar.badgeClass)}>
-                      {avatar.icon}
-                    </span>
-                  </div>
+                  <AvatarBase
+                    src={member.avatarDisplayUrl}
+                    name={member.label}
+                    fallback={avatar.initials}
+                    size={NOTIFICATION_AVATAR_SIZE}
+                    className="shrink-0"
+                  />
+                ) : avatarName ? (
+                  <EntityAvatar
+                    src={companyAvatarLogoUrl}
+                    name={avatarName}
+                    fallback={getInitials(avatarName)}
+                    size={NOTIFICATION_AVATAR_SIZE}
+                    className="shrink-0"
+                  />
                 ) : (
-                  <div className={NOTIFICATION_AVATAR_SHELL_CLASS}>
-                    <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl border text-sm font-semibold", avatar.avatarClass, n.read && "opacity-80")}>
-                      <span>{avatar.initials}</span>
-                    </div>
-                    <span className={cn(NOTIFICATION_BADGE_CLASS, avatar.badgeClass)}>
-                      {avatar.icon}
-                    </span>
-                  </div>
+                  <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full border text-2xs font-semibold", avatar.avatarClass)}>
+                    {avatar.initials}
+                  </span>
                 )}
-                <div className="min-w-0 flex-1 overflow-hidden">
-                  <div className="flex flex-col justify-center gap-0.5">
-                    <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                      <div className="flex min-w-0 items-start gap-2">
-                        {!n.read ? <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary/65" /> : null}
-                        <div className="min-w-0 line-clamp-2 break-words text-[15px] font-semibold leading-5 text-foreground sm:leading-6">{n.title}</div>
-                      </div>
-                      <span className="shrink-0 pl-4 text-xs text-muted-foreground sm:pl-0 sm:text-right">{n.time}</span>
-                    </div>
-                    {!n.read ? (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="secondary" className="bg-background/80">Нове</Badge>
-                      </div>
-                    ) : null}
-                  </div>
-                  {compactDescription ? (
-                    <div className="mt-0.5 line-clamp-2 text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere] sm:mt-1 sm:line-clamp-none">
-                      {renderNotificationDescription(compactDescription)}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </Button>
-          )})}
+                <span className="min-w-0 flex-1">
+                  <span className={cn("block truncate text-foreground", !n.read && "font-medium")}>{n.title}</span>
+                  {/* На телефоні дата — у сірому рядку: праворуч вона з'їдала пів заголовка. */}
+                  <span className="block truncate text-xs text-muted-foreground">
+                    <span className="tabular-nums sm:hidden">{n.time}{compactDescription ? " · " : ""}</span>
+                    {compactDescription ? renderNotificationDescription(compactDescription) : null}
+                  </span>
+                </span>
+                <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:block">{n.time}</span>
+              </button>
+            );
+          })}
         </div>
       )}
         </section>

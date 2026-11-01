@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarMeta } from "@/components/app/headers/toolbarPrimitives";
 import { PageLoading } from "@/components/app/page-loading";
@@ -13,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { FEED_GROUP_LABEL, FEED_ROW } from "@/components/app/table-kit";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import {
   formatActivityClock,
@@ -212,92 +212,56 @@ export default function ActivityPage() {
     return Activity;
   };
 
-  const badgeForItem = (item: ActivityItem) => {
-    if (item.type === "quotes") return { label: "Прорахунки", tone: "info" as const };
-    if (item.type === "design") return { label: "Дизайн", tone: "success" as const };
-    if (item.type === "team") return { label: "Команда", tone: "neutral" as const };
-    return { label: "Інше", tone: "neutral" as const };
-  };
-
-  const initialsForItem = (item: ActivityItem) => {
-    const actor = item.actor ?? "Користувач";
-    const parts = actor.split(" ").filter(Boolean);
-    const initials = parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : actor.slice(0, 2);
-    return initials.toUpperCase();
-  };
+  const categoryLabel = (item: ActivityItem) =>
+    FILTER_TABS.find((tab) => tab.value === item.type && tab.value !== "all")?.label ?? "Інше";
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="rounded-section border border-border bg-card/60 p-3 sm:p-5">
-        <div>
-          {filtered.length === 0 ? (
-            <div className="rounded-inner border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
-              Поки немає дій.
-            </div>
-          ) : (
-            <div className="space-y-5">
-              {grouped.map(([label, dayItems]) => (
-                <div key={label} className="space-y-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {label}
-                  </div>
-                  <div className="space-y-3">
-                    {dayItems.map((item) => {
-                      const Icon = iconForItem(item);
-                      const badge = badgeForItem(item);
-                      return (
-                        <Button
-                          key={item.id}
-                          type="button"
-                          variant="card"
-                          size="md"
-                          onClick={() => item.href && navigate(item.href)}
-                          // whitespace-normal і w-full: кнопка за замовчуванням не
-                          // переносить рядків, і на телефоні час виїжджав за картку.
-                          className="h-auto w-full justify-start whitespace-normal p-3 text-left sm:p-5"
-                        >
-                          <div className="flex w-full min-w-0 items-start gap-3 sm:gap-4">
-                            <div className="flex shrink-0 items-center gap-3 pt-0.5">
-                              <AvatarBase
-                                src={item.avatar_url}
-                                name={item.actor || item.title || "User"}
-                                fallback={initialsForItem(item)}
-                                variant="sm"
-                              />
-                              <div className="hidden h-10 w-10 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground sm:flex">
-                                <Icon className="h-5 w-5" />
-                              </div>
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                <span className="max-w-full break-words text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
-                                  {activityTitle(item.title)}
-                                </span>
-                                <Badge tone={badge.tone} size="sm" pill>
-                                  {badge.label}
-                                </Badge>
-                              </div>
-                              {item.actor ? (
-                                <div className="mt-2 text-xs text-muted-foreground">
-                                  <span className="font-medium text-foreground">{item.actor}</span>
-                                </div>
-                              ) : null}
-                            </div>
-
-                            <div className="shrink-0 self-start pt-0.5 text-xs text-muted-foreground whitespace-nowrap">
-                              {formatActivityClock(item.created_at)}
-                            </div>
-                          </div>
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+    <div className="pb-8">
+      {/* Стрічка рядками по 32 px (хвиля Б1): хто · що · коли. Доти кожна подія
+          була карткою на 88 px, і на екран влазило вісім подій замість двадцяти. */}
+      <div className="overflow-hidden rounded-section border border-border bg-card">
+        {filtered.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">Поки немає дій.</div>
+        ) : (
+          grouped.map(([label, dayItems]) => (
+            <section key={label}>
+              <div className={FEED_GROUP_LABEL}>{label}</div>
+              {dayItems.map((item) => {
+                const Icon = iconForItem(item);
+                const title = activityTitle(item.title);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => item.href && navigate(item.href)}
+                    className={cn(FEED_ROW, "h-8")}
+                    title={item.actor ? `${item.actor} — ${title}` : title}
+                  >
+                    <AvatarBase
+                      src={item.avatar_url}
+                      name={item.actor || item.title || "User"}
+                      size={20}
+                      className="shrink-0"
+                    />
+                    {item.actor ? (
+                      <span className="max-w-[40%] shrink-0 truncate font-medium text-foreground sm:max-w-[180px]">
+                        {item.actor}
+                      </span>
+                    ) : null}
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{title}</span>
+                    <span className="hidden shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+                      <Icon className="h-3.5 w-3.5" />
+                      {categoryLabel(item)}
+                    </span>
+                    <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                      {formatActivityClock(item.created_at)}
+                    </span>
+                  </button>
+                );
+              })}
+            </section>
+          ))
+        )}
       </div>
     </div>
   );

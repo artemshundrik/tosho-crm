@@ -239,3 +239,15 @@ export const TABLE_RECORD_NUMBER_TEXT = "font-mono text-sm text-muted-foreground
 
 /** Гроші в таблиці: праворуч, рівні цифри, середня вага — однаково скрізь. */
 export const TABLE_MONEY_TEXT = "figure text-right font-medium text-foreground";
+
+/**
+ * Рядок стрічки (Активність, Сповіщення) — та сама лінія, ховер і відступи,
+ * що й рядок таблиці (хвиля Б1). Висоту задає сторінка: 32 px подія, 48 px
+ * сповіщення з описом.
+ */
+export const FEED_ROW =
+  "flex w-full min-w-0 items-center gap-3 border-b border-border/50 px-4 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/30";
+
+/** Підпис групи в стрічці («Сьогодні», «Вчора») — як шапка колонки таблиці. */
+export const FEED_GROUP_LABEL =
+  "flex h-9 items-center border-b border-border bg-muted/20 px-4 text-xs font-medium text-muted-foreground";
