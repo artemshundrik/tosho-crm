@@ -6,6 +6,7 @@ import { findParty } from "@/lib/partyNameMatch";
 import { LeadDialog } from "./LeadDialog";
 import { useLeadEditor } from "./useLeadEditor";
 import { CustomerPanel } from "./panel/CustomerPanel";
+import { LeadPanel } from "./panel/LeadPanel";
 import type { PartyCardRequest } from "./PartyCardProvider";
 import type { PartyCardSavedResult } from "./partyCardContext";
 
@@ -35,6 +36,8 @@ async function resolvePartyByName(
   return null;
 }
 
+type PanelTarget = { kind: "customer" | "lead"; id: string; fallbackName: string | null };
+
 export default function PartyCardHost({ request }: { request: PartyCardRequest }) {
   const { teamId } = useAuth();
   const onSavedRef = React.useRef(request.onSaved);
@@ -46,10 +49,15 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
     onSavedRef.current?.(result);
   }, []);
 
-  // Замовник відкривається бічною панеллю (REQ-349); лід поки що — вікном.
-  const [customerPanel, setCustomerPanel] = React.useState<{ id: string; fallbackName: string | null } | null>(null);
+  // Замовник і лід відкриваються бічною панеллю (REQ-349). Вікно ліда лишилось
+  // повною карткою: назва, джерело, контакт правляться там.
+  const [panel, setPanel] = React.useState<PanelTarget | null>(null);
   const openForCustomer = React.useCallback(
-    (id: string, fallbackName: string | null) => setCustomerPanel({ id, fallbackName }),
+    (id: string, fallbackName: string | null) => setPanel({ kind: "customer", id, fallbackName }),
+    []
+  );
+  const openLeadPanel = React.useCallback(
+    (id: string, fallbackName: string | null) => setPanel({ kind: "lead", id, fallbackName }),
     []
   );
   const leadEditor = useLeadEditor({
@@ -60,13 +68,14 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
     ),
   });
 
-  const { openForLead, closeEditor: closeLeadEditor } = leadEditor;
+  const { openForLead } = leadEditor;
   const handledNonceRef = React.useRef(0);
+  const openByNameRef = React.useRef<() => void>(() => undefined);
 
   React.useEffect(() => {
     if (handledNonceRef.current === request.nonce) return;
     handledNonceRef.current = request.nonce;
-    setCustomerPanel(null);
+    setPanel(null);
     const { customerId, leadId, name } = request.target;
     const trimmedName = name?.trim() ?? "";
     const openByName = () => {
@@ -82,7 +91,7 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
             return;
           }
           if (party.kind === "customer") openForCustomer(party.id, trimmedName);
-          else void openForLead(party.id);
+          else openLeadPanel(party.id, trimmedName);
         })
         .catch(() => toast.error("Не вдалося знайти картку замовника."));
     };
@@ -90,27 +99,46 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
       openForCustomer(customerId, trimmedName || null);
       return;
     }
+    // Лід міг стати замовником: старий id уже нікуди не веде, а назва — так
+    // (панель кличе `onMissing`).
+    // Один раз: знайдений за назвою лід, якого знов «немає», не крутить по колу.
+    openByNameRef.current = () => {
+      openByNameRef.current = () => undefined;
+      if (!trimmedName || handledNonceRef.current !== request.nonce) return;
+      setPanel(null);
+      openByName();
+    };
     if (leadId) {
-      // Лід міг стати замовником: старий id уже нікуди не веде, а назва — так.
-      void openForLead(leadId).then((found) => {
-        if (found || !trimmedName || handledNonceRef.current !== request.nonce) return;
-        closeLeadEditor();
-        openByName();
-      });
+      openLeadPanel(leadId, trimmedName || null);
       return;
     }
     openByName();
-  }, [closeLeadEditor, openForCustomer, openForLead, request, teamId]);
+  }, [openForCustomer, openLeadPanel, request, teamId]);
 
   return (
     <>
-      {customerPanel ? (
+      {panel?.kind === "customer" ? (
         <CustomerPanel
-          key={customerPanel.id}
-          customerId={customerPanel.id}
-          fallbackName={customerPanel.fallbackName}
-          onClose={() => setCustomerPanel(null)}
+          key={panel.id}
+          customerId={panel.id}
+          fallbackName={panel.fallbackName}
+          onClose={() => setPanel(null)}
           onSaved={notifySaved}
+        />
+      ) : null}
+      {panel?.kind === "lead" ? (
+        <LeadPanel
+          key={panel.id}
+          leadId={panel.id}
+          fallbackName={panel.fallbackName}
+          onClose={() => setPanel(null)}
+          onOpenFull={() => {
+            setPanel(null);
+            void openForLead(panel.id);
+          }}
+          onSaved={notifySaved}
+          onConverted={(customerId) => openForCustomer(customerId, panel.fallbackName)}
+          onMissing={() => openByNameRef.current()}
         />
       ) : null}
       <LeadDialog {...leadEditor.editorProps} />

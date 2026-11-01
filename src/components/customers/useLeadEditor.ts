@@ -1,21 +1,14 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { OWNERSHIP_OPTIONS } from "@/features/quotes/quotes-page/config";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import type { CustomerLinkedItem } from "./CustomerDialog";
 import type { LeadDialogProps, LeadFormState } from "./LeadDialog";
-import {
-  buildLeadFormFromRow,
-  createEmptyLeadForm,
-  getFallbackLeadColumnsVariant,
-  getLeadColumns,
-  type LeadColumnsVariant,
-  type LeadRow,
-} from "./leadRecord";
+import { buildLeadFormFromRow, createEmptyLeadForm } from "./leadRecord";
+import { loadLeadRow } from "./leadCardLoad";
 import { saveLeadCard, validateLeadCard, type PartyPreviousState } from "./partyCardSave";
 import { loadPartyLinkedRecords } from "./partyLinkedRecords";
 
@@ -67,28 +60,6 @@ type LinkedState = {
 };
 
 const EMPTY_LINKED: LinkedState = { calculations: [], orders: [], designTasks: [] };
-
-async function fetchLeadRow(teamId: string, leadId: string): Promise<LeadRow | null> {
-  const loadLead = async (variant: LeadColumnsVariant) =>
-    await supabase
-      .schema("tosho")
-      .from("leads")
-      .select(getLeadColumns(variant))
-      .eq("team_id", teamId)
-      .eq("id", leadId)
-      .maybeSingle<LeadRow>();
-
-  let variant: LeadColumnsVariant = "full";
-  let { data, error } = await loadLead(variant);
-  let fallbackVariant = error ? getFallbackLeadColumnsVariant(variant, error.message ?? "") : null;
-  while (error && fallbackVariant) {
-    variant = fallbackVariant;
-    ({ data, error } = await loadLead(variant));
-    fallbackVariant = error ? getFallbackLeadColumnsVariant(variant, error.message ?? "") : null;
-  }
-  if (error) throw error;
-  return data ?? null;
-}
 
 export const useLeadEditor = (options?: { onSaved?: (result: LeadEditorSavedResult) => void }) => {
   const { teamId, userId } = useAuth();
@@ -151,7 +122,7 @@ export const useLeadEditor = (options?: { onSaved?: (result: LeadEditorSavedResu
       setLoading(true);
       setOpen(true);
       try {
-        const lead = await fetchLeadRow(teamId, leadId);
+        const lead = await loadLeadRow(teamId, leadId);
         if (request !== requestRef.current) return true;
         if (!lead) {
           setError("Не вдалося завантажити дані ліда.");

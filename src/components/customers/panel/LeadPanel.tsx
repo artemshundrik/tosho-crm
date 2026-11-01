@@ -1,0 +1,415 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+
+import { useAuth } from "@/auth/AuthProvider";
+import { EntityAvatar } from "@/components/app/avatar-kit";
+import { EntityPeek, Kbd } from "@/components/app/peek/EntityPeek";
+import { UserCheck } from "@/components/icons/appIcons";
+import { Button } from "@/components/ui/button";
+import { getLocalReminderDateInputValue, getLocalReminderTimeInputValue } from "@/lib/reminderDateTime";
+import { resolveWorkspaceId } from "@/lib/workspace";
+import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import type { CustomerContact } from "../CustomerDialog";
+import type { LeadFormState } from "../LeadDialog";
+import { loadLeadRow } from "../leadCardLoad";
+import { buildLeadFormFromRow, type LeadRow } from "../leadRecord";
+import { saveLeadCard, validateLeadCard } from "../partyCardSave";
+import type { PartyCardSavedResult } from "../partyCardContext";
+import { writeLeadFields, type LeadFieldPatch } from "../partyFieldWrite";
+import { loadPartyLinkedRecords, type PartyLinkedRecords } from "../partyLinkedRecords";
+import { getPartyReadiness, leadReadinessInput } from "../partyReadiness";
+import { usePartyFieldSave } from "../usePartyFieldSave";
+import { LeadConversionForm, type LeadConversionPatch } from "./LeadConversionForm";
+import { ContactsSection, DealsSection, NotesSection, PaymentSection } from "./PanelSections";
+import { ReadinessBlock } from "./ReadinessBlock";
+import { useDeferredConversion } from "./useDeferredConversion";
+
+/**
+ * Бічна панель ліда — та сама «чого бракує», що й у замовника (сім пунктів
+ * на «Рахунку», один на «Готівці»), і переведення в замовники.
+ *
+ * ПЕРЕВЕДЕННЯ ВІДКЛАДЕНЕ. «Перевести» лише заводить 6-секундний годинник
+ * (`useDeferredConversion`) і показує «<назва> тепер замовник · Скасувати»;
+ * у базу (`saveLeadCard` з `convertToCustomer`) іде після строку. Закрили
+ * панель посеред очікування — переведення виконується одразу. Після нього
+ * хост показує панель нового замовника (`onConverted`).
+ *
+ * Дрібне (оплата, нотатки, нагадування) пишеться одразу й по одному полю
+ * (`writeLeadFields`). Решту картки — назву, джерело, контакт — правлять у
+ * повній картці ліда (`onOpenFull`).
+ */
+
+type LeadCardState = "loading" | "ready" | "error" | "gone";
+type Screen = "card" | "convert";
+
+const CONVERSION_DELAY_MS = 6000;
+const EMPTY_RECORDS: PartyLinkedRecords = { calculations: [], orders: [], designTasks: [], ltvEntry: null };
+
+const phonesOf = (form: LeadFormState) => form.phones.map((phone) => phone.trim()).filter(Boolean);
+
+function leadContact(form: LeadFormState): CustomerContact[] {
+  const name = [form.firstName, form.lastName].map((part) => part.trim()).filter(Boolean).join(" ");
+  return [{ name, position: "", phone: phonesOf(form)[0] ?? "", email: form.email, birthday: "", telegram: form.telegram }];
+}
+
+export function LeadPanel(props: {
+  leadId: string;
+  fallbackName?: string | null;
+  onClose: () => void;
+  /** Повна картка ліда — назва, джерело, контакт. */
+  onOpenFull: () => void;
+  onSaved?: (result: PartyCardSavedResult) => void;
+  /** Лід став замовником — хост показує панель цього замовника. */
+  onConverted?: (customerId: string) => void;
+  /** Ліда немає (видалили чи вже перевели) — хост може пошукати за назвою. */
+  onMissing?: () => void;
+}) {
+  const { leadId, fallbackName, onClose, onOpenFull } = props;
+  const { teamId, userId } = useAuth();
+  const navigate = useNavigate();
+
+  const [state, setState] = useState<LeadCardState>("loading");
+  const [attempt, setAttempt] = useState(0);
+  const [row, setRow] = useState<LeadRow | null>(null);
+  const [form, setForm] = useState<LeadFormState | null>(null);
+  const [records, setRecords] = useState<PartyLinkedRecords>(EMPTY_RECORDS);
+  const [recordsLoading, setRecordsLoading] = useState(true);
+  const [paymentSet, setPaymentSet] = useState(true);
+  const [screen, setScreen] = useState<Screen>("card");
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
+
+  const onMissingRef = useRef(props.onMissing);
+  const onSavedRef = useRef(props.onSaved);
+  const onConvertedRef = useRef(props.onConverted);
+  useEffect(() => {
+    onMissingRef.current = props.onMissing;
+    onSavedRef.current = props.onSaved;
+    onConvertedRef.current = props.onConverted;
+  });
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    setState("loading");
+    setRecordsLoading(true);
+    void (async () => {
+      try {
+        const lead = await loadLeadRow(teamId, leadId);
+        if (cancelled) return;
+        if (!lead) {
+          setState("gone");
+          onMissingRef.current?.();
+          return;
+        }
+        setRow(lead);
+        setForm(buildLeadFormFromRow(lead, lead.manager ?? ""));
+        setPaymentSet(Boolean(lead.payment_type));
+        setState("ready");
+        const linked = await loadPartyLinkedRecords({
+          teamId,
+          userId,
+          target: { kind: "lead", names: [lead.company_name, lead.legal_name] },
+          onCalculations: (calculations) => {
+            if (!cancelled) setRecords((current) => ({ ...current, calculations }));
+          },
+        });
+        if (!cancelled) setRecords(linked);
+      } catch {
+        if (!cancelled) setState((current) => (current === "ready" ? current : "error"));
+      } finally {
+        if (!cancelled) setRecordsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt, leadId, teamId, userId]);
+
+  const update = useCallback((patch: Partial<LeadFormState>) => {
+    setForm((current) => (current ? { ...current, ...patch } : current));
+  }, []);
+
+  const write = useCallback(
+    async (patch: LeadFieldPatch) => {
+      const result = await writeLeadFields(leadId, patch);
+      if (result.ok) {
+        window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
+        onSavedRef.current?.({
+          kind: "lead",
+          id: leadId,
+          name: formRef.current?.companyName ?? "",
+          logoUrl: formRef.current?.logoUrl || null,
+          convertedCustomerId: null,
+        });
+      }
+      return result;
+    },
+    [leadId, teamId],
+  );
+  const { save, stateOf, retry } = usePartyFieldSave(write);
+  const [reminderAt, setReminderAt] = useState<string | null>(null);
+  useEffect(() => setReminderAt(row?.reminder_at ?? null), [row]);
+
+  // Форма, з якою натиснули «Перевести»: поля з форми переведення поверх картки.
+  const convertFormRef = useRef<LeadFormState | null>(null);
+  const toastIdRef = useRef<string | number | null>(null);
+
+  const runConversion = useCallback(async () => {
+    const merged = convertFormRef.current;
+    if (!teamId || !merged) return;
+    if (toastIdRef.current !== null) toast.dismiss(toastIdRef.current);
+    if (mountedRef.current) setConverting(true);
+    let members: { userId: string; label: string }[] = [];
+    try {
+      const workspaceId = userId ? await resolveWorkspaceId(userId) : null;
+      if (workspaceId) members = await listWorkspaceMembersForDisplay(workspaceId);
+    } catch {
+      members = [];
+    }
+    const managerLabelRaw = merged.manager.trim();
+    const selected = merged.managerId
+      ? members.find((member) => member.userId === merged.managerId)
+      : members.find((member) => member.label === managerLabelRaw);
+    const currentUserLabel = members.find((member) => member.userId === userId)?.label ?? "";
+    try {
+      const { logoUrl, convertedCustomerId } = await saveLeadCard({
+        teamId,
+        leadId,
+        form: merged,
+        manager: { label: selected?.label ?? managerLabelRaw, userId: selected?.userId ?? (merged.managerId.trim() || null) },
+        fallbackManagerLabel: currentUserLabel,
+        previous: {
+          logoUrl: row?.logo_url ?? null,
+          managerUserId: row?.manager_user_id?.trim() || null,
+          managerLabel: selected?.label ?? row?.manager ?? "",
+          companyName: row?.company_name ?? null,
+        },
+        actor: { userId: userId ?? null, name: currentUserLabel },
+        convertToCustomer: true,
+      });
+      window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
+      onSavedRef.current?.({ kind: "lead", id: leadId, name: merged.companyName.trim(), logoUrl, convertedCustomerId });
+      if (convertedCustomerId && mountedRef.current) onConvertedRef.current?.(convertedCustomerId);
+    } catch (error: unknown) {
+      const message = error instanceof Error && error.message ? error.message : "Спробуйте ще раз.";
+      toast.error(`${merged.companyName.trim() || "Ліда"} не перевели в замовники`, { description: message });
+      if (mountedRef.current) {
+        setScreen("convert");
+        setConvertError(message);
+      }
+    } finally {
+      if (mountedRef.current) setConverting(false);
+    }
+  }, [leadId, row, teamId, userId]);
+
+  const conversion = useDeferredConversion(runConversion, CONVERSION_DELAY_MS);
+
+  const cancelConversion = useCallback(() => {
+    conversion.cancel();
+    if (toastIdRef.current !== null) toast.dismiss(toastIdRef.current);
+    toastIdRef.current = null;
+    toast("Переведення скасовано", { description: "У базі нічого не змінилось." });
+  }, [conversion]);
+
+  const startConversion = (patch: LeadConversionPatch) => {
+    if (!form) return;
+    const merged: LeadFormState = { ...form, ...patch };
+    const issue = validateLeadCard(merged, { leadId, convertToCustomer: true });
+    if (issue) {
+      setConvertError(issue);
+      return;
+    }
+    setConvertError(null);
+    convertFormRef.current = merged;
+    setForm(merged);
+    setScreen("card");
+    conversion.start();
+    toastIdRef.current = toast(`${merged.companyName.trim()} тепер замовник`, {
+      duration: CONVERSION_DELAY_MS,
+      action: { label: "Скасувати", onClick: cancelConversion },
+    });
+  };
+
+  const readiness = useMemo(() => (form ? getPartyReadiness(leadReadinessInput(form, phonesOf(form))) : null), [form]);
+  const cash = form?.paymentType === "cash";
+
+  const setReminder = (at: string | null, comment?: string) => {
+    setReminderAt(at);
+    update({
+      reminderDate: getLocalReminderDateInputValue(at),
+      reminderTime: getLocalReminderTimeInputValue(at),
+      ...(comment !== undefined ? { reminderComment: comment } : at === null ? { reminderComment: "" } : {}),
+    });
+    const patch: LeadFieldPatch = { reminder_at: at };
+    if (comment !== undefined || at === null) patch.reminder_comment = at === null ? null : comment ?? null;
+    save("reminder", patch);
+  };
+
+  const name = form?.companyName || row?.company_name || fallbackName || "Лід";
+  const createdLabel = row?.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : null;
+  const calculationsCount = records.calculations.length;
+  const carryOver = form
+    ? [
+        "назва й лого",
+        form.firstName.trim() ? `контакт ${form.firstName.trim()}` : null,
+        calculationsCount ? `прорахунки (${calculationsCount})` : null,
+        form.manager.trim() ? `менеджер ${form.manager.trim()}` : null,
+        form.source.trim() ? `джерело «${form.source.trim()}»` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
+  return (
+    <EntityPeek
+      section="Ліди"
+      number={form?.taxId.trim() || "лід"}
+      numberCopyMessage="Код скопійовано"
+      title={
+        <span className="flex items-center gap-2.5">
+          <EntityAvatar src={form?.logoUrl || null} name={name} size={32} />
+          <span className="min-w-0 truncate">{name}</span>
+        </span>
+      }
+      properties={
+        state === "ready" ? (
+          <span className="text-xs text-muted-foreground">
+            {["Лід", createdLabel ? `з ${createdLabel}` : null, form?.source || null, form?.manager || null].filter(Boolean).join(" · ")}
+          </span>
+        ) : null
+      }
+      onClose={onClose}
+      onOpenFull={onOpenFull}
+      footer={
+        <>
+          <span><Kbd>Enter</Kbd> повна картка</span>
+          <span><Kbd>Esc</Kbd> закрити</span>
+          <span className="ml-auto">Зміни зберігаються одразу</span>
+        </>
+      }
+    >
+      <div data-testid="lead-panel">
+        {state === "loading" ? (
+          <div aria-busy className="space-y-3 px-4 py-3">
+            <div className="h-20 animate-pulse rounded-lg bg-muted" />
+            <div className="h-9 animate-pulse rounded-lg bg-muted" />
+            <div className="h-9 animate-pulse rounded-lg bg-muted opacity-70" />
+          </div>
+        ) : null}
+
+        {state === "error" || state === "gone" ? (
+          <div className="space-y-2 px-4 py-6 text-sm">
+            <p className="font-medium">{state === "gone" ? "Ліда не знайшли" : "Картку не завантажили"}</p>
+            <p className="text-muted-foreground">
+              {state === "gone"
+                ? "Можливо, його вже перевели в замовники або видалили."
+                : "Схоже, зник звʼязок. Те, що ви бачили, нікуди не поділось."}
+            </p>
+            {state === "error" ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)}>
+                Спробувати ще
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {state === "ready" && form && readiness && screen === "convert" ? (
+          <LeadConversionForm
+            name={name}
+            form={form}
+            carryOver={carryOver}
+            error={convertError}
+            onCancel={() => {
+              setConvertError(null);
+              setScreen("card");
+            }}
+            onConvert={startConversion}
+          />
+        ) : null}
+
+        {state === "ready" && form && readiness && screen === "card" ? (
+          <>
+            {conversion.pending || converting ? (
+              <section className="flex items-center gap-3 border-b border-border px-4 py-3 text-sm">
+                <UserCheck className="size-4 shrink-0 text-muted-foreground" />
+                <span className="flex-1">
+                  {converting ? `Переводимо ${name} в замовники…` : `${name} стане замовником за кілька секунд`}
+                </span>
+                {converting ? null : (
+                  <Button type="button" variant="outline" size="xs" aria-label="Скасувати переведення" onClick={cancelConversion}>
+                    Скасувати
+                  </Button>
+                )}
+              </section>
+            ) : (
+              <>
+                <PaymentSection
+                  value={paymentSet ? (cash ? "cash" : "invoice") : null}
+                  status={stateOf("payment_type")}
+                  onChange={(value) => {
+                    setPaymentSet(true);
+                    update({ paymentType: value });
+                    save("payment_type", { payment_type: value });
+                  }}
+                  onRetry={() => retry("payment_type")}
+                />
+                <ReadinessBlock
+                  readiness={readiness}
+                  cash={cash}
+                  paymentUnknown={!paymentSet}
+                  onJump={() => setScreen("convert")}
+                >
+                  <Button
+                    type="button"
+                    variant={readiness.missing.length === 0 ? "primary" : "outline"}
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setScreen("convert")}
+                  >
+                    <UserCheck className="size-4" />
+                    Перевести в замовники
+                  </Button>
+                </ReadinessBlock>
+              </>
+            )}
+            <ContactsSection contacts={leadContact(form)} accountant={{ name: "", email: "" }} onEdit={onOpenFull} />
+            <DealsSection
+              records={records}
+              loading={recordsLoading}
+              onOpenQuote={(id) => navigate(`/orders/estimates/${id}`)}
+              onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
+              onShowAll={onOpenFull}
+            />
+            <NotesSection
+              notes={form.notes}
+              reminderAt={reminderAt}
+              reminderComment={form.reminderComment}
+              notesStatus={stateOf("notes")}
+              reminderStatus={stateOf("reminder")}
+              onSaveNotes={(value) => {
+                update({ notes: value });
+                save("notes", { notes: value.trim() || null });
+              }}
+              onSetReminder={setReminder}
+              onRetryNotes={() => retry("notes")}
+              onRetryReminder={() => retry("reminder")}
+            />
+          </>
+        ) : null}
+      </div>
+    </EntityPeek>
+  );
+}
