@@ -53,12 +53,23 @@ export function SidebarCountBadge({
   count,
   collapsed,
   roomy = false,
+  quiet = false,
 }: {
   count: number;
+  /** Сіре число без підкладки: робота в розділі, а не те, що чекає відповіді. */
+  quiet?: boolean;
   collapsed: boolean;
   /** Мобільний дровер: рядок вищий, значок теж. */
   roomy?: boolean;
 }) {
+  if (quiet) {
+    if (collapsed) return null;
+    return <span className="ml-auto shrink-0 text-2xs tabular-nums text-muted-foreground/70">{count > 999 ? "999+" : count}</span>;
+  }
+  if (quiet) {
+    if (collapsed) return null;
+    return <span className="ml-auto shrink-0 text-2xs tabular-nums text-muted-foreground/70">{count > 999 ? "999+" : count}</span>;
+  }
   if (collapsed) {
     return (
       <span
