@@ -251,7 +251,7 @@ export function ToolbarFilterSelect({
               key={option.value}
               disabled={option.disabled}
               onSelect={() => onValueChange(option.value)}
-              className="gap-2 rounded-lg text-[13px]"
+              className="gap-2 rounded-lg text-md"
             >
               {/* Галочка займає місце завжди (opacity-0), інакше рядки стрибають. */}
               <Check className={cn("h-3.5 w-3.5 shrink-0", option.value === value ? "opacity-100" : "opacity-0")} />
@@ -402,7 +402,7 @@ export function ToolbarFilterBar({ children }: { children: React.ReactNode }) {
           <DropdownMenuContent align="start" className="min-w-[200px]">
             {idle.map((filter) => (
               <DropdownMenuSub key={filter.label}>
-                <DropdownMenuSubTrigger className="rounded-lg text-[13px]">{filter.label}</DropdownMenuSubTrigger>
+                <DropdownMenuSubTrigger className="rounded-lg text-md">{filter.label}</DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="max-h-[320px] min-w-[200px] overflow-y-auto">
                   <FilterOptionItems filter={filter} />
                 </DropdownMenuSubContent>
@@ -427,7 +427,7 @@ function FilterOptionItems({ filter }: { filter: ToolbarFilterSelectProps }) {
               key={option.value}
               disabled={option.disabled}
               onSelect={() => filter.onValueChange(option.value)}
-              className="gap-2 rounded-lg text-[13px]"
+              className="gap-2 rounded-lg text-md"
             >
               <Check className={cn("h-3.5 w-3.5 shrink-0", option.value === filter.value ? "opacity-100" : "opacity-0")} />
               {OptionIcon ? <OptionIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> : null}

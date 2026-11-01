@@ -208,7 +208,7 @@ export function DevRequestBoard({
         </div>
 
         {/* ── Тема ── */}
-        <p className="mt-1.5 text-[13px] font-medium leading-snug line-clamp-3" title={request.title}>
+        <p className="mt-1.5 text-md font-medium leading-snug line-clamp-3" title={request.title}>
           {request.title}
         </p>
 

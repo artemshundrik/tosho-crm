@@ -1033,7 +1033,7 @@ export function DesignersDashboard({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[13px] font-semibold text-foreground">{label}</span>
+                      <span className="truncate text-md font-semibold text-foreground">{label}</span>
                       {index === 0 && row.workload.level !== "critical" ? (
                         <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-3xs font-medium text-primary">
                           <Star className="h-3 w-3" />
@@ -1420,7 +1420,7 @@ export function DesignersDashboard({
                     <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: typeColor(row.type) }} aria-hidden="true" />
                     <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-medium text-foreground">{row.option.label}</span>
+                      <span className="block truncate text-md font-medium text-foreground">{row.option.label}</span>
                       {/* whitespace-nowrap + truncate: підпис має жити рівно в один рядок,
                           інакше «норма до 15 / хв» рветься навпіл і рядок типу стрибає. */}
                       <span className="block truncate whitespace-nowrap text-3xs tabular-nums text-muted-foreground">
@@ -1490,7 +1490,7 @@ export function DesignersDashboard({
                     ))}
                   </div>
                   <div className="flex items-center gap-2 sm:justify-end">
-                    <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums text-foreground">
+                    <span className="whitespace-nowrap text-md font-semibold tabular-nums text-foreground">
                       {row.current == null ? "—" : formatHumanSeconds(row.current)}
                     </span>
                     {row.overNorm != null ? (
@@ -1608,7 +1608,7 @@ export function DesignersDashboard({
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: color }} aria-hidden="true" />
                         <span className="min-w-0">
-                          <span className="block truncate text-[13px] font-medium text-foreground">{row.label}</span>
+                          <span className="block truncate text-md font-medium text-foreground">{row.label}</span>
                           <span className="block truncate whitespace-nowrap text-3xs tabular-nums text-muted-foreground">
                             {row.perDay != null ? `норма ${row.perDay}/день` : "норма індивідуальна"}
                             {row.rate != null ? ` · ${row.rate} ₴ понад` : ""}
@@ -1647,7 +1647,7 @@ export function DesignersDashboard({
                       </div>
                       <div className="flex flex-col gap-1 sm:items-end">
                         <div className="flex items-center gap-2">
-                          <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums text-foreground">
+                          <span className="whitespace-nowrap text-md font-semibold tabular-nums text-foreground">
                             {row.done} <span className="font-normal text-muted-foreground">з {row.norm}</span>
                           </span>
                           {over > 0 ? (
@@ -1722,7 +1722,7 @@ export function DesignersDashboard({
                         <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: typeColor(row.type) }} aria-hidden="true" />
                         <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="min-w-0">
-                          <span className="block truncate text-[13px] font-medium text-foreground">{row.option.label}</span>
+                          <span className="block truncate text-md font-medium text-foreground">{row.option.label}</span>
                           <span className="block truncate whitespace-nowrap text-3xs tabular-nums text-muted-foreground">
                             {works > 0
                               ? `${row.current?.visualization ?? 0} віз · ${row.current?.layout ?? 0} мак`
@@ -1772,7 +1772,7 @@ export function DesignersDashboard({
                         ))}
                       </div>
                       <div className="flex items-center gap-2 sm:justify-end">
-                        <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums text-foreground">
+                        <span className="whitespace-nowrap text-md font-semibold tabular-nums text-foreground">
                           {works}
                         </span>
                         {works > 0 || prevWorks > 0 ? (
@@ -1794,7 +1794,7 @@ export function DesignersDashboard({
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-muted-foreground/40" aria-hidden="true" />
                       <span className="min-w-0">
-                        <span className="block truncate text-[13px] font-medium text-muted-foreground">Без типу</span>
+                        <span className="block truncate text-md font-medium text-muted-foreground">Без типу</span>
                         <span className="block truncate whitespace-nowrap text-3xs tabular-nums text-muted-foreground">
                           {currentAgg?.worksByType.none.visualization ?? 0} віз ·{" "}
                           {currentAgg?.worksByType.none.layout ?? 0} мак
@@ -1810,7 +1810,7 @@ export function DesignersDashboard({
                       />
                     </div>
                     <div className="flex items-center sm:justify-end">
-                      <span className="text-[13px] font-semibold tabular-nums text-muted-foreground">
+                      <span className="text-md font-semibold tabular-nums text-muted-foreground">
                         {currentAgg?.worksByType.none.works ?? 0}
                       </span>
                     </div>
@@ -1925,7 +1925,7 @@ export function DesignersDashboard({
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                          <span className="truncate text-[13px] font-semibold text-foreground">{label}</span>
+                          <span className="truncate text-md font-semibold text-foreground">{label}</span>
                           {index === 0 && row.workload.level !== "critical" ? (
                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-3xs font-medium text-primary">
                               <Star className="h-3 w-3" />
@@ -2076,7 +2076,7 @@ export function DesignersDashboard({
                           inactive={memberInactiveById[designer.id] ?? false}
                         />
                         <span className="min-w-0">
-                          <span className="block truncate text-[13px] font-semibold text-foreground">{designer.label}</span>
+                          <span className="block truncate text-md font-semibold text-foreground">{designer.label}</span>
                           <span className="text-3xs text-muted-foreground">
                             {agg.works} робіт · {agg.files} файлів
                             {agg.tasksClosed > 0 ? ` · ${agg.tasksClosed} закрито` : ""}
@@ -2087,7 +2087,7 @@ export function DesignersDashboard({
                           торкались. Показувати тут лише таймерні означало б дві
                           різні цифри під однією назвою на одному екрані. */}
                       <span
-                        className="text-[13px] font-semibold tabular-nums text-foreground"
+                        className="text-md font-semibold tabular-nums text-foreground"
                         title={`${agg.tasksTouched} задач, з них ${agg.timerTaskCount} із таймером`}
                       >
                         {agg.tasksTouched}
@@ -2095,12 +2095,12 @@ export function DesignersDashboard({
                           <span className="text-3xs font-medium text-muted-foreground"> / {agg.timerTaskCount}</span>
                         ) : null}
                       </span>
-                      <span className="text-[13px] font-semibold tabular-nums text-foreground">{agg.works}</span>
-                      <span className="text-[13px] font-semibold tabular-nums text-foreground">
+                      <span className="text-md font-semibold tabular-nums text-foreground">{agg.works}</span>
+                      <span className="text-md font-semibold tabular-nums text-foreground">
                         {formatHours(agg.trackedSeconds)}
                         <span className="text-3xs font-medium text-muted-foreground"> год</span>
                       </span>
-                      <span className="text-[13px] font-semibold tabular-nums text-foreground">{avg == null ? "—" : formatHM(avg)}</span>
+                      <span className="text-md font-semibold tabular-nums text-foreground">{avg == null ? "—" : formatHM(avg)}</span>
                       <span
                         className={cn("flex h-3 gap-0.5 overflow-hidden rounded", structureTotal > 0 && "cursor-help")}
                         {...(structureTotal > 0
@@ -2203,7 +2203,7 @@ export function DesignersDashboard({
                                 </div>
                               ) : (
                                 <div
-                                  className="flex h-10 cursor-help items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-transform hover:scale-[1.04]"
+                                  className="flex h-10 cursor-help items-center justify-center rounded-lg text-md font-semibold tabular-nums transition-transform hover:scale-[1.04]"
                                   style={{
                                     background: `hsl(var(--heat-${heatBucket(value)}))`,
                                     color: `hsl(var(--heat-ink-${heatBucket(value)}))`,
@@ -2269,7 +2269,7 @@ export function DesignersDashboard({
                         const value = teamAgg ? metric.get(teamAgg) : null;
                         return (
                           <td key={month.value}>
-                            <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
+                            <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-md font-semibold tabular-nums text-muted-foreground">
                               {value == null ? "—" : metric.format(value)}
                             </div>
                           </td>
@@ -2317,7 +2317,7 @@ export function DesignersDashboard({
                       }
                       return (
                         <div
-                          className="flex h-10 cursor-help items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-transform hover:scale-[1.04]"
+                          className="flex h-10 cursor-help items-center justify-center rounded-lg text-md font-semibold tabular-nums transition-transform hover:scale-[1.04]"
                           style={{ background: `hsl(var(--heat-${bucket}))`, color: `hsl(var(--heat-ink-${bucket}))` }}
                           {...bindTip(() => ({
                             title: `${designer.label} · ${label}`,
@@ -2355,7 +2355,7 @@ export function DesignersDashboard({
                         ))}
                         {hasOtherExts ? <td>{heatCell(otherFiles(agg), "Інші формати")}</td> : null}
                         <td>
-                          <div className="flex h-10 items-center justify-center rounded-lg text-[13px] font-bold tabular-nums text-foreground">
+                          <div className="flex h-10 items-center justify-center rounded-lg text-md font-bold tabular-nums text-foreground">
                             {agg.files}
                           </div>
                         </td>
@@ -2400,20 +2400,20 @@ export function DesignersDashboard({
                       </td>
                       {fileExtColumns.map((ext) => (
                         <td key={ext}>
-                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-md font-semibold tabular-nums text-muted-foreground">
                             {teamFilesByExt(ext) || "—"}
                           </div>
                         </td>
                       ))}
                       {hasOtherExts ? (
                         <td>
-                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-md font-semibold tabular-nums text-muted-foreground">
                             {filesRows.reduce((sum, { agg }) => sum + otherFiles(agg), 0) || "—"}
                           </div>
                         </td>
                       ) : null}
                       <td>
-                        <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-bold tabular-nums text-muted-foreground">
+                        <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-md font-bold tabular-nums text-muted-foreground">
                           {teamFilesTotal}
                         </div>
                       </td>
@@ -2556,7 +2556,7 @@ export function DesignersDashboard({
                       {group.taskNumber ? (
                         <div className="text-3xs font-medium tabular-nums text-muted-foreground/80">{group.taskNumber}</div>
                       ) : null}
-                      <div className="pr-8 text-[13px] font-semibold leading-snug text-foreground">
+                      <div className="pr-8 text-md font-semibold leading-snug text-foreground">
                         {group.title ?? "Задача без назви"}
                       </div>
                       {group.customerName ? (

@@ -88,7 +88,7 @@ export function DevRequestList({
                 copyLabel="Скопіювати номер запиту"
               />
 
-              <p className="min-w-0 flex-1 truncate text-[13px] font-medium" title={request.title}>
+              <p className="min-w-0 flex-1 truncate text-md font-medium" title={request.title}>
                 {request.title}
               </p>
 

@@ -20,6 +20,7 @@
     "check:hook-disables": "node scripts/check-hook-disables.mjs",
     "check:control-overrides": "node scripts/check-control-overrides.mjs",
     "check:raw-tables": "node scripts/check-raw-tables.mjs",
+    "check:type-scale": "node scripts/check-type-scale.mjs",
     "check:functions": "node scripts/check-netlify-functions.mjs",
     "check:db-guards": "node scripts/check-db-guards.mjs",
     "check:rpc-contracts": "node scripts/check-rpc-contracts.mjs",

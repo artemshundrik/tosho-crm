@@ -4,14 +4,13 @@ import { render } from "@testing-library/react";
 import { QuoteKanbanProducts, type QuoteKanbanProduct } from "./QuoteKanbanProducts";
 
 /**
- * Довгий список товарів мусить згортатись, і згортатись у ПЕРЕДБАЧУВАНОМУ
- * місці: три повні рядки, далі один — саме один — ряд мініатюр.
+ * Товари на картці дошки — ОДИН ряд мініатюр (до чотирьох і «+N») і один рядок
+ * «перша позиція і ще N · кількість» (хвиля Б4).
  *
  * ЧОМУ ЦЕ ВАРТО ТЕСТУ. Зламати межу непомітно легко: досить змінити константу
- * чи повернути `flex-wrap` — і картка знову виростає вище за екран або ряд
- * мініатюр їде на другий рядок. Ані `tsc`, ані лінт про це не знають, а на
- * дошці більшість прорахунків має один-два товари, тож у щоденній роботі
- * поломка спливе не одразу.
+ * чи повернути `flex-wrap` — і картка знову виростає, а ряд мініатюр їде на
+ * другий рядок. Ані `tsc`, ані лінт про це не знають, а на дошці більшість
+ * прорахунків має один-два товари, тож поломка спливе не одразу.
  */
 
 // Мініатюри вантажаться за появою в полі зору, а jsdom спостерігача не має.
@@ -52,44 +51,34 @@ function renderPreview(count: number) {
   );
   const strip = container.querySelector<HTMLElement>(".flex-nowrap");
   return {
-    container,
-    fullRowNames: Array.from(container.querySelectorAll<HTMLElement>("[title]"))
-      .filter((node) => node.className.includes("truncate"))
-      .map((node) => node.textContent),
     strip,
     thumbTitles: strip
       ? Array.from(strip.querySelectorAll<HTMLElement>(":scope > div[title]")).map((node) => node.title)
       : [],
     overflowLabel: strip?.querySelector("span")?.textContent ?? null,
-    totalLabel: container.querySelector<HTMLElement>('[aria-label^="Товарів"]')?.textContent?.trim() ?? null,
+    summary: container.querySelector<HTMLElement>(".truncate")?.textContent ?? null,
   };
 }
 
 describe("QuoteKanbanProducts", () => {
-  it("до трьох товарів показує повними рядками й не малює смуги", () => {
-    const { fullRowNames, strip } = renderPreview(3);
-    expect(fullRowNames).toEqual(["Товар 1", "Товар 2", "Товар 3"]);
-    expect(strip).toBeNull();
-  });
-
-  it("решту згортає в мініатюри, поки вони вміщаються в один ряд", () => {
-    const { fullRowNames, thumbTitles, overflowLabel } = renderPreview(8);
-    expect(fullRowNames).toEqual(["Товар 1", "Товар 2", "Товар 3"]);
-    expect(thumbTitles).toHaveLength(5);
-    expect(thumbTitles[0]).toBe("Товар 4 · 100 шт.");
-    // Рівно п'ять мініатюр — лічильник зайвий.
+  it("один товар — одна мініатюра й назва з кількістю", () => {
+    const { thumbTitles, overflowLabel, summary } = renderPreview(1);
+    expect(thumbTitles).toEqual(["Товар 1 · 100 шт."]);
     expect(overflowLabel).toBeNull();
+    expect(summary).toBe("Товар 1 · 100 шт.");
   });
 
-  it("коли мініатюр більше за ряд — звільняє місце під «+N»", () => {
-    const { thumbTitles, overflowLabel } = renderPreview(12);
-    // 3 повні + 4 мініатюри + «+5»: ряд лишається один.
+  it("до чотирьох товарів — усі мініатюрами, без лічильника", () => {
+    const { thumbTitles, overflowLabel, summary } = renderPreview(4);
     expect(thumbTitles).toHaveLength(4);
-    expect(overflowLabel).toBe("+5");
+    expect(overflowLabel).toBeNull();
+    expect(summary).toBe("Товар 1 і ще 3 · 100 шт.");
   });
 
-  it("показує загальну кількість, лише коли список обрізаний", () => {
-    expect(renderPreview(3).totalLabel).toBeNull();
-    expect(renderPreview(12).totalLabel).toBe("12");
+  it("більше чотирьох — чотири мініатюри й «+N» в тому самому ряду", () => {
+    const { strip, thumbTitles, overflowLabel } = renderPreview(12);
+    expect(thumbTitles).toHaveLength(4);
+    expect(overflowLabel).toBe("+8");
+    expect(strip?.className).not.toContain("flex-wrap");
   });
 });

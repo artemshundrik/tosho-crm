@@ -319,7 +319,7 @@ function FxTickerItem({
   return (
     <span className="inline-flex items-baseline gap-1.5">
       <FxCurrencyCode code={code} />
-      <span className="text-[13px] font-semibold leading-none tabular-nums text-foreground">
+      <span className="text-md font-semibold leading-none tabular-nums text-foreground">
         {rate ? rate.toFixed(2) : "—"}
       </span>
       {deltaText && delta !== null ? (
@@ -369,7 +369,7 @@ function FxPopoverRow({
       <span className="inline-flex items-baseline gap-2.5">
         {/* Фіксована ширина — щоб назви валют стали в одну колонку. */}
         <FxCurrencyCode code={code} className="inline-block w-7 shrink-0" />
-        <span className="text-[13px] text-muted-foreground">{title}</span>
+        <span className="text-md text-muted-foreground">{title}</span>
       </span>
       <span className="inline-flex items-baseline gap-2">
         <span className="text-[17px] font-semibold leading-none tabular-nums text-foreground">
@@ -2238,7 +2238,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               setMobileMenuOpen(false);
                               setTabBarSettingsOpen(true);
                             }}
-                            className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-[14px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                            className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                           >
                             <SlidersHorizontal className="h-4 w-4 shrink-0" />
                             <span className="min-w-0 flex-1 truncate">Налаштувати смугу вкладок</span>
@@ -2935,7 +2935,7 @@ function SidebarGroup({
                   "transition-[opacity,transform] duration-base ease-out [transition-delay:var(--sb-in,0ms)] motion-reduce:transition-none",
                   "group-data-[collapsed=true]/sb:pointer-events-none group-data-[collapsed=true]/sb:opacity-0",
                   "group-data-[collapsed=true]/sb:-translate-x-2 group-data-[collapsed=true]/sb:[transition-delay:var(--sb-out,0ms)]",
-                  isMobileDrawer ? "text-[14px] font-medium" : undefined
+                  isMobileDrawer ? "text-sm font-medium" : undefined
                 )}
               >
                 {link.label}

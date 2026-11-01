@@ -712,7 +712,7 @@ function PulseFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline gap-3 border-t border-border/40 py-1.5 first:border-t-0">
       <dt className="w-[6.5rem] shrink-0 text-2xs text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 flex-1 text-[13px] font-semibold tabular-nums text-foreground">{value}</dd>
+      <dd className="min-w-0 flex-1 text-md font-semibold tabular-nums text-foreground">{value}</dd>
     </div>
   );
 }

@@ -1076,7 +1076,7 @@ export function TelegramTabPanel() {
               <div className="text-sm font-semibold text-foreground">Вимкнули по категоріях</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {optOuts.map(([key, n]) => (
-                  <Badge key={key} variant="outline" className="rounded-full px-3 py-1 text-[12px] font-medium">
+                  <Badge key={key} variant="outline" className="rounded-full px-3 py-1 text-xs font-medium">
                     {TELEGRAM_CATEGORY_LABEL[key] ?? key}: {n}
                   </Badge>
                 ))}

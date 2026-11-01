@@ -206,7 +206,7 @@ export function ThemeSwitcher({
                   // меню (`cursor-default`): рядки тут не «пункти списку», а
                   // органи керування, і без пальця на них не читається, що на
                   // них тиснуть.
-                  "group cursor-pointer gap-2.5 rounded-lg px-2 py-0 text-[13px] font-medium",
+                  "group cursor-pointer gap-2.5 rounded-lg px-2 py-0 text-md font-medium",
                   // Вибране показує ТІЛЬКИ галочка: ні плитки під іконкою, ні
                   // обводки рядка (рішення Артема 2026-08-16 — простіше меню).
                   "focus:bg-transparent focus:text-foreground data-[highlighted]:bg-muted/60 data-[highlighted]:text-foreground"

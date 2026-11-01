@@ -31,7 +31,7 @@ export function PrefixField({
         className
       )}
     >
-      <span className="flex h-full select-none items-center border-r border-border/60 bg-black/[0.03] px-2.5 font-mono text-[13px] font-medium tracking-wide text-muted-foreground dark:bg-white/[0.04]">
+      <span className="flex h-full select-none items-center border-r border-border/60 bg-black/[0.03] px-2.5 font-mono text-md font-medium tracking-wide text-muted-foreground dark:bg-white/[0.04]">
         {prefix}
       </span>
       {children}

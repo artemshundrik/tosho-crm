@@ -177,6 +177,7 @@ describe("типографіка (розділ 4)", () => {
       "--text-3xs--letter-spacing": "0em",
       "--text-2xs--letter-spacing": "0em",
       "--text-xs--letter-spacing": "-0.005em",
+      "--text-md--letter-spacing": "-0.01em",
       "--text-sm--letter-spacing": "-0.01em",
       "--text-base--letter-spacing": "-0.01em",
       "--text-lg--letter-spacing": "-0.02em",

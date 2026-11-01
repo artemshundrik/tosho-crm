@@ -195,7 +195,7 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-3 rounded-[var(--radius-lg)] px-3 py-2.5 text-[15px] outline-none",
+      "relative flex cursor-default select-none items-center gap-2.5 rounded-[var(--radius-lg)] px-2.5 py-1.5 text-md outline-none pointer-coarse:py-2.5",
       "transition-colors hover:bg-muted/50",
       "aria-selected:bg-muted aria-selected:text-foreground",
       // На телефоні cmdk однаково позначає перший рядок обраним — це потрібно
@@ -214,7 +214,7 @@ CommandItem.displayName = CommandPrimitive.Item.displayName;
 
 const CommandShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => (
   <span
-    className={cn("ml-auto text-[12px] tracking-wider text-muted-foreground", className)}
+    className={cn("ml-auto text-xs tracking-wider text-muted-foreground", className)}
     {...props}
   />
 );

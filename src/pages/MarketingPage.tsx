@@ -1080,7 +1080,7 @@ export default function MarketingPage() {
                   size={22}
                   className="shrink-0"
                 />
-                <span className="truncate text-[13px] font-semibold text-foreground">
+                <span className="truncate text-md font-semibold text-foreground">
                   {visual.customerName}
                 </span>
               </div>
@@ -1558,7 +1558,7 @@ export default function MarketingPage() {
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Про проєкт
                       </span>
-                      <p className="line-clamp-5 whitespace-pre-line text-[13px] leading-relaxed text-foreground/90">
+                      <p className="line-clamp-5 whitespace-pre-line text-md leading-relaxed text-foreground/90">
                         {selected.brief}
                       </p>
                     </div>
@@ -1699,7 +1699,7 @@ export default function MarketingPage() {
                             <label
                               htmlFor={`check-${item.id}`}
                               className={cn(
-                                "flex-1 cursor-pointer text-[13px] leading-snug text-foreground",
+                                "flex-1 cursor-pointer text-md leading-snug text-foreground",
                                 item.done && "text-muted-foreground line-through"
                               )}
                             >
@@ -1742,7 +1742,7 @@ export default function MarketingPage() {
                           }
                         }}
                         placeholder="Що ще зняти? Enter — додати"
-                        className="text-[13px]"
+                        className="text-md"
                         aria-label="Новий пункт чек-листа"
                       />
                       <Button
@@ -1771,7 +1771,7 @@ export default function MarketingPage() {
                       }}
                       onBlur={commitNotesDraft}
                       placeholder="Локація, реквізит, ідеї для кадрів…"
-                      className="min-h-[72px] text-[13px]"
+                      className="min-h-[72px] text-md"
                       aria-label="Нотатки для зйомки"
                     />
                   </div>

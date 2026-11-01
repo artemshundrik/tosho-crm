@@ -58,7 +58,7 @@ function QueueRow({ item }: { item: OverviewQueueItem }) {
         />
       ) : null}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13.5px] font-medium leading-5 text-foreground">{item.title}</div>
+        <div className="truncate text-md font-medium leading-5 text-foreground">{item.title}</div>
         <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
           {/* Чипс нейтральний, а тип позначає крапка. Кольоровий чипс тут уже
               пробували: поруч із кольоровим кантом терміновості й кольоровим

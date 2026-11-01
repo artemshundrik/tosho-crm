@@ -3,7 +3,6 @@ import { Package } from "@/components/icons/appIcons";
 import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import type { QuoteListLine, QuoteListTotal } from "@/features/quotes/quotes-page/quoteListTotal";
 
 export type QuoteKanbanProduct = {
@@ -39,23 +38,19 @@ export type QuoteKanbanProductPreview = {
 };
 
 /**
- * Скільки товарів картка показує повними рядками, а скільки — смугою мініатюр.
+ * Скільки мініатюр стоїть у рядку (хвиля Б4).
  *
- * До цього картка малювала ВСІ позиції прорахунку підряд, по 56 пікселів на
- * рядок: прорахунок на вісім товарів давав картку вищу за екран, і колонка
- * перетворювалась на стрічку, де видно одну справу замість шести. Три повні
- * рядки — це стільки, скільки треба, щоб упізнати замовлення; решта важлива
- * лише кількістю й тим, «що там ще», тож їй досить мініатюр із наведенням.
+ * До 01.11.2026 перші три товари малювались повними рядками з фото 56 px, назвою
+ * й тиражами, і картка прорахунку займала ~470 px: на екрані 1440×900 у колонці
+ * було видно півтори справи, а суми не було зовсім. Тепер фото — рядком мініатюр
+ * 36 px, а назва — одним рядком «перша позиція і ще N · кількість»: товар
+ * упізнається з фото, решту видно на наведенні. Картка ~150 px.
+ *
+ * Чотири по 36 з проміжками — 156 px, і це влазить у найвужчу колонку (224 px,
+ * `QUOTES_COLUMN_WIDTH` у lib/kanbanColumnWidth) разом із «+N». Ряд не
+ * переноситься ніколи.
  */
-const FULL_ROWS = 3;
-/**
- * Мініатюри й «+N» живуть в ОДНОМУ рядку, тож межа рахується з найвужчої
- * колонки: її мінімум — 224 px (`QUOTES_COLUMN_WIDTH` у lib/kanbanColumnWidth),
- * і мінус відступи картки й блоку лишає приблизно 168 пікселів. П'ять мініатюр по 28 з проміжками — 156, і це
- * стеля; коли товарів більше, останнє місце віддаємо лічильнику «+N»,
- * тобто малюємо чотири. Ряд не переноситься ніколи.
- */
-const THUMB_LIMIT = 5;
+const THUMB_LIMIT = 4;
 
 // Варіант дописуємо, лише коли він щось додає: у частини позицій назва
 // варіанта дослівно повторює назву товару, і картка показувала «X · X».
@@ -95,138 +90,61 @@ export function QuoteKanbanProducts({ preview, isLoading, imageLoadStrategy }: Q
           zoomImageUrl: preview?.zoomImageUrl ?? null,
         },
       ];
-  const fullProducts = products.slice(0, FULL_ROWS);
-  const collapsedProducts = products.slice(FULL_ROWS);
-  const thumbProducts =
-    collapsedProducts.length > THUMB_LIMIT ? collapsedProducts.slice(0, THUMB_LIMIT - 1) : collapsedProducts;
-  const overflowProducts = collapsedProducts.slice(thumbProducts.length);
+  const thumbProducts = products.slice(0, THUMB_LIMIT);
+  const overflowProducts = products.slice(THUMB_LIMIT);
+  const first = products[0];
+  const rest = Math.max((preview?.itemCount ?? products.length) - 1, products.length - 1, 0);
+  const summary = `${productDisplayName(first)}${rest ? ` і ще ${rest}` : ""}`;
 
   /*
-    ТІНТ ВІДДІЛЯЄ, РАМКА НІ. Блок мав власну межу `border-border/60` — того ж
-    кольору й тієї ж ваги, що й межа самої картки, — тож на дошці читалось три
-    рамки одна в одній: картка, блок, плитка товару. Заливка `bg-secondary` каже
-    «це окремий блок» сама, і після зняття межі рамка на картці лишається одна.
+    БЕЗ БЛОКУ В КАРТЦІ. Мініатюри стоять прямо на картці: тінтований блок
+    «Товари» з плитками всередині давав картку в картці, а рядок фото й так
+    читається як окрема річ.
   */
   return (
-    <div className="mt-3 rounded-inner bg-secondary px-3 py-2.5">
-      {/*
-        ЗАГОЛОВКА «ТОВАРИ» БІЛЬШЕ НЕМАЄ. Слово стояло над рядками з фотографіями,
-        назвами й тиражами — підпис до очевидного, який щоразу з'їдав рядок
-        висоти на кожній картці дошки. Лишилось те єдине, чого з самих рядків не
-        видно: скільки позицій насправді, коли список обрізаний. Значок каже, що
-        рахуємо, число — скільки; читалці це саме й проговорює `aria-label`, бо
-        голе число їй нічого не каже.
-      */}
-      {collapsedProducts.length ? (
-        <div
-          aria-label={`Товарів: ${products.length}`}
-          className="mb-2 inline-flex items-center gap-1.5 text-2xs font-semibold tabular-nums text-muted-foreground"
-        >
-          <Package aria-hidden="true" className="h-3.5 w-3.5" />
-          {products.length}
-        </div>
-      ) : null}
-      <div className="divide-y divide-border/50">
-        {fullProducts.map((product, productIndex) => {
+    <div className="mt-2 space-y-1.5">
+      <div className="flex flex-nowrap items-center gap-1" aria-label={`Товарів: ${preview?.itemCount ?? products.length}`}>
+        {thumbProducts.map((product) => {
           const displayName = productDisplayName(product);
           return (
-            <div
-              key={product.id}
-              className={cn(
-                "flex items-center gap-2.5",
-                productIndex > 0 && "pt-2",
-                productIndex < fullProducts.length - 1 && "pb-2"
-              )}
-            >
+            <div key={product.id} title={`${displayName} · ${product.qtyLabel}`} className="flex shrink-0">
               {product.specPreset ? (
-                <PrintModelTile presetKey={product.specPreset} className="h-14 w-14 rounded-lg" iconClassName="h-8 w-8" />
+                <PrintModelTile presetKey={product.specPreset} className="h-9 w-9 rounded-md" iconClassName="h-5 w-5" />
               ) : product.imageUrl ? (
                 <KanbanImageZoomPreview
                   imageUrl={product.imageUrl}
                   zoomImageUrl={product.zoomImageUrl ?? undefined}
                   alt={displayName}
+                  className="h-9 w-9 rounded-md"
                   loadStrategy={imageLoadStrategy}
                 />
               ) : (
-                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-secondary">
+                <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-border/60 bg-secondary">
                   {isLoading ? (
-                    // Каркас на весь квадрат, а не крапка посередині: крапка
-                    // читалась як зламане зображення, а не як очікування.
-                    <Skeleton className="h-full w-full rounded-lg" />
+                    <Skeleton className="h-full w-full rounded-md" />
                   ) : (
                     <div className="grid h-full w-full place-items-center text-muted-foreground/60">
-                      <Package className="h-4 w-4" />
+                      <Package className="h-3.5 w-3.5" />
                     </div>
                   )}
                 </div>
               )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[14px] font-medium" title={displayName}>
-                  {displayName}
-                </div>
-                {product.sku ? (
-                  <div className="mt-0.5 truncate text-[12px] font-medium text-muted-foreground">
-                    Артикул: {product.sku}
-                  </div>
-                ) : null}
-                {product.runLabels?.length ? (
-                  <div className="mt-1 flex flex-wrap items-center gap-1">
-                    {product.runLabels.map((runLabel) => (
-                      <span
-                        key={runLabel.id}
-                        className={cn(
-                          "inline-flex h-5 items-center rounded-full border px-2 text-2xs leading-none",
-                          runLabel.active
-                            ? "border-foreground/25 bg-foreground/10 font-semibold text-foreground"
-                            : "border-border/60 bg-muted/20 font-medium text-muted-foreground"
-                        )}
-                      >
-                        {runLabel.label}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-0.5 text-[13px] font-normal text-muted-foreground">{product.qtyLabel}</div>
-                )}
-              </div>
             </div>
           );
         })}
+        {overflowProducts.length ? (
+          <span
+            className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-dashed border-border/60 px-1.5 text-xs font-semibold tabular-nums text-muted-foreground"
+            title={overflowProducts.map((product) => productDisplayName(product)).join(", ")}
+          >
+            +{overflowProducts.length}
+          </span>
+        ) : null}
       </div>
-      {collapsedProducts.length ? (
-        // Хвіст списку — смугою мініатюр: назва тут не потрібна (її видно на
-        // наведенні), а от «що там ще» одним поглядом — потрібно.
-        <div className="mt-2 flex flex-nowrap items-center gap-1 border-t border-border/50 pt-2">
-          {thumbProducts.map((product) => {
-            const displayName = productDisplayName(product);
-            return (
-              <div key={product.id} title={`${displayName} · ${product.qtyLabel}`} className="flex shrink-0">
-                {product.imageUrl ? (
-                  <KanbanImageZoomPreview
-                    imageUrl={product.imageUrl}
-                    zoomImageUrl={product.zoomImageUrl ?? undefined}
-                    alt={displayName}
-                    className="h-7 w-7 rounded-md"
-                    loadStrategy="visible"
-                  />
-                ) : (
-                  <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border/60 bg-secondary text-muted-foreground/60">
-                    <Package className="h-3 w-3" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {overflowProducts.length ? (
-            <span
-              className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-border/60 px-1.5 text-2xs font-semibold text-muted-foreground"
-              title={overflowProducts.map((product) => product.name).join(", ")}
-            >
-              +{overflowProducts.length}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="truncate text-xs text-muted-foreground" title={products.map((product) => productDisplayName(product)).join(", ")}>
+        {summary}
+        {first.qtyLabel.trim() ? <span className="tabular-nums"> · {first.qtyLabel}</span> : null}
+      </div>
     </div>
   );
 }

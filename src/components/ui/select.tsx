@@ -192,7 +192,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none flex-col items-stretch rounded-lg py-1.5 pl-2 pr-8 text-sm leading-[20px] outline-none transition-colors focus:bg-muted focus:text-foreground data-[state=checked]:bg-muted data-[state=checked]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-pointer select-none flex-col items-stretch rounded-lg py-1 pl-2 pr-8 text-md leading-5 pointer-coarse:py-2 outline-none transition-colors focus:bg-muted focus:text-foreground data-[state=checked]:bg-muted data-[state=checked]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}
@@ -202,7 +202,7 @@ const SelectItem = React.forwardRef<
         <Check className="h-4 w-4" />
       </SelectPrimitive.ItemIndicator>
     </span>
-    <SelectPrimitive.ItemText className="text-sm leading-[20px]">{children}</SelectPrimitive.ItemText>
+    <SelectPrimitive.ItemText className="text-md leading-5">{children}</SelectPrimitive.ItemText>
     {description ? (
       <span className="mt-0.5 text-xs leading-[16px] text-muted-foreground">{description}</span>
     ) : null}

@@ -89,7 +89,7 @@ function NotificationRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
-          <span className="line-clamp-2 min-w-0 flex-1 text-[13.5px] font-semibold leading-tight text-foreground">
+          <span className="line-clamp-2 min-w-0 flex-1 text-md font-semibold leading-tight text-foreground">
             {item.title}
           </span>
           <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
@@ -281,7 +281,7 @@ export function NotificationsMenu({
                 <span className="mx-auto mb-2.5 flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                   <CheckCheck className="h-4 w-4" />
                 </span>
-                <div className="text-[13.5px] font-semibold text-foreground">Усе прочитано</div>
+                <div className="text-md font-semibold text-foreground">Усе прочитано</div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   Нові події зʼявляться тут автоматично.
                 </div>

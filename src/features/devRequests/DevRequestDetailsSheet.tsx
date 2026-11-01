@@ -294,9 +294,9 @@ export function DevRequestDetailsSheet({
                   підписувати не треба. whitespace-pre-wrap — надиктований текст
                   приходить абзацами, без цього вони склеїлись би в стіну. */}
               {shown.body.trim() ? (
-                <p className="whitespace-pre-wrap text-[13px] leading-relaxed">{shown.body}</p>
+                <p className="whitespace-pre-wrap text-md leading-relaxed">{shown.body}</p>
               ) : (
-                <p className="text-[13px] text-muted-foreground">опису немає</p>
+                <p className="text-md text-muted-foreground">опису немає</p>
               )}
 
               {shown.checklist.length > 0 || canManage ? (

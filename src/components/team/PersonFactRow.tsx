@@ -48,7 +48,7 @@ export function RailRow({ label, value }: { label: string; value: React.ReactNod
   return (
     <div className="flex items-baseline gap-3 border-b border-border/40 py-1.5 last:border-b-0">
       <span className="w-[5.5rem] shrink-0 text-2xs text-muted-foreground">{label}</span>
-      <span className="min-w-0 flex-1 text-[13px] font-medium text-foreground">{value}</span>
+      <span className="min-w-0 flex-1 text-md font-medium text-foreground">{value}</span>
     </div>
   );
 }

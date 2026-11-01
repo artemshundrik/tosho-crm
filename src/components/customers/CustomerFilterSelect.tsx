@@ -151,7 +151,7 @@ export function CustomerFilterSelect({
   const active = value !== null;
   const rowClass = (index: number) =>
     cn(
-      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] outline-none",
+      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-md outline-none",
       isNarrow && "min-h-11 text-sm",
       index === highlight
         ? "bg-accent text-accent-foreground"

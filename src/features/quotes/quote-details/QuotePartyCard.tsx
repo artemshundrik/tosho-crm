@@ -72,7 +72,7 @@ export function QuotePartyCard({
           size={36}
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13.5px] font-semibold leading-tight">
+          <span className="block truncate text-md font-semibold leading-tight">
             {customerName ?? "Замовник не вказаний"}
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">

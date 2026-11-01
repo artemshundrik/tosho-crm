@@ -57,7 +57,7 @@ export function ThreadReactions({ reactions, userId, memberName, onToggle, align
                       : "border-border/60 bg-card text-foreground/80 hover:bg-muted/60"
                   )}
                 >
-                  <span className="text-[13px] leading-none">{emoji}</span>
+                  <span className="text-md leading-none">{emoji}</span>
                   {list.length}
                 </button>
             </HoverTip>

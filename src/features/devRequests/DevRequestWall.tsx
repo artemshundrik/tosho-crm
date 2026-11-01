@@ -159,7 +159,7 @@ export function DevRequestWall({
               ) : null}
             </div>
 
-            <p className="mt-2 text-[13px] font-medium leading-snug">{request.title}</p>
+            <p className="mt-2 text-md font-medium leading-snug">{request.title}</p>
 
             {/* Опис — головна відмінність від списку: ідею видно цілком, не
                 відкриваючи. Обрізаємо на чотирьох рядках, бо далі це вже не

@@ -100,7 +100,7 @@ export function KanbanOffBoardList({
                   ) : null}
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium" title={entry.title}>
+                    <p className="truncate text-md font-medium" title={entry.title}>
                       {entry.title}
                     </p>
                     {entry.subtitle ? (

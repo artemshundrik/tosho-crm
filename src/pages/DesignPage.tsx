@@ -4517,45 +4517,92 @@ export default function DesignPage() {
         }}
         surface="raised"
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            {/* «Задача» над номером задачі нічого не казала — це вся дошка.
-                Підпис лишився лише там, де номер чужий: номер прорахунку. */}
-            {isLinkedQuote ? <div className="text-xs font-semibold text-muted-foreground">Прорахунок</div> : null}
-            <div className={cn("flex flex-wrap items-center gap-2", isLinkedQuote && "mt-0.5")}>
-              {isLinkedQuote ? (
-                <HoverCopyText
-                  value={getTaskDisplayNumber(task)}
-                  textClassName="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap hover:underline"
-                  successMessage="Номер прорахунку скопійовано"
-                  copyLabel="Скопіювати номер прорахунку"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    navigate(`/orders/estimates/${task.quoteId}`);
-                  }}
-                />
-              ) : (
-                <HoverCopyText
-                  value={getTaskDisplayNumber(task)}
-                  textClassName="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap"
-                  successMessage="Номер дизайн-задачі скопійовано"
-                  copyLabel="Скопіювати номер дизайн-задачі"
-                  title={task.title ?? getTaskDisplayNumber(task)}
-                />
-              )}
-              {isAttachedFromStandalone ? (
-                <Badge variant="outline" className="h-5 px-2 text-3xs">
-                  Привʼязано
-                </Badge>
-              ) : null}
-            </div>
+        {/*
+          КОМПАКТНА КАРТКА (хвиля Б4), та сама будова, що на дошці прорахунків:
+          номер і виконавець, назва, замовник, товар мініатюрою, тип, термін і
+          естімейт. Стан не повторюється — його каже колонка.
+        */}
+        <div className="flex items-center gap-1.5">
+          {isLinkedQuote ? (
+            <>
+              <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Задача прорахунку" />
+              <HoverCopyText
+                value={getTaskDisplayNumber(task)}
+                textClassName="font-mono text-xs text-muted-foreground whitespace-nowrap hover:underline"
+                successMessage="Номер прорахунку скопійовано"
+                copyLabel="Скопіювати номер прорахунку"
+                title="Відкрити прорахунок"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigate(`/orders/estimates/${task.quoteId}`);
+                }}
+              />
+            </>
+          ) : (
+            <HoverCopyText
+              value={getTaskDisplayNumber(task)}
+              textClassName="font-mono text-xs text-muted-foreground whitespace-nowrap"
+              successMessage="Номер дизайн-задачі скопійовано"
+              copyLabel="Скопіювати номер дизайн-задачі"
+              title={task.title ?? getTaskDisplayNumber(task)}
+            />
+          )}
+          {isAttachedFromStandalone ? (
+            <Badge variant="outline" className="h-5 px-1.5 text-3xs" title="Окрема задача привʼязана до прорахунку">
+              Привʼязано
+            </Badge>
+          ) : null}
+          <div className="ml-auto flex shrink-0 items-center -space-x-1.5">
+            {task.assigneeUserId ? (
+              (() => {
+                const assigneeId = task.assigneeUserId as string;
+                const avatar = (
+                  <AvatarBase
+                    src={getTaskAssigneeAvatar(task)}
+                    name={assigneeLabel}
+                    fallback={getInitials(assigneeLabel)}
+                    size={20}
+                    className="text-3xs font-semibold ring-2 ring-card"
+                    availability={getMemberAvailability(assigneeId)}
+                    suppressNativeTitle
+                    absence={memberAbsenceById[assigneeId] ?? null}
+                    presence={onlineMemberIds.has(assigneeId) ? "online" : "offline"}
+                    inactive={memberInactiveById[assigneeId] ?? false}
+                  />
+                );
+                // Картка під курсором: на цій аватарці менеджер вирішує, чи не
+                // перевантажений виконавець.
+                const person = buildPersonCard(assigneeId);
+                return person ? <PersonHoverCard person={person}>{avatar}</PersonHoverCard> : avatar;
+              })()
+            ) : (
+              <span
+                className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-dashed border-border text-muted-foreground"
+                title="Без виконавця"
+              >
+                <User className="h-3 w-3" />
+              </span>
+            )}
+            {collaboratorEntries.slice(0, 2).map((entry) => (
+              <AvatarBase
+                key={`task-collaborator-${task.id}-${entry.userId}`}
+                src={entry.avatarUrl}
+                name={entry.label}
+                fallback={getInitials(entry.label)}
+                size={20}
+                className="text-3xs font-semibold ring-2 ring-card"
+                availability={getMemberAvailability(entry.userId)}
+                presence={onlineMemberIds.has(entry.userId) ? "online" : "offline"}
+                inactive={memberInactiveById[entry.userId] ?? false}
+              />
+            ))}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="iconSm"
-                className="text-muted-foreground"
+                className="-my-1 -mr-1.5 text-muted-foreground"
                 onClick={(event) => event.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />
@@ -4676,183 +4723,94 @@ export default function DesignPage() {
               </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {isLinkedQuote && task.title ? (
-          <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div>
-        ) : null}
-        {!isLinkedQuote && task.title ? (
-          <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div>
-        ) : null}
-        {isAttachedFromStandalone ? (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/6 px-2.5 py-1 text-2xs text-muted-foreground">
-            <Link2 className="h-3.5 w-3.5 text-primary" />
-            <span>Окрема задача привʼязана до прорахунку</span>
-          </div>
-        ) : null}
-        {task.designTaskType ? (
-          /* Тип задачі — НЕЙТРАЛЬНИЙ, і це навмисно.
-             Раніше тут стояв accent (фіолетовий) для всіх п'яти типів одразу, тож
-             колір не розрізняв нічого — «Верстка» і «Презентація» виглядали однаково.
-             Гірше: той самий accent означає статус pm_review («Дизайн готовий»), тому
-             на борді один відтінок ніс дві різні смислові осі.
-             На канбані статус уже закодований колонкою, а єдине, що на картці вимагає
-             реакції, — дедлайн. Тип сканують, уже відкривши картку, тож він віддає
-             кольоровий бюджет дедлайну, а сам упізнається іконкою й текстом.
-             Це також вирівнює борд з рештою застосунку: у згрупованому вигляді, на
-             сторінці задачі та в картці клієнта тип уже був нейтральним.
-
-             Заливка — bg-muted/20, а не neutral-soft: суцільний сірий (#f0f0f0)
-             на білій картці читається як ще одна пляма поруч з дедлайном. Тут
-             навмисно та сама трійка, що й у згрупованому вигляді нижче по файлу,
-             щоб два вигляди однієї сторінки не розходились. */
-          <Badge
-            variant="outline"
-            className="mt-2 gap-1.5 rounded-full border-border/60 bg-muted/20 px-2.5 py-1 text-2xs font-medium normal-case tracking-normal text-muted-foreground"
+        {task.title ? <div className="mt-1 line-clamp-2 text-md font-medium">{task.title}</div> : null}
+        <div className="mt-1.5 flex min-w-0 items-center gap-2">
+          <PartyHoverCard
+            target={
+              task.customerId && task.customerType
+                ? {
+                    kind: task.customerType,
+                    id: task.customerId,
+                    name: task.customerName ?? "Замовник / Лід",
+                    logoUrl: task.customerLogoUrl ?? null,
+                    managerLabel: task.quoteManagerUserId ? memberById[task.quoteManagerUserId] ?? null : null,
+                    managerAvatarUrl: task.quoteManagerUserId ? getMemberAvatar(task.quoteManagerUserId) : null,
+                  }
+                : null
+            }
           >
-            {(() => {
-              const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
-              return <TypeIcon className="h-3.5 w-3.5" />;
-            })()}
-            <span>{DESIGN_TASK_TYPE_LABELS[task.designTaskType]}</span>
-          </Badge>
-        ) : null}
-        <div className="mt-3 space-y-3">
-          <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
-            <PartyHoverCard
-              target={
-                task.customerId && task.customerType
-                  ? {
-                      kind: task.customerType,
-                      id: task.customerId,
-                      name: task.customerName ?? "Замовник / Лід",
-                      logoUrl: task.customerLogoUrl ?? null,
-                      managerLabel: task.quoteManagerUserId ? memberById[task.quoteManagerUserId] ?? null : null,
-                      managerAvatarUrl: task.quoteManagerUserId ? getMemberAvatar(task.quoteManagerUserId) : null,
-                    }
-                  : null
-              }
-            >
-              <EntityAvatar
-                src={task.customerLogoUrl ?? null}
-                name={task.customerName ?? "Замовник / Лід"}
-                fallback={getInitials(task.customerName)}
-                size={32}
-              />
-            </PartyHoverCard>
-            {/*
-              Підпису «ЗАМОВНИК» над назвою компанії тут не було чого нести: на
-              цій дошці він був СТАЛИЙ — жодного іншого значення не приймав, —
-              і просто з'їдав рядок висоти на кожній картці (REQ-175#p8).
-            */}
-            <div className="min-w-0">
-              <div className="truncate text-[14px] font-semibold">{task.customerName ?? "Не вказано"}</div>
-            </div>
-          </div>
+            <EntityAvatar
+              src={task.customerLogoUrl ?? null}
+              name={task.customerName ?? "Замовник / Лід"}
+              fallback={getInitials(task.customerName)}
+              size={20}
+            />
+          </PartyHoverCard>
+          <span className="truncate text-md font-semibold">{task.customerName ?? "Не вказано"}</span>
         </div>
         {task.productName ? (
-          <div className="mt-3 rounded-inner border border-border/60 bg-background/35 px-3 py-2.5">
-            <div className="flex items-center gap-2.5">
-              {task.productSpecPreset ? (
-                <PrintModelTile presetKey={task.productSpecPreset} className="h-14 w-14 rounded-lg" iconClassName="h-8 w-8" />
-              ) : task.productImageUrl ? (
-                <KanbanImageZoomPreview
-                  imageUrl={task.productImageUrl}
-                  zoomImageUrl={task.productZoomImageUrl ?? task.productImageUrl}
-                  alt={task.productName}
-                  loadStrategy="visible"
-                />
-              ) : (
-                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted/25">
-                  <div className="grid h-full w-full place-items-center text-muted-foreground/60">
-                    <Package className="h-4 w-4" />
-                  </div>
-                </div>
-              )}
-              <div className="min-w-0">
-                <div className="truncate text-[14px] font-medium" title={task.productName}>
-                  {task.productName}
-                </div>
-                {task.productQtyLabel ? (
-                  <div className="text-[13px] font-normal text-muted-foreground">{task.productQtyLabel}</div>
-                ) : null}
+          // Товар — мініатюрою 36 px і рядком «назва · кількість», як на дошці
+          // прорахунків, без блоку в картці.
+          <div className="mt-2 flex min-w-0 items-center gap-2">
+            {task.productSpecPreset ? (
+              <PrintModelTile presetKey={task.productSpecPreset} className="h-9 w-9 rounded-md" iconClassName="h-5 w-5" />
+            ) : task.productImageUrl ? (
+              <KanbanImageZoomPreview
+                imageUrl={task.productImageUrl}
+                zoomImageUrl={task.productZoomImageUrl ?? task.productImageUrl}
+                alt={task.productName}
+                className="h-9 w-9 rounded-md"
+                loadStrategy="visible"
+              />
+            ) : (
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border/60 bg-secondary text-muted-foreground/60">
+                <Package className="h-3.5 w-3.5" />
               </div>
+            )}
+            <div className="min-w-0 truncate text-xs text-muted-foreground" title={task.productName}>
+              {task.productName}
+              {task.productQtyLabel ? <span className="tabular-nums"> · {task.productQtyLabel}</span> : null}
             </div>
           </div>
         ) : null}
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
-          <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
-            <div className="flex shrink-0 items-center -space-x-2">
-              {task.assigneeUserId ? (
-                (() => {
-                  const assigneeId = task.assigneeUserId as string;
-                  const avatar = (
-                    <AvatarBase
-                      src={getTaskAssigneeAvatar(task)}
-                      name={assigneeLabel}
-                      fallback={getInitials(assigneeLabel)}
-                      size={26}
-                      className="text-3xs font-semibold ring-2 ring-background"
-                      availability={getMemberAvailability(assigneeId)}
-                      suppressNativeTitle
-                      absence={memberAbsenceById[assigneeId] ?? null}
-                      presence={onlineMemberIds.has(assigneeId) ? "online" : "offline"}
-                      inactive={memberInactiveById[assigneeId] ?? false}
-                    />
-                  );
-                  // Картка під курсором лише там, де є кого показувати: на цій
-                  // аватарці менеджер вирішує, чи не перевантажений виконавець.
-                  const person = buildPersonCard(assigneeId);
-                  return person ? <PersonHoverCard person={person}>{avatar}</PersonHoverCard> : avatar;
-                })()
-              ) : (
-                <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground ring-2 ring-background">
-                  <User className="h-3.5 w-3.5" />
-                </div>
-              )}
-              {collaboratorEntries.slice(0, 2).map((entry) => (
-                <AvatarBase
-                  key={`task-collaborator-${task.id}-${entry.userId}`}
-                  src={entry.avatarUrl}
-                  name={entry.label}
-                  fallback={getInitials(entry.label)}
-                  size={22}
-                  className="text-3xs font-semibold ring-2 ring-background"
-                  availability={getMemberAvailability(entry.userId)}
-                  presence={onlineMemberIds.has(entry.userId) ? "online" : "offline"}
-                  inactive={memberInactiveById[entry.userId] ?? false}
-                />
-              ))}
-            </div>
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate font-medium text-foreground/90">{assigneeLabel}</span>
-              {collaboratorEntries.length > 0 ? (
-                <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-3xs">
-                  {collaboratorEntries.length > 1 ? `Спільна +${collaboratorEntries.length}` : "Спільна"}
-                </Badge>
-              ) : null}
-            </div>
+        {/*
+          Тип — НЕЙТРАЛЬНИЙ, рядком з іконкою: кольоровий бюджет картки віддано
+          дедлайну, а accent уже означає статус pm_review («Дизайн готовий»).
+        */}
+        {task.designTaskType ? (
+          <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {(() => {
+              const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
+              return <TypeIcon className="h-3.5 w-3.5 shrink-0" />;
+            })()}
+            <span className="truncate">{DESIGN_TASK_TYPE_LABELS[task.designTaskType]}</span>
+            {collaboratorEntries.length > 0 ? (
+              <span className="shrink-0">· {collaboratorEntries.length > 1 ? `спільна +${collaboratorEntries.length}` : "спільна"}</span>
+            ) : null}
           </div>
-          {task.designDeadline ? (
-            (() => {
-              const shortLabel = formatDeadlineShort(task.designDeadline);
-              if (!shortLabel) return null;
-              return <QuoteDeadlineBadge tone={deadlineBadge.tone} label={shortLabel} compact />;
-            })()
-          ) : null}
+        ) : null}
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs tabular-nums">
+          {task.designDeadline && formatDeadlineShort(task.designDeadline) ? (
+            <QuoteDeadlineBadge tone={deadlineBadge.tone} label={formatDeadlineShort(task.designDeadline)!} compact />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+          <span className="text-muted-foreground" title="Естімейт">
+            {getTaskEstimateMinutes(task) ? formatEstimateMinutes(getTaskEstimateMinutes(task)) : "без естімейту"}
+          </span>
         </div>
         {!task.assigneeUserId && canSelfAssign && userId ? (
-          <div className="mt-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-2 w-full text-xs"
-              onClick={(event) => {
-                event.stopPropagation();
-                void applyAssignee(task, userId);
-              }}
-            >
-              Взяти в роботу
-            </Button>
-          </div>
+          <Button
+            size="xs"
+            variant="outline"
+            className="mt-2 w-full"
+            onClick={(event) => {
+              event.stopPropagation();
+              void applyAssignee(task, userId);
+            }}
+          >
+            Взяти в роботу
+          </Button>
         ) : null}
       </KanbanCard>
     );

@@ -95,10 +95,10 @@ export function StackOverview() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Tabs value={mode} onValueChange={(value) => setMode(value as Mode)}>
           <TabsList>
-            <TabsTrigger value="layers" className="text-[13px]">
+            <TabsTrigger value="layers" className="text-md">
               За шарами
             </TabsTrigger>
-            <TabsTrigger value="urgency" className="text-[13px]">
+            <TabsTrigger value="urgency" className="text-md">
               За терміновістю
             </TabsTrigger>
           </TabsList>
@@ -472,7 +472,7 @@ function StackGroup({
         )}
       >
         <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", dot)} />
-        <span className="text-[13.5px] font-semibold">{label}</span>
+        <span className="text-md font-semibold">{label}</span>
         <span className="figure text-2xs text-muted-foreground">{count}</span>
         <span className="ml-auto text-xs text-muted-foreground">{summary}</span>
         <ChevronDown
@@ -582,7 +582,7 @@ function StackRow({ item }: { item: StackItem }) {
         ) : null}
         <AvatarFallback
           className={cn(
-            "figure rounded-lg text-[13px] font-semibold",
+            "figure rounded-lg text-md font-semibold",
             item.worstSeverity ? "bg-destructive/10 text-destructive" : LAYER_META[item.layer].tile
           )}
         >
@@ -626,7 +626,7 @@ function StackRow({ item }: { item: StackItem }) {
       </span>
 
       <span className="shrink-0 text-right">
-        <span className="figure block text-[13.5px] font-medium">{item.version}</span>
+        <span className="figure block text-md font-medium">{item.version}</span>
         <span className="block text-2xs text-muted-foreground">
           {item.state === "fresh" ? (
             "найновіша"
@@ -692,14 +692,14 @@ function StackRowPopover({ item }: { item: StackItem }) {
           /* Курсор-ручка навмисно: це не посилання, але поводиться як
              клікабельне, і рука — єдиний натяк, який людина читає без
              підказки. Підкреслення при наведенні дублює той самий сигнал. */
-          className="cursor-pointer truncate rounded text-left text-[13.5px] font-medium underline-offset-4 hover:underline"
+          className="cursor-pointer truncate rounded text-left text-md font-medium underline-offset-4 hover:underline"
         >
           {item.label ?? item.name}
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-3.5">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[13.5px] font-semibold">{item.label ?? item.name}</span>
+          <span className="text-md font-semibold">{item.label ?? item.name}</span>
           <span className="figure text-2xs text-muted-foreground">{item.version}</span>
         </div>
 
@@ -1008,7 +1008,7 @@ function GuardsCard() {
                         </button>
                       </PopoverTrigger>
                       <PopoverContent align="start" className="w-72 p-3">
-                        <p className="text-[13px] font-semibold">{guard.name}</p>
+                        <p className="text-md font-semibold">{guard.name}</p>
                         {guard.note ? (
                           <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{guard.note}</p>
                         ) : null}

@@ -747,7 +747,7 @@ function PapercutCard({
                 </span>
                 <span
                   className={cn(
-                    "text-[13px] leading-snug",
+                    "text-md leading-snug",
                     item.state === "done" && "text-muted-foreground line-through"
                   )}
                 >
@@ -855,7 +855,7 @@ function AddPapercut({ disabled, onAdd }: { disabled: boolean; onAdd: (text: str
         onBlur={submit}
         placeholder="додати дрібницю"
         aria-label="Додати дрібницю"
-        className="min-w-0 flex-1 bg-transparent py-1 text-[13px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
+        className="min-w-0 flex-1 bg-transparent py-1 text-md text-foreground placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-50"
       />
     </div>
   );

@@ -4780,7 +4780,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    */
   const renderQuoteKanbanCard = (row: QuoteListRow, columnId: string, index: number) => {
     const badge = getDeadlineBadge(row.deadline_at ?? null, row.status);
-    const ColumnStatusIcon = statusIcons[columnId] ?? Clock;
     const Icon = quoteTypeIcon(row.quote_type);
     const membership = quoteMembershipByQuoteId.get(row.id);
     const productPreview = kanbanProductByQuoteId[row.id];
@@ -4799,32 +4798,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         interactive={canOpen}
         disabled={!canOpen}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <ColumnStatusIcon
-              className={cn("h-4 w-4 shrink-0", statusColorClass[columnId] ?? "text-muted-foreground/80")}
-            />
-            <HoverCopyText
-              value={row.number}
-              textClassName="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap"
-              successMessage="Номер прорахунку скопійовано"
-              copyLabel="Скопіювати номер прорахунку"
-            >
-              {row.number ?? "Не вказано"}
-            </HoverCopyText>
-          </div>
-          <div className="flex max-w-[150px] flex-wrap items-center justify-end gap-1.5 shrink-0">
-            <span className="inline-flex h-6 items-center gap-1 text-xs font-medium text-muted-foreground">
-              {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-              {quoteTypeLabel(row.quote_type)}
-            </span>
+        {/*
+          КОМПАКТНА КАРТКА (хвиля Б4): ті самі клітинки, що й рядок таблиці, в
+          тому самому порядку — номер і менеджер, замовник, товари, термін і
+          сума. Стан не повторюється: його каже колонка.
+        */}
+        <div className="flex items-center gap-2">
+          <HoverCopyText
+            value={row.number}
+            textClassName="font-mono text-xs text-muted-foreground whitespace-nowrap"
+            successMessage="Номер прорахунку скопійовано"
+            copyLabel="Скопіювати номер прорахунку"
+          >
+            {row.number ?? "Не вказано"}
+          </HoverCopyText>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {Icon ? (
+              <span className="text-muted-foreground" title={quoteTypeLabel(row.quote_type)} aria-label={quoteTypeLabel(row.quote_type)}>
+                <Icon className="h-3.5 w-3.5" />
+              </span>
+            ) : null}
             {membership?.kp_count ? (
               <Badge
                 variant="outline"
                 title={membership.kp_names.join(", ")}
-                className="h-6 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-kp"
+                className="h-5 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-kp"
               >
-                <FileText className="h-3 w-3" />
                 КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
               </Badge>
             ) : null}
@@ -4832,59 +4831,59 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <Badge
                 variant="outline"
                 title={membership.set_names.join(", ")}
-                className="h-6 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-set"
+                className="h-5 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-set"
               >
-                <Layers className="h-3 w-3" />
                 Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
               </Badge>
             ) : null}
             {!canOpen ? (
-              <div
-                className="inline-flex h-6 items-center justify-center rounded-md border border-border/60 bg-secondary px-2 text-3xs font-semibold text-muted-foreground"
-                title="Лише свої"
-                aria-label="Лише свої"
-              >
-                <Lock className="h-3 w-3" />
-              </div>
+              <span className="text-muted-foreground" title="Лише свої" aria-label="Лише свої">
+                <Lock className="h-3.5 w-3.5" />
+              </span>
             ) : null}
+            <PersonHoverCardMaybe person={row.assigned_to ? buildPersonCard(row.assigned_to) : null}>
+              <AvatarBase
+                src={manager?.avatarUrl ?? null}
+                name={managerLabel}
+                fallback={row.assigned_to ? getInitials(managerLabel) : "—"}
+                size={20}
+                className="text-3xs font-semibold"
+                availability={manager?.availabilityStatus ?? null}
+                absence={manager?.absence ?? null}
+                suppressNativeTitle
+                presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
+                inactive={isManagerInactive(row.assigned_to)}
+              />
+            </PersonHoverCardMaybe>
           </div>
         </div>
-        <div className="mt-3 space-y-3">
-          <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
-            <PartyHoverCard
-              target={
-                row.customer_id || row.lead_id
-                  ? {
-                      kind: row.customer_id ? ("customer" as const) : ("lead" as const),
-                      id: (row.customer_id ?? row.lead_id) as string,
-                      name: row.customer_name ?? (row.customer_id ? "Замовник" : "Лід"),
-                      logoUrl: row.customer_logo_url ?? null,
-                      managerLabel: getManagerLabel(row.assigned_to),
-                      managerAvatarUrl: resolveManagerMember(row.assigned_to)?.avatarUrl ?? null,
-                    }
-                  : null
-              }
-            >
-              <EntityAvatar
-                src={row.customer_logo_url ?? null}
-                name={row.customer_name ?? "Замовник / Лід"}
-                fallback={getInitials(row.customer_name)}
-                size={32}
-              />
-            </PartyHoverCard>
-            {/*
-              Підпис лишився ТІЛЬКИ для ліда. «ЗАМОВНИК» над назвою компанії з
-              її ж логотипом не додавав нічого — це підпис до очевидного. А от
-              «ЛІД» каже, що справа ще не має замовника, і це виняток, який
-              видно з першого погляду.
-            */}
-            <div className="min-w-0">
-              {row.customer_id ? null : (
-                <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">Лід</div>
-              )}
-              <div className="truncate text-[14px] font-semibold">{row.customer_name ?? "Не вказано"}</div>
-            </div>
-          </div>
+        <div className="mt-1.5 flex min-w-0 items-center gap-2">
+          <PartyHoverCard
+            target={
+              row.customer_id || row.lead_id
+                ? {
+                    kind: row.customer_id ? ("customer" as const) : ("lead" as const),
+                    id: (row.customer_id ?? row.lead_id) as string,
+                    name: row.customer_name ?? (row.customer_id ? "Замовник" : "Лід"),
+                    logoUrl: row.customer_logo_url ?? null,
+                    managerLabel: getManagerLabel(row.assigned_to),
+                    managerAvatarUrl: resolveManagerMember(row.assigned_to)?.avatarUrl ?? null,
+                  }
+                : null
+            }
+          >
+            <EntityAvatar
+              src={row.customer_logo_url ?? null}
+              name={row.customer_name ?? "Замовник / Лід"}
+              fallback={getInitials(row.customer_name)}
+              size={20}
+            />
+          </PartyHoverCard>
+          {/* Підпис лише для ліда: справа ще не має замовника — виняток, який видно одразу. */}
+          <span className="truncate text-md font-semibold">{row.customer_name ?? "Не вказано"}</span>
+          {row.customer_id ? null : (
+            <span className="shrink-0 text-3xs uppercase tracking-caps text-muted-foreground/70">Лід</span>
+          )}
         </div>
 
         <QuoteKanbanProducts
@@ -4897,31 +4896,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           }
         />
 
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
-          <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
-            <PersonHoverCardMaybe person={row.assigned_to ? buildPersonCard(row.assigned_to) : null}>
-              <AvatarBase
-                src={manager?.avatarUrl ?? null}
-                name={managerLabel}
-                fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
-                size={26}
-                className="text-3xs font-semibold"
-                availability={manager?.availabilityStatus ?? null}
-                absence={manager?.absence ?? null}
-                suppressNativeTitle
-                presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
-                inactive={isManagerInactive(row.assigned_to)}
-              />
-            </PersonHoverCardMaybe>
-            <span className="truncate font-medium text-foreground/90">{managerLabel}</span>
-          </div>
-          {row.deadline_at
-            ? (() => {
-                const shortLabel = formatDeadlineShort(row.deadline_at!);
-                if (!shortLabel) return null;
-                return <QuoteDeadlineBadge tone={badge.tone} label={shortLabel} compact />;
-              })()
-            : null}
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs tabular-nums">
+          {row.deadline_at && formatDeadlineShort(row.deadline_at) ? (
+            <QuoteDeadlineBadge tone={badge.tone} label={formatDeadlineShort(row.deadline_at)!} compact />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+          <span className="font-semibold">
+            <QuoteTotalCellContent preview={productPreview} previewsLoading={kanbanPreviewsLoading} />
+          </span>
         </div>
       </KanbanCard>
     );

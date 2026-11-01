@@ -226,7 +226,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                       inactive={member.inactive}
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-semibold text-foreground">
+                      <span className="block truncate text-md font-semibold text-foreground">
                         {member.label}
                       </span>
                       <span className="block truncate text-2xs text-muted-foreground">
@@ -257,7 +257,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   </span>
                   {/* Без підпису під назвою: він однаковий у всіх рядках, тож
                       нічого не розрізняє — це сказано один раз в описі вікна. */}
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">
+                  <span className="min-w-0 flex-1 truncate text-md font-semibold text-foreground">
                     {role.label}
                   </span>
                 </button>

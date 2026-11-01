@@ -168,7 +168,7 @@ export function ChecklistPanel({
                       ) : null}
                       <span
                         className={cn(
-                          "text-[13px] leading-snug",
+                          "text-md leading-snug",
                           item.state === "done" && "text-muted-foreground line-through"
                         )}
                       >
@@ -288,7 +288,7 @@ export function ChecklistPanel({
               if (event.key === "Escape") setDraft("");
             }}
             placeholder="Новий пункт…"
-            className="text-[13px]"
+            className="text-md"
           />
           {draft ? (
             <Button type="button" variant="ghost" size="iconSm" onClick={() => setDraft("")}>
@@ -310,7 +310,7 @@ export function ChecklistPanel({
       ) : null}
 
       {items.length === 0 && !canManage ? (
-        <p className="text-[13px] text-muted-foreground">пунктів немає</p>
+        <p className="text-md text-muted-foreground">пунктів немає</p>
       ) : null}
     </div>
   );

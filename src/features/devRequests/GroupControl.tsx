@@ -54,7 +54,7 @@ export function GroupControl({
           <DropdownMenuItem
             key={key}
             onSelect={() => onChange(key)}
-            className="gap-2 rounded-lg text-[13px]"
+            className="gap-2 rounded-lg text-md"
           >
             <Check className={cn("h-3.5 w-3.5", value === key ? "opacity-100" : "opacity-0")} />
             {GROUP_LABELS[key]}
