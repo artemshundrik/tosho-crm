@@ -199,8 +199,9 @@ import { isOffBoardStatus } from "@/lib/kanbanBoards";
 import { listQuoteStatusCounts } from "@/lib/quoteStatusCounts";
 import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
 import { loadQuoteProductPreviews } from "@/features/quotes/quotes-page/quoteProductPreviews";
+import { formatQuoteGroupsSum, getDeadlineBadge, groupQuoteRows, parseDateOnly } from "@/features/quotes/quotes-page/quoteTableGroups";
 import { useQuotesScopeCache } from "@/features/quotes/quotes-page/useQuotesScopeCache";
-import { QuoteItemsCellContent, QuoteMembershipBadges, QuoteTotalCellContent } from "@/features/quotes/quotes-page/QuoteListCells";
+import { QuoteGroupHeaderRow, QuoteItemsCellContent, QuoteMembershipBadges, QuoteTotalCellContent } from "@/features/quotes/quotes-page/QuoteListCells";
 import { ResizableHead } from "@/features/quotes/quotes-page/ColumnResizeHandle";
 import { QuotesTableSkeleton } from "@/features/quotes/quotes-page/QuotesTableSkeleton";
 import { useQuotesTableColumns } from "@/features/quotes/quotes-page/useQuotesTableColumns";
@@ -1067,56 +1068,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const dateLabel = date.toLocaleDateString("uk-UA");
     const time = date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
     return `${dateLabel} · ${time}`;
-  };
-
-  const parseDateOnly = (value: string) => {
-    if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
-      const [y, m, d] = value.slice(0, 10).split("-").map(Number);
-      return new Date(y, (m ?? 1) - 1, d ?? 1);
-    }
-    return new Date(value);
-  };
-
-  const getDeadlineBadge = (value?: string | null, status?: string | null) => {
-    if (!value) return { label: "Не вказано", tone: "none" as const };
-    const date = parseDateOnly(value);
-    if (Number.isNaN(date.getTime())) {
-      return { label: "Не вказано", tone: "none" as const };
-    }
-    const today = new Date();
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const startOfDeadline = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const diffDays = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
-
-    // Затверджений чи скасований прорахунок уже нічого не винен: дату показуємо
-    // нейтрально, без «Прострочено» і без тривожних тонів.
-    const normalizedStatus = normalizeStatus(status);
-    if (normalizedStatus === "approved" || normalizedStatus === "cancelled") {
-      return { label: date.toLocaleDateString("uk-UA"), tone: "future" as const };
-    }
-
-    if (diffDays < 0) {
-      return {
-        label: `Прострочено (${Math.abs(diffDays)} дн.)`,
-        tone: "overdue" as const,
-      };
-    }
-    if (diffDays === 0) {
-      return {
-        label: "Сьогодні",
-        tone: "today" as const,
-      };
-    }
-    if (diffDays <= 2) {
-      return {
-        label: diffDays === 1 ? "Завтра" : `Через ${diffDays} дн.`,
-        tone: "soon" as const,
-      };
-    }
-    return {
-      label: date.toLocaleDateString("uk-UA"),
-      tone: "future" as const,
-    };
   };
 
   const formatDeadlineShort = (value: string) => {
@@ -2981,7 +2932,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   });
   // На дошці J/K ідуть колонками зліва направо, як їх бачить око (REQ-346#p8).
   const boardRows = useMemo(() => KANBAN_COLUMNS.flatMap((column) => groupedByStatus[column.id] ?? []), [groupedByStatus]);
-  const quotePeek = useEntityPeek(viewMode === "kanban" && boardRows.length ? boardRows : filteredAndSortedRows, quoteRowId);
+  const tableGroups = useMemo(() => groupQuoteRows(filteredAndSortedRows, (row) => kanbanProductByQuoteId[row.id]?.listTotal), [filteredAndSortedRows, kanbanProductByQuoteId]);
+  const tableRows = useMemo(() => tableGroups.flatMap((group) => group.rows), [tableGroups]);
+  const listSumLabel = viewMode === "table" && contentView !== "sets" ? formatQuoteGroupsSum(tableGroups, formatMoney) : undefined;
+  const quotePeek = useEntityPeek(viewMode === "kanban" && boardRows.length ? boardRows : tableRows, quoteRowId);
   const peekRow = quotePeek.item;
   const desktopKanbanViewportHeight = useKanbanViewportHeight(desktopKanbanViewportRef, {
     enabled: viewMode === "kanban",
@@ -4611,10 +4565,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             onReset={clearFilters}
             showReset={hasActiveFilters}
             loading={loading || showRefreshIndicator}
+            extra={listSumLabel}
           />
         }
       />
   ), [
+    listSumLabel,
     clearFilters,
     contentView,
     currentUserId,
@@ -5405,7 +5361,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAndSortedRows.map((row) => {
+                  {tableGroups.map((group) => [
+                    <QuoteGroupHeaderRow key={`group:${group.status}`} group={group} colSpan={9} />,
+                    ...group.rows.map((row) => {
                     const isSelected = selectedIds.has(row.id);
                     const membership = quoteMembershipByQuoteId.get(row.id);
                     const canOpen = canOpenQuoteRow(row);
@@ -5627,7 +5585,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         </TableCell>
                       </TableRow>
                     );
-                  })}
+                    }),
+                  ])}
                 </TableBody>
               </Table>
             </div>

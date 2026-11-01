@@ -2,10 +2,13 @@ import { createElement } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { formatMoney } from "@/features/quotes/commercial-document/document";
 import type { QuoteKanbanProductPreview } from "@/features/quotes/components/QuoteKanbanProducts";
 import { QuoteItemsHoverCard } from "@/features/quotes/quotes-page/QuoteItemsHoverCard";
-import { quoteTypeIcon, quoteTypeLabel } from "@/features/quotes/quotes-page/config";
+import { quoteTypeIcon, quoteTypeLabel, statusLabels } from "@/features/quotes/quotes-page/config";
+import type { QuoteTableGroup } from "@/features/quotes/quotes-page/quoteTableGroups";
+import { quoteStatusDotClass } from "@/lib/statusTones";
 import type { QuoteSetMembershipInfo } from "@/lib/toshoApi";
 import { cn } from "@/lib/utils";
 
@@ -92,5 +95,24 @@ export function QuoteMembershipBadges({
         </Badge>
       ) : null}
     </>
+  );
+}
+
+/** Рядок-заголовок групи в таблиці прорахунків (В4): стан, скільки й на яку суму. */
+export function QuoteGroupHeaderRow({ group, colSpan }: { group: QuoteTableGroup<unknown>; colSpan: number }) {
+  return (
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={colSpan} className="bg-muted/30 py-1.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className={cn("size-2 rounded-[3px]", quoteStatusDotClass[group.status] ?? "bg-muted-foreground")} aria-hidden />
+          <span className="font-medium text-foreground">{statusLabels[group.status] ?? "Без стану"}</span>
+          <span className="tabular-nums">{group.rows.length}</span>
+          <span className="ml-auto tabular-nums" title={group.partial ? "Частина сум ще невідома або залежить від тиражу" : undefined}>
+            {group.partial ? "від " : ""}
+            {formatMoney(Math.round(group.amount))}
+          </span>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
