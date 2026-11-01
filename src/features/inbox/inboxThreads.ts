@@ -44,6 +44,8 @@ export type InboxThread = {
   actors: string[];
   state: InboxThreadState;
   snoozedUntil: string | null;
+  /** Чому справа закрилась сама (тригер у базі) — підпис замість «готово». */
+  autoClosed: string | null;
 };
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
@@ -71,6 +73,15 @@ export function extractInboxActor(body: string | null | undefined) {
 
 export function snoozedUntilOf(row: InboxNotificationRow): string | null {
   const value = row.metadata?.snoozed_until;
+  return typeof value === "string" && value ? value : null;
+}
+
+/**
+ * Прохання, яке виконали, база гасить сама (scripts/notifications-auto-close.sql)
+ * і кладе сюди причину: «рахунок виписано», «погоджено», «оплату внесено».
+ */
+export function autoClosedOf(row: InboxNotificationRow): string | null {
+  const value = row.metadata?.auto_closed;
   return typeof value === "string" && value ? value : null;
 }
 
@@ -115,6 +126,7 @@ export function buildInboxThreads(rows: InboxNotificationRow[], now = Date.now()
       actors,
       state,
       snoozedUntil: state === "snoozed" ? snoozes.sort()[0] ?? null : null,
+      autoClosed: state === "done" ? autoClosedOf(latest) : null,
     };
   });
 }

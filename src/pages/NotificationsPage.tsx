@@ -27,6 +27,7 @@ import {
   inboxBucket,
   nextMorning,
   snoozedUntilOf,
+  autoClosedOf,
   type InboxBucket,
   type InboxEntityKind,
   type InboxNotificationRow,
@@ -444,7 +445,7 @@ function InboxRow({ thread, active, onSelect }: { thread: InboxThread; active: b
           {thread.state === "snoozed" && thread.snoozedUntil
             ? snoozeLabel(thread.snoozedUntil)
             : thread.state === "done"
-              ? `готово${sub ? ` · ${sub}` : ""}`
+              ? `${thread.autoClosed ? `закрито само: ${thread.autoClosed}` : "готово"}${sub ? ` · ${sub}` : ""}`
               : sub}
         </span>
       </span>
@@ -586,6 +587,8 @@ function InboxNotificationDetail({ thread, onOpenFull, missing }: { thread: Inbo
             {row.body ? <p className="whitespace-pre-line text-xs text-muted-foreground">{row.body}</p> : null}
             {!row.read_at && snoozedUntilOf(row) ? (
               <p className="text-2xs text-muted-foreground">{snoozeLabel(snoozedUntilOf(row) ?? "")}</p>
+            ) : autoClosedOf(row) ? (
+              <p className="text-2xs text-muted-foreground">Закрито само: {autoClosedOf(row)}</p>
             ) : null}
           </li>
         ))}
