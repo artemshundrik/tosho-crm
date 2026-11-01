@@ -39,7 +39,7 @@ import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
-import { hasOwnManagedWork } from "@/lib/managedWorkOwnership";
+import { useManagerFilter } from "@/hooks/useManagerFilter";
 import { isQuoteManagerJobRole, normalizeAccessRole, normalizeJobRole } from "@/lib/permissions";
 import { type DesignTaskType } from "@/lib/designTaskType";
 import { type QuoteAttachmentAudience } from "@/lib/quoteAttachmentAudience";
@@ -527,17 +527,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    */
   const [rowsSearchTerm, setRowsSearchTerm] = useState<string | null>(null);
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "active");
-  // Manager-filter default (see effect below) — role-agnostic, by ownership:
-  //   • designer   → всі (they filter by designer, not manager)
-  //   • sales-manager job role → себе immediately (definitely owns quotes)
-  //   • everyone else (incl. owner/super_admin) → всі, narrowed to себе only if
-  //     they actually own ≥1 quote
-  const [managerFilter, setManagerFilter] = useState<string>(
-    () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
-  );
-  const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
-  );
+  // Фільтр «Менеджер»: що стоїть одразу й що пам'ятається — у хуку.
+  const [managerFilter, setManagerFilter] = useManagerFilter({ page: "quotes", teamId, userId, jobRole, isDesigner: permissions.isDesigner, restored: restoredFilters?.managerFilter });
   const [customerFilter, setCustomerFilter] = useState<CustomerFilterValue | null>(() => restoredFilters?.customerFilter ?? null);
   const [burning, setBurning] = useState(false);
   const scopeFilterKey = `${managerFilter}|${customerFilterKey(customerFilter)}`;
@@ -847,30 +838,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setCurrentUserManagerLabel(presenceLabel);
     }
   }, [currentUserId, memberById, presenceLabelById, workspaceMemberLabelById]);
-  useEffect(() => {
-    if (defaultManagerFilterApplied) return;
-    if (permissions.isDesigner) return;
-    if (managerFilter !== ALL_MANAGERS_FILTER) return;
-    if (!currentUserId || !teamId) return;
-    // Mark applied up-front so this probe runs exactly once; then ask the DB
-    // directly (pagination-proof) whether this user manages any work at all —
-    // quotes OR design tasks, so CEO who manage only designs still land on себе.
-    setDefaultManagerFilterApplied(true);
-    let cancelled = false;
-    void (async () => {
-      const ownsWork = await hasOwnManagedWork({ userId: currentUserId, teamId });
-      if (!cancelled && ownsWork) setManagerFilter(currentUserId);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    currentUserId,
-    defaultManagerFilterApplied,
-    managerFilter,
-    permissions.isDesigner,
-    teamId,
-  ]);
   const getManagerAvatar = useCallback(
     (assignedTo?: string | null) => {
       const normalizedValue = (assignedTo ?? "").trim();
@@ -3210,7 +3177,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setManagerFilter(ALL_MANAGERS_FILTER);
     setCustomerFilter(null);
     setBurning(false);
-  }, []);
+  }, [setManagerFilter]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !teamId) return;
@@ -4590,6 +4557,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     loading,
     managerFilter,
     managerFilterOptions,
+    setManagerFilter,
     customerFilter,
     teamId,
     mobileFilterCount,

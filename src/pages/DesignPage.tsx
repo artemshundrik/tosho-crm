@@ -100,7 +100,7 @@ import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKan
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { removeAttachmentWithVariants, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
-import { hasOwnManagedWork } from "@/lib/managedWorkOwnership";
+import { useManagerFilter } from "@/hooks/useManagerFilter";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { formatDesignTaskNumber, getDesignTaskMonthCode, getNextDesignTaskNumber } from "@/lib/designTaskNumber";
@@ -1135,22 +1135,11 @@ export default function DesignPage() {
   const [designerFilter, setDesignerFilter] = useState<string>(
     () => restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
   );
-  // Manager-filter default (see effect below) — role-agnostic, by task ownership:
-  //   • designer   → всі (they filter by designer, not manager — even for tasks
-  //                  they created themselves, where they'd be the manager)
-  //   • sales-manager job role → себе immediately (definitely owns tasks)
-  //   • everyone else (incl. owner/super_admin) → всі, narrowed to себе only if
-  //     they actually own ≥1 task
-  const [managerFilter, setManagerFilter] = useState<string>(
-    () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
-  );
+  const [managerFilter, setManagerFilter] = useManagerFilter({ page: "design", teamId: effectiveTeamId, userId, jobRole, isDesigner: permissions.isDesigner, restored: restoredFilters?.managerFilter });
   const [customerFilter, setCustomerFilter] = useState<CustomerFilterValue | null>(() => restoredFilters?.customerFilter ?? null);
   const customerQuoteIds = useCustomerQuoteIds(effectiveTeamId, customerFilter);
   const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(
     () => (restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER) !== ALL_DESIGNERS_FILTER
-  );
-  const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
   );
   const [assigneeSpotlight, setAssigneeSpotlight] = useState<string>(
     () => restoredFilters?.assigneeSpotlight ?? ALL_ASSIGNEE_SPOTLIGHT
@@ -1615,31 +1604,6 @@ export default function DesignPage() {
     }
     setDefaultDesignerFilterApplied(true);
   }, [defaultDesignerFilterApplied, designerFilter, loading, permissions.isDesigner, tasks, userId]);
-
-  useEffect(() => {
-    if (defaultManagerFilterApplied) return;
-    if (permissions.isDesigner) return;
-    if (managerFilter !== ALL_MANAGERS_FILTER) return;
-    if (!userId || !effectiveTeamId) return;
-    // Mark applied up-front so this probe runs exactly once; then ask the DB
-    // directly (pagination-proof) whether this user manages any work at all —
-    // design tasks OR quotes, so CEO who manage only quotes still land on себе.
-    setDefaultManagerFilterApplied(true);
-    let cancelled = false;
-    void (async () => {
-      const ownsWork = await hasOwnManagedWork({ userId, teamId: effectiveTeamId });
-      if (!cancelled && ownsWork) setManagerFilter(userId);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    defaultManagerFilterApplied,
-    effectiveTeamId,
-    managerFilter,
-    permissions.isDesigner,
-    userId,
-  ]);
 
   const loadTeamWorkloadTasks = useCallback(async () => {
     if (!effectiveTeamId) {
@@ -2695,11 +2659,10 @@ export default function DesignPage() {
     setDesignerFilter(ALL_DESIGNERS_FILTER);
     setManagerFilter(ALL_MANAGERS_FILTER);
     setCustomerFilter(null);
-    // Re-arm the role-appropriate defaults (designer → self, manager → self if
-    // they own tasks) instead of hardcoding a stale "managers only → self" rule.
+    // Дизайнера знову веде дефолт (себе). Менеджера — ні: «Скинути» — це
+    // явний вибір «всі», і хук його запам'ятав.
     setDefaultDesignerFilterApplied(false);
-    setDefaultManagerFilterApplied(false);
-  }, []);
+  }, [setManagerFilter]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !effectiveTeamId) return;
@@ -5016,6 +4979,7 @@ export default function DesignPage() {
       loading,
       managerFilter,
       managerFilterOptions,
+      setManagerFilter,
       customerFilter,
       effectiveTeamId,
       refreshing,
