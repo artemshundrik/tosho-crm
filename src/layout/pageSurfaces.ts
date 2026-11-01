@@ -179,6 +179,7 @@ const boardColumnCount = (key: KanbanBoardKey) => KANBAN_BOARDS[key].onBoard.len
  */
 export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "notifications", path: "/notifications", page: "src/pages/NotificationsPage.tsx", toolbar: "compact", shape: "table", canvas: true },
+  { id: "my-turn", path: "/my-turn", page: "src/pages/MyTurnPage.tsx", toolbar: "none", shape: "table", canvas: true },
   { id: "activity", path: "/activity", page: "src/pages/ActivityPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "overview", path: "/overview", page: "src/pages/OverviewPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
   // Перед «/team»: збіг нежорсткий, тож без власного запису картка людини

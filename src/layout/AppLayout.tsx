@@ -3,7 +3,7 @@ import { prefersCollapsedSidebar } from "@/lib/keyboardInset";
 import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Bell,
+  Bell, CheckCircle2, Inbox,
   Banknote,
   BriefcaseBusiness,
   AddressBook,
@@ -526,8 +526,9 @@ const SB_STACK_TRANSITION =
 
 const baseSidebarLinks: SidebarLink[] = [
   // Головне
+  { label: "Вхідні", to: ROUTES.notifications, group: "overview", icon: Inbox },
+  { label: "Мій хід", to: ROUTES.myTurn, group: "overview", icon: CheckCircle2 },
   { label: "Огляд", to: ROUTES.overview, group: "overview", icon: LayoutGrid, moduleKey: "overview" },
-
   // Замовлення
   { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: AddressBook, moduleKey: "customers" },
   { label: "Прорахунки", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "quotes" },

@@ -34,6 +34,7 @@ export const ROUTES = {
   membersAccess: "/settings/members",
   integrations: "/integrations",
   notifications: "/notifications",
+  myTurn: "/my-turn",
   accountSettings: "/account-settings",
   profile: "/profile",
   features: "/features",

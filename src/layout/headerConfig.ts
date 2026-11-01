@@ -161,11 +161,19 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.team,
       showPageHeader: false,
     };
+  if (pathname === ROUTES.myTurn)
+    return {
+      title: "Мій хід",
+      subtitle: "Усе, що чекає саме тебе: прорахунки, дизайн і замовлення.",
+      breadcrumbLabel: "Мій хід",
+      breadcrumbTo: ROUTES.myTurn,
+      showPageHeader: false,
+    };
   if (pathname.startsWith(ROUTES.notifications))
     return {
-      title: "Сповіщення",
+      title: "Вхідні",
       subtitle: "Всі події та оновлення в одному місці.",
-      breadcrumbLabel: "Сповіщення",
+      breadcrumbLabel: "Вхідні",
       breadcrumbTo: ROUTES.notifications,
       showPageHeader: false,
     };

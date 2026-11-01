@@ -14,6 +14,7 @@ import {
 import {
   Banknote,
   Bell,
+  CheckCircle2,
   Building2,
   Calculator,
   Factory,
@@ -480,6 +481,15 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
         keywords: ["дизайн", "design", "tasks"],
         to: "/design",
         icon: Palette,
+      },
+      {
+        key: "route-my-turn",
+        label: "Мій хід",
+        description: "Справи, що чекають саме тебе",
+        kindLabel: "Сторінка",
+        keywords: ["мій хід", "my turn", "черга", "справи"],
+        to: "/my-turn",
+        icon: CheckCircle2,
       },
       {
         key: "route-notifications",

@@ -165,6 +165,7 @@ const OverviewPage = lazyWithRetry(() =>
 const ResetPasswordPage = lazyWithRetry(() => import("./pages/ResetPasswordPage"));
 const UpdatePasswordPage = lazyWithRetry(() => import("./pages/UpdatePasswordPage"));
 const NotificationsPage = lazyWithRetry(() => import("./pages/NotificationsPage"));
+const MyTurnPage = lazyWithRetry(() => import("./pages/MyTurnPage"));
 const ActivityPage = lazyWithRetry(() => import("./pages/ActivityPage"));
 const AdminObservabilityPage = lazyWithRetry(() => import("./pages/AdminObservabilityPage"));
 
@@ -335,6 +336,7 @@ function getRuntimeRouteContext(pathname: string) {
   }> = [
     { pattern: "/overview", scope: "page", group: "overview", test: (value) => value === "/overview" },
     { pattern: "/notifications", scope: "page", group: "account", test: (value) => value.startsWith("/notifications") },
+    { pattern: "/my-turn", scope: "page", group: "account", test: (value) => value === "/my-turn" },
     { pattern: "/activity", scope: "page", group: "account", test: (value) => value.startsWith("/activity") },
     { pattern: "/profile", scope: "page", group: "account", test: (value) => value === "/profile" },
     { pattern: "/settings/members", scope: "page", group: "account", test: (value) => value.startsWith("/settings/members") },
@@ -983,6 +985,14 @@ function AppRoutes() {
           element={
             <RouteSuspense shell>
               <NotificationsPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="my-turn"
+          element={
+            <RouteSuspense shell>
+              <MyTurnPage />
             </RouteSuspense>
           }
         />

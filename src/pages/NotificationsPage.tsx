@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -9,16 +9,10 @@ import { ToolbarMeta, ToolbarTabs } from "@/components/app/headers/toolbarPrimit
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
-import { DesignTaskPeek } from "@/components/design/DesignTaskPeek";
 import { Bell, Calculator, Inbox, Package, Palette, Settings2 } from "@/components/icons/appIcons";
 import { NotificationSettingsDialog } from "@/components/notifications/NotificationSettingsDialog";
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";
-import { Skeleton } from "@/components/ui/skeleton";
-import { OrderPeek } from "@/features/orders/order-list/OrderPeek";
-import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
-import { getDeadlineBadge } from "@/features/quotes/quote-details/deadlineLabels";
-import { QuotePeek } from "@/features/quotes/quotes-page/QuotePeek";
 import {
   buildInboxThreads,
   formatInboxTime,
@@ -33,11 +27,10 @@ import {
   type InboxNotificationRow,
   type InboxThread,
 } from "@/features/inbox/inboxThreads";
-import { useInboxEntity } from "@/features/inbox/useInboxEntity";
+import { EntityPeekPane } from "@/features/inbox/EntityPeekPane";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
-import { canApproveOrderLaunch, canIssueOrderInvoice } from "@/lib/permissions";
 import {
   disableRealtimeForSession,
   enableRealtimeForSession,
@@ -467,13 +460,6 @@ type InboxDetailProps = {
 };
 
 function InboxDetail({ thread, members, teamId, userId, accessRole, jobRole, onDone, onSnooze, onOpenFull, onClose }: InboxDetailProps) {
-  const { loaded, invalidate } = useInboxEntity(thread.entity, {
-    teamId,
-    userId,
-    canIssueInvoice: canIssueOrderInvoice(accessRole, jobRole),
-    canApproveLaunch: canApproveOrderLaunch(jobRole),
-  });
-  const memberLabel = (id: string | null | undefined) => members.find((member) => member.userId === id) ?? null;
   const actionable = thread.state === "open";
 
   const footer = (
@@ -485,63 +471,20 @@ function InboxDetail({ thread, members, teamId, userId, accessRole, jobRole, onD
     </>
   );
 
-  let content: ReactNode;
-  if (thread.entity && loaded?.status === "ready") {
-    const entity = loaded.entity;
-    if (entity.kind === "quote") {
-      const manager = memberLabel(entity.row.assigned_to);
-      const badge = getDeadlineBadge(entity.row.deadline_at);
-      content = (
-        <QuotePeek
-          row={entity.row}
-          preview={entity.preview}
-          previewLoading={false}
-          managerLabel={manager?.label ?? "Не вказано"}
-          managerAvatarUrl={manager?.avatarDisplayUrl ?? null}
-          deadline={<QuoteDeadlineBadge tone={badge.tone} label={badge.label} compact />}
-          onClose={onClose}
-          onOpenFull={onOpenFull}
-          teamId={teamId ?? ""}
-          onStatusChanged={() => thread.entity && invalidate(thread.entity)}
-        />
-      );
-    } else if (entity.kind === "order") {
-      content = <OrderPeek view={entity.view} onClose={onClose} onOpenFull={onOpenFull} />;
-    } else {
-      const task = entity.task;
-      const assignee = memberLabel(task.assigneeUserId);
-      const badge = task.designDeadline ? getDeadlineBadge(task.designDeadline) : null;
-      content = (
-        <DesignTaskPeek
-          task={task}
-          number={task.number}
-          assigneeLabel={assignee?.label ?? task.assigneeLabel ?? "Не призначено"}
-          assigneeAvatar={assignee?.avatarDisplayUrl ?? task.assigneeAvatarUrl}
-          deadline={badge ? <QuoteDeadlineBadge tone={badge.tone} label={badge.label} compact /> : null}
-          estimate={null}
-          actions={
-            <Button size="sm" onClick={onOpenFull}>
-              Відкрити задачу
-            </Button>
-          }
-          onClose={onClose}
-          onOpenFull={onOpenFull}
-        />
-      );
-    }
-  } else if (thread.entity && loaded?.status === "loading") {
-    content = (
-      <div className="space-y-3 p-4">
-        <Skeleton className="h-5 w-1/3" />
-        <Skeleton className="h-7 w-3/4" />
-        <Skeleton className="h-24 w-full" />
-      </div>
-    );
-  } else {
-    content = <InboxNotificationDetail thread={thread} onOpenFull={onOpenFull} missing={Boolean(thread.entity)} />;
-  }
-
-  return <PeekInlineContext.Provider value={{ footer }}>{content}</PeekInlineContext.Provider>;
+  return (
+    <EntityPeekPane
+      entity={thread.entity}
+      members={members}
+      teamId={teamId}
+      userId={userId}
+      accessRole={accessRole}
+      jobRole={jobRole}
+      footer={footer}
+      onOpenFull={onOpenFull}
+      onClose={onClose}
+      fallback={(missing) => <InboxNotificationDetail thread={thread} onOpenFull={onOpenFull} missing={missing} />}
+    />
+  );
 }
 
 function FooterAction({ label, hotkey, onClick, disabled }: { label: string; hotkey: string; onClick: () => void; disabled?: boolean }) {

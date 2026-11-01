@@ -12,6 +12,7 @@ const routeImporters: RoutePreloadEntry[] = [
   { pattern: /^\/overview$/, importer: () => import("../pages/OverviewPage") },
   { pattern: /^\/activity$/, importer: () => import("../pages/ActivityPage") },
   { pattern: /^\/notifications$/, importer: () => import("../pages/NotificationsPage") },
+  { pattern: /^\/my-turn$/, importer: () => import("../pages/MyTurnPage") },
   { pattern: /^\/team$/, importer: () => import("../pages/TeamPage") },
   { pattern: /^\/settings\/members$/, importer: () => import("../pages/TeamMembersPage") },
   { pattern: /^\/profile$/, importer: () => import("../pages/ProfilePage") },
