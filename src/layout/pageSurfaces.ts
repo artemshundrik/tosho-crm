@@ -36,15 +36,13 @@ import { DEV_BACKLOG_COLUMN_WIDTH, QUOTES_COLUMN_WIDTH } from "@/lib/kanbanColum
  *
  * Форм більше, ніж «список / картка / дошка», і це навмисно: каркас, який не
  * повторює рамку сторінки, дратує сильніше за його відсутність. Картка
- * прорахунку й дизайн-задача мають праву рейку різної ширини, «Активність» — це
- * одна картка з рядками всередині, а не стрічка окремих карток, тож у кожного
- * з цих випадків своя форма.
+ * прорахунку й дизайн-задача мають праву рейку різної ширини, тож у кожної
+ * своя форма. Стрічки («Активність», «Сповіщення») з хвилі Б2 — це «table»:
+ * рядки від краю до краю, як у кожної сторінки-списку.
  */
 export type PageShape =
   /** Стрічка окремих карток-рядків: сповіщення, релізи, «Що нового». */
   | "list"
-  /** Стрічка подій усередині однієї картки: «Активність». */
-  | "feed"
   /** Таблиця на всю ширину полотна: замовники, підрядники, склад. */
   | "table"
   /** Канбан: колонки з картками. */
@@ -180,8 +178,8 @@ const boardColumnCount = (key: KanbanBoardKey) => KANBAN_BOARDS[key].onBoard.len
  * своїми списками (`/design/:id` перед `/design`).
  */
 export const PAGE_SURFACES: readonly PageSurface[] = [
-  { id: "notifications", path: "/notifications", page: "src/pages/NotificationsPage.tsx", toolbar: "compact", shape: "list", canvas: true },
-  { id: "activity", path: "/activity", page: "src/pages/ActivityPage.tsx", toolbar: "full", shape: "feed" },
+  { id: "notifications", path: "/notifications", page: "src/pages/NotificationsPage.tsx", toolbar: "compact", shape: "table", canvas: true },
+  { id: "activity", path: "/activity", page: "src/pages/ActivityPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "overview", path: "/overview", page: "src/pages/OverviewPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
   // Перед «/team»: збіг нежорсткий, тож без власного запису картка людини
   // отримала б каркас дашборда команди — з фільтрами й плитками, яких там нема.

@@ -553,16 +553,18 @@ function ContractorsTable({
           // Комірка розкриття щільно тулиться до свого рядка: padding таблиці
           // (`[&_td]:py-1.5`) специфічніший за клас на самій комірці, тож
           // перебиваємо його теж із рівня таблиці, через data-атрибут.
-          className="[&_td[data-slot=detail]]:pt-0 [&_td[data-slot=detail]]:pb-4"
+          // table-fixed: теги послуг і телефон не переносяться (nowrap), і без
+          // фіксованої розкладки таблиця розпирала сторінку на 52 px праворуч.
+          className="table-fixed [&_td[data-slot=detail]]:pt-0 [&_td[data-slot=detail]]:pb-4"
         >
           {/* Липкість і непрозорий фон дає проп stickyHeader на <Table>. Тут
               руками нічого: попередній набір класів був напівпрозорий і програвав
               варіанту за специфічністю, тож крізь заголовок просвічували рядки. */}
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[48%]">{title}</TableHead>
-              <TableHead className="w-[30%]">Послуги</TableHead>
-              <TableHead className="w-[14%]">Звʼязок</TableHead>
+              <TableHead>{title}</TableHead>
+              <TableHead className="w-[34%]">Послуги</TableHead>
+              <TableHead className="w-[196px]">Звʼязок</TableHead>
               <TableHead className="w-[92px]" />
             </TableRow>
           </TableHeader>

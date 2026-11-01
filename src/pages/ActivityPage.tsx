@@ -219,7 +219,8 @@ export default function ActivityPage() {
     <div className="pb-8">
       {/* Стрічка рядками по 32 px (хвиля Б1): хто · що · коли. Доти кожна подія
           була карткою на 88 px, і на екран влазило вісім подій замість двадцяти. */}
-      <div className="overflow-hidden rounded-section border border-border bg-card">
+      {/* Від краю до краю, як таблиці на інших сторінках — без картки довкола. */}
+      <div>
         {filtered.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">Поки немає дій.</div>
         ) : (

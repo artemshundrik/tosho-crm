@@ -461,29 +461,6 @@ function ListShape({ canvas }: ShapeProps) {
   );
 }
 
-/** Стрічка подій усередині однієї картки — «Активність». */
-function FeedShape() {
-  return (
-    <div className="rounded-section border border-border bg-card/60 p-5">
-      <div className="space-y-4">
-        {Array.from({ length: 8 }).map((_, index) => (
-          <div
-            key={index}
-            className="flex items-start gap-3 border-b border-border/30 pb-4 last:border-b-0 last:pb-0"
-          >
-            <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <Line w={index % 3 === 0 ? "w-[46%]" : "w-[62%]"} />
-              <Line w={index % 2 === 0 ? "w-[72%]" : "w-[54%]"} h="h-3" dim />
-            </div>
-            <Line w="w-16" h="h-3" dim />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** Список ліворуч, деталі праворуч: Каталог і «Ролі та доступи». */
 function SplitShape({ canvas }: ShapeProps) {
   return (
@@ -525,7 +502,6 @@ function SplitShape({ canvas }: ShapeProps) {
 
 const SHAPES: Record<PageShape, (props: ShapeProps) => React.ReactElement> = {
   list: ListShape,
-  feed: FeedShape,
   table: TableShape,
   board: BoardShape,
   detail: DetailShape,

@@ -880,14 +880,9 @@ export default function NotificationsPage() {
 
   return (
     <PageCanvas>
-      <PageCanvasBody className="space-y-5 px-3 py-3 pb-20 sm:px-5 md:space-y-6 md:pb-6">
-        <section className="rounded-xl border border-border/60 bg-card/95 p-4 md:p-5">
-          <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4">
-            <div className="min-w-0">
-              <div className="text-lg font-semibold tracking-tight text-foreground">Стрічка подій</div>
-            </div>
-            <div className="text-sm font-semibold text-foreground md:hidden">{filtered.length} знайдено</div>
-          </div>
+      {/* Рамка — як у кожної сторінки-списку: стрічка від краю до краю під
+          тулбаром, без картки й свого заголовка (хвиля Б2). */}
+      <PageCanvasBody className="pb-20 md:pb-6">
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         {/* Кожен тумблер зберігається одразу — кнопки «Зберегти» тут немає,
@@ -1139,11 +1134,9 @@ export default function NotificationsPage() {
       </Dialog>
 
       {filtered.length === 0 ? (
-        <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-          Поки немає сповіщень.
-        </div>
+        <div className="p-6 text-center text-sm text-muted-foreground">Поки немає сповіщень.</div>
       ) : (
-        <div className="-mx-4 -mb-4 mt-0 md:-mx-5 md:-mb-5">
+        <div>
           {filtered.map((n) => {
             const avatar = getNotificationAvatarMeta(n);
             const compactDescription = getCompactNotificationDescription(n);
@@ -1230,7 +1223,6 @@ export default function NotificationsPage() {
           })}
         </div>
       )}
-        </section>
       </PageCanvasBody>
     </PageCanvas>
   );
