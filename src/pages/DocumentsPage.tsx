@@ -7,14 +7,10 @@ import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch, ToolbarTabs } from "@/components/app/headers/toolbarPrimitives";
 import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
-import { ChevronLeft, ChevronRight, Files } from "@/components/icons/appIcons";
 import { MobileStatusChips } from "@/components/kanban";
-import { Button } from "@/components/ui/button";
-import { SEGMENTED_GROUP, SEGMENTED_TRIGGER, TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
-import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { Sheet, SheetBody, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DocumentPreview } from "@/features/documents/DocumentPreview";
@@ -104,6 +100,8 @@ const monthLabel = (month: string) => {
   const [year, index] = month.split("-");
   return `${MONTHS[Number(index) - 1] ?? ""} ${year}`;
 };
+
+const ALL_TIME = "all-time";
 
 const shiftMonth = (month: string, delta: number) => {
   const [year, index] = month.split("-").map(Number);
@@ -319,7 +317,15 @@ export default function DocumentsPage() {
   // Плитка й пошук діють за весь час, тож місяць тоді вимкнено: інакше стрілки
   // непомітно міняли б його, і після очищення пошуку раптом відкривався б інший місяць.
   const monthLocked = Boolean(flag) || Boolean(search.trim());
-  const allTime = monthLocked || !month;
+  // Останні 12 місяців; вибраний давніший місяць (з кешу фільтрів) теж у списку.
+  const periodOptions = useMemo(() => {
+    const months = Array.from({ length: 12 }, (_, index) => shiftMonth(today.slice(0, 7), -index));
+    if (month && !months.includes(month)) months.push(month);
+    return [
+      { value: ALL_TIME, label: "За весь час" },
+      ...months.map((value) => ({ value, label: monthLabel(value) })),
+    ];
+  }, [month, today]);
   const activeFilterCount =
     (kind !== ALL ? 1 : 0) + (manager !== ALL ? 1 : 0) + (customer ? 1 : 0) + (flag ? 1 : 0);
 
@@ -329,27 +335,13 @@ export default function DocumentsPage() {
         mobileCompact
         mobileFilterCount={activeFilterCount}
         topLeft={
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
-              <Files className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div className="text-lg font-semibold text-foreground">Документи</div>
-            <SegmentedGroup className={cn(SEGMENTED_GROUP, "max-md:hidden")} aria-label="Розділ">
-              {SECTIONS.map((item) => (
-                <Button
-                  key={item.id}
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={section === item.id}
-                  onClick={() => changeSection(item.id)}
-                  className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
-                >
-                  {item.label}
-                  <span className="figure text-muted-foreground">{sectionCounts[item.id]}</span>
-                </Button>
-              ))}
-            </SegmentedGroup>
-          </div>
+          <ToolbarTabs
+            className="max-md:hidden"
+            ariaLabel="Розділ"
+            items={SECTIONS.map((item) => ({ value: item.id, label: item.label, count: sectionCounts[item.id] }))}
+            value={section}
+            onValueChange={changeSection}
+          />
         }
         search={
           <ToolbarSearch
@@ -362,50 +354,18 @@ export default function DocumentsPage() {
         filters={
           <>
             <ToolbarFilterBar>
-            <div
-              className={cn(
-                TOOLBAR_FILTER,
-                "inline-flex items-center gap-0 px-0",
-                month && !allTime && TOOLBAR_CONTROL_ACTIVE,
-                monthLocked && "opacity-60"
-              )}
-              role="group"
-              aria-label="Місяць"
-              title={monthLocked ? "Плитка чи пошук показують за весь час — місяць зараз не діє" : undefined}
-            >
-              <Button
-                variant="ghost"
-                size="iconSm"
-                aria-label="Попередній місяць"
-                className="h-full rounded-r-none"
-                disabled={monthLocked}
-                onClick={() => setMonth((value) => shiftMonth(value ?? today.slice(0, 7), -1))}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <button
-                type="button"
-                disabled={monthLocked}
-                className={cn(
-                  "min-w-[124px] px-1 text-center text-sm font-medium disabled:cursor-default",
-                  monthLocked && "text-muted-foreground"
-                )}
-                title={monthLocked ? undefined : month ? "Показати за весь час" : "Показати поточний місяць"}
-                onClick={() => setMonth((value) => (value ? null : today.slice(0, 7)))}
-              >
-                {month ? monthLabel(month) : "За весь час"}
-              </button>
-              <Button
-                variant="ghost"
-                size="iconSm"
-                aria-label="Наступний місяць"
-                className="h-full rounded-l-none"
-                disabled={monthLocked}
-                onClick={() => setMonth((value) => shiftMonth(value ?? today.slice(0, 7), 1))}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            {/* Період — фільтр, як решта (хвиля Б2). Доти тут стояв окремий
+                крокомір «‹ Листопад 2026 ›» на 230 px. Плитка чи пошук і так
+                показують за весь час — тоді період не діє і сірий. */}
+            <ToolbarFilterSelect
+              label="Період"
+              value={month ?? ALL_TIME}
+              onValueChange={(value) => setMonth(value === ALL_TIME ? null : value)}
+              neutralValue={ALL_TIME}
+              disabled={monthLocked}
+              className="sm:w-[170px]"
+              options={periodOptions}
+            />
             <ToolbarFilterSelect
               label="Тип" value={kind}
               onValueChange={setKind}
@@ -450,7 +410,7 @@ export default function DocumentsPage() {
         meta={
           <ToolbarMeta
             count={visible.length}
-            countLabel={allTime ? "за весь час" : "за місяць"}
+            unit={["документ", "документи", "документів"]}
             onReset={resetFilters}
             showReset={activeFilterCount > 0 || Boolean(search)}
           />
@@ -459,7 +419,6 @@ export default function DocumentsPage() {
     ),
     [
       activeFilterCount,
-      allTime,
       changeSection,
       customer,
       kind,
@@ -469,6 +428,7 @@ export default function DocumentsPage() {
       managerOptions,
       month,
       monthLocked,
+      periodOptions,
       refreshing,
       resetFilters,
       search,
@@ -476,7 +436,6 @@ export default function DocumentsPage() {
       sectionCounts,
       seesAll,
       teamId,
-      today,
       visible.length,
     ]
   );

@@ -794,6 +794,7 @@ export default function SampleStockPage() {
       meta={
         <ToolbarMeta
           count={filteredRows.length}
+          unit={["товар", "товари", "товарів"]}
           onReset={clearFilters}
           showReset={hasActiveFilters}
           loading={refreshing}

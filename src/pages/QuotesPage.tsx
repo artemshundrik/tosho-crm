@@ -153,7 +153,7 @@ import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
 import { customerFilterKey, type CustomerFilterValue } from "@/lib/customerFilter";
-import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarTabs, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import {
   DELIVERY_TYPE_OPTIONS,
@@ -178,9 +178,7 @@ import {
 import { resolveQuoteEditItemRuns } from "@/features/quotes/quoteEditItemRuns";
 import { useQuotesPageViewState } from "@/features/quotes/quotes-page/useQuotesPageViewState";
 import {
-  SEGMENTED_GROUP,
   SEGMENTED_GROUP_SM,
-  SEGMENTED_TRIGGER,
   SEGMENTED_TRIGGER_SM,
   TOOLBAR_ACTION_BUTTON,
   TOOLBAR_CONTROL,
@@ -4594,26 +4592,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           </Button>
         }
         topLeft={
-          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={contentView === "quotes"}
-              onClick={() => setContentView("quotes")}
-              className={SEGMENTED_TRIGGER}
-            >
-              Прорахунки
-            </Button>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={contentView === "sets"}
-              onClick={() => setContentView("sets")}
-              className={SEGMENTED_TRIGGER}
-            >
-              КП та набори
-            </Button>
-          </SegmentedGroup>
+          <ToolbarTabs
+            ariaLabel="Що показати"
+            items={[
+              { value: "quotes", label: "Прорахунки" },
+              { value: "sets", label: "КП та набори" },
+            ]}
+            value={contentView}
+            onValueChange={setContentView}
+          />
         }
         topRight={
           <>
@@ -4742,7 +4729,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }
         meta={
           <ToolbarMeta
-            count={loading && rows.length === 0 ? "…" : toolbarCount}
+            count={loading && rows.length === 0 ? "…" : toolbarCount} unit={contentView === "sets" ? undefined : ["прорахунок", "прорахунки", "прорахунків"]}
             onReset={clearFilters}
             showReset={hasActiveFilters}
             loading={loading || showRefreshIndicator}

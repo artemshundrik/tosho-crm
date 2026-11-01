@@ -22,8 +22,7 @@ import {
 } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
-import { SEGMENTED_GROUP, SEGMENTED_TRIGGER, TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
-import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { ToolbarMeta, ToolbarTabs } from "@/components/app/headers/toolbarPrimitives";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { NotificationChannelMatrix } from "@/components/notifications/NotificationChannelMatrix";
@@ -162,15 +161,6 @@ function renderInAppToastContent({
         </div>
       </div>
     </div>
-  );
-}
-
-function statusIconButtonClass(tone: SettingsTone) {
-  return cn(
-    "inline-flex h-11 w-11 items-center justify-center rounded-xl border transition-colors",
-    tone === "active" && "border-primary/25 bg-primary/10 text-primary",
-    tone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-    tone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
   );
 }
 
@@ -731,118 +721,39 @@ export default function NotificationsPage() {
       ? "active"
       : "muted";
 
-  const handlePushPillClick = useCallback(() => {
-    if (!push.supported) return;
-    if (push.enabled) {
-      void push.disable();
-      return;
-    }
-    void push.enable();
-  }, [push]);
-
-  const handleInAppPillClick = useCallback(() => {
-    updateInAppNotificationPreferences({ enabled: !inAppNotificationsEnabled });
-  }, [inAppNotificationsEnabled, updateInAppNotificationPreferences]);
-
-  const handleSoundPillClick = useCallback(() => {
-    if (!inAppNotificationsEnabled) return;
-    updateInAppNotificationPreferences({ soundEnabled: !inAppNotificationSoundEnabled });
-  }, [inAppNotificationSoundEnabled, inAppNotificationsEnabled, updateInAppNotificationPreferences]);
-
   const notificationsHeaderActions = useMemo(
     () => (
       <UnifiedPageToolbar
         topLeft={
-          <div className="flex w-full items-center justify-between gap-3 md:w-auto md:justify-start">
-            <div className="flex items-center gap-2">
-              <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={filter === "all"}
-                  onClick={() => setFilter("all")}
-                  className={SEGMENTED_TRIGGER}
-                >
-                  Всі
-                </Button>
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={filter === "unread"}
-                  onClick={() => setFilter("unread")}
-                  className={SEGMENTED_TRIGGER}
-                >
-                  Непрочитані
-                </Button>
-              </SegmentedGroup>
-              <div className="hidden md:flex items-center gap-1.5">
-                <HoverTip asChild label={`Push ${pushStatusLabel}`}>
-                  <button
-                    type="button"
-                    className={cn(statusIconButtonClass(pushStatusTone), "cursor-pointer")}
-                    onClick={handlePushPillClick}
-                    disabled={!push.supported}
-                    aria-label={`Push ${pushStatusLabel}`}
-                  >
-                    <BellRing className="h-4 w-4" />
-                  </button>
-                </HoverTip>
-                <HoverTip asChild label={`Popup ${inAppStatusLabel}`}>
-                  <button
-                    type="button"
-                    className={cn(statusIconButtonClass(inAppStatusTone), "cursor-pointer")}
-                    onClick={handleInAppPillClick}
-                    aria-label={`Popup ${inAppStatusLabel}`}
-                  >
-                    <MonitorSmartphone className="h-4 w-4" />
-                  </button>
-                </HoverTip>
-                <HoverTip asChild label={`Звук ${soundStatusLabel}`}>
-                  <button
-                    type="button"
-                    className={cn(statusIconButtonClass(soundStatusTone), "cursor-pointer")}
-                    onClick={handleSoundPillClick}
-                    disabled={!inAppNotificationsEnabled}
-                    aria-label={`Звук ${soundStatusLabel}`}
-                  >
-                    <Volume2 className="h-4 w-4" />
-                  </button>
-                </HoverTip>
-                <HoverTip asChild label="Налаштування сповіщень">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="border-border/60 bg-background/70"
-                    onClick={openSettings}
-                    aria-label="Налаштування сповіщень"
-                  >
-                    <Settings2 className="h-4 w-4" />
-                  </Button>
-                </HoverTip>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="border-border/60 bg-background/70 md:hidden"
-              onClick={openSettings}
-              aria-label="Налаштування сповіщень"
-            >
-              <Settings2 className="h-4 w-4" />
-            </Button>
-          </div>
+          <ToolbarTabs
+            ariaLabel="Які сповіщення показати"
+            items={[
+              { value: "all", label: "Всі", count: notifications.length },
+              { value: "unread", label: "Непрочитані", count: unreadCount },
+            ]}
+            value={filter}
+            onValueChange={setFilter}
+          />
         }
         topRight={
-          <div className="hidden md:flex items-center gap-4 text-sm">
-            <div className="font-semibold text-foreground">
-              {filtered.length}
-              <span className="ml-1 text-muted-foreground">знайдено</span>
-            </div>
+          <div className="flex items-center gap-2">
+            {/* Push, popup і звук — у налаштуваннях з підписами. Доти тут стояли
+                три кольорові квадрати без слів, і що вони значать, знав лише той,
+                хто наводив курсор. */}
+            <HoverTip asChild label="Налаштування сповіщень">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={openSettings}
+                aria-label="Налаштування сповіщень"
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </HoverTip>
             <Button
               variant="secondary"
-              className={cn(TOOLBAR_ACTION_BUTTON, "min-h-10 px-4")}
+              className="hidden md:inline-flex"
               onClick={markAllRead}
               disabled={unreadCount === 0}
             >
@@ -850,26 +761,10 @@ export default function NotificationsPage() {
             </Button>
           </div>
         }
+        meta={<ToolbarMeta count={filtered.length} unit={["сповіщення", "сповіщення", "сповіщень"]} />}
       />
     ),
-    [
-      filter,
-      filtered.length,
-      handleInAppPillClick,
-      handlePushPillClick,
-      handleSoundPillClick,
-      inAppStatusLabel,
-      inAppStatusTone,
-      inAppNotificationsEnabled,
-      markAllRead,
-      openSettings,
-      push.supported,
-      pushStatusLabel,
-      pushStatusTone,
-      soundStatusLabel,
-      soundStatusTone,
-      unreadCount,
-    ]
+    [filter, filtered.length, markAllRead, notifications.length, openSettings, unreadCount]
   );
 
   usePageHeaderActions(notificationsHeaderActions, [notificationsHeaderActions]);

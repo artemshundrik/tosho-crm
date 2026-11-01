@@ -4,13 +4,11 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarMeta } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarMeta, ToolbarTabs } from "@/components/app/headers/toolbarPrimitives";
 import { PageLoading } from "@/components/app/page-loading";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
-import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
-import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { FEED_GROUP_LABEL, FEED_ROW } from "@/components/app/table-kit";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
@@ -138,12 +136,24 @@ export default function ActivityPage() {
     markRead();
   }, [teamId, userId]);
 
-  const filtered = useMemo(() => {
-    // Службові рядки (показ промо тощо) — не дія людини; команда їх уже ховає.
-    const meaningful = items.filter((i) => !isNoiseActivity(i.action ?? null, i.title));
-    if (filter === "all") return meaningful;
-    return meaningful.filter((i) => i.type === filter);
-  }, [items, filter]);
+  // Службові рядки (показ промо тощо) — не дія людини; команда їх уже ховає.
+  const meaningful = useMemo(
+    () => items.filter((i) => !isNoiseActivity(i.action ?? null, i.title)),
+    [items]
+  );
+
+  const countByType = useMemo(() => {
+    const counts: Record<string, number> = { all: meaningful.length };
+    meaningful.forEach((i) => {
+      if (i.type) counts[i.type] = (counts[i.type] ?? 0) + 1;
+    });
+    return counts;
+  }, [meaningful]);
+
+  const filtered = useMemo(
+    () => (filter === "all" ? meaningful : meaningful.filter((i) => i.type === filter)),
+    [meaningful, filter]
+  );
 
   const grouped = useMemo(() => {
     const buckets = new Map<string, ActivityItem[]>();
@@ -159,42 +169,22 @@ export default function ActivityPage() {
     () => (
       <UnifiedPageToolbar
         topLeft={
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
-              <Activity className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-foreground">Активність команди</div>
-              <div className="text-sm text-muted-foreground">Усі події та зміни в одному місці</div>
-            </div>
-          </div>
+          <ToolbarTabs
+            ariaLabel="Категорія подій"
+            items={FILTER_TABS.map((tab) => ({ value: tab.value, label: tab.label, count: countByType[tab.value] ?? 0 }))}
+            value={filter}
+            onValueChange={setFilter}
+          />
         }
         topRight={
           <Button variant="secondary" onClick={() => navigate("/notifications")}>
             Сповіщення
           </Button>
         }
-        filters={
-          <SegmentedGroup className={cn(SEGMENTED_GROUP, "max-w-full overflow-x-auto [scrollbar-width:none]")}>
-            {FILTER_TABS.map((tab) => (
-              <Button
-                key={tab.value}
-                type="button"
-                variant="segmented"
-                size="xs"
-                aria-pressed={filter === tab.value}
-                onClick={() => setFilter(tab.value)}
-                className={cn(SEGMENTED_TRIGGER, "flex-none")}
-              >
-                {tab.label}
-              </Button>
-            ))}
-          </SegmentedGroup>
-        }
-        meta={<ToolbarMeta count={filtered.length} countLabel="подій" />}
+        meta={<ToolbarMeta count={filtered.length} unit={["подія", "події", "подій"]} />}
       />
     ),
-    [filter, filtered.length, navigate]
+    [countByType, filter, filtered.length, navigate]
   );
 
   usePageHeaderActions(headerActions, [headerActions]);

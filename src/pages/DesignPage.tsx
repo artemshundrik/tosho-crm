@@ -75,7 +75,7 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
 import { listCustomerDesignTaskActivityRows, useCustomerQuoteIds } from "@/features/design/customerTaskRows";
 import { customerFilterKey, taskMatchesCustomerFilter, type CustomerFilterValue } from "@/lib/customerFilter";
-import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch, ToolbarTabs } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanCardList, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard } from "@/components/kanban";
 import { CancelledDesignTasksList } from "@/components/design/CancelledDesignTasksList";
@@ -4887,38 +4887,16 @@ export default function DesignPage() {
           </Button>
         }
         topLeft={
-          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={contentView === "all"}
-              onClick={() => setContentView("all")}
-              className={SEGMENTED_TRIGGER}
-            >
-              Всі
-              <CountBadge value={allTasksCount} className="ml-1" />
-            </Button>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={contentView === "linked"}
-              onClick={() => setContentView("linked")}
-              className={SEGMENTED_TRIGGER}
-            >
-              З прорах.
-              <CountBadge value={linkedTasksCount} className="ml-1" />
-            </Button>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={contentView === "standalone"}
-              onClick={() => setContentView("standalone")}
-              className={SEGMENTED_TRIGGER}
-            >
-              Окремі
-              <CountBadge value={standaloneTasksCount} className="ml-1" />
-            </Button>
-          </SegmentedGroup>
+          <ToolbarTabs
+            ariaLabel="Які задачі показати"
+            items={[
+              { value: "all", label: "Всі", count: allTasksCount },
+              { value: "linked", label: "З прорахунку", count: linkedTasksCount },
+              { value: "standalone", label: "Окремі", count: standaloneTasksCount },
+            ]}
+            value={contentView}
+            onValueChange={setContentView}
+          />
         }
         topRight={
           <>
@@ -5039,6 +5017,7 @@ export default function DesignPage() {
         meta={
           <ToolbarMeta
             count={boardSkeletonShown ? "…" : filteredTasks.length}
+            unit={["задача", "задачі", "задач"]}
             onReset={clearFilters}
             showReset={hasActiveFilters}
             loading={loading || showRefreshIndicator}

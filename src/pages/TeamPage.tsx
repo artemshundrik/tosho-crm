@@ -32,7 +32,7 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MobileStatusChips } from "@/components/kanban";
 import { MOBILE_CHIPS_ROW } from "@/layout/mobileRhythm";
-import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch, ToolbarTabs } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import {
   SEGMENTED_GROUP,
@@ -1252,39 +1252,21 @@ export function TeamPage() {
         topLeft={
           isNarrowViewport ? undefined : (
           <div className="flex w-full items-center gap-2 lg:w-auto">
-          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={tab === "people"}
-              onClick={() => setTab("people")}
-              className={SEGMENTED_TRIGGER}
-            >
-              Люди <CountBadge value={activeMembers.length} className="ml-1" />
-            </Button>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={tab === "calendar"}
-              onClick={() => setTab("calendar")}
-              className={SEGMENTED_TRIGGER}
-            >
-              Календар
-            </Button>
-            <Button
-              variant="segmented"
-              size="xs"
-              aria-pressed={tab === "requests"}
-              onClick={() => setTab("requests")}
-              className={SEGMENTED_TRIGGER}
-            >
-              Запити
-              <CountBadge
-                value={canManageAbsences ? pendingRequests.length : myAbsences.length}
-                className={cn("ml-1", canManageAbsences && pendingRequests.length > 0 && toneBadgeClass.warning)}
-              />
-            </Button>
-          </SegmentedGroup>
+          <ToolbarTabs
+            ariaLabel="Розділ"
+            items={[
+              { value: "people", label: "Люди", count: activeMembers.length },
+              { value: "calendar", label: "Календар" },
+              {
+                value: "requests",
+                label: "Запити",
+                count: canManageAbsences ? pendingRequests.length : myAbsences.length,
+                attention: canManageAbsences && pendingRequests.length > 0,
+              },
+            ]}
+            value={tab}
+            onValueChange={setTab}
+          />
 
           {/* Перемикач ВИДУ — ОКРЕМА група, а не хвіст вкладок.
               Плашка в групі одна, тож усередині вкладок іконка активного
@@ -1416,7 +1398,7 @@ export function TeamPage() {
           tab === "people" ? (
             <ToolbarMeta
               count={filteredMembers.length}
-              countLabel="у команді"
+              unit={["людина", "людини", "людей"]}
               onReset={resetFilters}
               showReset={hasActiveFilters}
               loading={absencesLoading}

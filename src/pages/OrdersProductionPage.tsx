@@ -10,7 +10,7 @@ import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
-import { Factory, FileText, Plus } from "@/components/icons/appIcons";
+import { FileText, Plus } from "@/components/icons/appIcons";
 import { MobileStatusChips } from "@/components/kanban";
 import { CreateManualOrderDialog } from "@/components/orders/CreateManualOrderDialog";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import {
   summarizeOrderStages,
   type ActiveOrderStage,
 } from "@/features/orders/orderListStages";
-import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
+import { formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { isCashlessPaymentMethod } from "@/features/orders/paymentRules";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
@@ -270,14 +270,6 @@ export default function OrdersProductionPage() {
             <Plus className="h-5 w-5" />
           </Button>
         }
-        topLeft={
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
-              <Factory className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div className="text-lg font-semibold text-foreground">Замовлення</div>
-          </div>
-        }
         topRight={
           <Button onClick={() => setCreateOrderOpen(true)} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
             <Plus className="h-4 w-4" />
@@ -351,20 +343,26 @@ export default function OrdersProductionPage() {
               value={sortMode}
               onValueChange={(value) => setSortMode(value as SortMode)}
               neutralValue="my-turn"
-              className="sm:w-[160px]"
+              className="sm:w-[184px]"
               options={SORT_OPTIONS}
             />
             </ToolbarFilterBar>
           </>
         }
-        meta={<ToolbarMeta count={filteredViews.length} countLabel="знайдено" />}
+        meta={
+          <ToolbarMeta
+            count={filteredViews.length}
+            unit={["замовлення", "замовлення", "замовлень"]}
+            extra={formatOrderMoney(filteredViews.reduce((sum, { record }) => sum + record.total, 0), "UAH")}
+          />
+        }
       />
     ),
     [
       activeFilterCount,
       customerFilter,
       customerOptions,
-      filteredViews.length,
+      filteredViews,
       loading,
       managerFilter,
       managerOptions,

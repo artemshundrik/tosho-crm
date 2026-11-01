@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
@@ -8,7 +8,7 @@ import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
-import { ArrowLeft, Check } from "@/components/icons/appIcons";
+import { Check } from "@/components/icons/appIcons";
 import { MobileStatusChips } from "@/components/kanban";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,7 +18,6 @@ import { formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/ord
 import { isCashlessPaymentMethod } from "@/features/orders/paymentRules";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { MOBILE_CARD_LIST, MOBILE_CHIPS_ROW, MOBILE_PAGE_BODY } from "@/layout/mobileRhythm";
-import { ROUTES } from "@/layout/routes";
 import { TABLE_MONEY_TEXT, TABLE_RECORD_NUMBER_TEXT } from "@/components/app/table-kit";
 import { cn } from "@/lib/utils";
 
@@ -132,19 +131,6 @@ export default function OrdersQueuePage() {
     () => (
       <UnifiedPageToolbar
         mobileCompact
-        topLeft={
-          <div className="min-w-0">
-            <Link
-              to={ROUTES.ordersProduction}
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Замовлення
-            </Link>
-            <div className="text-lg font-semibold text-foreground">Черга з прорахунків</div>
-            <div className="text-sm text-muted-foreground">Затверджені прорахунки, з яких ще не зроблено замовлення</div>
-          </div>
-        }
         search={
           <ToolbarSearch
             value={search}
@@ -153,7 +139,7 @@ export default function OrdersQueuePage() {
             loading={(loading || refreshing) && Boolean(search)}
           />
         }
-        meta={<ToolbarMeta count={visible.length} countLabel="знайдено" />}
+        meta={<ToolbarMeta count={visible.length} unit={["прорахунок", "прорахунки", "прорахунків"]} />}
       />
     ),
     [loading, refreshing, search, visible.length]

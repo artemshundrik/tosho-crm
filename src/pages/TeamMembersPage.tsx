@@ -63,8 +63,6 @@ import {
 } from "@/components/ui/select";
 import {
   CONTROL_BASE,
-  SEGMENTED_GROUP,
-  SEGMENTED_TRIGGER,
   TOOLBAR_ACTION_BUTTON,
 } from "@/components/ui/controlStyles";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -80,7 +78,7 @@ import {
 } from "@/lib/employment";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarTabs } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { TeamPulsePanel, type PulsePerson } from "@/components/team/TeamPulsePanel";
 import { useAuth } from "@/auth/AuthProvider";
@@ -108,7 +106,6 @@ import {
   normalizeModuleAccess,
   type ModuleAccess,
 } from "@/lib/moduleAccess";
-import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { AccessMatrix, type MatrixPerson } from "@/components/team/AccessMatrix";
 import {
   getAccessBadgeClass,
@@ -1587,33 +1584,23 @@ export function TeamMembersPage() {
     () => (
       <UnifiedPageToolbar
         topLeft={
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-lg font-semibold tracking-tight text-foreground">Люди та доступи</h1>
-              <CountBadge value={members.length} />
-            </div>
-            <SegmentedGroup className={cn(SEGMENTED_GROUP, "h-auto flex-wrap")}>
-              {ADMIN_TABS.filter((tab) => (tab.key === "pulse" ? canPulse : tab.key === "invites" ? canManage : true)).map(
-                (tab) => (
-                  <Button
-                    key={tab.key}
-                    type="button"
-                    variant="segmented"
-                    size="xs"
-                    aria-pressed={activeTab === tab.key}
-                    onClick={() => handleTabChange(tab.key)}
-                    className={SEGMENTED_TRIGGER}
-                  >
-                    {tab.label}
-                    {tab.key === "people" ? ` (${members.length})` : null}
-                    {tab.key === "invites"
-                      ? ` (${invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})`
-                      : null}
-                  </Button>
-                )
-              )}
-            </SegmentedGroup>
-          </div>
+          <ToolbarTabs
+            ariaLabel="Розділ"
+            items={ADMIN_TABS.filter((tab) => (tab.key === "pulse" ? canPulse : tab.key === "invites" ? canManage : true)).map(
+              (tab) => ({
+                value: tab.key,
+                label: tab.label,
+                count:
+                  tab.key === "people"
+                    ? members.length
+                    : tab.key === "invites"
+                      ? invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length
+                      : undefined,
+              })
+            )}
+            value={activeTab}
+            onValueChange={handleTabChange}
+          />
         }
         topRight={
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end lg:ml-auto">

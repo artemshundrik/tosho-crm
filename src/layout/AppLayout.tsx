@@ -2261,9 +2261,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   дає власна кнопка «Назад до списку». Тобто це був підпис, а
                   не навігація — лишаємо тільки підпис. */}
               <div className="hidden min-w-0 md:flex h-7 items-center">
-                <span className="truncate text-sm font-semibold leading-none tracking-tight text-foreground">
-                  {header.breadcrumbLabel}
-                </span>
+                <HoverTip asChild side="bottom" label={header.subtitle || header.breadcrumbLabel}>
+                  <span className="truncate text-sm font-semibold leading-none tracking-tight text-foreground">{header.breadcrumbLabel}</span>
+                </HoverTip>
               </div>
 
               {/* Mobile title */}

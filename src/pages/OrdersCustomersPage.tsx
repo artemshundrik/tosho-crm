@@ -3272,7 +3272,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       }
       meta={
         <ToolbarMeta
-          count={activeTab === "customers" ? customersTotal : leadsTotal}
+          count={activeTab === "customers" ? customersTotal : leadsTotal} unit={activeTab === "customers" ? ["замовник", "замовники", "замовників"] : ["лід", "ліди", "лідів"]}
           onReset={clearFilters}
           showReset={hasActiveFilters}
           loading={

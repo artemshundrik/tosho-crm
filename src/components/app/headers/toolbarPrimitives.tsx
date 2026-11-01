@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { pluralWordUk } from "@/lib/lastSeen";
 import { Input } from "@/components/ui/input";
 import { TOOLBAR_CONTROL, TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -294,6 +295,14 @@ type ToolbarMetaProps = {
   count: number | string;
   /** Підпис після числа, напр. «знайдено». Без нього — просто число. */
   countLabel?: string;
+  /**
+   * Чого саме N — три форми слова: `["замовник", "замовники", "замовників"]`.
+   * Хвиля Б2: лічильник пише «164 замовники», а не «164 знайдено» на одній
+   * сторінці й голе «164» на іншій. Має перевагу над `countLabel`.
+   */
+  unit?: readonly [one: string, few: string, many: string];
+  /** Після лічильника через крапку — сума для грошових списків: «· 1 236 450 грн». */
+  extra?: React.ReactNode;
   /** Коли передано і showReset не false — зʼявляється кнопка скидання фільтрів. */
   onReset?: () => void;
   showReset?: boolean;
@@ -305,6 +314,8 @@ type ToolbarMetaProps = {
 export function ToolbarMeta({
   count,
   countLabel,
+  unit,
+  extra,
   onReset,
   showReset,
   loading = false,
@@ -327,7 +338,14 @@ export function ToolbarMeta({
         </HoverTip>
       ) : null}
       <span className="tabular-nums">{count}</span>
-      {countLabel ? <span className="text-muted-foreground">{countLabel}</span> : null}
+      {unit ? (
+        <span className="-ml-1 text-muted-foreground">
+          {typeof count === "number" ? pluralWordUk(count, ...unit) : unit[2]}
+        </span>
+      ) : countLabel ? (
+        <span className="text-muted-foreground">{countLabel}</span>
+      ) : null}
+      {extra ? <span className="-ml-1 tabular-nums text-muted-foreground">· {extra}</span> : null}
       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
     </div>
   );
@@ -447,6 +465,84 @@ function ToolbarFilterChip(filter: ToolbarFilterSelectProps) {
       >
         <X className="h-3.5 w-3.5" />
       </button>
+    </div>
+  );
+}
+
+export type ToolbarTabItem<T extends string> = {
+  value: T;
+  label: React.ReactNode;
+  /** Скільки записів у вкладці; `undefined` — лічильника немає. */
+  count?: number | string;
+  /** Лічильник вимагає уваги (запити на розгляд) — жовтий замість сірого. */
+  attention?: boolean;
+  icon?: React.ComponentType<{ className?: string }>;
+};
+
+/**
+ * Вкладки сторінки (хвиля Б2): текст із лічильником, вибрана — підкреслена.
+ *
+ * Один стиль на всі вкладки вмісту: «Всі / З прорахунку / Окремі», «Люди /
+ * Календар / Запити», «Всі / Непрочитані». Доти кожна сторінка брала обведений
+ * сегментний перемикач, і вкладки вмісту виглядали так само, як перемикач
+ * вигляду («Дошка / Таблиця») поруч — дві різні речі одним контролом. Сегментний
+ * перемикач лишився лише за виглядом.
+ */
+export function ToolbarTabs<T extends string>({
+  items,
+  value,
+  onValueChange,
+  ariaLabel,
+  countLoading = false,
+  className,
+}: {
+  items: ReadonlyArray<ToolbarTabItem<T>>;
+  value: T;
+  onValueChange: (value: T) => void;
+  ariaLabel?: string;
+  /** Дані ще їдуть — лічильники рискою, а не чесними нулями (див. CountBadge). */
+  countLoading?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className={cn("flex h-9 max-w-full items-stretch gap-5 overflow-x-auto [scrollbar-width:none]", className)}
+    >
+      {items.map((item) => {
+        const selected = item.value === value;
+        const ItemIcon = item.icon;
+        return (
+          <button
+            key={item.value}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onValueChange(item.value)}
+            className={cn(
+              "relative inline-flex shrink-0 items-center gap-1.5 text-sm font-medium transition-colors",
+              "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full",
+              selected
+                ? "text-foreground after:bg-foreground"
+                : "text-muted-foreground after:bg-transparent hover:text-foreground"
+            )}
+          >
+            {ItemIcon ? <ItemIcon className="h-3.5 w-3.5 shrink-0" /> : null}
+            {item.label}
+            {item.count !== undefined ? (
+              <span
+                className={cn(
+                  "text-xs tabular-nums",
+                  item.attention ? "font-semibold text-warning-foreground" : "text-muted-foreground"
+                )}
+              >
+                {countLoading ? "–" : item.count}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }

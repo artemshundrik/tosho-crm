@@ -16,7 +16,6 @@ import {
   Layers,
   ListChecks,
   Mail,
-  Megaphone,
   Palette,
   Phone,
   Plus,
@@ -48,7 +47,14 @@ import {
 } from "@/lib/attachmentPreview";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import {
+  ToolbarFilterBar,
+  ToolbarFilterSelect,
+  ToolbarMeta,
+  ToolbarSearch,
+  ToolbarTabs,
+  type ToolbarTabItem,
+} from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { StackHoverPreview } from "@/components/app/StackHoverPreview";
@@ -1138,21 +1144,29 @@ export default function MarketingPage() {
 
   const isEmpty = !loading && groups.length === 0;
 
+  const statusTabs = useMemo<ToolbarTabItem<"all" | MarketingStatus>[]>(
+    () => [
+      { value: "all", label: "Всі", count: baseGroups.length },
+      ...MARKETING_STATUSES.map((status) => ({
+        value: status,
+        label: MARKETING_STATUS_META[status].label,
+        count: statusCounts[status],
+      })),
+    ],
+    [baseGroups.length, statusCounts]
+  );
+
   const headerActions = useMemo(
     () => (
       <UnifiedPageToolbar
         topLeft={
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
-              <Megaphone className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-foreground">Маркетинг</div>
-              <div className="text-sm text-muted-foreground">
-                Галерея дизайн-візуалів: що зняти на виробництві та використати у промо.
-              </div>
-            </div>
-          </div>
+          <ToolbarTabs
+            ariaLabel="Статус візуалу"
+            items={statusTabs}
+            value={statusFilter}
+            onValueChange={setStatusFilter}
+            countLoading={loading}
+          />
         }
         search={
           <ToolbarSearch
@@ -1218,7 +1232,7 @@ export default function MarketingPage() {
             </ToolbarFilterBar>
           </>
         }
-        meta={<ToolbarMeta count={groups.length} countLabel="візуалів" loading={loading} />}
+        meta={<ToolbarMeta count={groups.length} unit={["візуал", "візуали", "візуалів"]} loading={loading} />}
       />
     ),
     [
@@ -1230,6 +1244,8 @@ export default function MarketingPage() {
       managerOptions,
       search,
       sortMode,
+      statusFilter,
+      statusTabs,
     ]
   );
 
@@ -1237,32 +1253,10 @@ export default function MarketingPage() {
 
   return (
     <div className="flex w-full flex-col gap-5 pb-24 md:pb-10">
-      {/* Чипи статусів і тегів лишаються в тілі: їх багато й вони ростуть разом
-          із тегами — у шапці вони б розпирали тулбар на пів екрана. */}
+      {/* Статуси — вкладки в шапці; обрані, приховані й теги лишаються тут:
+          тегів багато й вони ростуть — у шапці розпирали б тулбар. */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Chip size="sm" active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
-            Всі
-            <CountPill value={baseGroups.length} active={statusFilter === "all"} />
-          </Chip>
-          {MARKETING_STATUSES.map((status) => {
-            const meta = MARKETING_STATUS_META[status];
-            const Icon = meta.icon;
-            return (
-              <Chip
-                key={status}
-                size="sm"
-                active={statusFilter === status}
-                className={cn(statusCounts[status] === 0 && statusFilter !== status && "text-muted-foreground/70")}
-                icon={<Icon className="h-3.5 w-3.5" />}
-                onClick={() => setStatusFilter((prev) => (prev === status ? "all" : status))}
-              >
-                {meta.label}
-                <CountPill value={statusCounts[status]} active={statusFilter === status} />
-              </Chip>
-            );
-          })}
-          <span className="mx-1 hidden h-4 w-px bg-border sm:block" />
           <Chip
             size="sm"
             active={onlyFavorites}

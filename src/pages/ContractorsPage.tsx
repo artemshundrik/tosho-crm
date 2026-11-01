@@ -7,11 +7,9 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { usePageCache } from "@/hooks/usePageCache";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch, ToolbarTabs } from "@/components/app/headers/toolbarPrimitives";
 import { Button } from "@/components/ui/button";
 import {
-  SEGMENTED_GROUP,
-  SEGMENTED_TRIGGER,
   TOOLBAR_ACTION_BUTTON,
 } from "@/components/ui/controlStyles";
 import {
@@ -49,7 +47,6 @@ import {
   getLocalReminderTimeInputValue,
 } from "@/lib/reminderDateTime";
 import {
-  Building2,
   ChevronRight,
   Loader2,
   MoreHorizontal,
@@ -57,7 +54,6 @@ import {
   RefreshCw,
   Trash2,
 } from "@/components/icons/appIcons";
-import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
 import {
   createEmptyCustomerDeliveryPoint,
@@ -983,30 +979,15 @@ export default function ContractorsPage() {
   const headerActions = useMemo(() => (
     <UnifiedPageToolbar
       topLeft={
-        <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
-          <Button
-            variant="segmented"
-            size="xs"
-            aria-pressed={activeTab === "contractors"}
-            onClick={() => setActiveTab("contractors")}
-            className={cn(SEGMENTED_TRIGGER, "gap-2")}
-          >
-            <Building2 className="h-4 w-4" />
-            Підрядники
-            <CountBadge value={contractorsCount} />
-          </Button>
-          <Button
-            variant="segmented"
-            size="xs"
-            aria-pressed={activeTab === "suppliers"}
-            onClick={() => setActiveTab("suppliers")}
-            className={cn(SEGMENTED_TRIGGER, "gap-2")}
-          >
-            <Building2 className="h-4 w-4" />
-            Постачальники
-            <CountBadge value={suppliersCount} />
-          </Button>
-        </SegmentedGroup>
+        <ToolbarTabs
+          ariaLabel="Розділ"
+          items={[
+            { value: "contractors", label: "Підрядники", count: contractorsCount },
+            { value: "suppliers", label: "Постачальники", count: suppliersCount },
+          ]}
+          value={activeTab}
+          onValueChange={setActiveTab}
+        />
       }
       topRight={
         <Button
@@ -1042,6 +1023,7 @@ export default function ContractorsPage() {
       meta={
         <ToolbarMeta
           count={activeTabCount}
+          unit={activeTab === "contractors" ? ["підрядник", "підрядники", "підрядників"] : ["постачальник", "постачальники", "постачальників"]}
           onReset={clearFilters}
           showReset={hasActiveFilters}
           loading={refreshing}
