@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -128,7 +128,26 @@ describe("LeadPanel", () => {
 
   it("показує ті самі сім пунктів готовності, що й у замовника", async () => {
     renderPanel();
-    expect(await screen.findByText("Готово 1 з 7")).toBeInTheDocument();
+    const block = await screen.findByTestId("readiness-block");
+    expect(within(block).getByText("1")).toBeInTheDocument();
+    expect(within(block).getByText("з 7")).toBeInTheDocument();
+  });
+
+  it("IBAN вписується прямо в блоці й пишеться в колонку ліда при виході з поля", async () => {
+    renderPanel();
+    const block = await screen.findByTestId("readiness-block");
+    const iban = within(block).getByLabelText("IBAN");
+    fireEvent.change(iban, { target: { value: `UA${IBAN_27}` } });
+    fireEvent.blur(iban);
+    await waitFor(() => expect(mocks.writeLeadFields).toHaveBeenCalledWith("l1", { iban: `UA${IBAN_27}` }));
+  });
+
+  it("⤢ відкриває повну картку ліда", async () => {
+    const onOpenFull = vi.fn();
+    renderPanel({ onOpenFull });
+    await screen.findByTestId("readiness-block");
+    fireEvent.click(screen.getByRole("button", { name: "Розгорнути на всю сторінку" }));
+    expect(onOpenFull).toHaveBeenCalledTimes(1);
   });
 
   it("«Готівка»: форма переведення без полів, одразу «Перевести»", async () => {

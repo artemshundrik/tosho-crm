@@ -4,10 +4,11 @@ import { createEmptyCustomerLegalEntity, parseCustomerLegalEntities } from "@/li
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { getLocalReminderDateInputValue, getLocalReminderTimeInputValue } from "@/lib/reminderDateTime";
 import { parseCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
+import { isMissingReferredByColumn } from "./leadEntryHints";
 
 /**
- * Один замовник з бази у формі картки. Спільне для старого вікна
- * (`useCustomerEditor`), бічної панелі й повної сторінки замовника: рядок
+ * Один замовник з бази у формі картки. Спільне для бічної панелі й повної
+ * сторінки замовника: рядок
  * читається однаково, тож «чого бракує» в панелі й на сторінці рахується з
  * тієї самої форми.
  */
@@ -18,6 +19,7 @@ export type CustomerRecord = {
   name?: string | null;
   payment_type?: string | null;
   source?: string | null;
+  referred_by?: string | null;
   legal_name?: string | null;
   manager?: string | null;
   manager_user_id?: string | null;
@@ -151,19 +153,30 @@ export const parseContactsFromRow = (row: CustomerRecord): CustomerContact[] => 
   return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CONTACT }];
 };
 
-export const loadCustomerRow = (teamId: string, customerId: string) =>
+const selectCustomerRow = (teamId: string, customerId: string, columns: string) =>
   supabase
     .schema("tosho")
     .from("customers")
-    .select(CUSTOMER_COLUMNS)
+    .select(columns)
     .eq("team_id", teamId)
     .eq("id", customerId)
     .maybeSingle<CustomerRecord>();
+
+/**
+ * `referred_by` додає scripts/party-referred-by.sql. Поки його не застосовано,
+ * читаємо без колонки — картка відкривається, лише без «хто порекомендував».
+ */
+export const loadCustomerRow = async (teamId: string, customerId: string) => {
+  const full = await selectCustomerRow(teamId, customerId, `${CUSTOMER_COLUMNS},referred_by`);
+  if (!full.error || !isMissingReferredByColumn(full.error)) return full;
+  return selectCustomerRow(teamId, customerId, CUSTOMER_COLUMNS);
+};
 
 export const customerRowToForm = (data: CustomerRecord, managerLabel: string): CustomerFormState => ({
   name: data.name ?? "",
   paymentType: data.payment_type === "cash" ? "cash" : "invoice",
   source: data.source ?? "",
+  referredBy: data.referred_by ?? "",
   manager: managerLabel,
   managerId: data.manager_user_id ?? "",
   website: data.website ?? "",

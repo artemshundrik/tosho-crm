@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { TableUpdate } from "@/lib/dbTables";
+import { isMissingReferredByColumn } from "./leadEntryHints";
 
 /**
  * Запис одного поля картки замовника чи ліда.
@@ -7,8 +8,8 @@ import type { TableUpdate } from "@/lib/dbTables";
  * ЛИШЕ ЗМІНЕНА КОЛОНКА. Панель пише поле одразу, а не всю картку: якщо колега
  * тим часом змінив нотатки на сторінці, `update` усієї картки мовчки повернув
  * би старі. Тому тип патча обмежений «дешевими» полями, що лежать окремими
- * колонками; реквізити, контакти й доставка — jsonb-масиви, і їх редагує
- * сторінка під замком.
+ * колонками (і назва, менеджер, джерело, сайт, лого з шапки картки);
+ * реквізити, контакти й доставка — jsonb-масиви, їх пише `writeCustomerSection`.
  *
  * `.select("id")` обовʼязковий: без нього RLS, що не пустив рядок, відповідає
  * успіхом без жодного запису (див. памʼять «update без .select() мовчить»).
@@ -19,6 +20,12 @@ import type { TableUpdate } from "@/lib/dbTables";
 export type CustomerFieldPatch = Partial<
   Pick<
     TableUpdate<"customers">,
+    | "name"
+    | "manager"
+    | "manager_user_id"
+    | "source"
+    | "website"
+    | "logo_url"
     | "payment_type"
     | "accountant_name"
     | "accountant_email"
@@ -27,7 +34,10 @@ export type CustomerFieldPatch = Partial<
     | "reminder_at"
     | "reminder_comment"
   >
->;
+> & {
+  /** Колонку додає scripts/party-referred-by.sql; до нього запис поверне помилку колонки. */
+  referred_by?: string | null;
+};
 
 /** Розділи, які сторінка замовника править формою з «Зберегти». */
 export type CustomerSection = "requisites" | "contacts" | "delivery";
@@ -54,8 +64,25 @@ export type CustomerSectionPatch = Partial<
   >
 >;
 
+/**
+ * Лід тримає реквізити окремими колонками, а не jsonb-масивом, тож бракуюче
+ * для рахунку панель пише по одному полю, як і оплату.
+ */
 export type LeadFieldPatch = Partial<
-  Pick<TableUpdate<"leads">, "payment_type" | "notes" | "reminder_at" | "reminder_comment">
+  Pick<
+    TableUpdate<"leads">,
+    | "payment_type"
+    | "notes"
+    | "reminder_at"
+    | "reminder_comment"
+    | "ownership_type"
+    | "tax_id"
+    | "legal_address"
+    | "iban"
+    | "signatory_position"
+    | "email"
+    | "phone_numbers"
+  >
 >;
 
 export type FieldWriteResult = { ok: true } | { ok: false; reason: "gone" | "network"; message: string };
@@ -91,7 +118,10 @@ const caught = (error: unknown): FieldWriteResult => ({
 
 export async function writeCustomerFields(customerId: string, patch: CustomerFieldPatch): Promise<FieldWriteResult> {
   try {
-    const response = await supabase.schema("tosho").from("customers").update(patch).eq("id", customerId).select("id");
+    const response = await supabase.schema("tosho").from("customers").update(patch as never).eq("id", customerId).select("id");
+    if (response.error && "referred_by" in patch && isMissingReferredByColumn(response.error)) {
+      return { ok: false, reason: "network", message: "Не зберіглось: поле «Хто порекомендував» запрацює після оновлення бази." };
+    }
     return toResult(response, "Замовника вже немає або він вам недоступний");
   } catch (error) {
     return caught(error);

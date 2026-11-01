@@ -7,8 +7,8 @@ import { customerSectionColumns } from "../partyCardSave";
 import { writeCustomerSection, type CustomerSection } from "../partyFieldWrite";
 
 /**
- * Редагування розділу сторінки замовника: Реквізити, Контакти чи Доставка —
- * форма з «Зберегти», що пише ЛИШЕ колонки свого розділу
+ * Редагування розділу картки замовника: Реквізити, Контакти чи Доставка —
+ * чернетка, що пише ЛИШЕ колонки свого розділу
  * (`customerSectionColumns`), тож чужа правка нотаток у панелі виживає.
  *
  * «Брудна» — коли колонки розділу в чернетці відрізняються від збережених.
@@ -76,8 +76,10 @@ export function useCustomerPageForm(params: {
     },
     [saved],
   );
+  /** Функцією — коли правка залежить від чернетки на момент запису (перечитали замовника). */
   const update = useCallback(
-    (patch: Partial<CustomerFormState>) => setDraft((current) => (current ? { ...current, ...patch } : current)),
+    (patch: Partial<CustomerFormState> | ((draft: CustomerFormState) => Partial<CustomerFormState>)) =>
+      setDraft((current) => (current ? { ...current, ...(typeof patch === "function" ? patch(current) : patch) } : current)),
     [],
   );
   const close = useCallback(() => {
@@ -86,7 +88,8 @@ export function useCustomerPageForm(params: {
     setError(null);
   }, []);
 
-  const save = useCallback(async () => {
+  /** `keepOpen` — автозбереження поля: розділ лишається відкритим, чернетка теж. */
+  const save = useCallback(async (options?: { keepOpen?: boolean }) => {
     if (!editing || !draft || hasIssues) return false;
     setSaving(true);
     setError(null);
@@ -97,7 +100,7 @@ export function useCustomerPageForm(params: {
       return false;
     }
     onSaved(draft, editing);
-    close();
+    if (!options?.keepOpen) close();
     return true;
   }, [close, customerId, draft, editing, hasIssues, onSaved]);
 

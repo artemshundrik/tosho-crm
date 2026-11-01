@@ -1,38 +1,29 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { EntityAvatar } from "@/components/app/avatar-kit";
-import { PeekSection } from "@/components/app/peek/EntityPeek";
 import { Button } from "@/components/ui/button";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
-import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
-import { ExternalLink, Lock } from "@/components/icons/appIcons";
+import { ExternalLink, Mail, Phone, Send } from "@/components/icons/appIcons";
 import { statusClasses as quoteStatusClasses, statusLabels as quoteStatusLabels } from "@/features/quotes/quotes-page/config";
 import { DESIGN_STATUS_LABELS } from "@/lib/designTaskStatus";
-import {
-  formatCustomerDeliveryPointSummary,
-  type CustomerDeliveryPoint,
-} from "@/lib/customerDeliveryPoints";
-import { formatCustomerLegalEntityTitle, type CustomerLegalEntity } from "@/lib/customerLegalEntities";
-import type { EntityLockResult } from "@/lib/entityLock";
 import { pluralWordUk } from "@/lib/lastSeen";
 import { getLocalReminderDateInputValue } from "@/lib/reminderDateTime";
 import { toneDotClass, toneTextClass } from "@/lib/statusTones";
-import { bankFromIban } from "@/lib/ukrainianRequisites";
+import { formatTelegramHandle } from "@/lib/telegramContact";
 import { cn } from "@/lib/utils";
 import type { CustomerContact, CustomerLinkedItem } from "../CustomerDialog";
 import type { PartyLinkedItem, PartyLinkedRecords } from "../partyLinkedRecords";
 import type { FieldSaveState } from "../usePartyFieldSave";
 import type { PartyContextHint } from "./partyContextHints";
+import { PartySection as PeekSection } from "../card/CardParts";
 
 /**
- * Розділи бічної панелі замовника. Кожен — лише показ і дрібні дії; що
- * пишеться й куди, вирішує `CustomerPanel`.
- *
- * Реквізити, контакти й доставка тут ЛИШЕ ПОКАЗУЮТЬСЯ: це jsonb-масиви, і
- * запис одного елемента з панелі переписав би весь масив разом із чужою
- * правкою. «Змінити» веде на розділ повної сторінки.
+ * Розділи картки замовника й ліда — спільні для бічної панелі, спливної
+ * картки в списку й правої колонки сторінки. Кожен — лише показ і дрібні дії;
+ * що пишеться й куди, вирішує той, хто їх ставить. Як розділ виглядає
+ * (стрічка чи окрема картка), каже `PartySectionLayout`.
  */
 
 export type FieldStatus = { state: FieldSaveState; message: string | null };
@@ -60,131 +51,6 @@ export function SaveHint({ status, onRetry }: { status: FieldStatus; onRetry: ()
         Повторити
       </Button>
     </span>
-  );
-}
-
-export function PaymentSection(props: {
-  /** null — у картці форму оплати не вказано: жодна кнопка не натиснута. */
-  value: "cash" | "invoice" | null;
-  status: FieldStatus;
-  onChange: (value: "cash" | "invoice") => void;
-  onRetry: () => void;
-}) {
-  return (
-    <section className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
-      <span className="text-xs font-medium text-muted-foreground">Оплата</span>
-      <div role="group" aria-label="Форма оплати" className="flex rounded-lg border border-border p-0.5">
-        {(
-          [
-            ["invoice", "Рахунок"],
-            ["cash", "Готівка"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={props.value === value}
-            onClick={() => props.value !== value && props.onChange(value)}
-            className={cn(
-              "h-6 rounded-md px-2.5 text-xs font-medium transition-colors",
-              props.value === value ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {props.value === null && props.status.state === "idle" ? (
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span aria-hidden className={cn("size-1.5 rounded-full", toneDotClass.warning)} />
-          не вказано — від неї залежить, що ще потрібно
-        </span>
-      ) : null}
-      <span className="ml-auto">
-        <SaveHint status={props.status} onRetry={props.onRetry} />
-      </span>
-    </section>
-  );
-}
-
-const looksLikeEmail = (value: string) => !value.trim() || value.includes("@");
-
-/** «Бухгалтера немає — рахунки й акти підуть Анні» + поле на місці. */
-export function AccountantCard(props: {
-  name: string;
-  email: string;
-  edrpou: string;
-  fallbackRecipient: string | null;
-  open: boolean;
-  status: FieldStatus;
-  onOpenChange: (open: boolean) => void;
-  onSave: (value: { name: string; email: string; edrpou: string }) => void;
-  onRetry: () => void;
-}) {
-  const [draft, setDraft] = useState({ name: props.name, email: props.email, edrpou: props.edrpou });
-  const [attempted, setAttempted] = useState(false);
-  useEffect(() => {
-    if (props.open) setDraft({ name: props.name, email: props.email, edrpou: props.edrpou });
-  }, [props.open, props.name, props.email, props.edrpou]);
-  const emailBad = attempted && !looksLikeEmail(draft.email);
-
-  return (
-    <div className="space-y-2 rounded-lg border border-dashed border-border px-3 py-2.5 text-sm">
-      <div className="flex items-center gap-2">
-        <span className="flex-1">
-          {props.name || props.email
-            ? `Бухгалтер: ${[props.name, props.email].filter(Boolean).join(" · ")}`
-            : `Бухгалтера немає${props.fallbackRecipient ? ` — рахунки й акти підуть: ${props.fallbackRecipient}` : ""}`}
-        </span>
-        <SaveHint status={props.status} onRetry={props.onRetry} />
-        {!props.open ? (
-          <Button type="button" variant="outline" size="xs" onClick={() => props.onOpenChange(true)}>
-            {props.name || props.email ? "Змінити" : "Додати"}
-          </Button>
-        ) : null}
-      </div>
-      {props.open ? (
-        <form
-          className="space-y-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setAttempted(true);
-            if (!looksLikeEmail(draft.email)) return;
-            props.onSave(draft);
-            props.onOpenChange(false);
-          }}
-        >
-          <div className="grid grid-cols-2 gap-2">
-            <label className="grid gap-1 text-xs text-muted-foreground">
-              Імʼя
-              <Input value={draft.name} placeholder="напр. Ірина" onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-            </label>
-            <label className="grid gap-1 text-xs text-muted-foreground">
-              Пошта для документів
-              <Input
-                value={draft.email}
-                placeholder="buh@…"
-                aria-invalid={emailBad || undefined}
-                onChange={(e) => setDraft({ ...draft, email: e.target.value })}
-              />
-            </label>
-            <label className="col-span-2 grid gap-1 text-xs text-muted-foreground">
-              ЄДРПОУ бухгалтерії, якщо інший
-              <Input value={draft.edrpou} inputMode="numeric" onChange={(e) => setDraft({ ...draft, edrpou: e.target.value })} />
-            </label>
-          </div>
-          {emailBad ? <p className={cn("text-xs", toneTextClass.danger)}>Це не схоже на пошту — бракує «@».</p> : null}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="xs" onClick={() => props.onOpenChange(false)}>
-              Не зараз
-            </Button>
-            <Button type="submit" size="xs">
-              Зберегти
-            </Button>
-          </div>
-        </form>
-      ) : null}
-    </div>
   );
 }
 
@@ -247,169 +113,89 @@ export function ContextHintCards(props: {
   );
 }
 
-/** Реквізити основної юрособи — лише показ; під чужим замком — «Попросити передати». */
-export function RequisitesSection(props: {
-  entity: CustomerLegalEntity | null;
-  foreignLock: EntityLockResult | null;
-  releaseRequested: boolean;
-  onEdit: () => void;
-  onRequestRelease: () => void;
-}) {
-  const { entity } = props;
-  const bank = entity?.bankName.trim() || null;
-  const guessed = !bank && entity?.iban ? bankFromIban(entity.iban) : null;
-  const rows: Array<[string, ReactNode]> = entity
-    ? [
-        ["Код", entity.taxId || "—"],
-        ["IBAN", entity.iban ? <span className="font-mono">{entity.iban}</span> : "—"],
-        ["Банк", bank ?? (guessed?.bankName ? `${guessed.bankName} — за IBAN, не вписано` : "—")],
-        ["Підписант", [entity.signatoryName, entity.signatoryPosition].filter(Boolean).join(", ") || "—"],
-      ]
-    : [];
-  return (
-    <PeekSection
-      title="Реквізити"
-      aside={
-        props.foreignLock ? null : (
-          <Button type="button" variant="ghost" size="xxs" onClick={props.onEdit}>
-            Змінити
-          </Button>
-        )
-      }
-    >
-      {props.foreignLock ? (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
-          <Lock className="size-4 shrink-0 text-muted-foreground" />
-          <span className="flex-1">
-            Зараз редагує {props.foreignLock.lockedByName ?? "колега"} — тут лише перегляд
-          </span>
-          {props.releaseRequested ? (
-            <span className="text-xs text-muted-foreground">Попросили</span>
-          ) : (
-            <Button type="button" variant="outline" size="xs" onClick={props.onRequestRelease}>
-              Попросити передати
-            </Button>
-          )}
-        </div>
-      ) : null}
-      {entity ? (
-        <div className="space-y-1 text-sm">
-          <div className="font-medium">{formatCustomerLegalEntityTitle(entity)}</div>
-          <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1">
-            {rows.map(([label, value]) => (
-              <div key={label} className="contents">
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd className="min-w-0 break-words">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Юрособи ще немає.</p>
-      )}
-    </PeekSection>
-  );
-}
-
-export function MoneySection({ records }: { records: PartyLinkedRecords }) {
+/**
+ * Замовлено / Оплачено / Чекає — за живими замовленнями (скасовані не
+ * рахуються). «Оплачено» — повністю оплачені, «Чекає» — решта: те саме
+ * правило, що й «Чекає оплати» в панелі досі.
+ */
+export function workSums(records: PartyLinkedRecords) {
   const live = records.orders.filter((order) => order.status !== "cancelled");
-  const unpaid = live
-    .filter((order) => order.payment_status !== "fully_paid")
-    .reduce((sum, order) => sum + Number(order.total ?? 0), 0);
-  const tiles: Array<[string, string]> = [
-    ["Чекає оплати", `${formatMoney(unpaid)} ₴`],
-    ["Замовлень", String(live.length)],
-    ["Прорахунків", String(records.calculations.length)],
-  ];
+  const total = (orders: PartyLinkedItem[]) => orders.reduce((sum, order) => sum + Number(order.total ?? 0), 0);
+  const paid = total(live.filter((order) => order.payment_status === "fully_paid"));
+  const ordered = total(live);
+  return { ordered, paid, waiting: ordered - paid };
+}
+
+export function WorkSums({ records }: { records: PartyLinkedRecords }) {
+  const sums = workSums(records);
   return (
-    <PeekSection title="Гроші">
-      <div className="grid grid-cols-3 gap-2">
-        {tiles.map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-border px-3 py-2">
-            <div className="text-2xs text-muted-foreground">{label}</div>
-            <div className="truncate text-sm font-semibold tabular-nums">{value}</div>
-          </div>
-        ))}
-      </div>
-    </PeekSection>
+    <div className="flex flex-wrap gap-x-5 gap-y-1 pb-1">
+      {(
+        [
+          ["Замовлено", sums.ordered],
+          ["Оплачено", sums.paid],
+          ["Чекає", sums.waiting],
+        ] as const
+      ).map(([label, value]) => (
+        <div key={label}>
+          <div className="text-xs text-muted-foreground">{label}</div>
+          <div className="text-lg font-semibold tabular-nums">{formatMoney(value)} ₴</div>
+        </div>
+      ))}
+    </div>
   );
 }
 
-export function DeliverySection({ points, onEdit }: { points: CustomerDeliveryPoint[]; onEdit: () => void }) {
-  const main = points.find((point) => point.isDefault) ?? points[0] ?? null;
+/** Основний контакт: імʼя, посада, телефон і Telegram; решта — «+N». */
+export function ContactsSection(props: { contacts: CustomerContact[]; onAdd?: () => void }) {
+  const contacts = props.contacts.filter((contact) => contact.name || contact.phone || contact.email);
+  const main = contacts[0] ?? null;
+  const telegram = main?.telegram ? formatTelegramHandle(main.telegram) : "";
   return (
     <PeekSection
-      title="Доставка"
+      title="Контакт"
       aside={
-        <Button type="button" variant="ghost" size="xxs" onClick={onEdit}>
-          {main ? "Змінити" : "Додати"}
-        </Button>
+        !main && props.onAdd ? (
+          <Button type="button" variant="ghost" size="xxs" onClick={props.onAdd}>
+            Додати
+          </Button>
+        ) : null
       }
     >
       {main ? (
-        <p className="text-sm">
-          {formatCustomerDeliveryPointSummary(main)}
-          {points.length > 1 ? <span className="text-muted-foreground"> · ще {points.length - 1}</span> : null}
-        </p>
+        <>
+          <div className="flex items-center gap-2.5 text-sm">
+            <EntityAvatar name={main.name || main.phone} size={32} />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate font-medium">{main.name || "Без імені"}</span>
+              {main.position ? <span className="truncate text-xs text-muted-foreground">{main.position}</span> : null}
+            </div>
+            {contacts.length > 1 ? <span className="text-xs text-muted-foreground">+{contacts.length - 1}</span> : null}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {main.phone ? (
+              <a href={`tel:${main.phone.replace(/\s+/g, "")}`} className="inline-flex items-center gap-1.5 hover:underline">
+                <Phone className="size-3.5 text-muted-foreground" />
+                <span className="font-mono text-xs tabular-nums">{main.phone}</span>
+              </a>
+            ) : null}
+            {main.email ? (
+              <a href={`mailto:${main.email}`} className="inline-flex min-w-0 items-center gap-1.5 hover:underline">
+                <Mail className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{main.email}</span>
+              </a>
+            ) : null}
+            {telegram ? (
+              <a href={`https://t.me/${telegram.replace(/^@/, "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 hover:underline">
+                <Send className="size-3.5 text-muted-foreground" />
+                {telegram}
+              </a>
+            ) : null}
+          </div>
+        </>
       ) : (
-        <p className="text-sm text-muted-foreground">Адрес доставки ще немає.</p>
+        <p className="text-sm text-muted-foreground">Контактів ще немає.</p>
       )}
-    </PeekSection>
-  );
-}
-
-export function ContactsSection(props: {
-  contacts: CustomerContact[];
-  accountant: { name: string; email: string };
-  onEdit: () => void;
-}) {
-  const contacts = props.contacts.filter((contact) => contact.name || contact.phone || contact.email);
-  return (
-    <PeekSection
-      title="Контакти"
-      aside={
-        <Button type="button" variant="ghost" size="xxs" onClick={props.onEdit}>
-          {contacts.length ? "Змінити" : "Додати"}
-        </Button>
-      }
-    >
-      {contacts.length === 0 ? <p className="text-sm text-muted-foreground">Контактів ще немає.</p> : null}
-      {contacts.map((contact, index) => (
-        <div key={`${contact.name}-${index}`} className="flex min-h-9 items-center gap-2.5 text-sm">
-          <EntityAvatar name={contact.name || contact.phone} size={28} />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate font-medium">
-              {contact.name || "Без імені"}
-              {index === 0 ? <span className="ml-1.5 text-2xs font-normal text-muted-foreground">основний</span> : null}
-            </span>
-            <span className="truncate text-xs text-muted-foreground">
-              {[contact.position, contact.email || (contact.phone ? "без пошти" : "")].filter(Boolean).join(" · ")}
-            </span>
-          </div>
-          {contact.phone ? (
-            <HoverCopyText
-              value={contact.phone}
-              textClassName="font-mono text-xs tabular-nums"
-              successMessage="Телефон скопійовано"
-              copyLabel={`Скопіювати телефон: ${contact.name || contact.phone}`}
-            >
-              {contact.phone}
-            </HoverCopyText>
-          ) : null}
-        </div>
-      ))}
-      {props.accountant.name || props.accountant.email ? (
-        <div className="flex min-h-9 items-center gap-2.5 text-sm">
-          <EntityAvatar name={props.accountant.name || "Бухгалтер"} size={28} />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate font-medium">
-              {props.accountant.name || "Бухгалтер"}
-              <span className="ml-1.5 text-2xs font-normal text-muted-foreground">бухгалтер</span>
-            </span>
-            <span className="truncate text-xs text-muted-foreground">{props.accountant.email}</span>
-          </div>
-        </div>
-      ) : null}
     </PeekSection>
   );
 }
@@ -426,6 +212,8 @@ export function DealsSection(props: {
   limit?: number;
   /** Сторінка ставить сюди фільтр «Усе / Прорахунки / Замовлення». */
   title?: ReactNode;
+  /** Що стоїть над рядками: суми «Замовлено / Оплачено / Чекає». */
+  before?: ReactNode;
 }) {
   const limit = props.limit ?? 5;
   const rows: DealRow[] = [
@@ -434,7 +222,7 @@ export function DealsSection(props: {
   ].sort((a, b) => new Date(b.item.created_at ?? 0).getTime() - new Date(a.item.created_at ?? 0).getTime());
   return (
     <PeekSection
-      title={props.title ?? "Прорахунки й замовлення"}
+      title={props.title ?? "Робота"}
       aside={
         rows.length > limit ? (
           <Button type="button" variant="ghost" size="xxs" onClick={props.onShowAll}>
@@ -443,6 +231,7 @@ export function DealsSection(props: {
         ) : null
       }
     >
+      {props.before}
       {props.loading && rows.length === 0 ? <div className="h-9 animate-pulse rounded-md bg-muted" /> : null}
       {!props.loading && rows.length === 0 ? <p className="text-sm text-muted-foreground">Ще нічого немає.</p> : null}
       {rows.slice(0, limit).map(({ kind, item }) => {
@@ -459,22 +248,26 @@ export function DealsSection(props: {
             key={`${kind}-${item.id}`}
             type="button"
             onClick={() => (kind === "quote" ? props.onOpenQuote(item.id) : props.onOpenOrder(item.id))}
-            className="-mx-2 flex min-h-9 w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted/60"
+            className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md border-t border-border/60 px-2 py-2 text-left text-sm first-of-type:border-t-0 hover:bg-muted/60"
           >
-            <span className="w-[104px] shrink-0 font-mono text-xs">{item.number ?? "—"}</span>
-            <span className="min-w-0 flex-1 truncate">{kind === "order" ? "Замовлення" : item.title ?? "Прорахунок"}</span>
-            {label ? (
-              <span
-                className={cn(
-                  "shrink-0 rounded-full border px-2 py-0.5 text-2xs font-medium",
-                  kind === "quote" ? quoteStatusClasses[status] : "border-border bg-muted/30 text-muted-foreground",
-                )}
-              >
-                {label}
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="font-mono text-xs text-muted-foreground">{item.number ?? "—"}</span>
+              <span className="truncate">{kind === "order" ? "Замовлення" : item.title ?? "Прорахунок"}</span>
+            </span>
+            <span className="flex shrink-0 flex-col items-end gap-0.5">
+              <span className={cn("font-medium tabular-nums", zero && toneTextClass.warning)}>
+                {item.total == null ? "—" : `${formatMoney(Number(item.total))} ₴`}
               </span>
-            ) : null}
-            <span className={cn("w-[84px] shrink-0 text-right font-mono text-xs tabular-nums", zero && toneTextClass.warning)}>
-              {item.total == null ? "—" : formatMoney(Number(item.total))}
+              {label ? (
+                <span
+                  className={cn(
+                    "rounded-full border px-2 py-px text-2xs font-medium",
+                    kind === "quote" ? quoteStatusClasses[status] : "border-border bg-muted/30 text-muted-foreground",
+                  )}
+                >
+                  {label}
+                </span>
+              ) : null}
             </span>
           </button>
         );

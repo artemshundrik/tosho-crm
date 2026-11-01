@@ -1,61 +1,58 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { EntityAvatar } from "@/components/app/avatar-kit";
-import { EntityPeek, Kbd } from "@/components/app/peek/EntityPeek";
+import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { Button } from "@/components/ui/button";
-import { formatCustomerLegalEntityTitle } from "@/lib/customerLegalEntities";
-import { requestEntityLockRelease, sectionLockType } from "@/lib/entityLock";
+import { EmailInput } from "@/components/ui/email-input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { isDesignerJobRole } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import { customerPagePath } from "@/layout/routes";
+import { INLINE_CONTROL, INLINE_NEED, PartyField } from "../card/CardParts";
+import { EMPTY_CONTACT } from "../card/ContactCards";
+import { HeaderFact, LogoButton, ManagerChip, NameInput, PaymentSeg, SourceChip } from "../card/HeaderParts";
+import { READINESS_FIELD, RequisitesFields, usePlaceholderEntity, patchLegalEntity, type RequisiteField } from "../card/RequisitesFields";
+import { useCustomerQuickSave } from "../card/useCustomerQuickSave";
+import { useRequisitesAutosave, useSectionAutosave } from "../card/useSectionAutosave";
+import { useTeamMembers } from "../card/useTeamMembers";
+import type { CustomerFormState } from "../CustomerDialog";
 import type { PartyCardSavedResult } from "../partyCardContext";
-import { writeCustomerFields, type CustomerFieldPatch } from "../partyFieldWrite";
 import { customerReadinessInput, getPartyReadiness, type PartyReadinessKey } from "../partyReadiness";
 import { useCustomerCard } from "../useCustomerCard";
-import { usePartyFieldSave } from "../usePartyFieldSave";
 import {
-  AccountantCard,
   ContactsSection,
   ContextHintCards,
   DealsSection,
-  DeliverySection,
   DesignTasksSection,
   DropboxSection,
-  MoneySection,
   NotesSection,
-  PaymentSection,
-  RequisitesSection,
+  SaveHint,
+  WorkSums,
   reminderInDays,
 } from "./PanelSections";
+import { PartyDrawer } from "./PartyDrawer";
 import { getPartyContextHints } from "./partyContextHints";
 import { ReadinessBlock } from "./ReadinessBlock";
 
 /**
- * Бічна панель замовника: клік по замовнику з прорахунку, задачі, замовлення
- * чи списку «Замовники» відкриває її, а не вікно на всю картку.
+ * Шторка замовника (варіант А, REQ-349#p12): клік по замовнику з прорахунку,
+ * задачі, замовлення чи списку «Замовники» відкриває її справа.
  *
- * ДВІ ГЛИБИНИ. Тут — «чого бракує» й дрібне, що пишеться одразу й по одному
- * полю (`writeCustomerFields`). Реквізити, контакти й доставку правлять на
- * сторінці `/orders/customers/:id?section=…`, під замком і з «Зберегти».
+ * ЧОГО БРАКУЄ — ВПИСУЄТЬСЯ ТУТ ЖЕ. Під «Для рахунку N з 7» стоять поля саме
+ * тих пунктів, яких бракувало на відкритті. Набір заморожений: вписали IBAN —
+ * поле лишається до закриття, а не стрибає з-під курсора.
  *
- * ЗАМОК РЕКВІЗИТІВ ПАНЕЛЬ ЛИШЕ ЧИТАЄ (`readEntityLock`, не `useEntityLock`):
- * вона нічого з реквізитів не пише, а взятий відкриттям панелі замок
- * заблокував би колегу, що саме відкрив сторінку.
+ * Реквізити пишуться так само, як на сторінці (`useRequisitesAutosave`):
+ * замок береться фокусом у полі, а не відкриттям шторки — інакше погляд
+ * на замовника блокував би колегу. Чужий замок — лише перегляд і
+ * «Попросити передати».
  *
- * Дизайнер бачить лише лого, папку Dropbox і дизайн-задачі — без грошей і
- * реквізитів, і без «немає доступу»: йому це просто не потрібно.
+ * Дизайнер бачить лише лого, дизайн-задачі й папку Dropbox.
  */
 
-const JUMP_SECTION: Record<PartyReadinessKey, "requisites" | "contacts"> = {
-  ownership: "requisites",
-  taxId: "requisites",
-  legalAddress: "requisites",
-  iban: "requisites",
-  signatory: "requisites",
-  phone: "contacts",
-  documentEmail: "contacts",
-};
+const looksLikeEmail = (value: string) => !value.trim() || value.includes("@");
 
 export function CustomerPanel(props: {
   customerId: string;
@@ -63,123 +60,138 @@ export function CustomerPanel(props: {
   onClose: () => void;
   onSaved?: (result: PartyCardSavedResult) => void;
 }) {
-  const { customerId, fallbackName, onClose } = props;
+  const { customerId, fallbackName, onClose, onSaved } = props;
   const { teamId, userId, jobRole } = useAuth();
   const navigate = useNavigate();
   const designer = isDesignerJobRole(jobRole);
 
-  const { state, row, form, update, records, recordsLoading, foreignLock: lock, retry: reload } = useCustomerCard({
-    teamId,
-    userId,
-    customerId,
-  });
-  const [releaseRequested, setReleaseRequested] = useState(false);
-  const [accountantOpen, setAccountantOpen] = useState(false);
-  const [paymentSet, setPaymentSet] = useState(true);
-  useEffect(() => setPaymentSet(Boolean(row?.payment_type)), [row]);
+  const card = useCustomerCard({ teamId, userId, customerId });
+  const { state, row, form, setForm, records, recordsLoading } = card;
+  const members = useTeamMembers(userId);
 
-  const formRef = useRef(form);
-  formRef.current = form;
-  const onSavedRef = useRef(props.onSaved);
-  onSavedRef.current = props.onSaved;
-
-  const write = useCallback(
-    async (patch: CustomerFieldPatch) => {
-      const result = await writeCustomerFields(customerId, patch);
-      if (result.ok) {
-        window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
-        onSavedRef.current?.({
-          kind: "customer",
-          id: customerId,
-          name: formRef.current?.name ?? "",
-          logoUrl: formRef.current?.logoUrl || null,
-          convertedCustomerId: null,
-        });
-      }
-      return result;
+  const announce = useCallback(
+    (saved?: CustomerFormState | null) => {
+      window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
+      onSaved?.({
+        kind: "customer",
+        id: customerId,
+        name: saved?.name ?? "",
+        logoUrl: saved?.logoUrl || null,
+        convertedCustomerId: null,
+      });
     },
-    [customerId, teamId],
+    [customerId, onSaved, teamId],
   );
-  const { save, stateOf, retry } = usePartyFieldSave(write);
-  const [reminderAt, setReminderAt] = useState<string | null>(null);
-  useEffect(() => setReminderAt(row?.reminder_at ?? null), [row]);
+  const quick = useCustomerQuickSave({ customerId, teamId, userId, card, members, onSaved: announce });
+  const req = useRequisitesAutosave({ customerId, form, setForm, onSaved: () => announce(form), teamId, userId });
+  const contacts = useSectionAutosave({ section: "contacts", customerId, form, setForm, onSaved: () => announce(form) });
+  const placeholder = usePlaceholderEntity();
 
-  // Панель живе над маршрутами (PartyCardHost) — сторінка відкривається без неї.
-  const openPage = useCallback(
-    (section?: string) => {
-      onClose();
-      navigate(customerPagePath(customerId, section));
-    },
-    [customerId, navigate, onClose],
-  );
+  const openPage = useCallback(() => {
+    onClose();
+    navigate(customerPagePath(customerId));
+  }, [customerId, navigate, onClose]);
 
   const readiness = useMemo(() => (form ? getPartyReadiness(customerReadinessInput(form)) : null), [form]);
-  const entity = form?.legalEntities[0] ?? null;
-  const hasDeliveryPoint = (form?.deliveryPoints.length ?? 0) > 0;
   const hints = useMemo(
-    () => (form ? getPartyContextHints({ records, hasDeliveryPoint, now: new Date() }) : []),
-    [form, hasDeliveryPoint, records],
+    () => (form ? getPartyContextHints({ records, hasDeliveryPoint: form.deliveryPoints.length > 0, now: new Date() }) : []),
+    [form, records],
   );
-  const cash = form?.paymentType === "cash";
-  const firstContactName = form?.contacts.find((contact) => contact.name.trim())?.name ?? null;
 
-  const setReminder = (at: string | null, comment?: string) => {
-    setReminderAt(at);
-    const patch: CustomerFieldPatch = { reminder_at: at };
-    if (comment !== undefined || at === null) patch.reminder_comment = at === null ? null : comment ?? null;
-    if (comment !== undefined) update({ reminderComment: comment });
-    save("reminder", patch);
-  };
+  // Що просимо вписати — те, чого бракувало на відкритті.
+  const [asked, setAsked] = useState<ReadonlySet<PartyReadinessKey> | null>(null);
+  useEffect(() => {
+    if (readiness && !asked) setAsked(new Set(readiness.missing));
+  }, [asked, readiness]);
+  const askedFields = useMemo(
+    () => new Set([...(asked ?? [])].map((key) => READINESS_FIELD[key]).filter((field): field is RequisiteField => Boolean(field))),
+    [asked],
+  );
+  const missingFields = useMemo(
+    () => new Set((readiness?.missing ?? []).map((key) => READINESS_FIELD[key]).filter((field): field is RequisiteField => Boolean(field))),
+    [readiness],
+  );
+
+  const [email, setEmail] = useState<string | null>(null);
 
   const name = form?.name || row?.name || fallbackName || "Замовник";
-  const createdLabel = row?.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : null;
-  const legalTitle = entity?.legalName.trim() ? formatCustomerLegalEntityTitle(entity) : null;
+  const cash = form?.paymentType === "cash";
+  const foreign = card.foreignLock && !req.wanted ? card.foreignLock : null;
+  const readOnly = Boolean(foreign) || req.lockedByOther;
+  const phoneDraft = contacts.value?.contacts[0]?.phone ?? form?.contacts[0]?.phone ?? "";
+  const emailDraft = email ?? form?.accountantEmail ?? "";
+
+  const header = (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        {designer || !form ? (
+          <EntityAvatar src={form?.logoUrl || null} name={name} size={44} />
+        ) : (
+          <LogoButton
+            src={form.logoUrl || null}
+            name={name}
+            size={44}
+            busy={quick.logoBusy}
+            error={quick.logoError}
+            onFile={(file) => void quick.saveLogoFile(file)}
+          />
+        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Замовник</span>
+          {designer || !form ? (
+            <span className="truncate text-lg font-semibold">{name}</span>
+          ) : (
+            <NameInput value={form.name} size="panel" onCommit={quick.saveName} />
+          )}
+        </div>
+      </div>
+      {form && !designer ? (
+        <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+          <HeaderFact label="Менеджер">
+            <ManagerChip value={form.managerId} label={form.manager} members={members} onChange={quick.saveManager} />
+          </HeaderFact>
+          <HeaderFact label="Оплата">
+            <PaymentSeg value={quick.paymentSet ? (cash ? "cash" : "invoice") : null} onChange={quick.setPayment} />
+          </HeaderFact>
+          <HeaderFact label="Джерело">
+            <SourceChip
+              source={form.source}
+              referredBy={form.referredBy ?? ""}
+              onSource={quick.saveSource}
+              onReferredBy={quick.saveReferredBy}
+            />
+          </HeaderFact>
+          {(["name", "manager", "payment_type", "source", "logo"] as const).map((field) => (
+            <SaveHint key={field} status={quick.stateOf(field)} onRetry={() => quick.retry(field)} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
-    <EntityPeek
-      section="Замовники"
-      number={entity?.taxId.trim() || "без коду"}
-      numberCopyMessage="Код скопійовано"
-      title={
-        <span className="flex items-center gap-2.5">
-          <EntityAvatar src={form?.logoUrl || null} name={name} size={32} />
-          <span className="min-w-0 truncate">{name}</span>
-        </span>
-      }
-      properties={
-        state === "ready" && (legalTitle || createdLabel) ? (
-          <span className="text-xs text-muted-foreground">
-            {[legalTitle, createdLabel ? `з ${createdLabel}` : null, form?.manager || null].filter(Boolean).join(" · ")}
-          </span>
-        ) : null
-      }
+    <PartyDrawer
+      title={name}
+      header={header}
       onClose={onClose}
-      onOpenFull={() => openPage()}
+      onExpand={openPage}
       footer={
-        <>
-          <span><Kbd>Enter</Kbd> повна картка</span>
-          <span><Kbd>Esc</Kbd> закрити</span>
-          <span className="ml-auto">Зміни зберігаються одразу</span>
-        </>
+        <Button type="button" variant="outline" size="sm" className="w-full" onClick={openPage}>
+          Відкрити повну картку
+        </Button>
       }
     >
       <div data-testid="party-panel">
         {state === "loading" ? (
-          <div data-testid="party-panel-skeleton" aria-busy className="space-y-3 px-4 py-3">
-            <span className="text-xs text-muted-foreground">Назва й лого — одразу, решта догружається…</span>
-            <div className="h-20 animate-pulse rounded-lg bg-muted" />
-            <div className="grid grid-cols-3 gap-2">
-              {[0, 1, 2].map((index) => (
-                <div key={index} className="h-12 animate-pulse rounded-lg bg-muted" />
-              ))}
-            </div>
-            <div className="h-9 animate-pulse rounded-lg bg-muted" />
-            <div className="h-9 animate-pulse rounded-lg bg-muted opacity-70" />
+          <div data-testid="party-panel-skeleton" aria-busy className="space-y-3 px-5 py-4">
+            <div className="h-24 animate-pulse rounded-lg bg-muted" />
+            <div className="h-14 animate-pulse rounded-lg bg-muted" />
+            <div className="h-20 animate-pulse rounded-lg bg-muted opacity-70" />
           </div>
         ) : null}
 
         {state === "error" || state === "gone" ? (
-          <div className="space-y-2 px-4 py-6 text-sm">
+          <div className="space-y-2 px-5 py-6 text-sm">
             <p className="font-medium">{state === "gone" ? "Замовника не знайшли" : "Картку не завантажили"}</p>
             <p className="text-muted-foreground">
               {state === "gone"
@@ -187,7 +199,7 @@ export function CustomerPanel(props: {
                 : "Схоже, зник звʼязок. Те, що ви бачили, нікуди не поділось."}
             </p>
             {state === "error" ? (
-              <Button type="button" variant="outline" size="sm" onClick={reload}>
+              <Button type="button" variant="outline" size="sm" onClick={card.retry}>
                 Спробувати ще
               </Button>
             ) : null}
@@ -195,110 +207,119 @@ export function CustomerPanel(props: {
         ) : null}
 
         {state === "ready" && form && readiness ? (
-          <>
-            {designer ? null : (
-              <>
-                <PaymentSection
-                  value={paymentSet ? (cash ? "cash" : "invoice") : null}
-                  status={stateOf("payment_type")}
-                  onChange={(value) => {
-                    setPaymentSet(true);
-                    update({ paymentType: value });
-                    save("payment_type", { payment_type: value });
-                  }}
-                  onRetry={() => retry("payment_type")}
-                />
-                <ReadinessBlock
-                  readiness={readiness}
-                  cash={cash}
-                  paymentUnknown={!paymentSet}
-                  onJump={(key) => {
-                    if (key === "documentEmail") setAccountantOpen(true);
-                    else openPage(JUMP_SECTION[key]);
-                  }}
-                >
-                  {cash ? null : (
-                    <AccountantCard
-                      name={form.accountantName}
-                      email={form.accountantEmail}
-                      edrpou={form.accountantEdrpou}
-                      fallbackRecipient={firstContactName}
-                      open={accountantOpen}
-                      status={stateOf("accountant")}
-                      onOpenChange={setAccountantOpen}
-                      onSave={(value) => {
-                        update({ accountantName: value.name, accountantEmail: value.email, accountantEdrpou: value.edrpou });
-                        save("accountant", {
-                          accountant_name: value.name.trim() || null,
-                          accountant_email: value.email.trim() || null,
-                          accountant_edrpou: value.edrpou.trim() || null,
-                        });
-                      }}
-                      onRetry={() => retry("accountant")}
-                    />
-                  )}
-                  <ContextHintCards
-                    hints={hints}
-                    onAddDelivery={() => openPage("delivery")}
-                    onOpenQuote={(id) => navigate(`/orders/estimates/${id}`)}
-                    onRemind={(number) => setReminder(reminderInDays(1), `Нагадати клієнту про ${number}`)}
-                  />
-                </ReadinessBlock>
-                {cash ? null : (
-                  <RequisitesSection
-                    entity={entity}
-                    foreignLock={lock}
-                    releaseRequested={releaseRequested}
-                    onEdit={() => openPage("requisites")}
-                    onRequestRelease={() => {
-                      if (!teamId || !userId) return;
-                      setReleaseRequested(true);
-                      void requestEntityLockRelease({
-                        teamId,
-                        entityType: sectionLockType("customer", "requisites"),
-                        entityId: customerId,
-                        userId,
-                      }).catch(() => setReleaseRequested(false));
-                    }}
-                  />
-                )}
-                <MoneySection records={records} />
-                <ContactsSection
-                  contacts={form.contacts}
-                  accountant={{ name: form.accountantName, email: form.accountantEmail }}
-                  onEdit={() => openPage("contacts")}
-                />
-                <DeliverySection points={form.deliveryPoints} onEdit={() => openPage("delivery")} />
-                <DealsSection
-                  records={records}
-                  loading={recordsLoading}
-                  onOpenQuote={(id) => navigate(`/orders/estimates/${id}`)}
-                  onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
-                  onShowAll={() => openPage("work")}
-                />
-                <NotesSection
-                  notes={form.notes}
-                  reminderAt={reminderAt}
-                  reminderComment={form.reminderComment}
-                  notesStatus={stateOf("notes")}
-                  reminderStatus={stateOf("reminder")}
-                  onSaveNotes={(value) => {
-                    update({ notes: value });
-                    save("notes", { notes: value.trim() || null });
-                  }}
-                  onSetReminder={setReminder}
-                  onRetryNotes={() => retry("notes")}
-                  onRetryReminder={() => retry("reminder")}
-                />
-              </>
-            )}
-            <DropboxSection path={row?.dropbox_client_path ?? null} sharedUrl={row?.dropbox_shared_url ?? null} />
-            {designer ? (
+          designer ? (
+            <>
               <DesignTasksSection tasks={records.designTasks} onOpen={(id) => navigate(`/design/${id}`)} />
-            ) : null}
-          </>
+              <DropboxSection path={row?.dropbox_client_path ?? null} sharedUrl={row?.dropbox_shared_url ?? null} />
+            </>
+          ) : (
+            <>
+              <ReadinessBlock readiness={readiness} cash={cash} paymentUnknown={!quick.paymentSet}>
+                {!cash && askedFields.size > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {foreign ? (
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
+                        <span className="flex-1">Реквізити зараз редагує {foreign.lockedByName ?? "колега"}.</span>
+                        <Button type="button" variant="outline" size="xs" disabled={req.releaseAsked} onClick={req.askRelease}>
+                          {req.releaseAsked ? "Попросили" : "Попросити передати"}
+                        </Button>
+                      </div>
+                    ) : null}
+                    {req.wanted ? <EntityLockBanner lock={req.lock} subject="реквізити" onRelease={req.lock.release} /> : null}
+                    <fieldset
+                      disabled={readOnly}
+                      className="min-w-0"
+                      onFocusCapture={() => !readOnly && req.request()}
+                      onBlurCapture={req.flush}
+                    >
+                      <RequisitesFields
+                        entities={(req.value ?? form).legalEntities.slice(0, 1)}
+                        placeholder={placeholder}
+                        issues={req.issues}
+                        need={missingFields}
+                        only={askedFields}
+                        onPatch={(index, patch) =>
+                          req.change((draft) => ({ legalEntities: patchLegalEntity(draft.legalEntities, placeholder, index, patch) }))
+                        }
+                      />
+                    </fieldset>
+                  </div>
+                ) : null}
+                {asked?.has("phone") ? (
+                  <PartyField label="Телефон" htmlFor="panel-phone" tone={readiness.missing.includes("phone") ? "need" : "default"}>
+                    <div onBlurCapture={contacts.flush}>
+                      <PhoneInput
+                        id="panel-phone"
+                        value={phoneDraft}
+                        className={cn(INLINE_CONTROL, readiness.missing.includes("phone") && INLINE_NEED)}
+                        onChange={(phone) =>
+                          contacts.change((draft) => {
+                            const list = draft.contacts.length ? draft.contacts : [EMPTY_CONTACT];
+                            return { contacts: list.map((contact, at) => (at === 0 ? { ...contact, phone } : contact)) };
+                          })
+                        }
+                      />
+                    </div>
+                  </PartyField>
+                ) : null}
+                {!cash && asked?.has("documentEmail") ? (
+                  <PartyField
+                    label="Пошта для документів"
+                    htmlFor="panel-document-email"
+                    tone={!looksLikeEmail(emailDraft) ? "bad" : readiness.missing.includes("documentEmail") ? "need" : "default"}
+                    error={!looksLikeEmail(emailDraft) ? "Це не схоже на пошту — бракує «@»." : null}
+                  >
+                    <div
+                      onBlurCapture={() => {
+                        if (email === null || !looksLikeEmail(email)) return;
+                        if (email !== form.accountantEmail) {
+                          quick.saveAccountant({ name: form.accountantName, email, edrpou: form.accountantEdrpou });
+                        }
+                        setEmail(null);
+                      }}
+                    >
+                      <EmailInput
+                        id="panel-document-email"
+                        value={emailDraft}
+                        placeholder="buh@…"
+                        className={cn(INLINE_CONTROL, readiness.missing.includes("documentEmail") && INLINE_NEED)}
+                        onChange={setEmail}
+                      />
+                    </div>
+                  </PartyField>
+                ) : null}
+                <ContextHintCards
+                  hints={hints}
+                  onAddDelivery={openPage}
+                  onOpenQuote={(id) => navigate(`/orders/estimates/${id}`)}
+                  onRemind={(number) => quick.setReminder(reminderInDays(1), `Нагадати клієнту про ${number}`)}
+                />
+              </ReadinessBlock>
+              <ContactsSection contacts={form.contacts} onAdd={openPage} />
+              <DealsSection
+                records={records}
+                loading={recordsLoading}
+                before={<WorkSums records={records} />}
+                onOpenQuote={(id) => navigate(`/orders/estimates/${id}`)}
+                onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
+                onShowAll={openPage}
+              />
+              <NotesSection
+                notes={form.notes}
+                reminderAt={quick.reminderAt}
+                reminderComment={form.reminderComment}
+                notesStatus={quick.stateOf("notes")}
+                reminderStatus={quick.stateOf("reminder")}
+                onSaveNotes={quick.saveNotes}
+                onSetReminder={quick.setReminder}
+                onRetryNotes={() => quick.retry("notes")}
+                onRetryReminder={() => quick.retry("reminder")}
+              />
+              <DropboxSection path={row?.dropbox_client_path ?? null} sharedUrl={row?.dropbox_shared_url ?? null} />
+            </>
+          )
         ) : null}
       </div>
-    </EntityPeek>
+    </PartyDrawer>
   );
 }

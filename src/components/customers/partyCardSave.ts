@@ -43,7 +43,7 @@ export type PartyPreviousState = {
   companyName?: string | null;
 } | null;
 
-type PartyActor = { userId: string | null; name: string };
+export type PartyActor = { userId: string | null; name: string };
 
 export const normalizeCustomerBirthday = (value: string) => {
   const trimmed = value.trim();
@@ -57,7 +57,8 @@ export const normalizeCustomerBirthday = (value: string) => {
   return year ? `${year}-${normalizedMonth}-${normalizedDay}` : `${normalizedDay}.${normalizedMonth}`;
 };
 
-async function ingestLogo(params: {
+/** Лого з файлу чи посилання — у наше сховище; шапка картки кличе це напряму. */
+export async function ingestLogo(params: {
   teamId: string;
   entityType: "customer" | "lead";
   entityId: string | null;
@@ -99,6 +100,31 @@ const managerChangedFromAnother = (previous: PartyPreviousState, manager: PartyM
   (previous?.managerUserId
     ? previous.managerUserId !== manager.userId
     : Boolean(previous?.managerLabel && previous.managerLabel !== manager.label));
+
+/** Новий менеджер замість іншого — йому сповіщення. Повна форма й шапка картки кличуть одне. */
+export async function notifyCustomerManagerChange(input: {
+  customerId: string;
+  name: string;
+  previous: PartyPreviousState;
+  manager: PartyManagerChoice;
+  actor: PartyActor;
+}) {
+  const { customerId, name, previous, manager, actor } = input;
+  if (!managerChangedFromAnother(previous, manager)) return;
+  try {
+    await notifyCustomerLeadManagerAssigned({
+      entityType: "customer",
+      entityId: customerId,
+      entityName: name,
+      newManagerUserId: manager.userId,
+      previousManagerLabel: previous?.managerLabel ?? "",
+      actorUserId: actor.userId,
+      actorName: actor.name,
+    });
+  } catch (notifyError) {
+    console.warn("Failed to notify customer manager assignment", notifyError);
+  }
+}
 
 /**
  * Колонки одного розділу картки: реквізити (масив юросіб + копія основної в
@@ -240,20 +266,8 @@ export async function saveCustomerCard(input: {
     void removeManagedCustomerLogoByUrl(previous.logoUrl);
   }
 
-  if (customerId && managerFieldsPersisted && managerChangedFromAnother(previous, manager)) {
-    try {
-      await notifyCustomerLeadManagerAssigned({
-        entityType: "customer",
-        entityId: customerId,
-        entityName: form.name.trim(),
-        newManagerUserId: manager.userId,
-        previousManagerLabel: previous?.managerLabel ?? "",
-        actorUserId: actor.userId,
-        actorName: actor.name,
-      });
-    } catch (notifyError) {
-      console.warn("Failed to notify customer manager assignment", notifyError);
-    }
+  if (customerId && managerFieldsPersisted) {
+    await notifyCustomerManagerChange({ customerId, name: form.name.trim(), previous, manager, actor });
   }
 
   return { logoUrl: optimizedLogoUrl };

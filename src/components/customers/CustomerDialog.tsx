@@ -97,6 +97,8 @@ export type CustomerFormState = {
   name: string;
   paymentType: CustomerPaymentType;
   source: string;
+  /** Хто порекомендував — картка показує й пише його в шапці; форма поки ні. */
+  referredBy?: string;
   manager: string;
   managerId: string;
   website: string;
