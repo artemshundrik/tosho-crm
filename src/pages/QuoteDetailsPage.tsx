@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageLoading } from "@/components/app/page-loading";
 import { Button } from "@/components/ui/button";
-import { EntityHeader, EntityProp, EntityPropButton } from "@/components/app/headers/EntityHeader";
+import { EntityHeader, EntityProp } from "@/components/app/headers/EntityHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
@@ -262,7 +262,7 @@ import {
   type QuoteComment,
   type CatalogModelRowRaw,
 } from "@/features/quotes/quote-details/queries";
-import { QuoteTypeBadge } from "@/features/quotes/components/QuoteTypeBadge";
+import { QuoteDeadlinePropMenu, QuoteTypePropMenu } from "@/features/quotes/quote-details/QuoteHeaderPropMenus";
 import type { QuoteDeadlineTone } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { CustomerLeadQuickViewDialog } from "@/components/customers";
@@ -3988,15 +3988,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               onOpenCancelDialog={() => setCancelDialogOpen(true)}
               blockAction={quoteLockStatusAction(canEditQuoteContent)}
             />
-            <QuoteTypeBadge quoteType={quote.quote_type} />
+            <QuoteTypePropMenu quoteId={quoteId} teamId={teamId} value={quote.quote_type} disabled={!canEditQuoteContent} onSaved={(next) => setQuote((current) => (current ? { ...current, quote_type: next } : current))} />
             {/* Тип угоди — лише на поліграфії: на мерчі шкала не діє (REQ-182). */}
             {dealType ? (
               <QuoteDealTypeBadge value={dealType} disabled={!canEditQuoteContent || savingDealType} onChange={handleDealTypeChange} />
             ) : null}
             {/* Дедлайн один раз — тут, а не ще й приписом на вкладці. */}
-            <EntityPropButton label="Відповідь" onClick={() => setActiveQuoteTab("deadlines")}>
-              <span className={cn("tabular-nums", deadlineTabBadge?.toneClass ?? "text-muted-foreground")}>{deadlineTabBadge?.label ?? "не задано"}</span>
-            </EntityPropButton>
+            <QuoteDeadlinePropMenu badge={deadlineTabBadge} disabled={!canEditQuoteContent || deadlineSaving} onPick={(date) => void handleSaveDeadline({ date })} onMore={() => setActiveQuoteTab("deadlines")} />
             {quoteSetMembership?.kp_names.map((name) => <EntityProp key={`kp-${name}`} label="КП">{name}</EntityProp>)}
             {quoteSetMembership?.set_names.map((name) => <EntityProp key={`set-${name}`} label="Набір">{name}</EntityProp>)}
           </>
