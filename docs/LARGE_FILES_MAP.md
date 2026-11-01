@@ -64,13 +64,13 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | **1355** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~6 927 lines, 300 KB, as of 2026-11-01)
+## src/pages/QuotesPage.tsx (~6 765 lines, 293 KB, as of 2026-11-01)
 
 | Range | Content |
 |---|---|
 | 1–193 | imports |
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
-| **478** | `export function QuotesPage(...)` — main component starts |
+| **472** | `export function QuotesPage(...)` — main component starts |
 
 ## src/pages/DesignPage.tsx (~5 980 lines, 265 KB, as of 2026-11-01)
 

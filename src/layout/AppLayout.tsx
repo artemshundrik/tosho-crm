@@ -85,6 +85,7 @@ import { getAgencyLogo } from "@/lib/agencyAssets";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
+import { fetchInboxOpenCount } from "@/features/inbox/inboxThreads";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useTheme } from "@/hooks/useTheme";
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
@@ -1017,6 +1018,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   // намальовано зараз, — від нього залежить логотип і перемальовування шапки.
   const { resolved: theme } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [inboxOpenCount, setInboxOpenCount] = useState<number | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [realtimeDisabled, setRealtimeDisabled] = useState(() => isRealtimeDisabledForSession());
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(() => readInAppNotificationPreferences().enabled);
@@ -1299,15 +1301,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const loadNotifications = React.useCallback(async () => {
     if (!userId) return;
     setNotificationsLoading(true);
-    const { data, error } = await supabase
-      .from("notifications")
-      .select("id, title, body, href, created_at, read_at, type")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(20);
-    if (!error) {
-      setNotifications(((data || []) as NotificationRow[]).map(mapNotificationRow));
-    }
+    const [{ data, error }, openThreads] = await Promise.all([
+      supabase.from("notifications").select("id, title, body, href, created_at, read_at, type").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
+      // Число на дзвонику — відкриті справи «Вхідних», як на сторінці (REQ-346#p2).
+      fetchInboxOpenCount(userId),
+    ]);
+    if (!error) setNotifications(((data || []) as NotificationRow[]).map(mapNotificationRow));
+    setInboxOpenCount(openThreads);
     setNotificationsLoading(false);
   }, [userId]);
 
@@ -1731,7 +1731,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     };
   }, [loadActivityUnread, location.pathname, realtimeDisabled, teamId]);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = inboxOpenCount ?? notifications.filter((n) => !n.read).length;
   const unreadNotifications = notifications.filter((n) => !n.read);
   const hideToShoAiLauncher = toshoAiOpen || mobileMenuOpen || cmdkOpen || floatingLauncherBlocked;
 
@@ -1827,7 +1827,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       .eq("user_id", userId)
       .is("read_at", null);
     if (!error) {
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      void loadNotifications();
       toast.success("Усі сповіщення прочитані");
     } else {
       toast.error("Не вдалося оновити сповіщення");

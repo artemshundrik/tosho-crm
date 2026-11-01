@@ -50,7 +50,6 @@ const ALLOW = new Map([
   ["features/tosho-ai/ToShoAiWordmark.tsx", 2],
   ["layout/AppLayout.tsx", 2],
   ["pages/DesignTaskPage.tsx", 1],
-  ["pages/NotificationsPage.tsx", 1],
   ["pages/PersonProfilePage.tsx", 1],
 ]);
 

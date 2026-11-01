@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { ChevronDown, ChevronUp, Eye, Maximize2, X } from "@/components/icons/appIcons";
@@ -40,6 +40,14 @@ export type EntityPeekProps = {
   closing?: boolean;
 };
 
+/**
+ * Прев'ю як колонка сторінки, а не панель поверх списку: «Вхідні» (REQ-346#p2)
+ * тримають справу праворуч постійно. Клавіші тоді веде сторінка — у неї свої
+ * E і H, а J/K гортають сповіщення, не справи, — тож прев'ю своїх не ставить.
+ * На телефоні нічого не міняється: там це той самий нижній аркуш.
+ */
+export const PeekInlineContext = createContext<{ footer: ReactNode } | null>(null);
+
 const isTypingTarget = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -48,11 +56,12 @@ const isTypingTarget = (target: EventTarget | null) => {
 
 export function EntityPeek(props: EntityPeekProps) {
   const narrow = useIsNarrowViewport();
+  const inline = useContext(PeekInlineContext);
   const { onClose, onOpenFull, onPrev, onNext } = props;
 
   // Клавіші — лише на десктопі: на телефоні їх немає, а Esc закриває аркуш сам.
   useEffect(() => {
-    if (narrow) return;
+    if (narrow || inline) return;
     const onKeyDown = (event: KeyboardEvent) => {
       // Спливне меню чи діалог уже обробили клавішу (Radix ставить
       // preventDefault на своєму Esc) — прев'ю не закриваємо разом із ним.
@@ -76,9 +85,20 @@ export function EntityPeek(props: EntityPeekProps) {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [narrow, onClose, onOpenFull, onPrev, onNext]);
+  }, [narrow, inline, onClose, onOpenFull, onPrev, onNext]);
 
   if (narrow) return <PeekBottomSheet {...props} />;
+
+  if (inline) {
+    return (
+      <aside aria-label={`Справа: ${props.number}`} className="flex h-full min-h-0 min-w-0 flex-col bg-card">
+        <PeekBody {...props} showNav={false} />
+        <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-4 py-2 text-2xs text-muted-foreground">
+          {inline.footer}
+        </footer>
+      </aside>
+    );
+  }
 
   // Портал у body: `.page-reveal` має постійний will-change: transform, і
   // `fixed` усередині сторінки рахувався б від неї, а не від вікна — панель
@@ -105,7 +125,7 @@ export function EntityPeek(props: EntityPeekProps) {
   );
 }
 
-function Kbd({ children }: { children: ReactNode }) {
+export function Kbd({ children }: { children: ReactNode }) {
   return (
     <kbd className="inline-flex h-4 min-w-4 items-center justify-center rounded border border-border px-1 font-sans text-3xs text-muted-foreground">
       {children}

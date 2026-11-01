@@ -1,1124 +1,606 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  BadgeCheck,
-  BellRing,
-  MonitorSmartphone,
-  Send,
-  Settings2,
-  ShieldAlert,
-  Volume2,
-  X as CloseIcon,
-} from "@/components/icons/appIcons";
 import { toast } from "sonner";
-import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { FEED_ROW } from "@/components/app/table-kit";
+
+import { useAuth } from "@/auth/AuthProvider";
+import { PageLoading } from "@/components/app/page-loading";
+import { Kbd, PeekInlineContext } from "@/components/app/peek/EntityPeek";
+import { ToolbarMeta, ToolbarTabs } from "@/components/app/headers/toolbarPrimitives";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
+import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
+import { DesignTaskPeek } from "@/components/design/DesignTaskPeek";
+import { Bell, Calculator, Inbox, Package, Palette, Settings2 } from "@/components/icons/appIcons";
+import { NotificationSettingsDialog } from "@/components/notifications/NotificationSettingsDialog";
+import { Button } from "@/components/ui/button";
+import { HoverTip } from "@/components/ui/hover-tip";
+import { Skeleton } from "@/components/ui/skeleton";
+import { OrderPeek } from "@/features/orders/order-list/OrderPeek";
+import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
+import { getDeadlineBadge } from "@/features/quotes/quote-details/deadlineLabels";
+import { QuotePeek } from "@/features/quotes/quotes-page/QuotePeek";
+import {
+  buildInboxThreads,
+  formatInboxTime,
+  INBOX_BUCKET_LABELS,
+  INBOX_SELECT,
+  inboxBucket,
+  nextMorning,
+  snoozedUntilOf,
+  type InboxBucket,
+  type InboxEntityKind,
+  type InboxNotificationRow,
+  type InboxThread,
+} from "@/features/inbox/inboxThreads";
+import { useInboxEntity } from "@/features/inbox/useInboxEntity";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { usePageCache } from "@/hooks/usePageCache";
+import { canApproveOrderLaunch, canIssueOrderInvoice } from "@/lib/permissions";
 import {
   disableRealtimeForSession,
   enableRealtimeForSession,
   isRealtimeDisabledForSession,
   supabase,
-  db,
 } from "@/lib/supabaseClient";
-import { useAuth } from "@/auth/AuthProvider";
-import { Button } from "@/components/ui/button";
-import { ToolbarMeta, ToolbarTabs } from "@/components/app/headers/toolbarPrimitives";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { NotificationChannelMatrix } from "@/components/notifications/NotificationChannelMatrix";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { HoverTip } from "@/components/ui/hover-tip";
-import { PageLoading } from "@/components/app/page-loading";
-import { useMinimumLoading } from "@/hooks/useMinimumLoading";
-import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
-import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
-import {
-  extractNotificationName,
-  getNotificationAvatarMeta,
-  getNotificationInitials as getInitials,
-} from "@/lib/notificationAvatar";
-import { playNotificationSound } from "@/lib/notificationSound";
-import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
-import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
-import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
-import {
-  readInAppNotificationPreferences,
-  writeInAppNotificationPreferences,
-} from "@/lib/inAppNotificationPreferences";
 
-type FilterMode = "all" | "unread";
-type SoundDebugState = {
-  level: "idle" | "success" | "error";
-  message: string;
-};
+/**
+ * «Вхідні» (хвиля В2, REQ-346#p2): ліворуч сповіщення, зведені за справою,
+ * праворуч сама справа з головною дією — щоб відповісти, не відкриваючи
+ * сторінку. E — готово, H — до завтра (9:00), J/K — далі, Enter — відкрити.
+ *
+ * Клік по рядку тут відкриває прев'ю, а не сторінку (рішення 1 плану хвилі В):
+ * «Вхідні» читають, а не ходять. На телефоні — лише список, справа шторкою.
+ */
 
-type NotificationsPageCache = {
-  notifications: NotificationItem[];
-};
+type InboxTab = "inbox" | "all";
 
-type NotificationPartyAvatar = {
-  id?: string | null;
-  entityType?: "customer" | "lead" | null;
-  name: string;
-  logoUrl: string | null;
-};
+type NotificationsPageCache = { rows: InboxNotificationRow[] };
 
-type NotificationQuoteAvatar = {
-  quoteNumber: string;
-  customerId: string | null;
-  customerName: string | null;
-  customerLogoUrl: string | null;
-};
-
-type NotificationDesignTaskAvatar = {
-  taskId: string;
-  quoteId: string | null;
-  quoteNumber: string | null;
-  customerId: string | null;
-  customerType: "customer" | "lead" | null;
-  customerName: string | null;
-  customerLogoUrl: string | null;
-};
-
-const MENTION_TOKEN_REGEX = /(@[^\s@,;:!?()[\]{}<>]+)/g;
-
-type SettingsTone = "active" | "muted" | "inactive";
-type PreviewTone = "info" | "success" | "warning";
-
-const IN_APP_NOTIFICATION_TOAST_MS = 6500;
-const IN_APP_WARNING_NOTIFICATION_TOAST_MS = 9000;
 const FALLBACK_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const BUCKETS: InboxBucket[] = ["today", "week", "earlier"];
 
-function isDocumentVisible() {
-  if (typeof document === "undefined") return true;
-  return document.visibilityState === "visible";
-}
+const KIND_ICON: Record<InboxEntityKind, typeof Bell> = { quote: Calculator, order: Package, design: Palette };
+const KIND_SECTION: Record<InboxEntityKind, string> = { quote: "Прорахунки", order: "Замовлення", design: "Дизайн" };
 
-function getInAppNotificationDuration(tone?: PreviewTone) {
-  if (tone === "warning") return IN_APP_WARNING_NOTIFICATION_TOAST_MS;
-  return IN_APP_NOTIFICATION_TOAST_MS;
-}
+const isTypingTarget = (target: EventTarget | null) =>
+  target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
-function getInAppNotificationIcon(tone?: PreviewTone) {
-  if (tone === "warning") return <ShieldAlert className="h-4 w-4 text-warning-foreground" />;
-  if (tone === "success") return <BadgeCheck className="h-4 w-4 text-success-foreground" />;
-  return <BellRing className="h-4 w-4 text-primary" />;
-}
-
-function renderInAppToastContent({
-  title,
-  description,
-  tone,
-  actionLabel,
-  onClose,
-}: {
-  title: string;
-  description?: string;
-  tone?: PreviewTone;
-  actionLabel?: string;
-  onClose?: () => void;
-}) {
-  return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
-      <div className="flex items-start gap-3">
-        <div
-          className={cn(
-            "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border",
-            tone === "success" && "border-success-soft-border bg-success-soft text-success-foreground",
-            tone === "warning" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-            (!tone || tone === "info") && "border-info-soft-border bg-info-soft text-info-foreground"
-          )}
-        >
-          {getInAppNotificationIcon(tone)}
-        </div>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="text-[15px] font-semibold leading-5 text-foreground">{title}</div>
-            {onClose ? (
-              <button
-                type="button"
-                onClick={onClose}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/80 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label="Закрити сповіщення"
-              >
-                <CloseIcon className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-          {description ? <div className="text-sm leading-5 text-muted-foreground">{description}</div> : null}
-          <div className="flex items-center justify-end gap-3 pt-1">
-            {actionLabel ? (
-              <span className="inline-flex h-8 items-center rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground">
-                {actionLabel}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function normalizeNotificationMatchText(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function extractMentionActorName(title: string) {
-  const normalized = title.replace(/\s+/g, " ").trim();
-  const match = normalized.match(/^(.+?)\s+згадав(?:\(ла\))?\s+вас\s+у\s+коментарі$/i);
-  return match?.[1]?.trim() || null;
-}
-
-function extractQuoteNumber(text: string) {
-  const match = text.match(/#?(TS-\d{4}-\d{4})/i);
-  return match?.[1]?.toUpperCase() ?? null;
-}
-
-function extractDesignTaskIdFromHref(href: string | null | undefined) {
-  if (!href) return null;
-  const match = href.match(/^\/design\/([^/?#]+)/i);
-  return match?.[1]?.trim() || null;
-}
-
-function getNotificationSearchText(item: NotificationItem) {
-  return normalizeNotificationMatchText(`${item.title} ${item.description}`.trim());
-}
-
-function buildPartyNameVariants(name: string) {
-  const normalized = name.trim();
-  if (!normalized) return [];
-  const variants = new Set<string>([normalized]);
-  variants.add(normalized.replace(/["'«»]/g, "").trim());
-  return Array.from(variants)
-    .map((value) => normalizeNotificationMatchText(value))
-    .filter(Boolean);
-}
-
-function findMatchedPartyAvatar(
-  item: NotificationItem,
-  partyAvatars: NotificationPartyAvatar[]
-) {
-  const searchText = getNotificationSearchText(item);
-  let bestMatch: NotificationPartyAvatar | null = null;
-  let bestLength = 0;
-
-  for (const party of partyAvatars) {
-    const variants = buildPartyNameVariants(party.name);
-    if (variants.some((variant) => variant && searchText.includes(variant))) {
-      if (party.name.length > bestLength) {
-        bestMatch = party;
-        bestLength = party.name.length;
-      }
-    }
-  }
-
-  return bestMatch;
-}
-
-function findPartyAvatarByName(name: string | null | undefined, partyAvatars: NotificationPartyAvatar[]) {
-  const normalizedTarget = normalizeNotificationMatchText(name ?? "");
-  if (!normalizedTarget) return null;
-
-  let bestMatch: NotificationPartyAvatar | null = null;
-  let bestLength = 0;
-
-  for (const party of partyAvatars) {
-    const variants = buildPartyNameVariants(party.name);
-    if (variants.includes(normalizedTarget)) {
-      if (party.name.length > bestLength) {
-        bestMatch = party;
-        bestLength = party.name.length;
-      }
-    }
-  }
-
-  return bestMatch;
-}
-
-function findPartyAvatarByTypedId(
-  entityType: "customer" | "lead" | null | undefined,
-  id: string | null | undefined,
-  partyAvatars: NotificationPartyAvatar[]
-) {
-  if (!entityType || !id) return null;
-  return (
-    partyAvatars.find((party) => party.entityType === entityType && party.id === id) ??
-    null
-  );
-}
-
-function renderNotificationDescription(text: string): ReactNode {
-  const parts = text.split(MENTION_TOKEN_REGEX);
-  return parts.map((part, index) => {
-    if (!part) return null;
-    if (!part.startsWith("@")) return <span key={`part-${index}`}>{part}</span>;
-    return (
-      <span key={`part-${index}`} className="font-semibold text-primary">
-        {part}
-      </span>
-    );
-  });
-}
-
-function getCompactNotificationDescription(item: NotificationItem) {
-  const title = normalizeNotificationMatchText(item.title.replace(/[.,;:!?]+$/g, ""));
-  const description = normalizeNotificationMatchText(item.description.replace(/[.,;:!?]+$/g, ""));
-  if (!description) return "";
-  if (description === title) return "";
-  if (description.startsWith(title) || title.startsWith(description)) return "";
-  return item.description;
-}
-
-const NOTIFICATION_AVATAR_SIZE = 28;
+const snoozeLabel = (iso: string) => {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+  const day = date.toDateString() === nextMorning().toDateString() ? "завтра" : date.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+  return `відкладено до ${day}, ${time}`;
+};
 
 export default function NotificationsPage() {
   const { userId, teamId, accessRole, jobRole } = useAuth();
-  const push = usePushNotifications(userId);
   const location = useLocation();
   const navigate = useNavigate();
+  const narrow = useIsNarrowViewport();
   const { cached, setCache } = usePageCache<NotificationsPageCache>("notifications");
-  const hasCache = Boolean(cached);
-  
-  const [notifications, setNotifications] = useState<NotificationItem[]>(cached?.notifications ?? []);
-  const [loading, setLoading] = useState(!hasCache);
-  const [filter, setFilter] = useState<FilterMode>("all");
-  const [realtimeDisabled, setRealtimeDisabled] = useState(() => isRealtimeDisabledForSession());
-  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(() => readInAppNotificationPreferences().enabled);
-  const [inAppNotificationSoundEnabled, setInAppNotificationSoundEnabled] = useState(
-    () => readInAppNotificationPreferences().soundEnabled
-  );
+  const [rows, setRows] = useState<InboxNotificationRow[]>(cached?.rows ?? []);
+  const [loading, setLoading] = useState(!cached);
+  const [tab, setTab] = useState<InboxTab>("inbox");
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [soundDebug, setSoundDebug] = useState<SoundDebugState>({ level: "idle", message: "" });
-  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberDisplayRow[]>([]);
-  const [partyAvatars, setPartyAvatars] = useState<NotificationPartyAvatar[]>([]);
-  const [quoteAvatars, setQuoteAvatars] = useState<NotificationQuoteAvatar[]>([]);
-  const [designTaskAvatars, setDesignTaskAvatars] = useState<NotificationDesignTaskAvatar[]>([]);
-  const [telegramLinked, setTelegramLinked] = useState(false);
+  const [realtimeDisabled, setRealtimeDisabled] = useState(() => isRealtimeDisabledForSession());
+  const [members, setMembers] = useState<WorkspaceMemberDisplayRow[]>([]);
+  // Відкладене повертається о 9:00 само — список перераховується щохвилини.
+  const [now, setNow] = useState(() => Date.now());
+  // Висота рамки — від її верху до низу вікна: над нею шапка й тулбар, і
+  // футер з клавішами має бути видно без прокрутки сторінки.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [frameTop, setFrameTop] = useState(150);
 
   useEffect(() => {
-    if (hasCache && loading) {
-      setLoading(false);
-    }
-  }, [hasCache, loading]);
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const loadNotifications = useCallback(async () => {
+    if (!userId) return;
+    const { data, error } = await supabase
+      .from("notifications")
+      .select(INBOX_SELECT)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(300);
+    const next = error ? [] : ((data ?? []) as InboxNotificationRow[]);
+    setRows(next);
+    setCache({ rows: next });
+    setLoading(false);
+  }, [setCache, userId]);
 
   useEffect(() => {
-    if (!settingsOpen || !userId) return;
+    void loadNotifications();
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    if (!userId) return;
     let active = true;
-    (async () => {
-      const { data } = await db
-        .from("user_notification_settings" as never)
-        .select("telegram_chat_id")
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (!active) return;
-      const row = data as unknown as { telegram_chat_id?: string | null } | null;
-      setTelegramLinked(row?.telegram_chat_id != null);
+    void (async () => {
+      const workspaceId = await resolveWorkspaceId(userId);
+      if (!workspaceId) return;
+      const list = await listWorkspaceMembersForDisplay(workspaceId).catch(() => []);
+      if (active) setMembers(list);
     })();
     return () => {
       active = false;
     };
-  }, [settingsOpen, userId]);
-
-  const loadNotifications = useCallback(
-    async (showLoader = false) => {
-      if (!userId) return;
-      if (showLoader) {
-        setLoading(true);
-      }
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("id, title, body, href, created_at, read_at, type")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (!error) {
-        const mapped = ((data || []) as NotificationRow[]).map(mapNotificationRow);
-        setNotifications(mapped);
-        setCache({ notifications: mapped });
-      } else {
-        setNotifications([]);
-        setCache({ notifications: [] });
-      }
-      if (showLoader) {
-        setLoading(false);
-      }
-    },
-    [setCache, userId]
-  );
+  }, [userId]);
 
   useEffect(() => {
-    void loadNotifications(!hasCache);
-  }, [hasCache, loadNotifications]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadAvatarSources = async () => {
-      if (!userId || !teamId) return;
-      const workspaceId = await resolveWorkspaceId(userId);
-      if (!workspaceId || !active) return;
-
-      const quoteNumbers = Array.from(
-        new Set(
-          notifications
-            .map((item) => extractQuoteNumber(`${item.title} ${item.description}`))
-            .filter((value): value is string => Boolean(value))
-        )
-      );
-      const designTaskIds = Array.from(
-        new Set(
-          notifications
-            .map((item) => extractDesignTaskIdFromHref(item.href))
-            .filter((value): value is string => Boolean(value))
-        )
-      );
-
-      const [members, customersResult, leadsResult, quotesResult, designTasksResult] = await Promise.all([
-        listWorkspaceMembersForDisplay(workspaceId).catch(() => []),
-        // team_id, не workspaceId: це різні сутності, і фільтр по воркспейсу
-        // тут мовчки повертав нуль рядків — сповіщення лишались без назв і
-        // логотипів замовників (помічено під час аудиту 21.08.2026).
-        supabase
-          .schema("tosho")
-          .from("customers")
-          .select("id, name, legal_name, logo_url")
-          .eq("team_id", teamId)
-          .limit(5000),
-        supabase
-          .schema("tosho")
-          .from("leads")
-          .select("id, company_name, legal_name, logo_url")
-          .eq("team_id", teamId)
-          .limit(5000),
-        quoteNumbers.length > 0
-          ? supabase
-              .schema("tosho")
-              .from("quotes")
-              .select("id, number, customer_id, customer_name, customer_logo_url, title")
-              .in("number", quoteNumbers)
-          : Promise.resolve({ data: [], error: null }),
-        designTaskIds.length > 0
-          ? supabase
-              .from("activity_log")
-              .select("id, entity_id, metadata, title")
-              .eq("action", "design_task")
-              .in("id", designTaskIds)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-
-      if (!active) return;
-
-      setWorkspaceMembers(members);
-
-      const nextPartyAvatars: NotificationPartyAvatar[] = [];
-      for (const row of (customersResult.data ?? []) as Array<{ id?: string | null; name?: string | null; legal_name?: string | null; logo_url?: string | null }>) {
-        const name = row.name?.trim() || row.legal_name?.trim() || "";
-        if (!name) continue;
-        nextPartyAvatars.push({
-          id: row.id?.trim() || null,
-          entityType: "customer",
-          name,
-          logoUrl: normalizeCustomerLogoUrl(row.logo_url ?? null),
-        });
-      }
-      for (const row of (leadsResult.data ?? []) as Array<{ id?: string | null; company_name?: string | null; legal_name?: string | null; logo_url?: string | null }>) {
-        const name = row.company_name?.trim() || row.legal_name?.trim() || "";
-        if (!name) continue;
-        nextPartyAvatars.push({
-          id: row.id?.trim() || null,
-          entityType: "lead",
-          name,
-          logoUrl: normalizeCustomerLogoUrl(row.logo_url ?? null),
-        });
-      }
-      setPartyAvatars(nextPartyAvatars);
-      const nextPartyAvatarByTypedId = new Map<string, NotificationPartyAvatar>();
-      for (const party of nextPartyAvatars) {
-        if (!party.entityType || !party.id) continue;
-        nextPartyAvatarByTypedId.set(`${party.entityType}:${party.id}`, party);
-      }
-
-      const nextQuoteAvatars = ((quotesResult.data ?? []) as Array<{
-        id?: string | null;
-        number?: string | null;
-        customer_id?: string | null;
-        customer_name?: string | null;
-        customer_logo_url?: string | null;
-        title?: string | null;
-      }>)
-        .map((row) => {
-          const customerId = row.customer_id?.trim() || null;
-          const currentCustomer = customerId
-            ? nextPartyAvatarByTypedId.get(`customer:${customerId}`) ?? null
-            : null;
-          return {
-            quoteNumber: row.number?.trim()?.toUpperCase() || "",
-            customerId,
-            customerName: currentCustomer?.name || row.customer_name?.trim() || row.title?.trim() || null,
-            customerLogoUrl: currentCustomer?.logoUrl || normalizeCustomerLogoUrl(row.customer_logo_url ?? null),
-          };
-        })
-        .filter((row) => row.quoteNumber);
-      setQuoteAvatars(nextQuoteAvatars);
-
-      const nextDesignTaskAvatars = ((designTasksResult.data ?? []) as Array<{
-        id?: string | null;
-        entity_id?: string | null;
-        title?: string | null;
-        metadata?: Record<string, unknown> | null;
-      }>)
-        .map((row) => {
-          const metadata = row.metadata ?? {};
-          const customerTypeRaw =
-            typeof metadata.customer_type === "string" ? metadata.customer_type.trim().toLowerCase() : "";
-          const customerType: "customer" | "lead" | null =
-            customerTypeRaw === "customer" || customerTypeRaw === "lead"
-              ? customerTypeRaw
-              : null;
-          const customerId =
-            typeof metadata.customer_id === "string" && metadata.customer_id.trim()
-              ? metadata.customer_id.trim()
-              : null;
-          const currentParty = customerType && customerId
-            ? nextPartyAvatarByTypedId.get(`${customerType}:${customerId}`) ?? null
-            : null;
-          return {
-            taskId: row.id?.trim() || "",
-            quoteId: typeof row.entity_id === "string" && row.entity_id.trim() ? row.entity_id.trim() : null,
-            quoteNumber:
-              typeof metadata.quote_number === "string" && metadata.quote_number.trim()
-                ? metadata.quote_number.trim().toUpperCase()
-                : null,
-            customerId,
-            customerType,
-            customerName: currentParty?.name ||
-              (typeof metadata.customer_name === "string" && metadata.customer_name.trim()
-                ? metadata.customer_name.trim()
-                : null),
-            customerLogoUrl:
-              currentParty?.logoUrl ||
-              (typeof metadata.customer_logo_url === "string"
-                ? normalizeCustomerLogoUrl(metadata.customer_logo_url)
-                : null),
-          };
-        })
-        .filter((row) => row.taskId);
-      setDesignTaskAvatars(nextDesignTaskAvatars);
-    };
-
-    void loadAvatarSources();
-    return () => {
-      active = false;
-    };
-  }, [notifications, teamId, userId]);
-
-  const memberByNormalizedName = useMemo(() => {
-    const map = new Map<string, WorkspaceMemberDisplayRow>();
-    for (const member of workspaceMembers) {
-      const candidates = [
-        member.displayName,
-        member.fullName,
-        member.label,
-        [member.firstName, member.lastName].filter(Boolean).join(" "),
-      ];
-      for (const candidate of candidates) {
-        const normalized = normalizeNotificationMatchText(candidate ?? "");
-        if (normalized && !map.has(normalized)) {
-          map.set(normalized, member);
-        }
-      }
-    }
-    return map;
-  }, [workspaceMembers]);
-
-  useEffect(() => {
-    if (!userId) return;
-    if (!realtimeDisabled) return;
+    if (!userId || !realtimeDisabled) return;
     const intervalId = window.setInterval(() => {
-      if (!isDocumentVisible()) return;
-      void loadNotifications(false);
+      if (document.visibilityState === "visible") void loadNotifications();
     }, FALLBACK_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [loadNotifications, realtimeDisabled, userId]);
 
   useEffect(() => {
-    if (realtimeDisabled) return;
-    if (!userId) return;
+    if (realtimeDisabled || !userId) return;
     const channel = supabase
       .channel(`notifications-page:${userId}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
+        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
         (payload) => {
+          // Випливна стрічка — лише для нових подій; зміни прочитаності тиші не порушують.
           if (payload.eventType === "INSERT" && location.pathname.startsWith("/notifications")) {
-            const row = payload.new as NotificationRow;
-            const item = mapNotificationRow(row);
-            toast(item.title || "Нове сповіщення", {
-              description: item.description?.trim() || undefined,
-            });
+            const row = payload.new as InboxNotificationRow;
+            toast(row.title || "Нове сповіщення", { description: row.body?.trim() || undefined });
           }
-          void loadNotifications(false);
+          void loadNotifications();
         }
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           enableRealtimeForSession();
           setRealtimeDisabled(false);
-          return;
-        }
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
           disableRealtimeForSession();
           setRealtimeDisabled(true);
-          void loadNotifications(false);
+          void loadNotifications();
         }
       });
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [loadNotifications, location.pathname, realtimeDisabled, userId]);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const threads = useMemo(() => buildInboxThreads(rows, now), [rows, now]);
+  const openCount = useMemo(() => threads.filter((thread) => thread.state === "open").length, [threads]);
+  const visible = useMemo(
+    () => (tab === "inbox" ? threads.filter((thread) => thread.state === "open") : threads),
+    [tab, threads]
+  );
 
-  const filtered = useMemo(() => {
-    if (filter === "unread") return notifications.filter((n) => !n.read);
-    return notifications;
-  }, [notifications, filter]);
+  // На десктопі справа праворуч є завжди: нічого не вибрано — перша в списку.
+  const selected =
+    visible.find((thread) => thread.key === selectedKey) ?? (narrow || selectedKey === "" ? null : visible[0] ?? null);
+  const selectedIndex = selected ? visible.indexOf(selected) : -1;
 
-  const markAllRead = useCallback(async () => {
-    if (!userId || unreadCount === 0) return;
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("user_id", userId)
-      .is("read_at", null);
+  const step = useCallback(
+    (delta: number) => {
+      if (visible.length === 0) return;
+      const index = selectedIndex < 0 ? 0 : Math.min(visible.length - 1, Math.max(0, selectedIndex + delta));
+      setSelectedKey(visible[index].key);
+      document.querySelector(`[data-inbox-key="${CSS.escape(visible[index].key)}"]`)?.scrollIntoView({ block: "nearest" });
+    },
+    [selectedIndex, visible]
+  );
+
+  /** Після «готово» чи «завтра» справа зникає зі списку — фокус на наступну. */
+  const advancePast = useCallback(
+    (thread: InboxThread) => {
+      if (tab !== "inbox") return;
+      const rest = visible.filter((item) => item.key !== thread.key);
+      const index = Math.min(visible.indexOf(thread), rest.length - 1);
+      setSelectedKey(index >= 0 ? rest[index].key : null);
+    },
+    [tab, visible]
+  );
+
+  const markDone = useCallback(
+    async (thread: InboxThread) => {
+      const ids = thread.notifications.filter((row) => !row.read_at).map((row) => row.id);
+      if (ids.length === 0) return;
+      const readAt = new Date().toISOString();
+      advancePast(thread);
+      setRows((prev) => prev.map((row) => (ids.includes(row.id) ? { ...row, read_at: readAt } : row)));
+      const { error } = await supabase.from("notifications").update({ read_at: readAt }).in("id", ids);
+      if (error) {
+        toast.error("Не вдалося закрити сповіщення");
+        void loadNotifications();
+        return;
+      }
+      window.dispatchEvent(new Event("notifications_read"));
+    },
+    [advancePast, loadNotifications]
+  );
+
+  const snooze = useCallback(
+    async (thread: InboxThread) => {
+      const targets = thread.notifications.filter((row) => !row.read_at);
+      if (targets.length === 0) return;
+      const until = nextMorning().toISOString();
+      const patched = new Map(targets.map((row) => [row.id, { ...(row.metadata ?? {}), snoozed_until: until }]));
+      advancePast(thread);
+      setRows((prev) => prev.map((row) => (patched.has(row.id) ? { ...row, metadata: patched.get(row.id) ?? null } : row)));
+      const results = await Promise.all(
+        targets.map((row) => supabase.from("notifications").update({ metadata: patched.get(row.id) }).eq("id", row.id))
+      );
+      if (results.some((result) => result.error)) {
+        toast.error("Не вдалося відкласти");
+        void loadNotifications();
+        return;
+      }
+      window.dispatchEvent(new Event("notifications_read"));
+      toast.success("Повернеться завтра о 9:00");
+    },
+    [advancePast, loadNotifications]
+  );
+
+  const markAllDone = useCallback(async () => {
+    if (!userId || openCount === 0) return;
+    const readAt = new Date().toISOString();
+    const { error } = await supabase.from("notifications").update({ read_at: readAt }).eq("user_id", userId).is("read_at", null);
     if (error) {
       toast.error("Не вдалося оновити сповіщення");
       return;
     }
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setRows((prev) => prev.map((row) => (row.read_at ? row : { ...row, read_at: readAt })));
     window.dispatchEvent(new Event("notifications_read"));
     toast.success("Усі сповіщення прочитані");
-  }, [unreadCount, userId]);
+  }, [openCount, userId]);
 
-  const showSkeleton = useMinimumLoading(loading);
+  const openFull = useCallback((thread: InboxThread) => thread.href && navigate(thread.href), [navigate]);
 
-  const openNotification = async (n: NotificationItem) => {
-    setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
-    if (!n.read) {
-      await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
-      window.dispatchEvent(new Event("notifications_read"));
-    }
-    if (n.href) navigate(n.href);
-  };
-
-  // useCallback, щоб клік-хендлери нижче могли тримати її в deps без
-  // перестворення щорендер (writeInAppNotificationPreferences — модульний
-  // імпорт, сетери стабільні; залежить лише від двох поточних значень).
-  const updateInAppNotificationPreferences = useCallback(
-    (next: { enabled?: boolean; soundEnabled?: boolean }) => {
-      const resolved = {
-        enabled: next.enabled ?? inAppNotificationsEnabled,
-        soundEnabled: next.soundEnabled ?? inAppNotificationSoundEnabled,
-      };
-      const normalized = {
-        enabled: resolved.enabled,
-        soundEnabled: resolved.enabled ? resolved.soundEnabled : false,
-      };
-      setInAppNotificationsEnabled(normalized.enabled);
-      setInAppNotificationSoundEnabled(normalized.soundEnabled);
-      writeInAppNotificationPreferences(normalized);
-    },
-    [inAppNotificationsEnabled, inAppNotificationSoundEnabled]
-  );
-
-  const openSettings = useCallback(() => {
-    setSettingsOpen(true);
-  }, []);
-
-  const playInAppNotificationSound = useCallback(async (force = false) => {
-    if (!inAppNotificationSoundEnabled) {
-      return { ok: false, message: "Звук вимкнений у налаштуваннях" };
-    }
-    return playNotificationSound({ force });
-  }, [inAppNotificationSoundEnabled]);
-
-  const showInAppPreview = useCallback((tone: PreviewTone) => {
-    const variants: Record<PreviewTone, { title: string; description: string; actionLabel: string }> = {
-      info: {
-        title: "Нове сповіщення в CRM",
-        description: "Менеджер залишив коментар у задачі. Popup з’явиться так само, як при реальній події.",
-        actionLabel: "До задачі",
-      },
-      success: {
-        title: "Задачу оновлено",
-        description: "Дизайн переведено в готовий. Так виглядатиме сповіщення про успішну зміну стану.",
-        actionLabel: "Відкрити",
-      },
-      warning: {
-        title: "Потрібна увага",
-        description: "Замовник повернув правки. Важливі події можуть показуватись довше й з іншим акцентом.",
-        actionLabel: "Переглянути",
-      },
+  useEffect(() => {
+    if (narrow) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || settingsOpen) return;
+      if (isTypingTarget(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key === "j" || key === "о") step(1);
+      else if (key === "k" || key === "л") step(-1);
+      else if (selected && (key === "e" || key === "у")) void markDone(selected);
+      else if (selected && (key === "h" || key === "р")) void snooze(selected);
+      else if (selected && key === "enter") {
+        if (event.target instanceof HTMLElement && event.target.closest("button, a, [role=menuitem]")) return;
+        openFull(selected);
+      } else return;
+      event.preventDefault();
     };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [markDone, narrow, openFull, selected, settingsOpen, snooze, step]);
 
-    const preview = variants[tone];
-    toast.custom(
-      (t) =>
-        renderInAppToastContent({
-          title: preview.title,
-          description: preview.description,
-          tone,
-          actionLabel: preview.actionLabel,
-          onClose: () => toast.dismiss(t),
-        }),
-      {
-        id: `notification-preview:${tone}:${Date.now()}`,
-        position: "top-right",
-        duration: getInAppNotificationDuration(tone),
-        className: "!border-0 !bg-transparent !p-0 !",
-      }
-    );
-
-    void playInAppNotificationSound();
-  }, [playInAppNotificationSound]);
-
-  const pushStatusLabel = !push.supported
-    ? "Недоступно"
-    : push.enabled
-      ? "Увімкнено"
-      : push.configured
-        ? "Вимкнено"
-        : "Потрібен дозвіл";
-
-  const pushStatusTone: SettingsTone = !push.supported
-    ? "inactive"
-    : push.enabled
-      ? "active"
-      : "muted";
-
-  const inAppStatusLabel = inAppNotificationsEnabled ? "Увімкнено" : "Вимкнено";
-  const inAppStatusTone: SettingsTone = inAppNotificationsEnabled ? "active" : "muted";
-
-  const soundStatusLabel = !inAppNotificationsEnabled
-    ? "Недоступно"
-    : inAppNotificationSoundEnabled
-      ? "Увімкнено"
-      : "Вимкнено";
-
-  const soundStatusTone: SettingsTone = !inAppNotificationsEnabled
-    ? "inactive"
-    : inAppNotificationSoundEnabled
-      ? "active"
-      : "muted";
-
-  const notificationsHeaderActions = useMemo(
+  const headerActions = useMemo(
     () => (
       <UnifiedPageToolbar
         topLeft={
           <ToolbarTabs
             ariaLabel="Які сповіщення показати"
             items={[
-              { value: "all", label: "Всі", count: notifications.length },
-              { value: "unread", label: "Непрочитані", count: unreadCount },
+              { value: "inbox", label: "Вхідні", count: openCount },
+              { value: "all", label: "Усі", count: threads.length },
             ]}
-            value={filter}
-            onValueChange={setFilter}
+            value={tab}
+            onValueChange={(value) => setTab(value as InboxTab)}
           />
         }
         topRight={
           <div className="flex items-center gap-2">
-            {/* Push, popup і звук — у налаштуваннях з підписами. Доти тут стояли
-                три кольорові квадрати без слів, і що вони значать, знав лише той,
-                хто наводив курсор. */}
             <HoverTip asChild label="Налаштування сповіщень">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={openSettings}
-                aria-label="Налаштування сповіщень"
-              >
+              <Button type="button" variant="outline" size="icon" onClick={() => setSettingsOpen(true)} aria-label="Налаштування сповіщень">
                 <Settings2 className="h-4 w-4" />
               </Button>
             </HoverTip>
-            <Button
-              variant="secondary"
-              className="hidden md:inline-flex"
-              onClick={markAllRead}
-              disabled={unreadCount === 0}
-            >
-              Позначити всі
+            <Button variant="secondary" className="hidden md:inline-flex" onClick={markAllDone} disabled={openCount === 0}>
+              Усі прочитані
             </Button>
           </div>
         }
-        meta={<ToolbarMeta count={filtered.length} unit={["сповіщення", "сповіщення", "сповіщень"]} />}
+        meta={<ToolbarMeta count={visible.length} unit={["справа", "справи", "справ"]} />}
       />
     ),
-    [filter, filtered.length, markAllRead, notifications.length, openSettings, unreadCount]
+    [markAllDone, openCount, tab, threads.length, visible.length]
   );
+  usePageHeaderActions(headerActions, [headerActions]);
 
-  usePageHeaderActions(notificationsHeaderActions, [notificationsHeaderActions]);
+  const showSkeleton = useMinimumLoading(loading);
 
-  if (showSkeleton) {
-    return <PageLoading />;
-  }
+  useLayoutEffect(() => {
+    const measure = () => {
+      const top = frameRef.current?.getBoundingClientRect().top;
+      if (top !== undefined) setFrameTop(Math.round(top + window.scrollY));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [showSkeleton]);
+  if (showSkeleton) return <PageLoading />;
+
+  const grouped = BUCKETS.map((bucket) => ({
+    bucket,
+    threads: visible.filter((thread) => inboxBucket(thread.latest.created_at) === bucket),
+  })).filter((group) => group.threads.length > 0);
 
   return (
     <PageCanvas>
-      {/* Рамка — як у кожної сторінки-списку: стрічка від краю до краю під
-          тулбаром, без картки й свого заголовка (хвиля Б2). */}
-      <PageCanvasBody className="pb-20 md:pb-6">
-
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        {/* Кожен тумблер зберігається одразу — кнопки «Зберегти» тут немає,
-            тож закриття кліком повз нічого не втрачає. */}
-        <DialogContent dismissible className="max-h-[92dvh] w-[calc(100vw-0.75rem)] max-w-[760px] overflow-y-auto p-3 sm:max-h-[88dvh] sm:w-auto sm:p-6">
-          <DialogHeader>
-            <DialogTitle>Налаштування сповіщень</DialogTitle>
-            <DialogDescription className="hidden sm:block">
-              Тут можна керувати браузерним push, popup-сповіщеннями всередині CRM, звуком і одразу протестувати, як це виглядає.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2.5 sm:space-y-3">
-            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
-              <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex min-w-0 items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
-                      <BellRing className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 max-w-2xl">
-                      <div className="text-sm font-semibold text-foreground sm:text-base">Push у браузері</div>
-                      <div className="mt-1 hidden text-xs leading-5 text-muted-foreground sm:block">
-                        Працює, коли вкладка неактивна або браузер згорнутий.
-                      </div>
-                    </div>
-                  </div>
-                  <span className={cn(
-                    "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
-                    pushStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
-                    pushStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                    pushStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
-                  )}>
-                    {pushStatusLabel}
-                  </span>
-                </div>
-                <div className="flex w-full flex-col gap-3 md:min-w-[320px] md:max-w-[320px]">
-                  <div className="hidden items-center justify-end gap-3 md:flex">
-                    <span className={cn(
-                      "inline-flex rounded-full border px-2.5 py-1 text-2xs font-semibold",
-                      pushStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
-                      pushStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                      pushStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
-                    )}>
-                      {pushStatusLabel}
-                    </span>
-                  </div>
-                  {push.supported && push.configured ? (
-                    <div className="flex items-center justify-start gap-3 md:justify-end">
-                      <div className="flex w-full flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-start md:justify-end">
-                        <Button
-                          variant="outline"
-                          className="w-full text-sm sm:w-auto"
-                          onClick={push.sendTest}
-                          disabled={push.busy || !push.enabled}
-                        >
-                          Тест push
-                        </Button>
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            checked={push.enabled}
-                            disabled={push.busy}
-                            onCheckedChange={() => (push.enabled ? push.disable() : push.enable())}
-                            label="Перемкнути push у браузері"
-                          />
-                          <span className="text-sm font-medium text-foreground">
-                            {push.enabled ? "Увімкнено" : "Вимкнено"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-xs leading-5 text-muted-foreground">
-                      Поточний браузер не підтримує push або ще не надано дозвіл.
-                    </div>
-                  )}
-                </div>
+      <PageCanvasBody className="pb-20 md:pb-0">
+        <NotificationSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <div
+          ref={frameRef}
+          className="md:flex md:h-[var(--inbox-height)] md:overflow-hidden"
+          style={{ "--inbox-height": `calc(100dvh - ${frameTop}px)` } as CSSProperties}
+        >
+          <div className="min-w-0 md:w-[380px] md:shrink-0 md:overflow-y-auto md:overscroll-contain md:border-r md:border-border">
+            {visible.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 px-6 py-16 text-center text-sm text-muted-foreground">
+                <Inbox className="size-6" />
+                {tab === "inbox" ? "Вхідні порожні — усе розібрано." : "Поки немає сповіщень."}
               </div>
-            </section>
-
-            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
-              <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex min-w-0 items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
-                      <MonitorSmartphone className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 max-w-2xl">
-                      <div className="text-sm font-semibold text-foreground sm:text-base">In-app popup</div>
-                      <div className="mt-1 hidden text-xs leading-5 text-muted-foreground sm:block">
-                        З’являється у правому верхньому куті, поки ви працюєте всередині CRM.
-                      </div>
-                    </div>
-                  </div>
-                  <span className={cn(
-                    "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
-                    inAppStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
-                    inAppStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground"
-                  )}>
-                    {inAppStatusLabel}
-                  </span>
-                </div>
-                <div className="flex flex-col items-start gap-3 md:min-w-[280px] md:items-end">
-                  <span className={cn(
-                    "hidden rounded-full border px-2.5 py-1 text-2xs font-semibold md:inline-flex",
-                    inAppStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
-                    inAppStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground"
-                  )}>
-                    {inAppStatusLabel}
-                  </span>
-                  <div className="flex w-full items-center gap-3 md:min-w-[280px] md:justify-end">
-                    <Switch
-                      checked={inAppNotificationsEnabled}
-                      onCheckedChange={() => updateInAppNotificationPreferences({ enabled: !inAppNotificationsEnabled })}
-                      label="Перемкнути in-app popup"
+            ) : (
+              grouped.map((group) => (
+                <section key={group.bucket}>
+                  <h2 className="px-3 pb-1 pt-3 text-xs font-medium text-muted-foreground">{INBOX_BUCKET_LABELS[group.bucket]}</h2>
+                  {group.threads.map((thread) => (
+                    <InboxRow
+                      key={thread.key}
+                      thread={thread}
+                      active={selected?.key === thread.key}
+                      onSelect={() => {
+                        // На телефоні сповіщення без справи нема що показувати шторкою — одразу туди, куди воно веде.
+                        if (narrow && !thread.entity) {
+                          void markDone(thread);
+                          openFull(thread);
+                        } else setSelectedKey(thread.key);
+                      }}
                     />
-                    <span className="text-sm font-medium text-foreground">
-                      {inAppNotificationsEnabled ? "Увімкнено" : "Вимкнено"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
-              <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex min-w-0 items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
-                      <Volume2 className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 max-w-2xl">
-                      <div className="text-sm font-semibold text-foreground sm:text-base">Звук</div>
-                      <div className="mt-1 hidden text-xs leading-5 text-muted-foreground sm:block">
-                        Делікатний сигнал для нових popup-сповіщень усередині CRM.
-                      </div>
-                    </div>
-                  </div>
-                  <span className={cn(
-                    "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
-                    soundStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
-                    soundStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                    soundStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
-                  )}>
-                    {soundStatusLabel}
-                  </span>
-                </div>
-                <div className="flex flex-col items-start gap-3 md:min-w-[320px] md:items-end">
-                  <span className={cn(
-                    "hidden rounded-full border px-2.5 py-1 text-2xs font-semibold md:inline-flex",
-                    soundStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
-                    soundStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                    soundStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
-                  )}>
-                    {soundStatusLabel}
-                  </span>
-                  <div className="flex w-full flex-col items-start gap-2 md:min-w-[320px] md:items-end">
-                    <div className="flex w-full flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-start md:justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full text-sm sm:w-auto"
-                        disabled={!inAppNotificationsEnabled}
-                        onClick={async () => {
-                          const result = await playInAppNotificationSound(true);
-                          setSoundDebug({
-                            level: result.ok ? "success" : "error",
-                            message: result.message,
-                          });
-                        }}
-                      >
-                        Тест звуку
-                      </Button>
-                      <div className="flex items-center gap-3">
-                        <Switch
-                          checked={inAppNotificationSoundEnabled}
-                          disabled={!inAppNotificationsEnabled}
-                          onCheckedChange={() =>
-                            updateInAppNotificationPreferences({ soundEnabled: !inAppNotificationSoundEnabled })
-                          }
-                          label="Перемкнути звук сповіщень"
-                        />
-                        <span className="text-sm font-medium text-foreground">
-                          {inAppNotificationSoundEnabled ? "Увімкнено" : "Вимкнено"}
-                        </span>
-                      </div>
-                    </div>
-                    {soundDebug.message ? (
-                      <div
-                        className={cn(
-                          "text-xs",
-                          soundDebug.level === "success" && "text-success-foreground",
-                          soundDebug.level === "error" && "text-danger-foreground"
-                        )}
-                      >
-                        {soundDebug.message}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
-              <div className="mb-3 flex items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
-                  <Send className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-foreground sm:text-base">Типи сповіщень по каналах</div>
-                  <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Обери, які сповіщення слати в push і Telegram.
-                    {!telegramLinked ? " Telegram підключається у профілі." : ""}
-                  </div>
-                </div>
-              </div>
-              <NotificationChannelMatrix
+                  ))}
+                </section>
+              ))
+            )}
+          </div>
+          {/* Обидві колонки гортаються самі: список їде, справа стоїть. */}
+          <div className="hidden min-w-0 flex-1 md:block">
+            {selected ? (
+              <InboxDetail
+                thread={selected}
+                members={members}
+                teamId={teamId}
                 userId={userId}
                 accessRole={accessRole}
                 jobRole={jobRole}
-                telegramLinked={telegramLinked}
+                onDone={() => void markDone(selected)}
+                onSnooze={() => void snooze(selected)}
+                onOpenFull={() => openFull(selected)}
+                onClose={() => setSelectedKey("")}
               />
-            </section>
+            ) : (
+              <div className="grid h-full place-items-center text-sm text-muted-foreground">Оберіть сповіщення ліворуч</div>
+            )}
           </div>
-
-          <div className="rounded-inner border border-border/70 bg-background/68 p-3 sm:p-4">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-foreground sm:text-base">Тест in-app popup</div>
-                <div className="mt-1 hidden text-xs leading-5 text-muted-foreground sm:block">
-                  Перевіряє вигляд popup, різні іконки та звук. Можна натиснути кілька разів підряд, щоб побачити стек сповіщень.
-                </div>
-              </div>
-              <Badge variant="secondary" className="hidden w-fit bg-background/80 sm:inline-flex">Тільки для перевірки</Badge>
-            </div>
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:mt-4 sm:flex sm:flex-wrap">
-              <Button type="button" variant="outline" className="w-full text-sm sm:w-auto" onClick={() => showInAppPreview("info")}>
-                Звичайне
-              </Button>
-              <Button type="button" variant="outline" className="w-full text-sm sm:w-auto" onClick={() => showInAppPreview("success")}>
-                Успішне
-              </Button>
-              <Button type="button" variant="outline" className="w-full text-sm sm:w-auto" onClick={() => showInAppPreview("warning")}>
-                Важливе
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {filtered.length === 0 ? (
-        <div className="p-6 text-center text-sm text-muted-foreground">Поки немає сповіщень.</div>
-      ) : (
-        <div>
-          {filtered.map((n) => {
-            const avatar = getNotificationAvatarMeta(n);
-            const compactDescription = getCompactNotificationDescription(n);
-            const memberName = extractMentionActorName(n.title) || extractNotificationName(n.title);
-            const member = memberByNormalizedName.get(normalizeNotificationMatchText(memberName));
-            const matchedParty = findMatchedPartyAvatar(n, partyAvatars);
-            const matchedDesignTask = designTaskAvatars.find(
-              (task) => task.taskId === extractDesignTaskIdFromHref(n.href)
-            );
-            const matchedQuote =
-              quoteAvatars.find((quote) => quote.quoteNumber === matchedDesignTask?.quoteNumber) ??
-              quoteAvatars.find(
-                (quote) => quote.quoteNumber === extractQuoteNumber(`${n.title} ${n.description}`)
-              );
-            const matchedDesignTaskCustomer = findPartyAvatarByTypedId(
-              matchedDesignTask?.customerType,
-              matchedDesignTask?.customerId,
-              partyAvatars
-            );
-            const matchedQuoteCustomer = findPartyAvatarByTypedId("customer", matchedQuote?.customerId, partyAvatars);
-            const matchedDesignTaskParty = findPartyAvatarByName(matchedDesignTask?.customerName, partyAvatars);
-            const matchedQuoteParty = findPartyAvatarByName(matchedQuote?.customerName, partyAvatars);
-            const companyAvatarName =
-              matchedDesignTaskCustomer?.name ||
-              matchedQuoteCustomer?.name ||
-              matchedDesignTask?.customerName ||
-              matchedQuote?.customerName ||
-              matchedDesignTaskParty?.name ||
-              matchedQuoteParty?.name ||
-              matchedParty?.name ||
-              null;
-            const companyAvatarLogoUrl =
-              matchedDesignTaskCustomer?.logoUrl ||
-              matchedQuoteCustomer?.logoUrl ||
-              matchedDesignTask?.customerLogoUrl ||
-              matchedQuote?.customerLogoUrl ||
-              matchedDesignTaskParty?.logoUrl ||
-              matchedQuoteParty?.logoUrl ||
-              matchedParty?.logoUrl ||
-              null;
-            const avatarName = member?.label || companyAvatarName;
-            return (
-              <button
-                key={n.id}
-                type="button"
-                onClick={() => openNotification(n)}
-                className={cn(FEED_ROW, "min-h-12 py-1.5 pl-3")}
-                title={compactDescription ? `${n.title} — ${compactDescription}` : n.title}
-              >
-                {/* Непрочитане — крапка (хвиля Б1), без кольорової заливки картки. */}
-                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", n.read ? "bg-transparent" : "bg-primary")} aria-hidden />
-                {member?.avatarDisplayUrl ? (
-                  <AvatarBase
-                    src={member.avatarDisplayUrl}
-                    name={member.label}
-                    fallback={avatar.initials}
-                    size={NOTIFICATION_AVATAR_SIZE}
-                    className="shrink-0"
-                  />
-                ) : avatarName ? (
-                  <EntityAvatar
-                    src={companyAvatarLogoUrl}
-                    name={avatarName}
-                    fallback={getInitials(avatarName)}
-                    size={NOTIFICATION_AVATAR_SIZE}
-                    className="shrink-0"
-                  />
-                ) : (
-                  <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full border text-2xs font-semibold", avatar.avatarClass)}>
-                    {avatar.initials}
-                  </span>
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className={cn("block truncate text-foreground", !n.read && "font-medium")}>{n.title}</span>
-                  {/* На телефоні дата — у сірому рядку: праворуч вона з'їдала пів заголовка. */}
-                  <span className="block truncate text-xs text-muted-foreground">
-                    <span className="tabular-nums sm:hidden">{n.time}{compactDescription ? " · " : ""}</span>
-                    {compactDescription ? renderNotificationDescription(compactDescription) : null}
-                  </span>
-                </span>
-                <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:block">{n.time}</span>
-              </button>
-            );
-          })}
+          {narrow && selected ? (
+            <InboxDetail
+              thread={selected}
+              members={members}
+              teamId={teamId}
+              userId={userId}
+              accessRole={accessRole}
+              jobRole={jobRole}
+              onDone={() => void markDone(selected)}
+              onSnooze={() => void snooze(selected)}
+              onOpenFull={() => openFull(selected)}
+              onClose={() => setSelectedKey(null)}
+            />
+          ) : null}
         </div>
-      )}
       </PageCanvasBody>
     </PageCanvas>
   );
+}
+
+function InboxRow({ thread, active, onSelect }: { thread: InboxThread; active: boolean; onSelect: () => void }) {
+  const Icon = thread.entity ? KIND_ICON[thread.entity.kind] : Bell;
+  const open = thread.state === "open";
+  const sub = thread.actors.length > 0 ? thread.actors.join(", ") : thread.latest.body?.trim() ?? "";
+  return (
+    <button
+      type="button"
+      data-inbox-key={thread.key}
+      aria-current={active || undefined}
+      onClick={onSelect}
+      className={cn(
+        "flex w-full min-w-0 items-start gap-2.5 border-l-2 border-transparent px-3 py-2 text-left transition-colors hover:bg-muted/50",
+        active && "border-l-foreground bg-muted/70 hover:bg-muted/70"
+      )}
+    >
+      <Icon
+        className={cn(
+          "mt-0.5 size-4 shrink-0",
+          thread.latest.type === "warning" && open ? "text-warning-foreground" : "text-muted-foreground"
+        )}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className={cn("truncate text-sm", open ? "font-medium text-foreground" : "text-muted-foreground")}>
+            {thread.latest.title}
+          </span>
+          {thread.notifications.length > 1 ? (
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">×{thread.notifications.length}</span>
+          ) : null}
+          <span className="ml-auto shrink-0 pl-2 text-xs tabular-nums text-muted-foreground">
+            {formatInboxTime(thread.latest.created_at)}
+          </span>
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {thread.state === "snoozed" && thread.snoozedUntil
+            ? snoozeLabel(thread.snoozedUntil)
+            : thread.state === "done"
+              ? `готово${sub ? ` · ${sub}` : ""}`
+              : sub}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+type InboxDetailProps = {
+  thread: InboxThread;
+  members: WorkspaceMemberDisplayRow[];
+  teamId: string | null;
+  userId: string | null;
+  accessRole: string | null;
+  jobRole: string | null;
+  onDone: () => void;
+  onSnooze: () => void;
+  onOpenFull: () => void;
+  onClose: () => void;
+};
+
+function InboxDetail({ thread, members, teamId, userId, accessRole, jobRole, onDone, onSnooze, onOpenFull, onClose }: InboxDetailProps) {
+  const { loaded, invalidate } = useInboxEntity(thread.entity, {
+    teamId,
+    userId,
+    canIssueInvoice: canIssueOrderInvoice(accessRole, jobRole),
+    canApproveLaunch: canApproveOrderLaunch(jobRole),
+  });
+  const memberLabel = (id: string | null | undefined) => members.find((member) => member.userId === id) ?? null;
+  const actionable = thread.state === "open";
+
+  const footer = (
+    <>
+      <span><Kbd>J</Kbd> <Kbd>K</Kbd> далі</span>
+      <FooterAction label="готово" hotkey="E" onClick={onDone} disabled={thread.state === "done"} />
+      <FooterAction label="завтра" hotkey="H" onClick={onSnooze} disabled={!actionable} />
+      <span><Kbd>Enter</Kbd> відкрити повністю</span>
+    </>
+  );
+
+  let content: ReactNode;
+  if (thread.entity && loaded?.status === "ready") {
+    const entity = loaded.entity;
+    if (entity.kind === "quote") {
+      const manager = memberLabel(entity.row.assigned_to);
+      const badge = getDeadlineBadge(entity.row.deadline_at);
+      content = (
+        <QuotePeek
+          row={entity.row}
+          preview={entity.preview}
+          previewLoading={false}
+          managerLabel={manager?.label ?? "Не вказано"}
+          managerAvatarUrl={manager?.avatarDisplayUrl ?? null}
+          deadline={<QuoteDeadlineBadge tone={badge.tone} label={badge.label} compact />}
+          onClose={onClose}
+          onOpenFull={onOpenFull}
+          teamId={teamId ?? ""}
+          onStatusChanged={() => thread.entity && invalidate(thread.entity)}
+        />
+      );
+    } else if (entity.kind === "order") {
+      content = <OrderPeek view={entity.view} onClose={onClose} onOpenFull={onOpenFull} />;
+    } else {
+      const task = entity.task;
+      const assignee = memberLabel(task.assigneeUserId);
+      const badge = task.designDeadline ? getDeadlineBadge(task.designDeadline) : null;
+      content = (
+        <DesignTaskPeek
+          task={task}
+          number={task.number}
+          assigneeLabel={assignee?.label ?? task.assigneeLabel ?? "Не призначено"}
+          assigneeAvatar={assignee?.avatarDisplayUrl ?? task.assigneeAvatarUrl}
+          deadline={badge ? <QuoteDeadlineBadge tone={badge.tone} label={badge.label} compact /> : null}
+          estimate={null}
+          actions={
+            <Button size="sm" onClick={onOpenFull}>
+              Відкрити задачу
+            </Button>
+          }
+          onClose={onClose}
+          onOpenFull={onOpenFull}
+        />
+      );
+    }
+  } else if (thread.entity && loaded?.status === "loading") {
+    content = (
+      <div className="space-y-3 p-4">
+        <Skeleton className="h-5 w-1/3" />
+        <Skeleton className="h-7 w-3/4" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  } else {
+    content = <InboxNotificationDetail thread={thread} onOpenFull={onOpenFull} missing={Boolean(thread.entity)} />;
+  }
+
+  return <PeekInlineContext.Provider value={{ footer }}>{content}</PeekInlineContext.Provider>;
+}
+
+function FooterAction({ label, hotkey, onClick, disabled }: { label: string; hotkey: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-1 rounded transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+    >
+      <Kbd>{hotkey}</Kbd> {label}
+    </button>
+  );
+}
+
+/**
+ * Сповіщення без справи (відсутності, дні народження, запити в «Команді») або
+ * справа, якої вже немає: показуємо самі повідомлення й шлях туди, куди вони вели.
+ */
+function InboxNotificationDetail({ thread, onOpenFull, missing }: { thread: InboxThread; onOpenFull: () => void; missing: boolean }) {
+  const footer = useInlineFooter();
+  return (
+    <aside className="flex h-full min-h-0 flex-col bg-card">
+      <div className="shrink-0 space-y-2 px-4 pb-3 pt-3">
+        <div className="text-sm text-muted-foreground">{thread.entity ? KIND_SECTION[thread.entity.kind] : "Сповіщення"}</div>
+        <div className="text-lg font-semibold leading-snug tracking-tight text-foreground">{thread.latest.title}</div>
+        {missing ? <p className="text-xs text-muted-foreground">Справу не знайдено: її видалили або доступу до неї немає.</p> : null}
+        {thread.href && !missing ? (
+          <div className="pt-1">
+            <Button size="sm" onClick={onOpenFull}>
+              Відкрити
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto border-t border-border">
+        {thread.notifications.map((row) => (
+          <li key={row.id} className="space-y-0.5 px-4 py-2.5">
+            <div className="flex items-baseline gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm text-foreground">{row.title}</span>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatInboxTime(row.created_at)}</span>
+            </div>
+            {row.body ? <p className="whitespace-pre-line text-xs text-muted-foreground">{row.body}</p> : null}
+            {!row.read_at && snoozedUntilOf(row) ? (
+              <p className="text-2xs text-muted-foreground">{snoozeLabel(snoozedUntilOf(row) ?? "")}</p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {footer ? (
+        <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-4 py-2 text-2xs text-muted-foreground">
+          {footer}
+        </footer>
+      ) : null}
+    </aside>
+  );
+}
+
+function useInlineFooter() {
+  const narrow = useIsNarrowViewport();
+  const context = useContext(PeekInlineContext);
+  return narrow ? null : context?.footer ?? null;
 }
