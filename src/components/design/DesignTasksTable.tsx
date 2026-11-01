@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TABLE_RECORD_NUMBER_TEXT, TableEmptyRow, TableLoadingRow, TableTitleCell } from "@/components/app/table-kit";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { PeekRowButton } from "@/components/app/peek/EntityPeek";
 import { Button } from "@/components/ui/button";
 import { Package, User } from "@/components/icons/appIcons";
 import { PrintModelTile } from "@/features/quotes/quote-wizard/printModelArt";
@@ -39,6 +40,10 @@ type DesignTasksTableProps<T extends DesignTableTask> = {
   onMore?: () => void;
   moreBusy?: boolean;
   loading?: boolean;
+  /** Прев'ю збоку (REQ-346#p1): значок у рядку й пробіл над рядком. */
+  peekedId?: string | null;
+  onPeek?: (taskId: string) => void;
+  onHover?: (taskId: string | null) => void;
 };
 
 /**
@@ -58,6 +63,9 @@ export function DesignTasksTable<T extends DesignTableTask>({
   onMore,
   moreBusy,
   loading,
+  peekedId,
+  onPeek,
+  onHover,
 }: DesignTasksTableProps<T>) {
   return (
     // Без рамки, на всю ширину — як таблиця прорахунків. Ширина тримається
@@ -84,14 +92,24 @@ export function DesignTasksTable<T extends DesignTableTask>({
             return (
               <TableRow
                 key={task.id}
-                className="group cursor-pointer"
+                data-peek-id={task.id}
+                className={peekedId === task.id ? "group cursor-pointer bg-muted" : "group cursor-pointer"}
                 onClick={(event) => onOpen(task.id, event.metaKey || event.ctrlKey)}
                 onAuxClick={(event) => {
                   if (event.button === 1) onOpen(task.id, true);
                 }}
-                onMouseEnter={onPreload}
+                onMouseEnter={() => {
+                  onPreload?.();
+                  onHover?.(task.id);
+                }}
+                onMouseLeave={onHover ? () => onHover(null) : undefined}
               >
-                <TableCell className={`whitespace-nowrap ${TABLE_RECORD_NUMBER_TEXT}`}>{displayNumber(task)}</TableCell>
+                <TableCell className={`whitespace-nowrap ${TABLE_RECORD_NUMBER_TEXT}`}>
+                  <span className="flex items-center justify-between gap-1">
+                    {displayNumber(task)}
+                    {onPeek ? <PeekRowButton onPeek={() => onPeek(task.id)} active={peekedId === task.id} /> : null}
+                  </span>
+                </TableCell>
                 <TableCell>
                   <TableTitleCell
                     title={task.title || displayNumber(task)}

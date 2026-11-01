@@ -143,6 +143,8 @@ import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { Clock3, ExternalLink, LayoutGrid, ListFilter, PencilLine, Table2, Users } from "@/components/icons/appIcons";
 import { DesignTasksTable } from "@/components/design/DesignTasksTable";
+import { DesignTaskPeek } from "@/components/design/DesignTaskPeek";
+import { useEntityPeek } from "@/components/app/peek/useEntityPeek";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { MAX_BRIEF_FILES, planBriefFiles } from "@/features/design/briefFiles";
@@ -183,6 +185,8 @@ type DesignTask = {
   assigneeAvatarUrl?: string | null;
   createdAt?: string | null;
 };
+
+const designTaskId = (task: DesignTask) => task.id;
 
 type DesignTaskActivityRow = {
   id: string;
@@ -2676,6 +2680,8 @@ export default function DesignPage() {
       return (indexed?.haystack ?? "").includes(query);
     });
   }, [contentView, customerFilter, customerQuoteIds, deferredSearch, effectiveDesignerFilter, isManagerUser, managerFilter, statusFilter, taskSearchIndex, visibleTasks]);
+  const taskPeek = useEntityPeek(filteredTasks, designTaskId);
+  const peekTask = viewMode === "table" ? taskPeek.item : null;
 
   const hasActiveFilters =
     search.trim().length > 0 ||
@@ -5226,6 +5232,48 @@ export default function DesignPage() {
           onPreload={preloadDesignTaskRoute}
           onMore={hasMoreTasks ? () => void loadTasks({ append: true, force: true }) : undefined}
           moreBusy={loading || refreshing}
+          peekedId={taskPeek.peekId}
+          onPeek={taskPeek.toggle}
+          onHover={taskPeek.setHovered}
+        />
+      ) : null}
+
+      {peekTask ? (
+        <DesignTaskPeek
+          task={peekTask}
+          number={getTaskDisplayNumber(peekTask)}
+          assigneeLabel={getTaskAssigneeLabel(peekTask)}
+          assigneeAvatar={getTaskAssigneeAvatar(peekTask)}
+          deadline={
+            peekTask.designDeadline && formatDeadlineShort(peekTask.designDeadline) ? (
+              <QuoteDeadlineBadge
+                tone={getDeadlineBadge(peekTask.designDeadline).tone}
+                label={formatDeadlineShort(peekTask.designDeadline) ?? ""}
+                compact
+              />
+            ) : null
+          }
+          estimate={getTaskEstimateMinutes(peekTask) ? formatEstimateMinutes(getTaskEstimateMinutes(peekTask)) : null}
+          actions={
+            <>
+              {!peekTask.assigneeUserId && canSelfAssign && userId ? (
+                <Button size="sm" onClick={() => void applyAssignee(peekTask, userId)}>
+                  Взяти в роботу
+                </Button>
+              ) : canMarkTaskReady(peekTask) ? (
+                <Button size="sm" onClick={() => void handleStatusChange(peekTask, "pm_review")}>
+                  Дизайн готовий
+                </Button>
+              ) : null}
+              <Button size="sm" variant="outline" onClick={() => openTask(peekTask.id)}>
+                Відкрити задачу
+              </Button>
+            </>
+          }
+          onClose={taskPeek.close}
+          onOpenFull={() => openTask(peekTask.id)}
+          onPrev={taskPeek.prev}
+          onNext={taskPeek.next}
         />
       ) : null}
 

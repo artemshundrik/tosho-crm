@@ -6,6 +6,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { canApproveOrderLaunch, canIssueOrderInvoice } from "@/lib/permissions";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { useEntityPeek } from "@/components/app/peek/useEntityPeek";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarFilterBar, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
@@ -22,6 +23,7 @@ import {
   openGroupedSpecification,
 } from "@/features/orders/order-list/groupedSpecification";
 import { OrderListMobileCard, OrderListTableRow, type OrderListRowView } from "@/features/orders/order-list/OrderListRows";
+import { OrderPeek } from "@/features/orders/order-list/OrderPeek";
 import { OrderStageStrip, type OrderListScope } from "@/features/orders/order-list/OrderStageStrip";
 import { useOrderRecords } from "@/features/orders/order-list/useOrderRecords";
 import {
@@ -45,6 +47,8 @@ import { cn } from "@/lib/utils";
  * смуга етапів, у рядку — що далі й чий хід. Затверджені прорахунки, з яких ще
  * не зробили замовлення, живуть на окремому екрані «Черга з прорахунків».
  */
+const peekViewId = (view: OrderListRowView) => view.record.id;
+
 type PaymentFilter = "all" | "cashless" | "cash" | "crypto";
 type SortMode = "my-turn" | "recent";
 
@@ -207,6 +211,7 @@ export default function OrdersProductionPage() {
   const selectionBlocker = selectedRecords.length > 0 ? getSpecificationGroupBlocker(selectedRecords) : null;
 
   const openRecord = useCallback((record: DerivedOrderRecord) => navigate(`/orders/production/${record.id}`), [navigate]);
+  const peek = useEntityPeek(filteredViews, peekViewId);
 
   const toggleSelect = (record: DerivedOrderRecord, checked: boolean) => {
     if (!checked) {
@@ -385,6 +390,7 @@ export default function OrdersProductionPage() {
   }
 
   const firstSelected = selectedRecords[0];
+  const peekView = peek.item;
 
   return (
     <PageCanvas>
@@ -458,12 +464,25 @@ export default function OrdersProductionPage() {
                   selected={selectedIds.includes(view.record.id)}
                   selectBlocker={getSpecificationRecordBlocker(view.record)}
                   onToggleSelect={toggleSelect}
+                  peeked={peek.peekId === view.record.id}
+                  onPeek={(record) => peek.toggle(record.id)}
+                  onHover={peek.setHovered}
                 />
               ))}
             </TableBody>
           </Table>
         )}
       </PageCanvasBody>
+
+      {peekView ? (
+        <OrderPeek
+          view={peekView}
+          onClose={peek.close}
+          onOpenFull={() => openRecord(peekView.record)}
+          onPrev={peek.prev}
+          onNext={peek.next}
+        />
+      ) : null}
 
       {firstSelected ? (
         <div className="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4 max-md:bottom-20">

@@ -64,22 +64,22 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | **1355** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~6 935 lines, 301 KB, as of 2026-11-01)
+## src/pages/QuotesPage.tsx (~6 948 lines, 301 KB, as of 2026-11-01)
 
 | Range | Content |
 |---|---|
 | 1–193 | imports |
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
-| **473** | `export function QuotesPage(...)` — main component starts |
+| **478** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 964 lines, 265 KB, as of 2026-11-01)
+## src/pages/DesignPage.tsx (~5 970 lines, 264 KB, as of 2026-11-01)
 
 | Range | Content |
 |---|---|
 | 1–144 | imports |
 | 145–943 | types + module-level helpers (cache I/O, `sanitizeDesignTaskMetadataForCache`, `sanitizeDesignTaskForCache`, `buildDesignPageCachePayload`, `resolveTaskCustomerLogo`, `applyCustomerLogosToTasks`) |
-| **906** | `export default function DesignPage()` — main component starts |
-| 4028 | `duplicateStandaloneTask(source, options)` — builds the new task's metadata when copying a design task |
+| **910** | `export default function DesignPage()` — main component starts |
+| 4034 | `duplicateStandaloneTask(source, options)` — builds the new task's metadata when copying a design task |
 | 5895 | `<DuplicateDesignTaskDialog>` mount + `source`/`onConfirm` wiring |
 
 ---

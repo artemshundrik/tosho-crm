@@ -149,6 +149,9 @@ import { useDeferredHeavySurface } from "@/hooks/useDeferredHeavySurface";
 import { useKanbanViewportHeight } from "@/hooks/useKanbanViewportHeight";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { preloadQuoteDetailsRoute } from "@/routes/routePreload";
+import { PeekRowButton } from "@/components/app/peek/EntityPeek";
+import { useEntityPeek } from "@/components/app/peek/useEntityPeek";
+import { QuotePeek } from "@/features/quotes/quotes-page/QuotePeek";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CustomerFilterSelect } from "@/components/customers/CustomerFilterSelect";
@@ -469,6 +472,8 @@ const markQuotesBodyMounted = () => {
  * й нічого не рендерить (REQ-75).
  */
 const EMPTY_PARTY_OPTIONS: QuotePartyOption[] = [];
+
+const quoteRowId = (row: QuoteListRow) => row.id;
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const { userId, jobRole, permissions } = useAuth();
@@ -1124,6 +1129,37 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const date = parseDateOnly(value);
     if (Number.isNaN(date.getTime())) return null;
     return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+  };
+
+  // Дедлайн у таблиці й у прев'ю — одним текстом і тоном.
+  const renderTableDeadline = (row: QuoteListRow) => {
+    const badge = getDeadlineBadge(row.deadline_at ?? null, row.status);
+    if (!row.deadline_at) {
+      return (
+        <span className="text-sm text-muted-foreground" title="Дедлайн не задано">
+          —
+        </span>
+      );
+    }
+    const isTomorrow = badge.tone === "soon" && badge.label === "Завтра";
+    const shortLabel = formatDeadlineShort(row.deadline_at);
+    const text = badge.tone === "today" ? "сьогодні" : isTomorrow ? "завтра" : shortLabel ?? "—";
+    const toneClass =
+      badge.tone === "overdue"
+        ? "text-danger-foreground"
+        : badge.tone === "today" || isTomorrow
+          ? "text-warning-foreground"
+          : "text-muted-foreground";
+    const titleParts = [
+      badge.tone === "overdue" || badge.tone === "today" || badge.tone === "soon" ? badge.label : null,
+      `Дата: ${new Date(row.deadline_at).toLocaleDateString("uk-UA")}`,
+      row.deadline_note ? `Коментар: ${row.deadline_note}` : null,
+    ].filter(Boolean);
+    return (
+      <span className={cn("text-sm", toneClass)} title={titleParts.join(" · ")}>
+        {text}
+      </span>
+    );
   };
 
   const formatFileSize = (bytes: number) => {
@@ -2949,6 +2985,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     quoteSetDetailsTarget,
     quoteSetDetailsItems,
   });
+  const quotePeek = useEntityPeek(filteredAndSortedRows, quoteRowId);
+  const peekRow = viewMode === "table" ? quotePeek.item : null;
   const desktopKanbanViewportHeight = useKanbanViewportHeight(desktopKanbanViewportRef, {
     enabled: viewMode === "kanban",
     skeletonShown: boardSkeletonShown,
@@ -5533,7 +5571,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <TableHead className="w-[88px] font-semibold">
                       <div className="flex items-center justify-center">Менеджер</div>
                     </TableHead>
-                    <TableHead className="w-[44px]"></TableHead>
+                    <TableHead className="w-[72px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -5547,19 +5585,26 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         className={cn(
                           "group transition-colors border-b border-border/50",
                           canOpen ? "hover:bg-muted/10 cursor-pointer" : "cursor-not-allowed opacity-70",
-                          isSelected && "bg-primary/5"
+                          isSelected && "bg-primary/5",
+                          quotePeek.peekId === row.id && "bg-muted"
                         )}
                         onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                         // Чанк картки прорахунку їде на наведенні, а не в мить
                         // кліку (REQ-136).
-                        onMouseEnter={preloadQuoteDetailsRoute}
+                        onMouseEnter={() => {
+                          preloadQuoteDetailsRoute();
+                          if (canOpen) quotePeek.setHovered(row.id);
+                        }}
+                        onMouseLeave={() => quotePeek.setHovered(null)}
                         onFocus={preloadQuoteDetailsRoute}
                         onTouchStart={preloadQuoteDetailsRoute}
                         role="button"
                         tabIndex={0}
+                        data-peek-id={canOpen ? row.id : undefined}
                         onKeyDown={(event) => {
-                          if (!canOpen) return;
-                          if (event.key === "Enter" || event.key === " ") {
+                          if (!canOpen || event.target !== event.currentTarget) return;
+                          // Enter відкриває сторінку, пробіл — прев'ю (REQ-346#p1).
+                          if (event.key === "Enter") {
                             event.preventDefault();
                             navigate(`/orders/estimates/${row.id}`);
                           }
@@ -5685,44 +5730,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             );
                           })()}
                         </TableCell>
-                        <TableCell>
-                          {(() => {
-                            const badge = getDeadlineBadge(row.deadline_at ?? null, row.status);
-                            if (!row.deadline_at) {
-                              return (
-                                <span className="text-sm text-muted-foreground" title="Дедлайн не задано">
-                                  —
-                                </span>
-                              );
-                            }
-                            const isTomorrow = badge.tone === "soon" && badge.label === "Завтра";
-                            const shortLabel = formatDeadlineShort(row.deadline_at);
-                            const text =
-                              badge.tone === "today"
-                                ? "сьогодні"
-                                : isTomorrow
-                                  ? "завтра"
-                                  : shortLabel ?? "—";
-                            const toneClass =
-                              badge.tone === "overdue"
-                                ? "text-danger-foreground"
-                                : badge.tone === "today" || isTomorrow
-                                  ? "text-warning-foreground"
-                                  : "text-muted-foreground";
-                            const titleParts = [
-                              badge.tone === "overdue" || badge.tone === "today" || badge.tone === "soon"
-                                ? badge.label
-                                : null,
-                              `Дата: ${new Date(row.deadline_at).toLocaleDateString("uk-UA")}`,
-                              row.deadline_note ? `Коментар: ${row.deadline_note}` : null,
-                            ].filter(Boolean);
-                            return (
-                              <span className={cn("text-sm", toneClass)} title={titleParts.join(" · ")}>
-                                {text}
-                              </span>
-                            );
-                          })()}
-                        </TableCell>
+                        <TableCell>{renderTableDeadline(row)}</TableCell>
                         <TableCell>
                           {(() => {
                             const manager = resolveManagerMember(row.assigned_to);
@@ -5753,7 +5761,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             );
                           })()}
                         </TableCell>
-                        <TableCell className="text-right opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end">
+                          {canOpen ? (
+                            <PeekRowButton onPeek={() => quotePeek.toggle(row.id)} active={quotePeek.peekId === row.id} />
+                          ) : null}
+                          <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -5798,6 +5811,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          </div>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -5986,6 +6001,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           {rowDeleteError}
         </div>
       )}
+
+      {peekRow ? (
+        <QuotePeek
+          row={peekRow}
+          preview={kanbanProductByQuoteId[peekRow.id]}
+          previewLoading={kanbanPreviewsLoading}
+          managerLabel={getManagerLabel(peekRow.assigned_to)}
+          managerAvatarUrl={resolveManagerMember(peekRow.assigned_to)?.avatarUrl ?? null}
+          deadline={renderTableDeadline(peekRow)}
+          onClose={quotePeek.close}
+          onOpenFull={() => navigate(`/orders/estimates/${peekRow.id}`)}
+          onPrev={quotePeek.prev}
+          onNext={quotePeek.next}
+        />
+      ) : null}
 
       <QuoteWizardMount
         mount={quoteWizard}

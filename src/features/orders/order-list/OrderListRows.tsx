@@ -1,4 +1,5 @@
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { PeekRowButton } from "@/components/app/peek/EntityPeek";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
@@ -64,7 +65,7 @@ export function CustomerWithItems({ record }: { record: DerivedOrderRecord }) {
   );
 }
 
-function PaidMiniBar({ paid }: { paid: OrderListRowView["paid"] }) {
+export function PaidMiniBar({ paid }: { paid: OrderListRowView["paid"] }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       <div className="h-1.5 w-8 shrink-0 overflow-hidden rounded-full bg-muted" aria-hidden>
@@ -75,7 +76,7 @@ function PaidMiniBar({ paid }: { paid: OrderListRowView["paid"] }) {
   );
 }
 
-function DocMarks({ docs }: { docs: OrderDocMark[] | null }) {
+export function DocMarks({ docs }: { docs: OrderDocMark[] | null }) {
   if (!docs) {
     return (
       <span className="whitespace-nowrap text-xs text-muted-foreground" title="Договору, СП, рахунку й видаткової на готівці немає">
@@ -127,7 +128,7 @@ function TurnChip({ step, mine }: { step: OrderNextStep; mine: boolean }) {
   );
 }
 
-function NextStep({ view }: { view: OrderListRowView }) {
+export function NextStep({ view }: { view: OrderListRowView }) {
   const { step, record } = view;
   const extra = [
     step.amountDue ? formatOrderMoney(step.amountDue, record.currency) : null,
@@ -144,7 +145,7 @@ function NextStep({ view }: { view: OrderListRowView }) {
   );
 }
 
-function ManagerAvatar({ record, size }: { record: DerivedOrderRecord; size: number }) {
+export function ManagerAvatar({ record, size }: { record: DerivedOrderRecord; size: number }) {
   return (
     <AvatarBase
       src={record.managerAvatarUrl ?? null}
@@ -163,14 +164,30 @@ type RowHandlers = {
   /** null — можна обрати в групову СП; рядок — чому не можна. */
   selectBlocker: string | null;
   onToggleSelect: (record: DerivedOrderRecord, checked: boolean) => void;
+  /** Прев'ю збоку (REQ-346#p1): значок у рядку й пробіл над рядком. */
+  peeked?: boolean;
+  onPeek?: (record: DerivedOrderRecord) => void;
+  onHover?: (id: string | null) => void;
 };
 
-export function OrderListTableRow({ view, onOpen, selected, selectBlocker, onToggleSelect }: { view: OrderListRowView } & RowHandlers) {
+export function OrderListTableRow({
+  view,
+  onOpen,
+  selected,
+  selectBlocker,
+  onToggleSelect,
+  peeked,
+  onPeek,
+  onHover,
+}: { view: OrderListRowView } & RowHandlers) {
   const { record, step } = view;
   return (
     <TableRow
-      className={cn("group relative cursor-pointer", view.mine && "bg-primary/[0.04]")}
+      data-peek-id={record.id}
+      className={cn("group relative cursor-pointer", view.mine && "bg-primary/[0.04]", peeked && "bg-muted")}
       onClick={() => onOpen(record)}
+      onMouseEnter={onHover ? () => onHover(record.id) : undefined}
+      onMouseLeave={onHover ? () => onHover(null) : undefined}
     >
       <TableCell className="relative" onClick={(event) => event.stopPropagation()}>
         {view.mine ? <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-primary" aria-hidden /> : null}
@@ -183,14 +200,17 @@ export function OrderListTableRow({ view, onOpen, selected, selectBlocker, onTog
         />
       </TableCell>
       <TableCell>
-        <HoverCopyText
-          value={record.quoteNumber}
-          textClassName={TABLE_RECORD_NUMBER_TEXT}
-          successMessage="Номер замовлення скопійовано"
-          copyLabel="Скопіювати номер замовлення"
-        >
-          {record.quoteNumber}
-        </HoverCopyText>
+        <div className="flex items-center justify-between gap-1">
+          <HoverCopyText
+            value={record.quoteNumber}
+            textClassName={TABLE_RECORD_NUMBER_TEXT}
+            successMessage="Номер замовлення скопійовано"
+            copyLabel="Скопіювати номер замовлення"
+          >
+            {record.quoteNumber}
+          </HoverCopyText>
+          {onPeek ? <PeekRowButton onPeek={() => onPeek(record)} active={peeked} /> : null}
+        </div>
       </TableCell>
       <TableCell>
         <CustomerWithItems record={record} />
