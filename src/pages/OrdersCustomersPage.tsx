@@ -69,6 +69,7 @@ import {
 } from "@/lib/companyNameSearch";
 import { saveCustomerCard, saveLeadCard, validateLeadCard } from "@/components/customers/partyCardSave";
 import { useOpenPartyCard } from "@/components/customers/partyCardContext";
+import { CustomerHoverCard } from "@/components/customers/card/CustomerHoverCard";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -2620,18 +2621,20 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             onClick={() => openEdit(row)}
                           >
                             <TableCell>
-                              <TableTitleCell
-                                leading={
-                                  <EntityAvatar
-                                    src={row.logo_url ?? null}
-                                    name={row.name ?? row.legal_name ?? "Компанія"}
-                                    fallback={getInitials(row.name ?? row.legal_name)}
-                                    size={28}
-                                  />
-                                }
-                                title={row.name ?? "Не вказано"}
-                                meta={[legalEntities.length > 1 ? `${legalEntities.length} юр. ос.` : null]}
-                              />
+                              <CustomerHoverCard teamId={teamId} userId={userId} customerId={row.id} onOpenPanel={() => openEdit(row)}>
+                                <TableTitleCell
+                                  leading={
+                                    <EntityAvatar
+                                      src={row.logo_url ?? null}
+                                      name={row.name ?? row.legal_name ?? "Компанія"}
+                                      fallback={getInitials(row.name ?? row.legal_name)}
+                                      size={28}
+                                    />
+                                  }
+                                  title={row.name ?? "Не вказано"}
+                                  meta={[legalEntities.length > 1 ? `${legalEntities.length} юр. ос.` : null]}
+                                />
+                              </CustomerHoverCard>
                             </TableCell>
                             <TableCell className="px-2">
                               {primaryEntityType ? (
