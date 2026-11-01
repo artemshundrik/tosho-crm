@@ -110,3 +110,9 @@ export const getDeadlineBadge = (value?: string | null, status?: string | null) 
     tone: "future" as const,
   };
 };
+
+/** «Горить» (вигляд В5): хід наш, а дедлайн сьогодні або вже минув. */
+export const isQuoteBurning = (row: { status?: string | null; deadline_at?: string | null }) => {
+  const tone = getDeadlineBadge(row.deadline_at ?? null, row.status ?? null).tone;
+  return isQuoteOurTurn(row.status) && (tone === "overdue" || tone === "today");
+};

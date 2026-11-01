@@ -462,6 +462,11 @@ Practical implication:
 
 ## Notifications, Activity, And Runtime
 
+- `saved_list_views`
+  - per-user saved filter sets (quotes page)
+  - RLS `user_id = auth.uid()`; select/insert/delete only, no update
+  - [scripts/saved-list-views.sql](../scripts/saved-list-views.sql)
+
 - `notifications`
   - in-app notification rows
 

@@ -197,9 +197,9 @@ import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuote
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
 import { isOffBoardStatus } from "@/lib/kanbanBoards";
 import { listQuoteStatusCounts } from "@/lib/quoteStatusCounts";
-import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
 import { loadQuoteProductPreviews } from "@/features/quotes/quotes-page/quoteProductPreviews";
-import { formatQuoteGroupsSum, getDeadlineBadge, groupQuoteRows, parseDateOnly } from "@/features/quotes/quotes-page/quoteTableGroups";
+import { QuoteViewsBar } from "@/features/quotes/quotes-page/QuoteViewsBar";
+import { formatQuoteGroupsSum, getDeadlineBadge, groupQuoteRows, isQuoteBurning, parseDateOnly } from "@/features/quotes/quotes-page/quoteTableGroups";
 import { useQuotesScopeCache } from "@/features/quotes/quotes-page/useQuotesScopeCache";
 import { QuoteGroupHeaderRow, QuoteItemsCellContent, QuoteMembershipBadges, QuoteTotalCellContent } from "@/features/quotes/quotes-page/QuoteListCells";
 import { ResizableHead } from "@/features/quotes/quotes-page/ColumnResizeHandle";
@@ -538,6 +538,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
   );
   const [customerFilter, setCustomerFilter] = useState<CustomerFilterValue | null>(() => restoredFilters?.customerFilter ?? null);
+  const [burning, setBurning] = useState(false);
   const scopeFilterKey = `${managerFilter}|${customerFilterKey(customerFilter)}`;
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
@@ -960,9 +961,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       .sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" }));
   }, [getManagerLabel, teamMembers, visibleRows]);
   const filteredRowsByManager = useMemo(() => {
-    if (managerFilter === ALL_MANAGERS_FILTER) return visibleRows;
-    return visibleRows.filter((row) => (row.assigned_to?.trim() ?? "") === managerFilter);
-  }, [managerFilter, visibleRows]);
+    const byManager = managerFilter === ALL_MANAGERS_FILTER ? visibleRows : visibleRows.filter((row) => (row.assigned_to?.trim() ?? "") === managerFilter);
+    return burning ? byManager.filter(isQuoteBurning) : byManager;
+  }, [burning, managerFilter, visibleRows]);
 
   const selectedType = useMemo(
     () => catalogTypes.find((t) => t.id === selectedTypeId),
@@ -2947,7 +2948,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   // У таблиці число над списком — лічильник вибраної вкладки з бази, інакше
   // воно (50 завантажених) суперечило б вкладці «Активні 99».
   const selectedTabCount =
-    viewMode === "table" && !isNarrowViewport
+    viewMode === "table" && !isNarrowViewport && !burning
       ? getStatusTabCount(quoteStatusCounts, QUOTE_STATUS_TABS.find((tab) => tab.value === status) ?? {})
       : null;
   const toolbarCount = selectedTabCount ?? foundCount;
@@ -3207,6 +3208,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setStatusFilter("active");
     setManagerFilter(ALL_MANAGERS_FILTER);
     setCustomerFilter(null);
+    setBurning(false);
   }, []);
 
   useEffect(() => {
@@ -4464,13 +4466,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   на екрані, і «Скасовано» в ньому саме там, куди людина й
                   полізе, шукаючи скасований прорахунок.
                 */}
-                {viewMode === "kanban" ? (
+                {(
                   <ToolbarFilterSelect
                     label="Статус" value={effectiveStatus}
                     onValueChange={setStatusFilter}
-                    neutralValue="all"
+                    neutralValue={neutralStatus}
                     className="sm:w-[170px]"
                     options={[
+                      ...(neutralStatus === "active" ? [{ value: "active", label: "Активні", icon: ListFilter }] : []),
                       { value: "all", label: "Всі статуси", icon: ListFilter },
                       ...STATUS_OPTIONS.map((s) => ({
                         value: s,
@@ -4479,7 +4482,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       })),
                     ]}
                   />
-                ) : null}
+                )}
                 {isManagerUser ? (
                   <div
                     className={cn(
@@ -4570,6 +4573,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }
       />
   ), [
+    neutralStatus,
     listSumLabel,
     clearFilters,
     contentView,
@@ -5088,19 +5092,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       {contentView !== "sets" && (viewMode === "table" ? (
         <EstimatesTableCanvas>
           {!isNarrowViewport ? (
-            <TabBar value={status} wrapperClassName="border-b border-border/60 px-2">
-              {QUOTE_STATUS_TABS.map((tab) => {
-                const count = getStatusTabCount(quoteStatusCounts, tab);
-                return (
-                  <TabBarItem key={tab.value} value={tab.value} onSelect={setStatusFilter}>
-                    {tab.label}
-                    {count !== null ? (
-                      <span className="font-mono text-2xs font-normal text-muted-foreground">{count}</span>
-                    ) : null}
-                  </TabBarItem>
-                );
-              })}
-            </TabBar>
+            <QuoteViewsBar
+              current={{ status, manager: managerFilter === ALL_MANAGERS_FILTER ? "all" : managerFilter === currentUserId ? "me" : managerFilter, customer: customerFilter, burning }}
+              onApply={(view) => {
+                setStatusFilter(view.status);
+                setManagerFilter(view.manager === "all" ? ALL_MANAGERS_FILTER : view.manager === "me" ? (currentUserId ?? ALL_MANAGERS_FILTER) : view.manager);
+                setCustomerFilter(view.customer);
+                setBurning(view.burning);
+              }}
+            />
           ) : null}
           {boardSkeletonShown ? (
             <div
