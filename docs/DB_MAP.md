@@ -165,10 +165,12 @@ read: the one-argument helper, or an explicit conjunct.
 
 - `customers`
   - current CRM customer entities
+  - `referred_by text` — хто порекомендував; приходить із ліда при переведенні ([scripts/party-referred-by.sql](/Users/artem/Projects/tosho-crm/scripts/party-referred-by.sql))
 
 - `leads`
   - leads/prospects
   - tracked schema in [scripts/leads-schema.sql](/Users/artem/Projects/tosho-crm/scripts/leads-schema.sql)
+  - `referred_by text` — хто порекомендував (коли `source = 'Рекомендація'`); переходить у `customers.referred_by` при переведенні ([scripts/party-referred-by.sql](/Users/artem/Projects/tosho-crm/scripts/party-referred-by.sql))
 
 - `clients`
   - appears in search results, but not a primary current frontend domain

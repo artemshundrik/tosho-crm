@@ -37,6 +37,7 @@ import { IbanInput } from "@/components/customers/IbanInput";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { TelegramInput } from "@/components/ui/telegram-input";
 import { hasLeadContact } from "./leadContact";
+import { catchTelegramPaste, LeadEntryHintNote, ReferredByField } from "./LeadEntryHintNote";
 import { EmailInput } from "@/components/ui/email-input";
 import { DigitsInput } from "@/components/ui/digits-input";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -54,6 +55,8 @@ export type LeadFormState = {
   /** Нік без «@» або з ним — на запис нормалізується (REQ-298). */
   telegram: string;
   source: string;
+  /** Хто порекомендував — коли джерело «Рекомендація». */
+  referredBy?: string;
   website: string;
   logoUrl: string;
   logoFile: File | null;
@@ -759,6 +762,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
                     />
                   </div>
+                  <ReferredByField form={form} setForm={setForm} />
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
@@ -788,6 +792,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       onChange={(email) => setForm((prev) => ({ ...prev, email }))}
                       placeholder="name@company.com"
                     />
+                    <LeadEntryHintNote form={form} setForm={setForm} field="email" />
                   </div>
                   <div className="grid gap-2">
                     <div className="flex h-8 items-center justify-between">
@@ -799,7 +804,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     </div>
                     <div className="space-y-2">
                       {form.phones.map((phone, index) => (
-                        <div key={`phone-${index}`} className="flex items-center gap-2">
+                        <div key={`phone-${index}`} className="flex items-center gap-2" onPasteCapture={catchTelegramPaste((raw) => updatePhone(index, raw))}>
                           <PhoneInput
                             value={phone}
                             onChange={(value) => updatePhone(index, value)}
@@ -819,6 +824,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         </div>
                       ))}
                     </div>
+                    <LeadEntryHintNote form={form} setForm={setForm} field="phone" />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -903,6 +909,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
                       />
                     </div>
+                    <ReferredByField form={form} setForm={setForm} />
                   </div>
                 </div>
                 </SectionCard>
@@ -937,6 +944,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         onChange={(email) => setForm((prev) => ({ ...prev, email }))}
                         placeholder="name@company.com"
                       />
+                      <LeadEntryHintNote form={form} setForm={setForm} field="email" />
                     </div>
                     <div className="grid gap-2">
                       <div className="flex h-8 items-center justify-between">
@@ -948,7 +956,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       </div>
                       <div className="space-y-2">
                         {form.phones.map((phone, index) => (
-                          <div key={`phone-${index}`} className="flex items-center gap-2">
+                          <div key={`phone-${index}`} className="flex items-center gap-2" onPasteCapture={catchTelegramPaste((raw) => updatePhone(index, raw))}>
                             <PhoneInput
                               value={phone}
                               onChange={(value) => updatePhone(index, value)}
@@ -968,6 +976,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                           </div>
                         ))}
                       </div>
+                      <LeadEntryHintNote form={form} setForm={setForm} field="phone" />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

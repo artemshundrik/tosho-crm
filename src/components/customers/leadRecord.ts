@@ -30,6 +30,7 @@ export type LeadRow = {
   phone_numbers?: string[] | null;
   telegram?: string | null;
   source?: string | null;
+  referred_by?: string | null;
   website?: string | null;
   manager?: string | null;
   manager_user_id?: string | null;
@@ -48,7 +49,7 @@ export type LeadRow = {
 };
 
 
-const LEAD_COLUMNS = [
+const LEAD_COLUMNS_BASE = [
   "id",
   "team_id",
   "company_name",
@@ -80,18 +81,22 @@ const LEAD_COLUMNS = [
   "created_at",
   "updated_at",
 ].join(",");
-const LEAD_COLUMNS_WITHOUT_REQUISITES = LEAD_COLUMNS.replace("tax_id,", "").replace("legal_address,", "");
+// referred_by — scripts/party-referred-by.sql; до нього запасний набір без колонки.
+const LEAD_COLUMNS = `${LEAD_COLUMNS_BASE},referred_by`;
+const LEAD_COLUMNS_WITHOUT_REQUISITES = LEAD_COLUMNS_BASE.replace("tax_id,", "").replace("legal_address,", "");
 const LEAD_COLUMNS_LEGACY = LEAD_COLUMNS_WITHOUT_REQUISITES.replace("ownership_type,", "");
-export type LeadColumnsVariant = "full" | "no_requisites" | "no_ownership";
+export type LeadColumnsVariant = "full" | "no_referral" | "no_requisites" | "no_ownership";
 export const getLeadColumns = (variant: LeadColumnsVariant) => {
   if (variant === "no_ownership") return LEAD_COLUMNS_LEGACY;
   if (variant === "no_requisites") return LEAD_COLUMNS_WITHOUT_REQUISITES;
+  if (variant === "no_referral") return LEAD_COLUMNS_BASE;
   return LEAD_COLUMNS;
 };
 export const getFallbackLeadColumnsVariant = (variant: LeadColumnsVariant, message: string): LeadColumnsVariant | null => {
   if (!/column/i.test(message)) return null;
-  if (variant === "full" && (/tax_id/i.test(message) || /legal_address/i.test(message))) return "no_requisites";
-  if ((variant === "full" || variant === "no_requisites") && /ownership_type/i.test(message)) return "no_ownership";
+  if (variant === "full" && /referred_by/i.test(message)) return "no_referral";
+  if ((variant === "full" || variant === "no_referral") && (/tax_id/i.test(message) || /legal_address/i.test(message))) return "no_requisites";
+  if (variant !== "no_ownership" && /ownership_type/i.test(message)) return "no_ownership";
   return null;
 };
 
@@ -127,6 +132,7 @@ export const createEmptyLeadForm = (manager?: { label: string; id: string }): Le
   phones: [""],
   telegram: "",
   source: "",
+  referredBy: "",
   website: "",
   manager: manager?.label ?? "",
   managerId: manager?.id ?? "",
@@ -165,6 +171,7 @@ export const buildLeadFormFromRow = (lead: LeadRow, managerLabel: string): LeadF
   phones: lead.phone_numbers?.length ? lead.phone_numbers : [""],
   telegram: lead.telegram ?? "",
   source: lead.source ?? "",
+  referredBy: lead.referred_by ?? "",
   website: lead.website ?? "",
   manager: managerLabel,
   managerId: lead.manager_user_id ?? "",

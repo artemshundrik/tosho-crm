@@ -21,6 +21,7 @@ import type { CustomerFormState } from "./CustomerDialog";
 import type { CustomerSection, CustomerSectionPatch } from "./partyFieldWrite";
 import type { LeadFormState } from "./LeadDialog";
 import { getLeadContactIssue } from "./leadContact";
+import { isMissingReferredByColumn } from "./leadEntryHints";
 import { getLeadConversionMissingFields } from "./leadRecord";
 
 /**
@@ -345,7 +346,8 @@ export async function saveLeadCard(input: {
     event_comment: form.eventComment.trim() || null,
     notes: form.notes.trim() || null,
     delivery_points: serializeCustomerDeliveryPoints(form.deliveryPoints),
-  };
+    referred_by: form.referredBy?.trim() || null,
+  } as TableInsert<"leads">;
 
   const writeLead = (body: TableInsert<"leads">) =>
     leadId
@@ -353,7 +355,11 @@ export async function saveLeadCard(input: {
       : supabase.schema("tosho").from("leads").insert(body as never);
 
   let managerFieldsPersisted = true;
-  const { error: writeError } = await writeLead(payload);
+  let { error: writeError } = await writeLead(payload);
+  if (writeError && isMissingReferredByColumn(writeError)) {
+    delete (payload as Record<string, unknown>).referred_by;
+    ({ error: writeError } = await writeLead(payload));
+  }
   if (writeError) {
     const message = writeError.message ?? "";
     if (message.includes("column") && message.includes("logo_url")) {
@@ -425,6 +431,7 @@ export async function saveLeadCard(input: {
     // форма потім не давала зберегти навіть після правки однієї літери.
     payment_type: form.paymentType,
     source: form.source.trim() || null,
+    referred_by: form.referredBy?.trim() || null,
     legal_name: primaryLegalEntity?.legal_name ?? null,
     manager: managerLabel,
     manager_user_id: manager.userId,
@@ -452,12 +459,13 @@ export async function saveLeadCard(input: {
     delivery_points: serializeCustomerDeliveryPoints(form.deliveryPoints),
   };
 
-  const { data: insertedCustomer, error: customerInsertError } = await supabase
-    .schema("tosho")
-    .from("customers")
-    .insert(customerPayload as never)
-    .select("id")
-    .single();
+  const insertCustomer = () =>
+    supabase.schema("tosho").from("customers").insert(customerPayload as never).select("id").single();
+  let { data: insertedCustomer, error: customerInsertError } = await insertCustomer();
+  if (customerInsertError && isMissingReferredByColumn(customerInsertError)) {
+    delete customerPayload.referred_by;
+    ({ data: insertedCustomer, error: customerInsertError } = await insertCustomer());
+  }
   if (customerInsertError) throw customerInsertError;
 
   // Лід тримається в прорахунку лише текстом `customer_name` (REQ-193), тож
