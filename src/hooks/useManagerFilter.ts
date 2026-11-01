@@ -51,13 +51,19 @@ export function useManagerFilter({
   /** Фільтр, відновлений кнопкою «Назад», — він важливіший за все. */
   restored?: string;
 }) {
-  const [remembered] = useState(() => readChoice(page, teamId, userId));
   const managerByRole = isQuoteManagerJobRole(jobRole);
+  // Менеджер з продажу бачить лише своє, тож «всі» для нього — не вибір, а
+  // клік по вигляду «Активні» чи «Скинути». Запам'ятати його — означало б
+  // назавжди тягнути з бази прорахунки всієї команди й рахувати чужі.
+  const [remembered] = useState(() => {
+    const choice = readChoice(page, teamId, userId);
+    return choice === ALL_MANAGERS && managerByRole ? null : choice;
+  });
   const [value, setValue] = useState<string>(
     () => restored ?? remembered ?? (managerByRole && userId ? userId : ALL_MANAGERS)
   );
   const [defaultApplied, setDefaultApplied] = useState(
-    () => (restored ?? ALL_MANAGERS) !== ALL_MANAGERS || remembered !== null || managerByRole
+    () => (restored ?? ALL_MANAGERS) !== ALL_MANAGERS || remembered !== null || (managerByRole && Boolean(userId))
   );
 
   useEffect(() => {
@@ -69,8 +75,12 @@ export function useManagerFilter({
     // пізніше за перший рендер — тоді пам'ять читаємо тут.
     setDefaultApplied(true);
     const late = readChoice(page, teamId, userId);
-    if (late !== null) {
+    if (late !== null && !(late === ALL_MANAGERS && managerByRole)) {
       setValue(late);
+      return;
+    }
+    if (managerByRole && userId) {
+      setValue(userId);
       return;
     }
     let cancelled = false;
@@ -81,7 +91,7 @@ export function useManagerFilter({
     return () => {
       cancelled = true;
     };
-  }, [defaultApplied, isDesigner, page, selfId, teamId, userId, value]);
+  }, [defaultApplied, isDesigner, managerByRole, page, selfId, teamId, userId, value]);
 
   /** Вибір людини — його й пам'ятаємо; автоматичне значення вище — ні. */
   const choose = useCallback(
@@ -90,12 +100,13 @@ export function useManagerFilter({
       setDefaultApplied(true);
       if (!teamId || !userId) return;
       try {
-        localStorage.setItem(storageKey(page, teamId, userId), next);
+        if (next === ALL_MANAGERS && managerByRole) localStorage.removeItem(storageKey(page, teamId, userId));
+        else localStorage.setItem(storageKey(page, teamId, userId), next);
       } catch {
         // Приватне вікно чи заблоковане сховище — просто не пам'ятаємо.
       }
     },
-    [page, teamId, userId]
+    [managerByRole, page, teamId, userId]
   );
 
   return [value, choose] as const;
