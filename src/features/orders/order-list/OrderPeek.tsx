@@ -26,12 +26,14 @@ export function OrderPeek({
   onOpenFull,
   onPrev,
   onNext,
+  closing,
 }: {
   view: OrderListRowView;
   onClose: () => void;
   onOpenFull: () => void;
   onPrev?: () => void;
   onNext?: () => void;
+  closing?: boolean;
 }) {
   const { record, step } = view;
   const first = record.items[0];
@@ -71,6 +73,7 @@ export function OrderPeek({
       onOpenFull={onOpenFull}
       onPrev={onPrev}
       onNext={onNext}
+      closing={closing}
     >
       <PeekSection title="Що далі">
         <NextStep view={view} />

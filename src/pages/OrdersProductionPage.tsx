@@ -481,6 +481,7 @@ export default function OrdersProductionPage() {
           onOpenFull={() => openRecord(peekView.record)}
           onPrev={peek.prev}
           onNext={peek.next}
+          closing={peek.closing}
         />
       ) : null}
 

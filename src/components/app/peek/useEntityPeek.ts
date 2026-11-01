@@ -10,19 +10,47 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *
  * Справа зникла зі списку (фільтр, оновлення) — прев'ю закривається само, щоб
  * не показувати те, чого в списку вже немає.
+ *
+ * Закриття плавне: `closing` тримає панель змонтованою, поки вона виїжджає
+ * (`PEEK_EXIT_MS`, `duration-base`), і лише тоді `item` стає null. Інакше
+ * панель, що плавно виїхала, зникала б різко.
  */
+const PEEK_EXIT_MS = 160;
+
 export function useEntityPeek<T>(items: readonly T[], getId: (item: T) => string) {
   const [peekId, setPeekId] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverIdRef = useRef<string | null>(null);
 
   const index = peekId ? items.findIndex((item) => getId(item) === peekId) : -1;
   const item = index >= 0 ? items[index] : null;
 
-  useEffect(() => {
-    if (peekId && index < 0) setPeekId(null);
-  }, [peekId, index]);
+  const open = useCallback((id: string | null) => {
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+    exitTimerRef.current = null;
+    setClosing(false);
+    setPeekId(id);
+  }, []);
 
-  const toggle = useCallback((id: string) => setPeekId((current) => (current === id ? null : id)), []);
+  const close = useCallback(() => {
+    if (exitTimerRef.current) return;
+    setClosing(true);
+    exitTimerRef.current = setTimeout(() => open(null), PEEK_EXIT_MS);
+  }, [open]);
+
+  useEffect(() => () => {
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (peekId && index < 0) open(null);
+  }, [peekId, index, open]);
+
+  const toggle = useCallback(
+    (id: string) => (peekId === id && !closing ? close() : open(id)),
+    [peekId, closing, close, open]
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -46,18 +74,20 @@ export function useEntityPeek<T>(items: readonly T[], getId: (item: T) => string
       const next = index >= 0 ? items[index + delta] : undefined;
       if (!next) return;
       const id = getId(next);
-      setPeekId(id);
+      open(id);
       document.querySelector(`[data-peek-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" });
     },
-    [getId, index, items]
+    [getId, index, items, open]
   );
 
   return {
-    peekId,
+    /** Відкрита справа; поки панель виїжджає — уже null, щоб рядок не світився. */
+    peekId: closing ? null : peekId,
     item,
-    open: setPeekId,
+    closing,
+    open,
     toggle,
-    close: useCallback(() => setPeekId(null), []),
+    close,
     next: index >= 0 && index < items.length - 1 ? () => goTo(1) : undefined,
     prev: index > 0 ? () => goTo(-1) : undefined,
     /** Для `onMouseEnter` / `onMouseLeave` рядка: пробіл бере рядок під курсором. */

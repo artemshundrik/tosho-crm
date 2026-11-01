@@ -1,10 +1,12 @@
 import { createElement } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatMoney } from "@/features/quotes/commercial-document/document";
 import type { QuoteKanbanProductPreview } from "@/features/quotes/components/QuoteKanbanProducts";
 import { QuoteItemsHoverCard } from "@/features/quotes/quotes-page/QuoteItemsHoverCard";
 import { quoteTypeIcon, quoteTypeLabel } from "@/features/quotes/quotes-page/config";
+import type { QuoteSetMembershipInfo } from "@/lib/toshoApi";
 import { cn } from "@/lib/utils";
 
 /** Вміст клітинки «Що рахуємо»: мініатюра, назва, «+N», тираж, тип; на наведенні — картка позицій. */
@@ -65,5 +67,30 @@ export function QuoteTotalCellContent({
     <span title={`від ${exact} · Кілька тиражів, клієнт ще не обрав`}>від {rounded}</span>
   ) : (
     <span title={exact}>{rounded}</span>
+  );
+}
+
+/** Значки «КП» і «Набір» — у рядку таблиці (`row`) і на картці дошки (`card`). */
+export function QuoteMembershipBadges({
+  membership,
+  size,
+}: {
+  membership: QuoteSetMembershipInfo | undefined;
+  size: "row" | "card";
+}) {
+  const badgeClass = size === "row" ? "h-4 shrink-0 px-1 text-3xs" : "h-5 px-1.5 text-3xs inline-flex items-center gap-1";
+  return (
+    <>
+      {membership?.kp_count ? (
+        <Badge variant="outline" title={membership.kp_names.join(", ")} className={cn(badgeClass, "quote-kind-badge-kp")}>
+          КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+        </Badge>
+      ) : null}
+      {membership?.set_count ? (
+        <Badge variant="outline" title={membership.set_names.join(", ")} className={cn(badgeClass, "quote-kind-badge-set")}>
+          Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+        </Badge>
+      ) : null}
+    </>
   );
 }

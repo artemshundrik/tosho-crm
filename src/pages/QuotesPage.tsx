@@ -206,7 +206,7 @@ import { listQuoteStatusCounts } from "@/lib/quoteStatusCounts";
 import { TabBar, TabBarItem } from "@/components/ui/tab-bar";
 import { computeQuoteListBreakdown } from "@/features/quotes/quotes-page/quoteListTotal";
 import { useQuotesScopeCache } from "@/features/quotes/quotes-page/useQuotesScopeCache";
-import { QuoteItemsCellContent, QuoteTotalCellContent } from "@/features/quotes/quotes-page/QuoteListCells";
+import { QuoteItemsCellContent, QuoteMembershipBadges, QuoteTotalCellContent } from "@/features/quotes/quotes-page/QuoteListCells";
 import { ResizableHead } from "@/features/quotes/quotes-page/ColumnResizeHandle";
 import { QuotesTableSkeleton } from "@/features/quotes/quotes-page/QuotesTableSkeleton";
 import { useQuotesTableColumns } from "@/features/quotes/quotes-page/useQuotesTableColumns";
@@ -2985,8 +2985,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     quoteSetDetailsTarget,
     quoteSetDetailsItems,
   });
-  const quotePeek = useEntityPeek(filteredAndSortedRows, quoteRowId);
-  const peekRow = viewMode === "table" ? quotePeek.item : null;
+  // На дошці J/K ідуть колонками зліва направо, як їх бачить око (REQ-346#p8).
+  const boardRows = useMemo(() => KANBAN_COLUMNS.flatMap((column) => groupedByStatus[column.id] ?? []), [groupedByStatus]);
+  const quotePeek = useEntityPeek(viewMode === "kanban" && boardRows.length ? boardRows : filteredAndSortedRows, quoteRowId);
+  const peekRow = quotePeek.item;
   const desktopKanbanViewportHeight = useKanbanViewportHeight(desktopKanbanViewportRef, {
     enabled: viewMode === "kanban",
     skeletonShown: boardSkeletonShown,
@@ -4830,7 +4832,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         {...drag.itemProps(row.id, canOpen)}
         onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
         // Чанк картки прорахунку їде на наведенні, а не в мить кліку (REQ-136).
-        onMouseEnter={preloadQuoteDetailsRoute}
+        onMouseEnter={() => {
+          preloadQuoteDetailsRoute();
+          if (canOpen) quotePeek.setHovered(row.id);
+        }}
+        onMouseLeave={() => quotePeek.setHovered(null)}
+        data-peek-id={canOpen ? row.id : undefined}
+        className={cn("group", quotePeek.peekId === row.id && "border-foreground/40")}
         onFocus={preloadQuoteDetailsRoute}
         onTouchStart={preloadQuoteDetailsRoute}
         interactive={canOpen}
@@ -4850,30 +4858,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           >
             {row.number ?? "Не вказано"}
           </HoverCopyText>
+          {canOpen ? <PeekRowButton onPeek={() => quotePeek.toggle(row.id)} active={quotePeek.peekId === row.id} className="-my-1 size-6" /> : null}
           <div className="ml-auto flex shrink-0 items-center gap-1">
             {Icon ? (
               <span className="text-muted-foreground" title={quoteTypeLabel(row.quote_type)} aria-label={quoteTypeLabel(row.quote_type)}>
                 <Icon className="h-3.5 w-3.5" />
               </span>
             ) : null}
-            {membership?.kp_count ? (
-              <Badge
-                variant="outline"
-                title={membership.kp_names.join(", ")}
-                className="h-5 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-kp"
-              >
-                КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
-              </Badge>
-            ) : null}
-            {membership?.set_count ? (
-              <Badge
-                variant="outline"
-                title={membership.set_names.join(", ")}
-                className="h-5 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-set"
-              >
-                Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
-              </Badge>
-            ) : null}
+            <QuoteMembershipBadges membership={membership} size="card" />
             {!canOpen ? (
               <span className="text-muted-foreground" title="Лише свої" aria-label="Лише свої">
                 <Lock className="h-3.5 w-3.5" />
@@ -5571,7 +5563,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <TableHead className="w-[88px] font-semibold">
                       <div className="flex items-center justify-center">Менеджер</div>
                     </TableHead>
-                    <TableHead className="w-[72px]"></TableHead>
+                    <TableHead className="w-[48px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -5618,6 +5610,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm">
+                          <div className="flex items-center justify-between gap-1">
                           <div
                             className="flex items-center gap-2"
                             title={row.created_at ? `Створено ${formatListDateTime(row.created_at)}` : undefined}
@@ -5639,6 +5632,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                 <Lock className="h-3 w-3" />
                               </div>
                             ) : null}
+                          </div>
+                          {canOpen ? <PeekRowButton onPeek={() => quotePeek.toggle(row.id)} active={quotePeek.peekId === row.id} /> : null}
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">
@@ -5667,24 +5662,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             <span className="truncate" title={row.customer_name ?? "Не вказано"}>
                               {row.customer_name ?? "Не вказано"}
                             </span>
-                            {membership?.kp_count ? (
-                              <Badge
-                                variant="outline"
-                                title={membership.kp_names.join(", ")}
-                                className="h-4 shrink-0 px-1 text-3xs quote-kind-badge-kp"
-                              >
-                                КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
-                              </Badge>
-                            ) : null}
-                            {membership?.set_count ? (
-                              <Badge
-                                variant="outline"
-                                title={membership.set_names.join(", ")}
-                                className="h-4 shrink-0 px-1 text-3xs quote-kind-badge-set"
-                              >
-                                Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
-                              </Badge>
-                            ) : null}
+                            <QuoteMembershipBadges membership={membership} size="row" />
                           </div>
                         </TableCell>
                         <TableCell>
@@ -5762,10 +5740,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           })()}
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end">
-                          {canOpen ? (
-                            <PeekRowButton onPeek={() => quotePeek.toggle(row.id)} active={quotePeek.peekId === row.id} />
-                          ) : null}
                           <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -5811,7 +5785,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                          </div>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -6014,6 +5987,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           onOpenFull={() => navigate(`/orders/estimates/${peekRow.id}`)}
           onPrev={quotePeek.prev}
           onNext={quotePeek.next}
+          closing={quotePeek.closing}
+          teamId={teamId}
+          onStatusChanged={(status) => {
+            setRows((prev) => prev.map((row) => (row.id === peekRow.id ? { ...row, status } : row)));
+            refreshQuoteStatusCounts();
+          }}
         />
       ) : null}
 

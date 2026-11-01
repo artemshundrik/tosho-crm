@@ -145,6 +145,7 @@ import { Clock3, ExternalLink, LayoutGrid, ListFilter, PencilLine, Table2, Users
 import { DesignTasksTable } from "@/components/design/DesignTasksTable";
 import { DesignTaskPeek } from "@/components/design/DesignTaskPeek";
 import { useEntityPeek } from "@/components/app/peek/useEntityPeek";
+import { PeekRowButton } from "@/components/app/peek/EntityPeek";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { MAX_BRIEF_FILES, planBriefFiles } from "@/features/design/briefFiles";
@@ -2680,8 +2681,6 @@ export default function DesignPage() {
       return (indexed?.haystack ?? "").includes(query);
     });
   }, [contentView, customerFilter, customerQuoteIds, deferredSearch, effectiveDesignerFilter, isManagerUser, managerFilter, statusFilter, taskSearchIndex, visibleTasks]);
-  const taskPeek = useEntityPeek(filteredTasks, designTaskId);
-  const peekTask = viewMode === "table" ? taskPeek.item : null;
 
   const hasActiveFilters =
     search.trim().length > 0 ||
@@ -2842,6 +2841,10 @@ export default function DesignPage() {
     });
     return bucket;
   }, [filteredTasks]);
+  // На дошці J/K ідуть колонками зліва направо, як їх бачить око (REQ-346#p8).
+  const boardTasks = useMemo(() => DESIGN_COLUMNS.flatMap((column) => grouped[column.id] ?? []), [grouped]);
+  const taskPeek = useEntityPeek(viewMode === "kanban" && boardTasks.length ? boardTasks : filteredTasks, designTaskId);
+  const peekTask = viewMode === "assignee" ? null : taskPeek.item;
 
   const workloadSourceTasks = useMemo(() => {
     const byId = new Map<string, DesignTask>();
@@ -4505,9 +4508,14 @@ export default function DesignPage() {
         {...drag.itemProps(task.id, options?.draggable)}
         onClick={() => openTask(task.id)}
         // Чанк сторінки задачі (294 кБ) починає їхати на наведенні, а не в мить
-        // кліку (REQ-136). Обробник сталий, тож у списку карток нічого не
-        // створюється щорендер.
-        onMouseEnter={preloadDesignTaskRoute}
+        // кліку (REQ-136).
+        onMouseEnter={() => {
+          preloadDesignTaskRoute();
+          taskPeek.setHovered(task.id);
+        }}
+        onMouseLeave={() => taskPeek.setHovered(null)}
+        data-peek-id={task.id}
+        className={cn("group", taskPeek.peekId === task.id && "border-foreground/40")}
         onFocus={preloadDesignTaskRoute}
         onTouchStart={preloadDesignTaskRoute}
         onAuxClick={(event) => {
@@ -4553,6 +4561,7 @@ export default function DesignPage() {
               title={task.title ?? getTaskDisplayNumber(task)}
             />
           )}
+          <PeekRowButton onPeek={() => taskPeek.toggle(task.id)} active={taskPeek.peekId === task.id} className="-my-1 size-6" />
           {isAttachedFromStandalone ? (
             <Badge variant="outline" className="h-5 px-1.5 text-3xs" title="Окрема задача привʼязана до прорахунку">
               Привʼязано
@@ -5274,6 +5283,7 @@ export default function DesignPage() {
           onOpenFull={() => openTask(peekTask.id)}
           onPrev={taskPeek.prev}
           onNext={taskPeek.next}
+          closing={taskPeek.closing}
         />
       ) : null}
 

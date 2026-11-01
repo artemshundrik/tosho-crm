@@ -35,6 +35,7 @@ export function DesignTaskPeek<T extends PeekDesignTask>({
   onOpenFull,
   onPrev,
   onNext,
+  closing,
 }: {
   task: T;
   number: string;
@@ -47,6 +48,7 @@ export function DesignTaskPeek<T extends PeekDesignTask>({
   onOpenFull: () => void;
   onPrev?: () => void;
   onNext?: () => void;
+  closing?: boolean;
 }) {
   const StatusIcon = DESIGN_STATUS_ICON_BY_STATUS[task.status];
   const brief = typeof task.metadata?.design_brief === "string" ? task.metadata.design_brief.trim() : "";
@@ -81,6 +83,7 @@ export function DesignTaskPeek<T extends PeekDesignTask>({
       onOpenFull={onOpenFull}
       onPrev={onPrev}
       onNext={onNext}
+      closing={closing}
     >
       {task.productName ? (
         <PeekSection title="Товар">

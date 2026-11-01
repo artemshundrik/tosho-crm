@@ -79,8 +79,7 @@ import {
   type QuoteAttachmentAudience,
 } from "@/lib/quoteAttachmentAudience";
 import { supabase } from "@/lib/supabaseClient";
-import { logActivity } from "@/lib/activityLogger";
-import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChange,
+import { notifyDesignTaskStakeholdersOnCreate,
   notifyQuotesCreated,
 } from "@/lib/workflowNotifications";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
@@ -132,6 +131,7 @@ import { collectRunIdsNeedingModelPriceVat, inheritModelPriceVat, modelPriceVatG
 import { QuoteDealTypeBadge } from "@/features/quotes/quote-details/QuoteDealTypeBadge";
 import { isMarkupFrozen } from "@/lib/quoteMarkupApproval";
 import { resolveQuoteStatusGate, resolveStatusBlockReason } from "@/features/quotes/quote-details/quoteStatusGates";
+import { commitQuoteStatusChange } from "@/features/quotes/quote-details/quoteStatusCommit";
 import { blankRunRates, buildRunsAutosaveSignature, createBlankQuoteRun, type PristineDraftRun } from "@/features/quotes/quote-details/quoteRunAutosave";
 import { useQuoteRunsSaveState } from "@/features/quotes/quote-details/useQuoteRunsSaveState";
 import {
@@ -174,7 +174,7 @@ import {
   isDesignerJobRole,
   isLogisticsJobRole,
   canApproveQuoteMarkup,
-  isQuoteManagerJobRole,
+  canEditQuoteContent as canEditQuoteContentFor,
   normalizeJobRole,
   resolveQuoteRunPriceFieldAccess,
 } from "@/lib/permissions";
@@ -231,7 +231,6 @@ import {
   duplicateQuoteWithContents,
   fetchNextDesignTaskNumber,
   insertDesignTaskRow,
-  changeQuoteStatus,
   linkDesignVisualizationToQuote,
   fetchCatalogBase,
   fetchCatalogEnrichment,
@@ -826,13 +825,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     return resolveNumericRate(result.data, DEFAULT_MANAGER_RATE);
   }, []);
-  const canEditQuoteContent =
-    permissions.isSuperAdmin ||
-    permissions.isSeo ||
-    viewerJobRole === "pm" ||
-    ((permissions.isAdmin || permissions.isManagerJob || isQuoteManagerJobRole(viewerJobRole)) &&
-      userId !== null &&
-      (quoteManagerUserId === userId || quoteCreatedByUserId === userId));
+  const canEditQuoteContent = canEditQuoteContentFor({
+    userId,
+    quoteManagerUserId,
+    quoteCreatedByUserId,
+    viewerJobRole,
+    permissions,
+  });
   const canManagerDeleteOwnDesignerBriefFiles = userId !== null && quoteManagerUserId === userId;
   // Керівник прибирає будь-який файл справи — та сама пара, що видаляє чужі
   // повідомлення в обговоренні цієї ж картки, і той самий набір, що пропускає
@@ -3336,82 +3335,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setStatusBusy(true);
     setStatusError(null);
     {
-      const previousStatus = normalizeStatus(quote?.status);
-      const note = (noteOverride ?? statusNote).trim();
-      const changed = await changeQuoteStatus({
+      // Запис, сповіщення й журнал — спільні з прев'ю в списку (quoteStatusCommit).
+      const committed = await commitQuoteStatusChange({
+        teamId,
         quoteId,
-        status: nextStatus,
-        note: note ? note : undefined,
+        quoteNumber: quote?.number,
+        previousStatus: normalizeStatus(quote?.status),
+        nextStatus,
+        note: (noteOverride ?? statusNote).trim(),
+        actorUserId: userId ?? null,
       });
-      if (!changed.ok) {
-        setStatusError(changed.message);
+      if (!committed.ok) {
+        setStatusError(committed.message);
         setStatusBusy(false);
         return;
-      }
-      // Сповіщення ініціатора не має ламати зміну статусу: вона вже сталась.
-      //
-      // Значення рахуємо ДО try: будь-який «??», «&&» чи «?.» усередині
-      // try/catch React Compiler не вміє й через нього пропускає всю сторінку
-      // разом із перевірками лінту (REQ-109).
-      const statusNotifyActorUserId = userId ?? null;
-      // Сповіщаємо лише про СПРАВЖНІЙ перехід — і питаємо про це БАЗУ, а не свій
-      // знімок. Той самий статус (повторне «Затверджено», збереження нотатки без
-      // зміни стану) база ігнорує: ні в історію, ні в аудит нічого не пише.
-      // Порівняння `previousStatus !== nextStatus` знімало лише свій випадок і не
-      // бачило, що встигла зробити сусідня вкладка чи інша людина — саме так
-      // 25.08.2026 прилетіли чотири однакові повідомлення при одному рядку
-      // історії. Тепер `set_quote_status` сам каже, чи змінився рядок (REQ-231).
-      const statusActuallyChanged = changed.data;
-      if (statusActuallyChanged) {
-        try {
-          await notifyQuoteInitiatorOnStatusChange({
-            quoteId,
-            fromStatus: previousStatus,
-            toStatus: nextStatus,
-            actorUserId: statusNotifyActorUserId,
-          });
-        } catch (notifyError) {
-          console.warn("Failed to notify quote initiator about status change", notifyError);
-        }
-      }
-      const logged = await logQuoteActivity(
-        {
-          teamId,
-          action: "змінив статус",
-          entityType: "quotes",
-          entityId: quoteId,
-          title: `Статус: ${formatStatusLabel(previousStatus)} → ${formatStatusLabel(nextStatus)}`,
-          href: `/orders/estimates/${quoteId}`,
-          metadata: { source: "quote_status", from: previousStatus, to: nextStatus, note },
-        },
-        "Помилка зміни статусу"
-      );
-      if (!logged.ok) {
-        setStatusError(logged.message);
-        setStatusBusy(false);
-        return;
-      }
-      if (nextStatus === "approved" && normalizeStatus(quote?.status) !== "approved") {
-        await Promise.allSettled([
-          logActivity({
-            teamId,
-            action: "створив задачу",
-            entityType: "quotes",
-            entityId: quoteId,
-            title: `Задача для дизайнера: макет для прорахунку ${quote?.number ?? ""}`.trim(),
-            href: `/orders/estimates/${quoteId}`,
-            metadata: { role: "designer", source: "quote_status", status: nextStatus },
-          }),
-          logActivity({
-            teamId,
-            action: "створив задачу",
-            entityType: "quotes",
-            entityId: quoteId,
-            title: `Задача для бухгалтера: рахунок для прорахунку ${quote?.number ?? ""}`.trim(),
-            href: `/orders/estimates/${quoteId}`,
-            metadata: { role: "accountant", source: "quote_status", status: nextStatus },
-          }),
-        ]);
       }
       await loadQuote();
       await loadHistory();

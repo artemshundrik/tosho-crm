@@ -170,6 +170,11 @@ export function canViewQuoteSummary({
   );
 }
 
+/**
+ * Хто міняє вміст і статус прорахунку: owner, SEO, проджект — будь-який;
+ * адмін і менеджер — лише свій (менеджер або автор). Решта посад — ні.
+ * Одне правило на сторінку прорахунку й прев'ю в списку (REQ-346#p8).
+ */
 export function canEditQuoteContent({
   userId,
   quoteManagerUserId,
@@ -179,7 +184,7 @@ export function canEditQuoteContent({
 }: QuoteAccessContext) {
   if (permissions.isSuperAdmin || permissions.isSeo) return true;
   if (normalizeJobRole(viewerJobRole) === "pm") return true;
-  if (!permissions.isAdmin && !isQuoteManagerJobRole(viewerJobRole)) return true;
+  if (!permissions.isAdmin && !permissions.isManagerJob && !isQuoteManagerJobRole(viewerJobRole)) return false;
   const viewer = normalizeId(userId);
   return (
     viewer !== "" &&

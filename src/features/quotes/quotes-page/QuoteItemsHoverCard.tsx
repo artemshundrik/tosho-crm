@@ -15,6 +15,10 @@ const THUMB_LIMIT = 8;
 
 const money = (value: number) => formatMoney(Math.round(value));
 
+// Відкрита картка на всю таблицю одна: перейшов на сусідній рядок — попередня
+// зникає одразу, а не за 90 мс поверх нової.
+let closeOpenCard: (() => void) | null = null;
+
 const lineQty = (line: QuoteListLine | undefined, product: QuoteKanbanProduct) => {
   if (line?.quantity) {
     const label = Number.isInteger(line.quantity) ? String(line.quantity) : line.quantity.toLocaleString("uk-UA");
@@ -139,15 +143,28 @@ export function QuoteItemsHoverCard({
     if (closeTimer.current) clearTimeout(closeTimer.current);
     closeTimer.current = null;
   };
+  const closeNow = React.useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+    setOpen(false);
+  }, []);
   const show = () => {
     cancelClose();
+    if (closeOpenCard !== closeNow) closeOpenCard?.();
+    closeOpenCard = closeNow;
     setOpen(true);
   };
   const hide = () => {
     cancelClose();
     closeTimer.current = setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
   };
-  React.useEffect(() => cancelClose, []);
+  React.useEffect(
+    () => () => {
+      cancelClose();
+      if (closeOpenCard === closeNow) closeOpenCard = null;
+    },
+    [closeNow]
+  );
 
   if (!preview?.products?.length) return <>{children}</>;
 
@@ -166,9 +183,17 @@ export function QuoteItemsHoverCard({
           {children}
         </div>
       </PopoverAnchor>
+      {/*
+        ПРАВОРУЧ, А НЕ НАД РЯДКОМ. Зверху картка біля краю екрана перевертається
+        вниз і лягає на наступні рядки: курсор, що йде стовпцем униз, потрапляв
+        на саму картку й тримав її відкритою — щоб глянути сусідній товар,
+        мишку доводилось виводити вбік і заводити знову. Праворуч стовпець
+        лишається вільним: ведеш униз — картка перемикається з рядка на рядок,
+        а до неї самої — рухом убік.
+      */}
       <PopoverContent
-        side="top"
-        align="start"
+        side="right"
+        align="center"
         sideOffset={6}
         collisionPadding={12}
         onOpenAutoFocus={(event) => event.preventDefault()}

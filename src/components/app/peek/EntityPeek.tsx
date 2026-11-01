@@ -36,6 +36,8 @@ export type EntityPeekProps = {
   onOpenFull: () => void;
   onPrev?: () => void;
   onNext?: () => void;
+  /** Панель виїжджає (`useEntityPeek().closing`): грає анімацію й не ловить клік. */
+  closing?: boolean;
 };
 
 const isTypingTarget = (target: EventTarget | null) => {
@@ -85,7 +87,12 @@ export function EntityPeek(props: EntityPeekProps) {
   return createPortal(
     <aside
       aria-label={`Прев'ю: ${props.number}`}
-      className="fixed bottom-0 right-0 top-[var(--app-header-height)] z-40 flex w-[440px] max-w-[calc(100vw-48px)] flex-col border-l border-t border-border bg-card shadow-elevated-panel duration-slow animate-in slide-in-from-right"
+      className={cn(
+        "fixed bottom-0 right-0 top-[var(--app-header-height)] z-40 flex w-[440px] max-w-[calc(100vw-48px)] flex-col border-l border-t border-border bg-card shadow-elevated-panel",
+        props.closing
+          ? "pointer-events-none duration-base ease-in animate-out fill-mode-forwards slide-out-to-right"
+          : "duration-slow ease-out animate-in slide-in-from-right"
+      )}
     >
       <PeekBody {...props} />
       <footer className="flex shrink-0 items-center gap-3 border-t border-border px-4 py-2 text-2xs text-muted-foreground">
@@ -189,7 +196,7 @@ function PeekBottomSheet(props: EntityPeekProps) {
   const startYRef = useRef<number | null>(null);
 
   return (
-    <Sheet open onOpenChange={(open) => (open ? undefined : props.onClose())}>
+    <Sheet open={!props.closing} onOpenChange={(open) => (open ? undefined : props.onClose())}>
       <SheetContent
         side="bottom"
         dismissible
@@ -242,6 +249,9 @@ export function PeekRowButton({ onPeek, active, className }: { onPeek: () => voi
       aria-pressed={active}
       onClick={(event) => {
         event.stopPropagation();
+        // Клік мишею не лишає фокуса на оці: після J/K його рамка світилась би
+        // на рядку, з якого почали, ніби відкритих справ дві.
+        if (event.detail > 0) event.currentTarget.blur();
         onPeek();
       }}
       className={cn(

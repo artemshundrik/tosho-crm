@@ -13,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~6 112 lines, 298 KB, as of 2026-11-01)
+## src/pages/QuoteDetailsPage.tsx (~6 049 lines, 295 KB, as of 2026-11-01)
 
 Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p12. Файл СХУДНУВ на
 2 460 рядків (9 893 → 7 434): три вкладки з чотирьох поїхали в окремі модулі, а
@@ -30,11 +30,11 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 |---|---|
 | 1–213 | imports |
 | 214–509 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `renderBriefRichText`); розбір файлів дизайну — у `quote-details/designOutputFiles.ts`, збирач стрічки — у `quoteFeedEvents.ts` |
-| **505** | `export function QuoteDetailsPage(...)` — main component starts |
-| **958** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
+| **504** | `export function QuoteDetailsPage(...)` — main component starts |
+| **957** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
 | 1119 / 1123 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
 | 1295 / 1346 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
-| **1752** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
+| **1751** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
 | 2006 / 2053 | `handlePrimaryStatusAction`, `handleCreateOrder` |
 | 3123 / 3130 | ліниві завантажувачі «Стрічки»: вкладення й журнал вантажаться, коли відкрита вкладка |
 | 3200 / 3314 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
@@ -42,7 +42,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 3517 / 3633 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
 | 3845 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
 | 3960 | items: `handleSaveItem` |
-| **3872** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
+| **3809** | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
 | 4336–4492 | `<header>`: статус-контрол (DropdownMenu) + меню «⋮» (там же «Створити дизайн-задачу») |
 | 4507 | смуга вкладок — спільний `<TabBar>` (`src/components/ui/tab-bar.tsx`); риска ПЕРЕЇЖДЖАЄ окремим вузлом, псевдоелемента `after:` у файлі більше немає |
 | 4548 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
@@ -64,7 +64,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | **1355** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~6 948 lines, 301 KB, as of 2026-11-01)
+## src/pages/QuotesPage.tsx (~6 927 lines, 300 KB, as of 2026-11-01)
 
 | Range | Content |
 |---|---|
@@ -72,14 +72,14 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
 | **478** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 970 lines, 264 KB, as of 2026-11-01)
+## src/pages/DesignPage.tsx (~5 980 lines, 265 KB, as of 2026-11-01)
 
 | Range | Content |
 |---|---|
 | 1–144 | imports |
 | 145–943 | types + module-level helpers (cache I/O, `sanitizeDesignTaskMetadataForCache`, `sanitizeDesignTaskForCache`, `buildDesignPageCachePayload`, `resolveTaskCustomerLogo`, `applyCustomerLogosToTasks`) |
-| **910** | `export default function DesignPage()` — main component starts |
-| 4034 | `duplicateStandaloneTask(source, options)` — builds the new task's metadata when copying a design task |
+| **911** | `export default function DesignPage()` — main component starts |
+| 4037 | `duplicateStandaloneTask(source, options)` — builds the new task's metadata when copying a design task |
 | 5895 | `<DuplicateDesignTaskDialog>` mount + `source`/`onConfirm` wiring |
 
 ---
