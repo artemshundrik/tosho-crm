@@ -1,10 +1,19 @@
-export const PAGE_UI_STATE_TTL_MS = 30 * 60 * 1000;
+/**
+ * Коли сторінка списку відновлює свої фільтри: протягом сесії вкладки.
+ *
+ * Вибір (менеджер, статус, сортування, пошук) тримається, поки людина ходить
+ * сторінками — через бічне меню так само, як кнопкою «Назад». Перезавантаження,
+ * нова вкладка чи наступний день — і знову стоїть те, що за посадою: менеджер
+ * бачить себе (REQ-173#p19).
+ *
+ * Доти відновлювала лише «Назад» протягом 30 хв, а клік у меню скидав усе.
+ * Межа «до перезавантаження» — час завантаження цього модуля: стан, записаний
+ * раніше, належить попередньому завантаженню сторінки, хоч sessionStorage його
+ * й пережив.
+ */
+const PAGE_LOADED_AT = Date.now();
 
-export function shouldRestorePageUiState(
-  navigationType: "POP" | "PUSH" | "REPLACE",
-  cachedAt?: number | null
-) {
-  if (navigationType !== "POP") return false;
+export function shouldRestorePageUiState(cachedAt?: number | null) {
   if (!Number.isFinite(cachedAt ?? NaN)) return false;
-  return Date.now() - Number(cachedAt) <= PAGE_UI_STATE_TTL_MS;
+  return Number(cachedAt) >= PAGE_LOADED_AT;
 }

@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { createCustomerLogoResolver, type CustomerLogoDirectoryLike } from "@/lib/customerLogoIndex";
 import type { Json } from "@/lib/database.types";
@@ -821,15 +821,12 @@ type InitialDesignPageState = {
  * ключем — тобто ніяк. Тому рахуємо заново, коли команда змінилась: інакше
  * холодний вхід завжди тягнув би повний список із мережі замість кешу.
  */
-function readInitialDesignPageState(
-  teamId: string,
-  navigationType: "POP" | "PUSH" | "REPLACE"
-): InitialDesignPageState {
+function readInitialDesignPageState(teamId: string): InitialDesignPageState {
   const logoCache = readDesignCustomerLogoCache(teamId);
   const memberCache = readDesignMemberCache(teamId);
   const raw = readDesignPageCache(teamId);
   const storedFilters = readDesignPageFiltersState(teamId);
-  const filters = shouldRestorePageUiState(navigationType, storedFilters?.cachedAt)
+  const filters = shouldRestorePageUiState(storedFilters?.cachedAt)
     ? storedFilters
     : null;
   const cache =
@@ -910,7 +907,6 @@ const markDesignBodyMounted = () => {
 
 export default function DesignPage() {
   const { teamId, userId, permissions, session, jobRole, viewUserId } = useAuth();
-  const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
   /**
@@ -918,8 +914,8 @@ export default function DesignPage() {
    * `readInitialDesignPageState`. Там-таки записано, скільки це коштувало.
    */
   const initialPageState = useMemo(
-    () => readInitialDesignPageState(effectiveTeamId ?? "", navigationType),
-    [effectiveTeamId, navigationType]
+    () => readInitialDesignPageState(effectiveTeamId ?? ""),
+    [effectiveTeamId]
   );
   const initialLogoCache = initialPageState.logoCache;
   const initialMemberCache = initialPageState.memberCache;
@@ -1135,12 +1131,11 @@ export default function DesignPage() {
   const [designerFilter, setDesignerFilter] = useState<string>(
     () => restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
   );
-  const [managerFilter, setManagerFilter] = useManagerFilter({ page: "design", teamId: effectiveTeamId, userId, jobRole, isDesigner: permissions.isDesigner, restored: restoredFilters?.managerFilter });
+  const [managerFilter, setManagerFilter] = useManagerFilter({ teamId: effectiveTeamId, userId, jobRole, isDesigner: permissions.isDesigner, restored: restoredFilters?.managerFilter });
   const [customerFilter, setCustomerFilter] = useState<CustomerFilterValue | null>(() => restoredFilters?.customerFilter ?? null);
   const customerQuoteIds = useCustomerQuoteIds(effectiveTeamId, customerFilter);
-  const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(
-    () => (restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER) !== ALL_DESIGNERS_FILTER
-  );
+  // Відновлений у межах сесії вибір — і «всі» теж — дефолт «себе» не перебиває.
+  const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(() => restoredFilters != null);
   const [assigneeSpotlight, setAssigneeSpotlight] = useState<string>(
     () => restoredFilters?.assigneeSpotlight ?? ALL_ASSIGNEE_SPOTLIGHT
   );

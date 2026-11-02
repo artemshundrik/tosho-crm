@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { useNavigate, useNavigationType } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -143,7 +143,6 @@ function useMediaMatch(query: string) {
 
 export default function DocumentsPage() {
   const navigate = useNavigate();
-  const navigationType = useNavigationType();
   const { teamId, session, userId, accessRole, jobRole } = useAuth();
   const seesAll = canManageOrderDocuments(accessRole, jobRole);
   const isNarrowViewport = useIsNarrowViewport();
@@ -157,8 +156,8 @@ export default function DocumentsPage() {
 
   const restored = useMemo(() => {
     const stored = readFilters(teamId);
-    return shouldRestorePageUiState(navigationType, stored?.cachedAt) ? stored : null;
-  }, [teamId, navigationType]);
+    return shouldRestorePageUiState(stored?.cachedAt) ? stored : null;
+  }, [teamId]);
   const [section, setSection] = useState<SectionFilter>(() => restored?.section ?? "all");
   const [month, setMonth] = useState<string | null>(() => (restored ? (restored.month ?? null) : today.slice(0, 7)));
   const [kind, setKind] = useState(() => restored?.kind ?? ALL);
@@ -232,6 +231,14 @@ export default function DocumentsPage() {
     const all = buildDocumentRegistry(records, contracts, today);
     return seesAll ? all : all.filter((doc) => doc.managerUserId === userId);
   }, [records, contracts, today, seesAll, userId]);
+  // Власник і СЕО бачать усіх — за замовчуванням ставимо «себе», якщо є свої
+  // документи. Раз на сесію сторінки: відновлений вибір (зокрема «всі») важливіший.
+  const [managerDefaultApplied, setManagerDefaultApplied] = useState(() => restored !== null);
+  useEffect(() => {
+    if (managerDefaultApplied || loading || !userId || !seesAll) return;
+    setManagerDefaultApplied(true);
+    if (manager === ALL && documents.some((doc) => doc.managerUserId === userId)) setManager(userId);
+  }, [managerDefaultApplied, loading, userId, seesAll, documents, manager]);
 
   const baseFilters = useMemo(
     () => ({

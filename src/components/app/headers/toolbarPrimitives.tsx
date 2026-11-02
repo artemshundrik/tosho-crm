@@ -1,17 +1,12 @@
 import * as React from "react";
-import { Check, ChevronDown, FilterX, Loader2, Plus, Search, X } from "@/components/icons/appIcons";
+import { Check, ChevronDown, FilterX, Loader2, Search, X } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
-import { useIsWideViewport } from "@/hooks/useIsWideViewport";
 import { pluralWordUk } from "@/lib/lastSeen";
 import { Input } from "@/components/ui/input";
 import { TOOLBAR_CONTROL, TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
@@ -355,179 +350,16 @@ export function ToolbarMeta({
 }
 
 /**
- * Смуга фільтрів (хвиля Б2): фільтри не займають місця, поки не застосовані.
+ * Смуга фільтрів: діти малюються як є — кожен фільтр видимим випадайком.
  *
- * Діти — звичайні `ToolbarFilterSelect`. Той, що має `label` і `neutralValue`,
- * у нейтральному значенні ховається за «+ Фільтр», а застосований стає чипом
- * «Менеджер: Дар'я М.» із хрестиком. Решта дітей (сортування без `label`,
- * власні контроли на кшталт пошуку замовника) малюється як є, ПЕРЕД чипами:
- * постійні контроли не стрибають, коли з'являється чи зникає чип.
- *
- * Доти кожна сторінка тримала на виду 2–4 випадайки по 170–240 px з «Всі …»
- * навіть без жодного фільтра, і таблиця починалась на різній висоті.
- *
- * На телефоні діти малюються як є: там вони живуть в аркуші «Фільтри та
- * вигляд», де повний випадайко зручніший за меню з підменю.
+ * 01.11 тут була «+ Фільтр» і чипи: незастосовані фільтри ховались у меню, а
+ * нижче 1600 px усе стискалось в один чип «Фільтри N». За день роботи Артем
+ * попросив повернути як було (REQ-173#p19): з пам'яттю вибору на сесію
+ * схований фільтр — пастка, бо не видно, що зараз вибрано. Обгортку лишено,
+ * щоб сторінки не правити й мати одне місце, якщо смугу знову захочеться міняти.
  */
 export function ToolbarFilterBar({ children }: { children: React.ReactNode }) {
-  const isNarrow = useIsNarrowViewport();
-  const isWide = useIsWideViewport();
-  if (isNarrow) return <>{children}</>;
-
-  const managed: ToolbarFilterSelectProps[] = [];
-  const rest: React.ReactNode[] = [];
-  React.Children.forEach(children, (child) => {
-    if (React.isValidElement<ToolbarFilterSelectProps>(child) && child.type === ToolbarFilterSelect) {
-      const props = child.props;
-      if (props.label && props.neutralValue !== undefined) {
-        managed.push(props);
-        return;
-      }
-    }
-    if (child !== null && child !== undefined && child !== false) rest.push(child);
-  });
-  const active = managed.filter((filter) => filter.value !== filter.neutralValue);
-  const idle = managed.filter((filter) => filter.value === filter.neutralValue && !filter.disabled);
-
-  // Не широкий екран і хоч один фільтр — один чип замість ряду: навіть один
-  // чип «Менеджер: …» поруч із «+ Фільтр» на 1100 px ламає тулбар на два
-  // рядки (заміряно 01.11). У чипі-зведенні є й незастосовані фільтри.
-  if (!isWide && active.length > 0) {
-    return (
-      <>
-        {rest}
-        <ToolbarFiltersSummaryChip active={active} idle={idle} />
-      </>
-    );
-  }
-
-  return (
-    <>
-      {rest}
-      {active.map((filter) => (
-        <ToolbarFilterChip key={filter.label} {...filter} />
-      ))}
-      {idle.length > 0 ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="ghost" className={cn(TOOLBAR_FILTER, "text-muted-foreground")}>
-              <Plus className="h-3.5 w-3.5" />
-              Фільтр
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[200px]">
-            {idle.map((filter) => (
-              <DropdownMenuSub key={filter.label}>
-                <DropdownMenuSubTrigger className="rounded-lg text-md">{filter.label}</DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="max-h-[320px] min-w-[200px] overflow-y-auto">
-                  <FilterOptionItems filter={filter} />
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
-    </>
-  );
-}
-
-function FilterOptionItems({ filter }: { filter: ToolbarFilterSelectProps }) {
-  return (
-    <>
-      {filter.options
-        .filter((option) => option.value !== filter.neutralValue)
-        .map((option) => {
-          const OptionIcon = option.icon;
-          return (
-            <DropdownMenuItem
-              key={option.value}
-              disabled={option.disabled}
-              onSelect={() => filter.onValueChange(option.value)}
-              className="gap-2 rounded-lg text-md"
-            >
-              <Check className={cn("h-3.5 w-3.5 shrink-0", option.value === filter.value ? "opacity-100" : "opacity-0")} />
-              {OptionIcon ? <OptionIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> : null}
-              <span className="min-w-0 flex-1 truncate">{option.label}</span>
-            </DropdownMenuItem>
-          );
-        })}
-    </>
-  );
-}
-
-/** Кілька застосованих фільтрів одним чипом: «Фільтри · 2» — меню з кожним, хрестик скидає всі. */
-function ToolbarFiltersSummaryChip({ active, idle }: { active: ToolbarFilterSelectProps[]; idle: ToolbarFilterSelectProps[] }) {
-  const summary = active
-    .map((filter) => filter.options.find((option) => option.value === filter.value)?.label)
-    .filter((label): label is string => typeof label === "string")
-    .join(", ");
-  return (
-    <div className={cn(TOOLBAR_FILTER, TOOLBAR_CONTROL_ACTIVE, "inline-flex w-auto max-w-[240px] items-center gap-0 px-0")}>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" title={summary || undefined} className="flex h-full min-w-0 items-center gap-1.5 pl-3 pr-1.5 text-sm">
-            <span className="shrink-0">Фільтри</span>
-            <span className="shrink-0 tabular-nums text-muted-foreground">{active.length}</span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-[220px]">
-          {[...active, ...idle].map((filter) => {
-            const selected = filter.value !== filter.neutralValue ? filter.options.find((option) => option.value === filter.value) : null;
-            return (
-              <DropdownMenuSub key={filter.label}>
-                <DropdownMenuSubTrigger className="gap-2 rounded-lg text-md">
-                  <span className="shrink-0">{filter.label}</span>
-                  {selected ? <span className="min-w-0 flex-1 truncate text-right text-muted-foreground">{selected.label}</span> : null}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="max-h-[320px] min-w-[200px] overflow-y-auto">
-                  <FilterOptionItems filter={filter} />
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <button
-        type="button"
-        aria-label="Скинути фільтри"
-        onClick={() => active.forEach((filter) => filter.neutralValue !== undefined && filter.onValueChange(filter.neutralValue))}
-        className="grid h-full shrink-0 place-items-center pl-1 pr-2.5 text-muted-foreground hover:text-foreground"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
-
-/** Застосований фільтр: «Назва: значення» — клік міняє значення, хрестик скидає. */
-function ToolbarFilterChip(filter: ToolbarFilterSelectProps) {
-  const selected = filter.options.find((option) => option.value === filter.value);
-  const SelectedIcon = selected?.icon;
-  return (
-    <div className={cn(TOOLBAR_FILTER, TOOLBAR_CONTROL_ACTIVE, "inline-flex w-auto max-w-[280px] items-center gap-0 px-0")}>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className="flex h-full min-w-0 items-center gap-1.5 pl-3 pr-1.5 text-sm">
-            <span className="shrink-0 text-muted-foreground">{filter.label}:</span>
-            {SelectedIcon ? <SelectedIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> : null}
-            <span className="min-w-0 truncate">{selected?.label ?? filter.placeholder ?? filter.value}</span>
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-[320px] min-w-[200px]">
-          <FilterOptionItems filter={filter} />
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <button
-        type="button"
-        aria-label={`Скинути фільтр «${filter.label}»`}
-        onClick={() => filter.neutralValue !== undefined && filter.onValueChange(filter.neutralValue)}
-        className="grid h-full shrink-0 place-items-center pl-1 pr-2.5 text-muted-foreground hover:text-foreground"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
+  return <>{children}</>;
 }
 
 export type ToolbarTabItem<T extends string> = {

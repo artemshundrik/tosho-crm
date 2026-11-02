@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useNavigationType } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -104,7 +104,6 @@ const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
 export default function OrdersProductionPage() {
   const { containerRef: ordersTableRef, ...ordersColumns } = useTableColumns(ORDERS_TABLE_COLUMNS); // чому окремо — TableColumnsResizer
   const navigate = useNavigate();
-  const navigationType = useNavigationType();
   const { teamId, session, userId, accessRole, jobRole } = useAuth();
   const canIssueInvoice = canIssueOrderInvoice(accessRole, jobRole);
   const canApproveLaunch = canApproveOrderLaunch(jobRole);
@@ -113,8 +112,8 @@ export default function OrdersProductionPage() {
 
   const restored = useMemo(() => {
     const stored = readFilters(teamId);
-    return shouldRestorePageUiState(navigationType, stored?.cachedAt) ? stored : null;
-  }, [teamId, navigationType]);
+    return shouldRestorePageUiState(stored?.cachedAt) ? stored : null;
+  }, [teamId]);
   const [search, setSearch] = useState(() => restored?.search ?? "");
   const [managerFilter, setManagerFilter] = useState(() => restored?.managerFilter ?? ALL);
   const [customerFilter, setCustomerFilter] = useState(() => restored?.customerFilter ?? ALL);
@@ -150,6 +149,15 @@ export default function OrdersProductionPage() {
 
   // Лише справжні замовлення: затверджені прорахунки — на екрані черги.
   const orders = useMemo(() => records.filter((record) => record.source === "stored"), [records]);
+  // «Себе» за замовчуванням, як у прорахунках: хто має свої замовлення, той бачить
+  // їх одразу. Раз на сесію сторінки — відновлений вибір (зокрема «всі») важливіший.
+  const [managerDefaultApplied, setManagerDefaultApplied] = useState(() => restored !== null);
+  useEffect(() => {
+    if (managerDefaultApplied || loading || !userId) return;
+    setManagerDefaultApplied(true);
+    const own = orders.find((record) => record.managerUserId === userId)?.managerLabel.trim();
+    if (own && managerFilter === ALL) setManagerFilter(own);
+  }, [managerDefaultApplied, loading, userId, orders, managerFilter]);
   const queue = useMemo(() => {
     const pending = records.filter((record) => record.source !== "stored");
     const ready = pending.filter((record) => record.readinessColumn === "ready").length;

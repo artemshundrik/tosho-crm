@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -386,15 +386,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const { containerRef: leadsTableRef, ...leadsColumns } = useTableColumns(LEADS_TABLE_COLUMNS);
   const location = useLocation();
   const navigate = useNavigate();
-  const navigationType = useNavigationType();
   const [searchParams] = useSearchParams();
   const { session, userId, jobRole } = useAuth();
   // Кеш читається ОДИН раз, а не на кожен рендер: значення потрібні лише для
   // початкових станів нижче. Чому це важливо — див. readInitialDesignPageState.
   const initialPageState = useMemo(() => {
     const cache = readCustomersPageCache(teamId);
-    return { restored: shouldRestorePageUiState(navigationType, cache?.cachedAt) ? cache : null };
-  }, [teamId, navigationType]);
+    return { restored: shouldRestorePageUiState(cache?.cachedAt) ? cache : null };
+  }, [teamId]);
   const restoredCache = initialPageState.restored;
   const [activeTab, setActiveTab] = useState<"customers" | "leads">(() => restoredCache?.activeTab ?? "customers");
   const [search, setSearch] = useState(() => restoredCache?.search ?? "");

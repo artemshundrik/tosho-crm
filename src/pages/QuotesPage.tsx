@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useNavigationType } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
@@ -475,7 +475,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const { userId, jobRole, permissions } = useAuth();
   // Ставки компанії — з налаштувань (Фінанси → Налаштування → Ставки).
   const companyRates = useCompanyPricingRates(userId);
-  const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
   // Кеш читається ОДИН раз, а не на кожен рендер: значення потрібні лише для
   // початкових станів нижче. Чому це важливо — див. readInitialDesignPageState.
@@ -483,14 +482,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const cache = readQuotesPageCache(teamId);
     const teamMembers = readQuotesPageMembersCache(teamId);
     const stored = readQuotesPageFiltersState(teamId);
-    const filters = shouldRestorePageUiState(navigationType, stored?.cachedAt) ? stored : null;
+    const filters = shouldRestorePageUiState(stored?.cachedAt) ? stored : null;
     const viewMode: "table" | "kanban" = filters?.viewMode
       ? filters.viewMode
       : localStorage.getItem("quotes_view_mode") === "kanban"
         ? "kanban"
         : "table";
     return { cache, teamMembers, filters, viewMode };
-  }, [teamId, navigationType]);
+  }, [teamId]);
   const initialCache = initialPageState.cache;
   const initialTeamMembers = initialPageState.teamMembers;
   const restoredFilters = initialPageState.filters;
@@ -528,7 +527,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [rowsSearchTerm, setRowsSearchTerm] = useState<string | null>(null);
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "active");
   // Фільтр «Менеджер»: що стоїть одразу й що пам'ятається — у хуку.
-  const [managerFilter, setManagerFilter] = useManagerFilter({ page: "quotes", teamId, userId, jobRole, isDesigner: permissions.isDesigner, restored: restoredFilters?.managerFilter });
+  const [managerFilter, setManagerFilter] = useManagerFilter({ teamId, userId, jobRole, isDesigner: permissions.isDesigner, restored: restoredFilters?.managerFilter });
   const [customerFilter, setCustomerFilter] = useState<CustomerFilterValue | null>(() => restoredFilters?.customerFilter ?? null);
   const [burning, setBurning] = useState(false);
   const scopeFilterKey = `${managerFilter}|${customerFilterKey(customerFilter)}`;
