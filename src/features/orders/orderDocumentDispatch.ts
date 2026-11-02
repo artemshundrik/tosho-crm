@@ -1,6 +1,23 @@
 import { documentStamp, getDocumentApprovalState, isDocumentCleared, isDocumentSigned, type ApprovalRecord } from "./orderApprovals";
 import type { DerivedOrderRecord } from "./orderRecords";
-import { addBalanceDays, isCashlessPaymentMethod } from "./paymentRules";
+import { isCashlessPaymentMethod } from "./paymentRules";
+import { kyivDayOf, PAYMENT_STARTED_STATUSES } from "../../lib/orderDocumentDeadlines";
+
+// Строки й робочі дні живуть окремо, без жодного імпорту: їх рахує й крон.
+export {
+  ESCALATE_AFTER_WORKING_DAYS,
+  formatDispatchDay,
+  getInvoiceDue,
+  INVOICE_VALID_WORKING_DAYS,
+  kyivDayOf,
+  previousWorkingDay,
+  UNSENT_REMIND_AFTER_WORKING_DAYS,
+  UNSIGNED_REMIND_AFTER_WORKING_DAYS,
+  workingDaysBetween,
+  type InvoiceDue,
+  type InvoiceDueInput,
+} from "../../lib/orderDocumentDeadlines";
+import { formatDispatchDay, workingDaysBetween } from "../../lib/orderDocumentDeadlines";
 
 /**
  * Надсилання документів замовнику (REQ-343; СЕО, 30.10–02.11.2026).
@@ -10,8 +27,8 @@ import { addBalanceDays, isCashlessPaymentMethod } from "./paymentRules";
  * про нього. Підписали одразу на папері — крок пропускається. Нічого не
  * блокує: ворота запуску ті самі, змінюється лише чий хід і що нагадувати.
  *
- * Модуль чистий і без аліасів імпорту: його читає й крон ранкового зведення
- * (netlify/functions/order-document-reminders.ts).
+ * Строки (робочі дні, рахунок 5 р.д.) — у src/lib/orderDocumentDeadlines.ts:
+ * той модуль без імпортів, і його ж читає крон ранкового зведення.
  */
 export type DispatchDocument = "contract" | "specification" | "invoice";
 export type DispatchChannel = "email" | "telegram" | "viber" | "whatsapp" | "other" | "vchasno";
@@ -44,99 +61,9 @@ export const DISPATCH_CHANNEL_LABELS: Record<DispatchChannel, string> = {
   vchasno: "у Вчасно",
 };
 
-/** Рахунок дійсний 5 робочих днів з дати рахунку — так і в шаблоні BAS (Влад, 02.11). */
-export const INVOICE_VALID_WORKING_DAYS = 5;
-/** Погоджене чи виписане, але не надіслане з попереднього робочого дня — нагадати менеджеру. */
-export const UNSENT_REMIND_AFTER_WORKING_DAYS = 1;
-/** Надіслане й не підписане 2 робочі дні — нагадати менеджеру. */
-export const UNSIGNED_REMIND_AFTER_WORKING_DAYS = 2;
-/** 5 робочих днів без руху — у зведення керівнику. */
-export const ESCALATE_AFTER_WORKING_DAYS = 5;
-
 /** Відбиток рахунку: номер і дата з BAS. Перевиписали з іншим номером — надсилати наново. */
 export const invoiceStamp = (record: Pick<DerivedOrderRecord, "invoiceNumber" | "invoiceDate">) =>
   ["invoice", record.invoiceNumber ?? "", record.invoiceDate ?? ""].join("|");
-
-// --- Робочі дні: пн–пт, як у addBalanceDays (за воєнного стану свят немає). ---
-
-const isoToUtc = (iso: string) => {
-  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
-  return Date.UTC(year, month - 1, day);
-};
-const DAY_MS = 86_400_000;
-const isWeekend = (ms: number) => {
-  const weekday = new Date(ms).getUTCDay();
-  return weekday === 0 || weekday === 6;
-};
-
-/** Скільки робочих днів минуло: дні після `fromIso` до `toIso` включно (0 — той самий день). */
-export const workingDaysBetween = (fromIso: string, toIso: string): number => {
-  const from = isoToUtc(fromIso);
-  const to = isoToUtc(toIso);
-  let count = 0;
-  for (let cursor = from + DAY_MS; cursor <= to; cursor += DAY_MS) if (!isWeekend(cursor)) count += 1;
-  return count;
-};
-
-/** Попередній робочий день — «за день до кінця строку». */
-export const previousWorkingDay = (iso: string): string => {
-  let cursor = isoToUtc(iso) - DAY_MS;
-  while (isWeekend(cursor)) cursor -= DAY_MS;
-  return new Date(cursor).toISOString().slice(0, 10);
-};
-
-const kyivDayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Kiev" });
-/** Київська дата позначки часу: надіслане о 23:30 UTC — уже наступний день. */
-export const kyivDayOf = (value: string) => {
-  if (value.length <= 10) return value;
-  const time = Date.parse(value);
-  return Number.isNaN(time) ? value.slice(0, 10) : kyivDayFormat.format(new Date(time));
-};
-
-/** «02.11» */
-export const formatDispatchDay = (value: string) => {
-  const day = kyivDayOf(value);
-  return `${day.slice(8, 10)}.${day.slice(5, 7)}`;
-};
-
-// --- Строк оплати рахунку ---
-
-export type InvoiceDueInput = {
-  invoiceNumber: string | null;
-  invoiceDate: string | null;
-  invoiceCreatedAt: string | null;
-  /** Відсоток наперед; null — умов немає (старі замовлення), рахуємо як передоплату. */
-  prepaymentPct: number | null;
-  balanceTiming: string | null;
-  paymentStatus: string;
-};
-
-export type InvoiceDue = {
-  dueDate: string;
-  /** З цього дня — «за день до кінця»: жовтий і нагадування менеджеру. */
-  warnFrom: string;
-  overdue: boolean;
-  warning: boolean;
-};
-
-/** Оплата, що вже прийшла (хоч частково): рахунок своє відпрацював. */
-const PAYMENT_STARTED = new Set(["partially_paid", "fully_paid", "awaiting_balance"]);
-
-/**
- * Строк оплати рахунку: 5 робочих днів з дати рахунку. Лише там, де рахунок
- * справді треба оплатити наперед: на відтермінуванні (0% до відвантаження,
- * доплата після ВН) строк рахує дата ВН чи акта — це getBalanceDue.
- */
-export const getInvoiceDue = (input: InvoiceDueInput, todayIso: string): InvoiceDue | null => {
-  if (!input.invoiceNumber || PAYMENT_STARTED.has(input.paymentStatus)) return null;
-  if (input.prepaymentPct === 0 && input.balanceTiming === "after_shipment") return null;
-  const from = input.invoiceDate ?? (input.invoiceCreatedAt ? kyivDayOf(input.invoiceCreatedAt) : null);
-  if (!from) return null;
-  const dueDate = addBalanceDays(from, INVOICE_VALID_WORKING_DAYS, "working");
-  const warnFrom = previousWorkingDay(dueDate);
-  const overdue = todayIso > dueDate;
-  return { dueDate, warnFrom, overdue, warning: !overdue && todayIso >= warnFrom };
-};
 
 // --- Стан надсилання документа на замовленні ---
 
@@ -191,7 +118,7 @@ export const getDocumentDispatchState = (record: DispatchRecord, document: Dispa
   if (!isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail)) return { state: "none" };
   let since: string | null;
   if (document === "invoice") {
-    if (PAYMENT_STARTED.has(record.paymentStatus)) return { state: "none" };
+    if (PAYMENT_STARTED_STATUSES.has(record.paymentStatus)) return { state: "none" };
     if (!record.invoiceNumber) return { state: "notReady" };
     since = record.invoiceCreatedAt ?? record.invoiceDate ?? null;
   } else {

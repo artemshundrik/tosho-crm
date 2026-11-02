@@ -24,6 +24,7 @@
 import { assertCronAuthorized } from "./_cronAuth";
 import { handler as contractorReminders } from "./contractor-reminders";
 import { handler as customerLeadReminders } from "./customer-lead-reminders";
+import { handler as orderDocumentReminders } from "./order-document-reminders";
 import { handler as quoteDeadlineReminders } from "./quote-deadline-reminders";
 import { handler as quoteMarkupReminders } from "./quote-markup-reminders";
 import { handler as siteListingReminders } from "./site-listing-reminders";
@@ -50,6 +51,8 @@ const JOBS: ReadonlyArray<readonly [string, (event: HttpEvent) => Promise<unknow
   // REQ-311#p17: нові моделі Тотобі для сайту. Працює раз на годину — решта
   // тіків закінчується на годиннику, без жодного запиту.
   ["site-listing-reminders", siteListingReminders],
+  // REQ-343: ранкове зведення документів замовникам о 10:00 за Києвом.
+  ["order-document-reminders", orderDocumentReminders],
 ];
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {

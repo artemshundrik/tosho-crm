@@ -22,6 +22,11 @@ describe("toDbRow", () => {
     expect(Object.keys(dbRow).sort()).toEqual(["body", "href", "title", "type", "user_id"]);
   });
 
+  it("кнопки-посилання теж не їдуть у INSERT", () => {
+    const dbRow = toDbRow({ ...baseRow, telegramLinks: [{ text: "TS-1026-0012 · договір", href: "/orders/production/1" }] });
+    expect(dbRow).not.toHaveProperty("telegramLinks");
+  });
+
   it("рядок без кнопок лишається таким, як був", () => {
     expect(toDbRow(baseRow)).toEqual(baseRow);
   });
@@ -42,6 +47,25 @@ describe("buildNotificationKeyboard", () => {
     expect(keyboard).toEqual([
       [{ text: "✅ Підтвердити", callback_data: "absd:a:5f0d" }],
       [{ text: "Перейти в CRM", url: "https://tosho.pro/team?tab=requests" }],
+    ]);
+  });
+
+  it("посилання — кожне своїм рядком, над «Перейти в CRM», з повною адресою", () => {
+    const keyboard = buildNotificationKeyboard(
+      {
+        ...baseRow,
+        telegramLinks: [
+          { text: "TS-1026-0012 · договір", href: "/orders/production/1" },
+          { text: "TS-1026-0020 · рахунок", href: "/orders/production/2" },
+        ],
+      },
+      "https://tosho.pro/orders/production",
+      (href) => `https://tosho.pro${href}`
+    );
+    expect(keyboard).toEqual([
+      [{ text: "TS-1026-0012 · договір", url: "https://tosho.pro/orders/production/1" }],
+      [{ text: "TS-1026-0020 · рахунок", url: "https://tosho.pro/orders/production/2" }],
+      [{ text: "Перейти в CRM", url: "https://tosho.pro/orders/production" }],
     ]);
   });
 

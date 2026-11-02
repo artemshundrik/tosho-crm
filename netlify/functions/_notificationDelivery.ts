@@ -26,11 +26,17 @@ type NotificationInsertRow = {
    * до чату (переслане повідомлення).
    */
   telegramActions?: Array<{ text: string; callbackData: string }>;
+  /**
+   * Кнопки-посилання в Telegram, кожна окремим рядком над «Перейти в CRM».
+   * Теж не колонка. Для зведень, де в одному повідомленні кілька замовлень:
+   * кнопка веде одразу на потрібне, а не в список (REQ-343#p12).
+   */
+  telegramLinks?: Array<{ text: string; href: string }>;
 };
 
 /** Рядок для БД: без полів, яких немає в таблиці notifications. */
 export function toDbRow(row: NotificationInsertRow) {
-  const { telegramActions: _telegramActions, ...dbRow } = row;
+  const { telegramActions: _telegramActions, telegramLinks: _telegramLinks, ...dbRow } = row;
   return dbRow;
 }
 
@@ -41,13 +47,21 @@ export function toDbRow(row: NotificationInsertRow) {
  * відповідь — «так», і заради неї не варто йти в браузер. Коли дії немає,
  * лишається рівно те, що було роками, — один рядок «Відкрити в CRM».
  */
-export function buildNotificationKeyboard(row: NotificationInsertRow, url: string) {
+export function buildNotificationKeyboard(
+  row: NotificationInsertRow,
+  url: string,
+  resolveUrl: (href: string) => string = (href) => href
+) {
   const actionButtons = (row.telegramActions ?? []).map((action) => ({
     text: action.text,
     callback_data: action.callbackData,
   }));
-  const openButton = { text: actionButtons.length > 0 ? "Перейти в CRM" : "Відкрити в CRM", url };
-  return actionButtons.length > 0 ? [actionButtons, [openButton]] : [[openButton]];
+  const linkRows = (row.telegramLinks ?? []).map((link) => [{ text: link.text, url: resolveUrl(link.href) }]);
+  const openButton = {
+    text: actionButtons.length > 0 || linkRows.length > 0 ? "Перейти в CRM" : "Відкрити в CRM",
+    url,
+  };
+  return [...(actionButtons.length > 0 ? [actionButtons] : []), ...linkRows, [openButton]];
 }
 
 type PushSubscriptionRow = {
@@ -360,7 +374,7 @@ async function deliverTelegram(
     const text = `<b>${escapeTelegramHtml(row.title)}</b>${row.body ? `\n${escapeTelegramHtml(row.body)}` : ""}`;
     const result = await sendTelegramMessage(chatId, text, {
       parseMode: "HTML",
-      replyMarkup: { inline_keyboard: buildNotificationKeyboard(row, buildTelegramUrl(row.href)) },
+      replyMarkup: { inline_keyboard: buildNotificationKeyboard(row, buildTelegramUrl(row.href), buildTelegramUrl) },
     });
 
     if (result.ok) {

@@ -17,6 +17,7 @@ export type NotificationCategoryKey =
   | "order_shipment_blocked"
   | "order_payment"
   | "order_payment_check"
+  | "order_documents"
   | "design"
   | "contractor"
   | "team_events"
@@ -104,6 +105,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     key: "order_payment_check",
     label: "Перевірити оплату",
     description: "Менеджер каже, що замовник оплатив, — перевірте надходження",
+  },
+  {
+    key: "order_documents",
+    label: "Документи замовникам",
+    description: "Зведення о 10:00: що не надіслано, не підписано чи не оплачено замовником",
   },
   {
     key: "design",
@@ -268,6 +274,10 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // «Замовник каже, що оплатив» — тим, хто вносить оплати.
     case "order_payment_check":
       return isInvoiceIssuer;
+    // Ранкове зведення документів: менеджеру — свої замовлення, власнику й СЕО —
+    // затримки всіх менеджерів (REQ-343#p6, p13). Обидва в крузі прорахунків.
+    case "order_documents":
+      return isQuoteWorker;
     // Збут / прорахунки / контрагенти — лише ті, хто з цим працює.
     case "customer_followup":
     case "quote_deadline":

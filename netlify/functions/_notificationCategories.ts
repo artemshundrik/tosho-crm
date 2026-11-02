@@ -15,6 +15,7 @@ export type NotificationCategoryKey =
   | "order_shipment_blocked"
   | "order_payment"
   | "order_payment_check"
+  | "order_documents"
   | "design"
   | "contractor"
   | "team_events"
@@ -48,6 +49,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "order_shipment_blocked", label: "Готово, але не оплачено" },
   { key: "order_payment", label: "Оплати замовлень" },
   { key: "order_payment_check", label: "Перевірити оплату" },
+  { key: "order_documents", label: "Документи замовникам" },
   { key: "design", label: "Дизайн-задачі" },
   { key: "contractor", label: "Контрагенти" },
   { key: "team_events", label: "Події команди" },
@@ -125,6 +127,8 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
       return isQuoteWorker;
     case "order_payment_check":
       return isInvoiceIssuer;
+    case "order_documents":
+      return isQuoteWorker;
     case "customer_followup":
     case "quote_deadline":
     case "quote_comment":
