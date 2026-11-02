@@ -4426,32 +4426,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           <>
             {contentView !== "sets" ? (
               <ToolbarFilterBar>
-                {/*
-                  ФІЛЬТР ЛИШАЄТЬСЯ ПОВНИМ, зі «Скасовано» включно, — і це єдиний
-                  шлях до скасованих прорахунків. Окремої кнопки в тулбарі під
-                  них НЕМАЄ і бути не має: постійний контроль за те, чим
-                  користуються раз на рік, — це податок на всіх щодня.
-                  Тут же він нічого не коштує: список статусів однаково стоїть
-                  на екрані, і «Скасовано» в ньому саме там, куди людина й
-                  полізе, шукаючи скасований прорахунок.
-                */}
-                {(
-                  <ToolbarFilterSelect
-                    label="Статус" value={effectiveStatus}
-                    onValueChange={setStatusFilter}
-                    neutralValue={neutralStatus}
-                    className="sm:w-[170px]"
-                    options={[
-                      ...(neutralStatus === "active" ? [{ value: "active", label: "Активні", icon: ListFilter }] : []),
-                      { value: "all", label: "Всі статуси", icon: ListFilter },
-                      ...STATUS_OPTIONS.map((s) => ({
-                        value: s,
-                        label: formatStatusLabel(s),
-                        icon: statusIcons[s],
-                      })),
-                    ]}
-                  />
-                )}
                 {isManagerUser ? (
                   <div
                     className={cn(
@@ -4487,6 +4461,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       ...managerFilterOptions.map((manager) => ({
                         value: manager.id,
                         label: renderManagerFilterValue(manager.id),
+                      })),
+                    ]}
+                  />
+                )}
+                {/*
+                  ФІЛЬТР ЛИШАЄТЬСЯ ПОВНИМ, зі «Скасовано» включно, — і це єдиний
+                  шлях до скасованих прорахунків. Окремої кнопки в тулбарі під
+                  них НЕМАЄ і бути не має: постійний контроль за те, чим
+                  користуються раз на рік, — це податок на всіх щодня.
+                  Тут же він нічого не коштує: список статусів однаково стоїть
+                  на екрані, і «Скасовано» в ньому саме там, куди людина й
+                  полізе, шукаючи скасований прорахунок.
+                */}
+                {(
+                  <ToolbarFilterSelect
+                    label="Статус" value={effectiveStatus}
+                    onValueChange={setStatusFilter}
+                    neutralValue={neutralStatus}
+                    className="sm:w-[170px]"
+                    options={[
+                      ...(neutralStatus === "active" ? [{ value: "active", label: "Активні", icon: ListFilter }] : []),
+                      { value: "all", label: "Всі статуси", icon: ListFilter },
+                      ...STATUS_OPTIONS.map((s) => ({
+                        value: s,
+                        label: formatStatusLabel(s),
+                        icon: statusIcons[s],
                       })),
                     ]}
                   />

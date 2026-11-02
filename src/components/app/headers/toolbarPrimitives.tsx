@@ -7,6 +7,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { pluralWordUk } from "@/lib/lastSeen";
 import { Input } from "@/components/ui/input";
 import { TOOLBAR_CONTROL, TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
@@ -17,6 +19,19 @@ import { cn } from "@/lib/utils";
 // однаковий markup жив у 6+ копіях і повільно розповзався (різні позиції лоадера,
 // різні розміри бейджів). Тут — канонічна версія; сторінки лише передають дані.
 // Конвенція: список = UnifiedPageToolbar (через usePageHeaderActions) + ці примітиви.
+
+/**
+ * Спільний стан рядка тулбара: чи згорнутий пошук до лупи. Ставить
+ * `UnifiedPageToolbar`, вирішує `ToolbarFilterBar` — лише він знає, чи влазять
+ * фільтри. Поза тулбаром контексту немає, і пошук завжди повний.
+ */
+export type ToolbarRowState = {
+  compactSearch: boolean;
+  setCompactSearch: (next: boolean) => void;
+  /** Ширина повного пошуку з останнього разу, коли він був повним. */
+  searchFullWidthRef: React.MutableRefObject<number>;
+};
+export const ToolbarRowContext = React.createContext<ToolbarRowState | null>(null);
 
 type ToolbarSearchProps = {
   value: string;
@@ -111,10 +126,31 @@ export function ToolbarSearch({
     []
   );
 
+  // Фільтри не влазять — пошук стає лупою. Набраний запит лупою не ховається:
+  // поле з текстом лишається повним, інакше пошук «зникав» би з виду.
+  const row = React.useContext(ToolbarRowContext);
+  const [expanded, setExpanded] = React.useState(false);
+  const compact = Boolean(row?.compactSearch);
+  if (compact && !expanded && !draft) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        aria-label={placeholder}
+        title={placeholder}
+        onClick={() => setExpanded(true)}
+        className={cn(TOOLBAR_CONTROL, "w-9 shrink-0 px-0")}
+      >
+        <Search className="h-4 w-4 text-muted-foreground" />
+      </Button>
+    );
+  }
+
   return (
-    <div className={cn("relative", className)}>
+    <div className={cn("relative", compact && "w-[240px]", className)}>
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
+        autoFocus={compact && expanded}
         value={draft}
         onChange={(event) => schedule(event.target.value)}
         // Enter — «шукай зараз», без очікування паузи.
@@ -123,6 +159,7 @@ export function ToolbarSearch({
         }}
         onBlur={() => {
           if (timerRef.current) emit(draft);
+          if (!draft) setExpanded(false);
         }}
         placeholder={placeholder}
         className={cn(TOOLBAR_CONTROL, "pl-9 pr-9", inputClassName)}
@@ -350,16 +387,117 @@ export function ToolbarMeta({
 }
 
 /**
- * Смуга фільтрів: діти малюються як є — кожен фільтр видимим випадайком.
+ * Смуга фільтрів: на виду стільки, скільки влазить в один рядок.
  *
- * 01.11 тут була «+ Фільтр» і чипи: незастосовані фільтри ховались у меню, а
- * нижче 1600 px усе стискалось в один чип «Фільтри N». За день роботи Артем
- * попросив повернути як було (REQ-173#p19): з пам'яттю вибору на сесію
- * схований фільтр — пастка, бо не видно, що зараз вибрано. Обгортку лишено,
- * щоб сторінки не правити й мати одне місце, якщо смугу знову захочеться міняти.
+ * 01.11 тут була «+ Фільтр» і чипи — незастосовані фільтри ховались у меню
+ * навіть на широкому екрані, і не було видно, що вибрано; Артем попросив
+ * повернути випадайки (REQ-173#p19). Але чотири випадайки й пошук на вузькому
+ * вікні лягали у два рядки, тож коли місця бракує, діє порядок (REQ-173#p20):
+ *   1. фільтри завжди завширшки зі свій текст, а не 180–220 px;
+ *   2. не влазять — пошук згортається до лупи (`ToolbarRowContext`);
+ *   3. однаково не влазять — ОСТАННІ діти йдуть у «Ще». Порядок дітей і є
+ *      пріоритет: головний вибір (менеджер, дизайнер) ставити першим.
+ * «Ще» підсвічене й з числом, коли схований фільтр застосований.
+ *
+ * Ширини міряються з DOM; схованого фільтра не видно, тож береться остання
+ * виміряна. На телефоні діти малюються як є — вони живуть в аркуші.
  */
+const FILTER_GAP = 8;
+const SEARCH_ICON_WIDTH = 36;
+
+/** Чи застосований фільтр: випадайко — значення не нейтральне; замовник — вибраний. */
+function isFilterChildActive(child: React.ReactNode) {
+  if (!React.isValidElement<{ value?: unknown; neutralValue?: unknown }>(child)) return false;
+  const { value, neutralValue } = child.props;
+  if (neutralValue !== undefined) return value !== neutralValue;
+  return value !== null && typeof value === "object";
+}
+
 export function ToolbarFilterBar({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  const isNarrow = useIsNarrowViewport();
+  const row = React.useContext(ToolbarRowContext);
+  const items = React.Children.toArray(children).filter(React.isValidElement);
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const widthsRef = React.useRef<number[]>([]);
+  const moreWidthRef = React.useRef(72);
+  const [visible, setVisible] = React.useState(items.length);
+  const [tick, setTick] = React.useState(0);
+
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setTick((tick) => tick + 1));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isNarrow]);
+
+  // `items` новий на кожен рендер — і це навмисно: ширина міняється й від
+  // вибраного значення. Стан ставиться лише коли змінився, тож циклу немає.
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.querySelectorAll<HTMLElement>("[data-filter-item]").forEach((node) => {
+      widthsRef.current[Number(node.dataset.filterItem)] = node.offsetWidth;
+    });
+    const more = el.querySelector<HTMLElement>("[data-filter-more]");
+    if (more) moreWidthRef.current = more.offsetWidth;
+    const widths = items.map((_, index) => widthsRef.current[index] ?? 160);
+    const need = (count: number) =>
+      widths.slice(0, count).reduce((sum, width) => sum + width, 0) +
+      FILTER_GAP * Math.max(count - 1, 0) +
+      (count < items.length ? (count > 0 ? FILTER_GAP : 0) + moreWidthRef.current : 0);
+    const available = el.clientWidth;
+    let fit = items.length;
+    while (fit > 0 && need(fit) > available) fit -= 1;
+
+    if (row) {
+      if (fit < items.length && !row.compactSearch) {
+        row.setCompactSearch(true);
+        return;
+      }
+      const freed = row.searchFullWidthRef.current - SEARCH_ICON_WIDTH;
+      if (row.compactSearch && fit === items.length && need(items.length) + freed <= available) {
+        row.setCompactSearch(false);
+        return;
+      }
+    }
+    if (fit !== visible) setVisible(fit);
+  }, [items, row, tick, visible]);
+
+  if (isNarrow) return <>{children}</>;
+
+  const shown = items.slice(0, visible);
+  const hidden = items.slice(visible);
+  const hiddenActive = hidden.filter(isFilterChildActive).length;
+
+  return (
+    <div ref={ref} className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+      {shown.map((child, index) => (
+        <div key={child.key ?? index} data-filter-item={index} className="shrink-0 [&>*]:w-auto! [&>*]:max-w-[240px]">
+          {child}
+        </div>
+      ))}
+      {hidden.length > 0 ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              data-filter-more=""
+              className={cn(TOOLBAR_FILTER, "w-auto shrink-0", hiddenActive > 0 && TOOLBAR_CONTROL_ACTIVE)}
+            >
+              Ще
+              {hiddenActive > 0 ? <span className="-ml-1 tabular-nums text-muted-foreground">· {hiddenActive}</span> : null}
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="flex w-[260px] flex-col gap-2 p-2 [&>*]:w-full!">
+            {hidden}
+          </PopoverContent>
+        </Popover>
+      ) : null}
+    </div>
+  );
 }
 
 export type ToolbarTabItem<T extends string> = {

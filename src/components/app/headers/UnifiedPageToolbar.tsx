@@ -1,9 +1,16 @@
-import { useState, type ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { SlidersHorizontal } from "@/components/icons/appIcons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { ToolbarRowContext } from "./toolbarPrimitives";
 
 type UnifiedPageToolbarProps = {
   topLeft?: ReactNode;
@@ -79,11 +86,25 @@ export function UnifiedPageToolbar({
 }: UnifiedPageToolbarProps) {
   const isNarrow = useIsNarrowViewport();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Пошук-лупа: вирішує ToolbarFilterBar, коли фільтри не влазять у рядок.
+  const [compactSearch, setCompactSearch] = useState(false);
+  const searchFullWidthRef = useRef(260);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (!compactSearch && searchBoxRef.current)
+      searchFullWidthRef.current = searchBoxRef.current.offsetWidth;
+  });
+  const rowState = useMemo(
+    () => ({ compactSearch, setCompactSearch, searchFullWidthRef }),
+    [compactSearch],
+  );
 
   // Тернарник, а не `md:hidden`: React комітить обидві гілки, і десктопний
   // стос контролів жив би в DOM телефона (принцип картки 146).
   if (mobileCompact && isNarrow) {
-    const hasSheetContent = Boolean(topLeft || filters || mobileViewSwitch || mobileExtraActions);
+    const hasSheetContent = Boolean(
+      topLeft || filters || mobileViewSwitch || mobileExtraActions,
+    );
 
     return (
       <div className={cn("space-y-2", className)}>
@@ -110,7 +131,11 @@ export function UnifiedPageToolbar({
         </div>
 
         {hasSheetContent ? (
-          <BottomSheet open={filtersOpen} onOpenChange={setFiltersOpen} title="Фільтри та вигляд">
+          <BottomSheet
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            title="Фільтри та вигляд"
+          >
             <div className="space-y-4">
               {mobileViewSwitch ? (
                 <div className="min-w-0">
@@ -121,13 +146,17 @@ export function UnifiedPageToolbar({
                 </div>
               ) : null}
               {topLeft ? <div className="min-w-0">{topLeft}</div> : null}
-              {filters ? <div className="flex min-w-0 flex-col gap-2">{filters}</div> : null}
+              {filters ? (
+                <div className="flex min-w-0 flex-col gap-2">{filters}</div>
+              ) : null}
               {mobileExtraActions ? (
                 <div className="min-w-0">
                   <p className="pb-2 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
                     Дії
                   </p>
-                  <div className="flex min-w-0 flex-col gap-2">{mobileExtraActions}</div>
+                  <div className="flex min-w-0 flex-col gap-2">
+                    {mobileExtraActions}
+                  </div>
                 </div>
               ) : null}
               {/*
@@ -144,56 +173,85 @@ export function UnifiedPageToolbar({
   }
 
   return (
-    <div className={cn("space-y-3", className)}>
-      {(topLeft || topRight) ? (
-        <div
-          className={cn(
-            // lg:flex-wrap + незтискувана ліва частина: коли вкладки й кнопки
-            // не вміщаються в рядок (iPad у ландшафті з розгорнутим сайдбаром),
-            // кнопки переходять на новий рядок, а не наїжджають на вкладки.
-            "flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center",
-            topLeft && topRight ? "lg:justify-between" : topRight ? "lg:justify-end" : undefined,
-            topRowClassName
-          )}
-        >
-          {topLeft ? <div className={cn("min-w-0 lg:shrink-0", topLeftClassName)}>{topLeft}</div> : null}
-          {topRight ? (
-            <div
-              className={cn(
-                "flex w-full flex-col gap-2 self-stretch sm:flex-row sm:items-center sm:justify-end lg:ml-auto lg:w-auto lg:self-auto",
-                topRightClassName
-              )}
-            >
-              {topRight}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+    <ToolbarRowContext.Provider value={rowState}>
+      <div className={cn("space-y-3", className)}>
+        {topLeft || topRight ? (
+          <div
+            className={cn(
+              // lg:flex-wrap + незтискувана ліва частина: коли вкладки й кнопки
+              // не вміщаються в рядок (iPad у ландшафті з розгорнутим сайдбаром),
+              // кнопки переходять на новий рядок, а не наїжджають на вкладки.
+              "flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center",
+              topLeft && topRight
+                ? "lg:justify-between"
+                : topRight
+                  ? "lg:justify-end"
+                  : undefined,
+              topRowClassName,
+            )}
+          >
+            {topLeft ? (
+              <div className={cn("min-w-0 lg:shrink-0", topLeftClassName)}>
+                {topLeft}
+              </div>
+            ) : null}
+            {topRight ? (
+              <div
+                className={cn(
+                  "flex w-full flex-col gap-2 self-stretch sm:flex-row sm:items-center sm:justify-end lg:ml-auto lg:w-auto lg:self-auto",
+                  topRightClassName,
+                )}
+              >
+                {topRight}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
-      {(search || filters || meta) ? (
-        <div className={cn("flex flex-col gap-3 lg:flex-row lg:items-center", bottomRowClassName)}>
-          {search ? (
-            // Між lg і xl пошук вужчий: на 1100 px 320 px пошуку разом із
-            // замовником, чипом фільтрів і лічильником ламали ряд на два.
-            <div className={cn("w-full lg:max-w-[260px] lg:flex-none xl:max-w-[320px] min-[1600px]:max-w-[370px]", searchClassName)}>
-              {search}
-            </div>
-          ) : null}
-          {filters ? (
-            <div
-              className={cn(
-                "flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center",
-                filtersClassName
-              )}
-            >
-              {filters}
-            </div>
-          ) : null}
-          {meta ? (
-            <div className={cn("flex items-center gap-2 lg:ml-auto lg:flex-none", metaClassName)}>{meta}</div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+        {search || filters || meta ? (
+          <div
+            className={cn(
+              "flex flex-col gap-3 lg:flex-row lg:items-center",
+              bottomRowClassName,
+            )}
+          >
+            {search ? (
+              // Між lg і xl пошук вужчий: на 1100 px 320 px пошуку разом із
+              // замовником, чипом фільтрів і лічильником ламали ряд на два.
+              <div
+                ref={searchBoxRef}
+                className={cn(
+                  "w-full lg:max-w-[260px] lg:flex-none xl:max-w-[320px] min-[1600px]:max-w-[370px]",
+                  compactSearch && "lg:w-auto",
+                  searchClassName,
+                )}
+              >
+                {search}
+              </div>
+            ) : null}
+            {filters ? (
+              <div
+                className={cn(
+                  "flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center",
+                  filtersClassName,
+                )}
+              >
+                {filters}
+              </div>
+            ) : null}
+            {meta ? (
+              <div
+                className={cn(
+                  "flex items-center gap-2 lg:ml-auto lg:flex-none",
+                  metaClassName,
+                )}
+              >
+                {meta}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </ToolbarRowContext.Provider>
   );
 }

@@ -4865,27 +4865,6 @@ export default function DesignPage() {
         filters={
           <>
             <ToolbarFilterBar>
-            {/*
-              ФІЛЬТР ЛИШАЄТЬСЯ ПОВНИМ, зі «Скасовано» включно, — і це єдиний
-              шлях до скасованих задач. Окремої кнопки під них у тулбарі немає:
-              постійне місце на екрані за дію раз на рік — це податок на всіх
-              щодня, а фільтр робить те саме й нічого не коштує.
-            */}
-            <ToolbarFilterSelect
-              label="Статус" value={statusFilter}
-              onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}
-              neutralValue="all"
-              className="sm:w-[180px]"
-              options={[
-                { value: "all", label: "Всі статуси", icon: ListFilter },
-                ...DESIGN_STATUS_ENTRIES.map((column) => ({
-                  value: column.id,
-                  label: column.label,
-                  icon: DESIGN_STATUS_ICON_BY_STATUS[column.id],
-                })),
-              ]}
-            />
-
             {viewMode !== "assignee" ? (
               <ToolbarFilterSelect
                 label="Дизайнер" value={designerFilter}
@@ -4941,6 +4920,26 @@ export default function DesignPage() {
                 ]}
               />
             )}
+            {/*
+              ФІЛЬТР ЛИШАЄТЬСЯ ПОВНИМ, зі «Скасовано» включно, — і це єдиний
+              шлях до скасованих задач. Окремої кнопки під них у тулбарі немає:
+              постійне місце на екрані за дію раз на рік — це податок на всіх
+              щодня, а фільтр робить те саме й нічого не коштує.
+            */}
+            <ToolbarFilterSelect
+              label="Статус" value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}
+              neutralValue="all"
+              className="sm:w-[180px]"
+              options={[
+                { value: "all", label: "Всі статуси", icon: ListFilter },
+                ...DESIGN_STATUS_ENTRIES.map((column) => ({
+                  value: column.id,
+                  label: column.label,
+                  icon: DESIGN_STATUS_ICON_BY_STATUS[column.id],
+                })),
+              ]}
+            />
             <CustomerFilterSelect teamId={effectiveTeamId} value={customerFilter} onChange={setCustomerFilter} />
             </ToolbarFilterBar>
           </>
