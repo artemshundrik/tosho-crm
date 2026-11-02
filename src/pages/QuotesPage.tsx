@@ -527,7 +527,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [rowsSearchTerm, setRowsSearchTerm] = useState<string | null>(null);
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "active");
   // Фільтр «Менеджер»: що стоїть одразу й що пам'ятається — у хуку.
-  const [managerFilter, setManagerFilter] = useManagerFilter({ teamId, userId, jobRole, isDesigner: permissions.isDesigner, restored: restoredFilters?.managerFilter });
+  const [managerFilter, setManagerFilter] = useManagerFilter({ page: "quotes", teamId, userId, jobRole, isDesigner: permissions.isDesigner });
   const [customerFilter, setCustomerFilter] = useState<CustomerFilterValue | null>(() => restoredFilters?.customerFilter ?? null);
   const [burning, setBurning] = useState(false);
   const scopeFilterKey = `${managerFilter}|${customerFilterKey(customerFilter)}`;

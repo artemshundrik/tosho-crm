@@ -1131,7 +1131,7 @@ export default function DesignPage() {
   const [designerFilter, setDesignerFilter] = useState<string>(
     () => restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
   );
-  const [managerFilter, setManagerFilter] = useManagerFilter({ teamId: effectiveTeamId, userId, jobRole, isDesigner: permissions.isDesigner, restored: restoredFilters?.managerFilter });
+  const [managerFilter, setManagerFilter] = useManagerFilter({ page: "design", teamId: effectiveTeamId, userId, jobRole, isDesigner: permissions.isDesigner });
   const [customerFilter, setCustomerFilter] = useState<CustomerFilterValue | null>(() => restoredFilters?.customerFilter ?? null);
   const customerQuoteIds = useCustomerQuoteIds(effectiveTeamId, customerFilter);
   // Відновлений у межах сесії вибір — і «всі» теж — дефолт «себе» не перебиває.

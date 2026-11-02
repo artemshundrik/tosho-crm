@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { hasOwnManagedWork } from "@/lib/managedWorkOwnership";
+import { readFilterChoice, writeFilterChoice } from "@/lib/pageUiState";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 
 export const ALL_MANAGERS = "__all__";
@@ -15,61 +16,63 @@ export const ALL_MANAGERS = "__all__";
  *     прорахунок чи дизайн (`hasOwnManagedWork`), інакше всі — порожній список
  *     «своїх» нічого не показує.
  *
- * Вибір людини живе до перезавантаження вкладки: його відновлює сторінка разом
- * з рештою фільтрів (`shouldRestorePageUiState`) і передає сюди як `restored`.
+ * Вибір людини живе до перезавантаження вкладки. Пам'ятається лише клік
+ * людини (`writeFilterChoice`), а не те, що сторінка зберегла сама: інакше
+ * автоматичне «всі» до приходу відповіді з бази ставало «вибором».
  * 01.11 вибір пам'ятався в браузері назавжди; Артем попросив, щоб після
  * перезавантаження знову стояло «себе» (REQ-173#p19).
  */
 export function useManagerFilter({
+  page,
   teamId,
   userId,
   selfId = userId,
   jobRole,
   isDesigner,
-  restored,
 }: {
+  page: "quotes" | "design";
   teamId?: string | null;
   userId?: string | null;
   /** Кого ставити «себе» (у режимі «Переглянути як» — того, кого приміряють). */
   selfId?: string | null;
   jobRole?: string | null;
   isDesigner: boolean;
-  /** Вибір, відновлений у межах сесії, — він важливіший за дефолт, зокрема «всі». */
-  restored?: string;
 }) {
   const managerByRole = isQuoteManagerJobRole(jobRole);
+  const scope = `manager:${page}:${teamId ?? ""}:${userId ?? ""}`;
+  const [restored] = useState(() => (teamId && userId ? readFilterChoice(scope) : undefined));
   const [value, setValue] = useState<string>(
     () => restored ?? (managerByRole && selfId ? selfId : ALL_MANAGERS)
   );
-  const [defaultApplied, setDefaultApplied] = useState(
-    () => restored !== undefined || (managerByRole && Boolean(selfId))
-  );
+  // Ref, а не стан: позначка-стан перезапускала ефект, і його прибирання
+  // скасовувало пробу, що ще летіла, — «себе» не ставало ніколи (02.11).
+  const defaultAppliedRef = useRef(restored !== undefined || (managerByRole && Boolean(selfId)));
 
   useEffect(() => {
-    if (defaultApplied) return;
+    if (defaultAppliedRef.current) return;
     if (isDesigner) return;
-    if (value !== ALL_MANAGERS) return;
-    if (!selfId || !teamId) return;
-    // Позначка наперед, щоб проба пішла рівно раз. Посада могла з'явитись
-    // пізніше за перший рендер — тоді менеджера ставимо тут.
-    setDefaultApplied(true);
+    if (!selfId || !teamId || !userId) return;
+    defaultAppliedRef.current = true;
+    // Команда могла з'явитись пізніше за перший рендер — тоді вибір читаємо тут.
+    const late = readFilterChoice(scope);
+    if (late !== undefined) {
+      setValue(late);
+      return;
+    }
     if (managerByRole) {
       setValue(selfId);
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      const ownsWork = await hasOwnManagedWork({ userId: selfId, teamId });
-      if (!cancelled && ownsWork) setValue(selfId);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [defaultApplied, isDesigner, managerByRole, selfId, teamId, value]);
+    void hasOwnManagedWork({ userId: selfId, teamId }).then((ownsWork) => {
+      // Людина встигла вибрати сама — її вибір важливіший за пробу.
+      if (ownsWork) setValue((current) => (current === ALL_MANAGERS && readFilterChoice(scope) === undefined ? selfId : current));
+    });
+  }, [isDesigner, managerByRole, scope, selfId, teamId, userId]);
 
   const choose = (next: string) => {
     setValue(next);
-    setDefaultApplied(true);
+    defaultAppliedRef.current = true;
+    if (teamId && userId) writeFilterChoice(scope, next);
   };
 
   return [value, choose] as const;
