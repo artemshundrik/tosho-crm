@@ -1,6 +1,7 @@
 import {
   addCalendarDays,
   addWorkingDays,
+  DISPATCH_JOURNAL_STARTED,
   ESCALATE_AFTER_WORKING_DAYS,
   formatDispatchDay,
   getInvoiceDue,
@@ -26,7 +27,8 @@ import { QUIET_HOURS_TIME_ZONE, kyivHour } from "./quietHours";
  *
  * ЩО ЛОВИМО:
  *  - не надіслано: договір і СП погоджені, рахунок виписаний, а «надіслано»
- *    немає з попереднього робочого дня;
+ *    немає з попереднього робочого дня (але не раніше за старт журналу —
+ *    DISPATCH_JOURNAL_STARTED);
  *  - повернули з правками: хід знову менеджера;
  *  - не підписано: надіслано 2 робочі дні тому й раніше;
  *  - рахунок: за день до кінця 5 р.д. і прострочений;
@@ -166,7 +168,8 @@ const dispatchItem = (
 ): DocumentReminderItem | null => {
   if (!trail.sent) {
     if (!readySince) return null;
-    const days = workingDaysBetween(kyivDayOf(readySince), today);
+    const ready = kyivDayOf(readySince);
+    const days = workingDaysBetween(ready > DISPATCH_JOURNAL_STARTED ? ready : DISPATCH_JOURNAL_STARTED, today);
     if (days < UNSENT_REMIND_AFTER_WORKING_DAYS) return null;
     return { ...base, document, section: "unsent", detail: daysLabel(days), escalate: days >= ESCALATE_AFTER_WORKING_DAYS };
   }
@@ -345,9 +348,12 @@ export const buildDigestLinks = (items: DocumentReminderItem[]) =>
     href: `/orders/production/${item.orderId}`,
   }));
 
+/** «1 потребує», «21 потребує», «2 потребують», «11 потребують». */
+const needVerb = (count: number) => (count % 10 === 1 && count % 100 !== 11 ? "потребує" : "потребують");
+
 export function buildManagerDigest(items: DocumentReminderItem[]): { title: string; body: string } {
   return {
-    title: `Документи замовникам: ${items.length} потребують дії`,
+    title: `Документи замовникам: ${items.length} ${needVerb(items.length)} дії`,
     body: sectionBlocks(items).join("\n\n"),
   };
 }

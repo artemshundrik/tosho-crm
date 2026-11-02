@@ -12,8 +12,9 @@ import {
   type ReminderOrderRow,
 } from "./orderDocumentReminders";
 
-// Листопад 2026: 02.11 — понеділок, Київ = UTC+2.
+// Листопад 2026: 02.11 і 09.11 — понеділки, Київ = UTC+2. 02.11 — старт журналу надсилань.
 const MONDAY = "2026-11-02";
+const NEXT_MONDAY = "2026-11-09";
 
 const order = (patch: Partial<ReminderOrderRow> = {}): ReminderOrderRow => ({
   id: "order-1",
@@ -63,17 +64,24 @@ const sections = (items: ReturnType<typeof collectOrderReminders>) =>
 
 describe("договір і СП", () => {
   it("погоджено в п'ятницю й не надіслано — у понеділок нагадати менеджеру", () => {
-    const items = collectOrderReminders(order(), [approved("contract", "2026-10-30T12:00:00Z")], [], MONDAY);
+    const items = collectOrderReminders(order(), [approved("contract", "2026-11-06T12:00:00Z")], [], NEXT_MONDAY);
     expect(sections(items)).toEqual(["contract:unsent:1 р.д."]);
   });
 
   it("погоджено сьогодні — ще рано", () => {
-    expect(collectOrderReminders(order(), [approved("contract", "2026-11-02T07:00:00Z")], [], MONDAY)).toEqual([]);
+    expect(collectOrderReminders(order(), [approved("contract", "2026-11-09T07:00:00Z")], [], NEXT_MONDAY)).toEqual([]);
   });
 
   it("5 р.д. не надіслано — і керівнику", () => {
-    const items = collectOrderReminders(order(), [approved("specification", "2026-10-26T12:00:00Z")], [], MONDAY);
+    const items = collectOrderReminders(order(), [approved("specification", "2026-11-02T12:00:00Z")], [], NEXT_MONDAY);
     expect(sections(items)).toEqual(["specification:unsent:5 р.д.:head"]);
+  });
+
+  it("погоджене до старту журналу рахується від старту: у перший день мовчимо, керівнику — не одразу", () => {
+    const approvals = [approved("specification", "2026-10-26T12:00:00Z")];
+    expect(collectOrderReminders(order(), approvals, [], MONDAY)).toEqual([]);
+    expect(sections(collectOrderReminders(order(), approvals, [], "2026-11-03"))).toEqual(["specification:unsent:1 р.д."]);
+    expect(sections(collectOrderReminders(order(), approvals, [], NEXT_MONDAY))).toEqual(["specification:unsent:5 р.д.:head"]);
   });
 
   it("підписано або не погоджено — мовчимо", () => {
@@ -91,8 +99,8 @@ describe("договір і СП", () => {
   });
 
   it("відкликане пізніше погодження не перекриває чинне", () => {
-    const withdrawn = { ...approved("contract", "2026-10-30T12:00:00Z"), status: "withdrawn", requested_at: "2026-10-31T00:00:00Z" };
-    const items = collectOrderReminders(order(), [approved("contract", "2026-10-30T12:00:00Z"), withdrawn], [], MONDAY);
+    const withdrawn = { ...approved("contract", "2026-11-06T12:00:00Z"), status: "withdrawn", requested_at: "2026-10-31T00:00:00Z" };
+    const items = collectOrderReminders(order(), [approved("contract", "2026-11-06T12:00:00Z"), withdrawn], [], NEXT_MONDAY);
     expect(sections(items)).toEqual(["contract:unsent:1 р.д."]);
   });
 
@@ -108,9 +116,9 @@ describe("договір і СП", () => {
   it("надіслано старий документ (інший відбиток) — вважаємо не надісланим", () => {
     const items = collectOrderReminders(
       order(),
-      [approved("contract", "2026-10-30T12:00:00Z", "new")],
-      [dispatch("contract", "sent", "2026-10-29T09:00:00Z", "old")],
-      MONDAY
+      [approved("contract", "2026-11-06T12:00:00Z", "new")],
+      [dispatch("contract", "sent", "2026-11-05T09:00:00Z", "old")],
+      NEXT_MONDAY
     );
     expect(sections(items)).toEqual(["contract:unsent:1 р.д."]);
   });
@@ -149,8 +157,9 @@ describe("рахунок", () => {
     order({ invoice_number: "123", invoice_date: "2026-10-27", invoice_created_at: "2026-10-27T10:00:00Z", ...patch });
   const sentInvoice = dispatch("invoice", "sent", "2026-10-27T11:00:00Z", "invoice|123|2026-10-27");
 
-  it("виписаний і не надісланий", () => {
-    expect(sections(collectOrderReminders(invoiced(), [], [], MONDAY))).toEqual(["invoice:unsent:4 р.д."]);
+  it("виписаний і не надісланий — від старту журналу", () => {
+    expect(collectOrderReminders(invoiced(), [], [], MONDAY)).toEqual([]);
+    expect(sections(collectOrderReminders(invoiced(), [], [], "2026-11-05"))).toEqual(["invoice:unsent:3 р.д."]);
   });
 
   it("надісланий: за день до кінця 5 р.д. — менеджеру", () => {
@@ -170,8 +179,8 @@ describe("рахунок", () => {
 
   it("перевиписали з іншим номером — надсилати наново", () => {
     expect(
-      sections(collectOrderReminders(invoiced({ invoice_number: "124" }), [], [sentInvoice], MONDAY))
-    ).toEqual(["invoice:unsent:4 р.д."]);
+      sections(collectOrderReminders(invoiced({ invoice_number: "124" }), [], [sentInvoice], "2026-11-05"))
+    ).toEqual(["invoice:unsent:3 р.д."]);
   });
 });
 
@@ -225,12 +234,12 @@ describe("коли слати", () => {
 
 describe("тексти", () => {
   const items = [
-    ...collectOrderReminders(order(), [approved("contract", "2026-10-30T12:00:00Z")], [], MONDAY),
+    ...collectOrderReminders(order(), [approved("contract", "2026-11-06T12:00:00Z")], [], NEXT_MONDAY),
     ...collectOrderReminders(
-      order({ id: "order-2", quote_number: "TS-1026-0020", customer_name: null, invoice_number: "9", invoice_date: "2026-10-27" }),
+      order({ id: "order-2", quote_number: "TS-1026-0020", customer_name: null, invoice_number: "9", invoice_date: "2026-11-03" }),
       [],
       [],
-      MONDAY
+      NEXT_MONDAY
     ),
   ];
 
@@ -240,6 +249,10 @@ describe("тексти", () => {
     expect(digest.body).toBe(
       "Не надіслано:\n• TS-1026-0012 Рома — договір, 1 р.д.\n• TS-1026-0020 — рахунок, 4 р.д."
     );
+  });
+
+  it("однина в заголовку", () => {
+    expect(buildManagerDigest(items.slice(0, 1)).title).toBe("Документи замовникам: 1 потребує дії");
   });
 
   it("кнопка на кожен документ веде на замовлення", () => {
