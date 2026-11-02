@@ -73,7 +73,6 @@ import { amountInWords } from "@/lib/amountInWords";
 import { buildOrderActHtml } from "@/features/orders/orderActDocument";
 import { useOrderLegalEntity } from "@/features/orders/order-details/useOrderLegalEntity";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
-import { buildTelegramHref } from "@/lib/telegramContact";
 import { declineToGenitive } from "@/lib/nameDeclension";
 import { openDocumentWindow } from "@/features/orders/documentPrintWindow";
 import { buildSpecificationHtml, customerIbanWithBank, toAuthorityGenitive } from "@/features/orders/specificationDocument";
@@ -126,12 +125,14 @@ import {
   LAUNCHED_ORDER_STATUSES,
 } from "@/features/orders/orderLaunchPath";
 import { notifyOrderReadyUnpaid } from "@/lib/workflowNotifications";
-import { getDocumentApprovalState, getSendToCustomerBlocker, isDocumentCleared } from "@/features/orders/orderApprovals";
+import { getDocumentApprovalState, isDocumentCleared } from "@/features/orders/orderApprovals";
 import { OrderApprovalDeskCard } from "@/features/orders/order-details/OrderApprovalDeskCard";
 import { useOrderApprovalFlow } from "@/features/orders/order-details/useOrderApprovalFlow";
 import { IncotermsHint } from "@/features/orders/order-details/IncotermsHint";
 import { OrderDeliveryCard } from "@/features/orders/order-details/OrderDeliveryCard";
 import { OrderDocumentsCard } from "@/features/orders/order-details/OrderDocumentsCard";
+import { OrderMarkSentDialog } from "@/features/orders/order-details/OrderMarkSentDialog";
+import { useOrderSendToCustomer } from "@/features/orders/order-details/useOrderSendToCustomer";
 import { OrderClosingDocumentDeskCard } from "@/features/orders/order-details/OrderClosingDocumentDeskCard";
 import { OrderInvoiceDeskCard } from "@/features/orders/order-details/OrderInvoiceDeskCard";
 import { useOrderInvoiceFlow } from "@/features/orders/order-details/useOrderInvoiceFlow";
@@ -687,19 +688,21 @@ export default function OrdersProductionDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState<DerivedOrderRecord | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
+  const patchRecord = (patch: (current: DerivedOrderRecord) => DerivedOrderRecord) =>
+    setRecord((current) => {
+      if (!current) return current;
+      const next = patch(current);
+      return { ...next, docs: normalizeDocumentDocs(next) };
+    });
   const approvalFlow = useOrderApprovalFlow({
     record,
     teamId,
     userId,
     loadFresh: async () =>
       teamId && id ? ((await loadDerivedOrders(teamId, userId)).find((entry) => entry.id === id) ?? null) : null,
-    onRecordPatch: (patch) =>
-      setRecord((current) => {
-        if (!current) return current;
-        const next = patch(current);
-        return { ...next, docs: normalizeDocumentDocs(next) };
-      }),
+    onRecordPatch: patchRecord,
   });
+  const send = useOrderSendToCustomer({ record, teamId, onRecordPatch: patchRecord });
   const applyDocumentNames = (names: Map<string, string | null>) =>
     setRecord((current) => (current ? withDocumentNames(current, names) : current));
   const invoiceFlow = useOrderInvoiceFlow({
@@ -718,12 +721,7 @@ export default function OrdersProductionDetailsPage() {
   const legalEntity = useOrderLegalEntity({
     record,
     teamId,
-    onRecordPatch: (patch) =>
-      setRecord((current) => {
-        if (!current) return current;
-        const next = patch(current);
-        return { ...next, docs: normalizeDocumentDocs(next) };
-      }),
+    onRecordPatch: patchRecord,
   });
   const [activeTab, setActiveTab] = useState<OrderPageTab>("launch");
   const layoutRootRef = useRef<HTMLDivElement>(null);
@@ -1223,54 +1221,6 @@ export default function OrdersProductionDetailsPage() {
     setTtnDialogOpen(true);
   };
 
-  // Договір і СП — замовнику лише після погодження бухгалтера або СЕО (REQ-322#p6).
-  const guardSendToCustomer = () => {
-    const blocker = record ? getSendToCustomerBlocker(record) : null;
-    if (blocker) toast.error(blocker);
-    return !blocker;
-  };
-
-  const openEmailDraft = () => {
-    if (!record) return;
-    if (!guardSendToCustomer()) return;
-    const subject = encodeURIComponent(`Документи по замовленню ${record.quoteNumber}`);
-    const body = encodeURIComponent(
-      [
-        `Вітаю.`,
-        ``,
-        `Надсилаємо документи по замовленню ${record.quoteNumber}.`,
-        `Замовник: ${record.customerName}`,
-        `Сума: ${formatOrderMoney(record.total, record.currency)}`,
-        ``,
-        `Документи можна сформувати зі сторінки замовлення: Договір, СП, Рахунок, Техкарта.`,
-      ].join("\n")
-    );
-    window.location.href = `mailto:${encodeURIComponent(record.contactEmail || "")}?subject=${subject}&body=${body}`;
-  };
-
-  const openTelegramDraft = () => {
-    if (!record) return;
-    if (!guardSendToCustomer()) return;
-    const directHref = buildTelegramHref(record.contactTelegram);
-    if (directHref) {
-      window.open(directHref, "_blank", "noopener,noreferrer");
-      return;
-    }
-    const text = encodeURIComponent(
-      `Документи по замовленню ${record.quoteNumber}\n${record.customerName}\nСума: ${formatOrderMoney(record.total, record.currency)}`
-    );
-    window.open(`https://t.me/share/url?url=&text=${text}`, "_blank", "noopener,noreferrer");
-  };
-
-  const openViberDraft = () => {
-    if (!record) return;
-    if (!guardSendToCustomer()) return;
-    const text = encodeURIComponent(
-      `Документи по замовленню ${record.quoteNumber}. ${record.customerName}. Сума: ${formatOrderMoney(record.total, record.currency)}`
-    );
-    window.location.href = `viber://forward?text=${text}`;
-  };
-
   if (!id) {
     return <div className="p-6 text-sm text-muted-foreground">Невірний ідентифікатор.</div>;
   }
@@ -1390,18 +1340,21 @@ export default function OrdersProductionDetailsPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuItem onClick={openEmailDraft} disabled={!record.contactEmail}>
+                  <DropdownMenuItem onClick={send.openEmailDraft} disabled={!record.contactEmail}>
                     <Mail className="mr-2 h-4 w-4" />
                     Email
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={openTelegramDraft}>
+                  <DropdownMenuItem onClick={send.openTelegramDraft}>
                     <Send className="mr-2 h-4 w-4" />
                     Telegram
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={openViberDraft} disabled={!record.contactPhone}>
+                  <DropdownMenuItem onClick={send.openViberDraft} disabled={!record.contactPhone}>
                     <Phone className="mr-2 h-4 w-4" />
                     Viber
                   </DropdownMenuItem>
+                  {record.source === "stored" ? (
+                    <DropdownMenuItem onClick={send.markSentOther}>Надіслано іншим шляхом…</DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
               <DropdownMenu>
@@ -1557,9 +1510,7 @@ export default function OrdersProductionDetailsPage() {
                     kind === "contract" ? openContractParamsDialog() : openSpecificationParamsDialog()
                   }
                   onFixRequisites={openCustomerCard}
-                  onEmail={openEmailDraft}
-                  onTelegram={openTelegramDraft}
-                  onViber={openViberDraft}
+                  send={send}
                   teamId={teamId} onRecordChanged={() => void refreshRecord()}
                 />
                 {/* Готівка без договору: панель лише там, де договір уже є. Версії пишуться в рядок
@@ -2200,6 +2151,7 @@ export default function OrdersProductionDetailsPage() {
           onSaved={setOrderDelivery}
         />
       ) : null}
+      <OrderMarkSentDialog flow={send} />
       {teamId && record ? (
         <NovaPoshtaTtnDialog
           open={ttnDialogOpen}

@@ -48,6 +48,7 @@ import {
   type ClosingDocument,
 } from "@/features/orders/orderExecutor";
 import { openCustomerContractFile } from "@/features/orders/customerContractsQueries";
+import { getDocumentDispatchState } from "@/features/orders/orderDocumentDispatch";
 import type { OrderLegalEntityOption } from "@/features/orders/orderLegalEntityQueries";
 import { getInvoiceCorrectionBlocker } from "@/features/orders/orderInvoice";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
@@ -58,7 +59,9 @@ import { cn } from "@/lib/utils";
 
 import { CustomerContractEntry } from "./CustomerContractDialog";
 import { InfoHint, RequirementList } from "./OrderHints";
+import { DispatchLine, ReminderMenu } from "./OrderDispatchLine";
 import { OrderInvoiceCorrectionDialog } from "./OrderInvoiceCorrectionDialog";
+import type { OrderSendToCustomer } from "./useOrderSendToCustomer";
 
 export type OrderDocumentAction = { kind: OrderDocumentKind } & ReturnType<typeof getDocumentActionState>;
 
@@ -235,10 +238,12 @@ function ApprovalLine({
   record,
   kind,
   approvals,
+  send,
 }: {
   record: DerivedOrderRecord;
   kind: "contract" | "specification";
   approvals: OrderApprovalHandlers;
+  send: OrderSendToCustomer | null;
 }) {
   const { state, approval } = getDocumentApprovalState(record, kind);
   const signedAt = kind === "contract" ? record.contractSignedAt : record.specificationSignedAt;
@@ -300,16 +305,22 @@ function ApprovalLine({
 
   if (state === "approved" || state === "notRequired") {
     return (
-      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
-        {state === "approved" ? (
-          <span className="tone-text-success inline-flex items-center gap-1 font-medium">
-            <CheckCircle2 className="h-3 w-3" />
-            Погоджено{approval?.decidedAt ? ` · ${formatShortCreatedDate(approval.decidedAt)}` : ""}
-          </span>
-        ) : null}
-        <span>{kind === "contract" ? "Чекаємо підпис обох сторін" : "Чекаємо підпис замовника"}</span>
-        {signMenu}
-      </div>
+      <>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
+          {state === "approved" ? (
+            <span className="tone-text-success inline-flex items-center gap-1 font-medium">
+              <CheckCircle2 className="h-3 w-3" />
+              Погоджено{approval?.decidedAt ? ` · ${formatShortCreatedDate(approval.decidedAt)}` : ""}
+            </span>
+          ) : null}
+          {/* Не надіслано чи повернули з правками — чекаємо не замовника, а себе: про це рядок нижче. */}
+          {send && ["unsent", "returned"].includes(getDocumentDispatchState(record, kind).state) ? null : (
+            <span>{kind === "contract" ? "Чекаємо підпис обох сторін" : "Чекаємо підпис замовника"}</span>
+          )}
+          {signMenu}
+        </div>
+        {send ? <DispatchLine record={record} document={kind} send={send} /> : null}
+      </>
     );
   }
 
@@ -364,6 +375,7 @@ function DocumentRow({
   approvals,
   contractEntry,
   onCorrectInvoice,
+  send,
 }: {
   record: DerivedOrderRecord;
   document: OrderDocumentAction;
@@ -375,6 +387,8 @@ function DocumentRow({
   contractEntry: ReactNode;
   /** «Виправити рахунок» (REQ-335) — лише бухгалтерії й СЕО; null — пункту немає. */
   onCorrectInvoice: (() => void) | null;
+  /** Надсилання замовнику (REQ-343); null — незбережене замовлення, писати нікуди. */
+  send: OrderSendToCustomer | null;
 }) {
   // Договір поза CRM (p39) — це файл, а не документ, який CRM друкує: «Відкрити» показує скан.
   const externalFile = document.kind === "contract" ? (record.externalContract?.filePath ?? null) : null;
@@ -455,8 +469,9 @@ function DocumentRow({
           <div className="mt-0.5 text-2xs leading-4 text-muted-foreground">{secondaryText}</div>
         ) : null}
         {document.kind === "contract" || document.kind === "specification" ? (
-          <ApprovalLine record={record} kind={document.kind} approvals={approvals} />
+          <ApprovalLine record={record} kind={document.kind} approvals={approvals} send={send} />
         ) : null}
+        {document.kind === "invoice" && send ? <DispatchLine record={record} document="invoice" send={send} /> : null}
         {document.kind === "contract" && contractEntry ? <div className="mt-1.5">{contractEntry}</div> : null}
       </div>
       <div className="flex shrink-0 items-center gap-0.5">
@@ -526,9 +541,7 @@ export function OrderDocumentsCard({
   onAction,
   onParams,
   onFixRequisites,
-  onEmail,
-  onTelegram,
-  onViber,
+  send,
   approvals,
   issuer,
   teamId,
@@ -544,9 +557,7 @@ export function OrderDocumentsCard({
   onAction: (kind: OrderDocumentKind) => void;
   onParams: (kind: OrderDocumentKind) => void;
   onFixRequisites: (() => void) | null;
-  onEmail: () => void;
-  onTelegram: () => void;
-  onViber: () => void;
+  send: OrderSendToCustomer;
 }) {
   const cashless = isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail);
   const customerDocs = documentActions.filter((item) => item.kind !== "techCard");
@@ -563,7 +574,8 @@ export function OrderDocumentsCard({
     teamId && record.source === "stored" && canIssueOrderInvoice(accessRole, jobRole)
       ? () => setCorrectingInvoice(true)
       : null;
-  const rowProps = { record, onAction, onParams, onFixRequisites, approvals, contractEntry, onCorrectInvoice };
+  const rowSend = record.source === "stored" ? send : null;
+  const rowProps = { record, onAction, onParams, onFixRequisites, approvals, contractEntry, onCorrectInvoice, send: rowSend };
   const sendBlocker = getSendToCustomerBlocker(record);
 
   return (
@@ -614,18 +626,27 @@ export function OrderDocumentsCard({
               </span>
             ) : null}
           </span>
-          <Button size="sm" variant="outline" onClick={onEmail} disabled={!record.contactEmail}>
+          <Button size="sm" variant="outline" onClick={send.openEmailDraft} disabled={!record.contactEmail}>
             <Mail className="mr-2 h-4 w-4" />
             Email
           </Button>
-          <Button size="sm" variant="outline" onClick={onTelegram}>
+          <Button size="sm" variant="outline" onClick={send.openTelegramDraft}>
             <Send className="mr-2 h-4 w-4" />
             Telegram
           </Button>
-          <Button size="sm" variant="outline" onClick={onViber} disabled={!record.contactPhone}>
+          <Button size="sm" variant="outline" onClick={send.openViberDraft} disabled={!record.contactPhone}>
             <Phone className="mr-2 h-4 w-4" />
             Viber
           </Button>
+          {cashless && rowSend ? (
+            <>
+              <Button size="sm" variant="ghost" onClick={send.markSentOther} disabled={send.busy}>
+                Надіслано іншим шляхом
+              </Button>
+              <ReminderMenu record={record} send={send} purpose="signature" />
+              <ReminderMenu record={record} send={send} purpose="payment" />
+            </>
+          ) : null}
         </div>
       </section>
 
