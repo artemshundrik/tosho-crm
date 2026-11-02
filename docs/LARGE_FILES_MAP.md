@@ -13,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~6 042 lines, 296 KB, as of 2026-11-01)
+## src/pages/QuoteDetailsPage.tsx (~6 042 lines, 296 KB, as of 2026-11-02)
 
 Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p12. Файл СХУДНУВ на
 2 460 рядків (9 893 → 7 434): три вкладки з чотирьох поїхали в окремі модулі, а
@@ -55,7 +55,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 5419 / 5425 | вкладка «Стрічка» — `<QuoteFeed>`; збирач подій — `quoteFeedEvents.ts`, розмітка — `QuoteFeed.tsx` |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 810 lines, 588 KB, as of 2026-11-01)
+## src/pages/DesignTaskPage.tsx (~12 810 lines, 588 KB, as of 2026-11-02)
 
 | Range | Content |
 |---|---|
@@ -64,7 +64,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | **1353** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~6 695 lines, 292 KB, as of 2026-11-01)
+## src/pages/QuotesPage.tsx (~6 695 lines, 292 KB, as of 2026-11-02)
 
 | Range | Content |
 |---|---|
@@ -72,7 +72,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
 | **474** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 944 lines, 263 KB, as of 2026-11-01)
+## src/pages/DesignPage.tsx (~5 945 lines, 263 KB, as of 2026-11-02)
 
 | Range | Content |
 |---|---|
