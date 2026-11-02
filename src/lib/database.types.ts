@@ -3231,6 +3231,45 @@ export type Database = {
         }
         Relationships: []
       }
+      order_document_dispatches: {
+        Row: {
+          id: string
+          team_id: string
+          order_id: string
+          document: string
+          event: string
+          channel: string | null
+          document_stamp: string | null
+          note: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          order_id: string
+          document: string
+          event: string
+          channel?: string | null
+          document_stamp?: string | null
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          order_id?: string
+          document?: string
+          event?: string
+          channel?: string | null
+          document_stamp?: string | null
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           catalog_model_id: string | null

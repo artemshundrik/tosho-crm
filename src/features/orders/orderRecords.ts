@@ -5,6 +5,7 @@ import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborator
 import type { Database, Json } from "@/lib/database.types";
 import type { OrderApproval, SignatureVia } from "./orderApprovals";
 import { loadOrderApprovalsByOrderId } from "./orderApprovalQueries";
+import { loadOrderDispatchesByOrderId, type OrderDocumentDispatch } from "./orderDocumentDispatchQueries";
 import { externalContractLabel, isCustomerContractActive, type CustomerContract } from "./customerContracts";
 import { listCustomerContracts } from "./customerContractsQueries";
 import { legalEntityInsertColumns, resolveOrderLegalEntity } from "./orderLegalEntityQueries";
@@ -63,8 +64,7 @@ import {
 import { buildDerivedReadinessSteps, getReadinessColumn } from "./orderReadiness";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isMissingOrdersColumnMessage, isMissingOrdersRelationMessage } from "./ordersSchemaErrors";
-import { resolveWorkspaceId } from "@/lib/workspace";
-import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { listViewerWorkspaceMembers } from "@/lib/workspaceMemberDirectory";
 
 type CustomerContact = {
   name?: string;
@@ -482,6 +482,8 @@ export type DerivedOrderRecord = {
   specificationSignedVia: SignatureVia | null;
   /** Запити погодження договору, СП і винятку для запуску (p6, p8), свіжі першими. */
   approvals: OrderApproval[];
+  /** Надсилання договору, СП і рахунку замовнику (REQ-343), свіжі першими. */
+  documentDispatches: OrderDocumentDispatch[];
   /** Nova Poshta ТТН (Phase 2). null → ще не створено. */
   npTtnNumber: string | null;
   npTtnRef: string | null;
@@ -959,12 +961,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
           )
           .in("id", uniqueCustomerIds)
       : Promise.resolve({ data: [] as unknown[], error: null }),
-    (async () => {
-      if (!userId) return [];
-      const workspaceId = await resolveWorkspaceId(userId);
-      if (!workspaceId) return [];
-      return await listWorkspaceMembersForDisplay(workspaceId);
-    })(),
+    listViewerWorkspaceMembers(userId),
     (async () => {
       if (leadLookupNames.length === 0) return [] as LeadRecord[];
       const [byCompany, byLegal] = await Promise.all([
@@ -1333,6 +1330,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       specificationSignedAt: null,
       specificationSignedVia: null,
       approvals: [],
+      documentDispatches: [],
       npTtnNumber: null,
       npTtnRef: null,
       npTtnCost: null,
@@ -1372,15 +1370,11 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
 }
 
 export async function loadDerivedOrders(teamId: string, userId?: string | null): Promise<DerivedOrderRecord[]> {
-  const [storedOrders, membersResult, approvalsByOrderId] = await Promise.all([
+  const [storedOrders, membersResult, approvalsByOrderId, dispatchesByOrderId] = await Promise.all([
     listStoredOrders(teamId),
-    (async () => {
-      if (!userId) return [];
-      const workspaceId = await resolveWorkspaceId(userId);
-      if (!workspaceId) return [];
-      return await listWorkspaceMembersForDisplay(workspaceId);
-    })(),
+    listViewerWorkspaceMembers(userId),
     loadOrderApprovalsByOrderId(teamId),
+    loadOrderDispatchesByOrderId(teamId),
   ]);
 
   const approvedQuoteDerivedOrdersPromise = loadApprovedQuoteDerivedOrders(teamId, userId);
@@ -1846,6 +1840,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         specificationSignedAt: order.specification_signed_at ?? null,
         specificationSignedVia: parseSignatureVia(order.specification_signed_via),
         approvals: approvalsByOrderId.get(order.id) ?? [],
+        documentDispatches: dispatchesByOrderId.get(order.id) ?? [],
         npTtnNumber: order.np_ttn_number?.trim?.() || null,
         npTtnRef: order.np_ttn_ref?.trim?.() || null,
         npTtnCost:

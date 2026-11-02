@@ -8,6 +8,8 @@ import {
   summarizeOrderStages,
   type OrderListInput,
 } from "./orderListStages";
+import { documentStamp } from "./orderApprovals";
+import { invoiceStamp, type OrderDocumentDispatch } from "./orderDocumentDispatch";
 
 /**
  * Список замовлень (REQ-322#p12): згори етапи, у рядку — що далі й чий хід.
@@ -65,6 +67,27 @@ const withDocs = {
 };
 const cash: OrderListInput = { ...cashless, paymentMethodId: "cash", paymentRail: "Готівкові / на карту" };
 
+/** Позначка «надіслано» (REQ-343) з відбитком, що збігається з поточним документом. */
+const sentMark = (
+  document: OrderDocumentDispatch["document"],
+  stamp: string | null,
+  patch: Partial<OrderDocumentDispatch> = {}
+): OrderDocumentDispatch => ({
+  id: `${document}-${patch.event ?? "sent"}-${patch.createdAt ?? ""}`,
+  orderId: "o",
+  document,
+  event: "sent",
+  channel: "email",
+  documentStamp: stamp,
+  note: null,
+  createdBy: "me",
+  createdAt: "2026-10-16T09:00:00Z",
+  ...patch,
+});
+const invoiceSent = (input: OrderListInput) => [
+  sentMark("invoice", invoiceStamp({ invoiceNumber: input.invoiceNumber, invoiceDate: input.invoiceDate ?? null })),
+];
+
 describe("getOrderNextStep", () => {
   it("безготівка без договору — оформлення, хід менеджера", () => {
     expect(getOrderNextStep(cashless)).toMatchObject({
@@ -94,13 +117,32 @@ describe("getOrderNextStep", () => {
     });
   });
 
-  it("документи й рахунок є, передоплати немає — чекаємо замовника, з сумою", () => {
+  it("рахунок виписано, але не надіслано — хід менеджера (REQ-343#p4)", () => {
     expect(getOrderNextStep({ ...withDocs, invoiceNumber: "407" })).toMatchObject({
+      stage: "setup",
+      turn: "manager",
+      title: "Надіслати рахунок",
+      actionLabel: "Надіслати",
+    });
+  });
+
+  it("документи й рахунок є і надіслано, передоплати немає — чекаємо замовника, з сумою і строком", () => {
+    const issued = { ...withDocs, invoiceNumber: "407", invoiceDate: "2026-10-16" };
+    expect(getOrderNextStep({ ...issued, documentDispatches: invoiceSent(issued) }, "2026-10-20")).toMatchObject({
       stage: "customer",
       turn: "customer",
       title: "Передоплата 70%",
+      detail: "рахунок дійсний до 23.10",
       amountDue: 7000,
       actionLabel: null,
+    });
+  });
+
+  it("рахунок дійсний 5 р.д. — далі прострочено (p13)", () => {
+    const issued = { ...withDocs, invoiceNumber: "407", invoiceDate: "2026-10-16" };
+    expect(getOrderNextStep({ ...issued, documentDispatches: invoiceSent(issued) }, "2026-10-24")).toMatchObject({
+      turn: "customer",
+      title: "Передоплата 70% — рахунок прострочено",
     });
   });
 
@@ -350,7 +392,10 @@ describe("рахунок через бухгалтерію (p10)", () => {
 
   it("виписано — чекаємо передоплату від замовника", () => {
     const issued = { ...withDocs, invoiceNumber: "407", invoiceCreatedAt: "2026-10-15" };
-    expect(getOrderNextStep(issued)).toMatchObject({ stage: "customer", turn: "customer" });
+    expect(getOrderNextStep({ ...issued, documentDispatches: invoiceSent(issued) })).toMatchObject({
+      stage: "customer",
+      turn: "customer",
+    });
     expect(getOrderDocMarks(issued)?.find((mark) => mark.key === "invoice")?.ready).toBe(true);
   });
 
@@ -393,9 +438,57 @@ describe("погодження, підпис і виняток у списку (
     expect(getOrderNextStep(returned)).toMatchObject({ turn: "manager", detail: "Не та дата" });
   });
 
-  it("обидва погоджено — чекаємо підпис замовника", () => {
+  it("обидва погоджено, не надіслано — хід менеджера, а не замовника (REQ-343#p4)", () => {
     const approved = { ...created, approvals: [approval("contract", "approved"), approval("specification", "approved")] };
-    expect(getOrderNextStep(approved)).toMatchObject({ turn: "customer", title: "Чекаємо підпис договору" });
+    expect(getOrderNextStep(approved)).toMatchObject({
+      stage: "setup",
+      turn: "manager",
+      title: "Надіслати замовнику: договір і СП",
+    });
+  });
+
+  it("обидва погоджено й надіслано — чекаємо підпис замовника, видно коли надіслали", () => {
+    const approved = { ...created, approvals: [approval("contract", "approved"), approval("specification", "approved")] };
+    const sent = {
+      ...approved,
+      documentDispatches: [
+        sentMark("contract", documentStamp(approved, "contract")),
+        sentMark("specification", documentStamp(approved, "specification")),
+      ],
+    };
+    expect(getOrderNextStep(sent, "2026-10-20")).toMatchObject({
+      stage: "customer",
+      turn: "customer",
+      title: "Чекаємо підпис договору",
+      detail: "надіслано 16.10 · 2 р.д. чекаємо",
+    });
+  });
+
+  it("документ змінили після надсилання — знову «надіслати»", () => {
+    const approved = { ...created, approvals: [approval("contract", "approved"), approval("specification", "approved")] };
+    const stale = {
+      ...approved,
+      documentDispatches: [sentMark("contract", "старий відбиток"), sentMark("specification", documentStamp(approved, "specification"))],
+    };
+    expect(getOrderNextStep(stale)).toMatchObject({ turn: "manager", title: "Надіслати замовнику: договір" });
+  });
+
+  it("замовник повернув з правками — хід знову наш, з його коментарем (p5)", () => {
+    const approved = { ...created, approvals: [approval("contract", "approved"), approval("specification", "approved")] };
+    const returned = {
+      ...approved,
+      documentDispatches: [
+        sentMark("contract", documentStamp(approved, "contract")),
+        sentMark("specification", documentStamp(approved, "specification")),
+        sentMark("specification", null, { event: "customer_returned", note: "Інша адреса доставки", createdAt: "2026-10-17T09:00:00Z" }),
+      ],
+    };
+    expect(getOrderNextStep(returned)).toMatchObject({
+      stage: "setup",
+      turn: "manager",
+      title: "Замовник повернув СП з правками",
+      detail: "Інша адреса доставки",
+    });
   });
 
   it("просять запустити без умов — хід керівництва, бухгалтеру це не його хід", () => {

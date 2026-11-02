@@ -9,6 +9,7 @@ import { ORDER_PAYMENT_TERMS_OPTIONS } from "./config";
 import type { DerivedOrderRecord } from "./orderRecords";
 import { CLOSING_DOCUMENT_LABELS, type ClosingDocument } from "./orderExecutor";
 import { getOrderInvoiceState } from "./orderInvoice";
+import { formatDispatchDay, formatSentNote, getDocumentDispatchState, type DispatchRecord } from "./orderDocumentDispatch";
 import {
   addBalanceDays,
   daysBetween,
@@ -46,7 +47,8 @@ export type LaunchPathInput = ApprovalRecord &
   | "invoiceNumber"
   | "invoiceRequestedAt"
   | "invoiceReturnNote"
->;
+> &
+  Partial<Pick<DerivedOrderRecord, "invoiceCreatedAt" | "invoiceDate" | "documentDispatches" | "externalContract">>;
 
 export type LaunchStepState = "done" | "current" | "todo" | "locked";
 export type LaunchStep = { key: string; title: string; note: string; state: LaunchStepState };
@@ -245,15 +247,36 @@ export const buildLaunchPath = (
   const deferred = isFullyDeferred(input);
   const onReadiness = isPaidOnReadiness(input);
   const paymentDone = deferred || onReadiness || prepaymentReceived || launched;
-  const docNote = (created: boolean, signed: boolean, state: DocumentApprovalState, emptyNote: string) =>
-    signed ? "Підписано" : !created ? emptyNote : (APPROVAL_NOTES[state] ?? "Створено — чекаємо підпис");
+  const todayIso = localTodayIso();
+  // Погоджене — ще не «у замовника» (REQ-343#p3): що з надсиланням, видно в кроці.
+  const dispatchNote = (kind: "contract" | "specification") => {
+    const dispatch = getDocumentDispatchState(input as DispatchRecord, kind);
+    if (dispatch.state === "unsent") return "Погоджено — надіслати замовнику";
+    if (dispatch.state === "returned") {
+      return `Замовник повернув з правками ${formatDispatchDay(dispatch.returned.createdAt)}${dispatch.returned.note ? `: ${dispatch.returned.note}` : ""}`;
+    }
+    if (dispatch.state === "sent") return formatSentNote(dispatch, todayIso, { lead: "Надіслано на підпис" });
+    return null;
+  };
+  const docNote = (
+    kind: "contract" | "specification",
+    created: boolean,
+    signed: boolean,
+    state: DocumentApprovalState,
+    emptyNote: string
+  ) =>
+    signed
+      ? "Підписано"
+      : !created
+        ? emptyNote
+        : ((state === "approved" ? dispatchNote(kind) : null) ?? APPROVAL_NOTES[state] ?? "Створено — чекаємо підпис");
   const steps: LaunchStep[] = [
     {
       key: "contract",
       title: "Договір",
       note: input.inheritedContractOrderNumber && !contractSigned
         ? `З ${input.inheritedContractOrderNumber} — не позначено підписаним`
-        : docNote(contractCreated, contractSigned, contract.state, "Один на замовника, підписують обидві сторони"),
+        : docNote("contract", contractCreated, contractSigned, contract.state, "Один на замовника, підписують обидві сторони"),
       state: contractSigned ? "done" : "current",
     },
     {
@@ -272,6 +295,7 @@ export const buildLaunchPath = (
       key: "specification",
       title: "СП",
       note: docNote(
+        "specification",
         specCreated,
         specSigned,
         spec.state,

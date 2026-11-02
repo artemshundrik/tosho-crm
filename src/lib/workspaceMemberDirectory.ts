@@ -779,6 +779,13 @@ export async function listWorkspaceMembersForDisplay(workspaceId: string): Promi
   }
 }
 
+/** Учасники воркспейсу того, хто дивиться; без користувача чи воркспейсу — порожньо. */
+export async function listViewerWorkspaceMembers(userId: string | null | undefined): Promise<WorkspaceMemberDisplayRow[]> {
+  if (!userId) return [];
+  const workspaceId = await resolveWorkspaceId(userId);
+  return workspaceId ? await listWorkspaceMembersForDisplay(workspaceId) : [];
+}
+
 export async function getCurrentWorkspaceMemberDirectoryEntry() {
   if (currentWorkspaceMemberDirectoryEntryCache !== undefined) {
     return currentWorkspaceMemberDirectoryEntryCache;

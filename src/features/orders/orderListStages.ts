@@ -13,6 +13,15 @@ import {
   type LaunchPathInput,
 } from "./orderLaunchPath";
 import { getDocumentApprovalState, getLaunchException } from "./orderApprovals";
+import {
+  formatDispatchDay,
+  formatSentNote,
+  getDocumentDispatchState,
+  getInvoiceDue,
+  joinDocumentTitles,
+  DISPATCH_DOCUMENT_TITLES,
+  type DispatchDocument,
+} from "./orderDocumentDispatch";
 import { getOrderInvoiceState } from "./orderInvoice";
 import type { DerivedOrderRecord } from "./orderRecords";
 import { formatDayMonth, isCashlessPaymentMethod, localTodayIso } from "./paymentRules";
@@ -35,7 +44,9 @@ export type OrderListInput = LaunchPathInput &
     | "invoiceReturnNote"
     | "inheritedContractOrderNumber"
     | "managerUserId"
-  >;
+  > &
+  // Надсилання (REQ-343): у старих тестових записах цих полів немає — тоді «не надіслано».
+  Partial<Pick<DerivedOrderRecord, "invoiceDate" | "documentDispatches" | "externalContract">>;
 
 export type ActiveOrderStage = "setup" | "customer" | "production" | "shipment" | "awaitingPayment";
 export type OrderStage = ActiveOrderStage | "done" | "cancelled";
@@ -193,9 +204,41 @@ export const getOrderNextStep = (input: OrderListInput, todayIso = localTodayIso
       return step({ stage: "setup", turn: "manager", title: `${what} — на погодження`, actionLabel: "На погодження" });
     }
     case "Договір не підписано":
-      return step({ stage: "customer", turn: "customer", title: "Чекаємо підпис договору" });
-    case "СП не підписана":
-      return step({ stage: "customer", turn: "customer", title: "Чекаємо підпис СП" });
+    case "СП не підписана": {
+      // Погоджено — ще не означає «у замовника» (REQ-343#p4): поки не надіслали
+      // або замовник повернув з правками, хід менеджера.
+      const kind = path.blocker === "Договір не підписано" ? "contract" : "specification";
+      const states = (["contract", "specification", "invoice"] as const).map((document) => ({
+        document,
+        dispatch: getDocumentDispatchState(input, document),
+      }));
+      const returned = states.find((item) => item.dispatch.state === "returned");
+      if (returned?.dispatch.state === "returned") {
+        return step({
+          stage: "setup",
+          turn: "manager",
+          title: `Замовник повернув ${DISPATCH_DOCUMENT_TITLES[returned.document]} з правками`,
+          detail: returned.dispatch.returned.note,
+          actionLabel: "Виправити",
+        });
+      }
+      const unsent: DispatchDocument[] = states.filter((item) => item.dispatch.state === "unsent").map((item) => item.document);
+      if (unsent.some((document) => document !== "invoice")) {
+        return step({
+          stage: "setup",
+          turn: "manager",
+          title: `Надіслати замовнику: ${joinDocumentTitles(unsent)}`,
+          actionLabel: "Надіслати",
+        });
+      }
+      const waiting = states.find((item) => item.document === kind)?.dispatch;
+      return step({
+        stage: "customer",
+        turn: "customer",
+        title: kind === "contract" ? "Чекаємо підпис договору" : "Чекаємо підпис СП",
+        detail: waiting?.state === "sent" ? formatSentNote(waiting, todayIso, { waiting: "чекаємо" }) : null,
+      });
+    }
     case "Чекає передоплату": {
       const pct = breakdown?.prepayment ?? 100;
       // На безготівці замовник платить за рахунком, а рахунок виписує бухгалтерія.
@@ -210,6 +253,35 @@ export const getOrderNextStep = (input: OrderListInput, todayIso = localTodayIso
             actionLabel: "Рахунок",
           });
         }
+        // Рахунок виписано, але замовник його ще не бачив — хід менеджера (p4).
+        const dispatch = getDocumentDispatchState(input, "invoice");
+        if (dispatch.state === "unsent" || dispatch.state === "returned") {
+          return step({
+            stage: "setup",
+            turn: "manager",
+            title: dispatch.state === "unsent" ? "Надіслати рахунок" : "Замовник повернув рахунок з правками",
+            detail: dispatch.state === "returned" ? dispatch.returned.note : null,
+            actionLabel: dispatch.state === "unsent" ? "Надіслати" : "Виправити",
+          });
+        }
+        const due = getInvoiceDue(
+          {
+            invoiceNumber: input.invoiceNumber,
+            invoiceDate: input.invoiceDate ?? null,
+            invoiceCreatedAt: input.invoiceCreatedAt,
+            prepaymentPct: breakdown?.prepayment ?? null,
+            balanceTiming: input.balanceTiming,
+            paymentStatus: input.paymentStatus,
+          },
+          todayIso
+        );
+        return step({
+          stage: "customer",
+          turn: "customer",
+          title: due?.overdue ? `Передоплата ${pct}% — рахунок прострочено` : `Передоплата ${pct}%`,
+          detail: due ? (due.overdue ? `рахунок дійсний був до ${formatDispatchDay(due.dueDate)}` : `рахунок дійсний до ${formatDispatchDay(due.dueDate)}`) : null,
+          amountDue: share(input, pct),
+        });
       }
       return step({
         stage: "customer",
