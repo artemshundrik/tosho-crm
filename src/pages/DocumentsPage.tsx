@@ -91,7 +91,8 @@ const SECTIONS: { id: SectionFilter; label: string }[] = [
 
 // short — для телефона: третина ширини не вміщає «Договори закінчуються».
 const TILES: { flag: DocumentFlag; label: string; short: string; tone: Tone; hint: string }[] = [
-  { flag: "unsigned", label: "Не підписано", short: "Не підписано", tone: "warning", hint: "договори й СП активних замовлень, створені до сьогодні" },
+  { flag: "unsent", label: "Не надіслано", short: "Не надіслано", tone: "warning", hint: "хід наш: не надіслали чи повернули" },
+  { flag: "unsigned", label: "Чекаємо замовника", short: "Чекаємо", tone: "info", hint: "надіслано, чекаємо підпис" },
   { flag: "noClosing", label: "Без закривального", short: "Без ВН/акта", tone: "danger", hint: "відвантажено, а ВН або акта немає" },
   { flag: "expiring", label: "Договори закінчуються", short: "Закінчуються", tone: "accent", hint: "у найближчі 90 днів, без пролонгації" },
 ];
@@ -454,7 +455,7 @@ export default function DocumentsPage() {
   const totalForTiles = Math.max(1, section === "all" ? documents.length : documents.filter((doc) => doc.section === section).length);
 
   const tiles = (
-    <div className="grid grid-cols-3 gap-2 md:gap-3" aria-label="Що потребує уваги">
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3" aria-label="Що потребує уваги">
       {TILES.map((tile) => {
         const count = flagCounts[tile.flag];
         const active = flag === tile.flag;

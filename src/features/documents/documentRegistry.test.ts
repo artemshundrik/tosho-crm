@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { CustomerContract } from "@/features/orders/customerContracts";
+import { documentStamp, type OrderApproval } from "@/features/orders/orderApprovals";
+import { invoiceStamp, type DispatchDocument, type OrderDocumentDispatch } from "@/features/orders/orderDocumentDispatch";
 import { DEFAULT_ORDER_EXECUTOR } from "@/features/orders/orderExecutor";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 
@@ -61,6 +63,45 @@ const order = (patch: Partial<DerivedOrderRecord>): DerivedOrderRecord =>
     waybillDate: null,
     ...patch,
   }) as unknown as DerivedOrderRecord;
+
+/** СП, погоджена бухгалтерією з чинним відбитком — її вже можна й треба надіслати. */
+const approvedSpec = (patch: Partial<DerivedOrderRecord>): DerivedOrderRecord => {
+  const base = order(patch);
+  const approval: OrderApproval = {
+    id: "a1",
+    orderId: base.id,
+    kind: "specification",
+    status: "approved",
+    documentStamp: documentStamp(base, "specification"),
+    requestNote: null,
+    requestedBy: "m1",
+    requestedAt: "2026-10-20T09:00:00Z",
+    decidedBy: "acc",
+    decidedAt: "2026-10-20T12:00:00Z",
+    decisionNote: null,
+  };
+  return { ...base, approvals: [approval] };
+};
+
+const mark = (
+  record: DerivedOrderRecord,
+  document: DispatchDocument,
+  createdAt: string,
+  patch: Partial<OrderDocumentDispatch> = {}
+): OrderDocumentDispatch => ({
+  id: `${document}:${createdAt}`,
+  orderId: record.id,
+  document,
+  event: "sent",
+  channel: "telegram",
+  documentStamp: document === "invoice" ? invoiceStamp(record) : documentStamp(record, document),
+  note: null,
+  createdBy: "m1",
+  createdAt,
+  ...patch,
+});
+
+const withMarks = (record: DerivedOrderRecord, ...marks: OrderDocumentDispatch[]) => ({ ...record, documentDispatches: marks });
 
 const contract = (patch: Partial<CustomerContract>): CustomerContract => ({
   id: "k1",
@@ -125,17 +166,44 @@ describe("buildDocumentRegistry", () => {
     expect(docs.filter((doc) => doc.kind === "contract")).toHaveLength(1);
   });
 
-  it("непідписана СП активного замовлення — у плитці «Не підписано», давня — червона", () => {
-    const [spec] = buildDocumentRegistry([order({ specificationCreatedAt: "2026-10-23T09:00:00Z" })], [], TODAY);
-    expect(spec.flag).toBe("unsigned");
-    expect(spec.status).toMatchObject({ label: "Не підписано", tone: "danger", detail: "6 дн." });
-    expect(spec.alert?.tone).toBe("danger");
+  it("погоджена, але не надіслана СП — плитка «Не надіслано»: хід наш (REQ-343#p8)", () => {
+    const [spec] = buildDocumentRegistry([approvedSpec({ specificationCreatedAt: "2026-10-23T09:00:00Z" })], [], TODAY);
+    expect(spec.flag).toBe("unsent");
+    expect(spec.status).toMatchObject({ label: "Не надіслано", tone: "warning" });
+    expect(spec.steps[1]).toEqual({ label: "Надіслано", done: false, note: "ще ні" });
   });
 
-  it("СП, створена сьогодні, ще не «увага»: її ніхто не встиг підписати", () => {
-    const [spec] = buildDocumentRegistry([order({ specificationCreatedAt: "2026-10-29T11:50:00Z" })], [], TODAY);
+  it("не погоджена СП — теж «Не надіслано», з причиною", () => {
+    const [spec] = buildDocumentRegistry([order({ specificationCreatedAt: "2026-10-23T09:00:00Z" })], [], TODAY);
+    expect(spec.flag).toBe("unsent");
+    expect(spec.status).toMatchObject({ label: "Не надіслано", detail: "ще не погоджено" });
+  });
+
+  it("надіслана СП — «Не підписано» від дня надсилання, з 5 р.д. червона (p7, p8)", () => {
+    const spec0 = approvedSpec({ specificationCreatedAt: "2026-10-20T09:00:00Z" });
+    const [spec] = buildDocumentRegistry([withMarks(spec0, mark(spec0, "specification", "2026-10-21T09:00:00Z"))], [], TODAY);
+    expect(spec.flag).toBe("unsigned");
+    expect(spec.status).toMatchObject({ label: "Не підписано", tone: "danger", detail: "6 р.д. від надсилання" });
+    expect(spec.steps[1]).toEqual({ label: "Надіслано", done: true, note: "21.10 · у Telegram" });
+    expect(spec.alert?.text).toBe("Без підпису 6 р.д. від надсилання 21.10 · у Telegram.");
+    expect(spec.events.map((event) => event.text)).toContain("надіслано у Telegram");
+  });
+
+  it("надіслали сьогодні — ще не «увага»", () => {
+    const spec0 = approvedSpec({ specificationCreatedAt: "2026-10-20T09:00:00Z" });
+    const [spec] = buildDocumentRegistry([withMarks(spec0, mark(spec0, "specification", "2026-10-29T08:00:00Z"))], [], TODAY);
     expect(spec.flag).toBeNull();
-    expect(spec.status).toMatchObject({ label: "Не підписано", tone: "warning", detail: "сьогодні" });
+    expect(spec.status).toMatchObject({ label: "Не підписано", tone: "warning", detail: "надіслано сьогодні" });
+  });
+
+  it("замовник повернув з правками — знову «Не надіслано» з текстом правки", () => {
+    const spec0 = approvedSpec({ specificationCreatedAt: "2026-10-20T09:00:00Z" });
+    const sent = mark(spec0, "specification", "2026-10-21T09:00:00Z");
+    const returned = mark(spec0, "specification", "2026-10-22T09:00:00Z", { event: "customer_returned", channel: null, note: "інша адреса" });
+    const [spec] = buildDocumentRegistry([withMarks(spec0, sent, returned)], [], TODAY);
+    expect(spec.flag).toBe("unsent");
+    expect(spec.status).toMatchObject({ label: "Повернули з правками", detail: "інша адреса" });
+    expect(spec.alert?.tone).toBe("warning");
   });
 
   it("завершене замовлення не тягне непідписані документи в плитку", () => {
@@ -172,14 +240,27 @@ describe("buildDocumentRegistry", () => {
     expect(invoice.flag).toBeNull();
   });
 
-  it("рахунок, що чекає оплату: до 5 днів сірий, з 5 жовтий, з 14 червоний з попередженням", () => {
-    const invoiceAt = (createdAt: string) =>
-      buildDocumentRegistry([order({ invoiceNumber: "9", invoiceCreatedAt: createdAt })], [], TODAY)[0];
-    expect(invoiceAt("2026-10-26T09:00:00Z").status).toMatchObject({ tone: "neutral", detail: "3 дн." });
-    expect(invoiceAt("2026-10-23T09:00:00Z").status).toMatchObject({ tone: "warning", detail: "6 дн." });
-    const overdue = invoiceAt("2026-09-04T09:00:00Z");
-    expect(overdue.status).toMatchObject({ tone: "danger", detail: "55 дн." });
-    expect(overdue.alert).toEqual({ tone: "danger", text: "Рахунок чекає оплату 55 дн. від внесення номера." });
+  it("рахунок дійсний 5 р.д.: сірий, жовтий за день до кінця, червоний після (p14)", () => {
+    const invoiceOn = (invoiceDate: string) => {
+      const base = order({ invoiceNumber: "9", invoiceDate, invoiceCreatedAt: `${invoiceDate}T09:00:00Z` });
+      return buildDocumentRegistry([withMarks(base, mark(base, "invoice", `${invoiceDate}T10:00:00Z`))], [], TODAY)[0];
+    };
+    expect(invoiceOn("2026-10-27").status).toMatchObject({ label: "Чекає оплату", tone: "neutral", detail: "дійсний до 03.11" });
+    expect(invoiceOn("2026-10-23").status).toMatchObject({ tone: "warning", detail: "дійсний до 30.10" });
+    const overdue = invoiceOn("2026-10-20");
+    expect(overdue.status).toMatchObject({ tone: "danger", detail: "прострочено, був до 27.10" });
+    expect(overdue.alert).toEqual({ tone: "danger", text: "Рахунок прострочено: був дійсний до 27.10 (5 робочих днів)." });
+    expect(overdue.flag).toBeNull();
+  });
+
+  it("рахунок не надіслано — «Не надіслано» в плитці; на відтермінуванні строку рахунку немає", () => {
+    const [unsent] = buildDocumentRegistry([order({ invoiceNumber: "9", invoiceDate: "2026-10-27", invoiceCreatedAt: "2026-10-27T09:00:00Z" })], [], TODAY);
+    expect(unsent).toMatchObject({ flag: "unsent", status: { label: "Не надіслано", tone: "warning" } });
+
+    const deferred = order({ invoiceNumber: "9", invoiceCreatedAt: "2026-09-04T09:00:00Z", prepaymentPct: 0, balancePct: 100, balanceTiming: "after_shipment" });
+    const [invoice] = buildDocumentRegistry([withMarks(deferred, mark(deferred, "invoice", "2026-09-04T10:00:00Z"))], [], TODAY);
+    expect(invoice.status).toMatchObject({ tone: "neutral", detail: "55 дн." });
+    expect(invoice.alert).toBeNull();
   });
 
   it("рахунок на 0 грн каже, що в замовленні немає суми", () => {
@@ -228,7 +309,7 @@ describe("filterDocuments", () => {
   });
 
   it("лічильники плиток", () => {
-    expect(countFlags(docs)).toEqual({ unsigned: 1, noClosing: 0, expiring: 0 });
+    expect(countFlags(docs)).toEqual({ unsent: 3, unsigned: 0, noClosing: 0, expiring: 0 });
   });
 });
 

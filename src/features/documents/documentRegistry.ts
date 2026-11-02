@@ -1,6 +1,20 @@
 import type { CustomerContract } from "@/features/orders/customerContracts";
 import { SIGNATURE_VIA_LABELS, type SignatureVia } from "@/features/orders/orderApprovals";
-import { getClosingDocumentRef, PREPAYMENT_RECEIVED, SHIPPED_ORDER_STATUSES } from "@/features/orders/orderLaunchPath";
+import {
+  DISPATCH_CHANNEL_LABELS,
+  formatDispatchDay,
+  getDocumentDispatchState,
+  getInvoiceDue,
+  workingDaysBetween,
+  type DispatchDocument,
+  type DocumentDispatchState,
+} from "@/features/orders/orderDocumentDispatch";
+import {
+  getClosingDocumentRef,
+  PREPAYMENT_RECEIVED,
+  resolveBreakdown,
+  SHIPPED_ORDER_STATUSES,
+} from "@/features/orders/orderLaunchPath";
 import { getOrderNextStep } from "@/features/orders/orderListStages";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { isCashlessPaymentMethod } from "@/features/orders/paymentRules";
@@ -8,14 +22,14 @@ import { customerFilterNames, normalizeCustomerName, type CustomerFilterValue } 
 import type { Tone } from "@/lib/statusTones";
 
 /**
- * Реєстр розділу «Документи» (картка 15, пункт d16; макет E). Перший крок
- * збирається з того, що вже лежить на замовленнях і в договорах поза CRM, без
- * окремої таблиці: тож «надіслано» й «чернетка» тут не існують, а стан — лише
- * той, що відомо з полів (підпис, оплата, термін дії).
+ * Реєстр розділу «Документи» (картка 15, пункт d16; макет E). Збирається з
+ * того, що вже лежить на замовленнях і в договорах поза CRM: підпис, оплата,
+ * термін дії, а з REQ-343 — ще й журнал надсилань замовнику.
  */
 export type DocumentKind = "contract" | "specification" | "invoice" | "waybill" | "act";
 export type DocumentSection = "legal" | "accounting";
-export type DocumentFlag = "unsigned" | "noClosing" | "expiring";
+/** unsent — хід наш (не надіслано, повернули з правками); unsigned — надіслано, чекаємо замовника. */
+export type DocumentFlag = "unsent" | "unsigned" | "noClosing" | "expiring";
 
 export const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
   contract: "Договір",
@@ -83,8 +97,6 @@ const EXPIRING_WINDOW_DAYS = 90;
 const LONG_WAIT_DAYS = 5;
 /** Щойно створений договір чи СП ще ніхто не встиг підписати — це не «увага». */
 const UNSIGNED_FLAG_AFTER_DAYS = 1;
-/** Рахунок, що чекає оплату: з 5 днів жовтіє, з 14 червоніє. */
-const INVOICE_OVERDUE_DAYS = 14;
 
 /** «2026-10-14» або ISO → «14.10.2026». */
 export const formatDocumentDate = (value: string | null | undefined) => {
@@ -121,6 +133,29 @@ const waitStatus = (label: string, sinceIso: string, todayIso: string) => {
 const signedNote = (at: string, via: SignatureVia | null) =>
   `${formatDocumentDate(at)}${via ? ` · ${SIGNATURE_VIA_LABELS[via]}` : ""}`;
 
+const sentNote = (dispatch: Extract<DocumentDispatchState, { state: "sent" | "returned" }>) =>
+  `${formatDispatchDay(dispatch.sent.createdAt)} · ${DISPATCH_CHANNEL_LABELS[dispatch.sent.channel ?? "other"]}`;
+
+/** Крок «Надіслано» і події журналу (REQ-343#p7). */
+const dispatchStep = (dispatch: DocumentDispatchState, settled: boolean): DocumentStep => {
+  if (dispatch.state === "sent" || dispatch.state === "returned") return { label: "Надіслано", done: true, note: sentNote(dispatch) };
+  if (dispatch.state === "unsent") return { label: "Надіслано", done: false, note: "ще ні" };
+  if (dispatch.state === "notReady") return { label: "Надіслано", done: false, note: "ще не погоджено" };
+  return { label: "Надіслано", done: settled, note: settled ? null : "не відстежено" };
+};
+
+const DISPATCH_EVENT_TEXT = { sent: "надіслано", reminded: "нагадали", customer_returned: "замовник повернув з правками" } as const;
+
+const dispatchEvents = (record: DerivedOrderRecord, document: DispatchDocument): DocumentEvent[] =>
+  (record.documentDispatches ?? [])
+    .filter((item) => item.document === document)
+    .map((item) => ({
+      at: item.createdAt,
+      precise: true,
+      text: `${DISPATCH_EVENT_TEXT[item.event]}${item.channel ? ` ${DISPATCH_CHANNEL_LABELS[item.channel]}` : ""}${item.note ? `: ${item.note}` : ""}`,
+      userId: item.createdBy,
+    }));
+
 type OrderContext = {
   record: DerivedOrderRecord;
   active: boolean;
@@ -149,8 +184,33 @@ function signableDocument(
 ): RegistryDocument {
   const { record, todayIso, active } = ctx;
   const signed = Boolean(input.signedAt);
-  const wait = waitStatus("Не підписано", input.createdAt, todayIso);
-  const flag: DocumentFlag | null = !signed && active && wait.days >= UNSIGNED_FLAG_AFTER_DAYS ? "unsigned" : null;
+  const dispatch = getDocumentDispatchState(record, kind);
+  // «Не підписано» рахуємо від надсилання (p8): до нього чекали не замовника, а себе.
+  // Без журналу (документ не потребує погодження) — як і раніше, від створення.
+  let wait = waitStatus("Не підписано", input.createdAt, todayIso);
+  let flag: DocumentFlag | null = !signed && active && wait.days >= UNSIGNED_FLAG_AFTER_DAYS ? "unsigned" : null;
+  let alert: RegistryDocument["alert"] =
+    flag === "unsigned" && wait.days >= LONG_WAIT_DAYS
+      ? { tone: "danger", text: `Без підпису ${wait.days} дн. від створення. Чи надіслано замовнику, CRM не знає.` }
+      : null;
+  if (!signed && dispatch.state === "sent") {
+    const days = workingDaysBetween(isoDay(dispatch.sent.createdAt), todayIso);
+    wait = { ...wait, tone: days >= LONG_WAIT_DAYS ? "danger" : "warning", detail: days === 0 ? "надіслано сьогодні" : `${days} р.д. від надсилання`, days };
+    flag = active && days >= UNSIGNED_FLAG_AFTER_DAYS ? "unsigned" : null;
+    alert = flag && days >= LONG_WAIT_DAYS ? { tone: "danger", text: `Без підпису ${days} р.д. від надсилання ${sentNote(dispatch)}.` } : null;
+  } else if (!signed && (dispatch.state === "unsent" || dispatch.state === "notReady" || dispatch.state === "returned")) {
+    wait = {
+      ...wait,
+      tone: "warning",
+      label: dispatch.state === "returned" ? "Повернули з правками" : "Не надіслано",
+      detail: dispatch.state === "returned" ? (dispatch.returned.note ?? "без коментаря") : dispatch.state === "notReady" ? "ще не погоджено" : wait.detail,
+    };
+    flag = active ? "unsent" : null;
+    alert =
+      dispatch.state === "returned"
+        ? { tone: "warning", text: `Замовник повернув з правками ${formatDispatchDay(dispatch.returned.createdAt)}: ${dispatch.returned.note ?? "без коментаря"}` }
+        : null;
+  }
   const status = signed
     ? { tone: "success" as Tone, label: "Підписано", detail: signedNote(input.signedAt!, input.via) }
     : ctx.cancelled
@@ -158,6 +218,7 @@ function signableDocument(
       : { tone: wait.tone, label: wait.label, detail: wait.detail };
   const events: DocumentEvent[] = [
     { at: input.createdAt, precise: true, text: kind === "contract" ? "створено договір" : "створено СП", userId: null },
+    ...dispatchEvents(record, kind),
   ];
   if (input.signedAt) {
     events.push({ at: input.signedAt, precise: true, text: `підписано ${input.via ? SIGNATURE_VIA_LABELS[input.via] : ""}`.trim(), userId: null });
@@ -177,14 +238,11 @@ function signableDocument(
     status,
     steps: [
       { label: "Створено", done: true, note: formatDocumentDate(input.createdAt) },
-      { label: "Надіслано", done: signed, note: signed ? null : "поки не відстежуємо" },
+      dispatchStep(dispatch, signed),
       { label: "Підписано", done: signed, note: signed ? signedNote(input.signedAt!, input.via) : null },
     ],
-    flag,
-    alert:
-      flag === "unsigned" && wait.days >= LONG_WAIT_DAYS
-        ? { tone: "danger", text: `Без підпису ${wait.days} дн. від створення. Чи надіслано замовнику, CRM поки не знає.` }
-        : null,
+    flag: ctx.cancelled ? null : flag,
+    alert: ctx.cancelled ? null : alert,
     events,
   };
 }
@@ -202,22 +260,43 @@ function invoiceDocument(ctx: OrderContext): RegistryDocument | null {
   const noClosing =
     !ctx.cancelled && !closing.number && shipped && isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail);
   const waitedDays = daysBetween(createdAt, todayIso);
-  const waitingTone: Tone =
-    waitedDays >= INVOICE_OVERDUE_DAYS ? "danger" : waitedDays >= LONG_WAIT_DAYS ? "warning" : "neutral";
+  const dispatch = getDocumentDispatchState(record, "invoice");
+  // Рахунок дійсний 5 робочих днів з дати рахунку (p13–p14): жовтий за день до кінця, далі червоний.
+  // На відтермінуванні (доплата після ВН) строку рахунку немає — тоді сірий.
+  const due = getInvoiceDue(
+    {
+      invoiceNumber: record.invoiceNumber,
+      invoiceDate: record.invoiceDate,
+      invoiceCreatedAt: record.invoiceCreatedAt,
+      prepaymentPct: resolveBreakdown(record)?.prepayment ?? null,
+      balanceTiming: record.balanceTiming,
+      paymentStatus: record.paymentStatus,
+    },
+    todayIso
+  );
+  const waiting = !paid && !partial && !ctx.cancelled;
+  const unsent = waiting && (dispatch.state === "unsent" || dispatch.state === "returned");
+  const waitingTone: Tone = due?.overdue ? "danger" : due?.warning || unsent ? "warning" : "neutral";
+  const waitingDetail = due ? `${due.overdue ? "прострочено, був" : "дійсний"} до ${formatDispatchDay(due.dueDate)}` : waitedDetail(waitedDays);
   const status = paid
     ? { tone: "success" as Tone, label: "Оплачено", detail: null }
     : partial
       ? { tone: "info" as Tone, label: "Оплачено частково", detail: null }
       : ctx.cancelled
         ? { tone: "neutral" as Tone, label: "Замовлення скасовано", detail: null }
-        : { tone: waitingTone, label: "Чекає оплату", detail: waitedDetail(waitedDays) };
-  const overdue = !paid && !partial && !ctx.cancelled && waitedDays >= INVOICE_OVERDUE_DAYS;
+        : {
+            tone: waitingTone,
+            label: dispatch.state === "returned" ? "Повернули з правками" : unsent ? "Не надіслано" : "Чекає оплату",
+            detail: waitingDetail,
+          };
+  const overdue = waiting && Boolean(due?.overdue);
   const noSum = !(record.total > 0);
   const events: DocumentEvent[] = [];
   if (record.invoiceRequestedAt) {
     events.push({ at: record.invoiceRequestedAt, precise: true, text: "попросили рахунок", userId: record.invoiceRequestedBy });
   }
   events.push({ at: createdAt, precise: Boolean(record.invoiceCreatedAt), text: `внесено номер ${record.invoiceNumber} з BAS`, userId: record.invoiceIssuedBy ?? null });
+  events.push(...dispatchEvents(record, "invoice"));
   return {
     ...baseFromOrder(ctx),
     id: `invoice:${record.id}`,
@@ -233,16 +312,16 @@ function invoiceDocument(ctx: OrderContext): RegistryDocument | null {
     status,
     steps: [
       { label: "Виписано", done: true, note: formatDocumentDate(record.invoiceDate ?? createdAt) },
-      { label: "Надіслано", done: paid || partial, note: paid || partial ? null : "поки не відстежуємо" },
+      dispatchStep(dispatch, paid || partial),
       { label: "Оплачено", done: paid, note: paid ? "повністю" : partial ? "частково" : null },
     ],
-    flag: noClosing ? "noClosing" : null,
+    flag: noClosing ? "noClosing" : unsent && ctx.active ? "unsent" : null,
     alert: noClosing
       ? { tone: "danger", text: `Відвантажено, а ${closing.kind === "act" ? "акта" : "видаткової накладної"} ще немає.` }
       : noSum
         ? { tone: "warning", text: "У замовленні немає суми — рахунок показує 0 грн. Перевірте позиції замовлення." }
-        : overdue
-          ? { tone: "danger", text: `Рахунок чекає оплату ${waitedDays} дн. від внесення номера.` }
+        : overdue && due
+          ? { tone: "danger", text: `Рахунок прострочено: був дійсний до ${formatDispatchDay(due.dueDate)} (5 робочих днів).` }
           : null,
     events,
   };
@@ -428,7 +507,7 @@ export function filterDocuments(documents: RegistryDocument[], filters: Document
 }
 
 export const countFlags = (documents: RegistryDocument[]) => {
-  const counts: Record<DocumentFlag, number> = { unsigned: 0, noClosing: 0, expiring: 0 };
+  const counts: Record<DocumentFlag, number> = { unsent: 0, unsigned: 0, noClosing: 0, expiring: 0 };
   for (const doc of documents) if (doc.flag) counts[doc.flag] += 1;
   return counts;
 };
