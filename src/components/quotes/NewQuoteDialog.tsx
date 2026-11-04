@@ -1,4 +1,5 @@
 import * as React from "react";
+import { DesignerStatusLoad, useDesignerStatusLoad } from "@/hooks/useDesignerStatusLoad";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -320,7 +321,7 @@ const RunsEditor: React.FC<{
 const ChipDropdown: React.FC<{
   value: string;
   onChange: (value: string) => void;
-  options: ReadonlyArray<{ value: string; label: string }>;
+  options: ReadonlyArray<{ value: string; label: string; description?: React.ReactNode }>;
   placeholder: string;
   icon: React.ReactNode;
   disabled?: boolean;
@@ -364,6 +365,7 @@ const ChipDropdown: React.FC<{
                 size="md"
                 className={cn(
                   "w-full justify-between text-sm",
+                  option.description && "h-auto items-start gap-2 py-2",
                   active && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
                 )}
                 onClick={() => {
@@ -371,8 +373,15 @@ const ChipDropdown: React.FC<{
                   setOpen(false);
                 }}
               >
-                <span>{option.label}</span>
-                {active ? <Check className="h-4 w-4" /> : null}
+                {option.description ? (
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block truncate">{option.label}</span>
+                    {option.description}
+                  </span>
+                ) : (
+                  <span>{option.label}</span>
+                )}
+                {active ? <Check className="h-4 w-4 shrink-0" /> : null}
               </Button>
             );
           })}
@@ -894,6 +903,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       (member) => isDesignerJobRole(member.jobRole) && !isInactiveEmployment(member.employmentStatus)
     );
   }, [teamMembers]);
+  const designerStatusLoad = useDesignerStatusLoad(teamId, open && createDesignTask);
   const availableStatuses = React.useMemo(() => {
     if (isEditMode) return QUOTE_STATUSES;
     return QUOTE_STATUSES.filter(
@@ -2532,10 +2542,16 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       designerMembers.length > 0
                         ? [
                             { value: "none", label: "Без виконавця" },
-                            ...designerMembers.map((member) => ({
-                              value: member.id,
-                              label: member.label,
-                            })),
+                            ...designerMembers.map((member) => {
+                              const statusLoad = designerStatusLoad.byId.get(member.id);
+                              return {
+                                value: member.id,
+                                label: member.label,
+                                description: statusLoad ? (
+                                  <DesignerStatusLoad counts={statusLoad} scaleMax={designerStatusLoad.scale} />
+                                ) : undefined,
+                              };
+                            }),
                           ]
                         : [
                             {

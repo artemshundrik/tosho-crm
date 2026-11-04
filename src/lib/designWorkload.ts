@@ -11,6 +11,8 @@ export type DesignWorkloadLevel = "low" | "medium" | "high" | "critical";
 
 export type DesignWorkloadSummary = {
   activeTaskCount: number;
+  newCount: number;
+  changesCount: number;
   estimateMinutesTotal: number;
   effectiveMinutesTotal: number;
   inProgressCount: number;
@@ -66,6 +68,8 @@ export const calculateDesignWorkload = (
     0
   );
   const inProgressCount = activeTasks.filter((task) => task.status === "in_progress").length;
+  const newCount = activeTasks.filter((task) => task.status === "new").length;
+  const changesCount = activeTasks.filter((task) => task.status === "changes").length;
   const reviewCount = activeTasks.filter((task) => task.status === "pm_review" || task.status === "client_review").length;
   const overdueCount = activeTasks.filter((task) => getDeadlineState(task.designDeadline) === "overdue").length;
   const dueTodayCount = activeTasks.filter((task) => getDeadlineState(task.designDeadline) === "today").length;
@@ -114,6 +118,8 @@ export const calculateDesignWorkload = (
 
   return {
     activeTaskCount: activeTasks.length,
+    newCount,
+    changesCount,
     estimateMinutesTotal,
     effectiveMinutesTotal,
     inProgressCount,

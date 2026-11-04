@@ -151,6 +151,7 @@ import {
   buildQuoteDesignTaskCards,
 } from "@/features/quotes/quote-details/QuoteDesignTasksPanel";
 import { QuoteDesignTabSection } from "@/features/quotes/quote-details/QuoteDesignTabSection";
+import { useDesignerStatusLoad } from "@/hooks/useDesignerStatusLoad";
 import { QuoteFeed } from "@/features/quotes/quote-details/QuoteFeed";
 import { describeRunChanges } from "@/features/quotes/quote-details/quoteRunChanges";
 import { buildQuoteFeed } from "@/features/quotes/quote-details/quoteFeedEvents";
@@ -1659,6 +1660,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       (member) => isDesignerJobRole(member.jobRole) && !memberInactiveById[member.id]
     );
   }, [teamMembers, memberInactiveById]);
+  // Навантаження за етапами — лише коли відкрита вкладка «Дизайн»: там вибирають виконавця.
+  const designerStatusLoad = useDesignerStatusLoad(teamId, activeQuoteTab === "design");
+  const composerDesigners = useMemo(
+    () => designerMembers.map((member) => ({ ...member, statusLoad: designerStatusLoad.byId.get(member.id) ?? null })),
+    [designerMembers, designerStatusLoad]
+  );
   const selectedDesignOutputFile = useMemo(() => {
     const metadata = designTask?.metadata ?? {};
     const selectedId =
@@ -5187,7 +5194,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 onDesignTaskTypeChange={setDesignTaskType}
                 designAssigneeId={designAssigneeId}
                 onDesignAssigneeChange={setDesignAssigneeId}
-                designers={designerMembers}
+                designers={composerDesigners}
                 designTaskSaving={designTaskSaving}
                 designTaskError={designTaskError}
                 designTaskLoading={designTaskLoading}

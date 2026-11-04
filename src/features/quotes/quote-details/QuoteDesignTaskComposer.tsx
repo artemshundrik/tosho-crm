@@ -1,4 +1,5 @@
 import * as React from "react";
+import { DesignerStatusLoad, getDesignerStatusTotal, type DesignerStatusCounts } from "@/components/design/DesignerStatusLoad";
 import { Check, ChevronDown, Loader2, Paperclip, User, X } from "@/components/icons/appIcons";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
@@ -67,7 +68,13 @@ import type { QuoteAttachment } from "./queries";
 export type { DesignComposerImprint };
 
 /** Дизайнер у виборі виконавця — діючий, з посадою дизайнера. */
-export type ComposerDesigner = { id: string; label: string; avatarUrl?: string | null };
+export type ComposerDesigner = {
+  id: string;
+  label: string;
+  avatarUrl?: string | null;
+  /** Нові / в роботі / правки — показуємо під іменем у виборі виконавця. */
+  statusLoad?: DesignerStatusCounts | null;
+};
 
 export function QuoteDesignTaskComposer({
   brief,
@@ -118,6 +125,10 @@ export function QuoteDesignTaskComposer({
   const effectiveType = taskType ?? DEFAULT_DESIGN_TASK_TYPE;
   const TypeIcon = DESIGN_TASK_TYPE_ICONS[effectiveType];
   const assignee = designers.find((designer) => designer.id === assigneeId) ?? null;
+  const designerStatusScale = designers.reduce(
+    (max, designer) => Math.max(max, getDesignerStatusTotal(designer.statusLoad)),
+    0
+  );
   const briefRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   /*
@@ -298,7 +309,7 @@ export function QuoteDesignTaskComposer({
                 <ChevronDown className="shrink-0 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuContent align="end" className="w-72">
               <DropdownMenuLabel>Виконавець</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => onAssigneeChange(null)} className="gap-2 text-sm">
                 {/* Коробка під розмір аватарки, щоб імена стояли одним стовпчиком. */}
@@ -312,7 +323,7 @@ export function QuoteDesignTaskComposer({
                 <DropdownMenuItem
                   key={designer.id}
                   onSelect={() => onAssigneeChange(designer.id)}
-                  className="gap-2 text-sm"
+                  className="items-start gap-2 py-2 text-sm"
                 >
                   <AvatarBase
                     src={designer.avatarUrl ?? null}
@@ -321,7 +332,12 @@ export function QuoteDesignTaskComposer({
                     size={20}
                     className="shrink-0 text-3xs font-semibold"
                   />
-                  <span className="min-w-0 flex-1 truncate">{designer.label}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{designer.label}</div>
+                    {designer.statusLoad ? (
+                      <DesignerStatusLoad counts={designer.statusLoad} scaleMax={designerStatusScale} />
+                    ) : null}
+                  </div>
                   {designer.id === assignee?.id ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
                 </DropdownMenuItem>
               ))}

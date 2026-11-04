@@ -122,6 +122,7 @@ import {
   serializeDesignTaskProduct,
   type DesignTaskProduct,
 } from "@/lib/designTaskProduct";
+import { DesignerStatusLoad } from "@/components/design/DesignerStatusLoad";
 import { ACTIVE_DESIGN_STATUSES, calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import {
   listWorkspaceMembersForDisplay,
@@ -3018,6 +3019,11 @@ export default function DesignPage() {
   }, [assigneeGrouped]);
 
 
+  const designerStatusScale = useMemo(
+    () => designerMembers.reduce((max, member) => Math.max(max, designerLoadById.get(member.id)?.activeTaskCount ?? 0), 0),
+    [designerLoadById, designerMembers]
+  );
+
   const sortedDesignerCapacityOptions = useMemo(
     () =>
       [...designerMembers].sort((a, b) => {
@@ -4632,25 +4638,32 @@ export default function DesignPage() {
                       <Users />
                       Призначити дизайнеру
                     </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                    <DropdownMenuSubContent className="max-h-80 w-64 overflow-y-auto">
                       {designerMembers.length === 0 ? (
                         <DropdownMenuItem disabled>Немає дизайнерів</DropdownMenuItem>
                       ) : (
-                        designerMembers.map((member) => (
-                          <DropdownMenuItem
-                            key={member.id}
-                            onClick={() => applyAssignee(task, member.id)}
-                            disabled={task.assigneeUserId === member.id}
-                          >
-                            <AvatarBase
-                              src={member.avatarUrl ?? null}
-                              name={member.label}
-                              size={20}
-                              showStatusIndicator={false}
-                            />
-                            {member.label}
-                          </DropdownMenuItem>
-                        ))
+                        sortedDesignerCapacityOptions.map((member) => {
+                          const workload = designerLoadById.get(member.id);
+                          return (
+                            <DropdownMenuItem
+                              key={member.id}
+                              onClick={() => applyAssignee(task, member.id)}
+                              disabled={task.assigneeUserId === member.id}
+                              className="items-start py-2"
+                            >
+                              <AvatarBase
+                                src={member.avatarUrl ?? null}
+                                name={member.label}
+                                size={20}
+                                showStatusIndicator={false}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate">{member.label}</div>
+                                {workload ? <DesignerStatusLoad counts={workload} scaleMax={designerStatusScale} /> : null}
+                              </div>
+                            </DropdownMenuItem>
+                          );
+                        })
                       )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => applyAssignee(task, null)} disabled={!task.assigneeUserId}>
@@ -4679,7 +4692,7 @@ export default function DesignPage() {
                       <RefreshCw />
                       Змінити статус
                     </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                    <DropdownMenuSubContent className="max-h-80 w-64 overflow-y-auto">
                       {statusTargets.map((target) => {
                         const StatusIcon = DESIGN_STATUS_ICON_BY_STATUS[target.id];
                         return (
@@ -5581,7 +5594,7 @@ export default function DesignPage() {
                       {selectedAssignee?.label ?? "Виконавець"}
                     </Chip>
                   </PopoverTrigger>
-                  <PopoverContent className="w-64 p-2" align="start" portalled={false}>
+                  <PopoverContent className="w-80 p-2" align="start" portalled={false}>
                     <div className="space-y-1">
                       {recommendedAssigneeGroup?.id ? (
                         <div className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2">
@@ -5637,16 +5650,15 @@ export default function DesignPage() {
                                 fallbackClassName="text-3xs font-semibold"
                               />
                               <div className="min-w-0 flex-1 text-left">
-                                <div className="truncate">{member.label}</div>
-                                {workload ? (
-                                  <div className="mt-0.5 flex flex-wrap items-center gap-1 text-2xs text-muted-foreground">
-                                    <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
-                                    <span>·</span>
-                                    <span>{workload.activeTaskCount} задач</span>
-                                    <span>·</span>
-                                    <span>{formatHoursLoad(workload.estimateMinutesTotal)}</span>
-                                  </div>
-                                ) : null}
+                                <div className="flex items-baseline justify-between gap-2">
+                                  <span className="shrink-0">{member.label}</span>
+                                  {workload ? (
+                                    <span className="min-w-0 truncate text-2xs text-muted-foreground">
+                                      {CAPACITY_LABEL_BY_LEVEL[workload.level]} · {formatHoursLoad(workload.estimateMinutesTotal)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {workload ? <DesignerStatusLoad counts={workload} scaleMax={designerStatusScale} /> : null}
                               </div>
                               <Check
                                 className={cn(
@@ -5682,7 +5694,7 @@ export default function DesignPage() {
                       : `Співвиконавці · ${createCollaboratorIds.length}`}
                   </Chip>
                 </PopoverTrigger>
-                <PopoverContent className="w-64 p-2" align="start" portalled={false}>
+                <PopoverContent className="w-72 p-2" align="start" portalled={false}>
                   <div className="space-y-1">
                     {sortedDesignerCapacityOptions
                       .filter((member) => member.id !== createAssigneeUserId)
@@ -5715,13 +5727,7 @@ export default function DesignPage() {
                               />
                               <div className="min-w-0 flex-1 text-left">
                                 <div className="truncate">{member.label}</div>
-                                {workload ? (
-                                  <div className="mt-0.5 flex flex-wrap items-center gap-1 text-2xs text-muted-foreground">
-                                    <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
-                                    <span>·</span>
-                                    <span>{workload.activeTaskCount} задач</span>
-                                  </div>
-                                ) : null}
+                                {workload ? <DesignerStatusLoad counts={workload} scaleMax={designerStatusScale} /> : null}
                               </div>
                               <Check
                                 className={cn(

@@ -3,6 +3,7 @@ import { DateTimePicker, deadlineUrgencyTone } from "@/components/ui/picker-inpu
 import { PageLoading } from "@/components/app/page-loading";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import { DesignerStatusLoad } from "@/components/design/DesignerStatusLoad";
 import type { Json } from "@/lib/database.types";
 import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
@@ -3434,6 +3435,11 @@ export default function DesignTaskPage() {
     });
     return map;
   }, [designQueueTasks, designerMembers]);
+
+  const designerStatusScale = useMemo(
+    () => designerMembers.reduce((max, member) => Math.max(max, designerWorkloadById.get(member.id)?.activeTaskCount ?? 0), 0),
+    [designerMembers, designerWorkloadById]
+  );
 
   const sortedDesignerMembers = useMemo(
     () =>
@@ -8834,17 +8840,14 @@ export default function DesignTaskPage() {
         sortedDesignerMembers.map((member) => {
           const workload = designerWorkloadById.get(member.id);
           return (
-            <DropdownMenuItem key={member.id} onClick={() => void applyAssignee(member.id)} disabled={task.assigneeUserId === member.id} className="gap-2 py-2">
+            <DropdownMenuItem key={member.id} onClick={() => void applyAssignee(member.id)} disabled={task.assigneeUserId === member.id} className="items-start gap-2 py-2">
               <AvatarBase src={member.avatarUrl ?? getMemberAvatar(member.id)} name={member.label} fallback={getInitials(member.label)} size={18} className="shrink-0 border-border/70" fallbackClassName="text-3xs font-semibold" />
               <div className="min-w-0 flex-1">
-                <div className="truncate">{member.label}</div>
-                {workload ? (
-                  <div className="mt-0.5 flex items-center gap-1 text-2xs text-muted-foreground">
-                    <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
-                    <span>·</span>
-                    <span>{workload.activeTaskCount} задач</span>
-                  </div>
-                ) : null}
+                <div className="flex items-baseline gap-2">
+                  <span className="min-w-0 flex-1 truncate">{member.label}</span>
+                  {workload ? <span className="shrink-0 text-2xs text-muted-foreground">{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span> : null}
+                </div>
+                {workload ? <DesignerStatusLoad counts={workload} scaleMax={designerStatusScale} /> : null}
               </div>
               {workload ? (
                 <Badge variant="outline" className={cn("ml-auto text-3xs", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
@@ -8911,7 +8914,7 @@ export default function DesignTaskPage() {
                   {primary.label}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuContent align="end" className="w-72">
                 {renderAssigneeMenuItems()}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -11783,7 +11786,7 @@ export default function DesignTaskPage() {
                         {assigningMemberId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuContent align="end" className="w-72">
                       {renderAssigneeMenuItems()}
                     </DropdownMenuContent>
                   </DropdownMenu>
