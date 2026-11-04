@@ -27,6 +27,10 @@ import {
  * Ворота запуску (p8): договір і СП «зроблені», лише коли підписані (p7);
  * до того крок показує погодження (p6). Дозвіл на запуск без умов від СЕО чи
  * головного бухгалтера відкриває запуск, хоч би чого бракувало.
+ *
+ * Візуал (REQ-322#p42, Влад 04.11.2026): не тримає ні створення замовлення, ні
+ * договір з рахунком — лише запуск, і на готівці, і на безготівці. Повернули на
+ * доопрацювання після оплати — запуск знову чекає погодження.
  */
 export type LaunchPathInput = ApprovalRecord &
   Pick<
@@ -48,7 +52,9 @@ export type LaunchPathInput = ApprovalRecord &
   | "invoiceRequestedAt"
   | "invoiceReturnNote"
 > &
-  Partial<Pick<DerivedOrderRecord, "invoiceCreatedAt" | "invoiceDate" | "documentDispatches" | "externalContract">>;
+  Partial<
+    Pick<DerivedOrderRecord, "invoiceCreatedAt" | "invoiceDate" | "documentDispatches" | "externalContract" | "visualizationPending">
+  >;
 
 export type LaunchStepState = "done" | "current" | "todo" | "locked";
 export type LaunchStep = { key: string; title: string; note: string; state: LaunchStepState };
@@ -62,7 +68,8 @@ export type LaunchBlocker =
   | "СП не погоджено"
   | "Договір не підписано"
   | "СП не підписана"
-  | "Чекає передоплату";
+  | "Чекає передоплату"
+  | "Візуал не погоджено";
 
 export const PREPAYMENT_RECEIVED = new Set(["partially_paid", "fully_paid", "awaiting_balance"]);
 export const LAUNCHED_ORDER_STATUSES = new Set(["production_started", "in_production", "ready", "shipped", "completed"]);
@@ -175,7 +182,8 @@ export const buildLaunchPath = (
   const prepaymentNote = breakdown ? `${breakdown.prepayment}% до запуску` : "За умовами замовлення";
   const launchStep = (ready: boolean, lockedNote: string): LaunchStep => ({
     key: "launch",
-    title: "Запуск у виробництво",
+    // Шостий крок (візуал) звужує колонки — довга назва обрізалась на краю картки.
+    title: visualPending ? "Запуск" : "Запуск у виробництво",
     note: launched
       ? "Запущено"
       : ready
@@ -185,6 +193,11 @@ export const buildLaunchPath = (
           : lockedNote,
     state: launched ? "done" : ready || exceptionApproved ? "current" : "locked",
   });
+
+  const visualPending = Boolean(input.visualizationPending) && !launched;
+  const visualSteps: LaunchStep[] = visualPending
+    ? [{ key: "visual", title: "Візуал", note: "Не погоджено — запуск після погодження з замовником", state: "current" }]
+    : [];
 
   const shipmentStep: LaunchStep = {
     key: "shipment",
@@ -213,7 +226,8 @@ export const buildLaunchPath = (
             : prepaymentNote,
         state: prepaymentDone ? "done" : "current",
       },
-      launchStep(prepaymentDone, "Після передоплати"),
+      ...visualSteps,
+      launchStep(prepaymentDone && !visualPending, visualPending ? "Після передоплати й погодженого візуалу" : "Після передоплати"),
     ];
     if ((breakdown?.balance ?? 0) > 0) {
       steps.push({
@@ -228,8 +242,8 @@ export const buildLaunchPath = (
     return {
       heading: terms ? `${method}, ${terms}` : method,
       steps,
-      blocker: prepaymentDone || exceptionApproved ? null : "Чекає передоплату",
-      missing: prepaymentDone ? [] : ["передоплати"],
+      blocker: exceptionApproved ? null : !prepaymentDone ? "Чекає передоплату" : visualPending ? "Візуал не погоджено" : null,
+      missing: [...(prepaymentDone ? [] : ["передоплати"]), ...(visualPending ? ["погодженого візуалу"] : [])],
       exception,
     };
   }
@@ -313,7 +327,11 @@ export const buildLaunchPath = (
           : prepaymentNote,
       state: paymentDone ? "done" : contractSigned && specSigned ? "current" : "todo",
     },
-    launchStep(contractSigned && specSigned && paymentDone, "Після підписаної СП і оплати за умовами"),
+    ...visualSteps,
+    launchStep(
+      contractSigned && specSigned && paymentDone && !visualPending,
+      visualPending ? "Після підписаної СП, оплати й погодженого візуалу" : "Після підписаної СП і оплати за умовами"
+    ),
   ];
   const needsApproval = (state: DocumentApprovalState) => state !== "approved" && state !== "notRequired";
   // Уже запущене (старі замовлення без договору в CRM) — блокувати нічого.
@@ -335,11 +353,14 @@ export const buildLaunchPath = (
                 ? "СП не підписана"
                 : !paymentDone
                   ? "Чекає передоплату"
-                  : null;
+                  : visualPending
+                    ? "Візуал не погоджено"
+                    : null;
   const missing = [
     ...(!contractSigned ? ["підпису договору"] : []),
     ...(!specSigned ? ["підпису СП"] : []),
     ...(!paymentDone ? ["оплати"] : []),
+    ...(visualPending ? ["погодженого візуалу"] : []),
   ];
   return {
     heading: deferred ? "Безготівка, оплата після відвантаження" : terms ? `Безготівка, ${terms}` : "Безготівка",

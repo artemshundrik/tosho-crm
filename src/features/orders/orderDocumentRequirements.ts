@@ -352,9 +352,9 @@ export const getDocumentActionState = (
 };
 
 /**
- * Чи можна створити СП: безготівка, договір і рахунок (REQ-322#p15). Погоджений
- * візуал не вимагаємо: не кожному замовнику він потрібен у СП, і менеджер сам
- * вирішує у вікні параметрів, чи його друкувати (REQ-322#p37).
+ * Чи можна створити СП: безготівка, договір і рахунок (REQ-322#p15). Візуал тут не
+ * перевіряємо: чи друкувати його, менеджер вирішує у вікні параметрів (p37), а
+ * непогоджений із галочкою зупиняє getSpecificationVisualBlocker (p42).
  */
 export const canCreateSpecification = (record: DerivedOrderRecord) =>
   record.items.length > 0 &&
@@ -380,5 +380,21 @@ export const getSpecificationBlocker = (record: DerivedOrderRecord) => {
   if (!record.specificationCreatedAt && !record.invoiceNumber) {
     return "Спочатку рахунок: СП створюється, коли бухгалтерія його випише.";
   }
+  const visualBlocker = getSpecificationVisualBlocker(record, record.specIncludeVisualization !== false);
+  if (visualBlocker) return visualBlocker;
   return null;
 };
+
+/**
+ * СП з візуалом — лише з погодженим (REQ-322#p42, Dmint і Влад 04.11.2026): у СП
+ * клієнт підписує те, що отримає. Без візуалу в СП (галочку зняли, p37) — можна.
+ * Передрук уже створеної СП не блокуємо: візуал могли повернути на доопрацювання
+ * вже після підпису. null — можна.
+ */
+export const getSpecificationVisualBlocker = (
+  record: Pick<DerivedOrderRecord, "visualizationPending" | "specificationCreatedAt">,
+  includeVisualization: boolean
+) =>
+  includeVisualization && record.visualizationPending && !record.specificationCreatedAt
+    ? "Візуал ще не погоджено. СП з візуалом створиться після погодження, а якщо замовнику візуал у СП не потрібен, зніміть «Додати візуалізацію»."
+    : null;

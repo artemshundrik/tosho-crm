@@ -331,3 +331,35 @@ describe("ворота відвантаження (p9)", () => {
     expect(getShipmentBlocker({ ...cash, orderStatus: "shipped" })).toBeNull();
   });
 });
+
+describe("візуал тримає лише запуск (REQ-322#p42, Влад 04.11.2026)", () => {
+  it("безготівка: підписано й оплачено, але візуал не погоджено — запуск закритий", () => {
+    const input = { ...cashless, ...SIGNED, paymentStatus: "partially_paid", visualizationPending: true };
+    const path = buildLaunchPath(input);
+    expect(path.blocker).toBe("Візуал не погоджено");
+    expect(path.missing).toEqual(["погодженого візуалу"]);
+    expect(stateOf(input).slice(-3)).toEqual(["payment:done", "visual:current", "launch:locked"]);
+  });
+
+  it("безготівка: документи й оплата важливіші в черзі за візуал", () => {
+    expect(buildLaunchPath({ ...cashless, visualizationPending: true }).blocker).toBe("Бракує договору");
+  });
+
+  it("готівка з передоплатою без погодженого візуалу не запускається", () => {
+    const path = buildLaunchPath({ ...cash, paymentStatus: "partially_paid", visualizationPending: true });
+    expect(path.blocker).toBe("Візуал не погоджено");
+    expect(path.steps.find((step) => step.key === "launch")?.state).toBe("locked");
+  });
+
+  it("погоджений візуал кроку не додає", () => {
+    const input = { ...cash, paymentStatus: "partially_paid", visualizationPending: false };
+    expect(buildLaunchPath(input).blocker).toBeNull();
+    expect(stateOf(input)).not.toContain("visual:current");
+  });
+
+  it("уже запущене візуалом не блокується", () => {
+    const path = buildLaunchPath({ ...cash, orderStatus: "in_production", visualizationPending: true });
+    expect(path.blocker).toBeNull();
+    expect(stateOf({ ...cash, orderStatus: "in_production", visualizationPending: true })).not.toContain("visual:current");
+  });
+});

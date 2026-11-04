@@ -76,4 +76,12 @@ describe("getReadinessColumn", () => {
     expect(getReadinessColumn(["Макет погоджено"])).toBe("design");
     expect(getReadinessColumn([])).toBe("ready");
   });
+
+  it("непогоджений візуал не блокує створення замовлення (REQ-322#p42)", () => {
+    const input = { ...ready, hasApprovedVisualization: false };
+    expect(blockersOf(input)).toEqual([]);
+    const visual = buildDerivedReadinessSteps(input).find((step) => step.label === "Візуал погоджено");
+    expect(visual).toMatchObject({ done: false, blocking: false });
+    expect(getReadinessColumn(blockersOf(input))).toBe("ready");
+  });
 });

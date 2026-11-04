@@ -62,6 +62,7 @@ import {
   resolveOrderPaymentMethod,
 } from "./paymentRules";
 import { buildDerivedReadinessSteps, getReadinessColumn } from "./orderReadiness";
+import { isLayoutApprovedByTask, isVisualizationApprovedByTask, isVisualizationPending } from "./orderVisualGate";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isMissingOrdersColumnMessage, isMissingOrdersRelationMessage } from "./ordersSchemaErrors";
 import { listViewerWorkspaceMembers } from "@/lib/workspaceMemberDirectory";
@@ -342,16 +343,6 @@ const buildDesignTaskSnapshot = async (metadata: Record<string, unknown>): Promi
   };
 };
 
-const isVisualizationApprovedByTask = (task: DesignTaskSnapshot) =>
-  task.status === "approved" &&
-  (task.hasSelectedVisualization ||
-    ((!task.type || task.type === "visualization") && task.hasLegacySelectedOutput));
-
-const isLayoutApprovedByTask = (task: DesignTaskSnapshot) =>
-  task.status === "approved" &&
-  (task.hasSelectedLayout ||
-    ((!task.type || task.type === "layout" || task.type === "layout_adaptation") && task.hasLegacySelectedOutput));
-
 export type DerivedOrderItem = {
   id: string;
   quoteItemId?: string | null;
@@ -527,6 +518,8 @@ export type DerivedOrderRecord = {
    */
   requiresDesignApproval: boolean;
   hasApprovedVisualization: boolean;
+  /** Візуал ще погоджують — СП з ним і запуск чекають; див. orderVisualGate. */
+  visualizationPending: boolean;
   hasApprovedLayout: boolean;
   approvedVisualizationAssets: OrderDesignAsset[];
   approvedLayoutAssets: OrderDesignAsset[];
@@ -1362,6 +1355,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       waybillDate: null,
       requiresDesignApproval: hasImprint || requiresVisualization || requiresLayout,
       hasApprovedVisualization,
+      visualizationPending: requiresVisualization && !hasApprovedVisualization,
       hasApprovedLayout,
       approvedVisualizationAssets,
       approvedLayoutAssets,
@@ -1540,6 +1534,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       if (legalKey) storedLeadByLookup.set(legalKey, lead);
     });
     const designAssetsByQuoteId = new Map<string, { visualization: OrderDesignAsset[]; layout: OrderDesignAsset[] }>();
+    // Без них замовлення, створене до погодження візуалу, його б не побачило (p42).
+    const designTaskSnapshotsByQuoteId = new Map<string, DesignTaskSnapshot[]>();
     for (const row of ([...(designTaskRows.data ?? []), ...foreign.designTaskRows] as unknown) as Array<{
       entity_id?: string | null;
       metadata?: Record<string, unknown> | null;
@@ -1552,6 +1548,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             ? row.entity_id.trim()
             : "";
       if (!quoteId || !orderedQuoteIds.has(quoteId)) continue;
+      const snapshot = await buildDesignTaskSnapshot(metadata);
+      designTaskSnapshotsByQuoteId.set(quoteId, [...(designTaskSnapshotsByQuoteId.get(quoteId) ?? []), snapshot]);
       const statusRaw = typeof metadata.status === "string" ? metadata.status.trim().toLowerCase() : "new";
       if (!(statusRaw in DESIGN_STATUS_LABELS) || statusRaw !== "approved") continue;
       const existing = designAssetsByQuoteId.get(quoteId) ?? { visualization: [], layout: [] };
@@ -1650,10 +1648,15 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       const linkedDesignTask = linkedDesignTaskId ? designTaskByLinkId.get(linkedDesignTaskId) ?? null : null;
       // Прапорець із моменту створення тільки додає, ніколи не забирає: задачу могли погодити
       // вже після того, як замовлення завели (ручні замовлення з новою дизайн-задачею).
+      const knownDesignTasks = [
+        ...Array.from(orderQuoteIds).flatMap((quoteId) => designTaskSnapshotsByQuoteId.get(quoteId) ?? []),
+        ...(linkedDesignTask ? [linkedDesignTask] : []),
+      ];
       const hasApprovedVisualization =
         Boolean(order.has_approved_visualization) ||
         !requiresDesignApproval ||
-        Boolean(linkedDesignTask && isVisualizationApprovedByTask(linkedDesignTask));
+        knownDesignTasks.some(isVisualizationApprovedByTask);
+      const visualizationPending = isVisualizationPending(requiresDesignApproval, order.has_approved_visualization, knownDesignTasks);
       const hasApprovedLayout =
         Boolean(order.has_approved_layout) ||
         !requiresDesignApproval ||
@@ -1886,6 +1889,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         waybillDate: order.waybill_date ?? null,
         requiresDesignApproval,
         hasApprovedVisualization,
+        visualizationPending,
         hasApprovedLayout,
         approvedVisualizationAssets: linkedDesignAssets.visualization,
         approvedLayoutAssets: linkedDesignAssets.layout,

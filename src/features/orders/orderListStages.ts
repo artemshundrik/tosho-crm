@@ -239,6 +239,8 @@ export const getOrderNextStep = (input: OrderListInput, todayIso = localTodayIso
         detail: waiting?.state === "sent" ? formatSentNote(waiting, todayIso, { waiting: "чекаємо" }) : null,
       });
     }
+    case "Візуал не погоджено":
+      return step({ stage: "setup", turn: "manager", title: "Погодити візуал із замовником", actionLabel: "Дизайн" });
     case "Чекає передоплату": {
       const pct = breakdown?.prepayment ?? 100;
       // На безготівці замовник платить за рахунком, а рахунок виписує бухгалтерія.

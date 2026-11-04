@@ -52,6 +52,7 @@ import {
   getDocumentActionState,
   getOrderDocumentKinds,
   getSpecificationBlocker,
+  getSpecificationVisualBlocker,
   type OrderDocumentKind,
 } from "@/features/orders/orderDocumentRequirements";
 // Панель ревізій договору тягне rich-text-редактор (tiptap/prosemirror,
@@ -2027,6 +2028,7 @@ export default function OrdersProductionDetailsPage() {
             {isCashlessPaymentMethod(specPaymentMethodId) ? (
               <SpecificationVisualizationField
                 available={Boolean(record?.hasApprovedVisualization)}
+                pending={Boolean(record?.visualizationPending) && !record?.specificationCreatedAt}
                 checked={specIncludeVisualization}
                 onCheckedChange={setSpecIncludeVisualization}
               />
@@ -2060,9 +2062,14 @@ export default function OrdersProductionDetailsPage() {
                   prepaymentPct,
                   paymentTerms: record.paymentTerms,
                 });
-                if (prepaymentError) {
+                const dialogError =
+                  prepaymentError ??
+                  (isCashlessPaymentMethod(specPaymentMethodId)
+                    ? getSpecificationVisualBlocker(record, specIncludeVisualization)
+                    : null);
+                if (dialogError) {
                   // Помилка лишається у вікні, поруч із полем, яке треба виправити.
-                  setSpecDialogError(prepaymentError);
+                  setSpecDialogError(dialogError);
                   return;
                 }
                 setSpecDialogError(null);

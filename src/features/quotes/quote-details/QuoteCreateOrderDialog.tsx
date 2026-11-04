@@ -110,7 +110,12 @@ export function QuoteCreateOrderDialog({
                 {draft.readiness.readinessSteps.map((step) => (
                   <div key={step.label} className="flex items-start gap-3 rounded-lg border border-border/50 px-3 py-2">
                     <Checkbox checked={step.done} disabled />
-                    <div className="text-sm text-foreground">{step.label}</div>
+                    <div className="text-sm text-foreground">
+                      {step.label}
+                      {!step.done && step.blocking === false ? (
+                        <div className="text-xs text-muted-foreground">Створити не заважає — потрібен до запуску у виробництво</div>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>

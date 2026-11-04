@@ -46,8 +46,10 @@ export const buildDerivedReadinessSteps = (input: DerivedReadinessInput): Derive
   // із них погодив клієнт, замовлення робити нема з чого — до 25.08.2026
   // мовчки брався перший створений.
   ...(input.runChoicePending ? [{ label: "Позначено тираж, який погодив клієнт", done: false, blocking: true }] : []),
+  // Візуал не тримає створення: договір і рахунок робляться, поки його доробляють.
+  // Без погодженого візуалу не запуститься виробництво (REQ-322#p42, Влад 04.11.2026).
   ...(input.requiresVisualization
-    ? [{ label: "Візуал погоджено", done: input.hasApprovedVisualization, blocking: true }]
+    ? [{ label: "Візуал погоджено", done: input.hasApprovedVisualization, blocking: false }]
     : []),
   ...(input.requiresLayout ? [{ label: "Макет погоджено", done: input.hasApprovedLayout, blocking: true }] : []),
 ];

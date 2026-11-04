@@ -73,7 +73,8 @@ function RequirementChips({ record }: { record: DerivedOrderRecord }) {
     .filter((step) => step.short);
   // Не за способом оплати: лід без картки замовника ще може потребувати реквізитів (REQ-322#p4).
   const needsRequisites = steps.some((step) => step.short === "Реквізити");
-  const missing = steps.filter((step) => !step.done);
+  // Невиконаний крок, що не блокує (візуал, REQ-322#p42), не робить прорахунок «не готовим».
+  const missing = steps.filter((step) => !step.done && step.blocking !== false);
   const doneTitle = steps.filter((step) => step.done).map((step) => `✓ ${step.label}`).join("\n");
   if (missing.length > 0) {
     return (
