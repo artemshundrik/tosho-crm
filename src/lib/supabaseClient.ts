@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
+import { recoverExpiredJwt } from "./expiredJwtRecovery";
 import { trackNetworkFailures } from "./networkFailureTrail";
 import { fetchWithReadTimeout } from "./requestTimeout";
 import {
@@ -27,6 +28,25 @@ function requireEnv(name: "VITE_SUPABASE_URL" | "VITE_SUPABASE_ANON_KEY"): strin
   return v;
 }
 
+/**
+ * Живий токен замість відхиленого базою.
+ *
+ * Спершу дивимось, чи його вже не оновили: сусідня вкладка чи попередня пачка
+ * запитів могли встигнути раніше. Зайве оновлення не безневинне — воно ротує
+ * refresh-токен, якого чекає ще хтось.
+ */
+async function renewAccessToken(failedToken: string): Promise<string | null> {
+  const { auth } = getSupabaseClient();
+  const { data } = await auth.getSession();
+  const current = data.session?.access_token;
+  if (!current) return null;
+  if (current !== failedToken) return current;
+
+  const { data: refreshed, error } = await auth.refreshSession();
+  if (error) return null;
+  return refreshed.session?.access_token ?? null;
+}
+
 export function getSupabaseClient(): AnySupabaseClient {
   if (cachedSupabase) return cachedSupabase;
 
@@ -47,8 +67,11 @@ export function getSupabaseClient(): AnySupabaseClient {
        *
        * Зовні — слід обірваних запитів для журналу помилок: клієнт бази
        * віддає обрив мережі без стека й адреси (див. networkFailureTrail.ts).
+       *
+       * Найзовніше — відновлення після «JWT expired»: клієнт судить про строк
+       * токена за годинником людини, а він буває неправильний (expiredJwtRecovery.ts).
        */
-      fetch: trackNetworkFailures(fetchWithReadTimeout()),
+      fetch: recoverExpiredJwt(trackNetworkFailures(fetchWithReadTimeout()), renewAccessToken),
     },
     /**
      * Стеля частоти broadcast — записана явно, хоч це і типове значення.
