@@ -13,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~6 049 lines, 296 KB, as of 2026-11-04)
+## src/pages/QuoteDetailsPage.tsx (~6 049 lines, 296 KB, as of 2026-11-06)
 
 Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p12. Файл СХУДНУВ на
 2 460 рядків (9 893 → 7 434): три вкладки з чотирьох поїхали в окремі модулі, а
@@ -55,31 +55,31 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 5419 / 5425 | вкладка «Стрічка» — `<QuoteFeed>`; збирач подій — `quoteFeedEvents.ts`, розмітка — `QuoteFeed.tsx` |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 813 lines, 588 KB, as of 2026-11-04)
+## src/pages/DesignTaskPage.tsx (~12 814 lines, 588 KB, as of 2026-11-06)
 
 | Range | Content |
 |---|---|
 | 1–222 | imports |
 | 223–1325 | types + Dropbox export helpers (`collectDesignTaskStorageFiles`, `buildDropboxClientFolderPath`, `buildDropboxBrandFolderPath`, `formatDropboxDate`, `buildDropboxExportFileName`, brief-format helpers) |
-| **1354** | `export default function DesignTaskPage()` — main component starts |
+| **1355** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~6 694 lines, 292 KB, as of 2026-11-04)
+## src/pages/QuotesPage.tsx (~6 645 lines, 290 KB, as of 2026-11-06)
 
 | Range | Content |
 |---|---|
 | 1–193 | imports |
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
-| **474** | `export function QuotesPage(...)` — main component starts |
+| **467** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 945 lines, 264 KB, as of 2026-11-04)
+## src/pages/DesignPage.tsx (~5 938 lines, 263 KB, as of 2026-11-06)
 
 | Range | Content |
 |---|---|
 | 1–144 | imports |
 | 145–943 | types + module-level helpers (cache I/O, `sanitizeDesignTaskMetadataForCache`, `sanitizeDesignTaskForCache`, `buildDesignPageCachePayload`, `resolveTaskCustomerLogo`, `applyCustomerLogosToTasks`) |
 | **909** | `export default function DesignPage()` — main component starts |
-| 4001 | `duplicateStandaloneTask(source, options)` — builds the new task's metadata when copying a design task |
+| 3994 | `duplicateStandaloneTask(source, options)` — builds the new task's metadata when copying a design task |
 | 5895 | `<DuplicateDesignTaskDialog>` mount + `source`/`onConfirm` wiring |
 
 ---

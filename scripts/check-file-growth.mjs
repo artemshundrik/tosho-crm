@@ -347,12 +347,12 @@ const CEILINGS = {
   // тестами; у сторінці лишився один рядок протягування метаданих позиції —
   // виносити тут більше нічого.
   "src/pages/QuoteDetailsPage.tsx": 6050,
-  "src/pages/QuotesPage.tsx": 6766,
+  "src/pages/QuotesPage.tsx": 6646,
   "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
   // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
-  "src/pages/OrdersCustomersPage.tsx": 3195,
+  "src/pages/OrdersCustomersPage.tsx": 2857,
   "src/pages/TeamMembersPage.tsx": 2633,
   "src/pages/OrdersProductionDetailsPage.tsx": 2251,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2848,
