@@ -465,6 +465,20 @@ These tables together power the product catalog and quote item configuration.
 Practical implication:
 - sample stock is separate from catalog configuration; do not use catalog model tables for warehouse sample balances.
 
+## Instagram Requests
+
+Defined in [scripts/instagram-requests-schema.sql](/Users/artem/Projects/tosho-crm/scripts/instagram-requests-schema.sql). Code: `netlify/functions/instagram-requests.ts`, `src/features/instagramRequests/`.
+
+- `instagram_settings` — one row per team: timer minutes, working hours, auto-reply text, who reviews the "other" tab, the round cursor and who is excluded from it
+- `instagram_requests` — a conversation with its assignee, status and deadlines. `kind = 'other'` is a conversation not from an ad
+- `instagram_messages` — messages of a request
+- `instagram_request_events` — history of a request
+
+Practical implication:
+- the browser only reads: `authenticated` has `select`, every write goes through the `instagram-requests` function under service role, so handover, timer and first reply settle in one place
+- read access is `tosho.can_read_instagram_requests(team_id, kind)`. `kind = 'other'` is hidden from managers at the database level, not only in the UI
+- `reminder_due_at` and `handover_due_at` are computed by the app when a request is assigned, so the timer is a plain query with no working-hours logic in SQL
+
 ## Notifications, Activity, And Runtime
 
 - `saved_list_views`
