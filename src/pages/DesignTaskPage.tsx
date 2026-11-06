@@ -172,6 +172,7 @@ import {
   type DesignTaskTimerSummary,
   type DesignTaskTimerBreakdown,
 } from "@/lib/designTaskTimer";
+import { serverNow } from "@/lib/serverClock";
 import {
   pickNewestChangeRequestId,
   shouldPauseTimerForStatusChange,
@@ -1622,7 +1623,7 @@ export default function DesignTaskPage() {
   }>({ open: false, label: "", description: "", confirm: null });
   const [timerSummary, setTimerSummary] = useState<DesignTaskTimerSummary>(createEmptyTimerSummary);
   const [timerBusy, setTimerBusy] = useState<"start" | "pause" | null>(null);
-  const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
+  const [timerNowMs, setTimerNowMs] = useState<number>(() => serverNow());
   // Per-change-request timer breakdown (null until loaded / if migration pending).
   const [designTimerBreakdown, setDesignTimerBreakdown] = useState<DesignTaskTimerBreakdown | null>(null);
   const [changeRequestTimerBusyId, setChangeRequestTimerBusyId] = useState<string | null>(null);
@@ -1922,11 +1923,11 @@ export default function DesignTaskPage() {
     if (!effectiveTeamId) return;
     try {
       const summary = await getDesignTaskTimerSummary(effectiveTeamId, taskId);
-      setTimerNowMs(Date.now());
+      setTimerNowMs(serverNow());
       setTimerSummary(summary);
     } catch (e) {
       console.warn("Failed to load timer summary", e);
-      setTimerNowMs(Date.now());
+      setTimerNowMs(serverNow());
       setTimerSummary(createEmptyTimerSummary());
     }
     // Per-change-request breakdown — requires the migration; degrade silently if absent.
@@ -3162,7 +3163,7 @@ export default function DesignTaskPage() {
   useEffect(() => {
     if (!timerSummary.activeStartedAt) return;
     const interval = window.setInterval(() => {
-      setTimerNowMs(Date.now());
+      setTimerNowMs(serverNow());
     }, 1000);
     return () => window.clearInterval(interval);
   }, [timerSummary.activeStartedAt]);

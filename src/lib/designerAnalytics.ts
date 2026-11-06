@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { parseDesignTaskType, type DesignTaskType } from "@/lib/designTaskType";
 import { isDeletedWorksRuleActive, outputWorkKey } from "@/lib/designerPayrollMath";
+import { serverNow } from "@/lib/serverClock";
 import {
   ACTIVE_DESIGN_STATUSES,
   calculateDesignWorkload,
@@ -293,7 +294,7 @@ export async function loadDesignerAnalytics(params: {
   mode?: "full" | "balance";
 }): Promise<DesignerAnalytics> {
   const monthsBack = Math.max(2, params.monthsBack ?? 6);
-  const now = params.now ?? new Date();
+  const now = params.now ?? new Date(serverNow());
   const nowMs = now.getTime();
   const months = buildMonthWindow(monthsBack, now);
   const from = new Date(Date.UTC(months[0].year, months[0].month - 1, 1)).toISOString();

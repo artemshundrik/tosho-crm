@@ -211,6 +211,8 @@ This is the most important non-obvious part of the repo.
 - Separate table:
   - `design_task_timer_sessions`
     - timer/running-work state for design tasks
+    - for browser clients the trigger `design_task_timer_stamp_server_time` (`scripts/design-task-timer-server-clock.sql`) stamps `started_at` / `created_at` / `paused_at` and freezes every other column on update: the only allowed change is stopping an open session. A new column the browser must edit has to be added to that trigger. Service role keeps its own values (the 8-hour cap in `design-timer-reminders` writes a past date on purpose)
+    - "elapsed" on the client counts from `serverNow()` (`src/lib/serverClock.ts`), not `Date.now()`
 
 Practical implication:
 - any design-task schema or metadata change has unusually wide blast radius

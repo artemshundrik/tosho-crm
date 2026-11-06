@@ -3,6 +3,7 @@ import type { Database } from "./database.types";
 import { recoverExpiredJwt } from "./expiredJwtRecovery";
 import { trackNetworkFailures } from "./networkFailureTrail";
 import { fetchWithReadTimeout } from "./requestTimeout";
+import { observeServerClock } from "./serverClock";
 import {
   blockedRpc,
   guardPostgrestClient,
@@ -70,8 +71,14 @@ export function getSupabaseClient(): AnySupabaseClient {
        *
        * Найзовніше — відновлення після «JWT expired»: клієнт судить про строк
        * токена за годинником людини, а він буває неправильний (expiredJwtRecovery.ts).
+       *
+       * Найближче до мережі — час сервера із заголовка відповіді: з нього лічильник
+       * таймера дизайну рахує «скільки минуло» при зсунутому годиннику (serverClock.ts).
        */
-      fetch: recoverExpiredJwt(trackNetworkFailures(fetchWithReadTimeout()), renewAccessToken),
+      fetch: recoverExpiredJwt(
+        trackNetworkFailures(observeServerClock(fetchWithReadTimeout())),
+        renewAccessToken
+      ),
     },
     /**
      * Стеля частоти broadcast — записана явно, хоч це і типове значення.

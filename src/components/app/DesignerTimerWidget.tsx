@@ -27,6 +27,7 @@ import {
   startDesignTaskTimer,
   type DesignerTimerTaskOverview,
 } from "@/lib/designTaskTimer";
+import { serverNow } from "@/lib/serverClock";
 
 type DesignerTimerControllerParams = {
   teamId?: string | null;
@@ -179,7 +180,7 @@ export function useDesignerTimerController({
   const [tasks, setTasks] = useState<DesignerTimerTaskOverview[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(() => serverNow());
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<"start" | "pause" | null>(null);
 
@@ -203,7 +204,7 @@ export function useDesignerTimerController({
     setLoading(true);
     try {
       const nextTasks = await getDesignerTimerTaskOverview({ teamId, userId, limit: 3 });
-      setNowMs(Date.now());
+      setNowMs(serverNow());
       setTasks(nextTasks);
       setError(null);
     } catch (refreshError) {
@@ -312,7 +313,7 @@ export function useDesignerTimerController({
 
   useEffect(() => {
     if (!hasRunningTask) return;
-    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    const intervalId = window.setInterval(() => setNowMs(serverNow()), 1000);
     return () => window.clearInterval(intervalId);
   }, [hasRunningTask]);
 

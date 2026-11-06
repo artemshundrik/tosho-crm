@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { ACTIVE_DESIGN_STATUSES } from "@/lib/designWorkload";
+import { serverNow } from "@/lib/serverClock";
 
 export type DesignTaskTimerSessionRow = {
   id: string;
@@ -81,9 +82,15 @@ const toUnixMs = (value?: string | null) => {
 const secondsBetween = (from?: string | null, toMs?: number) => {
   const startMs = toUnixMs(from);
   if (!Number.isFinite(startMs)) return 0;
-  const endMs = Number.isFinite(toMs ?? NaN) ? (toMs as number) : Date.now();
+  const endMs = Number.isFinite(toMs ?? NaN) ? (toMs as number) : serverNow();
   return Math.max(0, Math.floor((endMs - startMs) / 1000));
 };
+
+/**
+ * Значення для «зупинити таймер». Сам час ставить тригер у базі
+ * (scripts/design-task-timer-server-clock.sql), а ця дата лише каже «вже не null».
+ */
+const pausedAtPlaceholder = () => new Date().toISOString();
 
 function summarizeSessions(sessions: DesignTaskTimerSessionRow[]): DesignTaskTimerSummary {
   let totalSeconds = 0;
@@ -155,7 +162,7 @@ export function formatElapsedSeconds(totalSeconds: number) {
   return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-export function getTimerElapsedSeconds(summary: DesignTaskTimerSummary, nowMs = Date.now()) {
+export function getTimerElapsedSeconds(summary: DesignTaskTimerSummary, nowMs = serverNow()) {
   // «Витрачено» під цим числом — людино-години, тож тікати мають УСІ активні
   // сесії. Доти рахувалась лише найновіша: коли задачу вели двоє, час другої
   // людини не з'являвся, поки вона не поставить паузу.
@@ -425,7 +432,7 @@ export async function startDesignTaskTimer(params: {
     if (!row.id) continue;
     const { error: pauseError } = await supabase
       .from("design_task_timer_sessions")
-      .update({ paused_at: new Date().toISOString() })
+      .update({ paused_at: pausedAtPlaceholder() })
       .eq("id", row.id)
       .is("paused_at", null);
     if (pauseError) throw pauseError;
@@ -436,7 +443,7 @@ export async function startDesignTaskTimer(params: {
     team_id: params.teamId,
     design_task_id: params.taskId,
     user_id: params.userId,
-    started_at: new Date().toISOString(),
+    // started_at не шлемо: його ставить база, годинник комп'ютера буває неправильний.
     paused_at: null,
   };
   // Only attach change_request_id when timing a specific правка. Omitting it keeps
@@ -485,7 +492,7 @@ export async function pauseDesignTaskTimer(params: {
 
   const { error: updateError } = await supabase
     .from("design_task_timer_sessions")
-    .update({ paused_at: new Date().toISOString() })
+    .update({ paused_at: pausedAtPlaceholder() })
     .in("id", ids)
     .is("paused_at", null);
   if (updateError) throw updateError;
