@@ -181,6 +181,8 @@ type QuoteDeliveryFieldsProps = {
   onSaveToCardChange: (value: boolean) => void;
   /** Замовника обрано — можна пропонувати збереження в картку. */
   canSaveToCard: boolean;
+  /** Одним стовпчиком: для вузької панелі ширина екрана нічого не каже про ширину полів. */
+  stacked?: boolean;
 };
 
 export function QuoteDeliveryFields({
@@ -191,6 +193,7 @@ export function QuoteDeliveryFields({
   saveToCard,
   onSaveToCardChange,
   canSaveToCard,
+  stacked = false,
 }: QuoteDeliveryFieldsProps) {
   const isNovaPoshta = deliveryType === "nova_poshta";
   const npPoints = React.useMemo(
@@ -202,7 +205,7 @@ export function QuoteDeliveryFields({
     : null;
 
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className={stacked ? "grid grid-cols-1 gap-3 [&>*]:col-span-1!" : "grid gap-3 md:grid-cols-2"}>
       {isNovaPoshta && npPoints.length === 0 && canSaveToCard ? (
         <div className="md:col-span-2 rounded-lg border border-dashed border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           У клієнта ще немає збережених адрес доставки. Заповніть нову нижче — вона додасться в картку клієнта

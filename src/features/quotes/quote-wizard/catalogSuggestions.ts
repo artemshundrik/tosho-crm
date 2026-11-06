@@ -58,6 +58,8 @@ export type CatalogSuggestion = QuoteImportDraftCatalog & {
    * (рішення Олени 11.09, REQ-36#p36).
    */
   specPreset: string | null;
+  /** Ціна моделі з каталогу; у більшості моделей 0, тобто «не задана». */
+  price?: number | null;
 };
 
 export type CatalogSuggestionSource = {
@@ -88,6 +90,7 @@ export function buildCatalogSuggestions(source: CatalogSuggestionSource): Catalo
       imageUrl: model.image_url ?? null,
       quoteType: type.quote_type ?? null,
       specPreset: model.specPreset ?? null,
+      price: model.price ?? null,
     });
   }
   return result;

@@ -36,6 +36,8 @@ export type CustomerLeadPickerProps = {
   onCreateLead?: (name: string) => void;
   onClear?: () => void;
   chipLabel?: string;
+  /** Там, де ліда обрати не можна, підказка про нього лише збиває. */
+  searchPlaceholder?: string;
   popoverClassName?: string;
   align?: "start" | "center" | "end";
   maxVisible?: number;
@@ -46,6 +48,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
   onOpenChange,
   selectedLabel,
   selectedType = "customer",
+  searchPlaceholder = "Пошук замовника або ліда...",
   selectedLogoUrl,
   searchValue,
   onSearchChange,
@@ -164,7 +167,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
           <Input
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Пошук замовника або ліда..."
+            placeholder={searchPlaceholder}
           />
           <div className="relative">
             <div

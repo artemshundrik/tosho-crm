@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { UploadIllustration } from "@/components/ui/upload-illustration";
-import { ImportDraftRow, type DraftKindOption, type PlaceOption } from "@/features/quotes/quote-import/ImportDraftRow";
+import { ImportDraftRow, type DraftKindOption } from "@/features/quotes/quote-import/ImportDraftRow";
 import {
   attachImportExtras,
   parseImportFile,
@@ -29,17 +29,21 @@ import type {
   QuoteImportDraftItem,
   QuoteImportLinkPreview,
 } from "@/features/quotes/quote-import/types";
-import { countSettledPreviews, fetchLinkPreview, useLinkPreviews } from "@/features/quotes/quote-import/useLinkPreviews";
+import { countSettledPreviews, useLinkPreviews } from "@/features/quotes/quote-import/useLinkPreviews";
 import { pluralWordUk } from "@/lib/lastSeen";
-import {
-  applySupplierVariant,
-  SHOP_SUPPLIER_SLUG,
-  type SupplierPoolProduct,
-  type SupplierPoolVariant,
-} from "@/lib/supplierPool";
+import type { SupplierPoolProduct, SupplierPoolVariant } from "@/lib/supplierPool";
 import { cn } from "@/lib/utils";
 
-import { guessKindFromTitle, type CatalogSuggestion } from "./catalogSuggestions";
+import type { CatalogSuggestion } from "./catalogSuggestions";
+import {
+  applyDraftKind,
+  applyLinkPreview,
+  applyPoolVariant,
+  mergeKindPlaces,
+  previewAfterVariant,
+  readLinkPreviews,
+  supplierProductFields,
+} from "./productDraftFields";
 import { QuoteItemCommandField } from "./QuoteItemCommandField";
 import { PrintModelPicker, selectPrintModels } from "./PrintModelPicker";
 import { QUOTE_KINDS, type QuoteKindValue } from "./quoteWizardKinds";
@@ -197,36 +201,8 @@ export function QuoteWizardDialog({
     reset: resetKindOptions,
     directoryFor,
   } = useKindImprintOptions(teamId, draftKindIds);
-  /**
-   * Місця виду: довідник плюс те, що вже вписали руками на інших позиціях
-   * ЦЬОГО Ж виду. Рядок довідника з'явиться лише на «Створити», а прорахунок
-   * на десять однакових футболок збирають до нього — і набирати «по центру
-   * спереду» десять разів людина не буде.
-   */
-  const placesByKind = React.useMemo(() => {
-    const typed = new Map<string, Map<string, string>>();
-    for (const draft of drafts) {
-      const kindId = draft.catalog?.kindId;
-      if (!kindId) continue;
-      for (const imprint of draft.imprints) {
-        const label = imprint.positionLabel?.trim();
-        if (!label || imprint.positionId) continue;
-        const forKind = typed.get(kindId) ?? new Map<string, string>();
-        forKind.set(label.toLowerCase(), label);
-        typed.set(kindId, forKind);
-      }
-    }
-    const result: Record<string, PlaceOption[]> = {};
-    for (const kindId of new Set([...Object.keys(optionsByKind), ...typed.keys()])) {
-      const known = optionsByKind[kindId]?.places ?? [];
-      const knownLabels = new Set(known.map((place) => place.label.toLowerCase()));
-      const extra = [...(typed.get(kindId)?.entries() ?? [])]
-        .filter(([lower]) => !knownLabels.has(lower))
-        .map(([, label]) => ({ id: null, label }));
-      result[kindId] = [...known, ...extra];
-    }
-    return result;
-  }, [drafts, optionsByKind]);
+  /** Місця виду: довідник плюс уже вписане руками на інших позиціях цього виду. */
+  const placesByKind = React.useMemo(() => mergeKindPlaces(drafts, optionsByKind), [drafts, optionsByKind]);
 
   /** «Схожі в пулі» для позицій файлу без посилання (REQ-182#p27). */
   const poolCandidates = usePoolCandidates(drafts, isFileDraft);
@@ -295,38 +271,10 @@ export function QuoteWizardDialog({
    */
   const pickLinkVariant = (key: string, variant: SupplierPoolVariant) => {
     const product = linkPreviews[key] && linkPreviews[key].status !== "pending" ? linkPreviews[key].pool?.product : null;
-    // Рядок пулу беремо звужений до обраного кольору: у Е-Сувеніра ціни
-    // кольорів збігаються, а в Топтайма ні, і платимо ми за той, що обрали.
-    const picked = product ? applySupplierVariant(product, variant) : null;
-    const priceRowId = picked?.priceRowId ?? null;
-    setDrafts((prev) =>
-      prev.map((draft) =>
-        draft.key === key
-          ? {
-              ...draft,
-              sku: variant.article ?? draft.sku,
-              supplierProductId: priceRowId ?? draft.supplierProductId,
-              // Ціна теж стає кольоровою: у Топтайма кольори коштують
-              // по-різному, і показувати далі діапазон означало б ховати те,
-              // що вже вирішено.
-              poolPrice:
-                picked?.priceMin != null
-                  ? { amount: picked.priceMin, currency: picked.currency }
-                  : draft.poolPrice,
-            }
-          : draft
-      )
-    );
-    // Фото теж стає кольоровим: у прев'ю досі лежить знімок картки, тобто
-    // першого-ліпшого кольору, і лишати його після вибору — показувати не те,
-    // що обрали. Кольору без власного фото це не стосується: у Бергамо таких
-    // половина, і підміняти наявний знімок порожнечею було б гірше.
-    if (!variant.imageUrl) return;
-    const imageUrl = variant.imageUrl;
+    setDrafts((prev) => prev.map((draft) => (draft.key === key ? applyPoolVariant(draft, product, variant) : draft)));
     setLinkPreviews((prev) => {
-      const current = prev[key];
-      if (!current || current.status === "pending") return prev;
-      return { ...prev, [key]: { status: "done", imageUrl, title: current.title ?? null, sku: variant.article, pool: current.pool } };
+      const next = previewAfterVariant(prev[key], variant);
+      return next ? { ...prev, [key]: next } : prev;
     });
   };
 
@@ -466,25 +414,7 @@ export function QuoteWizardDialog({
    * брехнею.
    */
   const changeKind = (key: string, kind: DraftKindOption | null) =>
-    setDrafts((prev) =>
-      prev.map((draft) => {
-        if (draft.key !== key) return draft;
-        if (!kind) return { ...draft, catalog: null, imprints: [] };
-        return {
-          ...draft,
-          imprints: draft.catalog?.kindId === kind.kindId ? draft.imprints : [],
-          catalog: {
-            modelId: null,
-            kindId: kind.kindId,
-            typeId: kind.typeId,
-            kindName: kind.kindName,
-            typeName: kind.typeName,
-            imageUrl: null,
-            guessed: false,
-          },
-        };
-      })
-    );
+    setDrafts((prev) => prev.map((draft) => (draft.key === key ? applyDraftKind(draft, kind) : draft)));
 
   /** Назви в базі немає — позиція без каталогу, як колишнє «руками». */
   const handleAddName = (name: string) => {
@@ -516,68 +446,8 @@ export function QuoteWizardDialog({
    * кандидата до вже наявного рядка файлу (`bindCandidate`) заповнюють товар
    * одним і тим самим способом, і розходитись їм нема причини.
    */
-  const supplierProductDraftFields = (product: SupplierPoolProduct): Partial<QuoteImportDraftItem> => {
-    /**
-     * Вид — припущення, і джерел у нього два, у порядку надійності.
-     *
-     * СПЕРШУ КАТЕГОРІЯ ПОСТАЧАЛЬНИКА. Це не здогад із рядка, а його власна
-     * класифікація: berrytex сам каже «Футболки» (750 товарів), «Поло» (511),
-     * «Светри» (425). Наявне вгадування вже порівнює по основі слова, тож
-     * «Футболки» знаходить наш вид «Футболка» без жодного нового коду.
-     *
-     * ПОТІМ НАЗВА — те саме, що для позицій за посиланням. Потрібне для
-     * джерел без категорій: у мапах avanprint і bergamo їх немає взагалі.
-     *
-     * `guessed: true` тут принципове: чип підпише «припущення», і людина
-     * побачить, що це версія CRM, а не факт від постачальника.
-     */
-    const guess =
-      guessKindFromTitle(catalog.kinds, product.category) ?? guessKindFromTitle(catalog.kinds, product.name);
-    // «Наш магазин» і «оптовик» — різні кнопки на картці, тож і розкладаємо їх
-    // за роллю джерела, а не за порядком у списку.
-    const shop = product.sources.find((source) => source.supplierSlug === SHOP_SUPPLIER_SLUG);
-    const wholesale = product.sources.find((source) => source.supplierSlug !== SHOP_SUPPLIER_SLUG);
-    /*
-      ВАРІАНТ — ЦЕ ВІДПОВІДЬ ПРО КОЛІР. Товар приходить сюди вже звуженим
-      (`applySupplierVariant`) або з одним-єдиним виконанням — і в обох
-      випадках у нього рівно один варіант, тобто колір і його код відомі.
-      Кілька варіантів означає, що вибору не було: тоді кольору немає, і чип
-      під нього не малюється.
-    */
-    const variant = product.variants.length === 1 ? product.variants[0] : null;
-    return {
-      name: product.name,
-      color: variant?.label ?? null,
-      sku: variant?.article ?? product.article,
-      // Ціна — та сама, що стояла в підказці. Це показ, а не запис: у базу їде
-      // `supplierProductId`, і число там читає вона сама.
-      poolPrice:
-        product.priceMin !== null ? { amount: product.priceMin, currency: product.currency } : null,
-      supplierUrl: wholesale?.url ?? null,
-      avantprintUrl: shop?.url ?? null,
-      // Чип «Дитяча» переїжджає з підказки в рядок позиції: попередження живе
-      // стільки ж, скільки сама позиція, а не вісім секунд тоста.
-      isKids: product.isKids,
-      // ВАРТІСТЬ ТОВАРУ — не число, а РЯДОК ПУЛУ, з якого його прочитає база.
-      // Що саме брати, вирішує вона ж: `retail` (вітрина постачальника) туди
-      // не пройде, бо з неї нічого не порахуєш.
-      supplierProductId: product.priceRowId,
-      catalog: guess
-        ? {
-            modelId: null,
-            kindId: guess.kindId,
-            typeId: guess.typeId,
-            kindName: guess.kindName,
-            typeName: guess.typeName,
-            // Фото пулу — те саме, яке людина щойно бачила в підказці. Звідси
-            // воно доїжджає до моделі каталогу (`bindCatalogModel`), а з неї —
-            // на картку позиції.
-            imageUrl: product.imageUrl,
-            guessed: true,
-          }
-        : null,
-    };
-  };
+  const supplierProductDraftFields = (product: SupplierPoolProduct): Partial<QuoteImportDraftItem> =>
+    supplierProductFields(catalog.kinds, product);
 
   const handleAddSupplierProduct = (product: SupplierPoolProduct) => {
     setError(null);
@@ -682,66 +552,15 @@ export function QuoteWizardDialog({
     }));
 
     setLinkBusy(true);
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < fresh.length) {
-        const entry = fresh[cursor];
-        cursor += 1;
-        const preview = await fetchLinkPreview(entry.url);
-        const title = preview.status === "pending" ? null : preview.title ?? null;
-        const sku = preview.status === "pending" ? null : preview.sku ?? null;
-        setLinkPreviews((prev) => ({ ...prev, [entry.draft.key]: preview }));
-        // Беремо ЛИШЕ назву й фото. Опис зі сторінки не тягнемо: у магазинів
-        // це рекламний абзац («замовляйте оптом для брендування»), який у
-        // прорахунку не значить нічого, а місце в рядку займає.
-        // Правки менеджера не затираємо: він міг почати вписувати назву, поки
-        // сайт думав, тому назва лягає лише в порожнє поле.
-        // Вид — припущення з назви сторінки (REQ-182#p18): «Кепка 5-панельна…»
-        // → Кепка. Лише якщо людина ще не поставила вид сама.
-        // Посилання, яке впізнав пул, несе й категорію постачальника — вона
-        // надійніша за назву, тож іде першою, як і для товару з пошуку в пулі
-        // (REQ-324#p3). Раніше посилання її мовчки губило.
-        const poolCategory = preview.status !== "pending" ? preview.pool?.product.category : null;
-        const guess = guessKindFromTitle(catalog.kinds, poolCategory) ?? guessKindFromTitle(catalog.kinds, title);
+    await readLinkPreviews(
+      fresh.map((entry) => ({ key: entry.draft.key, url: entry.url })),
+      (key, preview) => {
+        setLinkPreviews((prev) => ({ ...prev, [key]: preview }));
         setDrafts((prev) =>
-          prev.map((draft) => {
-            if (draft.key !== entry.draft.key) return draft;
-            // Артикул сторінка називає сама (REQ-247), тож він лягає одразу й
-            // не чекає фонової розвідки. У порожнє: якщо менеджер уже вписав
-            // свій — його рука головніша за розмітку магазину.
-            const next = { ...draft, name: draft.name || title || "", sku: draft.sku || sku };
-            // НАША ЦІНА З ПУЛУ (REQ-285). Число не їде через браузер: ми лише
-            // називаємо РЯДОК пулу, а собівартість читає й пише сама база
-            // (`set_quote_run_cost_from_pool`) — так само, як для товару,
-            // обраного в пошуку. Коли кольори різні, рядок ще не визначений:
-            // його назве вибір кольору, інакше ціна була б від чужого кольору.
-            const pooled = preview.status !== "pending" ? preview.pool : null;
-            if (pooled && !pooled.needsColor) next.supplierProductId = pooled.product.priceRowId;
-            // ЦІНУ ВИДНО ОДРАЗУ, а не лише після створення прорахунку. Число
-            // тут — те саме, що менеджер бачить у підказці пулу: показуємо його
-            // в тій самій колонці рядка. Поки кольори не розведені, ціна може
-            // різнитись (у Топтайма 269,99–301,35), тож не показуємо нічого:
-            // одне число з діапазону читалось би як відповідь.
-            if (pooled && !pooled.needsColor && pooled.product.priceMin !== null) {
-              next.poolPrice = { amount: pooled.product.priceMin, currency: pooled.product.currency };
-            }
-            if (guess && !draft.catalog) {
-              next.catalog = {
-                modelId: null,
-                kindId: guess.kindId,
-                typeId: guess.typeId,
-                kindName: guess.kindName,
-                typeName: guess.typeName,
-                imageUrl: null,
-                guessed: true,
-              };
-            }
-            return next;
-          })
+          prev.map((draft) => (draft.key === key ? applyLinkPreview(catalog.kinds, draft, preview) : draft))
         );
       }
-    };
-    await Promise.all(Array.from({ length: Math.min(3, fresh.length) }, worker));
+    );
     setLinkBusy(false);
   };
 

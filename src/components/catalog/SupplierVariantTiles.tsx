@@ -75,7 +75,8 @@ export function SupplierVariantTiles({
   onPick,
   className,
 }: {
-  product: SupplierPoolProduct;
+  /** Лише варіанти: кольори моделі каталогу малюються цими самими плитками (REQ-353). */
+  product: Pick<SupplierPoolProduct, "variants">;
   /** Хвіст уже розгорнули — показуємо всі кольори, а не перші `COLOR_CAP`. */
   allColors: boolean;
   onShowAll: () => void;
