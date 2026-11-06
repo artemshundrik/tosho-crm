@@ -17,7 +17,7 @@ import { READINESS_FIELD, RequisitesFields, usePlaceholderEntity, patchLegalEnti
 import { useCustomerQuickSave } from "../card/useCustomerQuickSave";
 import { useRequisitesAutosave, useSectionAutosave } from "../card/useSectionAutosave";
 import { useTeamMembers } from "../card/useTeamMembers";
-import type { CustomerFormState } from "../CustomerDialog";
+import type { CustomerFormState } from "../partyFormTypes";
 import type { PartyCardSavedResult } from "../partyCardContext";
 import { customerReadinessInput, getPartyReadiness, type PartyReadinessKey } from "../partyReadiness";
 import { useCustomerCard } from "../useCustomerCard";

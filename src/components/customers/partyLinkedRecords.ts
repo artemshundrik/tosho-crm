@@ -4,7 +4,7 @@ import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { computeQuoteListTotal } from "@/features/quotes/quotes-page/quoteListTotal";
 import { listQuoteItemPreviewsForQuotes, listQuoteRunPreviewsForQuotes } from "@/lib/toshoApi";
 import { aggregateCustomerLtv, buildSegmentMap, type CustomerLtvEntry, type RfmSegment } from "@/lib/customerLtv";
-import type { CustomerLinkedItem } from "./CustomerDialog";
+import type { CustomerLinkedItem } from "./partyFormTypes";
 
 /**
  * Прорахунки, замовлення й дизайн-задачі замовника або ліда — нижня частина

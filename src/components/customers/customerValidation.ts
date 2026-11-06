@@ -1,5 +1,5 @@
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
-import type { CustomerFormState } from "./CustomerDialog";
+import type { CustomerFormState } from "./partyFormTypes";
 
 /** Ключ поля → текст помилки під ним. Порожній обʼєкт означає «можна зберігати». */
 export type CustomerFieldErrors = Partial<

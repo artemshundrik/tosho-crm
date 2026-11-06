@@ -1,4 +1,4 @@
-import type { LeadFormState } from "./LeadDialog";
+import type { LeadFormState } from "./partyFormTypes";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { getLocalReminderDateInputValue, getLocalReminderTimeInputValue } from "@/lib/reminderDateTime";
 import { parseCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";

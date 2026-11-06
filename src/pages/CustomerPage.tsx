@@ -31,7 +31,7 @@ import {
 import { useCustomerQuickSave } from "@/components/customers/card/useCustomerQuickSave";
 import { useRequisitesAutosave, useSectionAutosave } from "@/components/customers/card/useSectionAutosave";
 import { useTeamMembers } from "@/components/customers/card/useTeamMembers";
-import type { CustomerContact } from "@/components/customers/CustomerDialog";
+import type { CustomerContact } from "@/components/customers/partyFormTypes";
 import { DeliveryEditor } from "@/components/customers/page/CustomerPageSections";
 import {
   ContextHintCards,

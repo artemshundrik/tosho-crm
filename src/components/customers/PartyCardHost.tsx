@@ -3,8 +3,6 @@ import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { findParty } from "@/lib/partyNameMatch";
-import { LeadDialog } from "./LeadDialog";
-import { useLeadEditor } from "./useLeadEditor";
 import { CustomerPanel } from "./panel/CustomerPanel";
 import { LeadPanel } from "./panel/LeadPanel";
 import type { PartyCardRequest } from "./PartyCardProvider";
@@ -49,8 +47,8 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
     onSavedRef.current?.(result);
   }, []);
 
-  // Замовник і лід відкриваються бічною панеллю (REQ-349). Вікно ліда лишилось
-  // повною карткою: назва, джерело, контакт правляться там.
+  // Замовник і лід відкриваються бічною панеллю (REQ-349). Лід правиться лише
+  // в ній: окремої сторінки в нього немає.
   const [panel, setPanel] = React.useState<PanelTarget | null>(null);
   const openForCustomer = React.useCallback(
     (id: string, fallbackName: string | null) => setPanel({ kind: "customer", id, fallbackName }),
@@ -60,15 +58,6 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
     (id: string, fallbackName: string | null) => setPanel({ kind: "lead", id, fallbackName }),
     []
   );
-  const leadEditor = useLeadEditor({
-    onSaved: React.useCallback(
-      (saved: { id: string; name: string; logoUrl: string | null; convertedCustomerId: string | null }) =>
-        notifySaved({ kind: "lead", ...saved }),
-      [notifySaved]
-    ),
-  });
-
-  const { openForLead } = leadEditor;
   const handledNonceRef = React.useRef(0);
   const openByNameRef = React.useRef<() => void>(() => undefined);
 
@@ -132,16 +121,11 @@ export default function PartyCardHost({ request }: { request: PartyCardRequest }
           leadId={panel.id}
           fallbackName={panel.fallbackName}
           onClose={() => setPanel(null)}
-          onOpenFull={() => {
-            setPanel(null);
-            void openForLead(panel.id, { full: true });
-          }}
           onSaved={notifySaved}
           onConverted={(customerId) => openForCustomer(customerId, panel.fallbackName)}
           onMissing={() => openByNameRef.current()}
         />
       ) : null}
-      <LeadDialog {...leadEditor.editorProps} />
     </>
   );
 }

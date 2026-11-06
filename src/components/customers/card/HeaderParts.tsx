@@ -23,6 +23,8 @@ export const REFERRAL_SOURCE = "Рекомендація";
 function useCommitOnBlur(value: string, onCommit: (next: string) => void, options?: { required?: boolean }) {
   const [text, setText] = useState(value);
   const focused = useRef(false);
+  // blur() нижче спрацьовує одразу, і в onBlur ще старий `text`: без цього Esc зберігав би.
+  const cancelled = useRef(false);
   useEffect(() => {
     if (!focused.current) setText(value);
   }, [value]);
@@ -34,6 +36,10 @@ function useCommitOnBlur(value: string, onCommit: (next: string) => void, option
     },
     onBlur: () => {
       focused.current = false;
+      if (cancelled.current) {
+        cancelled.current = false;
+        return;
+      }
       // Обовʼязкове поле порожнім не пишемо — повертаємо збережене.
       if (options?.required && !text.trim()) setText(value);
       else if (text !== value) onCommit(text);
@@ -42,19 +48,19 @@ function useCommitOnBlur(value: string, onCommit: (next: string) => void, option
       if (event.key === "Enter") event.currentTarget.blur();
       if (event.key === "Escape") {
         setText(value);
-        focused.current = false;
+        cancelled.current = true;
         event.currentTarget.blur();
       }
     },
   };
 }
 
-export function NameInput(props: { value: string; size?: "page" | "panel"; onCommit: (name: string) => void }) {
+export function NameInput(props: { value: string; size?: "page" | "panel"; label?: string; onCommit: (name: string) => void }) {
   const field = useCommitOnBlur(props.value, props.onCommit, { required: true });
   return (
     <input
       {...field}
-      aria-label="Назва замовника"
+      aria-label={props.label ?? "Назва замовника"}
       aria-invalid={!field.value.trim() || undefined}
       className={cn(
         "-ml-2 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 font-semibold tracking-tight text-foreground outline-none",

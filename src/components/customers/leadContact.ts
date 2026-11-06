@@ -14,6 +14,14 @@ import { formatTelegramHandle, normalizeTelegramUsername } from "@/lib/telegramC
  * ЗАМОВНИКА лишається недоторканою: там договір, документи й доставка.
  */
 
+export type LeadContactDraft = {
+  firstName: string;
+  lastName: string;
+  phones: string[];
+  telegram: string;
+  email: string;
+};
+
 export type LeadContactInput = {
   phones: string[];
   telegram: string;
@@ -46,4 +54,32 @@ export function leadContactLabel(lead: {
   const phones = cleanLeadPhones(lead.phone_numbers ?? []);
   if (phones.length > 0) return phones.join(", ");
   return formatTelegramHandle(lead.telegram) || "Не вказано";
+}
+
+/**
+ * Що записати з редактора контакту в панелі: лише змінене. Ім'я порожнім не
+ * пишемо, і телефон із Telegram не пишемо, якщо не лишається жодного способу
+ * звʼязку: за тими самими правилами перевіряє `validateLeadCard`.
+ */
+export function leadContactChanges(saved: LeadContactDraft, draft: LeadContactDraft) {
+  const patch: {
+    first_name?: string;
+    last_name?: string | null;
+    email?: string | null;
+    phone_numbers?: string[];
+    telegram?: string | null;
+  } = {};
+  const changed = (key: "firstName" | "lastName" | "email") => draft[key].trim() !== saved[key].trim();
+  if (changed("firstName") && draft.firstName.trim()) patch.first_name = draft.firstName.trim();
+  if (changed("lastName")) patch.last_name = draft.lastName.trim() || null;
+  if (changed("email")) patch.email = draft.email.trim() || null;
+
+  const issue = getLeadContactIssue(draft);
+  if (!issue) {
+    const phones = cleanLeadPhones(draft.phones);
+    if (phones.join("\n") !== cleanLeadPhones(saved.phones).join("\n")) patch.phone_numbers = phones;
+    const telegram = normalizeTelegramUsername(draft.telegram);
+    if (telegram !== normalizeTelegramUsername(saved.telegram)) patch.telegram = telegram || null;
+  }
+  return { patch, issue };
 }

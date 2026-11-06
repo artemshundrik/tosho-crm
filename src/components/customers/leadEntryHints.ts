@@ -1,4 +1,4 @@
-import type { LeadFormState } from "./LeadDialog";
+import type { LeadFormState } from "./partyFormTypes";
 
 /**
  * Підказки на вході нового ліда: що вписали не в те поле. Лише підказують —
@@ -6,12 +6,10 @@ import type { LeadFormState } from "./LeadDialog";
  * контакту взагалі.
  */
 export type LeadEntryHint =
-  | { field: "phone"; kind: "telegram_in_phone"; telegram: string }
   | { field: "email"; kind: "not_email" }
   | { field: "referredBy"; kind: "referral_without_name" };
 
 export const LEAD_ENTRY_HINT_TEXT: Record<LeadEntryHint["kind"], string> = {
-  telegram_in_phone: "Схоже на Telegram — перенести в поле Telegram?",
   not_email: "Це не схоже на пошту",
   referral_without_name: "Від кого рекомендація?",
 };
@@ -28,21 +26,10 @@ export function telegramFromPhoneField(value: string): string | null {
 
 export function getLeadEntryHints(form: LeadFormState): LeadEntryHint[] {
   const hints: LeadEntryHint[] = [];
-  const telegram = form.phones.map(telegramFromPhoneField).find(Boolean);
-  if (telegram) hints.push({ field: "phone", kind: "telegram_in_phone", telegram });
   const email = form.email.trim();
   if (email && !email.includes("@")) hints.push({ field: "email", kind: "not_email" });
   if (form.source === "Рекомендація" && !form.referredBy?.trim()) hints.push({ field: "referredBy", kind: "referral_without_name" });
   return hints;
-}
-
-/** Переносить нік із поля телефону в Telegram; телефонне поле лишається порожнім. */
-export function moveTelegramFromPhones(form: LeadFormState): LeadFormState {
-  const index = form.phones.findIndex((phone) => telegramFromPhoneField(phone));
-  if (index < 0) return form;
-  const telegram = telegramFromPhoneField(form.phones[index])!;
-  const phones = form.phones.filter((_, i) => i !== index);
-  return { ...form, telegram: form.telegram.trim() || telegram, phones: phones.length ? phones : [""] };
 }
 
 /**

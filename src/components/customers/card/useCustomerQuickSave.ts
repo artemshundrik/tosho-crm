@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { removeManagedCustomerLogoByUrl } from "@/lib/customerLogo";
-import type { CustomerFormState } from "../CustomerDialog";
+import type { CustomerFormState } from "../partyFormTypes";
 import { ingestLogo, notifyCustomerManagerChange } from "../partyCardSave";
 import { writeCustomerFields, type CustomerFieldPatch } from "../partyFieldWrite";
 import { usePartyFieldSave } from "../usePartyFieldSave";

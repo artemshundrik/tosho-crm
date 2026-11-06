@@ -1,5 +1,5 @@
-import type { CustomerFormState } from "./CustomerDialog";
-import type { LeadFormState } from "./LeadDialog";
+import type { CustomerFormState } from "./partyFormTypes";
+import type { LeadFormState } from "./partyFormTypes";
 import { getPrimaryCustomerLegalEntity } from "@/lib/customerLegalEntities";
 
 /**

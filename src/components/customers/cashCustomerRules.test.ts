@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 // Правилам він не потрібен, а логічні тести йдуть без браузера.
 vi.mock("@/lib/supabaseClient", () => ({ supabase: {} }));
 
-import type { CustomerFormState } from "./CustomerDialog";
+import type { CustomerFormState } from "./partyFormTypes";
 import { validateCustomerForm } from "./customerValidation";
-import type { LeadFormState } from "./LeadDialog";
+import type { LeadFormState } from "./partyFormTypes";
 import { getLeadConversionMissingFields } from "./leadRecord";
 
 /**

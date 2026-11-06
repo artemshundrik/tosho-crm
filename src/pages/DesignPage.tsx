@@ -3079,15 +3079,8 @@ export default function DesignPage() {
   const customerLeadCreate = useCustomerLeadCreate({
     teamId: effectiveTeamId,
     defaultManagerLabel: userId ? getMemberLabel(userId) : "",
-    teamMembers: managerMembers,
     onCreated: handleCreatedParty,
     resolveErrorMessage: getErrorMessage,
-    customerDialogTitle: "Новий замовник",
-    customerDialogDescription: "Додайте дані замовника для подальшої роботи в дизайн-задачах.",
-    customerSubmitLabel: "Створити замовника",
-    leadDialogTitle: "Новий лід",
-    leadDialogDescription: "Додайте контакт ліда для подальшої роботи в дизайн-задачах.",
-    leadSubmitLabel: "Створити ліда",
   });
 
   useEffect(() => {

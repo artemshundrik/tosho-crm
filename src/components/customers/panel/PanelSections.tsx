@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { EntityAvatar } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { getLocalReminderDateInputValue } from "@/lib/reminderDateTime";
 import { toneDotClass, toneTextClass } from "@/lib/statusTones";
 import { formatTelegramHandle } from "@/lib/telegramContact";
 import { cn } from "@/lib/utils";
-import type { CustomerContact, CustomerLinkedItem } from "../CustomerDialog";
+import type { CustomerContact, CustomerLinkedItem } from "../partyFormTypes";
 import type { PartyLinkedItem, PartyLinkedRecords } from "../partyLinkedRecords";
 import type { FieldSaveState } from "../usePartyFieldSave";
 import type { PartyContextHint } from "./partyContextHints";
@@ -147,7 +147,12 @@ export function WorkSums({ records }: { records: PartyLinkedRecords }) {
 }
 
 /** Основний контакт: імʼя, посада, телефон і Telegram; решта — «+N». */
-export function ContactsSection(props: { contacts: CustomerContact[]; onAdd?: () => void }) {
+export function ContactsSection(props: {
+  contacts: CustomerContact[];
+  onAdd?: () => void;
+  /** Є контакт — кнопка «Змінити» замість «Додати». */
+  onEdit?: () => void;
+}) {
   const contacts = props.contacts.filter((contact) => contact.name || contact.phone || contact.email);
   const main = contacts[0] ?? null;
   const telegram = main?.telegram ? formatTelegramHandle(main.telegram) : "";
@@ -158,6 +163,10 @@ export function ContactsSection(props: { contacts: CustomerContact[]; onAdd?: ()
         !main && props.onAdd ? (
           <Button type="button" variant="ghost" size="xxs" onClick={props.onAdd}>
             Додати
+          </Button>
+        ) : main && props.onEdit ? (
+          <Button type="button" variant="ghost" size="xxs" onClick={props.onEdit}>
+            Змінити
           </Button>
         ) : null
       }
@@ -297,6 +306,18 @@ export function NotesSection(props: {
 }) {
   const [notes, setNotes] = useState(props.notes);
   useEffect(() => setNotes(props.notes), [props.notes]);
+  // Панель закрили клавішею Esc із курсором у полі: blur не прийде, а текст уже набраний.
+  const unsavedRef = useRef({ notes, saved: props.notes, save: props.onSaveNotes });
+  useEffect(() => {
+    unsavedRef.current = { notes, saved: props.notes, save: props.onSaveNotes };
+  });
+  useEffect(
+    () => () => {
+      const { notes: typed, saved, save } = unsavedRef.current;
+      if (typed.trim() !== saved.trim()) save(typed);
+    },
+    [],
+  );
   const reminderLabel = props.reminderAt
     ? new Date(props.reminderAt).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
     : null;

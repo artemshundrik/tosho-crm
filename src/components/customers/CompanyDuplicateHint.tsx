@@ -179,11 +179,18 @@ export function CompanyDuplicateHintField({
 }) {
   const { matches, loading } = useCompanyDuplicateHint(teamId, query, excludeId);
   const { byId, byLabel } = useMemberAvatars();
+  // Лише поки курсор у полі: людина пішла заповнювати далі — поповер не має
+  // лежати на наступних полях. Натискати в ньому нічого, тож закриття нічого не губить.
+  const [focused, setFocused] = useState(false);
 
   return (
-    <Popover open={matches.length > 0}>
+    <Popover open={focused && matches.length > 0}>
       <PopoverAnchor asChild>
-        <div className={cn("relative", className)}>
+        <div
+          className={cn("relative", className)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        >
           {children}
           {/*
             Крутілка НЕ перехоплює вказівник: вона стоїть над полем, і без

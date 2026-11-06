@@ -3,32 +3,34 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { EntityAvatar } from "@/components/app/avatar-kit";
 import { UserCheck } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import type { CustomerLegalEntity } from "@/lib/customerLegalEntities";
 import { getLocalReminderDateInputValue, getLocalReminderTimeInputValue } from "@/lib/reminderDateTime";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
-import { HeaderFact, PaymentSeg } from "../card/HeaderParts";
+import { HeaderFact, LogoButton, ManagerChip, NameInput, PaymentSeg, SourceChip, WebsiteChip } from "../card/HeaderParts";
+import { PartySection } from "../card/CardParts";
 import { READINESS_FIELD, RequisitesFields, usePlaceholderEntity, type RequisiteField } from "../card/RequisitesFields";
-import type { CustomerContact } from "../CustomerDialog";
-import { CUSTOMER_LEAD_SOURCES } from "../customerSources";
+import { useTeamMembers } from "../card/useTeamMembers";
+import type { CustomerContact } from "../partyFormTypes";
 import { requisitesIssues } from "../page/useCustomerPageForm";
-import type { LeadFormState } from "../LeadDialog";
+import type { LeadFormState } from "../partyFormTypes";
 import { loadLeadRow } from "../leadCardLoad";
 import { buildLeadFormFromRow, type LeadRow } from "../leadRecord";
 import { saveLeadCard, validateLeadCard } from "../partyCardSave";
 import type { PartyCardSavedResult } from "../partyCardContext";
-import { writeLeadFields, type LeadFieldPatch } from "../partyFieldWrite";
+import type { LeadFieldPatch } from "../partyFieldWrite";
 import { loadPartyLinkedRecords, type PartyLinkedRecords } from "../partyLinkedRecords";
 import { getPartyReadiness, leadReadinessInput, type PartyReadinessKey } from "../partyReadiness";
-import { usePartyFieldSave } from "../usePartyFieldSave";
 import { LeadConversionForm, type LeadConversionPatch } from "./LeadConversionForm";
-import { ContactsSection, DealsSection, NotesSection, SaveHint, WorkSums } from "./PanelSections";
+import { LeadContactEditor } from "./LeadContactEditor";
+import { ContactsSection, DealsSection, DesignTasksSection, NotesSection, SaveHint, WorkSums } from "./PanelSections";
 import { PartyDrawer } from "./PartyDrawer";
 import { ReadinessBlock } from "./ReadinessBlock";
 import { useDeferredConversion } from "./useDeferredConversion";
+import { useLeadQuickSave } from "./useLeadQuickSave";
 
 /**
  * Бічна панель ліда — та сама «чого бракує», що й у замовника (сім пунктів
@@ -40,23 +42,42 @@ import { useDeferredConversion } from "./useDeferredConversion";
  * панель посеред очікування — переведення виконується одразу. Після нього
  * хост показує панель нового замовника (`onConverted`).
  *
- * Дрібне (оплата, нотатки, нагадування) пишеться одразу й по одному полю
- * (`writeLeadFields`). Реквізитів, яких бракує на відкритті, просимо прямо під
- * «Для рахунку» — ті самі поля, що в замовника, але в плоскі колонки ліда, і
- * пишуться при виході з поля. Назву, джерело й контакт правлять у повній
- * картці ліда (`onOpenFull`, ⤢).
+ * Це вся картка ліда: окремої сторінки в нього немає. Шапка, контакт, реквізити
+ * й нотатки пишуться одразу й по одному полю (`useLeadQuickSave`). Реквізитів,
+ * яких бракує на відкритті, просимо прямо під «Для рахунку», решта лежить у
+ * згорнутому розділі «Реквізити»: ті самі поля, що в замовника, але в плоскі
+ * колонки ліда, і пишуться при виході з поля.
  */
 
 /** Плоскі колонки ліда, що відповідають полям юрособи. */
 const LEAD_REQUISITE_COLUMNS = {
   ownershipType: "ownership_type",
+  legalName: "legal_name",
   taxId: "tax_id",
   legalAddress: "legal_address",
   iban: "iban",
+  signatoryName: "signatory_name",
   signatoryPosition: "signatory_position",
 } as const satisfies Partial<Record<keyof CustomerLegalEntity & keyof LeadFormState, keyof LeadFieldPatch>>;
 type LeadRequisiteKey = keyof typeof LEAD_REQUISITE_COLUMNS;
 const LEAD_REQUISITE_KEYS = Object.keys(LEAD_REQUISITE_COLUMNS) as LeadRequisiteKey[];
+/** Усі реквізити, для яких у ліда є колонки: ПДВ, банк і підстава лишаються замовнику. */
+const LEAD_REQUISITE_FIELDS: readonly RequisiteField[] = ["ownership", "legalName", "taxId", "iban", "legalAddress", "signatory", "position"];
+
+/** Поле підписанта віддає прізвище, імʼя й по батькові, а в ліда одна колонка. */
+function leadRequisitesPatch(patch: Partial<CustomerLegalEntity>): Partial<LeadFormState> {
+  const flat: Partial<LeadFormState> = {};
+  for (const key of LEAD_REQUISITE_KEYS) {
+    if (patch[key] !== undefined) flat[key] = patch[key];
+  }
+  if (patch.signatoryLastName !== undefined || patch.signatoryFirstName !== undefined || patch.signatoryMiddleName !== undefined) {
+    flat.signatoryName = [patch.signatoryLastName, patch.signatoryFirstName, patch.signatoryMiddleName]
+      .map((part) => (part ?? "").trim())
+      .filter(Boolean)
+      .join(" ");
+  }
+  return flat;
+}
 
 type LeadCardState = "loading" | "ready" | "error" | "gone";
 type Screen = "card" | "convert";
@@ -75,15 +96,13 @@ export function LeadPanel(props: {
   leadId: string;
   fallbackName?: string | null;
   onClose: () => void;
-  /** Повна картка ліда — назва, джерело, контакт. */
-  onOpenFull: () => void;
   onSaved?: (result: PartyCardSavedResult) => void;
   /** Лід став замовником — хост показує панель цього замовника. */
   onConverted?: (customerId: string) => void;
   /** Ліда немає (видалили чи вже перевели) — хост може пошукати за назвою. */
   onMissing?: () => void;
 }) {
-  const { leadId, fallbackName, onClose, onOpenFull } = props;
+  const { leadId, fallbackName, onClose } = props;
   const { teamId, userId } = useAuth();
   const navigate = useNavigate();
 
@@ -97,6 +116,10 @@ export function LeadPanel(props: {
   const [screen, setScreen] = useState<Screen>("card");
   const [convertError, setConvertError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
+  const [editingContact, setEditingContact] = useState(false);
+  const [allRequisites, setAllRequisites] = useState(false);
+  const [allDeals, setAllDeals] = useState(false);
+  const members = useTeamMembers(userId);
 
   const onMissingRef = useRef(props.onMissing);
   const onSavedRef = useRef(props.onSaved);
@@ -160,33 +183,24 @@ export function LeadPanel(props: {
     setForm((current) => (current ? { ...current, ...patch } : current));
   }, []);
 
-  const write = useCallback(
-    async (patch: LeadFieldPatch) => {
-      const result = await writeLeadFields(leadId, patch);
-      if (result.ok) {
-        window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
-        onSavedRef.current?.({
-          kind: "lead",
-          id: leadId,
-          name: formRef.current?.companyName ?? "",
-          logoUrl: formRef.current?.logoUrl || null,
-          convertedCustomerId: null,
-        });
-      }
-      return result;
-    },
-    [leadId, teamId],
-  );
-  const { save, stateOf, retry } = usePartyFieldSave(write);
+  const quick = useLeadQuickSave({ leadId, teamId, userId, row, form, update, members, onSaved: props.onSaved });
+  const { save, stateOf, retry } = quick;
   const [reminderAt, setReminderAt] = useState<string | null>(null);
   useEffect(() => setReminderAt(row?.reminder_at ?? null), [row]);
 
   // Поля з форми переведення. Кладуться поверх картки В МОМЕНТ ЗАПИСУ, не
   // натискання: нотатка чи нагадування, дописані за ці 6 с, теж переходять.
   const convertPatchRef = useRef<LeadConversionPatch | null>(null);
+  const convertUndoRef = useRef<Partial<LeadFormState> | null>(null);
   const toastIdRef = useRef<string | number | null>(null);
 
   const runConversion = useCallback(async () => {
+    // Те, що ще в полі з курсором, теж має перейти: поля пишуть на виході з них.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest('[data-testid="lead-panel"]')) {
+      active.blur();
+      await new Promise((resolve) => setTimeout(resolve));
+    }
     const patch = convertPatchRef.current;
     const merged: LeadFormState | null = patch && formRef.current ? { ...formRef.current, ...patch } : null;
     if (!teamId || !merged) return;
@@ -236,16 +250,13 @@ export function LeadPanel(props: {
   }, [leadId, row, teamId, userId]);
 
   const conversion = useDeferredConversion(runConversion, CONVERSION_DELAY_MS);
-  // Повна картка посеред очікування розмонтувала б панель (переведення піде
-  // одразу) і відкрила б «Зберегти і перевести» того самого ліда — двічі.
-  const openFull = useCallback(() => {
-    if (!conversion.pending) onOpenFull();
-  }, [conversion.pending, onOpenFull]);
-
   const cancelConversion = useCallback(() => {
     conversion.cancel();
     if (toastIdRef.current !== null) toast.dismiss(toastIdRef.current);
     toastIdRef.current = null;
+    // Значення з форми переведення не записані: без цього закриття панелі записало б їх.
+    const undo = convertUndoRef.current;
+    if (undo) setForm((current) => current && { ...current, ...undo });
     toast("Переведення скасовано", { description: "У базі нічого не змінилось." });
   }, [conversion]);
 
@@ -259,6 +270,7 @@ export function LeadPanel(props: {
     }
     setConvertError(null);
     convertPatchRef.current = patch;
+    convertUndoRef.current = Object.fromEntries(Object.keys(patch).map((key) => [key, form[key as keyof LeadFormState]]));
     setForm(merged);
     setScreen("card");
     conversion.start();
@@ -291,6 +303,8 @@ export function LeadPanel(props: {
     return { ...placeholder, ...flat };
   }, [form, placeholder]);
   const issues = useMemo(() => (entity ? requisitesIssues([entity]) : {}), [entity]);
+  // Що вже попросили під «Для рахунку», у розділі не дублюємо: двоє полів на одне значення.
+  const restFields = useMemo(() => new Set(LEAD_REQUISITE_FIELDS.filter((field) => cash || !askedFields.has(field))), [askedFields, cash]);
 
   // Що лежить у базі: пишемо лише змінене й лише без помилки формату.
   const savedRequisitesRef = useRef<Partial<Record<LeadRequisiteKey, string>> | null>(null);
@@ -342,29 +356,36 @@ export function LeadPanel(props: {
         .join(" · ")
     : null;
 
-  const SourceIcon = CUSTOMER_LEAD_SOURCES.find((option) => option.value === form?.source)?.Icon;
   const header = (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <EntityAvatar src={form?.logoUrl || null} name={name} size={44} />
+        {form && state === "ready" ? (
+          <LogoButton
+            src={form.logoUrl || null}
+            name={name}
+            size={44}
+            busy={quick.logoBusy}
+            error={quick.logoError}
+            onFile={(file) => void quick.saveLogoFile(file)}
+          />
+        ) : (
+          <EntityAvatar src={form?.logoUrl || null} name={name} size={44} />
+        )}
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             Лід{createdLabel ? ` · з ${createdLabel}` : ""}
           </span>
-          <span className="truncate text-lg font-semibold">{name}</span>
+          {form && state === "ready" ? (
+            <NameInput value={form.companyName} size="panel" label="Назва ліда" onCommit={quick.saveName} />
+          ) : (
+            <span className="truncate text-lg font-semibold">{name}</span>
+          )}
         </div>
       </div>
       {form && state === "ready" ? (
         <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
           <HeaderFact label="Менеджер">
-            {form.manager.trim() ? (
-              <span className="flex items-center gap-1.5 text-sm">
-                <AvatarBase src={null} name={form.manager} size={20} />
-                {form.manager}
-              </span>
-            ) : (
-              <span className="text-sm text-muted-foreground">не призначено</span>
-            )}
+            <ManagerChip value={form.managerId} label={form.manager} members={members} onChange={quick.saveManager} />
           </HeaderFact>
           <HeaderFact label="Оплата">
             <PaymentSeg
@@ -377,12 +398,19 @@ export function LeadPanel(props: {
             />
           </HeaderFact>
           <HeaderFact label="Джерело">
-            <span className="flex items-center gap-1.5 text-sm">
-              {SourceIcon ? <SourceIcon className="size-3.5 text-muted-foreground" /> : null}
-              {form.source.trim() || <span className="text-muted-foreground">не вказано</span>}
-            </span>
+            <SourceChip
+              source={form.source}
+              referredBy={form.referredBy ?? ""}
+              onSource={quick.saveSource}
+              onReferredBy={quick.saveReferredBy}
+            />
           </HeaderFact>
-          <SaveHint status={stateOf("payment_type")} onRetry={() => retry("payment_type")} />
+          <HeaderFact label="Сайт">
+            <WebsiteChip value={form.website} onCommit={quick.saveWebsite} />
+          </HeaderFact>
+          {(["name", "manager", "payment_type", "source", "referred_by", "website"] as const).map((field) => (
+            <SaveHint key={field} status={stateOf(field)} onRetry={() => retry(field)} />
+          ))}
         </div>
       ) : null}
     </div>
@@ -392,13 +420,11 @@ export function LeadPanel(props: {
     <PartyDrawer
       title={name}
       header={header}
-      onClose={onClose}
-      onExpand={openFull}
-      footer={
-        <Button type="button" variant="outline" size="sm" className="w-full" disabled={conversion.pending} onClick={openFull}>
-          Відкрити повну картку
-        </Button>
-      }
+      onClose={() => {
+        // Клавіша Esc закриває панель без виходу з поля: вписане не має пропасти.
+        flushRequisites();
+        onClose();
+      }}
     >
       <div data-testid="lead-panel">
         {state === "loading" ? (
@@ -463,13 +489,7 @@ export function LeadPanel(props: {
                       issues={issues}
                       need={missingFields}
                       only={askedFields}
-                      onPatch={(_, patch) => {
-                        const flat: Partial<LeadFormState> = {};
-                        for (const key of LEAD_REQUISITE_KEYS) {
-                          if (patch[key] !== undefined) flat[key] = patch[key];
-                        }
-                        update(flat);
-                      }}
+                      onPatch={(_, patch) => update(leadRequisitesPatch(patch))}
                     />
                   </div>
                 ) : null}
@@ -486,15 +506,36 @@ export function LeadPanel(props: {
                 </Button>
               </ReadinessBlock>
             )}
-            <ContactsSection contacts={leadContact(form)} onAdd={openFull} />
+            {editingContact || stateOf("contact").state === "error" ? (
+              <LeadContactEditor
+                form={form}
+                status={stateOf("contact")}
+                onRetry={() => retry("contact")}
+                onCommit={(formPatch, patch) => {
+                  update(formPatch);
+                  save("contact", patch);
+                }}
+                onDone={() => setEditingContact(false)}
+              />
+            ) : (
+              <ContactsSection
+                contacts={leadContact(form)}
+                onAdd={() => setEditingContact(true)}
+                onEdit={() => setEditingContact(true)}
+              />
+            )}
             <DealsSection
               records={records}
               loading={recordsLoading}
               before={<WorkSums records={records} />}
               onOpenQuote={(id) => navigate(`/orders/estimates/${id}`)}
               onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
-              onShowAll={openFull}
+              limit={allDeals ? Infinity : 5}
+              onShowAll={() => setAllDeals(true)}
             />
+            {records.designTasks.length > 0 ? (
+              <DesignTasksSection tasks={records.designTasks} onOpen={(id) => navigate(`/design/${id}`)} />
+            ) : null}
             <NotesSection
               notes={form.notes}
               reminderAt={reminderAt}
@@ -509,6 +550,29 @@ export function LeadPanel(props: {
               onRetryNotes={() => retry("notes")}
               onRetryReminder={() => retry("reminder")}
             />
+            {entity ? (
+              <PartySection
+                title="Реквізити"
+                aside={
+                  <Button type="button" variant="ghost" size="xxs" aria-expanded={allRequisites} onClick={() => setAllRequisites((open) => !open)}>
+                    {allRequisites ? "Згорнути" : "Показати"}
+                  </Button>
+                }
+              >
+                {allRequisites ? (
+                  <div className="min-w-0" onBlurCapture={flushRequisites}>
+                    <RequisitesFields
+                      entities={[entity]}
+                      placeholder={placeholder}
+                      issues={issues}
+                      only={restFields}
+                      onPatch={(_, patch) => update(leadRequisitesPatch(patch))}
+                    />
+                  </div>
+                ) : null}
+                {allRequisites ? <SaveHint status={stateOf("requisites")} onRetry={() => retry("requisites")} /> : null}
+              </PartySection>
+            ) : null}
           </>
         ) : null}
       </div>

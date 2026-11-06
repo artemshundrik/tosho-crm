@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { requestEntityLockRelease, sectionLockType } from "@/lib/entityLock";
-import type { CustomerFormState } from "../CustomerDialog";
+import type { CustomerFormState } from "../partyFormTypes";
 import { customerRowToForm, loadCustomerRow } from "../customerCardLoad";
 import type { CustomerSection } from "../partyFieldWrite";
 import { useCustomerPageForm } from "../page/useCustomerPageForm";

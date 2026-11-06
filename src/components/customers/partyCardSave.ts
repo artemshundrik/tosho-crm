@@ -17,9 +17,9 @@ import { buildReminderAtIso } from "@/lib/reminderDateTime";
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { notifyCustomerLeadManagerAssigned } from "@/lib/workflowNotifications";
 import type { TableInsert } from "@/lib/dbTables";
-import type { CustomerFormState } from "./CustomerDialog";
+import type { CustomerFormState } from "./partyFormTypes";
 import type { CustomerSection, CustomerSectionPatch } from "./partyFieldWrite";
-import type { LeadFormState } from "./LeadDialog";
+import type { LeadFormState } from "./partyFormTypes";
 import { getLeadContactIssue } from "./leadContact";
 import { isMissingReferredByColumn } from "./leadEntryHints";
 import { getLeadConversionMissingFields } from "./leadRecord";
@@ -28,10 +28,16 @@ import { getLeadConversionMissingFields } from "./leadRecord";
  * Збереження картки замовника й ліда — те саме для сторінки «Замовники» і для
  * картки, що відкривається клацанням по замовнику деінде (REQ-348).
  *
- * Чому спільне: друга копія (useCustomerEditor) уже встигла розійтись зі
+ * Чому спільне: друга копія цього запису вже встигала розійтись зі
  * сторінкою — не перевіряла поля й мовчала, коли міняли менеджера. Тут лише
  * запис; хто менеджер і як його показати, вирішує той, хто викликає.
  */
+
+/**
+ * Лише «такого стовпця нема». Слово «column» у тексті не показник: його містить і
+ * порушення NOT NULL, і тоді запасний запис мовчки втрачав контакт, джерело й менеджера.
+ */
+const isMissingColumnError = (error: { code?: string | null }) => error.code === "42703" || error.code === "PGRST204";
 
 export type PartyManagerChoice = { label: string; userId: string | null };
 
@@ -126,6 +132,31 @@ export async function notifyCustomerManagerChange(input: {
   }
 }
 
+/** Те саме для ліда: і запис картки, і шапка бічної панелі кличуть одне. */
+export async function notifyLeadManagerChange(input: {
+  leadId: string;
+  name: string;
+  previous: PartyPreviousState;
+  manager: PartyManagerChoice;
+  actor: PartyActor;
+}) {
+  const { leadId, name, previous, manager, actor } = input;
+  if (!managerChangedFromAnother(previous, manager)) return;
+  try {
+    await notifyCustomerLeadManagerAssigned({
+      entityType: "lead",
+      entityId: leadId,
+      entityName: name,
+      newManagerUserId: manager.userId,
+      previousManagerLabel: previous?.managerLabel ?? "",
+      actorUserId: actor.userId,
+      actorName: actor.name,
+    });
+  } catch (notifyError) {
+    console.warn("Failed to notify lead manager assignment", notifyError);
+  }
+}
+
 /**
  * Колонки одного розділу картки: реквізити (масив юросіб + копія основної в
  * окремих колонках), контакти (масив + перший контакт у колонках) чи
@@ -180,8 +211,9 @@ export async function saveCustomerCard(input: {
   fallbackManagerLabel: string;
   previous: PartyPreviousState;
   actor: PartyActor;
-}): Promise<{ logoUrl: string | null }> {
+}): Promise<{ logoUrl: string | null; createdCustomerId: string | null }> {
   const { teamId, customerId, form, manager, fallbackManagerLabel, previous, actor } = input;
+  let createdCustomerId: string | null = null;
 
   const optimizedLogoUrl = await ingestLogo({
     teamId,
@@ -240,7 +272,7 @@ export async function saveCustomerCard(input: {
       .eq("id", customerId)
       .eq("team_id", teamId);
     if (updateError) {
-      if (!(updateError.message ?? "").includes("column")) throw updateError;
+      if (!isMissingColumnError(updateError)) throw updateError;
       managerFieldsPersisted = false;
       const { error: fallbackError } = await supabase
         .schema("tosho")
@@ -251,15 +283,21 @@ export async function saveCustomerCard(input: {
       if (fallbackError) throw fallbackError;
     }
   } else {
-    const { error: insertError } = await supabase.schema("tosho").from("customers").insert(payload as never);
-    if (insertError) {
-      if (!(insertError.message ?? "").includes("column")) throw insertError;
-      const { error: fallbackError } = await supabase
-        .schema("tosho")
-        .from("customers")
-        .insert({ team_id: teamId, name: payload.name, legal_name: payload.legal_name } as never);
-      if (fallbackError) throw fallbackError;
+    // Id потрібен тому, хто створює: прорахунок чи замовлення одразу стають на нового замовника.
+    const insertCustomer = (body: Record<string, unknown>) =>
+      supabase.schema("tosho").from("customers").insert(body as never).select("id").single();
+    const insertBody: Record<string, unknown> = { ...payload, referred_by: form.referredBy?.trim() || null };
+    let inserted = await insertCustomer(insertBody);
+    if (inserted.error && isMissingReferredByColumn(inserted.error)) {
+      delete insertBody.referred_by;
+      inserted = await insertCustomer(insertBody);
     }
+    if (inserted.error) {
+      if (!isMissingColumnError(inserted.error)) throw inserted.error;
+      inserted = await insertCustomer({ team_id: teamId, name: payload.name, legal_name: payload.legal_name });
+      if (inserted.error) throw inserted.error;
+    }
+    createdCustomerId = (inserted.data as { id: string } | null)?.id ?? null;
   }
 
   if (customerId && previous?.logoUrl && previous.logoUrl !== optimizedLogoUrl) {
@@ -270,7 +308,7 @@ export async function saveCustomerCard(input: {
     await notifyCustomerManagerChange({ customerId, name: form.name.trim(), previous, manager, actor });
   }
 
-  return { logoUrl: optimizedLogoUrl };
+  return { logoUrl: optimizedLogoUrl, createdCustomerId };
 }
 
 /** Перевірка ліда перед записом. Повертає текст помилки або null. */
@@ -410,20 +448,8 @@ export async function saveLeadCard(input: {
     void removeManagedCustomerLogoByUrl(previous.logoUrl);
   }
 
-  if (leadId && !convertToCustomer && managerFieldsPersisted && managerChangedFromAnother(previous, manager)) {
-    try {
-      await notifyCustomerLeadManagerAssigned({
-        entityType: "lead",
-        entityId: leadId,
-        entityName: form.companyName.trim(),
-        newManagerUserId: manager.userId,
-        previousManagerLabel: previous?.managerLabel ?? "",
-        actorUserId: actor.userId,
-        actorName: actor.name,
-      });
-    } catch (notifyError) {
-      console.warn("Failed to notify lead manager assignment", notifyError);
-    }
+  if (leadId && !convertToCustomer && managerFieldsPersisted) {
+    await notifyLeadManagerChange({ leadId, name: form.companyName.trim(), previous, manager, actor });
   }
 
   if (!convertToCustomer || !leadId) return { logoUrl: optimizedLogoUrl, convertedCustomerId: null, createdLeadId };

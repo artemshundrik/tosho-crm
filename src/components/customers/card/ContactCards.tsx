@@ -7,7 +7,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { TelegramInput } from "@/components/ui/telegram-input";
 import { cn } from "@/lib/utils";
 import { formatBirthdayForInput, normalizeBirthdayInput } from "../contactBirthday";
-import type { CustomerContact } from "../CustomerDialog";
+import type { CustomerContact } from "../partyFormTypes";
 import { POSITION_OPTIONS } from "../positionOptions";
 import { INLINE_CONTROL, INLINE_NEED } from "./CardParts";
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -17,15 +17,8 @@ import { ResizableHead } from "@/components/app/table-columns/ResizableHead";
 import { useTableColumns } from "@/components/app/table-columns/useTableColumns";
 import { CUSTOMERS_TABLE_COLUMNS, LEADS_TABLE_COLUMNS } from "@/features/orders/customersTableColumns";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  CustomerDialog,
-  LeadDialog,
-  hasCustomerFieldErrors,
-  validateCustomerForm,
-  type CustomerContact,
-  type CustomerFormState,
-  type LeadFormState,
-} from "@/components/customers";
+import { useCustomerLeadCreate } from "@/components/customers";
+import type { CustomerContact } from "@/components/customers/partyFormTypes";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { usePageCache } from "@/hooks/usePageCache";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
@@ -51,7 +44,6 @@ import { isInactiveEmployment } from "@/lib/employment";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import {
-  createEmptyCustomerLegalEntity,
   formatCustomerLegalEntitySummary,
   formatCustomerLegalEntityTitle,
   formatOwnershipTypeLabel,
@@ -67,7 +59,6 @@ import {
   normalizeCompanyNameLooseKey,
   scoreCompanyNameMatch,
 } from "@/lib/companyNameSearch";
-import { saveCustomerCard, saveLeadCard, validateLeadCard } from "@/components/customers/partyCardSave";
 import { useOpenPartyCard } from "@/components/customers/partyCardContext";
 import { CustomerHoverCard } from "@/components/customers/card/CustomerHoverCard";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
@@ -81,11 +72,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader2, MoreHorizontal, Plus, Trash2, Unlink, Users } from "@/components/icons/appIcons";
-import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 import { formatTelegramHandle } from "@/lib/telegramContact";
 import { leadContactLabel } from "@/components/customers/leadContact";
 import {
-  createEmptyLeadForm,
   getFallbackLeadColumnsVariant,
   getLeadColumns,
   type LeadColumnsVariant,
@@ -155,57 +144,6 @@ type SearchVisibilityMatch = {
   entityType: "customer" | "lead";
   managerLabel: string;
 };
-
-type QuoteHistoryRow = {
-  id: string;
-  number?: string | null;
-  status?: string | null;
-  total?: number | null;
-  created_at?: string | null;
-};
-
-type LinkedDesignTaskRow = {
-  id: string;
-  number?: string | null;
-  title?: string | null;
-  status?: string | null;
-  subtitle?: string | null;
-  created_at?: string | null;
-};
-
-const EMPTY_CUSTOMER_CONTACT: CustomerContact = {
-  name: "",
-  position: "",
-  phone: "",
-  email: "",
-  birthday: "",
-  telegram: "",
-};
-
-const createInitialCustomerFormState = (manager = "", managerId = ""): CustomerFormState => ({
-  name: "",
-  paymentType: "invoice",
-  source: "",
-  manager,
-  managerId,
-  website: "",
-  logoUrl: "",
-  logoFile: null,
-  logoUploadMode: "url",
-  legalEntities: [createEmptyCustomerLegalEntity()],
-  contacts: [{ ...EMPTY_CUSTOMER_CONTACT }],
-  deliveryPoints: [],
-  reminderDate: "",
-  reminderTime: "",
-  reminderComment: "",
-  eventName: "",
-  eventDate: "",
-  eventComment: "",
-  notes: "",
-  accountantName: "",
-  accountantEmail: "",
-  accountantEdrpou: "",
-});
 
 const getInitials = (value?: string | null) => {
   if (!value) return "?";
@@ -385,7 +323,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const { containerRef: customersTableRef, ...customersColumns } = useTableColumns(CUSTOMERS_TABLE_COLUMNS); // чому окремо — TableColumnsResizer
   const { containerRef: leadsTableRef, ...leadsColumns } = useTableColumns(LEADS_TABLE_COLUMNS);
   const location = useLocation();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { session, userId, jobRole } = useAuth();
   // Кеш читається ОДИН раз, а не на кожен рендер: значення потрібні лише для
@@ -442,38 +379,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [leadsHasMore, setLeadsHasMore] = useState(seededLeads?.hasMore ?? false);
   const [teamMembers, setTeamMembers] = useState<WorkspaceMemberDisplayRow[]>([]);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  /**
-   * Помилки полів показуємо лише після першої спроби зберегти. Інакше форма
-   * починає червоніти, поки людина ще друкує перше слово.
-   */
-  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [form, setForm] = useState<CustomerFormState>(() => createInitialCustomerFormState());
-  /**
-   * Перераховується на кожну зміну форми, тож помилка зникає в ту мить, коли
-   * поле виправили, — не треба тиснути «Зберегти» ще раз, щоб це побачити.
-   */
-  const customerFieldErrors = useMemo(
-    () => validateCustomerForm(form, { isNew: !editingId }),
-    [form, editingId]
-  );
-
-  const [leadDialogOpen, setLeadDialogOpen] = useState(false);
-  const [leadEditingId, setLeadEditingId] = useState<string | null>(null);
-  const [leadSaving, setLeadSaving] = useState(false);
-  const [leadFormError, setLeadFormError] = useState<string | null>(null);
   const [leadDeleteDialogOpen, setLeadDeleteDialogOpen] = useState(false);
   const [leadDeleteTarget, setLeadDeleteTarget] = useState<LeadRow | null>(null);
   const [leadDeleteBusy, setLeadDeleteBusy] = useState(false);
   const [leadDeleteError, setLeadDeleteError] = useState<string | null>(null);
-  const [leadForm, setLeadForm] = useState<LeadFormState>(() => createEmptyLeadForm());
   const customerDropboxColumnsAvailableRef = useRef<boolean | null>(null);
   const [customerDropboxLinks, setCustomerDropboxLinks] = useState<Record<string, CustomerDropboxLink>>(() =>
     readCustomerDropboxLinks(teamId)
@@ -904,10 +817,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
       "Папку Dropbox прив'язано"
     );
   }, [attachCustomerDropboxFolder, attachDropboxPath, attachDropboxTarget, runCustomerDropboxAction]);
-  const [linkedQuotes, setLinkedQuotes] = useState<QuoteHistoryRow[]>([]);
-  const [linkedOrders, setLinkedOrders] = useState<QuoteHistoryRow[]>([]);
-  const [linkedDesignTasks, setLinkedDesignTasks] = useState<LinkedDesignTaskRow[]>([]);
-  const [linkedQuotesLoading, setLinkedQuotesLoading] = useState(false);
   const [handledDeepLink, setHandledDeepLink] = useState<string | null>(null);
   const previousPathnameRef = useRef(location.pathname);
   const rowsRef = useRef<CustomerRow[]>([]);
@@ -940,15 +849,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.userId, member])), [teamMembers]);
   const memberByLabel = useMemo(
     () => new Map(teamMembers.map((member) => [member.label, member])),
-    [teamMembers]
-  );
-  const managerDialogMembers = useMemo(
-    () =>
-      teamMembers.map((member) => ({
-        id: member.userId,
-        label: member.label,
-        avatarUrl: member.avatarDisplayUrl,
-      })),
     [teamMembers]
   );
   const memberByAlias = useMemo(() => {
@@ -1152,11 +1052,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
     };
   }, [isManagerUser, resolveManagerLabel, search, teamId, userId]);
 
-  const calculationQuotes = useMemo(
-    () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() !== "approved"),
-    [linkedQuotes]
-  );
-  const orderQuotes = useMemo(() => linkedOrders, [linkedOrders]);
 
   useEffect(() => {
     rowsRef.current = rows;
@@ -1229,36 +1124,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
     return formatCustomerLegalEntityTitle(primary);
   };
 
-  const resetForm = useCallback(() => {
-    setForm(createInitialCustomerFormState(currentManagerLabel || defaultManagerName, userId ?? ""));
-    setLinkedQuotes([]);
-    setLinkedQuotesLoading(false);
-    setFormError(null);
-    setSubmitAttempted(false);
-  }, [currentManagerLabel, defaultManagerName, userId]);
-
-  const resetLeadForm = useCallback(() => {
-    setLeadForm(createEmptyLeadForm({ label: currentManagerLabel || defaultManagerName, id: userId ?? "" }));
-    setLeadFormError(null);
-  }, [currentManagerLabel, defaultManagerName, userId]);
-
-  const openCreate = useCallback(() => {
-    setEditingId(null);
-    resetForm();
-    setDialogOpen(true);
-  }, [resetForm]);
-
   const openDelete = (row: CustomerRow) => {
     setDeleteTarget(row);
     setDeleteError(null);
     setDeleteDialogOpen(true);
   };
-
-  const openCreateLead = useCallback(() => {
-    setLeadEditingId(null);
-    resetLeadForm();
-    setLeadDialogOpen(true);
-  }, [resetLeadForm]);
 
   const openDeleteLead = (lead: LeadRow) => {
     setLeadDeleteTarget(lead);
@@ -1753,6 +1623,22 @@ function CustomersPage({ teamId }: { teamId: string }) {
     [loadCustomers, loadLeads, openPartyCard]
   );
 
+  // Створену сторону одразу відкриваємо в панелі: там дозаповнюють реквізити.
+  const { openCustomerCreate, openLeadCreate, dialogs: partyCreateDialogs } = useCustomerLeadCreate({
+    teamId,
+    defaultManagerLabel: currentManagerLabel || defaultManagerName,
+    resolveErrorMessage: getErrorMessage,
+    onCreated: (created) => {
+      if (created.entityType === "customer") {
+        void loadCustomers();
+        openEdit({ id: created.id, name: created.name });
+      } else {
+        void loadLeads();
+        openEditLead({ id: created.id, company_name: created.name });
+      }
+    },
+  });
+
   // Infinite scroll: auto-load the next page when the bottom sentinel nears the
   // viewport. Loads the same batches as the "Показати ще" button (which stays as
   // a fallback), so it's no heavier than today — just no click required.
@@ -2021,8 +1907,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
 
     previousPathnameRef.current = location.pathname;
-    setDialogOpen(false);
-    setLeadDialogOpen(false);
     setDeleteDialogOpen(false);
     setLeadDeleteDialogOpen(false);
 
@@ -2033,124 +1917,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   }, [location.pathname]);
 
-  const handleSave = async () => {
-    // Спершу перевіряємо форму ЦІЛКОМ: людина має побачити всі проблеми за
-    // один раз, а не дізнаватись про них по черзі після кожного натискання.
-    setSubmitAttempted(true);
-    if (hasCustomerFieldErrors(customerFieldErrors)) {
-      setFormError(null);
-      return;
-    }
-
-    setSaving(true);
-    setFormError(null);
-
-    const managerValue = form.manager.trim();
-    const selectedManagerMember = resolveManagerMember(form.managerId, managerValue);
-    const selectedManagerLabel = form.managerId
-      ? memberById.get(form.managerId)?.label ?? managerValue
-      : selectedManagerMember?.label ?? managerValue;
-    const selectedManagerUserId = selectedManagerMember?.userId ?? (form.managerId.trim() || null);
-    const previousCustomer = editingId ? rows.find((row) => row.id === editingId) ?? null : null;
-    const previousCustomerManagerMember = previousCustomer
-      ? resolveManagerMember(previousCustomer.manager_user_id, previousCustomer.manager)
-      : null;
-
-    try {
-      await saveCustomerCard({
-        teamId,
-        customerId: editingId,
-        form,
-        manager: { label: selectedManagerLabel, userId: selectedManagerUserId },
-        fallbackManagerLabel: currentManagerLabel || defaultManagerName,
-        previous: previousCustomer
-          ? {
-              logoUrl: previousCustomer.logo_url ?? null,
-              managerUserId: previousCustomerManagerMember?.userId ?? previousCustomer.manager_user_id?.trim() ?? null,
-              managerLabel: resolveManagerLabel(previousCustomer.manager_user_id, previousCustomer.manager),
-            }
-          : null,
-        actor: { userId, name: currentManagerLabel || defaultManagerName },
-      });
-
-      setDialogOpen(false);
-      resetForm();
-      await loadCustomers();
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
-      }
-    } catch (err: unknown) {
-      setFormError(getErrorMessage(err, "Не вдалося зберегти замовника."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveLead = async (options?: { convertToCustomer?: boolean }) => {
-    const issue = validateLeadCard(leadForm, { leadId: leadEditingId, convertToCustomer: options?.convertToCustomer });
-    if (issue) {
-      setLeadFormError(issue);
-      return;
-    }
-
-    setLeadSaving(true);
-    setLeadFormError(null);
-
-    const previousLead = leadEditingId ? leads.find((lead) => lead.id === leadEditingId) ?? null : null;
-    const managerValue = leadForm.manager.trim();
-    const selectedManagerMember = resolveManagerMember(leadForm.managerId, managerValue);
-
-    try {
-      const { convertedCustomerId } = await saveLeadCard({
-        teamId,
-        leadId: leadEditingId,
-        form: leadForm,
-        manager: {
-          label: leadForm.managerId
-            ? memberById.get(leadForm.managerId)?.label ?? managerValue
-            : selectedManagerMember?.label ?? managerValue,
-          userId: selectedManagerMember?.userId ?? (leadForm.managerId.trim() || null),
-        },
-        fallbackManagerLabel: currentManagerLabel || defaultManagerName,
-        previous: previousLead
-          ? {
-              logoUrl: previousLead.logo_url ?? null,
-              managerUserId:
-                resolveManagerMember(previousLead.manager_user_id, previousLead.manager)?.userId ??
-                (previousLead.manager_user_id?.trim() || null),
-              managerLabel: resolveManagerLabel(previousLead.manager_user_id, previousLead.manager),
-              companyName: previousLead.company_name ?? null,
-            }
-          : null,
-        actor: { userId: userId ?? null, name: currentManagerLabel || defaultManagerName },
-        convertToCustomer: options?.convertToCustomer,
-      });
-      if (convertedCustomerId) toast.success("Ліда переведено в замовника.");
-
-      setLeadDialogOpen(false);
-      resetLeadForm();
-      await loadLeads();
-      if (convertedCustomerId) {
-        await loadCustomers();
-      }
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
-      }
-    } catch (err: unknown) {
-      const message = getErrorMessage(err, "Не вдалося зберегти ліда.");
-      if (message.includes("relation") && message.includes("leads")) {
-        setLeadFormError("Таблиця lead ще не створена. Запустіть SQL-скрипт scripts/leads-schema.sql.");
-      } else if (message.includes("column") && message.includes("ownership_type")) {
-        setLeadFormError("У базі немає колонки ownership_type для лідів. Запустіть оновлений scripts/leads-schema.sql.");
-      } else if (message.includes("column") && (message.includes("tax_id") || message.includes("legal_address"))) {
-        setLeadFormError("У базі немає нових колонок tax_id/legal_address для лідів. Запустіть оновлений scripts/leads-schema.sql.");
-      } else {
-        setLeadFormError(message);
-      }
-    } finally {
-      setLeadSaving(false);
-    }
-  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -2234,7 +2000,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       }
       topRight={
         <Button
-          onClick={activeTab === "customers" ? openCreate : openCreateLead}
+          onClick={() => (activeTab === "customers" ? openCustomerCreate() : openLeadCreate())}
           className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
         >
           <Plus className="h-4 w-4" />
@@ -2347,8 +2113,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     leadsRefreshing,
     leadsTotal,
     memberById,
-    openCreate,
-    openCreateLead,
+    openCustomerCreate,
+    openLeadCreate,
     renderManagerFilterValue,
     clearFilters,
     hasActiveFilters,
@@ -2954,74 +2720,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
         </TabsContent>
       </Tabs>
 
-      <CustomerDialog
-        teamId={teamId}
-        duplicateHintExcludeId={editingId}
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open && !editingId) {
-            resetForm();
-          }
-          if (!open && editingId) {
-            setLinkedQuotes([]);
-            setLinkedOrders([]);
-            setLinkedDesignTasks([]);
-            setLinkedQuotesLoading(false);
-          }
-        }}
-        form={form}
-        setForm={setForm}
-        ownershipOptions={OWNERSHIP_OPTIONS}
-        vatOptions={VAT_OPTIONS}
-        teamMembers={managerDialogMembers}
-        saving={saving}
-        error={formError}
-        fieldErrors={submitAttempted ? customerFieldErrors : undefined}
-        title={editingId ? "Редагувати замовника" : "Новий замовник"}
-        description={
-          editingId
-            ? undefined
-            : "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку."
-        }
-        submitLabel={editingId ? "Зберегти" : "Створити замовника"}
-        calculations={calculationQuotes}
-        orders={orderQuotes}
-        designTasks={linkedDesignTasks}
-        linkedLoading={linkedQuotesLoading}
-        // LTV (MVP)
-        ltvEntry={editingId ? customerLtvMap.get(editingId) ?? null : null}
-        ltvSegment={editingId ? customerSegmentMap.get(editingId) : undefined}
-        onOpenCalculation={(id) => navigate(`/orders/estimates/${id}`)}
-        onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
-        onOpenDesignTask={(id) => navigate(`/design/${id}`)}
-        isDropboxLinked={!!(editingId && customerDropboxLinks[editingId])}
-        dropboxAction={
-          editingId && dropboxActionState?.customerId === editingId ? dropboxActionState.action : null
-        }
-        onOpenClientFiles={
-          editingId && form.name.trim()
-            ? () => void runCustomerDropboxAction(editingId, "open", () => openCustomerDropboxFolder(editingId, form.name.trim()))
-            : undefined
-        }
-        onCreateDropboxFolder={
-          editingId && form.name.trim()
-            ? () => void runCustomerDropboxAction(editingId, "create", () => createCustomerDropboxFolder(editingId, form.name.trim()), "Папку Dropbox створено")
-            : undefined
-        }
-        onAttachDropboxFolder={
-          editingId && form.name.trim()
-            ? () => openAttachDropboxDialog(editingId, form.name.trim())
-            : undefined
-        }
-        onDetachDropboxFolder={
-          editingId && customerDropboxLinks[editingId]
-            ? () => void runCustomerDropboxAction(editingId, "detach", () => detachCustomerDropboxFolder(editingId), "Папку Dropbox відв'язано")
-            : undefined
-        }
-        onSubmit={handleSave}
-      />
-
       <Dialog
         open={attachDropboxDialogOpen}
         onOpenChange={(open) => {
@@ -3077,42 +2775,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         </DialogContent>
       </Dialog>
 
-      <LeadDialog
-        teamId={teamId}
-        duplicateHintExcludeId={leadEditingId}
-        open={leadDialogOpen}
-        onOpenChange={(open) => {
-          setLeadDialogOpen(open);
-          if (!open && !leadEditingId) {
-            resetLeadForm();
-          }
-          if (!open && leadEditingId) {
-            setLinkedQuotes([]);
-            setLinkedOrders([]);
-            setLinkedDesignTasks([]);
-            setLinkedQuotesLoading(false);
-          }
-        }}
-        form={leadForm}
-        setForm={setLeadForm}
-        ownershipOptions={OWNERSHIP_OPTIONS}
-        teamMembers={managerDialogMembers}
-        saving={leadSaving}
-        error={leadFormError}
-        title={leadEditingId ? "Редагувати ліда" : "Новий лід"}
-        description={leadEditingId ? undefined : "Додайте всі дані ліда для першого контакту."}
-        submitLabel={leadEditingId ? "Зберегти" : "Створити ліда"}
-        secondarySubmitLabel={leadEditingId ? "Зберегти і перевести в замовника" : undefined}
-        calculations={calculationQuotes}
-        orders={orderQuotes}
-        designTasks={linkedDesignTasks}
-        linkedLoading={linkedQuotesLoading}
-        onOpenCalculation={(id) => navigate(`/orders/estimates/${id}`)}
-        onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
-        onOpenDesignTask={(id) => navigate(`/design/${id}`)}
-        onSecondarySubmit={leadEditingId ? () => void handleSaveLead({ convertToCustomer: true }) : undefined}
-        onSubmit={() => void handleSaveLead()}
-      />
+      {partyCreateDialogs}
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}

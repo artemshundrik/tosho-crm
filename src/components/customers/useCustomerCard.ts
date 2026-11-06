@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { readEntityLock, sectionLockType, type EntityLockResult } from "@/lib/entityLock";
-import type { CustomerFormState } from "./CustomerDialog";
+import type { CustomerFormState } from "./partyFormTypes";
 import { customerRowToForm, loadCustomerRow, type CustomerRecord } from "./customerCardLoad";
 import { loadPartyLinkedRecords, type PartyLinkedRecords } from "./partyLinkedRecords";
 

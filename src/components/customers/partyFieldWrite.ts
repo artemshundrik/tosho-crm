@@ -65,8 +65,8 @@ export type CustomerSectionPatch = Partial<
 >;
 
 /**
- * Лід тримає реквізити окремими колонками, а не jsonb-масивом, тож бракуюче
- * для рахунку панель пише по одному полю, як і оплату.
+ * Лід тримає все окремими колонками, а не jsonb-масивами, тож панель пише кожне
+ * поле окремо: назву, менеджера, контакт, реквізити. Повної форми в ліда немає.
  */
 export type LeadFieldPatch = Partial<
   Pick<
@@ -82,8 +82,22 @@ export type LeadFieldPatch = Partial<
     | "signatory_position"
     | "email"
     | "phone_numbers"
+    | "company_name"
+    | "manager"
+    | "manager_user_id"
+    | "source"
+    | "website"
+    | "logo_url"
+    | "first_name"
+    | "last_name"
+    | "telegram"
+    | "legal_name"
+    | "signatory_name"
   >
->;
+> & {
+  /** Колонку додає scripts/party-referred-by.sql; до нього запис поверне помилку колонки. */
+  referred_by?: string | null;
+};
 
 export type FieldWriteResult = { ok: true } | { ok: false; reason: "gone" | "network"; message: string };
 
@@ -140,7 +154,10 @@ export async function writeCustomerSection(customerId: string, patch: CustomerSe
 
 export async function writeLeadFields(leadId: string, patch: LeadFieldPatch): Promise<FieldWriteResult> {
   try {
-    const response = await supabase.schema("tosho").from("leads").update(patch).eq("id", leadId).select("id");
+    const response = await supabase.schema("tosho").from("leads").update(patch as never).eq("id", leadId).select("id");
+    if (response.error && "referred_by" in patch && isMissingReferredByColumn(response.error)) {
+      return { ok: false, reason: "network", message: "Не зберіглось: поле «Хто порекомендував» запрацює після оновлення бази." };
+    }
     return toResult(response, "Ліда вже немає або він вам недоступний");
   } catch (error) {
     return caught(error);

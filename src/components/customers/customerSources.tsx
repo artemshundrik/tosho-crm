@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Gavel, Globe, Megaphone, PhoneCall, Presentation, ThumbsUp, UserCheck } from "@/components/icons/appIcons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { TikTokIcon } from "@/components/icons/TikTokIcon";
 import { ThreadsIcon } from "@/components/icons/ThreadsIcon";
 import { InstagramIcon } from "@/components/icons/InstagramIcon";
@@ -79,5 +80,31 @@ export function SourceSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/** Джерело пілюлями: усі варіанти видно одразу, вибір в один клік. */
+export function SourcePills({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  return (
+    <div role="group" aria-label="Звідки прийшов" className="flex flex-wrap gap-1.5">
+      {CUSTOMER_LEAD_SOURCES.map((option) => {
+        const active = value.trim() === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-md transition-colors",
+              active ? "border-primary/30 bg-primary/8 text-foreground" : "border-border text-muted-foreground hover:bg-muted",
+            )}
+          >
+            <option.Icon className="size-3.5" />
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

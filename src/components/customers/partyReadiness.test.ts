@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 // leadRecord → customerLogo тягне клієнт бази, якому потрібен window.
 vi.mock("@/lib/supabaseClient", () => ({ supabase: {} }));
 
-import type { CustomerFormState } from "./CustomerDialog";
-import type { LeadFormState } from "./LeadDialog";
+import type { CustomerFormState } from "./partyFormTypes";
+import type { LeadFormState } from "./partyFormTypes";
 import { getLeadConversionMissingFields } from "./leadRecord";
 import { customerReadinessInput, getPartyReadiness, leadReadinessInput, type PartyReadinessInput } from "./partyReadiness";
 import { createEmptyCustomerLegalEntity } from "@/lib/customerLegalEntities";

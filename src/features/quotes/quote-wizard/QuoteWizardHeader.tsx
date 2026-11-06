@@ -230,14 +230,10 @@ export function QuoteWizardHeader({
 
     Дотепер пошук, який нічого не знайшов, був глухим кутом: вікно доводилось
     закрити, піти на «Замовників», завести картку й почати прорахунок наново —
-    разом із уже набраними позиціями. Тепер те саме вікно створення, яким
-    заводять замовника з білдера й з дизайн-задачі (`useCustomerLeadCreate`),
-    відкривається поверх візарда, а створене одразу стає вибраним.
-
-    ВІКНА НЕ ДУБЛЮЮТЬСЯ НАВМИСНО. Своя коротка форма на пʼять полів здавалась
-    доречнішою в модалці поверх модалки, але картка замовника має правила, яких
-    у ній не буде: контакт ліда (телефон АБО телеграм), юрособи, логотип за
-    посиланням, нагадування. Половина з них мовчки не спрацювала б.
+    разом із уже набраними позиціями. Тепер те саме вікно створення, що скрізь
+    у CRM (`useCustomerLeadCreate`), відкривається поверх візарда, а створене
+    одразу стає вибраним. Своя форма тут мовчки обійшла б правила: контакт ліда
+    (телефон АБО Telegram), обов'язкова пошта рахункового замовника.
   */
   const currentUserLabel = members.find((member) => member.id === currentUserId)?.label ?? "";
 
@@ -260,18 +256,7 @@ export function QuoteWizardHeader({
   const customerLeadCreate = useCustomerLeadCreate({
     teamId,
     defaultManagerLabel: currentUserLabel,
-    teamMembers: members.map((member) => ({
-      id: member.id,
-      label: member.label,
-      avatarUrl: member.avatarUrl,
-    })),
     onCreated: handleCreatedParty,
-    customerDialogTitle: "Новий замовник",
-    customerDialogDescription: "Додайте дані замовника — прорахунок одразу стане на нього.",
-    customerSubmitLabel: "Створити замовника",
-    leadDialogTitle: "Новий лід",
-    leadDialogDescription: "Досить назви й одного контакту — решту доповните потім.",
-    leadSubmitLabel: "Створити ліда",
   });
 
   // Читаємо тією самою конвенцією, якою пишемо: дедлайн — настінний час, і

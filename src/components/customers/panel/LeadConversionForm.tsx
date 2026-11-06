@@ -10,7 +10,7 @@ import { OWNERSHIP_OPTIONS } from "@/features/quotes/quotes-page/config";
 import { ibanIssue, taxIdIssue } from "@/lib/ukrainianRequisites";
 import { cn } from "@/lib/utils";
 import { IbanInput } from "../IbanInput";
-import type { LeadFormState } from "../LeadDialog";
+import type { LeadFormState } from "../partyFormTypes";
 import { getPartyReadiness, leadReadinessInput, type PartyReadinessKey } from "../partyReadiness";
 
 /**

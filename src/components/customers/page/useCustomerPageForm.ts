@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { CustomerLegalEntity } from "@/lib/customerLegalEntities";
 import { ibanIssue, taxIdIssue, vatIdIssue } from "@/lib/ukrainianRequisites";
-import type { CustomerFormState } from "../CustomerDialog";
+import type { CustomerFormState } from "../partyFormTypes";
 import { customerSectionColumns } from "../partyCardSave";
 import { writeCustomerSection, type CustomerSection } from "../partyFieldWrite";
 

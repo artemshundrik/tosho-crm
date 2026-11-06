@@ -1,25 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { getLeadEntryHints, isMissingReferredByColumn, moveTelegramFromPhones } from "./leadEntryHints";
-import type { LeadFormState } from "./LeadDialog";
+import { getLeadEntryHints, isMissingReferredByColumn, telegramFromPhoneField } from "./leadEntryHints";
+import type { LeadFormState } from "./partyFormTypes";
 
 // Лише поля, які читають підказки; leadRecord тягне window і в node не вантажиться.
 const form = (patch: Partial<LeadFormState>) =>
   ({ phones: [""], email: "", telegram: "", source: "Сайт", referredBy: "", ...patch }) as LeadFormState;
 
 describe("getLeadEntryHints", () => {
-  it("нік Telegram у полі телефону — пропонує перенести", () => {
-    expect(getLeadEntryHints(form({ phones: ["@masseeds"] }))).toEqual([
-      { field: "phone", kind: "telegram_in_phone", telegram: "@masseeds" },
-    ]);
-    expect(getLeadEntryHints(form({ phones: ["t.me/masseeds"] }))).toEqual([
-      { field: "phone", kind: "telegram_in_phone", telegram: "@masseeds" },
-    ]);
-    expect(getLeadEntryHints(form({ phones: ["https://t.me/masseeds"] }))).toEqual([
-      { field: "phone", kind: "telegram_in_phone", telegram: "@masseeds" },
-    ]);
-  });
-
   it("справжній номер — нічого", () => {
     expect(getLeadEntryHints(form({ phones: ["+380 50 111 22 33"] }))).toEqual([]);
   });
@@ -37,15 +25,12 @@ describe("getLeadEntryHints", () => {
   });
 });
 
-describe("moveTelegramFromPhones", () => {
-  it("переносить нік у Telegram і прибирає його з телефонів", () => {
-    const moved = moveTelegramFromPhones(form({ phones: ["@test"] }));
-    expect(moved.telegram).toBe("@test");
-    expect(moved.phones).toEqual([""]);
-    expect(moveTelegramFromPhones(form({ phones: ["+380501112233", "t.me/abc_d"], telegram: "@old" }))).toMatchObject({
-      telegram: "@old",
-      phones: ["+380501112233"],
-    });
+describe("telegramFromPhoneField", () => {
+  it("упізнає нік і посилання, а номер лишає телефоном", () => {
+    expect(telegramFromPhoneField("@masseeds")).toBe("@masseeds");
+    expect(telegramFromPhoneField("t.me/masseeds")).toBe("@masseeds");
+    expect(telegramFromPhoneField("https://t.me/masseeds")).toBe("@masseeds");
+    expect(telegramFromPhoneField("+380 50 111 22 33")).toBeNull();
   });
 });
 

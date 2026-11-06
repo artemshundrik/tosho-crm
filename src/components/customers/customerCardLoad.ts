@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
-import type { CustomerContact, CustomerFormState } from "./CustomerDialog";
+import type { CustomerContact, CustomerFormState } from "./partyFormTypes";
 import { createEmptyCustomerLegalEntity, parseCustomerLegalEntities } from "@/lib/customerLegalEntities";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { getLocalReminderDateInputValue, getLocalReminderTimeInputValue } from "@/lib/reminderDateTime";

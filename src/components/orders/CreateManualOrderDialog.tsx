@@ -321,20 +321,16 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
     if (!paymentMethodTouched.current) setPaymentMethodId(defaultPaymentMethod(currency, paymentType));
   };
 
-  // Те саме вікно створення, що в прорахунку: у картки замовника свої правила,
-  // і коротка форма поруч мовчки їх обійшла б (REQ-301).
+  // Те саме вікно створення, що скрізь: у замовника свої правила, і окрема
+  // форма поруч мовчки їх обійшла б.
   const customerCreate = useCustomerLeadCreate({
     teamId,
     defaultManagerLabel: members.find((member) => member.userId === userId)?.label ?? "",
-    teamMembers: members.map((member) => ({ id: member.userId, label: member.label, avatarUrl: member.avatarUrl })),
     onCreated: (created) => {
       const name = getCreatedCustomerLeadLabel(created);
       setCustomerSearch(name);
       applyCustomer({ id: created.id, name, logoUrl: created.logoUrl ?? null }, null);
     },
-    customerDialogTitle: "Новий замовник",
-    customerDialogDescription: "Додайте дані замовника: замовлення одразу стане на нього.",
-    customerSubmitLabel: "Створити замовника",
   });
 
   const hasPrint = items.some((item) => item.imprints.length > 0);

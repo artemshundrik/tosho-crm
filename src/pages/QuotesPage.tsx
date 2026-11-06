@@ -90,13 +90,6 @@ import { DEFAULT_MANAGER_RATE, getManagerRateForUser } from "@/lib/managerRate";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import { QuoteWizardMount } from "@/features/quotes/quote-wizard/QuoteWizardEntry";
-import {
-  getCreatedCustomerLeadLabel,
-  toQuotePartyOption,
-  upsertByIdAndEntityType,
-  useCustomerLeadCreate,
-  type CreatedCustomerLead,
-} from "@/components/customers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -573,8 +566,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
-  const customerDropdownTimer = useRef<number | null>(null);
   const [quoteType, setQuoteType] = useState("merch");
   const [catalogTypes, setCatalogTypes] = useState<CatalogType[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -697,7 +688,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [quoteSetDetailsOpen, setQuoteSetDetailsOpen] = useState(false);
   const [quoteSetDetailsLoading, setQuoteSetDetailsLoading] = useState(false);
   void rowStatusBusy;
-  void customerDropdownOpen;
   void catalogLoading;
   void catalogError;
   void setPrintMode;
@@ -2242,43 +2232,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
     return true;
   };
-
-  const closeCustomerDropdown = () => {
-    if (customerDropdownTimer.current) {
-      window.clearTimeout(customerDropdownTimer.current);
-      customerDropdownTimer.current = null;
-    }
-    setCustomerDropdownOpen(false);
-  };
-
-  const handleCreatedParty = (created: CreatedCustomerLead) => {
-    const label = getCreatedCustomerLeadLabel(created);
-    setCustomers((prev) => {
-      const nextParty = toQuotePartyOption(created) as QuotePartyOption;
-      return upsertByIdAndEntityType(prev, nextParty);
-    });
-    setCustomerId(created.id);
-    setCustomerSearch(label);
-    closeCustomerDropdown();
-  };
-
-  const customerLeadCreate = useCustomerLeadCreate({
-    teamId,
-    defaultManagerLabel: currentUserManagerLabel,
-    teamMembers: teamMembers.map((member) => ({
-      id: member.id,
-      label: member.label,
-      avatarUrl: member.avatarUrl ?? null,
-    })),
-    onCreated: handleCreatedParty,
-    resolveErrorMessage: getErrorMessage,
-    customerDialogTitle: "Новий замовник",
-    customerDialogDescription: "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку.",
-    customerSubmitLabel: "Створити замовника",
-    leadDialogTitle: "Новий лід",
-    leadDialogDescription: "Додайте контакт ліда для подальшої роботи в прорахунках і задачах.",
-    leadSubmitLabel: "Створити ліда",
-  });
 
   const validateStep2 = () => {
     setCreateError(null);
@@ -5771,8 +5724,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       />
 
       {/* Old multi-step form removed - using NewQuoteDialog instead */}
-
-      {customerLeadCreate.dialogs}
 
       <Dialog
         open={quoteSetDetailsOpen}
