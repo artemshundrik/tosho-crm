@@ -1,5 +1,6 @@
 import type { QuoteKanbanProductPreview } from "@/features/quotes/components/QuoteKanbanProducts";
 import { fetchSpecPresetsByModelId } from "@/features/quotes/quote-details/catalogSpecPresets";
+import { colorBesideTitle } from "@/features/quotes/quote-details/quoteItemMetadata";
 import { computeQuoteListBreakdown } from "@/features/quotes/quotes-page/quoteListTotal";
 import {
   listCatalogModelsByIds,
@@ -129,9 +130,10 @@ export async function loadQuoteProductPreviews(
               name?: unknown;
             sku?: unknown;
             imageUrl?: unknown;
+            colorUnchosen?: unknown;
           })
         : null;
-      const variantName = typeof metadataVariant?.name === "string" ? metadataVariant.name.trim() || null : null;
+      const variantName = colorBesideTitle(item.name, metadataVariant);
       const variantImageUrl =
         typeof metadataVariant?.imageUrl === "string" ? metadataVariant.imageUrl.trim() || null : null;
       const sku = metadataSku || catalogImage?.sku || null;

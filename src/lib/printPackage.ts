@@ -101,6 +101,8 @@ export type QuoteItemMetadata = {
     name: string;
     sku?: string | null;
     imageUrl?: string | null;
+    /** Кольорів у товару кілька, а вибору не було: `name` тут назва товару, а фото лише приклад. */
+    colorUnchosen?: boolean;
   } | null;
   configuratorPreset?: PrintConfiguratorPreset | null;
   printProduct?: PrintProductConfig | null;

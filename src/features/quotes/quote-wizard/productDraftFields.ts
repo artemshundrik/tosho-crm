@@ -24,7 +24,14 @@ import { guessKindFromTitle, type CatalogKindOption } from "./catalogSuggestions
 /** Поля позиції, які заповнює сторінка товару. */
 type ProductFields = Pick<
   QuoteImportDraftItem,
-  "name" | "sku" | "catalog" | "supplierProductId" | "poolPrice"
+  | "name"
+  | "sku"
+  | "color"
+  | "catalog"
+  | "supplierProductId"
+  | "poolVariantRowId"
+  | "poolVariantImageUrl"
+  | "poolPrice"
 >;
 
 /**
@@ -62,6 +69,8 @@ export function supplierProductFields(
   return {
     name: product.name,
     color: variant?.label ?? null,
+    poolVariantRowId: variant?.id ?? null,
+    poolVariantImageUrl: variant ? variant.imageUrl ?? product.imageUrl : null,
     sku: variant?.article ?? product.article,
     // Ціна — та сама, що стояла в підказці. Це показ, а не запис: у базу їде
     // `supplierProductId`, і число там читає вона сама.
@@ -160,6 +169,10 @@ export function applyLinkPreview<T extends ProductFields>(
  * Людина обрала колір на картці товару. Артикул тут головний: саме він їде в
  * замовлення. Рядок пулу беремо звужений до обраного кольору: у Е-Сувеніра ціни
  * кольорів збігаються, а в Топтайма ні, і платимо ми за той, що обрали.
+ *
+ * Колір і його фото їдуть у позицію. Коли вони лишались лише у вікні, позиція
+ * діставала артикул без кольору, а розвідка підставляла перший-ліпший знімок
+ * товару: обирали Navy, а на прорахунку лежав Sage.
  */
 export function applyPoolVariant<T extends ProductFields>(
   draft: T,
@@ -170,6 +183,10 @@ export function applyPoolVariant<T extends ProductFields>(
   return {
     ...draft,
     sku: variant.article ?? draft.sku,
+    color: variant.label ?? variant.article ?? draft.color ?? null,
+    poolVariantRowId: variant.id,
+    // Без власного фото в кольору тут порожньо: чужий знімок брехав би про колір.
+    poolVariantImageUrl: picked ? picked.imageUrl : variant.imageUrl,
     supplierProductId: picked?.priceRowId ?? draft.supplierProductId,
     // Ціна теж стає кольоровою: показувати далі діапазон означало б ховати те,
     // що вже вирішено.

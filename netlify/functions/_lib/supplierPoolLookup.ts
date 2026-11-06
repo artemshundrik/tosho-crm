@@ -86,6 +86,23 @@ export type SupplierPoolMatch = {
 
 type PoolQueryRow = SupplierPoolRow & { is_active?: boolean | null };
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Рядок пулу, якщо людина вже назвала колір: `catalogVariant.id` = `pool:<id рядка>`.
+ *
+ * Звідси береться лише id, а адресу фото читаємо з самого рядка: metadata пише
+ * браузер, і адреса з неї повела б нашу функцію куди завгодно.
+ */
+export function readPinnedPoolRowId(metadata: Record<string, unknown> | null | undefined): string | null {
+  const variant = metadata?.catalogVariant;
+  if (!variant || typeof variant !== "object" || Array.isArray(variant)) return null;
+  const id = (variant as Record<string, unknown>).id;
+  if (typeof id !== "string" || !id.startsWith("pool:")) return null;
+  const rowId = id.slice("pool:".length);
+  return UUID_PATTERN.test(rowId) ? rowId : null;
+}
+
 /**
  * Адреса в тих написаннях, у яких вона могла лягти в пул.
  *

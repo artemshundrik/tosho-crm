@@ -12,7 +12,12 @@ import {
 } from "./_lib/externalFetch";
 import { extractOgTags } from "./_lib/ogTags";
 import { extractProductSku } from "./_lib/productSku";
-import { findPoolByArticle, findPoolByUrl, type SupplierPoolMatch } from "./_lib/supplierPoolLookup";
+import {
+  findPoolByArticle,
+  findPoolByUrl,
+  readPinnedPoolRowId,
+  type SupplierPoolMatch,
+} from "./_lib/supplierPoolLookup";
 
 /**
  * Дослідження лінків постачальників після імпорту (REQ-233, §3.4).
@@ -181,6 +186,17 @@ async function storeImage(params: {
   return params.admin.storage.from(IMPORT_IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
 }
 
+async function fillModelImage(client: SupabaseClient, modelId: string | null | undefined, imageUrl: string) {
+  if (!modelId) return;
+  const { error } = await client
+    .schema("tosho")
+    .from("catalog_models")
+    .update({ image_url: imageUrl } as never)
+    .eq("id", modelId)
+    .is("image_url", null);
+  if (error) console.error("quote-import-research: model image update failed", error.message);
+}
+
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") return jsonResponse(204, {});
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method Not Allowed" });
@@ -236,7 +252,45 @@ export const handler = async (event: HttpEvent) => {
     const fetchedAt = new Date().toISOString();
     let outcome: "done" | "skipped" | "failed" = "failed";
 
-    if (!supplierUrl || !item.team_id) {
+    // КОЛІР УЖЕ ОБРАНО: драбинка тут лише зашкодила б, бо за адресою стоять усі
+    // кольори товару. Переносимо в наше сховище фото саме цього рядка; без фото
+    // лишаємо, як є, і чужого кольору не підставляємо.
+    const pinnedRowId = readPinnedPoolRowId(item.metadata);
+    if (pinnedRowId && item.team_id) {
+      try {
+        const { data: poolRow, error: poolError } = await userClient
+          .schema("tosho")
+          .from("supplier_products")
+          .select("image_url")
+          .eq("id", pinnedRowId)
+          .maybeSingle();
+        if (poolError) throw new Error(poolError.message);
+        const sourceImage = (poolRow as { image_url?: string | null } | null)?.image_url ?? null;
+        const imageUrl = sourceImage
+          ? await storeImage({
+              admin: adminClient,
+              imageUrl: sourceImage,
+              teamId: item.team_id,
+              quoteId: body.quoteId,
+              itemId: item.id,
+            })
+          : null;
+        if (sourceImage && !imageUrl) throw new Error("Не вдалося забрати фото кольору.");
+        if (imageUrl) {
+          metadata.catalogVariant = { ...(metadata.catalogVariant as Record<string, unknown>), imageUrl };
+          await fillModelImage(userClient, item.catalog_model_id, imageUrl);
+        }
+        metadata.research = { status: "done", fetchedAt, source: "pool" };
+        outcome = "done";
+      } catch (error) {
+        metadata.research = {
+          status: "failed",
+          fetchedAt,
+          error: error instanceof Error ? error.message : "Не вдалося забрати фото кольору.",
+          source: "pool",
+        };
+      }
+    } else if (!supplierUrl || !item.team_id) {
       outcome = "skipped";
       metadata.research = { status: "skipped", fetchedAt };
     } else {
@@ -263,14 +317,18 @@ export const handler = async (event: HttpEvent) => {
           // Пишемо в `catalogVariant` навмисно: картка позиції рендерить це
           // поле вже сьогодні, тож картинка й назва з'являються без жодної
           // зміни в UI. `id` штучний — товару каталогу за цим нічого не стоїть.
+          // КОЛЬОРІВ КІЛЬКА, А ВИБОРУ НЕМАЄ: фото лишається прикладом, і позиція
+          // каже про це прямо. `pool:` тут не можна, бо це означало б обраний колір.
+          const colorUnchosen = tags.pool?.ambiguousArticle === true;
           metadata.catalogVariant = {
             // `pool:<id рядка>` замість штучного `import:<id позиції>`, коли
-            // товар знайшовся в нас: за цим id підставляється собівартість, і
-            // без нього зв'язок із пулом губиться назавжди (REQ-285#p4).
-            id: tags.pool ? `pool:${tags.pool.rowId}` : `import:${item.id}`,
+            // товар знайшовся в нас: без нього зв'язок із пулом губиться
+            // назавжди (REQ-285#p4).
+            id: tags.pool && !colorUnchosen ? `pool:${tags.pool.rowId}` : `import:${item.id}`,
             name: (tags.title ?? "").slice(0, 160) || "Товар постачальника",
             sku: existingSku || tags.sku,
             imageUrl,
+            ...(colorUnchosen ? { colorUnchosen: true } : {}),
           };
           metadata.research = { status: "done", fetchedAt, source: tags.source };
           outcome = "done";
@@ -278,15 +336,7 @@ export const handler = async (event: HttpEvent) => {
           // Товар за посиланням уже став рядком каталогу (REQ-182#p18), але
           // без фото: воно з'являється саме тут, коли картинку стиснуто. Лише
           // в порожнє поле — фото, яке людина поставила руками, не затираємо.
-          if (imageUrl && item.catalog_model_id) {
-            const { error: modelError } = await userClient
-              .schema("tosho")
-              .from("catalog_models")
-              .update({ image_url: imageUrl } as never)
-              .eq("id", item.catalog_model_id)
-              .is("image_url", null);
-            if (modelError) console.error("quote-import-research: model image update failed", modelError.message);
-          }
+          if (imageUrl) await fillModelImage(userClient, item.catalog_model_id, imageUrl);
 
           // Артикул у рядок каталогу — тим самим правилом «лише в порожнє»
           // (REQ-247). Візард уже кладе його при створенні моделі; сюди

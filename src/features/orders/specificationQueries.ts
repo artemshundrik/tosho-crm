@@ -3,6 +3,7 @@ import { formatPrintSpecEntries, getPrintSpecPreset } from "@/lib/printSpec";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { supabase } from "@/lib/supabaseClient";
 import type { DerivedOrderRecord, OrderDesignAsset } from "@/features/orders/orderRecords";
+import { colorBesideTitle } from "@/features/quotes/quote-details/quoteItemMetadata";
 import { itemDocumentName } from "@/features/orders/orderItemDocumentNames";
 import { buildDefaultSpecItemText } from "@/features/orders/specificationDocument";
 
@@ -167,7 +168,7 @@ export async function loadSpecificationItemTexts(
     const modelDescription = row.catalog_model_id ? modelDescriptionById.get(row.catalog_model_id) : "";
     if (description && normalizeForCompare(description) !== modelDescription) result.push(description);
     const metadata = row.quote_item_id ? metadataByQuoteItem.get(row.quote_item_id) : null;
-    const colour = text(asRecord(asRecord(metadata)?.catalogVariant)?.name);
+    const colour = colorBesideTitle(row.name, asRecord(asRecord(metadata)?.catalogVariant));
     if (colour) result.push(`колір ${colour}`);
     const spec = readQuoteItemPrintSpec(metadata);
     const preset = spec ? getPrintSpecPreset(spec.presetKey) : null;

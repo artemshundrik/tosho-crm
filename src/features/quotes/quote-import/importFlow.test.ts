@@ -103,6 +103,16 @@ describe("writeDraftsToQuote — вартість ставить база, а н
     expect(setQuoteRunCostFromPool).toHaveBeenCalledWith(runId, "pool-row-1");
   });
 
+  it("закріплений колір їде в розвідку й тоді, коли фото вже є", async () => {
+    const catalog = { modelId: "model-1", kindId: "k", typeId: "t", kindName: "К", typeName: "Т", imageUrl: "https://x/a.jpg" };
+
+    const withPhoto = await write({ catalog });
+    const pinned = await write({ catalog, color: "Navy", poolVariantRowId: "row-navy" });
+
+    expect(withPhoto.researchItemIds).toEqual([]);
+    expect(pinned.researchItemIds).toHaveLength(1);
+  });
+
   it("товар не з пулу бази про ціну не питає", async () => {
     const result = await write({});
 

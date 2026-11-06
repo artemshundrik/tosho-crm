@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildUrlCandidates, pickPoolMatch, supplierSlugForUrl } from "./supplierPoolLookup";
+import { buildUrlCandidates, pickPoolMatch, readPinnedPoolRowId, supplierSlugForUrl } from "./supplierPoolLookup";
 import type { SupplierPoolRow } from "../../../src/lib/supplierPoolRows";
 
 const row = (patch: Partial<SupplierPoolRow> = {}): SupplierPoolRow => ({
@@ -163,5 +163,24 @@ describe("вибір головного рядка з пулу (REQ-285#p2)", ()
 
     expect(match?.supplierSlug).toBe("e-suvenir.com.ua");
     expect(match?.rows).toHaveLength(1);
+  });
+});
+
+describe("обраний колір у metadata позиції", () => {
+  const rowId = "ef9c1369-abeb-4def-ac69-07966d5811ab";
+
+  it("віддає лише id рядка з префіксом pool:", () => {
+    expect(readPinnedPoolRowId({ catalogVariant: { id: `pool:${rowId}` } })).toBe(rowId);
+  });
+
+  it.each([
+    [null],
+    [{}],
+    [{ catalogVariant: { id: "import:1" } }],
+    [{ catalogVariant: { id: "pool:не-uuid" } }],
+    [{ catalogVariant: { id: rowId } }],
+    [{ catalogVariant: [] }],
+  ])("усе інше не закріплення: %j", (metadata) => {
+    expect(readPinnedPoolRowId(metadata as Record<string, unknown> | null)).toBeNull();
   });
 });

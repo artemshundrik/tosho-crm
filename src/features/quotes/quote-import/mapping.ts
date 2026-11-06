@@ -268,6 +268,16 @@ export function buildImportItemPayload(input: QuoteImportItemPayloadInput): Reco
   // тож «Артикул: …» з'являється без жодної зміни в тих читачах.
   const sku = draft.sku?.trim();
   if (sku) metadata.sku = sku;
+  // Обраний колір лягає в позицію одразу: картка показує його фото ще до розвідки,
+  // а розвідка за цим id лише переносить знімок цього ж кольору в наше сховище.
+  if (hasPinnedPoolColor(draft)) {
+    metadata.catalogVariant = {
+      id: `pool:${draft.poolVariantRowId}`,
+      name: draft.color?.trim(),
+      sku: sku || null,
+      imageUrl: draft.poolVariantImageUrl ?? null,
+    };
+  }
 
   return {
     id: input.itemId,
@@ -364,4 +374,11 @@ export function buildImportRunPayloads(input: {
     vat_rate: input.defaults.vatRate,
     is_approved: false,
   }));
+}
+
+/** Людина назвала колір товару з пулу, і він має рядок, з якого розвідка візьме фото. */
+export function hasPinnedPoolColor(
+  draft: Pick<QuoteImportDraftItem, "color" | "poolVariantRowId">
+): boolean {
+  return Boolean(draft.color?.trim() && draft.poolVariantRowId);
 }

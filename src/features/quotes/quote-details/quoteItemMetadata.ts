@@ -29,6 +29,28 @@ function safeHttpUrl(value: unknown): string | null {
   }
 }
 
+/**
+ * Колір позиції, який треба дописати поруч із її назвою. `null`, коли кольору
+ * немає або він уже в назві: « · Navy» лягає туди при створенні, а розвідка колись
+ * клала в `name` саму назву товару, і документи друкували «колір <назва товару>».
+ */
+export function colorBesideTitle(
+  title: string | null | undefined,
+  variant: { name?: unknown; colorUnchosen?: unknown } | null | undefined
+): string | null {
+  const name = typeof variant?.name === "string" ? variant.name.trim() : "";
+  if (!name || variant?.colorUnchosen === true) return null;
+  return (title ?? "").toLocaleLowerCase("uk").includes(name.toLocaleLowerCase("uk")) ? null : name;
+}
+
+/** Частина рядка під назвою на картці позиції: там про невибраний колір кажемо прямо. */
+export function variantMetaLabel(
+  title: string | null | undefined,
+  variant: { name?: unknown; colorUnchosen?: unknown } | null | undefined
+): string | null {
+  return variant?.colorUnchosen === true ? "колір не обрано" : colorBesideTitle(title, variant);
+}
+
 export function parseQuoteItemMetadata(value: unknown): QuoteItemMetadata | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 
@@ -49,6 +71,7 @@ export function parseQuoteItemMetadata(value: unknown): QuoteItemMetadata | null
         name,
         sku: typeof variantRecord.sku === "string" ? variantRecord.sku.trim() || null : null,
         imageUrl: typeof variantRecord.imageUrl === "string" ? variantRecord.imageUrl.trim() || null : null,
+        ...(variantRecord.colorUnchosen === true ? { colorUnchosen: true } : {}),
       };
     }
   }

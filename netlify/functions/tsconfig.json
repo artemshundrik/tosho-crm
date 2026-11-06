@@ -56,6 +56,7 @@
     "_lib/absenceDecisionButtons.test.ts",
     "_lib/absenceDecisionButtons.ts",
     "_lib/absenceSubmit.test.ts",
+    "_lib/quoteImportResearch.test.ts",
     "_lib/aiPricing.test.ts",
     "_lib/absenceSubmit.ts",
     "_lib/appUrl.ts",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseQuoteItemMetadata } from "./quoteItemMetadata";
+import { colorBesideTitle, parseQuoteItemMetadata, variantMetaLabel } from "./quoteItemMetadata";
 
 describe("читання metadata позиції прорахунку", () => {
   it("пропускає посилання постачальника — без них кнопка на картці сіра", () => {
@@ -35,6 +35,21 @@ describe("читання metadata позиції прорахунку", () => {
     });
     expect(metadata?.research?.status).toBe("failed");
     expect(metadata?.importLinks).toEqual(["https://kmz.ua/a"]);
+  });
+
+  it("позначка «колір не обрано» переживає читання", () => {
+    const variant = { id: "import:1", name: "Фліс", colorUnchosen: true };
+
+    expect(parseQuoteItemMetadata({ catalogVariant: variant })?.catalogVariant?.colorUnchosen).toBe(true);
+  });
+
+  it("колір біля назви: не дублюємо й не видаємо назву товару за колір", () => {
+    expect(colorBesideTitle("Фліс", { name: "Navy" })).toBe("Navy");
+    expect(colorBesideTitle("Фліс · Navy", { name: "navy" })).toBeNull();
+    expect(colorBesideTitle("Фліс Ka911", { name: "Фліс Ka911" })).toBeNull();
+    expect(colorBesideTitle("Фліс", { name: "Фліс", colorUnchosen: true })).toBeNull();
+    expect(colorBesideTitle("Фліс", null)).toBeNull();
+    expect(variantMetaLabel("Фліс", { name: "Фліс", colorUnchosen: true })).toBe("колір не обрано");
   });
 
   it("невідомий статус дослідження не проходить", () => {

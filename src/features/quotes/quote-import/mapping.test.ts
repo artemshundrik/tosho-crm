@@ -106,6 +106,38 @@ describe("розшифровка → рядки прев'ю", () => {
 });
 
 describe("рядки прев'ю → payload мутацій", () => {
+  const payloadOf = (patch: Parameters<typeof draft>[0]) =>
+    buildImportItemPayload({
+      draft: draft(patch),
+      itemId: "item-1",
+      teamId: "team-1",
+      quoteId: "quote-1",
+      position: 1,
+      trace: { fileName: "посилання", importedAt: "2026-11-06T10:00:00.000Z" },
+    }) as { name: string; metadata: Record<string, unknown> };
+
+  it("обраний колір лягає в позицію разом із фото цього кольору", () => {
+    const payload = payloadOf({
+      name: "Фліс",
+      sku: "ka911",
+      color: "Navy",
+      poolVariantRowId: "row-navy",
+      poolVariantImageUrl: "https://toptime.com.ua/ka911_NV.jpg",
+    });
+
+    expect(payload.name).toBe("Фліс · Navy");
+    expect(payload.metadata.catalogVariant).toEqual({
+      id: "pool:row-navy",
+      name: "Navy",
+      sku: "ka911",
+      imageUrl: "https://toptime.com.ua/ka911_NV.jpg",
+    });
+  });
+
+  it("колір без рядка пулу (каталог, файл) позицію не закріплює", () => {
+    expect(payloadOf({ name: "Кепка", color: "Білий" }).metadata.catalogVariant).toBeUndefined();
+  });
+
   it("ціну браузер НЕ надсилає — тираж їде з нулем і власним id", () => {
     // Число від браузера — це число від людини, і гейт посад слушно його
     // зупиняє. Вартість ставить база окремим кроком, прочитавши рядок пулу;

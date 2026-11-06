@@ -62,7 +62,7 @@ import { QuoteItemImprintsSection } from "@/features/quotes/quote-details/QuoteI
 import { QuoteItemModelSwap } from "@/features/quotes/quote-details/QuoteItemModelSwap";
 import { QuoteItemSpec } from "@/features/quotes/quote-details/QuoteItemSpec";
 import { pickProductPreview } from "@/features/quotes/quote-details/productPreviewImage";
-import { parseQuoteItemMetadata } from "@/features/quotes/quote-details/quoteItemMetadata";
+import { parseQuoteItemMetadata, variantMetaLabel } from "@/features/quotes/quote-details/quoteItemMetadata";
 import { QuoteImportDialog } from "@/features/quotes/quote-import/QuoteImportDialog";
 import { useQuoteImportResearch } from "@/features/quotes/quote-import/useQuoteImportResearch";
 import { normalizeUnitLabel } from "@/lib/units";
@@ -4313,7 +4313,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     // Поліграфія — виняток: вид іде бейджем (див. QuoteItemTitle).
                     const itemMeta = [
                       modelSpecPreset ? null : metaLine,
-                      catalogVariant?.name,
+                      variantMetaLabel(item.title, item.metadata?.catalogVariant),
                       itemSku ? `Артикул: ${itemSku}` : null,
                     ].filter((part): part is string => Boolean(part));
                     const shouldShowDescription =
@@ -4484,7 +4484,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               kindName={kindLabel}
                               modelLabel={modelLabel}
                               sku={itemSku}
-                              color={catalogVariant?.name ?? null}
+                              color={item.metadata?.catalogVariant?.colorUnchosen ? null : catalogVariant?.name ?? null}
                               imageUrl={
                                 productPreview?.type === "image"
                                   ? productPreview.url

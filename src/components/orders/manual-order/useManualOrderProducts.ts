@@ -204,7 +204,7 @@ export function useManualOrderProducts(teamId: string, open: boolean) {
       prev.map((draft) => {
         if (draft.key !== key) return draft;
         const next = applyPoolVariant(draft, draft.colorSource, variant);
-        return { ...next, color: variant.label ?? variant.article, variantId: variant.id };
+        return { ...next, variantId: variant.id };
       })
     );
     setPreviews((prev) => {

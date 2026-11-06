@@ -16,6 +16,7 @@ import type { QuoteRun } from "@/lib/toshoApi";
 import {
   buildImportItemPayload,
   buildImportRunPayloads,
+  hasPinnedPoolColor,
   toDraftItems,
   type QuoteImportRunDefaults,
 } from "./mapping";
@@ -268,8 +269,9 @@ export async function writeDraftsToQuote(input: {
     }
     const rowId = ((inserted.data as { id?: string } | null)?.id ?? itemId) as string;
     itemIds.push(rowId);
-    // Фото вже є — розвідці нема чого додати, зате є що зіпсувати.
-    if (!draft.catalog?.imageUrl) researchItemIds.push(rowId);
+    // Фото вже є — розвідці нема чого додати, зате є що зіпсувати. Закріплений колір
+    // їде завжди: його знімок ще чужий, а чужий у PDF пропозиції зникає (CORS).
+    if (!draft.catalog?.imageUrl || hasPinnedPoolColor(draft)) researchItemIds.push(rowId);
     input.onSaved?.(itemIds.length);
     const runs = buildImportRunPayloads({
       draft,
