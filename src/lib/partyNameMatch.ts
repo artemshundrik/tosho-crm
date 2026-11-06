@@ -87,6 +87,20 @@ export function isSameParty(query: string, party: PartyNames): boolean {
 }
 
 /**
+ * Чи це та сама назва, а не лише схоже звучання.
+ *
+ * Регістр, пробіли, лапки й правова форма не рахуються: «ТОВ "Вектор"» і «вектор»
+ * це одна назва. Інші літери рахуються: «Fantom» і «Фантом» можуть бути різними
+ * компаніями, тому їх вирішує людина, а не ця функція.
+ */
+export function isExactPartyName(query: string, party: PartyNames): boolean {
+  const key = (value: string) => compactPartyMatch(stripLegalForm(normalizePartyMatch(value)));
+  const wanted = key(query);
+  if (!wanted) return false;
+  return [party.name, party.legalName].some((value) => !!value && key(value) === wanted);
+}
+
+/**
  * Знайти картку за назвою — або НІЧОГО.
  *
  * `null` замість «найкращого з наявних» тут принциповий. Показати чужу
@@ -95,5 +109,7 @@ export function isSameParty(query: string, party: PartyNames): boolean {
  * просто бачить, що зв'язку немає.
  */
 export function findParty<T extends PartyNames>(rows: readonly T[], query: string): T | null {
-  return rows.find((row) => isSameParty(query, row)) ?? null;
+  // Точна назва першою: тепер можуть жити поруч «Fantom» і «Фантом», і прорахунок
+  // із текстом «Фантом» не має відкрити ту, що стоїть раніше за абеткою.
+  return rows.find((row) => isExactPartyName(query, row)) ?? rows.find((row) => isSameParty(query, row)) ?? null;
 }

@@ -58,6 +58,11 @@ describe("isSameParty — чуже лишається чужим", () => {
 });
 
 describe("findParty", () => {
+  it("точна назва важливіша за схоже звучання, хоч би яка стояла першою", () => {
+    expect(findParty([{ name: "Fantom" }, { name: "Фантом" }], "Фантом")?.name).toBe("Фантом");
+  });
+
+
   const rows = [lead("."), lead(".."), lead("EDS"), lead("MAS Seeds"), lead("Ерідон")];
 
   it("знаходить потрібну, а не першу за абеткою", () => {

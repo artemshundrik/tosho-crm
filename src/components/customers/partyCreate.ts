@@ -1,5 +1,8 @@
 import { createEmptyCustomerLegalEntity } from "@/lib/customerLegalEntities";
+import { pickCompanyHints, type CompanyHintCandidate, type CompanyHintMatch } from "@/lib/companyDuplicateHint";
 import { areCompanyNamesEquivalent } from "@/lib/companyNameSearch";
+import { isExactPartyName } from "@/lib/partyNameMatch";
+import { supabase } from "@/lib/supabaseClient";
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { validateCustomerForm } from "./customerValidation";
@@ -166,6 +169,63 @@ export async function findDuplicatePartyMessage(
     return `Схожа компанія вже є в CRM як ${label}${manager ? `. Менеджер: ${manager}` : ""}.`;
   } catch {
     return null;
+  }
+}
+
+export type PartyDuplicates = { exact: string | null; similar: CompanyHintMatch[] };
+
+const managerSuffix = (manager?: string | null) => {
+  // Підпис менеджера буває скорочений («Іван С.»): крапку ставить речення.
+  const clean = manager?.trim().replace(/\.+$/, "");
+  return clean ? `. Менеджер: ${clean}` : "";
+};
+
+/** Та сама назва забороняє створення, схожа лише показується: рішення власника 06.11.2026. */
+export function classifyPartyDuplicates(
+  name: string,
+  customers: CompanyHintCandidate[],
+  leads: CompanyHintCandidate[],
+): PartyDuplicates {
+  const same = (row: CompanyHintCandidate) => isExactPartyName(name, row);
+  const customer = customers.find(same);
+  const lead = customer ? undefined : leads.find(same);
+  const exact = customer ?? lead;
+  return {
+    exact: exact ? `Така назва вже є в CRM як ${customer ? "замовник" : "лід"}${managerSuffix(exact.manager)}.` : null,
+    similar: exact ? [] : pickCompanyHints(name, leads, customers),
+  };
+}
+
+/**
+ * Перевірка перед створенням порівнює з УСІМА картками команди, а не з результатом
+ * пошуку. Пошук у базі шукає за літерами: «Kyivstar» не знаходить «Київстар», бо
+ * в варіантах написання лише «кіівстар». Рядків кілька сотень, запит один на створення.
+ * Збій не блокує створення: без перевірки людині все одно треба працювати.
+ */
+export async function checkPartyDuplicates(teamId: string, name: string): Promise<PartyDuplicates> {
+  try {
+    const db = supabase.schema("tosho");
+    const [customers, leads] = await Promise.all([
+      db.from("customers").select("id,name,legal_name,logo_url,manager,manager_user_id").eq("team_id", teamId).limit(2000),
+      db.from("leads").select("id,company_name,legal_name,logo_url,manager,manager_user_id").eq("team_id", teamId).limit(2000),
+    ]);
+    if (customers.error) throw customers.error;
+    if (leads.error) throw leads.error;
+    const candidate = (row: { id: string; legal_name: string | null; logo_url: string | null; manager: string | null; manager_user_id: string | null }, rowName: string | null): CompanyHintCandidate => ({
+      id: row.id,
+      name: rowName ?? "",
+      legalName: row.legal_name,
+      logoUrl: row.logo_url,
+      manager: row.manager,
+      managerUserId: row.manager_user_id,
+    });
+    return classifyPartyDuplicates(
+      name.trim(),
+      (customers.data ?? []).map((row) => candidate(row, row.name)),
+      (leads.data ?? []).map((row) => candidate(row, row.company_name)),
+    );
+  } catch {
+    return { exact: null, similar: [] };
   }
 }
 

@@ -156,6 +156,56 @@ function useMemberAvatars() {
   return { byId, byLabel };
 }
 
+/** Рядки зі схожими компаніями: і в поповері під полем, і перед створенням. */
+export function CompanyHintList({ matches }: { matches: CompanyHintMatch[] }) {
+  const { byId, byLabel } = useMemberAvatars();
+  return (
+    <ul className="space-y-0.5">
+      {matches.map((match) => {
+        const manager = match.manager?.trim() || "";
+        const avatar =
+          (match.managerUserId ? byId[match.managerUserId] : null) ??
+          (manager ? byLabel[normalizeMemberKey(manager)] ?? null : null);
+        return (
+          <li
+            key={`${match.kind}-${match.id}`}
+            className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5"
+          >
+            <EntityAvatar
+              src={match.logoUrl ?? null}
+              name={match.name}
+              fallback={match.name.slice(0, 2).toUpperCase()}
+              size={34}
+              fallbackClassName="text-2xs font-semibold"
+            />
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="truncate text-sm font-medium text-foreground">{match.name}</div>
+              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="shrink-0">{match.kind}</span>
+                {manager ? (
+                  <>
+                    <span className="shrink-0 text-muted-foreground/50" aria-hidden>
+                      ·
+                    </span>
+                    <AvatarBase
+                      src={avatar}
+                      name={manager}
+                      size={16}
+                      className="shrink-0 border-border/60"
+                      fallbackClassName="text-[8px] font-semibold"
+                    />
+                    <span className="truncate">{manager}</span>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /**
  * Обгортка навколо поля назви: тримає якір поповера й крутілку.
  *
@@ -178,7 +228,6 @@ export function CompanyDuplicateHintField({
   className?: string;
 }) {
   const { matches, loading } = useCompanyDuplicateHint(teamId, query, excludeId);
-  const { byId, byLabel } = useMemberAvatars();
   // Лише поки курсор у полі: людина пішла заповнювати далі — поповер не має
   // лежати на наступних полях. Натискати в ньому нічого, тож закриття нічого не губить.
   const [focused, setFocused] = useState(false);
@@ -218,7 +267,8 @@ export function CompanyDuplicateHintField({
         // панель лягає просто на сусідні поля форми, і крізь неї читалось
         // «Джерело» під назвами компаній. Підказку про дубль треба прочитати з
         // першого разу, а не розбирати крізь чужий текст.
-        className="w-[var(--radix-popover-trigger-width)] border-border/60 bg-popover p-1.5 backdrop-blur-none"
+        // Натискати тут нічого, а лежить підказка на сусідніх полях: клік має дійти до них.
+        className="pointer-events-none w-[var(--radix-popover-trigger-width)] border-border/60 bg-popover p-1.5 backdrop-blur-none"
         // Фокус лишається в полі: людина продовжує друкувати, а поповер лише
         // показує. Без цього перше ж спрацювання виривало б курсор із поля.
         onOpenAutoFocus={(event) => event.preventDefault()}
@@ -227,49 +277,7 @@ export function CompanyDuplicateHintField({
         <div className="px-1.5 pb-1 pt-0.5 text-2xs font-medium text-muted-foreground">
           Схожа компанія вже є
         </div>
-        <ul className="space-y-0.5">
-          {matches.map((match) => {
-            const manager = match.manager?.trim() || "";
-            const avatar =
-              (match.managerUserId ? byId[match.managerUserId] : null) ??
-              (manager ? byLabel[normalizeMemberKey(manager)] ?? null : null);
-            return (
-              <li
-                key={`${match.kind}-${match.id}`}
-                className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5"
-              >
-                <EntityAvatar
-                  src={match.logoUrl ?? null}
-                  name={match.name}
-                  fallback={match.name.slice(0, 2).toUpperCase()}
-                  size={34}
-                  fallbackClassName="text-2xs font-semibold"
-                />
-                <div className="min-w-0 flex-1 leading-tight">
-                  <div className="truncate text-sm font-medium text-foreground">{match.name}</div>
-                  <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="shrink-0">{match.kind}</span>
-                    {manager ? (
-                      <>
-                        <span className="shrink-0 text-muted-foreground/50" aria-hidden>
-                          ·
-                        </span>
-                        <AvatarBase
-                          src={avatar}
-                          name={manager}
-                          size={16}
-                          className="shrink-0 border-border/60"
-                          fallbackClassName="text-[8px] font-semibold"
-                        />
-                        <span className="truncate">{manager}</span>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <CompanyHintList matches={matches} />
       </PopoverContent>
     </Popover>
   );

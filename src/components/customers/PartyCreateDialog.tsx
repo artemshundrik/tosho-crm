@@ -10,14 +10,15 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { TelegramInput } from "@/components/ui/telegram-input";
 import { HeaderFact, LogoButton, ManagerChip, PaymentSeg, REFERRAL_SOURCE } from "./card/HeaderParts";
 import { useTeamMembers } from "./card/useTeamMembers";
-import { CompanyDuplicateHintField } from "./CompanyDuplicateHint";
+import type { CompanyHintMatch } from "@/lib/companyDuplicateHint";
+import { CompanyDuplicateHintField, CompanyHintList } from "./CompanyDuplicateHint";
 import { SourcePills } from "./customerSources";
 import { getLeadEntryHints, LEAD_ENTRY_HINT_TEXT, telegramFromPhoneField } from "./leadEntryHints";
 import {
   createParty,
   createPartyDraft,
   draftToLeadForm,
-  findDuplicatePartyMessage,
+  checkPartyDuplicates,
   PARTY_CREATE_FIELD_ORDER,
   validatePartyDraft,
   type CreatedCustomerLead,
@@ -55,6 +56,8 @@ export function PartyCreateDialog(props: {
   const [attempted, setAttempted] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Прив'язано до назви: змінили назву — показане більше не чинне, треба перевірити знову.
+  const [similar, setSimilar] = React.useState<{ name: string; matches: CompanyHintMatch[] } | null>(null);
   const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
 
@@ -92,6 +95,8 @@ export function PartyCreateDialog(props: {
     });
   };
 
+  const similarShown = similar?.name === draft.name.trim() ? similar.matches : null;
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
@@ -107,9 +112,16 @@ export function PartyCreateDialog(props: {
     }
     setSaving(true);
     try {
-      const duplicate = await findDuplicatePartyMessage(teamId, draft.name);
-      if (duplicate) {
-        setError(duplicate);
+      const duplicates = await checkPartyDuplicates(teamId, draft.name);
+      if (duplicates.exact) {
+        setSimilar(null);
+        setError(duplicates.exact);
+        return;
+      }
+      if (duplicates.similar.length > 0 && !similarShown) {
+        setSimilar({ name: draft.name.trim(), matches: duplicates.similar });
+        // Блок виріс над кнопкою: на низькому екрані вона пішла б за край вікна.
+        requestAnimationFrame(() => formRef.current?.querySelector('button[type="submit"]')?.scrollIntoView({ block: "nearest" }));
         return;
       }
       const created = await createParty({
@@ -225,12 +237,19 @@ export function PartyCreateDialog(props: {
             </p>
           ) : null}
 
+          {similarShown ? (
+            <div role="status" data-testid="party-similar" className="rounded-lg border border-border/60 p-2">
+              <p className="px-1.5 pb-1 text-sm font-medium text-foreground">Схожа компанія вже є. Це не вона?</p>
+              <CompanyHintList matches={similarShown} />
+            </div>
+          ) : null}
+
           <DialogFooter>
             <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
               Скасувати
             </Button>
             <Button type="submit" variant="primary" loading={saving}>
-              {copy.submit}
+              {similarShown ? "Це інша, створити" : copy.submit}
             </Button>
           </DialogFooter>
         </form>

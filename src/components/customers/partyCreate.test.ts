@@ -5,7 +5,7 @@ vi.mock("@/lib/supabaseClient", () => ({ supabase: {} }));
 vi.mock("@/lib/toshoApi", () => ({ listCustomersBySearch: mocks.listCustomersBySearch, listLeadsBySearch: mocks.listLeadsBySearch }));
 
 import { validateLeadCard } from "./partyCardSave";
-import { createPartyDraft, draftToCustomerForm, draftToLeadForm, findDuplicatePartyMessage, validatePartyDraft, type PartyCreateDraft } from "./partyCreate";
+import { classifyPartyDuplicates, createPartyDraft, draftToCustomerForm, draftToLeadForm, findDuplicatePartyMessage, validatePartyDraft, type PartyCreateDraft } from "./partyCreate";
 
 const draft = (patch: Partial<PartyCreateDraft> = {}): PartyCreateDraft => ({
   ...createPartyDraft("MAS Seeds", "u1"),
@@ -96,5 +96,27 @@ describe("findDuplicatePartyMessage", () => {
   it("пошук упав — створення не блокуємо", async () => {
     mocks.listCustomersBySearch.mockRejectedValue(new Error("offline"));
     expect(await findDuplicatePartyMessage("t1", "MAS Seeds")).toBeNull();
+  });
+});
+
+describe("classifyPartyDuplicates", () => {
+  const row = (name: string, manager: string | null = null, legalName: string | null = null) => ({ id: name, name, legalName, manager });
+
+  it("та сама назва забороняє, навіть з іншим регістром, лапками й правовою формою", () => {
+    expect(classifyPartyDuplicates("вектор", [row('ТОВ "Вектор"', "Іван С.")], []).exact).toBe("Така назва вже є в CRM як замовник. Менеджер: Іван С.");
+    expect(classifyPartyDuplicates("MAS Seeds", [], [row("masseeds")]).exact).toBe("Така назва вже є в CRM як лід.");
+    expect(classifyPartyDuplicates("Вектор", [row("Інша", null, "ТОВ Вектор")], []).exact).toContain("замовник");
+  });
+
+  it("інші літери не забороняють, а показують", () => {
+    for (const [query, existing] of [["Fantom", "Фантом"], ["Kyivstar", "Київстар"], ["KMZ", "KMZ Industries - КМЗ"]]) {
+      const result = classifyPartyDuplicates(query, [row(existing)], []);
+      expect(result.exact).toBeNull();
+      expect(result.similar.map((match) => match.name)).toEqual([existing]);
+    }
+  });
+
+  it("чуже мовчить", () => {
+    expect(classifyPartyDuplicates("Вектор", [row("Нова Земля")], [row("EDS")])).toEqual({ exact: null, similar: [] });
   });
 });
