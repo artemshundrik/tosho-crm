@@ -3280,6 +3280,7 @@ export type Database = {
           image_url: string | null
           item_kind: string
           line_total: number
+          metadata: Json | null
           methods: Json | null
           name: string
           order_id: string
@@ -3301,6 +3302,7 @@ export type Database = {
           image_url?: string | null
           item_kind?: string
           line_total?: number
+          metadata?: Json | null
           methods?: Json | null
           name: string
           order_id: string
@@ -3322,6 +3324,7 @@ export type Database = {
           image_url?: string | null
           item_kind?: string
           line_total?: number
+          metadata?: Json | null
           methods?: Json | null
           name?: string
           order_id?: string

@@ -1,3 +1,9 @@
+import {
+  compactOrderItemMetadata,
+  parseOrderItemMetadata,
+  type OrderItemMetadata,
+  type OrderItemMetadataInput,
+} from "@/features/orders/orderItemMetadata";
 import { DESIGN_STATUS_LABELS, type DesignStatus } from "@/lib/designTaskStatus";
 import { parseDesignTaskType, type DesignTaskType } from "@/lib/designTaskType";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
@@ -65,6 +71,7 @@ import { buildDerivedReadinessSteps, getReadinessColumn } from "./orderReadiness
 import { isLayoutApprovedByTask, isVisualizationApprovedByTask, isVisualizationPending } from "./orderVisualGate";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isMissingOrdersColumnMessage, isMissingOrdersRelationMessage } from "./ordersSchemaErrors";
+import { listStoredOrderItems } from "./storedOrderItems";
 import { listViewerWorkspaceMembers } from "@/lib/workspaceMemberDirectory";
 
 type CustomerContact = {
@@ -361,6 +368,7 @@ export type DerivedOrderItem = {
   imageUrl?: string | null;
   thumbUrl?: string | null;
   kind?: OrderItemKind;
+  metadata?: OrderItemMetadata | null;
 };
 
 export type DerivedReadinessStep = {
@@ -613,25 +621,6 @@ type StoredOrderRow = {
   has_approved_layout?: boolean | null;
 };
 
-type StoredOrderItemRow = {
-  id: string;
-  order_id?: string | null;
-  quote_item_id?: string | null;
-  position?: number | null;
-  name?: string | null;
-  description?: string | null;
-  qty?: number | null;
-  unit?: string | null;
-  unit_price?: number | null;
-  line_total?: number | null;
-  methods?: unknown[] | null;
-  catalog_model_id?: string | null;
-  image_url?: string | null;
-  thumb_url?: string | null;
-  item_kind?: string | null;
-  document_name?: string | null;
-};
-
 const parseQuoteItemAttachmentImage = (attachment: unknown) => {
   if (!attachment || typeof attachment !== "object") return null;
   const entry = attachment as Record<string, unknown>;
@@ -662,7 +651,7 @@ export type ManualOrderPrintApplication = {
   height?: string | null;
 };
 
-/** Один товар замовлення, створеного вручну (без прорахунку). Товар — з каталогу. */
+/** Позиція замовлення, створеного вручну: товар із каталогу, пулу, за посиланням або просто за назвою. */
 export type ManualOrderItemInput = {
   name: string;
   description?: string | null;
@@ -676,6 +665,8 @@ export type ManualOrderItemInput = {
   kind?: OrderItemKind;
   /** Нанесення саме цього товару. Порожньо = товар без друку. */
   printApplications?: ManualOrderPrintApplication[];
+  /** Звідки товар, коли моделі каталогу немає: артикул, колір, посилання (REQ-353). */
+  metadata?: OrderItemMetadataInput | null;
 };
 
 /**
@@ -887,34 +878,6 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   }
 
   return ((data ?? []) as unknown) as StoredOrderRow[];
-}
-
-async function listStoredOrderItems(teamId: string, orderIds: string[]): Promise<StoredOrderItemRow[]> {
-  const uniqueOrderIds = Array.from(new Set(orderIds.filter(Boolean)));
-  if (uniqueOrderIds.length === 0) return [];
-
-  const baseColumns = "id,order_id,quote_item_id,position,name,qty,unit,unit_price,line_total";
-  const extendedColumns = `${baseColumns},description,methods,catalog_model_id,image_url,thumb_url,item_kind,document_name`;
-  const readRows = async (columns: string) =>
-    await supabase
-      .schema("tosho")
-      .from("order_items")
-      .select(columns)
-      .eq("team_id", teamId)
-      .in("order_id", uniqueOrderIds)
-      .order("order_id", { ascending: true })
-      .order("position", { ascending: true });
-
-  let { data, error } = await readRows(extendedColumns);
-  if (error && isMissingOrdersColumnMessage(error.message)) {
-    ({ data, error } = await readRows(baseColumns));
-  }
-  if (error) {
-    if (isMissingOrdersRelationMessage(error.message)) return [];
-    throw error;
-  }
-
-  return ((data ?? []) as unknown) as StoredOrderItemRow[];
 }
 
 async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | null): Promise<DerivedOrderRecord[]> {
@@ -1517,6 +1480,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         imageUrl: item.image_url?.trim?.() || null,
         thumbUrl: item.thumb_url?.trim?.() || null,
         kind: parseItemKind(item.item_kind),
+        metadata: parseOrderItemMetadata(item.metadata),
       });
       itemsByOrderId.set(orderId, list);
     });
@@ -2080,6 +2044,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
         thumbUrl: item.thumbUrl?.trim() || null,
         kind: parseItemKind(item.kind),
         prints,
+        metadata: compactOrderItemMetadata(item.metadata),
       };
     })
     .filter((item) => item.name.length > 0);
@@ -2245,6 +2210,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     image_url: item.imageUrl,
     thumb_url: item.thumbUrl,
     item_kind: item.kind,
+    metadata: item.metadata,
   }));
 
   const { error: insertItemsError } = await supabase.schema("tosho").from("order_items").insert(orderItemsPayload);

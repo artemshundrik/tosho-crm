@@ -72,6 +72,7 @@ import {
 } from "@/features/contractRevisions/contractSections";
 import { amountInWords } from "@/lib/amountInWords";
 import { buildOrderActHtml } from "@/features/orders/orderActDocument";
+import { orderItemCargoTypeNames } from "@/features/orders/orderItemMetadata";
 import { useOrderLegalEntity } from "@/features/orders/order-details/useOrderLegalEntity";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { declineToGenitive } from "@/lib/nameDeclension";
@@ -780,6 +781,7 @@ export default function OrdersProductionDetailsPage() {
     [ttnNumber, ttnRef, ttnCost, ttnEstimatedDelivery]
   );
   // Мемо обовʼязкове: новий масив на кожен рендер перезапускав би ефект діалогу.
+  const ttnCargoTypeNames = useMemo(() => orderItemCargoTypeNames(record?.items ?? []), [record?.items]);
   const ttnCatalogModelIds = useMemo(
     () => (record?.items ?? []).map((item) => item.catalogModelId ?? "").filter(Boolean),
     [record?.items]
@@ -2170,6 +2172,7 @@ export default function OrdersProductionDetailsPage() {
           partyId={record.customerId}
           defaultEdrpou={record.customerTaxId ?? ""}
           catalogModelIds={ttnCatalogModelIds}
+          cargoTypeNames={ttnCargoTypeNames}
           orderTotal={record.total}
           existingTtn={ttnExisting}
           onSaved={(ttn) =>

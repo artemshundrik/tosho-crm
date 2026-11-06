@@ -258,6 +258,8 @@ type NovaPoshtaTtnDialogProps = {
   defaultEdrpou: string;
   /** Моделі каталогу з позицій замовлення — з їхніх категорій складається опис вантажу. */
   catalogModelIds: string[];
+  /** Категорії позицій без моделі каталогу: товар за посиланням чи з пулу теж їде в коробці. */
+  cargoTypeNames?: string[];
   orderTotal: number;
   existingTtn: ExistingTtn | null;
   onSaved: (ttn: NpTtnResult | null) => void;
@@ -273,6 +275,7 @@ export function NovaPoshtaTtnDialog({
   partyId,
   defaultEdrpou,
   catalogModelIds,
+  cargoTypeNames,
   orderTotal,
   existingTtn,
   onSaved,
@@ -318,7 +321,12 @@ export function NovaPoshtaTtnDialog({
         // Це те, що реально їде в коробці, а не захардкоджена «друкована продукція».
         const typeNames = await listCatalogTypeNamesByModelIds(catalogModelIds).catch(() => new Map<string, string>());
         const cargoDescription =
-          Array.from(new Set(catalogModelIds.map((id) => typeNames.get(id)).filter(Boolean) as string[])).join(", ") ||
+          Array.from(
+            new Set([
+              ...(catalogModelIds.map((id) => typeNames.get(id)).filter(Boolean) as string[]),
+              ...(cargoTypeNames ?? []),
+            ])
+          ).join(", ") ||
           loaded?.defaultDescription ||
           "Друкована продукція";
 
@@ -375,7 +383,7 @@ export function NovaPoshtaTtnDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, existingTtn, teamId, partyId, partyType, delivery, defaultEdrpou, catalogModelIds, orderTotal]);
+  }, [open, existingTtn, teamId, partyId, partyType, delivery, defaultEdrpou, catalogModelIds, cargoTypeNames, orderTotal]);
 
   // Живий статус для вже створеної ТТН.
   useEffect(() => {

@@ -1,6 +1,40 @@
+import { ExternalLink } from "@/components/icons/appIcons";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { OrderItemDocumentNamesField } from "@/features/orders/order-details/OrderItemDocumentNamesField";
-import { formatOrderMoney, type DerivedOrderRecord } from "@/features/orders/orderRecords";
+import { orderItemSources } from "@/features/orders/orderItemMetadata";
+import { formatOrderMoney, type DerivedOrderItem, type DerivedOrderRecord } from "@/features/orders/orderRecords";
+
+/**
+ * Артикул, колір і сайт товару: те, за чим його замовлятимуть, коли моделі в каталозі
+ * немає. Позиції з прорахунку цих полів не мають, тож рядка в них просто нема.
+ */
+function OrderItemSourceLine({ item }: { item: Pick<DerivedOrderItem, "name" | "metadata"> }) {
+  const sku = item.metadata?.sku;
+  const color = item.metadata?.color;
+  // Колір зазвичай уже дописаний у назву: документи читають саме її.
+  const showColor = color && !item.name.toLowerCase().includes(color.toLowerCase());
+  const sources = orderItemSources(item.metadata);
+  if (!sku && !showColor && sources.length === 0) return null;
+  return (
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-normal text-muted-foreground">
+      {sku ? <span className="tabular-nums">арт. {sku}</span> : null}
+      {showColor ? <span>{color}</span> : null}
+      {sources.map((source) => (
+        <a
+          key={source.url}
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={source.url}
+          className="inline-flex items-center gap-1 transition-colors hover:text-primary"
+        >
+          <span className="underline underline-offset-2">{source.name}</span>
+          <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 /** Вкладка «Позиції»: товари замовлення з підсумком унизу і назви для документів. */
 export function OrderItemsTable({
@@ -49,6 +83,7 @@ export function OrderItemsTable({
                     {item.methodsSummary ? (
                       <div className="mt-0.5 text-xs font-normal text-muted-foreground">Нанесення: {item.methodsSummary}</div>
                     ) : null}
+                    <OrderItemSourceLine item={item} />
                   </div>
                 </div>
               </TableCell>
