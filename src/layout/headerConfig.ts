@@ -135,6 +135,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.documents,
       showPageHeader: false,
     };
+  if (pathname.startsWith(ROUTES.requests))
+    return {
+      title: "Заявки",
+      subtitle: "Заявки з Instagram Direct.",
+      breadcrumbLabel: "Заявки",
+      breadcrumbTo: ROUTES.requests,
+      showPageHeader: false,
+    };
   if (pathname.startsWith(ROUTES.marketing))
     return {
       title: "Маркетинг",

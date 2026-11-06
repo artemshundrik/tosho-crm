@@ -27,6 +27,7 @@ import {
   Loader2,
   Mic,
   Search,
+  MessagesSquare,
   Truck,
   User,
   Users,
@@ -463,6 +464,15 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
         keywords: ["документи", "documents", "договір", "договори", "специфікація", "сп", "реєстр", "підпис"],
         to: "/documents",
         icon: Files,
+      },
+      {
+        key: "route-requests",
+        label: "Заявки",
+        description: "Заявки з Instagram Direct: відповіді, розподіл, ліди",
+        kindLabel: "Сторінка",
+        keywords: ["заявки", "instagram", "інстаграм", "директ", "direct", "реклама"],
+        to: "/requests",
+        icon: MessagesSquare,
       },
       {
         key: "route-marketing",

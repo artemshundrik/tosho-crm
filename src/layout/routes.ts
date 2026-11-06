@@ -28,6 +28,7 @@ export const ROUTES = {
   finances: "/finances",
   documents: "/documents",
   marketing: "/marketing",
+  requests: "/requests",
   team: "/team",
 
   workspaceSettings: "/workspace-settings",

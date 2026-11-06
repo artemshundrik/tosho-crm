@@ -21,6 +21,7 @@ const contractor = vi.fn();
 const quoteMarkup = vi.fn();
 const siteListing = vi.fn();
 const orderDocuments = vi.fn();
+const instagramTimer = vi.fn();
 
 vi.mock("../customer-lead-reminders", () => ({ handler: (event: unknown) => customerLead(event) }));
 vi.mock("../quote-deadline-reminders", () => ({ handler: (event: unknown) => quoteDeadline(event) }));
@@ -28,6 +29,7 @@ vi.mock("../contractor-reminders", () => ({ handler: (event: unknown) => contrac
 vi.mock("../quote-markup-reminders", () => ({ handler: (event: unknown) => quoteMarkup(event) }));
 vi.mock("../site-listing-reminders", () => ({ handler: (event: unknown) => siteListing(event) }));
 vi.mock("../order-document-reminders", () => ({ handler: (event: unknown) => orderDocuments(event) }));
+vi.mock("./instagramTimer", () => ({ handler: (event: unknown) => instagramTimer(event) }));
 
 const { handler } = await import("../reminders-dispatch");
 
@@ -51,6 +53,7 @@ beforeEach(() => {
   quoteMarkup.mockReset().mockResolvedValue(ok());
   siteListing.mockReset().mockResolvedValue(ok());
   orderDocuments.mockReset().mockResolvedValue(ok());
+  instagramTimer.mockReset().mockResolvedValue(ok());
 });
 
 afterEach(() => {
@@ -64,7 +67,7 @@ describe("reminders-dispatch", () => {
 
     expect(response.statusCode).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.ran).toBe(6);
+    expect(body.ran).toBe(7);
     expect(body.failed).toBe(0);
     expect(customerLead).toHaveBeenCalledTimes(1);
     expect(quoteDeadline).toHaveBeenCalledTimes(1);
@@ -72,6 +75,7 @@ describe("reminders-dispatch", () => {
     expect(quoteMarkup).toHaveBeenCalledTimes(1);
     expect(siteListing).toHaveBeenCalledTimes(1);
     expect(orderDocuments).toHaveBeenCalledTimes(1);
+    expect(instagramTimer).toHaveBeenCalledTimes(1);
   });
 
   it("падіння одного нагадування не глушить решту", async () => {

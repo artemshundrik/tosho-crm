@@ -31,6 +31,7 @@ const routeImporters: RoutePreloadEntry[] = [
   { pattern: /^\/stock\/samples$/, importer: () => import("../pages/SampleStockPage"), heavy: true },
   { pattern: /^\/finances$/, importer: () => import("../pages/FinancesPage") },
   { pattern: /^\/documents$/, importer: () => import("../pages/DocumentsPage") },
+  { pattern: /^\/requests(\/|$)/, importer: () => import("../pages/InstagramRequestsPage"), heavy: true },
   { pattern: /^\/marketing$/, importer: () => import("../pages/MarketingPage"), heavy: true },
 ];
 

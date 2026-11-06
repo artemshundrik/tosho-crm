@@ -29,6 +29,7 @@ import {
   X,
   BadgeCheck,
   CircleDot,
+  MessagesSquare,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
@@ -516,6 +517,7 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Мій хід", to: ROUTES.myTurn, group: "overview", icon: CheckCircle2 },
   { label: "Огляд", to: ROUTES.overview, group: "overview", icon: LayoutGrid, moduleKey: "overview" },
   // Замовлення
+  { label: "Заявки", to: ROUTES.requests, group: "orders", icon: MessagesSquare, moduleKey: "instagram_requests" },
   { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: AddressBook, moduleKey: "customers" },
   { label: "Прорахунки", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "quotes" },
   { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory, moduleKey: "orders" },
@@ -530,13 +532,7 @@ const baseSidebarLinks: SidebarLink[] = [
     icon: BriefcaseBusiness,
     moduleKey: "contractors",
   },
-  {
-    label: "Склад",
-    to: ROUTES.sampleStock,
-    group: "operations",
-    icon: Package,
-    moduleKey: "stock",
-  },
+  { label: "Склад", to: ROUTES.sampleStock, group: "operations", icon: Package, moduleKey: "stock" },
   {
     label: "Фінанси",
     to: ROUTES.finances,

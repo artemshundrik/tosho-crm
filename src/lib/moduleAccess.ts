@@ -14,6 +14,7 @@
  * «Сповіщення» свідомо НЕ модуль: вони потрібні всім і перемикача не мають.
  */
 
+import { isRequestManagerRole } from "../features/instagramRequests/rules";
 import { formatJobRole } from "./jobRoles";
 
 export type ModuleKey =
@@ -21,6 +22,7 @@ export type ModuleKey =
   | "customers"
   | "quotes"
   | "orders"
+  | "instagram_requests"
   | "shipping"
   | "catalog"
   | "logistics"
@@ -57,6 +59,15 @@ const isOwner = (ctx: RoleContext) => (ctx.accessRole ?? "").trim().toLowerCase(
 const job = (ctx: RoleContext) => (ctx.jobRole ?? "").trim().toLowerCase();
 
 const ownerOrSeo = (ctx: RoleContext) => isOwner(ctx) || job(ctx) === "seo";
+
+/** Кому база віддає заявки з Instagram (`tosho.can_read_instagram_requests`). */
+const canReadInstagramRequests = (ctx: RoleContext) => ownerOrSeo(ctx) || isRequestManagerRole(ctx.jobRole);
+
+/**
+ * Запобіжник до підключення Meta: поки заявок із Instagram немає, менеджери не
+ * бачать порожнього розділу. На запуску перемикається одним цим рядком.
+ */
+const INSTAGRAM_REQUESTS_LIVE = false;
 
 export type ModuleDefinition = {
   key: ModuleKey;
@@ -113,6 +124,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { key: "customers", label: "Замовники", group: "orders", inheritsFrom: "orders" },
   { key: "quotes", label: "Прорахунки", group: "orders", inheritsFrom: "orders" },
   { key: "orders", label: "Замовлення", group: "orders" },
+  {
+    key: "instagram_requests",
+    label: "Заявки з Instagram",
+    group: "orders",
+    // Дані ріже база: іншій посаді галочка показала б порожній розділ.
+    restrictedTo: canReadInstagramRequests,
+  },
   { key: "shipping", label: "До відвантаження", group: "orders", inheritsFrom: "orders" },
 
   { key: "catalog", label: "Каталог", group: "operations" },
@@ -234,6 +252,11 @@ const SALES_MENU: ModuleKey[] = ["overview", "customers", "quotes", "orders", "c
  */
 const SALES_MANAGER_MENU: ModuleKey[] = [...SALES_MENU, "documents"];
 
+/** Менеджери продажів, які беруть заявки по колу. PM і офіс-менеджер їх не отримують. */
+const REQUEST_MANAGER_MENU: ModuleKey[] = INSTAGRAM_REQUESTS_LIVE
+  ? [...SALES_MANAGER_MENU, "instagram_requests"]
+  : SALES_MANAGER_MENU;
+
 /** Бухгалтерія: документи ходять навколо замовлення, від складу до підрядника. */
 const ACCOUNTING_MENU: ModuleKey[] = [
   "overview",
@@ -254,10 +277,10 @@ const MARKETING_MENU: ModuleKey[] = ["overview", "design", "marketing"];
 
 const ROLE_MENUS: Record<string, ModuleKey[]> = {
   // — Продажі —
-  manager: SALES_MANAGER_MENU,
-  sales_manager: SALES_MANAGER_MENU,
-  junior_sales_manager: SALES_MANAGER_MENU,
-  top_manager: SALES_MANAGER_MENU,
+  manager: REQUEST_MANAGER_MENU,
+  sales_manager: REQUEST_MANAGER_MENU,
+  junior_sales_manager: REQUEST_MANAGER_MENU,
+  top_manager: REQUEST_MANAGER_MENU,
   office_manager: SALES_MANAGER_MENU,
   // PM веде замовлення далі за менеджера — звідси склад зразків і підрядники.
   pm: [...SALES_MANAGER_MENU, "stock", "contractors"],

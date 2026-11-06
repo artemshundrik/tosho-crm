@@ -40,6 +40,12 @@
     "vchasno-upload.ts"
   ],
   "files": [
+    "instagram-requests.ts",
+    "_lib/instagramPlans.test.ts",
+    "_lib/instagramPlans.ts",
+    "_lib/instagramRequests.ts",
+    "_lib/instagramTimer.ts",
+    "_lib/instagramTransport.ts",
     "_absenceBotFlow.ts",
     "_adminAssistant.ts",
     "_aiPricing.ts",

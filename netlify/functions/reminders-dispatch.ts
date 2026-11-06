@@ -22,6 +22,7 @@
 // а не жодного разу: без правильного x-cron-key диспетчер відповідає 401 і до
 // обробників не доходить.
 import { assertCronAuthorized } from "./_cronAuth";
+import { handler as instagramRequestsTimer } from "./_lib/instagramTimer";
 import { handler as contractorReminders } from "./contractor-reminders";
 import { handler as customerLeadReminders } from "./customer-lead-reminders";
 import { handler as orderDocumentReminders } from "./order-document-reminders";
@@ -53,6 +54,8 @@ const JOBS: ReadonlyArray<readonly [string, (event: HttpEvent) => Promise<unknow
   ["site-listing-reminders", siteListingReminders],
   // REQ-343: ранкове зведення документів замовникам о 10:00 за Києвом.
   ["order-document-reminders", orderDocumentReminders],
+  // Картка 352: заявки з Instagram, нагадування на 15-й і передача на 30-й хвилині.
+  ["instagram-requests-timer", instagramRequestsTimer],
 ];
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {

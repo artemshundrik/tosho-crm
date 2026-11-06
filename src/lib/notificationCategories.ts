@@ -30,7 +30,8 @@ export type NotificationCategoryKey =
   | "business_digest"
   | "team_activity"
   | "dev_news"
-  | "supplier_new_models";
+  | "supplier_new_models"
+  | "instagram_requests";
 
 export type NotificationCategory = {
   key: NotificationCategoryKey;
@@ -180,6 +181,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     label: "Нові моделі для сайту",
     description: "У Тотобі з'явились моделі, яких немає на avanprint.ua, або очікувана модель отримала ціну",
   },
+  {
+    key: "instagram_requests",
+    label: "Заявки з Instagram",
+    description: "Нова заявка на вас, нагадування про відповідь, передача й нові повідомлення клієнта",
+  },
 ];
 
 // Видимість категорій за роллю. Чиста функція від рядків ролей —
@@ -230,6 +236,9 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // отримує взагалі, вибирають у шапці блоку (REQ-311#p18) — з усієї
     // команди; вибраний поза цим кругом перемикача не бачить, його вимикає той,
     // хто вибирав.
+    // Заявки з Instagram: той самий круг, що бачить розділ (can_read_instagram_requests).
+    case "instagram_requests":
+      return access === "owner" || job === "seo" || ["manager", "sales_manager", "junior_sales_manager", "top_manager"].includes(job);
     case "supplier_new_models":
       return access === "owner" || job === "seo" || job === "it_specialist";
     // Дизайн-задачі — дизайнери + ті, хто з прорахунками/дизайном.

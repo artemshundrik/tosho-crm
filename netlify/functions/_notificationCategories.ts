@@ -28,7 +28,8 @@ export type NotificationCategoryKey =
   | "business_digest"
   | "team_activity"
   | "dev_news"
-  | "supplier_new_models";
+  | "supplier_new_models"
+  | "instagram_requests";
 
 export type NotificationCategory = {
   key: NotificationCategoryKey;
@@ -63,6 +64,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "team_activity", label: "Робота команди в CRM" },
   { key: "dev_news", label: "Підбірка для розробки" },
   { key: "supplier_new_models", label: "Нові моделі для сайту" },
+  { key: "instagram_requests", label: "Заявки з Instagram" },
 ];
 
 // Видимість категорій за роллю — копія src/lib/notificationCategories.ts (тримати синхронно).
@@ -99,6 +101,9 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     case "dev_news":
       return access === "owner";
     // Нові моделі для сайту — власник, CEO, IT (див. src/lib/notificationCategories.ts).
+    // Заявки з Instagram: той самий круг, що бачить розділ (can_read_instagram_requests).
+    case "instagram_requests":
+      return access === "owner" || job === "seo" || ["manager", "sales_manager", "junior_sales_manager", "top_manager"].includes(job);
     case "supplier_new_models":
       return access === "owner" || job === "seo" || job === "it_specialist";
     case "design":

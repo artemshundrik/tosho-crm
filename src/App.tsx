@@ -160,6 +160,7 @@ const SupplierPage = lazyWithRetry(() => import("./pages/SupplierPage"));
 const SampleStockPage = lazyWithRetry(() => import("./pages/SampleStockPage"));
 const FinancesPage = lazyWithRetry(() => import("./pages/FinancesPage"));
 const MarketingPage = lazyWithRetry(() => import("./pages/MarketingPage"));
+const InstagramRequestsPage = lazyWithRetry(() => import("./pages/InstagramRequestsPage"));
 const DocumentsPage = lazyWithRetry(() => import("./pages/DocumentsPage"));
 const OverviewPage = lazyWithRetry(() =>
   import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
@@ -1196,6 +1197,26 @@ function AppRoutes() {
             <ModuleRouteGate moduleKey="documents">
               <RouteSuspense shell>
                 <DocumentsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="requests"
+          element={
+            <ModuleRouteGate moduleKey="instagram_requests">
+              <RouteSuspense shell>
+                <InstagramRequestsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="requests/:id"
+          element={
+            <ModuleRouteGate moduleKey="instagram_requests">
+              <RouteSuspense shell>
+                <InstagramRequestsPage />
               </RouteSuspense>
             </ModuleRouteGate>
           }

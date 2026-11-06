@@ -207,6 +207,8 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "stock", path: "/stock/samples", page: "src/pages/SampleStockPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "finances", path: "/finances", page: "src/pages/FinancesPage.tsx", toolbar: "none", shape: "dashboard", canvas: true },
   { id: "documents", path: "/documents", page: "src/pages/DocumentsPage.tsx", toolbar: "full", shape: "table", canvas: true },
+  { id: "requests", path: "/requests", page: "src/pages/InstagramRequestsPage.tsx", toolbar: "none", shape: "split", canvas: true },
+  { id: "requests-detail", path: "/requests/:id", page: "src/pages/InstagramRequestsPage.tsx", toolbar: "none", shape: "split", canvas: true },
   { id: "marketing", path: "/marketing", page: "src/pages/MarketingPage.tsx", toolbar: "full", shape: "grid" },
 
   { id: "members-access", path: "/settings/members", page: "src/pages/TeamMembersPage.tsx", toolbar: "compact", shape: "split", canvas: true },

@@ -316,8 +316,9 @@ export async function saveLeadCard(input: {
   previous: PartyPreviousState;
   actor: PartyActor;
   convertToCustomer?: boolean;
-}): Promise<{ logoUrl: string | null; convertedCustomerId: string | null }> {
+}): Promise<{ logoUrl: string | null; convertedCustomerId: string | null; createdLeadId: string | null }> {
   const { teamId, leadId, form, manager, fallbackManagerLabel, previous, actor, convertToCustomer } = input;
+  let createdLeadId: string | null = null;
   const phones = form.phones.map((phone) => phone.trim()).filter(Boolean);
   const leadTelegram = normalizeTelegramUsername(form.telegram);
   const managerLabel = manager.label || fallbackManagerLabel || null;
@@ -367,7 +368,13 @@ export async function saveLeadCard(input: {
   // вкладці чи вікні). Без цієї перевірки переведення створювало другого
   // замовника — уже без прорахунків.
   const writeLead = async (body: TableInsert<"leads">) => {
-    if (!leadId) return await supabase.schema("tosho").from("leads").insert(body as never);
+    if (!leadId) {
+      // Id потрібен тому, хто створює ліда не зі сторінки «Замовники»: заявка
+      // з Instagram одразу прив'язується до своєї картки.
+      const created = await supabase.schema("tosho").from("leads").insert(body as never).select("id").single();
+      if (!created.error) createdLeadId = (created.data as { id: string }).id;
+      return created;
+    }
     const result = await supabase.schema("tosho").from("leads").update(body).eq("id", leadId).eq("team_id", teamId).select("id");
     if (!result.error && (result.data?.length ?? 0) === 0) {
       throw new Error(convertToCustomer ? "Ліда вже переведено або видалено — оновіть список." : "Ліда вже немає — оновіть список.");
@@ -419,7 +426,7 @@ export async function saveLeadCard(input: {
     }
   }
 
-  if (!convertToCustomer || !leadId) return { logoUrl: optimizedLogoUrl, convertedCustomerId: null };
+  if (!convertToCustomer || !leadId) return { logoUrl: optimizedLogoUrl, convertedCustomerId: null, createdLeadId };
 
   const contactName = [form.firstName.trim(), form.lastName.trim()].filter(Boolean).join(" ");
   const conversionLegalEntity = {
@@ -521,5 +528,5 @@ export async function saveLeadCard(input: {
     .eq("team_id", teamId);
   if (leadDeleteError) throw leadDeleteError;
 
-  return { logoUrl: optimizedLogoUrl, convertedCustomerId };
+  return { logoUrl: optimizedLogoUrl, convertedCustomerId, createdLeadId };
 }
