@@ -1,7 +1,12 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 
 import { isChannelEnabled, type NotificationCategoryKey } from "../_notificationCategories";
-import { getTelegramBotToken, sendTelegramMessage } from "../_telegram";
+import {
+  getTelegramBotToken,
+  sendTelegramMessage,
+  sendTelegramRichWithFallback,
+  type RichContent,
+} from "../_telegram";
 
 /**
  * Кому йде звіт у Telegram і як він туди потрапляє.
@@ -118,7 +123,8 @@ export async function sendDigest(
   recipients: MemberRow[],
   category: NotificationCategoryKey,
   text: string,
-  keyboard: Array<Array<{ text: string; url: string }>>
+  keyboard: Array<Array<{ text: string; url: string }>>,
+  rich?: RichContent | null
 ) {
   if (!getTelegramBotToken()) return { delivered: 0, failed: 0, eligible: 0 };
 
@@ -146,11 +152,13 @@ export async function sendDigest(
     if (!isChannelEnabled(setting.channel_prefs, category, "telegram")) continue; // категорію вимкнено
 
     eligible += 1;
-    const result = await sendTelegramMessage(setting.telegram_chat_id, text, {
-      parseMode: "HTML",
-      replyMarkup: { inline_keyboard: keyboard },
-      disablePreview: true,
-    });
+    const result = rich
+      ? await sendTelegramRichWithFallback(setting.telegram_chat_id, rich, text, keyboard)
+      : await sendTelegramMessage(setting.telegram_chat_id, text, {
+          parseMode: "HTML",
+          replyMarkup: { inline_keyboard: keyboard },
+          disablePreview: true,
+        });
 
     if (result.ok) {
       delivered += 1;

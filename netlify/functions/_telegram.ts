@@ -76,7 +76,99 @@ type SendOptions = {
   parseMode?: "HTML";
   replyMarkup?: ReplyMarkup;
   disablePreview?: boolean;
+  silent?: boolean;
 };
+
+/**
+ * Вміст Rich Message (Bot API 10.1+): html у форматі rich і необов'язкова
+ * картка-картинка над ним. Картка їде файлом, а не посиланням: на ній гроші й
+ * імена, і вони не мають лежати за адресою, яку Telegram міг би завантажити.
+ */
+export type RichContent = {
+  html: string;
+  photo?: Buffer | null;
+  keyboard?: InlineKeyboard;
+  silent?: boolean;
+};
+
+const RICH_PHOTO_ID = "card";
+
+function richForm(content: RichContent, target: Record<string, string>): FormData {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(target)) form.set(key, value);
+  const html = content.photo ? `<img src="tg://photo?id=${RICH_PHOTO_ID}"/>${content.html}` : content.html;
+  form.set(
+    "rich_message",
+    JSON.stringify({
+      html,
+      ...(content.photo
+        ? { media: [{ id: RICH_PHOTO_ID, media: { type: "photo", media: "attach://card_file" } }] }
+        : {}),
+    })
+  );
+  if (content.photo) {
+    form.set("card_file", new Blob([new Uint8Array(content.photo)], { type: "image/png" }), "card.png");
+  }
+  if (content.keyboard) form.set("reply_markup", JSON.stringify({ inline_keyboard: content.keyboard }));
+  return form;
+}
+
+async function callTelegramForm(method: string, form: FormData): Promise<TelegramApiResult> {
+  const token = getTelegramBotToken();
+  if (!token) return { ok: false, status: 0, description: "TELEGRAM_BOT_TOKEN missing" };
+  try {
+    const res = await fetch(`${TELEGRAM_API}/bot${token}/${method}`, { method: "POST", body: form });
+    const data = (await res.json().catch(() => null)) as
+      | { ok?: boolean; error_code?: number; description?: string }
+      | null;
+    return { ok: Boolean(data?.ok), status: res.status, errorCode: data?.error_code, description: data?.description };
+  } catch (error: unknown) {
+    return { ok: false, status: 0, description: error instanceof Error ? error.message : "fetch failed" };
+  }
+}
+
+export async function sendTelegramRichMessage(
+  chatId: number | string,
+  content: RichContent
+): Promise<TelegramApiResult> {
+  const form = richForm(content, { chat_id: String(chatId) });
+  if (content.silent) form.set("disable_notification", "true");
+  return callTelegramForm("sendRichMessage", form);
+}
+
+/** Перемальовує те саме повідомлення — так працюють вкладки. */
+export async function editTelegramRichMessage(
+  chatId: number | string,
+  messageId: number,
+  content: RichContent
+): Promise<TelegramApiResult> {
+  return callTelegramForm(
+    "editMessageText",
+    richForm(content, { chat_id: String(chatId), message_id: String(messageId) })
+  );
+}
+
+/**
+ * Надсилає Rich Message, а якщо Telegram його відхилив — звичайний текст.
+ * Людина має отримати звіт за будь-яких обставин. Виняток — 403: бота
+ * заблоковано, і повторна спроба нічого не дасть.
+ */
+export async function sendTelegramRichWithFallback(
+  chatId: number | string,
+  content: RichContent,
+  fallbackText: string,
+  fallbackKeyboard?: InlineKeyboard
+): Promise<TelegramApiResult> {
+  const rich = await sendTelegramRichMessage(chatId, content);
+  if (rich.ok || rich.status === 403 || rich.errorCode === 403) return rich;
+  console.warn("[telegram] rich message rejected, sending plain text", rich.errorCode, rich.description);
+  return sendTelegramMessage(chatId, fallbackText, {
+    parseMode: "HTML",
+    disablePreview: true,
+    silent: content.silent,
+    replyMarkup: fallbackKeyboard ? { inline_keyboard: fallbackKeyboard } : undefined,
+  });
+}
 
 export async function sendTelegramMessage(
   chatId: number | string,
@@ -88,6 +180,7 @@ export async function sendTelegramMessage(
     text,
     parse_mode: options?.parseMode,
     disable_web_page_preview: options?.disablePreview ?? true,
+    disable_notification: options?.silent,
     reply_markup: options?.replyMarkup,
   });
 }

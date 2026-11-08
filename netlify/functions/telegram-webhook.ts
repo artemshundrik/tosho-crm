@@ -7,6 +7,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   answerTelegramCallback,
   editTelegramMessageText,
+  editTelegramRichMessage,
   editTelegramReplyMarkup,
   escapeTelegramHtml,
   sendTelegramChatAction,
@@ -25,6 +26,9 @@ import {
   presetRange,
   submitAbsenceFromBot,
 } from "./_absenceBotFlow";
+import { isCategoryVisibleForRole } from "./_notificationCategories";
+import { loadMembers, resolveTeamIds } from "./_lib/digestDelivery";
+import { buildTrendRich, type TrendPeriod } from "./_lib/digestRich";
 import { resolveMemberWorkspaceId } from "./_lib/absenceSubmit";
 import { decideAbsenceRequest } from "./_lib/absenceDecision";
 import {
@@ -713,6 +717,28 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
   const row = await loadSettingsByChat(adminClient, chatId);
   if (!row) {
     await answerTelegramCallback(cb.id, "Акаунт не підключено");
+    return;
+  }
+
+  // Вкладки вечірнього звіту показують гроші, а кнопку могли переслати або
+  // людину могли звільнити чи змінити посаду, тому доступ перевіряємо щоразу.
+  if (data === "dg:month" || data === "dg:week") {
+    const members = await loadMembers(adminClient);
+    const member = members.find((m) => m.userId === row.user_id);
+    const allowed =
+      member && isCategoryVisibleForRole("business_digest", { accessRole: member.accessRole, jobRole: member.jobRole });
+    if (!allowed) {
+      await answerTelegramCallback(cb.id, "Немає доступу до цього звіту");
+      return;
+    }
+    try {
+      const rich = await buildTrendRich(adminClient, resolveTeamIds(members), data.slice(3) as TrendPeriod, buildAppUrl("").replace(/\/$/, ""));
+      const result = await editTelegramRichMessage(chatId, messageId, rich);
+      await answerTelegramCallback(cb.id, result.ok ? undefined : "Не вдалось оновити");
+    } catch (error: unknown) {
+      console.error("[telegram-webhook] trend tab failed", error);
+      await answerTelegramCallback(cb.id, "Не вдалось оновити");
+    }
     return;
   }
 

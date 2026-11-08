@@ -40,6 +40,9 @@
     "vchasno-upload.ts"
   ],
   "files": [
+    "_lib/digestDates.ts",
+    "_lib/digestRich.ts",
+    "_lib/telegramCards.ts",
     "instagram-requests.ts",
     "_lib/instagramPlans.test.ts",
     "_lib/instagramPlans.ts",

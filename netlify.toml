@@ -60,6 +60,13 @@ package = "/plugins/record-release"
 directory = "netlify/functions"
 node_bundler = "esbuild"
 
+# Шрифти для PNG-карток у Telegram: у середовищі функцій системних шрифтів немає.
+[functions."daily-digest"]
+included_files = ["src/assets/fonts/Roboto-*.ttf"]
+
+[functions."telegram-webhook"]
+included_files = ["src/assets/fonts/Roboto-*.ttf"]
+
 # ЛОКАЛЬНИЙ `netlify dev`. Без цього блоку CLI сам вгадує фреймворк і чекає на
 # Vite за типовим портом 5173 — а наш Vite слухає 5199 (`devPort` у
 # vite.config.ts). Наслідок був німий і дорогий: сервер піднімався, віддавав

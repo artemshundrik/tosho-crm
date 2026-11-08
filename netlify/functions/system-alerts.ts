@@ -1,7 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { isChannelEnabled } from "./_notificationCategories";
-import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage } from "./_telegram";
+import {
+  escapeTelegramHtml,
+  getTelegramBotToken,
+  sendTelegramMessage,
+  sendTelegramRichWithFallback,
+  type RichContent,
+} from "./_telegram";
 import { collectSystemSignals, isProblem, type Signal } from "./_systemHealth";
 import { mergeTeamMembers, resolveTeamIds, isDeliverable } from "./_lib/teamMembers";
 import {
@@ -109,6 +115,7 @@ export const handler = async (event: HttpEvent) => {
       : Number.POSITIVE_INFINITY;
 
     let message: string | null = null;
+    let richAlert: RichContent | null = null;
     if (danger.length > 0) {
       const changed = currentPrint !== previousPrint;
       if (changed || hoursSinceNotified >= ALERT_COOLDOWN_HOURS) {
@@ -120,6 +127,25 @@ export const handler = async (event: HttpEvent) => {
         }
         lines.push("", `${APP_URL}/dev/health`);
         message = lines.join("\n");
+        const [first, ...restDanger] = danger;
+        const clock = new Intl.DateTimeFormat("uk-UA", {
+          timeZone: "Europe/Kiev",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(now);
+        richAlert = {
+          // Тривога лишається зі звуком, тому silent тут немає.
+          html:
+            `<h3>🔴 ${escapeTelegramHtml(first.text)}</h3>` +
+            restDanger.map((s) => `<p>${escapeTelegramHtml(s.text)}</p>`).join("") +
+            (warnings.length > 0
+              ? `<details><summary>⚠️ Ще попереджень: ${warnings.length}</summary><ul>${warnings
+                  .map((s) => `<li>${escapeTelegramHtml(s.text)}</li>`)
+                  .join("")}</ul></details>`
+              : "") +
+            `<footer>🕑 Сьогодні о ${clock}</footer>`,
+          keyboard: [[{ text: "🩺 Стан системи", url: `${APP_URL}/dev/health` }]],
+        };
       }
     } else if (previousPrint) {
       // Було червоне, стало чисто — про це варто сказати.
@@ -237,10 +263,13 @@ export const handler = async (event: HttpEvent) => {
         if (row.telegram_chat_id == null || row.telegram_enabled === false) continue;
         if (!isChannelEnabled(row.channel_prefs, CATEGORY, "telegram")) continue;
         for (const text of messages) {
-          const result = await sendTelegramMessage(row.telegram_chat_id, text, {
-            parseMode: "HTML",
-            disablePreview: true,
-          });
+          const result =
+            richAlert && text === message
+              ? await sendTelegramRichWithFallback(row.telegram_chat_id, richAlert, text)
+              : await sendTelegramMessage(row.telegram_chat_id, text, {
+                  parseMode: "HTML",
+                  disablePreview: true,
+                });
           if (result.ok) delivered += 1;
         }
       }

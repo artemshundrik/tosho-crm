@@ -236,7 +236,7 @@ async function dropboxContentUpload<T>(path: string, body: ArrayBuffer | Uint8Ar
       }),
       "Content-Type": "application/octet-stream",
     },
-    body,
+    body: body as BodyInit,
   });
 
   const payload = (await response.json().catch(() => null)) as T | { error_summary?: string } | null;

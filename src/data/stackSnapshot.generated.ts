@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-10-29T17:27:59.933Z",
+  "generatedAt": "2026-11-08T14:20:49.777Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -114,7 +114,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Крутить великі підсумки розряд за розрядом, коли сума міняється: «Витрати», картки «Огляду», сума прорахунку, лічильники «Релізів».",
       "homepage": "https://number-flow.barvian.me",
-      "usedIn": 2,
+      "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=number-flow.barvian.me&sz=128"
     },
     {
@@ -159,7 +159,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Вікна підтвердження — «Точно видалити?».",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -174,7 +174,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Аватарка з відкотом на монограму, коли фото не завантажилось.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -189,7 +189,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Галочки у формах і списках.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -204,7 +204,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Модальні вікна: діалог замовника, форма прорахунку, палітра команд.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 3,
+      "usedIn": 4,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -219,7 +219,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Випадні меню: три крапки на картках і в рядках таблиць.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -234,7 +234,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Підписи до полів, привʼязані до самого поля.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -249,7 +249,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Спливні картки біля елемента — як пояснення пакета на цій сторінці.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -264,7 +264,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Випадні списки вибору у формах.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -279,7 +279,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Лінії-роздільники між блоками.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -294,7 +294,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дозволяє кнопці прикинутись посиланням, не дублюючи стилі.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -309,7 +309,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Вкладки — як «За шарами» / «За терміновістю» вгорі.",
       "homepage": "https://radix-ui.com/primitives",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -324,7 +324,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Збирає PDF-документи — рахунки, специфікації, договори.",
       "homepage": null,
-      "usedIn": 5,
+      "usedIn": 6,
       "iconUrl": "https://github.com/diegomura.png?size=64"
     },
     {
@@ -339,7 +339,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 102,
+      "usedIn": 110,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -354,7 +354,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Підключає Tailwind до складальника: збирає CSS під час збірки.",
       "homepage": "https://tailwindcss.com",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tailwindcss.com&sz=128"
     },
     {
@@ -369,7 +369,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Памʼятає, що вже завантажено, і не питає базу двічі. Через нього ходять майже всі запити.",
       "homepage": "https://tanstack.com/query",
-      "usedIn": 29,
+      "usedIn": 33,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
@@ -384,7 +384,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Малює лише видимі рядки довгих списків. Без нього дошка з сотнями карток гальмувала б.",
       "homepage": "https://tanstack.com/virtual",
-      "usedIn": 2,
+      "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
@@ -414,7 +414,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 60,
+      "usedIn": 68,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -444,7 +444,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Посилання в редакторі ТЗ.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 2,
+      "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
     {
@@ -459,7 +459,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Підкреслення в редакторі ТЗ.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
     {
@@ -474,7 +474,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Рушій ProseMirror, на якому побудований редактор ТЗ. У коді не викликається — його вимагають самі розширення tiptap.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 2,
+      "usedIn": 3,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
@@ -490,7 +490,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Редактор технічного завдання: жирний, списки, посилання.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 4,
+      "usedIn": 6,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
     {
@@ -505,7 +505,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Базовий набір можливостей редактора ТЗ.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 3,
+      "usedIn": 5,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
     {
@@ -520,13 +520,25 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Опис типів Node для коду, що працює на сервері.",
       "homepage": null,
-      "usedIn": 1,
+      "usedIn": 2,
       "peerRequired": true,
       "iconUrl": "https://github.com/DefinitelyTyped.png?size=64",
       "pinned": {
         "to": "node",
         "why": "мажор має збігатися з Node, інакше типи описують API, якого в рантаймі немає"
       }
+    },
+    {
+      "name": "@types/opentype.js",
+      "version": "1.3.10",
+      "layer": "platform",
+      "dev": true,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Опис типів бібліотеки контурів шрифту.",
+      "homepage": null,
+      "usedIn": 0,
+      "iconUrl": "https://github.com/DefinitelyTyped.png?size=64"
     },
     {
       "name": "@types/react",
@@ -540,7 +552,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Опис типів React для перевірки типів.",
       "homepage": null,
-      "usedIn": 0,
+      "usedIn": 1,
       "peerRequired": true,
       "iconUrl": "https://github.com/DefinitelyTyped.png?size=64"
     },
@@ -648,7 +660,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Рушій палітри команд — того вікна, що відкривається на Cmd+K.",
       "homepage": null,
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://github.com/pacocoursey.png?size=64"
     },
     {
@@ -663,7 +675,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Робота з датами: дедлайни, періоди, «3 дні тому».",
       "homepage": null,
-      "usedIn": 14,
+      "usedIn": 13,
       "iconUrl": "https://github.com/date-fns.png?size=64"
     },
     {
@@ -678,7 +690,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Чистить HTML від чужого коду перед показом — захист від підстановки скриптів.",
       "homepage": null,
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://github.com/cure53.png?size=64"
     },
     {
@@ -744,6 +756,18 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": "https://github.com/netlify.png?size=64"
     },
     {
+      "name": "opentype.js",
+      "version": "1.3.4",
+      "layer": "platform",
+      "dev": false,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Перетворює текст на контури, щоб кирилиця на картках Telegram малювалась без системних шрифтів.",
+      "homepage": null,
+      "usedIn": 2,
+      "iconUrl": "https://github.com/opentypejs.png?size=64"
+    },
+    {
       "name": "oxlint",
       "version": "1.90.0",
       "layer": "build",
@@ -770,7 +794,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Малює прев'ю PDF-вкладень прямо в браузері.",
       "homepage": "https://mozilla.github.io/pdf.js/",
-      "usedIn": 3,
+      "usedIn": 4,
       "iconUrl": "https://www.google.com/s2/favicons?domain=mozilla.github.io&sz=128"
     },
     {
@@ -785,7 +809,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 391,
+      "usedIn": 444,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -801,7 +825,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Календар вибору дати — той, що випадає в полях дедлайнів.",
       "homepage": "https://daypicker.dev",
-      "usedIn": 2,
+      "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=daypicker.dev&sz=128"
     },
     {
@@ -816,7 +840,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Частина React, яка власне малює в браузері.",
       "homepage": "https://react.dev/",
-      "usedIn": 12,
+      "usedIn": 13,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -832,7 +856,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Обрізання картинки при завантаженні аватарки чи лого.",
       "homepage": "https://ValentinH.github.io/react-easy-crop/",
-      "usedIn": 3,
+      "usedIn": 4,
       "iconUrl": "https://www.google.com/s2/favicons?domain=valentinh.github.io&sz=128"
     },
     {
@@ -847,7 +871,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Адреси сторінок: що показати на /orders/estimates і як переходити між розділами без перезавантаження.",
       "homepage": null,
-      "usedIn": 69,
+      "usedIn": 86,
       "iconUrl": "https://github.com/remix-run.png?size=64"
     },
     {
@@ -862,7 +886,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Графіки: стовпчики й площі на сторінках аналітики.",
       "homepage": null,
-      "usedIn": 1,
+      "usedIn": 2,
       "iconUrl": "https://github.com/recharts.png?size=64"
     },
     {
@@ -892,7 +916,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Обробка зображень на сервері: стискає й переганяє у webp картинки каталогу.",
       "homepage": "https://sharp.pixelplumbing.com",
-      "usedIn": 10,
+      "usedIn": 13,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sharp.pixelplumbing.com&sz=128"
     },
     {
@@ -907,7 +931,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Спливні повідомлення в кутку: «Збережено», «Не вийшло».",
       "homepage": "https://sonner.emilkowal.ski/",
-      "usedIn": 90,
+      "usedIn": 109,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
     },
     {
@@ -983,7 +1007,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Складальник: перетворює сотні файлів коду на кілька, які розуміє браузер. Він же тримає локальний сервер для перевірок.",
       "homepage": "https://vite.dev",
-      "usedIn": 6,
+      "usedIn": 7,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vite.dev&sz=128"
     },
@@ -999,7 +1023,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 272,
+      "usedIn": 305,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1015,7 +1039,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Надсилає пуш-сповіщення в браузер.",
       "homepage": null,
-      "usedIn": 2,
+      "usedIn": 3,
       "iconUrl": "https://github.com/web-push-libs.png?size=64"
     },
     {
@@ -1045,7 +1069,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Перевіряє, що дані, які прийшли ззовні, справді такі, як ми чекаємо: серверні функції звіряють із нею тіло запиту.",
       "homepage": "https://zod.dev",
-      "usedIn": 29,
+      "usedIn": 30,
       "iconUrl": "https://www.google.com/s2/favicons?domain=zod.dev&sz=128"
     }
   ],
@@ -1060,12 +1084,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 3292,
-  "testFiles": 270,
+  "tests": 3653,
+  "testFiles": 303,
   "lintStubs": 28,
   "node": "24",
-  "netlifyFunctions": 50,
-  "sourceLines": 331947,
+  "netlifyFunctions": 52,
+  "sourceLines": 350093,
   "automation": {
     "workflows": [
       {

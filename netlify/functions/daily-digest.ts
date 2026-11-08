@@ -8,16 +8,15 @@ import {
   type MemberRow,
 } from "./_lib/digestDelivery";
 import { isCategoryVisibleForRole } from "./_notificationCategories";
-import { escapeTelegramHtml } from "./_telegram";
+import { escapeTelegramHtml, type RichContent } from "./_telegram";
+import { kievDayBounds, shiftDays, todayKeyInKiev, wallClockToInstant } from "./_lib/digestDates";
+import { legacyToRich, loadTrendView, kyivClock, sumQuotesByRuns, trendKeyboard } from "./_lib/digestRich";
+import { prepareAvatar, renderPlanCard, renderTeamCard } from "./_lib/telegramCards";
 import {
   addRange,
   formatMoneyRange,
-  QUOTE_RUN_PRICING_COLUMNS,
-  loadDeclinedQuoteItemIds,
-  quoteSaleTotalRanges,
   ZERO_RANGE,
   type MoneyRange,
-  type QuoteRunPricingRow,
 } from "./_lib/quotePricing";
 import { formatLastSeen, loadPresence, shortName } from "./_teamAssistant";
 import { ABSENCE_KIND_LABELS, formatAbsenceShort } from "./_lib/absenceSubmit";
@@ -44,6 +43,7 @@ import {
   loadTeamActivity,
   renderTeamActivity,
   type PersonDay,
+  formatMinutes,
 } from "./_lib/teamActivityDigest";
 import { loadWorkSchedules, scheduleRowsForDates } from "./_lib/workSchedules";
 import {
@@ -84,7 +84,6 @@ type DigestKind = "tech" | "business_morning" | "business_evening" | "team_activ
 // скоупляться операційним team_id з public.team_members. Тому учасника
 // збираємо з трьох джерел і носимо обидва id.
 
-const TIME_ZONE = "Europe/Kiev";
 const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
 
 // Пороги — docs/DAILY_DIGESTS_DESIGN.md §4. Бекапи/storage/dead tuples
@@ -116,61 +115,6 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
 // --- Дати -------------------------------------------------------------------
 
 /** «Сьогодні» як YYYY-MM-DD у Києві. */
-function todayKeyInKiev(now: Date): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")}`;
-}
-
-function shiftDays(iso: string, days: number): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-}
-
-function zonedWallClockOffsetMs(utcMs: number, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(new Date(utcMs));
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? "0");
-  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
-  return asUtc - utcMs;
-}
-
-/**
- * «Плаваючий» wall-clock → реальний момент у вказаній зоні.
- * Копія логіки з quote-deadline-reminders.ts: дедлайни зберігаються як час,
- * який обрав користувач, позначений +00, а не як справжній UTC-момент.
- */
-function wallClockToInstant(value: string, timeZone = TIME_ZONE): Date {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
-  if (!match) return new Date(value);
-  const [, y, mo, d, hh, mm, ss] = match;
-  const base = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(hh ?? "0"), Number(mm ?? "0"), Number(ss ?? "0"));
-  let instant = base - zonedWallClockOffsetMs(base, timeZone);
-  instant = base - zonedWallClockOffsetMs(instant, timeZone);
-  return new Date(instant);
-}
-
-/** Межі київської доби як справжні UTC-моменти. */
-function kievDayBounds(dayKey: string): { startIso: string; endIso: string } {
-  return {
-    startIso: wallClockToInstant(`${dayKey}T00:00:00`).toISOString(),
-    endIso: wallClockToInstant(`${shiftDays(dayKey, 1)}T00:00:00`).toISOString(),
-  };
-}
-
 function formatDayLabel(dayKey: string): string {
   const [y, m, d] = dayKey.split("-").map(Number);
   return new Intl.DateTimeFormat("uk-UA", {
@@ -315,22 +259,6 @@ type DesignTaskRow = {
  * означало б назвати керівництву суму, якої не буде в жодному замовленні
  * (REQ-77 — завищення щонайменше на 3,9 млн грн).
  */
-async function sumQuotesByRuns(admin: AdminClient, quoteIds: string[]): Promise<Map<string, MoneyRange>> {
-  if (quoteIds.length === 0) return new Map();
-
-  const { data, error } = await admin
-    .schema("tosho")
-    .from("quote_item_runs")
-    .select(QUOTE_RUN_PRICING_COLUMNS)
-    .in("quote_id", quoteIds)
-    .limit(20000);
-  if (error) throw new Error(`quote_item_runs: ${error.message}`);
-
-  // Позиції, від яких клієнт відмовився, у суму не входять (REQ-267#p1).
-  const declinedItemIds = await loadDeclinedQuoteItemIds(admin, quoteIds);
-  return quoteSaleTotalRanges((data ?? []) as QuoteRunPricingRow[], declinedItemIds);
-}
-
 /**
  * Прорахунки, затверджені у вікні [startIso, endIso).
  *
@@ -819,8 +747,30 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   }
 
   const tone: Tone = quotesOverdue > 0 || designOverdue > 0 ? "warning" : "good";
+  const overdue = quotesOverdue + designOverdue;
+  const dueToday = quotesDueToday + designDueToday;
+  const photo = await renderPlanCard({ date: cardDate(todayKey), overdue, dueToday, revisions: pendingRevisions }).catch(
+    logCardFailure
+  );
+  const lead =
+    dueToday + overdue === 0
+      ? "🌤 Дедлайнів на сьогодні немає"
+      : `🎯 Дедлайнів сьогодні: ${dueToday}` + (overdue > 0 ? ` · уже прострочено: ${overdue}` : "");
+  const rich: RichContent = {
+    html: `<p>${lead}</p>${legacyToRich(lines.join("\n"), { dropTitle: true })}`,
+    photo,
+    silent: true,
+    keyboard: [
+      [
+        { text: "🧮 Прорахунки", url: `${APP_URL}/orders/estimates` },
+        { text: "🎨 Дизайн", url: `${APP_URL}/design` },
+      ],
+      [{ text: "💰 Фінанси", url: `${APP_URL}/finances` }],
+    ],
+  };
   return {
     tone,
+    rich,
     text: lines.join("\n"),
     keyboard: [
       [
@@ -1135,8 +1085,23 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
   // Порожній звіт краще за мовчанку: інакше не відрізниш вихідний від зламаного cron.
   if (lines.length === 1) lines.push("", "За сьогодні активності не було.");
 
+  const trend = await loadTrendView(admin, teamIds, todayKey, "month").catch((error: unknown) => {
+    console.warn("[daily-digest] trend failed", error);
+    return null;
+  });
+  const lead =
+    approvedTodayIds.length > 0
+      ? `🎉 Сьогодні затвердили: ${approvedTodayIds.length} на ${escapeTelegramHtml(formatMoneyRange(sumOf(approvedTodayIds), formatMoney))}`
+      : "🌙 Сьогодні нових затверджень не було";
+  const rich: RichContent = {
+    html: `<p>${lead}</p>${legacyToRich(lines.join("\n"), { dropTitle: true })}<footer>🕕 Оновлено о ${kyivClock(now)}</footer>`,
+    photo: trend?.photo ?? null,
+    silent: true,
+    keyboard: trendKeyboard("month", APP_URL),
+  };
   return {
     tone: "good" as Tone,
+    rich,
     text: lines.join("\n"),
     keyboard: [
       [
@@ -1162,7 +1127,7 @@ async function buildTeamActivityDigest(admin: AdminClient, members: MemberRow[],
     admin
       .schema("tosho")
       .from("team_absences")
-      .select("user_id,kind")
+      .select("user_id,kind,end_date")
       .in("workspace_id", workspaceIds)
       .eq("status", "approved")
       .lte("start_date", dayKey)
@@ -1207,14 +1172,146 @@ async function buildTeamActivityDigest(admin: AdminClient, members: MemberRow[],
       })
     : [];
 
+  const endByUser = new Map(
+    ((absences.data ?? []) as Array<{ user_id?: string | null; end_date?: string | null }>)
+      .filter((r) => r.user_id && r.end_date)
+      .map((r) => [r.user_id as string, r.end_date as string])
+  );
+  const rich = await buildTeamRich(admin, {
+    team,
+    dayKey,
+    people,
+    isWorkday,
+    idle,
+    absenceByUser,
+    endByUser,
+    minutesByUser,
+    changes,
+  });
   return {
     tone: "good" as Tone,
+    rich,
     text: renderTeamActivity({ dayLabel: formatDayLabel(dayKey), people, absent }),
     keyboard: [[{ text: "Пульс команди", url: `${APP_URL}/settings/members?tab=pulse` }]],
   };
 }
 
+const GENITIVE_MONTHS = ["січня","лютого","березня","квітня","травня","червня","липня","серпня","вересня","жовтня","листопада","грудня"];
+
+function cardDate(dayKey: string): string {
+  const [, month, day] = dayKey.split("-").map(Number);
+  return `${day} ${GENITIVE_MONTHS[month - 1]}`;
+}
+
+/** Картка — прикраса: якщо вона не намалювалась, звіт однаково йде текстом. */
+function logCardFailure(error: unknown): null {
+  console.warn("[daily-digest] card render failed", error);
+  return null;
+}
+
+/** «Олександр Вишневецький» → «Олександр В.»: у рядку картки мало місця. */
+function cardName(name: string): string {
+  const [first, second] = name.trim().split(/\s+/);
+  return second ? `${first} ${second[0]}.` : first;
+}
+
+const MAX_CARD_PEOPLE = 12;
+const MAX_CARD_ABSENT = 6;
+
+async function loadAvatars(admin: AdminClient, userIds: string[]): Promise<Map<string, Buffer | null>> {
+  const { data } = await admin
+    .schema("tosho")
+    .from("team_member_profiles")
+    .select("user_id,avatar_path")
+    .in("user_id", userIds);
+  const rows = ((data ?? []) as Array<{ user_id: string; avatar_path?: string | null }>).filter((r) => r.avatar_path);
+  const entries = await Promise.all(
+    rows.map(async (row) => {
+      const { data: file } = await admin.storage.from("avatars").download(row.avatar_path as string);
+      const avatar = file ? await prepareAvatar(Buffer.from(await file.arrayBuffer())) : null;
+      return [row.user_id, avatar] as const;
+    })
+  );
+  return new Map(entries);
+}
+
+async function buildTeamRich(
+  admin: AdminClient,
+  input: {
+    team: MemberRow[];
+    dayKey: string;
+    people: PersonDay[];
+    isWorkday: boolean;
+    idle: MemberRow[];
+    absenceByUser: Map<string, string>;
+    endByUser: Map<string, string>;
+    minutesByUser: Map<string, { spans: Array<{ from: number; to: number }>; activeMinutes: number }>;
+    changes: Map<string, number>;
+  }
+): Promise<RichContent> {
+  const nameOf = (m: MemberRow) => (m.fullName ?? "").trim() || (m.email ?? "").split("@")[0] || "—";
+  const minutesOf = (userId: string) => {
+    const entry = input.minutesByUser.get(userId);
+    if (!entry) return 0;
+    return entry.spans.length ? entry.spans.reduce((sum, s) => sum + (s.to - s.from), 0) : entry.activeMinutes;
+  };
+  const idleIds = new Set(input.idle.map((m) => m.userId));
+  const working = input.team
+    .filter((m) => !idleIds.has(m.userId))
+    .sort((a, b) => minutesOf(b.userId) - minutesOf(a.userId));
+  const absentMembers = input.isWorkday ? input.idle : [];
+  const avatars = await loadAvatars(admin, [...working, ...absentMembers].map((m) => m.userId)).catch(
+    () => new Map<string, Buffer | null>()
+  );
+
+  const reasonOf = (m: MemberRow) => {
+    const kind = input.absenceByUser.get(m.userId);
+    if (!kind) return "не було в CRM";
+    const label = (ABSENCE_KIND_LABELS[kind] ?? "Відсутність").toLowerCase();
+    const end = input.endByUser.get(m.userId);
+    return end && end > input.dayKey ? `${label} до ${end.slice(8, 10)}.${end.slice(5, 7)}` : label;
+  };
+
+  const photo = await renderTeamCard({
+    date: cardDate(input.dayKey),
+    people: working.slice(0, MAX_CARD_PEOPLE).map((m) => ({
+      name: cardName(nameOf(m)),
+      minutes: minutesOf(m.userId),
+      avatar: avatars.get(m.userId) ?? null,
+    })),
+    absent: absentMembers.slice(0, MAX_CARD_ABSENT).map((m) => ({
+      name: cardName(nameOf(m)),
+      reason: reasonOf(m),
+      avatar: avatars.get(m.userId) ?? null,
+    })),
+  }).catch(logCardFailure);
+
+  const row = (m: MemberRow, tail: string) => `<li>${escapeTelegramHtml(nameOf(m))} — ${escapeTelegramHtml(tail)}</li>`;
+  const changeRows = working.map((m) => row(m, `змін: ${input.changes.get(m.userId) ?? 0}`)).join("");
+  const offCard = [
+    ...working.slice(MAX_CARD_PEOPLE).map((m) => row(m, formatMinutes(minutesOf(m.userId)))),
+    ...absentMembers.slice(MAX_CARD_ABSENT).map((m) => row(m, reasonOf(m))),
+  ].join("");
+
+  return {
+    html:
+      `<p>👥 Працювали: ${working.length}` +
+      (absentMembers.length > 0 ? ` · 🏝 не було: ${absentMembers.length}` : "") +
+      `</p><p>📵 Дзвінки, Telegram і робота поза CRM сюди не входять</p>` +
+      (offCard ? `<details><summary>➕ Решта команди</summary><ul>${offCard}</ul></details>` : "") +
+      `<details><summary>📝 Зміни в CRM по людях</summary><ul>${changeRows}</ul></details>`,
+    photo,
+    silent: true,
+    keyboard: [[{ text: "💓 Пульс команди", url: `${APP_URL}/settings/members?tab=pulse` }]],
+  };
+}
+
 // --- Handler ----------------------------------------------------------------
+
+/** Технічний звіт без картки: той самий текст, але згорнутими блоками. */
+function richOf(digest: { text: string; keyboard: RichContent["keyboard"]; rich?: RichContent }): RichContent {
+  return digest.rich ?? { html: legacyToRich(digest.text), keyboard: digest.keyboard, silent: true };
+}
 
 const VALID_KINDS: DigestKind[] = ["tech", "business_morning", "business_evening", "team_activity"];
 
@@ -1291,6 +1388,7 @@ export const handler = async (event: HttpEvent) => {
         tone: digest.tone,
         recipients: recipients.length,
         message: digest.text,
+        richHtml: richOf(digest).html,
       });
     }
 
@@ -1312,7 +1410,8 @@ export const handler = async (event: HttpEvent) => {
       recipients,
       category,
       digest.text,
-      digest.keyboard
+      digest.keyboard,
+      richOf(digest)
     );
 
     if (!force) {
