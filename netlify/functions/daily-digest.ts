@@ -1298,8 +1298,8 @@ async function buildTeamRich(
       `<p>👥 Працювали: ${working.length}` +
       (absentMembers.length > 0 ? ` · 🏝 не було: ${absentMembers.length}` : "") +
       `</p><p>📵 Дзвінки, Telegram і робота поза CRM сюди не входять</p>` +
-      (offCard ? `<details><summary>➕ Решта команди</summary><ul>${offCard}</ul></details>` : "") +
-      `<details><summary>📝 Зміни в CRM по людях</summary><ul>${changeRows}</ul></details>`,
+      (offCard ? `<h4>➕ Решта команди</h4><ul>${offCard}</ul>` : "") +
+      `<h4>📝 Зміни в CRM по людях</h4><ul>${changeRows}</ul>`,
     photo,
     silent: true,
     keyboard: [[{ text: "💓 Пульс команди", url: `${APP_URL}/settings/members?tab=pulse` }]],
@@ -1308,7 +1308,7 @@ async function buildTeamRich(
 
 // --- Handler ----------------------------------------------------------------
 
-/** Технічний звіт без картки: той самий текст, але згорнутими блоками. */
+/** Технічний звіт без картки: той самий текст, але блоками із заголовками. */
 function richOf(digest: { text: string; keyboard: RichContent["keyboard"]; rich?: RichContent }): RichContent {
   return digest.rich ?? { html: legacyToRich(digest.text), keyboard: digest.keyboard, silent: true };
 }

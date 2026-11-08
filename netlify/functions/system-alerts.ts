@@ -139,9 +139,9 @@ export const handler = async (event: HttpEvent) => {
             `<h3>🔴 ${escapeTelegramHtml(first.text)}</h3>` +
             restDanger.map((s) => `<p>${escapeTelegramHtml(s.text)}</p>`).join("") +
             (warnings.length > 0
-              ? `<details><summary>⚠️ Ще попереджень: ${warnings.length}</summary><ul>${warnings
+              ? `<h4>⚠️ Ще попереджень: ${warnings.length}</h4><ul>${warnings
                   .map((s) => `<li>${escapeTelegramHtml(s.text)}</li>`)
-                  .join("")}</ul></details>`
+                  .join("")}</ul>`
               : "") +
             `<footer>🕑 Сьогодні о ${clock}</footer>`,
           keyboard: [[{ text: "🩺 Стан системи", url: `${APP_URL}/dev/health` }]],

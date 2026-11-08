@@ -26,7 +26,7 @@ const SECTION_EMOJI: Record<string, string> = {
 };
 
 /**
- * Старий текст звіту → згорнуті блоки. Звіт і далі збирається один раз, тож
+ * Старий текст звіту → блоки із заголовками, одразу розгорнуті. Звіт і далі збирається один раз, тож
  * запасний текст і Rich не можуть розійтись у цифрах.
  */
 export function legacyToRich(text: string, options: { dropTitle?: boolean } = {}): string {
@@ -40,7 +40,7 @@ export function legacyToRich(text: string, options: { dropTitle?: boolean } = {}
       if (head && lines.length > 1) {
         const emoji = SECTION_EMOJI[head[1]];
         const items = lines.slice(1).map((line) => `<li>${line.replace(/^•\s*/, "")}</li>`).join("");
-        return `<details><summary>${emoji ? `${emoji} ` : ""}${head[1]}</summary><ul>${items}</ul></details>`;
+        return `<h4>${emoji ? `${emoji} ` : ""}${head[1]}</h4><ul>${items}</ul>`;
       }
       return lines.map((line) => `<p>${line}</p>`).join("");
     })
