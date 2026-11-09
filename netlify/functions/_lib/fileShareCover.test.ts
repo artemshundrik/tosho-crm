@@ -44,6 +44,16 @@ describe("обкладинка картки месенджера", () => {
     vi.unstubAllGlobals();
   });
 
+  it("хвіст ?v= у публічної адреси лишає звичайну сторінку", async () => {
+    const response = await handler({
+      httpMethod: "GET",
+      path: `/f/${CODE}`,
+      queryStringParameters: { v: "3" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers).toMatchObject({ "Content-Type": expect.stringContaining("text/html") });
+  });
+
   it("вписує широкий макет в обкладинку, нічого не обрізаючи", async () => {
     const response = await handler(coverEvent);
     expect(response.statusCode).toBe(200);

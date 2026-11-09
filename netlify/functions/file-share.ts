@@ -246,12 +246,10 @@ async function handleCreate(event: HttpEvent, admin: SupabaseClient, supabaseUrl
 async function handlePublic(event: HttpEvent, admin: SupabaseClient, supabaseUrl: string) {
   // Netlify при переписуванні /f/… не передає параметри з правила, тож читаємо адресу.
   const route = SHARE_ROUTE_PATTERN.exec(event.path ?? "");
-  const query: Record<string, string | undefined> = {
-    ...event.queryStringParameters,
-    ...(route
-      ? { code: route[1], ...(route[2] ? { [route[2]]: route[3] } : {}), ...(route[4] ? { c: "1" } : {}) }
-      : {}),
-  };
+  // Хвіст ?… у публічної адреси не читаємо: ?v=3 для свіжої картки в месенджері інакше стає маршрутом /v/3.
+  const query: Record<string, string | undefined> = route
+    ? { code: route[1], ...(route[2] ? { [route[2]]: route[3] } : {}), ...(route[4] ? { c: "1" } : {}) }
+    : (event.queryStringParameters ?? {});
   const code = query.code ?? "";
   if (!CODE_PATTERN.test(code)) return unavailable();
 
