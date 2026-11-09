@@ -88,3 +88,6 @@ e2e/__screens__/
 
 # результати прогонів claude plugin eval — знімки, не джерело
 evals/*/results/
+
+# Рушій PDF і шрифт сторінки файлів: копіює scripts/copy-share-assets.mjs
+public/share/vendor/

@@ -41,6 +41,7 @@
   ],
   "files": [
     "file-share.ts",
+    "_lib/fileFormatArt.ts",
     "_lib/fileSharePage.ts",
     "_lib/fileSharePage.test.ts",
     "_lib/fileShareCover.test.ts",

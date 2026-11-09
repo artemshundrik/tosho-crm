@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-11-08T14:20:49.777Z",
+  "generatedAt": "2026-11-09T12:15:23.870Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -100,6 +100,18 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Шрифт Inter, покладений у наш бандл, щоб не тягнути його з чужого сервера.",
       "homepage": "https://fontsource.org/fonts/inter",
       "usedIn": 1,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=fontsource.org&sz=128"
+    },
+    {
+      "name": "@fontsource-variable/onest",
+      "version": "5.3.1",
+      "layer": "screen",
+      "dev": false,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Шрифт сторінки файлів для замовника.",
+      "homepage": "https://fontsource.org/fonts/onest",
+      "usedIn": 0,
       "iconUrl": "https://www.google.com/s2/favicons?domain=fontsource.org&sz=128"
     },
     {
@@ -339,7 +351,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 110,
+      "usedIn": 112,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -533,8 +545,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.3.10",
       "layer": "platform",
       "dev": true,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-11-08T16:21:41+02:00",
+      "bumpCommit": {
+        "sha": "3a3c9c1c",
+        "subject": "Звіти в Telegram-боті тепер приходять красивими картками: план на день, підсумок із графіком, команда з аватарками"
+      },
       "description": "Опис типів бібліотеки контурів шрифту.",
       "homepage": null,
       "usedIn": 0,
@@ -760,8 +775,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.3.4",
       "layer": "platform",
       "dev": false,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-11-08T16:21:41+02:00",
+      "bumpCommit": {
+        "sha": "3a3c9c1c",
+        "subject": "Звіти в Telegram-боті тепер приходять красивими картками: план на день, підсумок із графіком, команда з аватарками"
+      },
       "description": "Перетворює текст на контури, щоб кирилиця на картках Telegram малювалась без системних шрифтів.",
       "homepage": null,
       "usedIn": 2,
@@ -916,7 +934,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Обробка зображень на сервері: стискає й переганяє у webp картинки каталогу.",
       "homepage": "https://sharp.pixelplumbing.com",
-      "usedIn": 13,
+      "usedIn": 15,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sharp.pixelplumbing.com&sz=128"
     },
     {
@@ -1023,7 +1041,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 305,
+      "usedIn": 307,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1069,7 +1087,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Перевіряє, що дані, які прийшли ззовні, справді такі, як ми чекаємо: серверні функції звіряють із нею тіло запиту.",
       "homepage": "https://zod.dev",
-      "usedIn": 30,
+      "usedIn": 31,
       "iconUrl": "https://www.google.com/s2/favicons?domain=zod.dev&sz=128"
     }
   ],
@@ -1084,12 +1102,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 3653,
-  "testFiles": 303,
+  "tests": 3663,
+  "testFiles": 305,
   "lintStubs": 28,
   "node": "24",
-  "netlifyFunctions": 52,
-  "sourceLines": 350093,
+  "netlifyFunctions": 53,
+  "sourceLines": 351076,
   "automation": {
     "workflows": [
       {

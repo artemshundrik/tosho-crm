@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/check-netlify-functions.mjs",
+    "prebuild": "node scripts/check-netlify-functions.mjs && node scripts/copy-share-assets.mjs",
     "build": "tsc -b && vite build",
     "analyze": "ANALYZE=1 vite build",
     "typecheck": "tsc --noEmit",
@@ -62,10 +62,12 @@
     "check:eval-cases": "node scripts/check-eval-cases.mjs",
     "db:apply": "node scripts/db-apply.mjs",
     "db:backfill-journal": "node scripts/backfill-sql-journal.mjs",
-    "check:instruction-size": "node scripts/check-instruction-size.mjs"
+    "check:instruction-size": "node scripts/check-instruction-size.mjs",
+    "predev": "node scripts/copy-share-assets.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/onest": "^5.3.1",
     "@number-flow/react": "^0.6.2",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-alert-dialog": "^1.1.15",

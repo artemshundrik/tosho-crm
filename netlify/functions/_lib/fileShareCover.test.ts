@@ -66,3 +66,53 @@ describe("обкладинка картки месенджера", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe("сторінка файлів: перегляд і велика картинка", () => {
+  const pdfLink = {
+    ...link,
+    files: [
+      { bucket: "attachments", path: "teams/t/a.png", name: "a.png" },
+      { bucket: "attachments", path: "teams/t/kp.pdf", name: "kp.pdf" },
+    ],
+  };
+
+  beforeEach(async () => {
+    currentLink = pdfLink;
+    vi.stubEnv("SUPABASE_URL", "https://db.test");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service");
+    vi.stubEnv("SUPABASE_ANON_KEY", "anon");
+    const image = await sharp({ create: { width: 4000, height: 2000, channels: 3, background: "#00ff00" } })
+      .png()
+      .toBuffer();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array(image))));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("стискає оригінал до робочої ширини", async () => {
+    const response = await handler({ httpMethod: "GET", path: `/f/${CODE}/v/0` });
+    expect(response).toMatchObject({ statusCode: 200, headers: { "Content-Type": "image/webp" } });
+    const metadata = await sharp(Buffer.from(response.body, "base64")).metadata();
+    expect(metadata.width).toBe(2000);
+  });
+
+  it("не дає великої картинки поза списком файлів", async () => {
+    const response = await handler({ httpMethod: "GET", path: `/f/${CODE}/v/7` });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("відкриває PDF із добірки й дозволяє скрипт лише зі свого домену", async () => {
+    const response = await handler({ httpMethod: "GET", path: `/f/${CODE}/o/1` });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain(`data-src="/f/${CODE}/d/1"`);
+    expect(response).toMatchObject({
+      headers: { "Content-Security-Policy": expect.stringContaining("script-src 'self' 'wasm-unsafe-eval'") },
+    });
+    expect(response).toMatchObject({
+      headers: { "Content-Security-Policy": expect.stringContaining("connect-src 'self' https://db.test") },
+    });
+  });
+});

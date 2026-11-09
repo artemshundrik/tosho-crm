@@ -33,10 +33,13 @@ const LINK_TTL_DAYS = 30;
 const ACCESS_TTL_SECONDS = 60 * 60;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 const CODE_PATTERN = /^[A-Za-z0-9]{10}$/;
-const SHARE_ROUTE_PATTERN = /^\/f\/([A-Za-z0-9]{10})(?:\/(?:(d|p|t)\/(\d{1,2})|(c)))?\/?$/;
+const SHARE_ROUTE_PATTERN = /^\/f\/([A-Za-z0-9]{10})(?:\/(?:(d|p|t|o|v)\/(\d{1,2})|(c)))?\/?$/;
 const COVER_WIDTH_PX = 1200;
 const COVER_HEIGHT_PX = 630;
 const COVER_PADDING_PX = 24;
+// Готові прев'ю лише 640 px: на всю ширину сторінки макет з них розмитий.
+const VISUAL_WIDTH_PX = 2000;
+const RASTER_IMAGE_PATTERN = /\.(png|jpe?g|webp|gif)$/i;
 // Тимчасово: проба, який тип сторінки Telegram показує великою картинкою.
 const OG_TYPE_TRIALS: Record<string, string> = { "1": "photo", "2": "article" };
 const COVER_BACKGROUND = "#ffffff";
@@ -67,7 +70,13 @@ const json = (statusCode: number, body: Record<string, unknown>) => ({
   body: JSON.stringify(body),
 });
 
-const html = (statusCode: number, body: string) => ({
+const STRICT_CSP = "default-src 'none'; img-src 'self' https:; style-src 'unsafe-inline'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'";
+
+/** Сторінка файлів: перегляд PDF тягне файл зі сховища й працює у фоновому потоці. */
+const filePageCsp = (storageOrigin: string) =>
+  `default-src 'none'; img-src 'self' https: data: blob:; style-src 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self' ${storageOrigin}; frame-ancestors 'none'; base-uri 'none'`;
+
+const html = (statusCode: number, body: string, csp: string = STRICT_CSP) => ({
   statusCode,
   headers: {
     "Content-Type": "text/html; charset=utf-8",
@@ -75,7 +84,7 @@ const html = (statusCode: number, body: string) => ({
     "X-Robots-Tag": "noindex",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
-    "Content-Security-Policy": "default-src 'none'; img-src 'self' https:; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+    "Content-Security-Policy": csp,
   },
   body,
 });
@@ -94,7 +103,7 @@ const generateCode = () =>
 const previewCandidates = (file: ShareFile) => {
   const basename = file.path.replace(/\.[^./]+$/, "");
   const candidates = [`${basename}__preview.webp`, `${basename}__preview.png`];
-  if (/\.(png|jpe?g|webp|gif)$/i.test(file.path)) candidates.push(file.path);
+  if (RASTER_IMAGE_PATTERN.test(file.path)) candidates.push(file.path);
   return candidates;
 };
 
@@ -106,14 +115,51 @@ async function signPreview(admin: SupabaseClient, file: ShareFile): Promise<stri
   return null;
 }
 
+async function fetchOriginalRaster(admin: SupabaseClient, file: ShareFile): Promise<Buffer | null> {
+  if (!RASTER_IMAGE_PATTERN.test(file.path)) return null;
+  const { data } = await admin.storage.from(file.bucket).createSignedUrl(file.path, ACCESS_TTL_SECONDS);
+  if (!data?.signedUrl) return null;
+  const response = await fetch(data.signedUrl);
+  return response.ok ? Buffer.from(await response.arrayBuffer()) : null;
+}
+
+/** Картинка для великого показу: з оригіналу, бо готове прев'ю замале. */
+async function renderVisual(admin: SupabaseClient, file: ShareFile) {
+  try {
+    const original = await fetchOriginalRaster(admin, file);
+    if (!original) return null;
+    const image = await sharp(original)
+      .rotate()
+      .resize({ width: VISUAL_WIDTH_PX, withoutEnlargement: true })
+      .webp({ quality: 84 })
+      .toBuffer();
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "image/webp", "Cache-Control": "private, max-age=3600" },
+      body: image.toString("base64"),
+      isBase64Encoded: true,
+    };
+  } catch (error) {
+    console.error("file-share: visual failed", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+async function fetchCoverSource(admin: SupabaseClient, file: ShareFile): Promise<Buffer | null> {
+  const original = await fetchOriginalRaster(admin, file);
+  if (original) return original;
+  const url = await signPreview(admin, file);
+  if (!url) return null;
+  const response = await fetch(url);
+  return response.ok ? Buffer.from(await response.arrayBuffer()) : null;
+}
+
 /** Широка обкладинка картки: макет цілком, у пропорціях великого прев'ю месенджерів. */
 async function renderCover(admin: SupabaseClient, files: ShareFile[]) {
   for (const file of files) {
-    const url = await signPreview(admin, file);
-    if (!url) continue;
-    const response = await fetch(url);
-    if (!response.ok) continue;
-    const image = await sharp(Buffer.from(await response.arrayBuffer()))
+    const source = await fetchCoverSource(admin, file);
+    if (!source) continue;
+    const image = await sharp(source)
       .rotate()
       .resize(COVER_WIDTH_PX - 2 * COVER_PADDING_PX, COVER_HEIGHT_PX - 2 * COVER_PADDING_PX, {
         fit: "contain",
@@ -199,7 +245,7 @@ async function handleCreate(event: HttpEvent, admin: SupabaseClient, supabaseUrl
   return json(500, { error: "Не вдалося створити посилання" });
 }
 
-async function handlePublic(event: HttpEvent, admin: SupabaseClient) {
+async function handlePublic(event: HttpEvent, admin: SupabaseClient, supabaseUrl: string) {
   // Netlify при переписуванні /f/… не передає параметри з правила, тож читаємо адресу.
   const route = SHARE_ROUTE_PATTERN.exec(event.path ?? "");
   const query: Record<string, string | undefined> = {
@@ -245,6 +291,15 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient) {
     return url ? redirect(url) : { statusCode: 404, headers: { "Cache-Control": "no-store" }, body: "" };
   }
 
+  if (query.v !== undefined) {
+    const file = pick(query.v);
+    if (!file) return { statusCode: 404, headers: { "Cache-Control": "no-store" }, body: "" };
+    const visual = await renderVisual(admin, file);
+    if (visual) return visual;
+    const url = await signPreview(admin, file);
+    return url ? redirect(url) : { statusCode: 404, headers: { "Cache-Control": "no-store" }, body: "" };
+  }
+
   const previews = await Promise.all(files.map((file) => signPreview(admin, file)));
   return html(
     200,
@@ -256,7 +311,9 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient) {
       managerName: link.created_by_name,
       expiresAt: link.expires_at,
       files: files.map((file, index) => ({ name: file.name, hasPreview: Boolean(previews[index]) })),
-    })
+      openIndex: pick(query.o) ? Number(query.o) : undefined,
+    }),
+    filePageCsp(new URL(supabaseUrl).origin)
   );
 }
 
@@ -268,6 +325,6 @@ export const handler = async (event: HttpEvent) => {
 
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
   if (event.httpMethod === "POST") return handleCreate(event, admin, supabaseUrl, anonKey);
-  if (event.httpMethod === "GET" || event.httpMethod === "HEAD") return handlePublic(event, admin);
+  if (event.httpMethod === "GET" || event.httpMethod === "HEAD") return handlePublic(event, admin, supabaseUrl);
   return json(405, { error: "Method Not Allowed" });
 };
