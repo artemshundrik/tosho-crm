@@ -33,7 +33,7 @@ const LINK_TTL_DAYS = 30;
 const ACCESS_TTL_SECONDS = 60 * 60;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 const CODE_PATTERN = /^[A-Za-z0-9]{10}$/;
-const SHARE_ROUTE_PATTERN = /^\/f\/([A-Za-z0-9]{10})(?:\/(?:(d|p|o|v)\/(\d{1,2})|(c)))?\/?$/;
+const SHARE_ROUTE_PATTERN = /^\/f\/([A-Za-z0-9]{10})(?:\/(?:(d|p|o|v)\/(\d{1,2})|(c|m)))?\/?$/;
 const COVER_WIDTH_PX = 1200;
 const COVER_HEIGHT_PX = 630;
 const COVER_PADDING_PX = 24;
@@ -41,8 +41,12 @@ const COVER_PADDING_PX = 24;
 const VISUAL_WIDTH_PX = 2000;
 const RASTER_IMAGE_PATTERN = /\.(png|jpe?g|webp|gif)$/i;
 const COVER_BACKGROUND = "#ffffff";
+const MANAGER_AVATAR_BUCKET = "avatars";
+const MANAGER_PHOTO_PX = 192;
+// У профілі лежить шлях у сховищі. Усе інше (зовнішня адреса тощо) не завантажуємо.
+const MANAGER_AVATAR_PATH_PATTERN = /^avatars(?:\/[\w-]+)+\.(?:webp|png|jpe?g)$/i;
 // % ? # \ відсікаємо, бо сховище розкодує шлях уже після цієї перевірки.
-const TEAM_PATH_PATTERN = /^teams\/([0-9a-f-]{36})\/(?!.*\.\.)[^%?#\\]+$/i;
+const TEAM_PATH_PATTERN = /^teams\/([0-9a-f-]{36})\/(?!.*\.\.)[^%?#\\]+$/is;
 
 const requestSchema = z
   .object({
@@ -139,6 +143,43 @@ async function renderVisual(admin: SupabaseClient, file: ShareFile) {
     };
   } catch (error) {
     console.error("file-share: visual failed", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+async function signManagerPhoto(admin: SupabaseClient, userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const { data: profile } = await admin
+    .schema("tosho")
+    .from("team_member_profiles")
+    .select("avatar_url")
+    .eq("user_id", userId)
+    .limit(1)
+    .maybeSingle();
+  const path = profile?.avatar_url;
+  if (!path || !MANAGER_AVATAR_PATH_PATTERN.test(path)) return null;
+  const { data } = await admin.storage.from(MANAGER_AVATAR_BUCKET).createSignedUrl(path, ACCESS_TTL_SECONDS);
+  return data?.signedUrl ?? null;
+}
+
+/** Фото йде через наш домен: адреса сховища містила б службовий ідентифікатор людини. */
+async function renderManagerPhoto(url: string) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const image = await sharp(Buffer.from(await response.arrayBuffer()))
+      .rotate()
+      .resize(MANAGER_PHOTO_PX, MANAGER_PHOTO_PX, { fit: "cover", withoutEnlargement: true })
+      .webp({ quality: 84 })
+      .toBuffer();
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "image/webp", "Cache-Control": "private, max-age=3600" },
+      body: image.toString("base64"),
+      isBase64Encoded: true,
+    };
+  } catch (error) {
+    console.error("file-share: manager photo failed", error instanceof Error ? error.message : error);
     return null;
   }
 }
@@ -248,7 +289,7 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient, supabaseUrl
   const route = SHARE_ROUTE_PATTERN.exec(event.path ?? "");
   // Хвіст ?… у публічної адреси не читаємо: ?v=3 для свіжої картки в месенджері інакше стає маршрутом /v/3.
   const query: Record<string, string | undefined> = route
-    ? { code: route[1], ...(route[2] ? { [route[2]]: route[3] } : {}), ...(route[4] ? { c: "1" } : {}) }
+    ? { code: route[1], ...(route[2] ? { [route[2]]: route[3] } : {}), ...(route[4] ? { [route[4]]: "1" } : {}) }
     : (event.queryStringParameters ?? {});
   const code = query.code ?? "";
   if (!CODE_PATTERN.test(code)) return unavailable();
@@ -256,7 +297,7 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient, supabaseUrl
   const { data: link } = await admin
     .schema("tosho")
     .from("file_share_links")
-    .select("code, title, files, created_by_name, expires_at")
+    .select("code, title, files, created_by, created_by_name, expires_at")
     .eq("code", code)
     .maybeSingle();
   if (!link || new Date(link.expires_at).getTime() <= Date.now()) return unavailable();
@@ -281,6 +322,12 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient, supabaseUrl
     return cover ?? { statusCode: 404, headers: { "Cache-Control": "no-store" }, body: "" };
   }
 
+  if (query.m !== undefined) {
+    const url = await signManagerPhoto(admin, link.created_by);
+    const photo = url ? await renderManagerPhoto(url) : null;
+    return photo ?? { statusCode: 404, headers: { "Cache-Control": "no-store" }, body: "" };
+  }
+
   if (query.p !== undefined) {
     const file = pick(query.p);
     const url = file ? await signPreview(admin, file) : null;
@@ -296,7 +343,10 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient, supabaseUrl
     return url ? redirect(url) : { statusCode: 404, headers: { "Cache-Control": "no-store" }, body: "" };
   }
 
-  const previews = await Promise.all(files.map((file) => signPreview(admin, file)));
+  const [previews, managerPhoto] = await Promise.all([
+    Promise.all(files.map((file) => signPreview(admin, file))),
+    signManagerPhoto(admin, link.created_by),
+  ]);
   return html(
     200,
     renderFileSharePage({
@@ -304,6 +354,7 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient, supabaseUrl
       baseUrl: buildAppUrl("/").replace(/\/$/, ""),
       title: link.title,
       managerName: link.created_by_name,
+      hasManagerPhoto: Boolean(managerPhoto),
       expiresAt: link.expires_at,
       files: files.map((file, index) => ({ name: file.name, hasPreview: Boolean(previews[index]) })),
       openIndex: pick(query.o) ? Number(query.o) : undefined,

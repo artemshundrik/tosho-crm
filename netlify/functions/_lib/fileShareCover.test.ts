@@ -8,15 +8,24 @@ const link = {
   code: CODE,
   title: "Візуали",
   files: [{ bucket: "attachments", path: "teams/t/a.png", name: "a.png" }],
+  created_by: "user-1",
   created_by_name: "Влад",
   expires_at: "2999-01-01T00:00:00.000Z",
 };
 let currentLink: typeof link | null = link;
+let currentAvatar: string | null = null;
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
     schema: () => ({
-      from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: currentLink }) }) }) }),
+      from: (table: string) => ({
+        select: () => ({
+          eq: () =>
+            table === "team_member_profiles"
+              ? { limit: () => ({ maybeSingle: async () => ({ data: { avatar_url: currentAvatar } }) }) }
+              : { maybeSingle: async () => ({ data: currentLink }) },
+        }),
+      }),
     }),
     storage: {
       from: () => ({ createSignedUrl: async () => ({ data: { signedUrl: "https://storage.test/a.png" } }) }),
@@ -32,6 +41,7 @@ const coverEvent = { httpMethod: "GET", path: `/f/${CODE}/c` };
 describe("обкладинка картки месенджера", () => {
   beforeEach(async () => {
     currentLink = link;
+    currentAvatar = null;
     vi.stubEnv("SUPABASE_URL", "https://db.test");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service");
     vi.stubEnv("SUPABASE_ANON_KEY", "anon");
@@ -42,6 +52,27 @@ describe("обкладинка картки месенджера", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+  });
+
+  it("віддає фото менеджера квадратом через свій домен", async () => {
+    currentAvatar = "avatars/user-1/1/hero.webp";
+    const response = await handler({ httpMethod: "GET", path: `/f/${CODE}/m` });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers).toMatchObject({ "Content-Type": "image/webp" });
+    expect(await sharp(Buffer.from(response.body, "base64")).metadata()).toMatchObject({ width: 192, height: 192 });
+
+    const page = await handler({ httpMethod: "GET", path: `/f/${CODE}` });
+    expect(page.body).toContain(`<img class="face" src="/f/${CODE}/m"`);
+  });
+
+  it.each([
+    "https://evil.test/a.png",
+    "avatars/a\n/../../../attachments/teams/T/x.png",
+  ])("не завантажує фото менеджера за підозрілим шляхом %j", async (avatar) => {
+    currentAvatar = avatar;
+    const response = await handler({ httpMethod: "GET", path: `/f/${CODE}/m` });
+    expect(response.statusCode).toBe(404);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("хвіст ?v= у публічної адреси лишає звичайну сторінку", async () => {

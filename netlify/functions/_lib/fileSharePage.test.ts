@@ -34,6 +34,16 @@ describe("renderFileSharePage", () => {
     expect(html).toContain(`og:type" content="article"`);
   });
 
+  it("показує фото менеджера, а без фото першу літеру імені", () => {
+    const files = [{ name: "a.png", hasPreview: true }];
+    const withPhoto = renderFileSharePage({ ...base, files, hasManagerPhoto: true });
+    expect(withPhoto).toContain(`<img class="face" src="/f/Ab3xK9P2qZ/m"`);
+
+    const withoutPhoto = renderFileSharePage({ ...base, files, hasManagerPhoto: false });
+    expect(withoutPhoto).not.toContain(`/m"`);
+    expect(withoutPhoto).toContain(`<div class="face" aria-hidden="true">В</div>`);
+  });
+
   it("не показує довгих адрес сховища", () => {
     const html = renderFileSharePage({ ...base, files: [{ name: "a.pdf", hasPreview: true }] });
     expect(html).not.toContain("supabase");

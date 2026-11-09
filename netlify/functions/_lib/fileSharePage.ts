@@ -18,6 +18,7 @@ export type FileSharePageInput = {
   baseUrl: string;
   title: string;
   managerName: string | null;
+  hasManagerPhoto?: boolean;
   expiresAt: string;
   files: FileSharePageFile[];
   /** Адреса /f/<код>/o/<номер>: PDF із добірки, відкритий на перегляд. */
@@ -85,6 +86,7 @@ figcaption span{min-width:0;overflow-wrap:anywhere}
 .foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 24px;margin-top:72px;padding-top:28px;padding-bottom:40px;border-top:1px solid var(--line)}
 .who{display:flex;align-items:center;gap:14px}
 .face{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:999px;background:var(--text);color:#fff;font-size:18px;font-weight:600}
+img.face{flex:none;object-fit:cover;background:#EFEFEB}
 .who-name{font-size:17px;font-weight:500}
 .who-role,.until{margin:0;color:var(--muted);font-size:14px}
 .reader{background:var(--plate)}
@@ -164,8 +166,11 @@ type Entry = FileSharePageFile & { index: number; kind: ReturnType<typeof fileKi
 
 const footer = (input: FileSharePageInput) => {
   const name = input.managerName?.trim();
+  const face = input.hasManagerPhoto
+    ? `<img class="face" src="/f/${input.code}/m" alt="" width="48" height="48">`
+    : `<div class="face" aria-hidden="true">${escapeHtml(Array.from(name ?? " ")[0].toUpperCase())}</div>`;
   const who = name
-    ? `<div class="who"><div class="face" aria-hidden="true">${escapeHtml(Array.from(name)[0].toUpperCase())}</div><div><div class="who-name">${escapeHtml(name)}</div><p class="who-role">Ваш менеджер у ToSho</p></div></div>`
+    ? `<div class="who">${face}<div><div class="who-name">${escapeHtml(name)}</div><p class="who-role">Ваш менеджер у ToSho</p></div></div>`
     : "<div></div>";
   return `<footer class="wrap foot">${who}<p class="until">Файли доступні до ${formatUntil(input.expiresAt)}</p></footer>`;
 };
