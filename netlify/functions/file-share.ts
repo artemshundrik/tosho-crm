@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 import { z } from "zod";
 
 import { buildAppUrl } from "./_lib/appUrl";
@@ -32,7 +33,10 @@ const LINK_TTL_DAYS = 30;
 const ACCESS_TTL_SECONDS = 60 * 60;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 const CODE_PATTERN = /^[A-Za-z0-9]{10}$/;
-const SHARE_ROUTE_PATTERN = /^\/f\/([A-Za-z0-9]{10})(?:\/(d|p)\/(\d{1,2}))?\/?$/;
+const SHARE_ROUTE_PATTERN = /^\/f\/([A-Za-z0-9]{10})(?:\/(?:(d|p)\/(\d{1,2})|(c)))?\/?$/;
+const COVER_INNER_PX = 720;
+const COVER_PADDING_PX = 40;
+const COVER_BACKGROUND = "#ffffff";
 // % ? # \ відсікаємо, бо сховище розкодує шлях уже після цієї перевірки.
 const TEAM_PATH_PATTERN = /^teams\/([0-9a-f-]{36})\/(?!.*\.\.)[^%?#\\]+$/i;
 
@@ -95,6 +99,36 @@ async function signPreview(admin: SupabaseClient, file: ShareFile): Promise<stri
   for (const path of previewCandidates(file)) {
     const { data } = await admin.storage.from(file.bucket).createSignedUrl(path, ACCESS_TTL_SECONDS);
     if (data?.signedUrl) return data.signedUrl;
+  }
+  return null;
+}
+
+/** Квадрат із макетом цілком: месенджери кадрують картинку картки під квадрат. */
+async function renderCover(admin: SupabaseClient, files: ShareFile[]) {
+  for (const file of files) {
+    const url = await signPreview(admin, file);
+    if (!url) continue;
+    const response = await fetch(url);
+    if (!response.ok) continue;
+    const image = await sharp(Buffer.from(await response.arrayBuffer()))
+      .rotate()
+      .resize(COVER_INNER_PX, COVER_INNER_PX, { fit: "contain", background: COVER_BACKGROUND })
+      .flatten({ background: COVER_BACKGROUND })
+      .extend({
+        top: COVER_PADDING_PX,
+        bottom: COVER_PADDING_PX,
+        left: COVER_PADDING_PX,
+        right: COVER_PADDING_PX,
+        background: COVER_BACKGROUND,
+      })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "image/jpeg", "Cache-Control": "no-store" },
+      body: image.toString("base64"),
+      isBase64Encoded: true,
+    };
   }
   return null;
 }
@@ -164,7 +198,9 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient) {
   const route = SHARE_ROUTE_PATTERN.exec(event.path ?? "");
   const query: Record<string, string | undefined> = {
     ...event.queryStringParameters,
-    ...(route ? { code: route[1], ...(route[2] ? { [route[2]]: route[3] } : {}) } : {}),
+    ...(route
+      ? { code: route[1], ...(route[2] ? { [route[2]]: route[3] } : {}), ...(route[4] ? { c: "1" } : {}) }
+      : {}),
   };
   const code = query.code ?? "";
   if (!CODE_PATTERN.test(code)) return unavailable();
@@ -190,6 +226,11 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient) {
     return data?.signedUrl
       ? redirect(`${data.signedUrl}&download=${encodeURIComponent(downloadName(file.name))}`)
       : unavailable();
+  }
+
+  if (query.c !== undefined) {
+    const cover = await renderCover(admin, files);
+    return cover ?? { statusCode: 404, headers: { "Cache-Control": "no-store" }, body: "" };
   }
 
   if (query.p !== undefined) {

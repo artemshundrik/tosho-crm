@@ -71,7 +71,8 @@ export function renderFileSharePage(input: FileSharePageInput): string {
   const prefix = `${input.baseUrl}/f/${input.code}`;
   const title = escapeHtml(input.title);
   const single = input.files.length === 1;
-  const description = single ? input.files[0].name : fileCountLabel(input.files.length);
+  const contents = single ? input.files[0].name : fileCountLabel(input.files.length);
+  const description = input.managerName ? `${contents} · менеджер ${input.managerName}` : contents;
   const previewIndex = input.files.findIndex((file) => file.hasPreview);
 
   const meta = [
@@ -81,7 +82,9 @@ export function renderFileSharePage(input: FileSharePageInput): string {
     `<meta property="og:title" content="${title}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
     `<meta property="og:url" content="${escapeHtml(prefix)}">`,
-    previewIndex >= 0 ? `<meta property="og:image" content="${escapeHtml(`${prefix}/p/${previewIndex}`)}">` : "",
+    previewIndex >= 0
+      ? `<meta property="og:image" content="${escapeHtml(`${prefix}/c`)}"><meta property="og:image:width" content="800"><meta property="og:image:height" content="800">`
+      : "",
   ].join("");
 
   const files = input.files

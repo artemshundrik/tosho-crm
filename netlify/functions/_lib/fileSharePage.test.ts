@@ -29,8 +29,8 @@ describe("renderFileSharePage", () => {
         { name: "b.pdf", hasPreview: true },
       ],
     });
-    expect(html).toContain(`og:image" content="https://tosho.pro/f/Ab3xK9P2qZ/p/1"`);
-    expect(html).toContain("2 файли");
+    expect(html).toContain(`og:image" content="https://tosho.pro/f/Ab3xK9P2qZ/c"`);
+    expect(html).toContain(`og:description" content="2 файли · менеджер Влад"`);
   });
 
   it("не показує довгих адрес сховища", () => {

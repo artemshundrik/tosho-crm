@@ -7320,13 +7320,17 @@ export default function DesignTaskPage() {
         ...selectedLinks.map((link) => link.label),
       ];
       const kindTitle = kind === "visualization" ? "Візуали" : "Макети";
-      const quoteNumber = task?.quoteNumber?.trim();
+      const taskNumber = task?.quoteNumber?.trim() || task?.designTaskNumber?.trim();
+      const customerName = task?.customerName?.trim();
       // Сторінка на короткій адресі (картка 357). Не вийшло — лишаються прямі
       // посилання: довге краще, ніж нічого не надіслати замовнику.
       const shortUrl =
         selectedFiles.length > 0 && selectedFiles.every((file) => file.storage_bucket && file.storage_path)
           ? await createFileShareLink({
-              title: quoteNumber ? `${kindTitle} по прорахунку ${quoteNumber}` : kindTitle,
+              title: [customerName ? `${kindTitle} для ${customerName}` : kindTitle, taskNumber]
+                .filter(Boolean)
+                .join(" · ")
+                .slice(0, 200),
               files: selectedFiles.map((file) => ({
                 bucket: file.storage_bucket as string,
                 path: file.storage_path as string,
@@ -7363,6 +7367,8 @@ export default function DesignTaskPage() {
       clientShareSelectionIds,
       designOutputFiles,
       designOutputLinks,
+      task?.customerName,
+      task?.designTaskNumber,
       task?.quoteNumber,
     ]
   );
