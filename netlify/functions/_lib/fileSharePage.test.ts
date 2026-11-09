@@ -31,6 +31,7 @@ describe("renderFileSharePage", () => {
     });
     expect(html).toContain(`og:image" content="https://tosho.pro/f/Ab3xK9P2qZ/c"`);
     expect(html).toContain(`og:description" content="2 файли · менеджер Влад"`);
+    expect(html).toContain(`og:type" content="article"`);
   });
 
   it("не показує довгих адрес сховища", () => {

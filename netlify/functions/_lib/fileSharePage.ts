@@ -17,7 +17,6 @@ export type FileSharePageInput = {
   code: string;
   baseUrl: string;
   title: string;
-  ogType?: string;
   managerName: string | null;
   expiresAt: string;
   files: FileSharePageFile[];
@@ -214,7 +213,8 @@ export function renderFileSharePage(input: FileSharePageInput): string {
 
   const meta = [
     `<title>${fullTitle}</title>`,
-    `<meta property="og:type" content="${escapeHtml(input.ogType ?? "website")}">`,
+    // article, бо саме з ним Telegram показав велику картинку на пробі (09.11.2026).
+    `<meta property="og:type" content="article">`,
     `<meta property="og:site_name" content="ToSho">`,
     `<meta property="og:title" content="${fullTitle}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
