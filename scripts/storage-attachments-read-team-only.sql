@@ -1,0 +1,22 @@
+-- Читати файли бакета attachments можуть лише учасники команди.
+--
+-- ЩО ТУТ. Прибирає політику attachments_read_authenticated з умовою лише на
+-- бакет. Політики PostgreSQL об'єднуються через OR, тож вона перекривала
+-- командну attachments_read_team і відкривала файли кожному, хто має акаунт
+-- (docs/SECURITY.md, правило 2).
+--
+-- ХТО ВТРАЧАЄ ДОСТУП (заміряно 09.11.2026). Усі 13 891 файл лежать у
+-- teams/<єдина команда>/, усі 25 її учасників читають далі. Без доступу лишаються
+-- 3 акаунти поза team_members: двоє ніколи не входили, один востаннє в лютому.
+--
+-- ЧОГО НЕ ЧІПАЄ. Загальні insert/update/delete. Для update командної політики
+-- немає, а командний delete вужчий за нинішню поведінку, тож просте видалення
+-- зламало б перезапис і видалення файлів.
+--
+-- ВІДКАТ:
+--   create policy attachments_read_authenticated on storage.objects
+--     for select to authenticated using (bucket_id = 'attachments');
+--
+-- БЕЗПЕЧНО ЗАСТОСОВУВАТИ ПОВТОРНО.
+
+drop policy if exists attachments_read_authenticated on storage.objects;
