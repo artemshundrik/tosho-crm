@@ -33,9 +33,12 @@ const LINK_TTL_DAYS = 30;
 const ACCESS_TTL_SECONDS = 60 * 60;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 const CODE_PATTERN = /^[A-Za-z0-9]{10}$/;
-const SHARE_ROUTE_PATTERN = /^\/f\/([A-Za-z0-9]{10})(?:\/(?:(d|p)\/(\d{1,2})|(c)))?\/?$/;
-const COVER_INNER_PX = 720;
-const COVER_PADDING_PX = 40;
+const SHARE_ROUTE_PATTERN = /^\/f\/([A-Za-z0-9]{10})(?:\/(?:(d|p|t)\/(\d{1,2})|(c)))?\/?$/;
+const COVER_WIDTH_PX = 1200;
+const COVER_HEIGHT_PX = 630;
+const COVER_PADDING_PX = 24;
+// Тимчасово: проба, який тип сторінки Telegram показує великою картинкою.
+const OG_TYPE_TRIALS: Record<string, string> = { "1": "photo", "2": "article" };
 const COVER_BACKGROUND = "#ffffff";
 // % ? # \ відсікаємо, бо сховище розкодує шлях уже після цієї перевірки.
 const TEAM_PATH_PATTERN = /^teams\/([0-9a-f-]{36})\/(?!.*\.\.)[^%?#\\]+$/i;
@@ -103,7 +106,7 @@ async function signPreview(admin: SupabaseClient, file: ShareFile): Promise<stri
   return null;
 }
 
-/** Квадрат із макетом цілком: месенджери кадрують картинку картки під квадрат. */
+/** Широка обкладинка картки: макет цілком, у пропорціях великого прев'ю месенджерів. */
 async function renderCover(admin: SupabaseClient, files: ShareFile[]) {
   for (const file of files) {
     const url = await signPreview(admin, file);
@@ -112,7 +115,10 @@ async function renderCover(admin: SupabaseClient, files: ShareFile[]) {
     if (!response.ok) continue;
     const image = await sharp(Buffer.from(await response.arrayBuffer()))
       .rotate()
-      .resize(COVER_INNER_PX, COVER_INNER_PX, { fit: "contain", background: COVER_BACKGROUND })
+      .resize(COVER_WIDTH_PX - 2 * COVER_PADDING_PX, COVER_HEIGHT_PX - 2 * COVER_PADDING_PX, {
+        fit: "contain",
+        background: COVER_BACKGROUND,
+      })
       .flatten({ background: COVER_BACKGROUND })
       .extend({
         top: COVER_PADDING_PX,
@@ -246,6 +252,7 @@ async function handlePublic(event: HttpEvent, admin: SupabaseClient) {
       code,
       baseUrl: buildAppUrl("/").replace(/\/$/, ""),
       title: link.title,
+      ogType: query.t ? OG_TYPE_TRIALS[query.t] : undefined,
       managerName: link.created_by_name,
       expiresAt: link.expires_at,
       files: files.map((file, index) => ({ name: file.name, hasPreview: Boolean(previews[index]) })),

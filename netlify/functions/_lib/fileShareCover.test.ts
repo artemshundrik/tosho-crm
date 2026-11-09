@@ -44,19 +44,19 @@ describe("обкладинка картки месенджера", () => {
     vi.unstubAllGlobals();
   });
 
-  it("вписує широкий макет у квадрат, нічого не обрізаючи", async () => {
+  it("вписує широкий макет в обкладинку, нічого не обрізаючи", async () => {
     const response = await handler(coverEvent);
     expect(response.statusCode).toBe(200);
     expect(response.headers).toMatchObject({ "Content-Type": "image/jpeg" });
 
     const cover = sharp(Buffer.from(response.body, "base64"));
-    expect(await cover.metadata()).toMatchObject({ width: 800, height: 800 });
+    expect(await cover.metadata()).toMatchObject({ width: 1200, height: 630 });
 
     const { data, info } = await cover.removeAlpha().raw().toBuffer({ resolveWithObject: true });
     const redAt = (x: number, y: number) => data[(y * info.width + x) * info.channels + 1] < 40;
-    expect(redAt(50, 400)).toBe(true);
-    expect(redAt(750, 400)).toBe(true);
-    expect(redAt(400, 100)).toBe(false);
+    expect(redAt(50, 315)).toBe(true);
+    expect(redAt(1150, 315)).toBe(true);
+    expect(redAt(600, 100)).toBe(false);
   });
 
   it("не віддає обкладинку за простроченим посиланням", async () => {

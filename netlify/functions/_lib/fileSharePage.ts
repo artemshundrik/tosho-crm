@@ -15,6 +15,7 @@ export type FileSharePageInput = {
   code: string;
   baseUrl: string;
   title: string;
+  ogType?: string;
   managerName: string | null;
   expiresAt: string;
   files: FileSharePageFile[];
@@ -77,13 +78,13 @@ export function renderFileSharePage(input: FileSharePageInput): string {
 
   const meta = [
     `<title>${title}</title>`,
-    `<meta property="og:type" content="website">`,
+    `<meta property="og:type" content="${escapeHtml(input.ogType ?? "website")}">`,
     `<meta property="og:site_name" content="ToSho">`,
     `<meta property="og:title" content="${title}">`,
     `<meta property="og:description" content="${escapeHtml(description)}">`,
     `<meta property="og:url" content="${escapeHtml(prefix)}">`,
     previewIndex >= 0
-      ? `<meta property="og:image" content="${escapeHtml(`${prefix}/c`)}"><meta property="og:image:width" content="800"><meta property="og:image:height" content="800">`
+      ? `<meta property="og:image" content="${escapeHtml(`${prefix}/c`)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">`
       : "",
   ].join("");
 
