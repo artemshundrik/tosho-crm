@@ -19,6 +19,7 @@ import { parseBody } from "./_lib/parseBody";
 
 type HttpEvent = {
   httpMethod?: string;
+  path?: string;
   body?: string | null;
   headers?: Record<string, string | undefined>;
   queryStringParameters?: Record<string, string | undefined> | null;
@@ -31,6 +32,7 @@ const LINK_TTL_DAYS = 30;
 const ACCESS_TTL_SECONDS = 60 * 60;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 const CODE_PATTERN = /^[A-Za-z0-9]{10}$/;
+const SHARE_ROUTE_PATTERN = /^\/f\/([A-Za-z0-9]{10})(?:\/(d|p)\/(\d{1,2}))?\/?$/;
 // % ? # \ відсікаємо, бо сховище розкодує шлях уже після цієї перевірки.
 const TEAM_PATH_PATTERN = /^teams\/([0-9a-f-]{36})\/(?!.*\.\.)[^%?#\\]+$/i;
 
@@ -158,7 +160,12 @@ async function handleCreate(event: HttpEvent, admin: SupabaseClient, supabaseUrl
 }
 
 async function handlePublic(event: HttpEvent, admin: SupabaseClient) {
-  const query = event.queryStringParameters ?? {};
+  // Netlify при переписуванні /f/… не передає параметри з правила, тож читаємо адресу.
+  const route = SHARE_ROUTE_PATTERN.exec(event.path ?? "");
+  const query: Record<string, string | undefined> = {
+    ...event.queryStringParameters,
+    ...(route ? { code: route[1], ...(route[2] ? { [route[2]]: route[3] } : {}) } : {}),
+  };
   const code = query.code ?? "";
   if (!CODE_PATTERN.test(code)) return unavailable();
 
