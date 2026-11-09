@@ -40,6 +40,9 @@
     "vchasno-upload.ts"
   ],
   "files": [
+    "file-share.ts",
+    "_lib/fileSharePage.ts",
+    "_lib/fileSharePage.test.ts",
     "_lib/digestDates.ts",
     "_lib/digestRich.ts",
     "_lib/telegramCards.ts",

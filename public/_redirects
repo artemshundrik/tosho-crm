@@ -1,2 +1,5 @@
 /api/fx-rates    /.netlify/functions/fx-rates   200
+/f/:code/d/:i    /.netlify/functions/file-share?code=:code&d=:i   200
+/f/:code/p/:i    /.netlify/functions/file-share?code=:code&p=:i   200
+/f/:code    /.netlify/functions/file-share?code=:code   200
 /*    /index.html   200

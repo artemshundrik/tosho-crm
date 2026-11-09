@@ -113,6 +113,7 @@ import {
   waitForSignedAttachmentUrl,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
+import { createFileShareLink } from "@/lib/fileShareLink";
 import {
   parseStoredDesignOutputFiles,
   recoverDesignOutputFilesFromHistory,
@@ -7318,8 +7319,23 @@ export default function DesignTaskPage() {
         ),
         ...selectedLinks.map((link) => link.label),
       ];
+      const kindTitle = kind === "visualization" ? "Візуали" : "Макети";
+      const quoteNumber = task?.quoteNumber?.trim();
+      // Сторінка на короткій адресі (картка 357). Не вийшло — лишаються прямі
+      // посилання: довге краще, ніж нічого не надіслати замовнику.
+      const shortUrl =
+        selectedFiles.length > 0 && selectedFiles.every((file) => file.storage_bucket && file.storage_path)
+          ? await createFileShareLink({
+              title: quoteNumber ? `${kindTitle} по прорахунку ${quoteNumber}` : kindTitle,
+              files: selectedFiles.map((file) => ({
+                bucket: file.storage_bucket as string,
+                path: file.storage_path as string,
+                name: getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type),
+              })),
+            })
+          : null;
       const resolvedFileLinks = await Promise.all(
-        selectedFiles.map(async (file) => {
+        (shortUrl ? [] : selectedFiles).map(async (file) => {
           if (!file.storage_bucket || !file.storage_path) return null;
           const url = await getSignedAttachmentUrl(file.storage_bucket, file.storage_path, "original", 60 * 60 * 8);
           if (!url) return null;
@@ -7335,6 +7351,9 @@ export default function DesignTaskPage() {
         selectedFiles,
         selectedLabels,
         links: [
+          ...(shortUrl
+            ? [{ label: selectedFiles.length === 1 ? selectedLabels[0] : `Файли (${selectedFiles.length})`, url: shortUrl }]
+            : []),
           ...(resolvedFileLinks.filter(Boolean) as Array<{ label: string; url: string }>),
           ...selectedLinks.map((link) => ({ label: link.label, url: link.url })),
         ],
@@ -7344,6 +7363,7 @@ export default function DesignTaskPage() {
       clientShareSelectionIds,
       designOutputFiles,
       designOutputLinks,
+      task?.quoteNumber,
     ]
   );
 
