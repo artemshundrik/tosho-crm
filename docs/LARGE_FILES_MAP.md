@@ -13,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~6 049 lines, 296 KB, as of 2026-11-06)
+## src/pages/QuoteDetailsPage.tsx (~6 049 lines, 296 KB, as of 2026-11-09)
 
 Зміщення звірені grep-ом 30.08.2026 — після REQ-155 p1–p12. Файл СХУДНУВ на
 2 460 рядків (9 893 → 7 434): три вкладки з чотирьох поїхали в окремі модулі, а
@@ -55,16 +55,16 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 5419 / 5425 | вкладка «Стрічка» — `<QuoteFeed>`; збирач подій — `quoteFeedEvents.ts`, розмітка — `QuoteFeed.tsx` |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 814 lines, 588 KB, as of 2026-11-06)
+## src/pages/DesignTaskPage.tsx (~12 834 lines, 589 KB, as of 2026-11-09)
 
 | Range | Content |
 |---|---|
 | 1–222 | imports |
 | 223–1325 | types + Dropbox export helpers (`collectDesignTaskStorageFiles`, `buildDropboxClientFolderPath`, `buildDropboxBrandFolderPath`, `formatDropboxDate`, `buildDropboxExportFileName`, brief-format helpers) |
-| **1355** | `export default function DesignTaskPage()` — main component starts |
+| **1356** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
-## src/pages/QuotesPage.tsx (~6 645 lines, 290 KB, as of 2026-11-06)
+## src/pages/QuotesPage.tsx (~6 645 lines, 290 KB, as of 2026-11-09)
 
 | Range | Content |
 |---|---|
@@ -72,7 +72,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 194–550 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
 | **467** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~5 938 lines, 263 KB, as of 2026-11-06)
+## src/pages/DesignPage.tsx (~5 938 lines, 263 KB, as of 2026-11-09)
 
 | Range | Content |
 |---|---|
