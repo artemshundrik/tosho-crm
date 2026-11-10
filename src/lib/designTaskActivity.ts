@@ -27,6 +27,11 @@ type NotifyUsersParams = {
    * категорію невідомою і шле всюди — тож для нових продюсерів вказуємо явно.
    */
   category?: string;
+  /**
+   * Про що подія — сервер за цим збирає Telegram-віджет (REQ-356). Сервер
+   * перечитує все з бази, тож це підказка, а не дані.
+   */
+  context?: { orderApprovalId?: string; designTaskId?: string };
 };
 
 const toActorName = (user: { email?: string | null; user_metadata?: Record<string, unknown> } | null) => {
@@ -85,6 +90,7 @@ export async function notifyUsers(params: NotifyUsersParams) {
     type: params.type ?? "info",
     dedupeByHref: params.dedupeByHref === true,
     ...(params.category ? { category: params.category } : {}),
+    ...(params.context ? { context: params.context } : {}),
   };
 
   const { data: sessionData } = await supabase.auth.getSession();

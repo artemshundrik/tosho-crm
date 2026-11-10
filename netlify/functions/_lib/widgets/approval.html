@@ -1,0 +1,62 @@
+<style>
+:root{--a:#E6007E;--e:#e5484d;--ok:#2fa84f;--h:var(--tg-theme-hint-color,#8a8a8e);--s:var(--tg-theme-secondary-bg-color,#f1f1f4);--x:var(--tg-theme-text-color,#000);--b:var(--tg-theme-bg-color,#fff)}
+body{margin:0;padding:12px 14px;font:13px/1.4 system-ui,sans-serif;color:var(--x);-webkit-user-select:none;user-select:none}
+.t{display:flex;justify-content:space-between;align-items:center;font:600 15px system-ui,sans-serif}
+.t i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--a);margin-right:8px;vertical-align:1px;animation:p 1.6s ease-out infinite}
+@keyframes p{from{box-shadow:0 0 0 0 rgba(230,0,126,.5)}to{box-shadow:0 0 0 7px rgba(230,0,126,0)}}
+.t em{font:400 13px system-ui,sans-serif;color:var(--h)}
+.c{display:flex;align-items:center;gap:10px;margin-top:10px}
+.v{flex:none;width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font:700 14px system-ui,sans-serif;color:#fff;background:#65aadd}
+.v.l{background:var(--lg) center/cover #fff;color:transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.c b{display:block;font-size:15px}.c span{color:var(--h);font-size:12px}
+.n{margin-top:8px;font-size:28px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.n small{font-size:13px;font-weight:500;letter-spacing:0;color:var(--h);margin-left:6px}
+.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:8px;background:var(--s)}
+.bar s{display:block;background:var(--a);transform:scaleX(0);transform-origin:left;transition:transform .8s cubic-bezier(.2,.8,.2,1)}
+.bar s+s{background:var(--h);opacity:.45;transition-delay:.25s}
+.go .bar s{transform:none}
+.bl{display:flex;flex-wrap:wrap;justify-content:space-between;column-gap:8px;white-space:nowrap;font-size:11.5px;color:var(--h);margin-top:4px}.bl b{color:var(--x);font-weight:600}
+.L{margin-top:10px;border-top:1px solid var(--s)}
+.r{padding:6px 0;border-bottom:1px solid var(--s)}
+.r .q{display:flex;gap:8px;align-items:baseline}
+.r .q b{flex:1;min-width:0;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.r .q span{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.r .u{color:var(--h);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
+.r .u:after{content:' · характеристики ›';color:var(--a)}
+.r.on .u:after{content:' · згорнути'}
+.r .d{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s cubic-bezier(.2,.8,.2,1)}
+.r .d>div{overflow:hidden;font-size:12px;color:var(--h);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}.r.on .d{grid-template-rows:1fr}.r.on .d>div{padding-top:6px}
+.k{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.k div{padding:6px 9px;border-radius:10px;background:var(--s)}
+.k div span{display:block;font-size:11px;color:var(--h)}.k div b{font-weight:600}
+.k div.w b{color:var(--e)}.k div.g b{color:var(--ok)}
+.f{margin-top:8px;font-size:12px;color:var(--h)}
+</style>
+<div class=t><span><i></i><span id=T></span></span><em id=O></em></div>
+<div class=c><span class=v id=V></span><div><b id=C></b><span id=E></span></div></div>
+<div class=n id=N></div>
+<div id=P></div>
+<div class=L id=L></div>
+<div class=k id=K></div>
+<div class=f id=F></div>
+<script>
+const W=window.TelegramWidget||{onEvent(){}},$=i=>document.getElementById(i);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>'&#'+c.charCodeAt(0)+';');
+const money=v=>Math.round(v).toLocaleString('uk-UA').replace(/,/g,' ')+' ₴';
+const price=v=>v.toLocaleString('uk-UA',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₴';
+let D;
+function init(){
+  D=window.DN;if(!D)try{D=JSON.parse(W.chatData)}catch(e){return}
+  $('T').textContent=D.t;$('O').textContent=D.o;
+  $('V').textContent=D.c.split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  if(getComputedStyle(document.documentElement).getPropertyValue('--lg').trim())$('V').classList.add('l');$('C').textContent=D.c;$('E').textContent=D.e;
+  $('N').innerHTML=money(D.s)+'<small>'+(D.ns||'з ПДВ · '+D.p.length+' '+(D.p.length==1?'позиція':D.p.length<5?'позиції':'позицій'))+'</small>';
+  if(D.pp){const a=D.s*D.pp/100;$('P').innerHTML='<div class=bar><s style=width:'+D.pp+'%></s><s style=width:'+(100-D.pp)+'%></s></div><div class=bl><span>Передоплата '+D.pp+'% · <b>'+money(a)+'</b></span><span>'+esc(D.bt)+' · <b>'+money(D.s-a)+'</b></span></div>'}
+  $('L').innerHTML=D.p.map(p=>'<div class=r><div class=q><b>'+esc(p[0])+'</b><span>'+money(p[3])+'</span></div><div class=u>'+p[1]+' '+esc(p[2])+' × '+price(p[3]/p[1])+'</div><div class=d><div>'+esc(p[4]||'Без характеристик')+'</div></div></div>').join('');
+  $('K').innerHTML=D.k.map(k=>'<div class="'+(k[2]||'')+'"><span>'+esc(k[0])+'</span><b>'+esc(k[1])+'</b></div>').join('');
+  $('F').textContent=D.f;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>document.body.classList.add('go')));
+}
+document.addEventListener('click',e=>{const r=e.target.closest('.r');if(!r)return;document.querySelectorAll('.r.on').forEach(o=>o!==r&&o.classList.remove('on'));r.classList.toggle('on');W.HapticFeedback&&W.HapticFeedback.selectionChanged()});
+W.onEvent('chatDataChanged',init);init();W.ready&&W.ready();
+</script>

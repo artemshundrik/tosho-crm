@@ -25,7 +25,7 @@ type NotificationInsertRow = {
    * тому, кому ми її надіслали, але натиснути її може будь-хто, хто дістався
    * до чату (переслане повідомлення).
    */
-  telegramActions?: Array<{ text: string; callbackData: string }>;
+  telegramActions?: Array<{ text: string; callbackData: string } | { text: string; href: string }>;
   /**
    * Кнопки-посилання в Telegram, кожна окремим рядком над «Перейти в CRM».
    * Теж не колонка. Для зведень, де в одному повідомленні кілька замовлень:
@@ -62,10 +62,13 @@ export function buildNotificationKeyboard(
   url: string,
   resolveUrl: (href: string) => string = (href) => href
 ) {
-  const actionButtons = (row.telegramActions ?? []).map((action) => ({
-    text: action.text,
-    callback_data: action.callbackData,
-  }));
+  // Дія з href — посилання в тому самому рядку, що й рішення («↩️ Повернути»
+  // веде в CRM, бо повернення потребує записки).
+  const actionButtons = (row.telegramActions ?? []).map((action) =>
+    "href" in action
+      ? { text: action.text, url: resolveUrl(action.href) }
+      : { text: action.text, callback_data: action.callbackData }
+  );
   const linkRows = (row.telegramLinks ?? []).map((link) => [{ text: link.text, url: resolveUrl(link.href) }]);
   const openButton = {
     text: actionButtons.length > 0 || linkRows.length > 0 ? "Перейти в CRM" : "Відкрити в CRM",

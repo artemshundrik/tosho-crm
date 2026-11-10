@@ -45,6 +45,8 @@ import { canSeeAiCosts,
   canSeeReleases, canUseQuotes, resolveAccessLevel, type AccessLevel } from "./_lib/assistantAccess";
 import { collectDropboxHealth, formatDropboxHealthForTelegram } from "./_lib/dropboxHealth";
 import { buildAppUrl } from "./_lib/appUrl";
+import { parseOrderApprovalCallback } from "./_lib/orderApprovalWidget";
+import { ORDER_APPROVAL_INFO_CALLBACK, decideOrderApprovalFromBot } from "./_lib/orderApprovalDecision";
 import {
   BOARD_PATH,
   fetchBoardCard,
@@ -771,6 +773,33 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
       return;
     }
     await handleQueueCallback(adminClient, cb.id, chatId, messageId, access.teamId, data);
+    return;
+  }
+
+  // «✅ Погодити» під віджетом СП/договору (REQ-356#p1). Права перевіряє
+  // тригер у базі під перевтіленням — кнопку могли переслати будь-кому.
+  if (data.startsWith("oap:")) {
+    if (data === ORDER_APPROVAL_INFO_CALLBACK) {
+      await answerTelegramCallback(cb.id, "Уже погоджено");
+      return;
+    }
+    const parsed = parseOrderApprovalCallback(data);
+    if (!parsed) {
+      await answerTelegramCallback(cb.id, "Невідома дія");
+      return;
+    }
+    if (!(await isActiveMember(adminClient, row.user_id))) {
+      await answerTelegramCallback(cb.id, "Доступ призупинено");
+      return;
+    }
+    const result = await decideOrderApprovalFromBot({
+      admin: adminClient,
+      userId: row.user_id,
+      approvalId: parsed.approvalId,
+      buildUrl: buildAppUrl,
+    });
+    await answerTelegramCallback(cb.id, result.toast);
+    if (result.keyboard) await editTelegramReplyMarkup(chatId, messageId, result.keyboard);
     return;
   }
 

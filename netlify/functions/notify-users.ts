@@ -2,8 +2,9 @@ import { z } from "zod";
 
 import { parseBody } from "./_lib/parseBody";
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
+import { loadOrderApprovalWidget, orderApprovalCallbackData } from "./_lib/orderApprovalWidget";
 
 /**
  * Форма запиту — і перевірка, і тип (REQ-137).
@@ -20,6 +21,17 @@ const requestSchema = z
     type: z.enum(["info", "success", "warning"]).optional(),
     dedupeByHref: z.boolean().optional(),
     category: z.string().optional(),
+    /**
+     * Про що подія — щоб у Telegram прийшов віджет замість тексту (REQ-356).
+     * Сервер нічого з цього не бере на віру: запит погодження перечитується
+     * з бази й мусить бути заведений самим викликачем і ще не вирішений.
+     */
+    context: z
+      .object({
+        orderApprovalId: z.string().uuid().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -136,13 +148,18 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(200, { success: true, delivered: 0 });
   }
 
-  const rows = authorizedUserIds.map((userId) => ({
+  const baseRows = authorizedUserIds.map((userId) => ({
     user_id: userId,
     title,
     body: payload.body ?? null,
     href: payload.href ?? null,
     type: payload.type ?? "info",
   }));
+  const rows = await withOrderApprovalWidget(adminClient, baseRows, {
+    callerUserId: userData.user.id,
+    category: payload.category,
+    approvalId: payload.context?.orderApprovalId,
+  });
 
   // Категорія для гейтингу каналів: явна або виведена з href.
   // Дизайн-сповіщення мають href виду «/design/...» → категорія "design".
@@ -161,3 +178,80 @@ export const handler = async (event: HttpEvent) => {
     });
   }
 };
+
+type BaseRow = {
+  user_id: string;
+  title: string;
+  body: string | null;
+  href: string | null;
+  type: "info" | "success" | "warning";
+};
+
+/** Хто може погодити СП чи договір — дзеркало tosho.is_order_invoice_issuer. */
+const ORDER_APPROVER_JOB_ROLES = new Set(["seo", "accountant", "chief_accountant"]);
+
+/**
+ * Запит погодити СП/договір: тим, хто може погодити, — віджет із кнопкою
+ * «✅ Погодити»; решті — звичайний текст. Права на самому натисканні все
+ * одно перевіряє база (tosho.bot_decide_order_approval), тут лише не
+ * показуємо кнопку тому, кому вона нічого не дасть.
+ *
+ * Не вдалось зібрати — повертаємо рядки як є: сповіщення важливіше за вигляд.
+ */
+async function withOrderApprovalWidget(
+  adminClient: SupabaseClient,
+  rows: BaseRow[],
+  params: { callerUserId: string; category?: string; approvalId?: string }
+) {
+  if (params.category !== "order_approval_request" || !params.approvalId) return rows;
+  try {
+    const { data: teamRows } = await adminClient
+      .from("team_members")
+      .select("team_id")
+      .eq("user_id", params.callerUserId);
+    const teamIds = ((teamRows ?? []) as Array<{ team_id: string | null }>)
+      .map((row) => row.team_id)
+      .filter((id): id is string => !!id);
+    if (teamIds.length === 0) return rows;
+
+    const loaded = await loadOrderApprovalWidget(adminClient, params.approvalId, {
+      teamIds,
+      requestedBy: params.callerUserId,
+    });
+    if (!loaded?.html) return rows;
+
+    const { data: approverRows } = await adminClient
+      .schema("tosho")
+      .from("memberships")
+      .select("user_id,role,job_role")
+      .in(
+        "user_id",
+        rows.map((row) => row.user_id)
+      );
+    const approvers = new Set(
+      ((approverRows ?? []) as Array<{ user_id: string; role?: string | null; job_role?: string | null }>)
+        .filter(
+          (row) =>
+            String(row.role ?? "").toLowerCase() === "owner" ||
+            ORDER_APPROVER_JOB_ROLES.has(String(row.job_role ?? "").toLowerCase())
+        )
+        .map((row) => row.user_id)
+    );
+    const widget = { html: loaded.html, chatData: "{}", caption: loaded.caption };
+    return rows.map((row) =>
+      approvers.has(row.user_id)
+        ? {
+            ...row,
+            telegramWidget: widget,
+            telegramActions: [
+              { text: "✅ Погодити", callbackData: orderApprovalCallbackData(loaded.approval.id) },
+              { text: "↩️ Повернути", href: loaded.href },
+            ],
+          }
+        : row
+    );
+  } catch (error) {
+    console.warn("[notify-users] approval widget skipped", error instanceof Error ? error.message : error);
+    return rows;
+  }
+}

@@ -114,6 +114,7 @@ export function useOrderApprovalFlow({
             note,
             requesterName: actorName,
             actorUserId: userId,
+            approvalId: approval.id,
           })
       );
     });

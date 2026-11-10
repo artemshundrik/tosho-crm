@@ -881,6 +881,8 @@ export async function notifyOrderApprovalRequested(params: {
   note?: string | null;
   requesterName?: string | null;
   actorUserId?: string | null;
+  /** Запит погодження — у Telegram замість тексту прийде віджет із кнопкою «Погодити». */
+  approvalId?: string | null;
 }) {
   const members = await resolveTeamMembers(params.teamId);
   const recipients = new Set(
@@ -908,6 +910,7 @@ export async function notifyOrderApprovalRequested(params: {
     href: `/orders/production/${params.orderId}`,
     type: "warning",
     category: "order_approval_request",
+    ...(params.approvalId && params.kind !== "launch" ? { context: { orderApprovalId: params.approvalId } } : {}),
   });
 }
 
