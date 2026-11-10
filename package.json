@@ -22,6 +22,7 @@
     "check:raw-tables": "node scripts/check-raw-tables.mjs",
     "check:type-scale": "node scripts/check-type-scale.mjs",
     "check:line-tokens": "node scripts/check-line-tokens.mjs",
+    "check:token-alpha": "node scripts/check-token-alpha.mjs",
     "check:functions": "node scripts/check-netlify-functions.mjs",
     "check:db-guards": "node scripts/check-db-guards.mjs",
     "check:rpc-contracts": "node scripts/check-rpc-contracts.mjs",

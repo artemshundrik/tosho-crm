@@ -48,6 +48,7 @@ FAST_CHECKS='
 сирі таблиці|node scripts/check-raw-tables.mjs
 шкала тексту|node scripts/check-type-scale.mjs
 ролі ліній|node scripts/check-line-tokens.mjs
+прозорості токенів|node scripts/check-token-alpha.mjs
 розростання файлів|node scripts/check-file-growth.mjs
 розмір інструкцій|node scripts/check-instruction-size.mjs
 реєстр функцій|npm run check:functions --silent
@@ -68,6 +69,7 @@ FULL_CHECKS='
 сирі таблиці|node scripts/check-raw-tables.mjs
 шкала тексту|node scripts/check-type-scale.mjs
 ролі ліній|node scripts/check-line-tokens.mjs
+прозорості токенів|node scripts/check-token-alpha.mjs
 розростання файлів|node scripts/check-file-growth.mjs
 розмір інструкцій|node scripts/check-instruction-size.mjs
 знімок стеку|node scripts/check-stack-snapshot.mjs
