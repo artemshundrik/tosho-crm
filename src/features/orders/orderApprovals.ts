@@ -69,6 +69,16 @@ type StampInput = Pick<
  * Відбиток того, що погоджують. Перестворили СП з іншими умовами чи
  * позиціями — відбиток інший, і старе погодження вже не про цей документ.
  */
+/** Короткий відбиток тексту (FNV-1a): самі тексти в базу погоджень не кладемо. */
+const hashText = (value: string) => {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+};
+
 const num = (value: number | string | null | undefined) =>
   value === null || value === undefined || value === "" ? "" : (Number(value) || 0).toFixed(2);
 
@@ -92,6 +102,7 @@ export const documentStamp = (record: StampInput, kind: "contract" | "specificat
     return ["contract", record.contractNumber, record.contractDate, record.contractAutoProlongation, ...terms].join("|");
   }
   const items = record.items.map((item) => `${item.name}:${num(item.qty)}:${num(item.unitPrice)}`).join(";");
+  const specTexts = record.items.map((item) => item.specText?.trim() ?? "");
   return [
     "specification",
     record.currency,
@@ -103,6 +114,9 @@ export const documentStamp = (record: StampInput, kind: "contract" | "specificat
     // Вид СП міняє текст документа (REQ-358). Товари — як до появи видів, тож
     // їх не дописуємо: інакше всі погоджені СП стали б «зміненими».
     ...(record.specTemplate && record.specTemplate !== "merch" ? [`template:${record.specTemplate}`] : []),
+    // Поправлений «Текст у СП» теж міняє документ. Без правок не дописуємо —
+    // погодження СП з типовими текстами лишаються чинними.
+    ...(specTexts.some(Boolean) ? [`texts:${hashText(specTexts.join("\u0000"))}`] : []),
   ].join("|");
 };
 

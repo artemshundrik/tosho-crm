@@ -370,6 +370,8 @@ export type DerivedOrderItem = {
   thumbUrl?: string | null;
   kind?: OrderItemKind;
   metadata?: OrderItemMetadata | null;
+  /** Текст позиції в СП, поправлений менеджером; null — типовий. Входить у відбиток погодження. */
+  specText?: string | null;
 };
 
 export type DerivedReadinessStep = {
@@ -1485,6 +1487,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         thumbUrl: item.thumb_url?.trim?.() || null,
         kind: parseItemKind(item.item_kind),
         metadata: parseOrderItemMetadata(item.metadata),
+        specText: item.spec_text?.trim?.() || null,
       });
       itemsByOrderId.set(orderId, list);
     });

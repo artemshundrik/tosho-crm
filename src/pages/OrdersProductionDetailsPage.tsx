@@ -78,7 +78,7 @@ import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { declineToGenitive } from "@/lib/nameDeclension";
 import { openDocumentWindow } from "@/features/orders/documentPrintWindow";
 import { buildSpecificationHtml, customerIbanWithBank, toAuthorityGenitive } from "@/features/orders/specificationDocument";
-import { loadSpecificationItemTexts, resolveVisualizationImageUrls } from "@/features/orders/specificationQueries";
+import { loadSpecificationItemTexts, resolveVisualizationImageUrls, withStoredSpecTexts } from "@/features/orders/specificationQueries";
 import { SpecificationItemTextsField } from "@/features/orders/order-details/SpecificationItemTextsField";
 import { SpecificationVisualizationField } from "@/features/orders/order-details/SpecificationVisualizationField";
 import { SpecificationNumberField } from "@/features/orders/order-details/SpecificationNumberField";
@@ -2104,6 +2104,7 @@ export default function OrdersProductionDetailsPage() {
                     specIncludeVisualization,
                     specificationNumber,
                     specTemplate: specItemTexts.template,
+                    items: withStoredSpecTexts(record.items, specItemTexts.texts),
                   };
                   const nextRecord = { ...patched, docs: normalizeDocumentDocs(patched) };
                   if (record.source === "stored" && teamId) {

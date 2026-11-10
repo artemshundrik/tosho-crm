@@ -29,6 +29,17 @@ const base: ApprovalRecord = {
 };
 
 describe("documentStamp", () => {
+  it("правка «Тексту у СП» міняє відбиток СП, типові тексти — ні (REQ-358)", () => {
+    const withText = (specText: string | null) => ({ ...base, items: [{ ...base.items[0], specText }] });
+    const plain = documentStamp(base, "specification");
+    expect(documentStamp(withText(null), "specification")).toBe(plain);
+    expect(documentStamp(withText("Ручка синя"), "specification")).not.toBe(plain);
+    expect(documentStamp(withText("Ручка синя"), "specification")).not.toBe(
+      documentStamp(withText("Ручка червона"), "specification")
+    );
+    expect(documentStamp(withText("Ручка синя"), "contract")).toBe(documentStamp(base, "contract"));
+  });
+
   it("строк доплати до відвантаження не впливає: після перезавантаження він приходить з успадкованого договору", () => {
     expect(documentStamp({ ...base, balanceDaysAfterShipment: 14 }, "specification")).toBe(
       documentStamp(base, "specification")

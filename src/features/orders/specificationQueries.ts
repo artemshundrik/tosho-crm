@@ -238,13 +238,27 @@ export async function loadSpecificationItemTexts(
 }
 
 /** Текст, що збігається з типовим, зберігаємо як null: тоді він іде за даними замовлення. */
+export const storedSpecText = (entry: Pick<SpecificationItemText, "text" | "defaultText">) => {
+  const value = entry.text.trim();
+  return value && value !== entry.defaultText.trim() ? value : null;
+};
+
+/** Позиції з текстами, які щойно збережено: щоб відбиток погодження побачив правку без перезавантаження. */
+export const withStoredSpecTexts = <T extends { id: string; specText?: string | null }>(
+  items: T[],
+  texts: SpecificationItemText[]
+): T[] => {
+  if (texts.length === 0) return items;
+  const byId = new Map(texts.map((entry) => [entry.itemId, storedSpecText(entry)]));
+  return items.map((item) => (byId.has(item.id) ? { ...item, specText: byId.get(item.id) ?? null } : item));
+};
+
 export async function saveSpecificationItemTexts(teamId: string, texts: SpecificationItemText[]) {
   for (const entry of texts) {
-    const value = entry.text.trim();
     const { error } = await supabase
       .schema("tosho")
       .from("order_items")
-      .update({ spec_text: value && value !== entry.defaultText.trim() ? value : null })
+      .update({ spec_text: storedSpecText(entry) })
       .eq("team_id", teamId)
       .eq("id", entry.itemId);
     if (error) throw error;

@@ -20,6 +20,7 @@ export type StoredOrderItemRow = {
   item_kind?: string | null;
   document_name?: string | null;
   metadata?: unknown;
+  spec_text?: string | null;
 };
 
 export async function listStoredOrderItems(teamId: string, orderIds: string[]): Promise<StoredOrderItemRow[]> {
@@ -28,7 +29,7 @@ export async function listStoredOrderItems(teamId: string, orderIds: string[]): 
 
   const baseColumns = "id,order_id,quote_item_id,position,name,qty,unit,unit_price,line_total";
   const previousColumns = `${baseColumns},description,methods,catalog_model_id,image_url,thumb_url,item_kind,document_name`;
-  const extendedColumns = `${previousColumns},metadata`;
+  const extendedColumns = `${previousColumns},metadata,spec_text`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
