@@ -1,0 +1,72 @@
+<style>
+:root{--a:#E6007E;--h:var(--tg-theme-hint-color,#8a8a8e);--s:var(--tg-theme-secondary-bg-color,#f1f1f4);--x:var(--tg-theme-text-color,#000)}
+body{margin:0;padding:12px 14px 14px;font:15px/1.3 system-ui,sans-serif;color:var(--x)}
+.t{display:flex;justify-content:space-between;align-items:center;font-weight:600}
+.t i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--a);margin-right:8px;vertical-align:1px}
+.t em{font-style:normal;font-weight:400;font-size:13px;color:var(--h)}
+.n{font-size:34px;font-weight:700;letter-spacing:-.6px;margin-top:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.n small{font-size:15px;font-weight:500;letter-spacing:0;color:var(--h);margin-left:6px}
+.c{font-size:13px;color:var(--h)}
+.c b{color:var(--a);font-weight:600}
+.g{position:relative;display:flex;background:var(--s);border-radius:10px;padding:3px;margin:14px 0 10px}
+.g button{flex:1;position:relative;z-index:1;border:0;background:none;padding:6px 0;font:500 13px system-ui,sans-serif;color:var(--h)}
+.g button.on{color:var(--x)}
+.g u{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:8px;background:var(--tg-theme-bg-color,#fff);box-shadow:0 1px 3px rgba(0,0,0,.15);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.g.w u{transform:translateX(100%)}
+svg{display:block;width:100%;height:110px}
+.q{fill:none;stroke:var(--h);stroke-width:1.5;stroke-dasharray:4 4}
+.l{fill:none;stroke:var(--a);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.f{fill:url(#gr)}
+.o{fill:var(--a);animation:o 1.6s ease-out infinite}
+@keyframes o{from{opacity:.5}to{opacity:0}}
+.k{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
+.k div{background:var(--s);border-radius:12px;padding:9px 12px}
+.k b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.k span{font-size:12px;color:var(--h)}
+</style>
+<div class=t><span><i></i><span id=T></span></span><em id=D></em></div>
+<div class=n id=N></div>
+<div class=c id=C></div>
+<div class=g id=G><u></u><button data-k=m class=on>Місяць</button><button data-k=w>Тиждень</button></div>
+<svg id=S><defs><linearGradient id=gr x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color=#E6007E stop-opacity=.28 /><stop offset=1 stop-color=#E6007E stop-opacity=0 /></linearGradient></defs><path class=q id=Q /><path class=f id=F /><path class=l id=L /><circle class=o id=O r=9 cx=-20 /><circle id=P r=4.5 cx=-20 fill=#E6007E /></svg>
+<div class=k id=K></div>
+<script>
+const W=window.TelegramWidget||{onEvent(){}},$=i=>document.getElementById(i);
+let D={},k='m',raf=0;
+const read=()=>{try{D=JSON.parse(W.chatData)||{}}catch(e){D={}}};
+const ease=t=>1-Math.pow(1-t,3);
+const anim=(ms,fn)=>{cancelAnimationFrame(raf);const s=performance.now();const step=n=>{const t=Math.max(0,Math.min(1,(n-s)/ms));fn(ease(t));if(t<1)raf=requestAnimationFrame(step)};raf=requestAnimationFrame(step)};
+const big=v=>v>=1e6?(v/1e6).toFixed(1).replace('.',','):String(Math.round(v/1e3));
+const money=(a,b)=>{const lo=big(a),hi=big(b);return (lo===hi?hi:lo+'–'+hi)+'<small>'+(b>=1e6?'млн':'тис.')+' грн</small>'};
+function render(){
+  const p=D[k];if(!p)return;
+  $('T').textContent=D.t||'';$('D').textContent=D.d||'';
+  const d=p.p>0?Math.round((p.v[1]-p.p)/p.p*100):null;
+  $('C').innerHTML=(p.l||'')+(d===null?'':' · <b>'+(d>0?'+':'')+d+'%</b> '+(p.x||''));
+  $('K').innerHTML=(D.s||[]).map(r=>'<div><b data-v='+r[0]+'>0</b><span>'+r[1]+'</span></div>').join('');
+  const w=$('S').clientWidth||300,h=110,n=Math.max(p.n||0,p.c.length,p.q.length),max=Math.max(1,...p.c,...p.q)*1.08;
+  $('S').setAttribute('viewBox','0 0 '+w+' '+h);
+  const X=i=>6+i/(n-1)*(w-12),Y=v=>h-4-v/max*(h-14);
+  const line=(a,m)=>{let s='';for(let i=0;i<=m&&i<a.length;i++)s+=(i?'L':'M')+X(i).toFixed(1)+' '+Y(a[i]).toFixed(1);const f=m%1;if(f&&m+1<a.length){const i=Math.floor(m);s+='L'+(X(i)+(X(i+1)-X(i))*f).toFixed(1)+' '+(Y(a[i])+(Y(a[i+1])-Y(a[i]))*f).toFixed(1)}return s};
+  $('Q').setAttribute('d',line(p.q,p.q.length));
+  const to=p.v,last=p.c.length-1;
+  $('O').setAttribute('cx',-20);$('P').setAttribute('cx',-20);
+  anim(900,t=>{
+    const m=t*last,s=line(p.c,m);
+    $('L').setAttribute('d',s);
+    $('F').setAttribute('d',s?s+'L'+X(m).toFixed(1)+' '+h+'L'+X(0)+' '+h+'Z':'');
+    $('N').innerHTML=money(to[0]*t,to[1]*t);
+    document.querySelectorAll('#K b').forEach(b=>b.textContent=Math.round(b.dataset.v*t));
+    if(t===1){const x=X(last),y=Y(p.c[last]);['O','P'].forEach(i=>{$(i).setAttribute('cx',x);$(i).setAttribute('cy',y)})}
+  });
+}
+$('G').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||b.dataset.k===k)return;
+  k=b.dataset.k;$('G').classList.toggle('w',k==='w');
+  document.querySelectorAll('.g button').forEach(x=>x.classList.toggle('on',x===b));
+  W.HapticFeedback&&W.HapticFeedback.selectionChanged();
+  render();
+});
+W.onEvent('chatDataChanged',()=>{read();render()});
+read();render();W.ready&&W.ready();
+</script>

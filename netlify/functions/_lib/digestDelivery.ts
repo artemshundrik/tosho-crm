@@ -5,8 +5,10 @@ import {
   getTelegramBotToken,
   sendTelegramMessage,
   sendTelegramRichWithFallback,
+  sendTelegramWidget,
   type RichContent,
 } from "../_telegram";
+import type { WidgetContent } from "./telegramWidgets";
 
 /**
  * Кому йде звіт у Telegram і як він туди потрапляє.
@@ -124,7 +126,8 @@ export async function sendDigest(
   category: NotificationCategoryKey,
   text: string,
   keyboard: Array<Array<{ text: string; url: string }>>,
-  rich?: RichContent | null
+  rich?: RichContent | null,
+  widget?: WidgetContent | null
 ) {
   if (!getTelegramBotToken()) return { delivered: 0, failed: 0, eligible: 0 };
 
@@ -152,7 +155,16 @@ export async function sendDigest(
     if (!isChannelEnabled(setting.channel_prefs, category, "telegram")) continue; // категорію вимкнено
 
     eligible += 1;
-    const result = rich
+    // Віджет → Rich → текст: людина отримує звіт за будь-яких обставин.
+    const viaWidget = widget
+      ? await sendTelegramWidget(setting.telegram_chat_id, widget, { keyboard: widget.keyboard ?? keyboard, silent: true })
+      : null;
+    if (viaWidget && !viaWidget.ok && viaWidget.status !== 403 && viaWidget.errorCode !== 403) {
+      console.warn("[digest] widget rejected, falling back", viaWidget.errorCode, viaWidget.description);
+    }
+    const result = viaWidget && (viaWidget.ok || viaWidget.status === 403 || viaWidget.errorCode === 403)
+      ? viaWidget
+      : rich
       ? await sendTelegramRichWithFallback(setting.telegram_chat_id, rich, text, keyboard)
       : await sendTelegramMessage(setting.telegram_chat_id, text, {
           parseMode: "HTML",

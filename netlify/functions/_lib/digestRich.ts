@@ -116,12 +116,21 @@ function compactRange(range: MoneyRange): { value: string; unit: string } {
   return { value: low === high ? high : `${low}–${high}`, unit: useMillions ? "млн грн" : "тис. грн" };
 }
 
-export async function loadTrendView(
+export type TrendSeries = {
+  current: { line: number[]; total: MoneyRange };
+  previous: { line: number[]; total: MoneyRange };
+  totalPoints: number;
+  /** «до 1–8 жовтня» / «до попередніх 7 днів» — з чим саме порівнюємо. */
+  against: string;
+};
+
+/** Наростаючі суми затверджень: поточний період і такий самий відрізок минулого. */
+export async function loadTrendSeries(
   admin: AdminClient,
   teamIds: string[],
   todayKey: string,
   period: TrendPeriod
-): Promise<{ photo: Buffer; caption: string }> {
+): Promise<TrendSeries> {
   const [year, month, day] = todayKey.split("-").map(Number);
   let currentKeys: string[];
   let previousKeys: string[];
@@ -161,8 +170,25 @@ export async function loadTrendView(
     });
     return { line, total: { min, max } };
   };
-  const current = series(currentKeys);
-  const previous = series(previousKeys);
+  const last = previousKeys[previousKeys.length - 1];
+  const previousMonth = GENITIVE_MONTHS[Number(last.slice(5, 7)) - 1];
+  const lastDay = Number(last.slice(8, 10));
+  return {
+    current: series(currentKeys),
+    previous: series(previousKeys),
+    totalPoints: Math.max(currentKeys.length, previousKeys.length),
+    against: period === "month" ? `до ${lastDay === 1 ? "" : "1–"}${lastDay} ${previousMonth}` : "до попередніх 7 днів",
+  };
+}
+
+export async function loadTrendView(
+  admin: AdminClient,
+  teamIds: string[],
+  todayKey: string,
+  period: TrendPeriod
+): Promise<{ photo: Buffer; caption: string }> {
+  const [, month, day] = todayKey.split("-").map(Number);
+  const { current, previous, totalPoints } = await loadTrendSeries(admin, teamIds, todayKey, period);
 
   const against =
     period === "month" ? `у ${LOCATIVE_MONTHS[(month + 10) % 12]}` : "тижнем раніше";
@@ -185,7 +211,7 @@ export async function loadTrendView(
     caption,
     current: current.line,
     previous: previous.line,
-    totalPoints: Math.max(currentKeys.length, previousKeys.length),
+    totalPoints,
   });
   return { photo, caption };
 }

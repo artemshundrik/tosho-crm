@@ -10,7 +10,23 @@ import {
 import { isCategoryVisibleForRole } from "./_notificationCategories";
 import { escapeTelegramHtml, type RichContent } from "./_telegram";
 import { kievDayBounds, shiftDays, todayKeyInKiev, wallClockToInstant } from "./_lib/digestDates";
-import { legacyToRich, loadTrendView, kyivClock, sumQuotesByRuns, trendKeyboard } from "./_lib/digestRich";
+import {
+  legacyToRich,
+  loadTrendSeries,
+  loadTrendView,
+  kyivClock,
+  sumQuotesByRuns,
+  trendKeyboard,
+  type TrendSeries,
+} from "./_lib/digestRich";
+import {
+  buildEveningWidget,
+  buildTeamWidget,
+  fitCaption,
+  plural,
+  type EveningPeriod,
+  type WidgetContent,
+} from "./_lib/telegramWidgets";
 import { prepareAvatar, renderPlanCard, renderTeamCard } from "./_lib/telegramCards";
 import {
   addRange,
@@ -1099,9 +1115,23 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
     silent: true,
     keyboard: trendKeyboard("month", APP_URL),
   };
+  const widget = await buildEveningWidgetContent(admin, teamIds, todayKey, {
+    lead,
+    lines,
+    tiles: [
+      [approvedTodayIds.length, "затверджено сьогодні"],
+      [newLeads, plural(newLeads, ["новий лід", "нові ліди", "нових лідів"])],
+      [newQuoteIds.length, plural(newQuoteIds.length, ["новий прорахунок", "нові прорахунки", "нових прорахунків"])],
+      [orders.length, plural(orders.length, ["нове замовлення", "нові замовлення", "нових замовлень"])],
+    ],
+  }).catch((error: unknown) => {
+    console.warn("[daily-digest] evening widget failed", error);
+    return null;
+  });
   return {
     tone: "good" as Tone,
     rich,
+    widget,
     text: lines.join("\n"),
     keyboard: [
       [
@@ -1113,17 +1143,58 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
   };
 }
 
+/**
+ * Вечірній підсумок віджетом: обидва періоди одразу в даних, тож вкладки
+ * «Місяць/Тиждень» перемикаються без запиту до бота. Решта звіту — у підписі.
+ */
+async function buildEveningWidgetContent(
+  admin: AdminClient,
+  teamIds: string[],
+  todayKey: string,
+  input: { lead: string; lines: string[]; tiles: Array<[number, string]> }
+): Promise<WidgetContent | null> {
+  const [month, week] = await Promise.all([
+    loadTrendSeries(admin, teamIds, todayKey, "month"),
+    loadTrendSeries(admin, teamIds, todayKey, "week"),
+  ]);
+  const monthName = STANDALONE_MONTHS[Number(todayKey.slice(5, 7)) - 1] ?? "";
+  const period = (series: TrendSeries, label: string): EveningPeriod => ({
+    total: series.current.total,
+    previousMax: series.previous.total.max,
+    current: series.current.line,
+    previous: series.previous.line,
+    totalPoints: series.totalPoints,
+    label,
+    against: series.against,
+  });
+  // Перший рядок старого тексту — заголовок; у підписі його замінює lead.
+  const blocks = input.lines.slice(1).join("\n").split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  return buildEveningWidget({
+    title: "Підсумок дня",
+    date: cardDate(todayKey),
+    month: period(month, `затверджено за ${monthName}`),
+    week: period(week, "затверджено за 7 днів"),
+    tiles: input.tiles,
+    caption: fitCaption([input.lead, ...blocks]),
+    keyboard: [
+      [
+        { text: "🧮 Прорахунки", url: `${APP_URL}/orders/estimates` },
+        { text: "📦 Замовлення", url: `${APP_URL}/orders` },
+      ],
+    ],
+  });
+}
+
 // --- Робота в CRM за вчора (REQ-331) ----------------------------------------
 
 async function buildTeamActivityDigest(admin: AdminClient, members: MemberRow[], todayKey: string) {
   const dayKey = shiftDays(todayKey, -1);
-  const bounds = kievDayBounds(dayKey);
   const byUser = new Map(members.filter((m) => !SERVICE_ACCOUNT_IDS.has(m.userId)).map((m) => [m.userId, m]));
   const team = Array.from(byUser.values());
   const workspaceIds = Array.from(new Set(team.map((m) => m.workspaceId)));
 
-  const [{ changes, minutesByUser }, absences, exceptions] = await Promise.all([
-    loadTeamActivity(admin, team, dayKey, bounds),
+  const [{ minutesByUser }, absences, exceptions] = await Promise.all([
+    loadTeamActivity(admin, team, dayKey),
     admin
       .schema("tosho")
       .from("team_absences")
@@ -1142,16 +1213,14 @@ async function buildTeamActivityDigest(admin: AdminClient, members: MemberRow[],
   const idle: MemberRow[] = [];
   for (const member of team) {
     const minutes = minutesByUser.get(member.userId);
-    const changeCount = changes.get(member.userId) ?? 0;
-    if (!minutes && changeCount === 0) {
+    if (!minutes) {
       idle.push(member);
       continue;
     }
     people.push({
       name: nameOf(member),
-      spans: minutes?.spans ?? [],
-      activeMinutes: minutes?.activeMinutes ?? 0,
-      changes: changeCount,
+      spans: minutes.spans,
+      activeMinutes: minutes.activeMinutes ?? 0,
     });
   }
   if (people.length === 0) return null;
@@ -1177,7 +1246,7 @@ async function buildTeamActivityDigest(admin: AdminClient, members: MemberRow[],
       .filter((r) => r.user_id && r.end_date)
       .map((r) => [r.user_id as string, r.end_date as string])
   );
-  const rich = await buildTeamRich(admin, {
+  const { rich, widget } = await buildTeamRich(admin, {
     team,
     dayKey,
     people,
@@ -1186,16 +1255,17 @@ async function buildTeamActivityDigest(admin: AdminClient, members: MemberRow[],
     absenceByUser,
     endByUser,
     minutesByUser,
-    changes,
   });
   return {
     tone: "good" as Tone,
     rich,
+    widget,
     text: renderTeamActivity({ dayLabel: formatDayLabel(dayKey), people, absent }),
     keyboard: [[{ text: "Пульс команди", url: `${APP_URL}/settings/members?tab=pulse` }]],
   };
 }
 
+const STANDALONE_MONTHS = ["січень","лютий","березень","квітень","травень","червень","липень","серпень","вересень","жовтень","листопад","грудень"];
 const GENITIVE_MONTHS = ["січня","лютого","березня","квітня","травня","червня","липня","серпня","вересня","жовтня","листопада","грудня"];
 
 function cardDate(dayKey: string): string {
@@ -1246,9 +1316,8 @@ async function buildTeamRich(
     absenceByUser: Map<string, string>;
     endByUser: Map<string, string>;
     minutesByUser: Map<string, { spans: Array<{ from: number; to: number }>; activeMinutes: number }>;
-    changes: Map<string, number>;
   }
-): Promise<RichContent> {
+): Promise<{ rich: RichContent; widget: WidgetContent | null }> {
   const nameOf = (m: MemberRow) => (m.fullName ?? "").trim() || (m.email ?? "").split("@")[0] || "—";
   const minutesOf = (userId: string) => {
     const entry = input.minutesByUser.get(userId);
@@ -1287,30 +1356,58 @@ async function buildTeamRich(
   }).catch(logCardFailure);
 
   const row = (m: MemberRow, tail: string) => `<li>${escapeTelegramHtml(nameOf(m))} — ${escapeTelegramHtml(tail)}</li>`;
-  const changeRows = working.map((m) => row(m, `змін: ${input.changes.get(m.userId) ?? 0}`)).join("");
   const offCard = [
     ...working.slice(MAX_CARD_PEOPLE).map((m) => row(m, formatMinutes(minutesOf(m.userId)))),
     ...absentMembers.slice(MAX_CARD_ABSENT).map((m) => row(m, reasonOf(m))),
   ].join("");
+  const totalMinutes = working.reduce((sum, m) => sum + minutesOf(m.userId), 0);
+  const keyboard = [[{ text: "💓 Пульс команди", url: `${APP_URL}/settings/members?tab=pulse` }]];
+
+  const widget = await buildTeamWidget({
+    date: `${cardDate(input.dayKey)}, ${WEEKDAY_SHORT[new Date(`${input.dayKey}T12:00:00Z`).getUTCDay()]}`,
+    people: working.map((m) => ({
+      name: nameOf(m),
+      minutes: minutesOf(m.userId),
+      spans: input.minutesByUser.get(m.userId)?.spans ?? [],
+      avatar: avatars.get(m.userId) ?? null,
+    })),
+    absent: absentMembers.map((m) => `${cardName(nameOf(m))} (${reasonOf(m)})`),
+    caption:
+      `👥 ${working.length} ${plural(working.length, ["людина була", "людини були", "людей були"])} в CRM, ` +
+      `разом ${formatMinutes(totalMinutes)}\n<i>📵 Дзвінки, Telegram і робота поза CRM сюди не входять</i>`,
+    keyboard,
+  }).catch((error: unknown) => {
+    console.warn("[daily-digest] team widget failed", error);
+    return null;
+  });
 
   return {
-    html:
-      `<p>👥 Працювали: ${working.length}` +
-      (absentMembers.length > 0 ? ` · 🏝 не було: ${absentMembers.length}` : "") +
-      `</p><p>📵 Дзвінки, Telegram і робота поза CRM сюди не входять</p>` +
-      (offCard ? `<h4>➕ Решта команди</h4><ul>${offCard}</ul>` : "") +
-      `<h4>📝 Зміни в CRM по людях</h4><ul>${changeRows}</ul>`,
-    photo,
-    silent: true,
-    keyboard: [[{ text: "💓 Пульс команди", url: `${APP_URL}/settings/members?tab=pulse` }]],
+    widget,
+    rich: {
+      html:
+        `<p>👥 Працювали: ${working.length}` +
+        (absentMembers.length > 0 ? ` · 🏝 не було: ${absentMembers.length}` : "") +
+        `</p><p>📵 Дзвінки, Telegram і робота поза CRM сюди не входять</p>` +
+        (offCard ? `<h4>➕ Решта команди</h4><ul>${offCard}</ul>` : ""),
+      photo,
+      silent: true,
+      keyboard,
+    },
   };
 }
+
+const WEEKDAY_SHORT = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 
 // --- Handler ----------------------------------------------------------------
 
 /** Технічний звіт без картки: той самий текст, але блоками із заголовками. */
 function richOf(digest: { text: string; keyboard: RichContent["keyboard"]; rich?: RichContent }): RichContent {
   return digest.rich ?? { html: legacyToRich(digest.text), keyboard: digest.keyboard, silent: true };
+}
+
+/** Віджет є не в кожного звіту: технічний і ранок поки йдуть Rich. */
+function widgetOf(digest: object): WidgetContent | null {
+  return "widget" in digest ? ((digest.widget as WidgetContent | null) ?? null) : null;
 }
 
 const VALID_KINDS: DigestKind[] = ["tech", "business_morning", "business_evening", "team_activity"];
@@ -1389,6 +1486,9 @@ export const handler = async (event: HttpEvent) => {
         recipients: recipients.length,
         message: digest.text,
         richHtml: richOf(digest).html,
+        widget: widgetOf(digest)
+          ? { chatData: widgetOf(digest)?.chatData, caption: widgetOf(digest)?.caption, html: widgetOf(digest)?.html }
+          : null,
       });
     }
 
@@ -1411,7 +1511,8 @@ export const handler = async (event: HttpEvent) => {
       category,
       digest.text,
       digest.keyboard,
-      richOf(digest)
+      richOf(digest),
+      widgetOf(digest)
     );
 
     if (!force) {

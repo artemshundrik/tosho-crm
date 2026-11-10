@@ -170,6 +170,28 @@ export async function sendTelegramRichWithFallback(
   });
 }
 
+/**
+ * Віджет (Bot API 10.4): HTML зі скриптом, що живе в повідомленні. Telegram
+ * сам робить його непересилним; protect_content ставимо явно, бо там гроші
+ * й імена.
+ */
+export async function sendTelegramWidget(
+  chatId: number | string,
+  widget: { html: string; chatData: string; caption: string },
+  options?: { keyboard?: InlineKeyboard; silent?: boolean }
+): Promise<TelegramApiResult> {
+  return callTelegram("sendWidget", {
+    chat_id: chatId,
+    html: widget.html,
+    chat_data: widget.chatData,
+    caption: widget.caption,
+    parse_mode: "HTML",
+    protect_content: true,
+    disable_notification: options?.silent,
+    reply_markup: options?.keyboard ? { inline_keyboard: options.keyboard } : undefined,
+  });
+}
+
 export async function sendTelegramMessage(
   chatId: number | string,
   text: string,
