@@ -495,6 +495,7 @@ export async function notifyQuoteInitiatorOnDesignStatusChange(params: {
     body,
     href: `/design/${params.designTaskId}`,
     type: alert.type,
+    context: { designTaskId: params.designTaskId, designStatus: params.toStatus },
   });
 }
 
@@ -519,6 +520,7 @@ export async function notifyDesignTaskCollaboratorsOnStatusChange(params: {
     body: `${params.actorName ?? "System"} змінив(ла) статус спільної задачі ${params.taskLabel}.`,
     href: `/design/${params.designTaskId}`,
     type: alert.type,
+    context: { designTaskId: params.designTaskId, designStatus: params.toStatus },
   });
 }
 

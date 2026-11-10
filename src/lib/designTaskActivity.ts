@@ -31,7 +31,7 @@ type NotifyUsersParams = {
    * Про що подія — сервер за цим збирає Telegram-віджет (REQ-356). Сервер
    * перечитує все з бази, тож це підказка, а не дані.
    */
-  context?: { orderApprovalId?: string; designTaskId?: string };
+  context?: { orderApprovalId?: string; designTaskId?: string; designStatus?: string };
 };
 
 const toActorName = (user: { email?: string | null; user_metadata?: Record<string, unknown> } | null) => {

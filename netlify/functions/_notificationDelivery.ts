@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { type SupabaseClient } from "@supabase/supabase-js";
-import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage, sendTelegramWidget } from "./_telegram";
+import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage, sendTelegramPhoto, sendTelegramWidget } from "./_telegram";
 import { isChannelEnabled } from "./_notificationCategories";
 
 // Приймаємо реальний Supabase service-role клієнт (як його створюють reminder-функції).
@@ -37,6 +37,11 @@ type NotificationInsertRow = {
    * лишаються ті самі; Telegram віджет не прийняв — іде звичайний текст.
    */
   telegramWidget?: { html: string; chatData: string; caption: string } | null;
+  /**
+   * Фото з підписом замість тексту (макет дизайну, REQ-356). Теж не колонка.
+   * Telegram фото не прийняв — іде звичайний текст із тими самими кнопками.
+   */
+  telegramPhoto?: { photo: Buffer; caption: string } | null;
 };
 
 /** Рядок для БД: без полів, яких немає в таблиці notifications. */
@@ -45,6 +50,7 @@ export function toDbRow(row: NotificationInsertRow) {
     telegramActions: _telegramActions,
     telegramLinks: _telegramLinks,
     telegramWidget: _telegramWidget,
+    telegramPhoto: _telegramPhoto,
     ...dbRow
   } = row;
   return dbRow;
@@ -385,7 +391,11 @@ async function deliverTelegram(
 
     const chatId = setting.telegram_chat_id;
     const keyboard = buildNotificationKeyboard(row, buildTelegramUrl(row.href), buildTelegramUrl);
-    const widgetResult = row.telegramWidget ? await sendTelegramWidget(chatId, row.telegramWidget, { keyboard }) : null;
+    const widgetResult = row.telegramWidget
+      ? await sendTelegramWidget(chatId, row.telegramWidget, { keyboard })
+      : row.telegramPhoto
+        ? await sendTelegramPhoto(chatId, { ...row.telegramPhoto, keyboard })
+        : null;
     if (widgetResult && !widgetResult.ok && widgetResult.status !== 403 && widgetResult.errorCode !== 403) {
       console.warn("[notifications] widget rejected, sending text", widgetResult.errorCode, widgetResult.description);
     }

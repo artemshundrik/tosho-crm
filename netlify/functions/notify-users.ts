@@ -5,6 +5,7 @@ import { parseBody } from "./_lib/parseBody";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
 import { loadOrderApprovalWidget, orderApprovalCallbackData } from "./_lib/orderApprovalWidget";
+import { attachDesignPhoto, DESIGN_PHOTO_STATUSES, loadDesignTask } from "./_lib/designTaskTelegram";
 
 /**
  * Форма запиту — і перевірка, і тип (REQ-137).
@@ -29,6 +30,9 @@ const requestSchema = z
     context: z
       .object({
         orderApprovalId: z.string().uuid().optional(),
+        /** Задача, чий статус змінився, і новий статус — для фото макета. */
+        designTaskId: z.string().uuid().optional(),
+        designStatus: z.string().max(32).optional(),
       })
       .strict()
       .optional(),
@@ -155,10 +159,18 @@ export const handler = async (event: HttpEvent) => {
     href: payload.href ?? null,
     type: payload.type ?? "info",
   }));
-  const rows = await withOrderApprovalWidget(adminClient, baseRows, {
+  const callerTeamIds = payload.context ? await loadCallerTeamIds(adminClient, userData.user.id) : [];
+  const withApproval = await withOrderApprovalWidget(adminClient, baseRows, {
     callerUserId: userData.user.id,
+    teamIds: callerTeamIds,
     category: payload.category,
     approvalId: payload.context?.orderApprovalId,
+  });
+  const rows = await withDesignPhoto(adminClient, withApproval, {
+    teamIds: callerTeamIds,
+    href: payload.href ?? null,
+    taskId: payload.context?.designTaskId,
+    status: payload.context?.designStatus,
   });
 
   // Категорія для гейтингу каналів: явна або виведена з href.
@@ -198,21 +210,15 @@ const ORDER_APPROVER_JOB_ROLES = new Set(["seo", "accountant", "chief_accountant
  *
  * Не вдалось зібрати — повертаємо рядки як є: сповіщення важливіше за вигляд.
  */
-async function withOrderApprovalWidget(
+async function withOrderApprovalWidget<T extends BaseRow>(
   adminClient: SupabaseClient,
-  rows: BaseRow[],
-  params: { callerUserId: string; category?: string; approvalId?: string }
+  rows: T[],
+  params: { callerUserId: string; teamIds: string[]; category?: string; approvalId?: string }
 ) {
   if (params.category !== "order_approval_request" || !params.approvalId) return rows;
+  const teamIds = params.teamIds;
+  if (teamIds.length === 0) return rows;
   try {
-    const { data: teamRows } = await adminClient
-      .from("team_members")
-      .select("team_id")
-      .eq("user_id", params.callerUserId);
-    const teamIds = ((teamRows ?? []) as Array<{ team_id: string | null }>)
-      .map((row) => row.team_id)
-      .filter((id): id is string => !!id);
-    if (teamIds.length === 0) return rows;
 
     const loaded = await loadOrderApprovalWidget(adminClient, params.approvalId, {
       teamIds,
@@ -252,6 +258,36 @@ async function withOrderApprovalWidget(
     );
   } catch (error) {
     console.warn("[notify-users] approval widget skipped", error instanceof Error ? error.message : error);
+    return rows;
+  }
+}
+
+/** Команди викликача: усе збагачення читає лише їхні рядки. */
+async function loadCallerTeamIds(adminClient: SupabaseClient, userId: string): Promise<string[]> {
+  const { data } = await adminClient.from("team_members").select("team_id").eq("user_id", userId);
+  return ((data ?? []) as Array<{ team_id: string | null }>)
+    .map((row) => row.team_id)
+    .filter((id): id is string => !!id);
+}
+
+/**
+ * Сповіщення про статус дизайну — фото макета (REQ-356). Задача мусить бути
+ * з команди викликача, href — саме на неї, а статус у базі — той, про який
+ * сповіщаємо: інакше кнопки під фото пропонували б застарілий перехід.
+ */
+async function withDesignPhoto<T extends BaseRow>(
+  adminClient: SupabaseClient,
+  rows: T[],
+  params: { teamIds: string[]; href: string | null; taskId?: string; status?: string }
+) {
+  if (!params.taskId || !params.status || !DESIGN_PHOTO_STATUSES.has(params.status)) return rows;
+  if (params.href !== `/design/${params.taskId}` || params.teamIds.length === 0) return rows;
+  try {
+    const task = await loadDesignTask(adminClient, params.taskId);
+    if (!task || !params.teamIds.includes(task.team_id) || task.metadata?.status !== params.status) return rows;
+    return await attachDesignPhoto(adminClient, rows, task);
+  } catch (error) {
+    console.warn("[notify-users] design photo skipped", error instanceof Error ? error.message : error);
     return rows;
   }
 }

@@ -235,6 +235,43 @@ export async function editTelegramMessageText(
   });
 }
 
+/**
+ * Фото з підписом і кнопками (REQ-356#p1): макет дизайну, щоб рішення
+ * «передати замовнику» приймалось, дивлячись на сам макет. Файлом, а не
+ * посиланням: візуали лежать у приватному бакеті. protect_content — це
+ * чужий макет до затвердження.
+ */
+export async function sendTelegramPhoto(
+  chatId: number | string,
+  content: { photo: Buffer; caption: string; keyboard?: InlineKeyboard; silent?: boolean }
+): Promise<TelegramApiResult> {
+  const form = new FormData();
+  form.set("chat_id", String(chatId));
+  form.set("photo", new Blob([new Uint8Array(content.photo)], { type: "image/jpeg" }), "design.jpg");
+  form.set("caption", content.caption);
+  form.set("parse_mode", "HTML");
+  form.set("protect_content", "true");
+  if (content.silent) form.set("disable_notification", "true");
+  if (content.keyboard) form.set("reply_markup", JSON.stringify({ inline_keyboard: content.keyboard }));
+  return callTelegramForm("sendPhoto", form);
+}
+
+/** Новий підпис і кнопки під тим самим фото — статус макета змінився. */
+export async function editTelegramCaption(
+  chatId: number | string,
+  messageId: number,
+  caption: string,
+  keyboard: InlineKeyboard
+): Promise<TelegramApiResult> {
+  return callTelegram("editMessageCaption", {
+    chat_id: chatId,
+    message_id: messageId,
+    caption,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
 export async function editTelegramReplyMarkup(
   chatId: number | string,
   messageId: number,
@@ -247,8 +284,16 @@ export async function editTelegramReplyMarkup(
   });
 }
 
-export async function answerTelegramCallback(callbackQueryId: string, text?: string): Promise<TelegramApiResult> {
-  return callTelegram("answerCallbackQuery", { callback_query_id: callbackQueryId, text });
+export async function answerTelegramCallback(
+  callbackQueryId: string,
+  text?: string,
+  options?: { alert?: boolean }
+): Promise<TelegramApiResult> {
+  return callTelegram("answerCallbackQuery", {
+    callback_query_id: callbackQueryId,
+    text,
+    ...(options?.alert ? { show_alert: true } : {}),
+  });
 }
 
 /**

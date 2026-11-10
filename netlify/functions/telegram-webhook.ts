@@ -6,6 +6,7 @@ import { timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   answerTelegramCallback,
+  editTelegramCaption,
   editTelegramMessageText,
   editTelegramRichMessage,
   editTelegramReplyMarkup,
@@ -47,6 +48,7 @@ import { collectDropboxHealth, formatDropboxHealthForTelegram } from "./_lib/dro
 import { buildAppUrl } from "./_lib/appUrl";
 import { parseOrderApprovalCallback } from "./_lib/orderApprovalWidget";
 import { ORDER_APPROVAL_INFO_CALLBACK, decideOrderApprovalFromBot } from "./_lib/orderApprovalDecision";
+import { decideDesignStatusFromBot } from "./_lib/designTaskDecision";
 import {
   BOARD_PATH,
   fetchBoardCard,
@@ -800,6 +802,19 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
     });
     await answerTelegramCallback(cb.id, result.toast);
     if (result.keyboard) await editTelegramReplyMarkup(chatId, messageId, result.keyboard);
+    return;
+  }
+
+  // Кнопки під фото макета (REQ-356#p1). Права й статус перевіряються
+  // наново: повідомлення могли переслати або задачу вже посунули з CRM.
+  if (data.startsWith("dsg:")) {
+    if (!(await isActiveMember(adminClient, row.user_id))) {
+      await answerTelegramCallback(cb.id, "Доступ призупинено");
+      return;
+    }
+    const result = await decideDesignStatusFromBot({ admin: adminClient, userId: row.user_id, data, buildUrl: buildAppUrl });
+    await answerTelegramCallback(cb.id, result.toast.slice(0, 200), { alert: result.alert });
+    if (result.edit) await editTelegramCaption(chatId, messageId, result.edit.caption, result.edit.keyboard);
     return;
   }
 
