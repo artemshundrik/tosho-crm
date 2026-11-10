@@ -3499,6 +3499,7 @@ export type Database = {
           specification_signed_via: string | null
           specification_number: number | null
           spec_include_visualization: boolean | null
+          spec_template: string | null
           our_legal_entity_id: string | null
           our_legal_entity: Json | null
           closing_document: string | null
@@ -3585,6 +3586,7 @@ export type Database = {
           specification_signed_via?: string | null
           specification_number?: number | null
           spec_include_visualization?: boolean | null
+          spec_template?: string | null
           our_legal_entity_id?: string | null
           our_legal_entity?: Json | null
           closing_document?: string | null
@@ -3671,6 +3673,7 @@ export type Database = {
           specification_signed_via?: string | null
           specification_number?: number | null
           spec_include_visualization?: boolean | null
+          spec_template?: string | null
           our_legal_entity_id?: string | null
           our_legal_entity?: Json | null
           closing_document?: string | null

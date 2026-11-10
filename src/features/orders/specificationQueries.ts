@@ -1,11 +1,12 @@
 import { readQuoteItemPrintSpec } from "@/lib/printSpecLegacy";
-import { formatPrintSpecEntries, getPrintSpecPreset } from "@/lib/printSpec";
+import { formatPrintSpecEntries, formatPrintSpecParts, getPrintSpecPreset } from "@/lib/printSpec";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { supabase } from "@/lib/supabaseClient";
 import type { DerivedOrderRecord, OrderDesignAsset } from "@/features/orders/orderRecords";
 import { colorBesideTitle } from "@/features/quotes/quote-details/quoteItemMetadata";
 import { itemDocumentName } from "@/features/orders/orderItemDocumentNames";
-import { buildDefaultSpecItemText } from "@/features/orders/specificationDocument";
+import { buildDefaultSpecItemText, buildPrintSpecItemText } from "@/features/orders/specificationDocument";
+import type { SpecTemplate } from "@/features/orders/specTemplate";
 
 /**
  * Дані для СП, яких немає в DerivedOrderRecord: тексти позицій (REQ-322#p24) і
@@ -49,6 +50,12 @@ export type SpecificationItemText = {
   /** Що піде в СП: поправлене менеджером, інакше типове. */
   text: string;
   defaultText: string;
+  /** Типовий текст за кожним шаблоном: вид СП можна перемкнути у вікні, не перечитуючи базу. */
+  defaultTexts: Record<SpecTemplate, string>;
+  /** Позиція має параметри друку з прорахунку — підказка виду СП (REQ-358). */
+  isPrint: boolean;
+  /** Позиція — послуга: усі послуги підказують СП на дизайн-послуги. */
+  isService: boolean;
   edited: boolean;
 };
 
@@ -111,7 +118,8 @@ async function loadOrderItems(teamId: string, orderIds: string[]) {
  */
 export async function loadSpecificationItemTexts(
   teamId: string,
-  records: Array<Pick<DerivedOrderRecord, "id" | "source" | "items">>
+  records: Array<Pick<DerivedOrderRecord, "id" | "source" | "items">>,
+  template: SpecTemplate = "merch"
 ): Promise<SpecificationItemText[]> {
   const orderIds = records.filter((record) => record.source === "stored").map((record) => record.id);
   if (orderIds.length === 0) return [];
@@ -162,7 +170,10 @@ export async function loadSpecificationItemTexts(
       })
       .filter(Boolean);
 
-  const characteristicsOf = (row: OrderItemRow) => {
+  const entryText = (entry: { label: string; value: string }) => `${entry.label.toLowerCase()} — ${entry.value}`;
+
+  /** Опис менеджера (якщо це не текст каталогу) і колір. */
+  const ownTraitsOf = (row: OrderItemRow) => {
     const result: string[] = [];
     const description = text(row.description);
     const modelDescription = row.catalog_model_id ? modelDescriptionById.get(row.catalog_model_id) : "";
@@ -170,28 +181,56 @@ export async function loadSpecificationItemTexts(
     const metadata = row.quote_item_id ? metadataByQuoteItem.get(row.quote_item_id) : null;
     const colour = colorBesideTitle(row.name, asRecord(asRecord(metadata)?.catalogVariant));
     if (colour) result.push(`колір ${colour}`);
+    return result;
+  };
+
+  const printSpecOf = (row: OrderItemRow) => {
+    const metadata = row.quote_item_id ? metadataByQuoteItem.get(row.quote_item_id) : null;
     const spec = readQuoteItemPrintSpec(metadata);
     const preset = spec ? getPrintSpecPreset(spec.presetKey) : null;
-    if (spec && preset) {
-      result.push(...formatPrintSpecEntries(preset, spec.values).map((entry) => `${entry.label.toLowerCase()} — ${entry.value}`));
-    }
-    return result;
+    return spec && preset ? { preset, values: spec.values } : null;
   };
 
   return records.flatMap((record) =>
     record.items.map((item) => {
       const row = rowsById.get(item.id);
-      const defaultText = buildDefaultSpecItemText({
-        name: itemDocumentName(item),
-        characteristics: row ? characteristicsOf(row) : [],
-        imprints: row ? imprintsOf(row) : item.methodsSummary ? [item.methodsSummary] : [],
+      const name = itemDocumentName(item);
+      const imprints = row ? imprintsOf(row) : item.methodsSummary ? [item.methodsSummary] : [];
+      const ownTraits = row ? ownTraitsOf(row) : [];
+      const printSpec = row ? printSpecOf(row) : null;
+      const merch = buildDefaultSpecItemText({
+        name,
+        characteristics: [
+          ...ownTraits,
+          ...(printSpec ? formatPrintSpecEntries(printSpec.preset, printSpec.values).map(entryText) : []),
+        ],
+        imprints,
       });
+      const print = printSpec
+        ? buildPrintSpecItemText({
+            name,
+            kindLabel: printSpec.preset.label,
+            parts: formatPrintSpecParts(printSpec.preset, printSpec.values).map((part) => ({
+              title: part.title,
+              values: part.entries.map(entryText),
+            })),
+            characteristics: ownTraits,
+            imprints,
+          })
+        : merch;
+      // Послуга без нанесень і «згідно макету»: назва й опис робіт.
+      const design = buildDefaultSpecItemText({ name, characteristics: ownTraits, imprints: [] });
+      const defaultTexts: Record<SpecTemplate, string> = { merch, print, design };
+      const defaultText = defaultTexts[template];
       const stored = row?.spec_text?.trim() ?? "";
       return {
         itemId: item.id,
         name: item.name,
         text: stored || defaultText,
         defaultText,
+        defaultTexts,
+        isPrint: Boolean(printSpec),
+        isService: item.kind === "service",
         edited: Boolean(stored) && stored !== defaultText,
       };
     })

@@ -86,6 +86,8 @@ import { parseSpecificationParamsInput } from "@/features/orders/order-details/s
 import { formatContractDateParts, formatContractEndDate } from "@/features/orders/contractDateFormat";
 import { itemDocumentName, withDocumentNames } from "@/features/orders/orderItemDocumentNames";
 import { useSpecificationItemTexts } from "@/features/orders/order-details/useSpecificationItemTexts";
+import { SpecificationTemplateField } from "@/features/orders/order-details/SpecificationTemplateField";
+import { effectiveSpecTemplate } from "@/features/orders/specTemplate";
 import { formatInvoicePartyName } from "@/features/orders/invoicePartyName";
 import { toSignatureInitials } from "@/lib/signatureFormat";
 import { supabase } from "@/lib/supabaseClient";
@@ -1093,9 +1095,10 @@ export default function OrdersProductionDetailsPage() {
     if (kind === "specification") {
       // Візуал — за вибором менеджера у вікні параметрів (REQ-322#p37); старі СП — як були.
       const includeVisualization = printedRecord.specIncludeVisualization !== false;
+      const specTemplate = effectiveSpecTemplate(printedRecord.specTemplate);
       const [visualizationImageUrls, itemTexts] = await Promise.all([
         includeVisualization ? resolveVisualizationImageUrls(printedRecord.approvedVisualizationAssets) : [],
-        teamId ? loadSpecificationItemTexts(teamId, [printedRecord]).catch(() => []) : [],
+        teamId ? loadSpecificationItemTexts(teamId, [printedRecord], specTemplate).catch(() => []) : [],
       ]);
       printWindow.mark("візуалізації й тексти позицій");
       builtHtml = buildSpecificationHtml({
@@ -1105,6 +1108,7 @@ export default function OrdersProductionDetailsPage() {
         visualizationImageUrls,
         customerSignatoryNameGenitive,
         customerSignatoryRoleGenitive,
+        template: specTemplate,
       });
     } else {
       builtHtml = buildOrderDocumentHtml(printedRecord, kind, {
@@ -2035,6 +2039,7 @@ export default function OrdersProductionDetailsPage() {
                 onCheckedChange={setSpecIncludeVisualization}
               />
             ) : null}
+            {isCashlessPaymentMethod(specPaymentMethodId) ? <SpecificationTemplateField state={specItemTexts} /> : null}
             {isCashlessPaymentMethod(specPaymentMethodId) ? <SpecificationItemTextsField state={specItemTexts} /> : null}
           </div>
           {specDialogError ? (
@@ -2098,6 +2103,7 @@ export default function OrdersProductionDetailsPage() {
                     incotermsPlace,
                     specIncludeVisualization,
                     specificationNumber,
+                    specTemplate: specItemTexts.template,
                   };
                   const nextRecord = { ...patched, docs: normalizeDocumentDocs(patched) };
                   if (record.source === "stored" && teamId) {
@@ -2115,6 +2121,7 @@ export default function OrdersProductionDetailsPage() {
                       incotermsCode: specIncotermsCode,
                       incotermsPlace,
                       specIncludeVisualization,
+                      specTemplate: specItemTexts.template,
                       ...(specificationNumber !== record.specificationNumber ? { specificationNumber } : {}),
                     });
                     setRecord((current) => (current && current.id === record.id ? nextRecord : current));

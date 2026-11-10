@@ -62,6 +62,7 @@ type StampInput = Pick<
   | "contractProductionDays"
   | "contractAutoProlongation"
   | "ourLegalEntityId"
+  | "specTemplate"
 >;
 
 /**
@@ -99,6 +100,9 @@ export const documentStamp = (record: StampInput, kind: "contract" | "specificat
     record.incotermsPlace ?? "",
     ...terms,
     items,
+    // Вид СП міняє текст документа (REQ-358). Товари — як до появи видів, тож
+    // їх не дописуємо: інакше всі погоджені СП стали б «зміненими».
+    ...(record.specTemplate && record.specTemplate !== "merch" ? [`template:${record.specTemplate}`] : []),
   ].join("|");
 };
 

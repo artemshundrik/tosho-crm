@@ -4,10 +4,12 @@ import { DEFAULT_ORDER_EXECUTOR } from "./orderExecutor";
 import type { DerivedOrderRecord } from "./orderRecords";
 import {
   buildDefaultSpecItemText,
+  buildPrintSpecItemText,
   buildSpecificationHtml,
   buildSpecPaymentClause,
   signatoryActsPhrase,
 } from "./specificationDocument";
+import { hasMixedSpecItems, suggestSpecTemplate } from "./specTemplate";
 
 /** Intl ставить нерозривний пробіл між тисячами; у тексті тесту — звичайний. */
 const plain = (value: string) => value.replace(/[\u00a0\u202f]/g, " ");
@@ -132,5 +134,49 @@ describe("допоміжне", () => {
     expect(
       buildDefaultSpecItemText({ name: "Футболка", characteristics: ["бавовна 100%.", "колір чорний"], imprints: ["ДТФ, груди"] })
     ).toBe("Футболка\nТехнічні характеристики: бавовна 100%; колір чорний.\nДТФ, груди — згідно затвердженого макету");
+  });
+});
+
+describe("СП на поліграфію й дизайн-послуги (REQ-358)", () => {
+  it("поліграфія: позиція рядками за частинами, своя назва розділу 1", () => {
+    const text = buildPrintSpecItemText({
+      name: "Календар квартальний",
+      kindLabel: "Квартальний календар",
+      parts: [{ title: "Топер", values: ["друк — 4+0"] }],
+      characteristics: [],
+      imprints: [],
+    });
+    expect(text).toContain("Топер: друк — 4+0");
+    const html = plain(buildSpecificationHtml({ records: [record()], specificationNumber: 1, template: "print" }));
+    expect(html).toContain("1. ОПИС ПРОДУКЦІЇ ТА ВАРТОСТІ");
+    expect(html).toContain("Incoterms 2020");
+  });
+
+  it("дизайн-послуги: таблиця з одиницями, оплата 100%, без Incoterms і договору постачання", () => {
+    const html = plain(
+      buildSpecificationHtml({
+        records: [record({ items: [{ id: "i1", position: 1, name: "Дизайн логотипу", qty: 1, unit: "послуга", unitPrice: 5000, lineTotal: 5000 }] as never, total: 5000 })],
+        specificationNumber: 5,
+        template: "design",
+      })
+    );
+    expect(html).toContain("1. ОПИС ПОСЛУГИ ТА ЇЇ ВАРТІСТЬ");
+    expect(html).toContain("Одиниці");
+    expect(html).toContain("у розмірі 100% загальної вартості");
+    expect(html).toContain("Акта наданих послуг");
+    expect(html).not.toContain("Incoterms");
+    expect(html).not.toContain("рекламно-сувенірної");
+    expect(html).toContain("Додаток (Специфікація) № 5 до");
+  });
+});
+
+describe("вид СП за позиціями", () => {
+  it("підказка й змішані позиції", () => {
+    expect(suggestSpecTemplate([{ isPrint: false, isService: true }])).toBe("design");
+    expect(suggestSpecTemplate([{ isPrint: true }, { isPrint: false }])).toBe("print");
+    expect(suggestSpecTemplate([])).toBe("merch");
+    expect(hasMixedSpecItems([{ isPrint: false, isService: true }, { isPrint: false }])).toBe(true);
+    expect(hasMixedSpecItems([{ isPrint: false, isService: true }, { isPrint: false, isService: true }])).toBe(false);
+    expect(hasMixedSpecItems([{ isPrint: true }, { isPrint: false }])).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import type { Database } from "@/lib/database.types";
 import { supabase } from "@/lib/supabaseClient";
 import { isMissingOrdersColumnMessage, isMissingOrdersRelationMessage } from "./ordersSchemaErrors";
 import type { BalanceDaysKind } from "./paymentRules";
+import type { SpecTemplate } from "./specTemplate";
 
 /** Умови договору й СП на замовленні: пише лише передані поля. */
 export async function updateOrderDocumentSettings(params: {
@@ -22,6 +23,7 @@ export async function updateOrderDocumentSettings(params: {
   contractProductionDays?: number | null;
   contractAutoProlongation?: boolean;
   specIncludeVisualization?: boolean | null;
+  specTemplate?: SpecTemplate | null;
   specificationNumber?: number | null;
 }) {
   const payload: Database["tosho"]["Tables"]["orders"]["Update"] = {
@@ -42,6 +44,7 @@ export async function updateOrderDocumentSettings(params: {
   if (params.contractProductionDays !== undefined) payload.contract_production_days = params.contractProductionDays;
   if (params.contractAutoProlongation !== undefined) payload.contract_auto_prolongation = params.contractAutoProlongation;
   if (params.specIncludeVisualization !== undefined) payload.spec_include_visualization = params.specIncludeVisualization;
+  if (params.specTemplate !== undefined) payload.spec_template = params.specTemplate;
   if (params.specificationNumber !== undefined) payload.specification_number = params.specificationNumber;
 
   const { error } = await supabase

@@ -1,13 +1,22 @@
 import { ORDER_PAYMENT_TERMS_OPTIONS } from "@/features/orders/config";
 import { expandOrganizationForm } from "@/features/orders/invoicePartyName";
-import { executorPreamble, executorRequisiteLines, splitVat, VAT_RATE } from "@/features/orders/orderExecutor";
+import {
+  executorPreamble,
+  executorRequisiteLines,
+  splitVat,
+  VAT_RATE,
+} from "@/features/orders/orderExecutor";
 import { itemDocumentName } from "@/features/orders/orderItemDocumentNames";
-import type { DerivedOrderItem, DerivedOrderRecord } from "@/features/orders/orderRecords";
+import type {
+  DerivedOrderItem,
+  DerivedOrderRecord,
+} from "@/features/orders/orderRecords";
 import { formatBalanceDaysTerm } from "@/features/orders/paymentRules";
 import { amountInWords, type AmountCurrency } from "@/lib/amountInWords";
 import { splitSignatoryFullName } from "@/lib/customerLegalEntities";
 import { renderPrintDocument } from "@/lib/printDocument";
 import { toSignatureInitials } from "@/lib/signatureFormat";
+import type { SpecTemplate } from "@/features/orders/specTemplate";
 
 /**
  * Специфікація (Додаток до договору) за шаблоном № 31 — REQ-322#p21.
@@ -34,7 +43,10 @@ const escapeHtml = (value?: string | number | null) =>
     .replace(/'/g, "&#39;");
 
 const formatPlainMoney = (value: number) =>
-  new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+  new Intl.NumberFormat("uk-UA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value || 0);
 
 const toDate = (value?: string | null) => {
   const source = value ? new Date(value) : new Date();
@@ -42,7 +54,8 @@ const toDate = (value?: string | null) => {
 };
 
 /** «19.10.2026» — дата договору в шапці й преамбулі. */
-const formatDotDate = (value?: string | null) => toDate(value).toLocaleDateString("uk-UA");
+const formatDotDate = (value?: string | null) =>
+  toDate(value).toLocaleDateString("uk-UA");
 
 /** «"19" жовтня 2026 р.» — дата самої СП. Родовий місяця дає лише формат із днем. */
 const formatLongDate = (value?: string | null) => {
@@ -63,18 +76,22 @@ export const toAuthorityGenitive = (value?: string | null) => {
   if (!trimmed) return "";
   const normalized = trimmed.toLowerCase();
   if (normalized === "статут" || normalized === "статуту") return "Статуту";
-  if (normalized === "довіреність" || normalized === "довіреності") return "Довіреності";
+  if (normalized === "довіреність" || normalized === "довіреності")
+    return "Довіреності";
   return trimmed;
 };
 
-const looksLikeIban = (value: string) => /^UA\d{2}/i.test(value.replace(/\s+/g, ""));
+const looksLikeIban = (value: string) =>
+  /^UA\d{2}/i.test(value.replace(/\s+/g, ""));
 
 /**
  * «UA21… в АТ КБ «ПриватБанк»» — IBAN замовника з банком (REQ-322#p25). До
  * p25 у customer_bank_details старих замовлень писали сам IBAN, тож значення,
  * схоже на IBAN, банком не вважаємо, а беремо за IBAN, якщо іншого немає.
  */
-export const customerIbanWithBank = (record: Pick<DerivedOrderRecord, "customerIban" | "customerBankDetails">) => {
+export const customerIbanWithBank = (
+  record: Pick<DerivedOrderRecord, "customerIban" | "customerBankDetails">,
+) => {
   const details = record.customerBankDetails?.trim() ?? "";
   const legacyIban = details && looksLikeIban(details) ? details : "";
   const iban = record.customerIban?.trim() || legacyIban;
@@ -87,7 +104,13 @@ export const customerIbanWithBank = (record: Pick<DerivedOrderRecord, "customerI
 export const customerVatStatusLabel = (rate?: string | null) => {
   const normalized = (rate ?? "").trim();
   const numeric = Number(normalized);
-  if (!normalized || normalized === "none" || !Number.isFinite(numeric) || numeric < 0) return "Не є платником ПДВ.";
+  if (
+    !normalized ||
+    normalized === "none" ||
+    !Number.isFinite(numeric) ||
+    numeric < 0
+  )
+    return "Не є платником ПДВ.";
   if (numeric === 20) return "Є платником ПДВ на загальних підставах.";
   if (numeric === 0) return "Є платником ПДВ за нульовою ставкою.";
   return `Є платником ПДВ за ставкою ${numeric}%.`;
@@ -118,13 +141,73 @@ export type DefaultSpecItemTextSource = {
  * Маркетингового опису з каталогу тут немає свідомо — його відсіює той, хто
  * збирає `characteristics`. Перший рядок — назва, у таблиці вона жирна.
  */
-export const buildDefaultSpecItemText = ({ name, characteristics, imprints }: DefaultSpecItemTextSource) => {
-  const traits = characteristics.map((entry) => entry.replace(/\s+/g, " ").trim().replace(/[.;]+$/, "")).filter(Boolean);
+export const buildDefaultSpecItemText = ({
+  name,
+  characteristics,
+  imprints,
+}: DefaultSpecItemTextSource) => {
+  const traits = characteristics
+    .map((entry) =>
+      entry
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/[.;]+$/, ""),
+    )
+    .filter(Boolean);
   const places = imprints.map((entry) => entry.trim()).filter(Boolean);
   return [
     name.trim(),
     traits.length > 0 ? `Технічні характеристики: ${traits.join("; ")}.` : "",
-    places.length > 0 ? `${places.join("; ")} — згідно затвердженого макету` : "",
+    places.length > 0
+      ? `${places.join("; ")} — згідно затвердженого макету`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
+export type PrintSpecItemTextSource = {
+  name: string;
+  /** Назва виду з опису: «Квартальний календар». */
+  kindLabel: string;
+  /** Частини виробу з параметрами: «Основи» → ["друк основ — 4+0", …]. */
+  parts: Array<{ title: string; values: string[] }>;
+  /** Решта характеристик замовлення: опис менеджера, колір. */
+  characteristics: string[];
+  imprints: string[];
+};
+
+/**
+ * Текст позиції в СП на поліграфію (REQ-358#p2): як у підписаних СП — після
+ * «Технічні характеристики:» вид і рядок на кожну частину виробу.
+ */
+export const buildPrintSpecItemText = ({
+  name,
+  kindLabel,
+  parts,
+  characteristics,
+  imprints,
+}: PrintSpecItemTextSource) => {
+  const traits = characteristics
+    .map((entry) =>
+      entry
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/[.;]+$/, ""),
+    )
+    .filter(Boolean);
+  const places = imprints.map((entry) => entry.trim()).filter(Boolean);
+  const partLines = parts
+    .filter((part) => part.values.length > 0)
+    .map((part) => `${part.title}: ${part.values.join(", ")}`);
+  const body = [kindLabel.trim(), ...partLines, ...traits].filter(Boolean);
+  return [
+    name.trim(),
+    body.length > 0 ? "Технічні характеристики:" : "",
+    ...body,
+    places.length > 0
+      ? `${places.join("; ")} — згідно затвердженого макету`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -141,11 +224,16 @@ const renderItemText = (text: string) => {
 type PaymentStages = { advance: number; balance: number };
 
 const resolvePaymentStages = (record: DerivedOrderRecord): PaymentStages => {
-  if (typeof record.prepaymentPct === "number" && typeof record.balancePct === "number") {
+  if (
+    typeof record.prepaymentPct === "number" &&
+    typeof record.balancePct === "number"
+  ) {
     return { advance: record.prepaymentPct, balance: record.balancePct };
   }
   const option =
-    ORDER_PAYMENT_TERMS_OPTIONS.find((item) => item.id === record.paymentTerms) ?? ORDER_PAYMENT_TERMS_OPTIONS[1];
+    ORDER_PAYMENT_TERMS_OPTIONS.find(
+      (item) => item.id === record.paymentTerms,
+    ) ?? ORDER_PAYMENT_TERMS_OPTIONS[1];
   return { advance: option.advance, balance: option.balance };
 };
 
@@ -161,8 +249,10 @@ export const buildSpecPaymentClause = (params: {
   balanceDaysTerm: string;
 }) => {
   const { stages, total, vatPayer, balanceTiming, balanceDaysTerm } = params;
-  const money = (amount: number) => `${formatPlainMoney(amount)} грн${vatPayer ? " з ПДВ" : ""}`;
-  const onInvoice = "на підставі підписаного додатку до Договору та виставленого Виконавцем рахунку-фактури";
+  const money = (amount: number) =>
+    `${formatPlainMoney(amount)} грн${vatPayer ? " з ПДВ" : ""}`;
+  const onInvoice =
+    "на підставі підписаного додатку до Договору та виставленого Виконавцем рахунку-фактури";
   const balanceWhen =
     balanceTiming === "after_shipment"
       ? `з моменту виписки видаткової накладної протягом ${balanceDaysTerm}`
@@ -185,10 +275,16 @@ export type SpecificationDocumentParams = {
   visualizationImageUrls?: string[];
   customerSignatoryNameGenitive?: string;
   customerSignatoryRoleGenitive?: string;
+  /** Шаблон (REQ-358): поліграфія міняє назву розділу 1; без нього — товари. */
+  template?: SpecTemplate;
 };
 
 const fallbackItemText = (item: DerivedOrderItem) =>
-  buildDefaultSpecItemText({ name: itemDocumentName(item), characteristics: [], imprints: item.methodsSummary ? [item.methodsSummary] : [] });
+  buildDefaultSpecItemText({
+    name: itemDocumentName(item),
+    characteristics: [],
+    imprints: item.methodsSummary ? [item.methodsSummary] : [],
+  });
 
 export function buildSpecificationHtml(params: SpecificationDocumentParams) {
   const { records } = params;
@@ -196,9 +292,18 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
   const executor = first.executor;
   const vatPayer = executor.vatPayer;
   const items = records.flatMap((record) => record.items);
-  const totalWithVat = records.reduce((sum, record) => sum + (Number(record.total) || 0), 0);
-  const { net: totalWithoutVat, vat: vatAmount } = splitVat(totalWithVat, vatPayer);
-  const wordsCurrency: AmountCurrency = first.currency === "USD" || first.currency === "EUR" ? first.currency : "UAH";
+  const totalWithVat = records.reduce(
+    (sum, record) => sum + (Number(record.total) || 0),
+    0,
+  );
+  const { net: totalWithoutVat, vat: vatAmount } = splitVat(
+    totalWithVat,
+    vatPayer,
+  );
+  const wordsCurrency: AmountCurrency =
+    first.currency === "USD" || first.currency === "EUR"
+      ? first.currency
+      : "UAH";
   const totalInWords = amountInWords(totalWithVat, wordsCurrency);
 
   const numberLabel =
@@ -206,24 +311,37 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
       ? String(params.specificationNumber)
       : records.map((record) => record.quoteNumber).join(", ");
   const contractNumber = first.contractNumber?.trim() || first.quoteNumber;
-  const contractDate = formatDotDate(first.contractDate || first.contractCreatedAt);
-  const contractTitle = "Договору на виготовлення та поставку рекламно-сувенірної продукції";
+  const contractDate = formatDotDate(
+    first.contractDate || first.contractCreatedAt,
+  );
+  const isDesign = params.template === "design";
+  // У договорів замовника немає типу; СП на послуги чіпляється до того самого
+  // договору, тож назву типу не вигадуємо.
+  const contractTitle = isDesign
+    ? "Договору"
+    : "Договору на виготовлення та поставку рекламно-сувенірної продукції";
 
   const customerShortTitle = first.legalEntityLabel || first.customerName;
   const customerFullTitle = expandOrganizationForm(customerShortTitle);
   const signatoryName = first.customerSignatoryName?.trim() || "Не вказано";
-  const signatoryNameBody = params.customerSignatoryNameGenitive?.trim() || signatoryName;
-  const signatoryRole = first.customerSignatoryPosition?.trim() || "уповноваженої особи";
-  const roleGenitive = params.customerSignatoryRoleGenitive?.trim() || signatoryRole;
-  const roleBody = roleGenitive.charAt(0).toLocaleLowerCase("uk-UA") + roleGenitive.slice(1);
-  const authority = toAuthorityGenitive(first.customerSignatoryAuthority) || "Не вказано";
+  const signatoryNameBody =
+    params.customerSignatoryNameGenitive?.trim() || signatoryName;
+  const signatoryRole =
+    first.customerSignatoryPosition?.trim() || "уповноваженої особи";
+  const roleGenitive =
+    params.customerSignatoryRoleGenitive?.trim() || signatoryRole;
+  const roleBody =
+    roleGenitive.charAt(0).toLocaleLowerCase("uk-UA") + roleGenitive.slice(1);
+  const authority =
+    toAuthorityGenitive(first.customerSignatoryAuthority) || "Не вказано";
 
   const productionDays = Math.max(
     ...records.map((record) =>
-      typeof record.contractProductionDays === "number" && record.contractProductionDays > 0
+      typeof record.contractProductionDays === "number" &&
+      record.contractProductionDays > 0
         ? Math.round(record.contractProductionDays)
-        : DEFAULT_PRODUCTION_WORK_DAYS
-    )
+        : DEFAULT_PRODUCTION_WORK_DAYS,
+    ),
   );
   const stages = resolvePaymentStages(first);
   const paymentClause = buildSpecPaymentClause({
@@ -231,7 +349,10 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
     total: totalWithVat,
     vatPayer,
     balanceTiming: first.balanceTiming,
-    balanceDaysTerm: formatBalanceDaysTerm(first.balanceDaysAfterShipment ?? 3, first.balanceDaysKind),
+    balanceDaysTerm: formatBalanceDaysTerm(
+      first.balanceDaysAfterShipment ?? 3,
+      first.balanceDaysKind,
+    ),
   });
   const incoterms = `${first.incotermsCode?.trim() || DEFAULT_INCOTERMS} (Incoterms 2020)${
     first.incotermsPlace?.trim() ? `, ${first.incotermsPlace.trim()}` : ""
@@ -239,8 +360,20 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
 
   const rows = items
     .map((item, index) => {
-      const text = params.itemTexts?.get(item.id)?.trim() || fallbackItemText(item);
+      const text =
+        params.itemTexts?.get(item.id)?.trim() || fallbackItemText(item);
       const unit = item.unit && item.unit !== "шт." ? ` ${item.unit}` : "";
+      if (isDesign) {
+        return `
+        <tr>
+          <td>${index + 1}.</td>
+          <td>${renderItemText(text)}</td>
+          <td>${escapeHtml(item.unit?.trim() || "послуга")}</td>
+          <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(splitVat(Number(item.unitPrice) || 0, vatPayer).net))}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(splitVat(Number(item.lineTotal) || 0, vatPayer).net))}</td>
+        </tr>`;
+      }
       return `
         <tr>
           <td>${index + 1}.</td>
@@ -259,20 +392,23 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
           [`ПДВ (${VAT_RATE}%):`, vatAmount],
           ["Загальна вартість з ПДВ:", totalWithVat],
         ]
-      : [["Загальна вартість (без ПДВ):", totalWithVat]]
+      : [[isDesign ? "Всього:" : "Загальна вартість (без ПДВ):", totalWithVat]]
   )
     .map(
       ([label, amount]) => `
             <tr class="total-row">
-              <td colspan="4" class="num">${escapeHtml(String(label))}</td>
+              <td colspan="${isDesign ? 5 : 4}" class="num">${escapeHtml(String(label))}</td>
               <td class="num">${escapeHtml(formatPlainMoney(Number(amount)))}</td>
-            </tr>`
+            </tr>`,
     )
     .join("");
   const visualizations = params.visualizationImageUrls ?? [];
-  const lowerFirst = (text: string) => text.charAt(0).toLocaleLowerCase("uk-UA") + text.slice(1);
+  const lowerFirst = (text: string) =>
+    text.charAt(0).toLocaleLowerCase("uk-UA") + text.slice(1);
   const wordsInline = lowerFirst(totalInWords);
-  const netWordsInline = lowerFirst(amountInWords(totalWithoutVat, wordsCurrency));
+  const netWordsInline = lowerFirst(
+    amountInWords(totalWithoutVat, wordsCurrency),
+  );
 
   return renderPrintDocument({
     title: `Специфікація № ${numberLabel}`,
@@ -315,7 +451,44 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
 
         <p>${escapeHtml(executorPreamble(executor))}, з однієї сторони, та ${escapeHtml(customerFullTitle)} (надалі – Замовник), в особі ${escapeHtml(roleBody)} ${escapeHtml(signatoryNameBody)}, ${escapeHtml(signatoryActsPhrase(first.customerSignatoryName))} на підставі ${escapeHtml(authority)}, з іншої сторони, разом – Сторони, підписали цей Додаток до ${escapeHtml(contractTitle)} № ${escapeHtml(contractNumber)} від ${escapeHtml(contractDate)} р. про наступне:</p>
 
-        <div class="heading">1. СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
+${
+  isDesign
+    ? `
+        <div class="heading">1. ОПИС ПОСЛУГИ ТА ЇЇ ВАРТІСТЬ</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px;">№</th>
+              <th>Найменування робіт, послуг</th>
+              <th style="width:72px;">Одиниці</th>
+              <th style="width:72px;">Кількість</th>
+              <th style="width:104px;">Ціна, грн./шт. (без ПДВ)</th>
+              <th style="width:110px;">Сума (без ПДВ)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+${totalRows}
+          </tbody>
+        </table>
+
+        <div class="heading">2. ВАРТІСТЬ ТА СТРОКИ ВИКОНАННЯ РОБІТ І ПОСЛУГ</div>
+        <p>${
+          vatPayer
+            ? `2.1. Загальна вартість робіт та послуг складає ${escapeHtml(formatPlainMoney(totalWithVat))} (${escapeHtml(wordsInline)}), враховуючи ПДВ ${VAT_RATE}%. Вартість без ПДВ складає ${escapeHtml(formatPlainMoney(totalWithoutVat))} (${escapeHtml(netWordsInline)}).`
+            : `2.1. Загальна вартість робіт та послуг складає ${escapeHtml(formatPlainMoney(totalWithVat))} (${escapeHtml(wordsInline)}), без ПДВ.`
+        }</p>
+        <p>2.2. Термін виконання робіт та послуг складає ${escapeHtml(formatBalanceDaysTerm(productionDays, "working"))} з дати підписання відповідної Специфікації та отримання оплати згідно умов п. 3.1.</p>
+
+        <div class="heading">3. ПОРЯДОК ОПЛАТИ ВАРТОСТІ РОБІТ ТА ПОСЛУГ</div>
+        <p>3.1. Оплата робіт та послуг здійснюється Замовником у розмірі 100% загальної вартості на підставі підписаного додатку до Договору та виставленого Виконавцем рахунку-фактури.</p>
+        <p>3.2. Результати робіт передаються Замовнику в електронному вигляді: електронною поштою, у погодженому месенджері або посиланням на файлове сховище.</p>
+        <p>3.3. Послуги вважаються наданими після передання Замовнику фінальних матеріалів і підписання Акта наданих послуг. Якщо протягом 3 (трьох) робочих днів після передання Замовник не надав мотивованих письмових зауважень, послуги вважаються прийнятими.</p>
+        <p>3.4. Право використання результатів дизайну передається Замовнику після повної оплати в межах погодженого призначення. Вихідні (робочі) файли передаються лише тоді, коли це прямо зазначено в п. 1 цієї Специфікації.</p>
+
+`
+    : `
+        <div class="heading">${params.template === "print" ? "1. ОПИС ПРОДУКЦІЇ ТА ВАРТОСТІ" : "1. СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ"}</div>
         <table>
           <thead>
             <tr>
@@ -336,7 +509,10 @@ ${totalRows}
           visualizations.length > 0
             ? `<div class="visual-title">Візуальний вигляд продукції:</div>
         <div class="visualization">${visualizations
-          .map((src) => `<img src="${escapeHtml(src)}" alt="Візуальний вигляд продукції" />`)
+          .map(
+            (src) =>
+              `<img src="${escapeHtml(src)}" alt="Візуальний вигляд продукції" />`,
+          )
           .join("")}</div>`
             : ""
         }
@@ -348,7 +524,9 @@ ${totalRows}
             : `2.1. Загальна вартість робіт з виготовлення Продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} (${escapeHtml(wordsInline)}), без ПДВ.`
         }</p>
         <p>2.2. Термін виготовлення Продукції, з поставкою на склад, складає до ${escapeHtml(formatBalanceDaysTerm(productionDays, "working"))} з дати затвердження макету до друку${
-          stages.advance > 0 ? ", отримання передоплати згідно пункту 3.1., та" : " та"
+          stages.advance > 0
+            ? ", отримання передоплати згідно пункту 3.1., та"
+            : " та"
         } підписання даної Специфікації.</p>
         <p>2.3. Сторони погодили, що всі дизайн-макети та візуалізації, що підлягають погодженню Замовником до початку виготовлення Продукції, можуть направлятися та погоджуватися засобами електронної пошти та месенджерів (Telegram, Viber або WhatsApp).</p>
 
@@ -356,11 +534,15 @@ ${totalRows}
         <p>${escapeHtml(paymentClause)}</p>
         <p>3.2. Поставка Продукції здійснюється на умовах ${escapeHtml(incoterms)}.</p>
 
+`
+}
         <div class="heading">АДРЕСИ І РЕКВІЗИТИ СТОРІН:</div>
         <div class="signature-grid">
           <div>
             <div class="party-title">ВИКОНАВЕЦЬ:</div>
-            ${executorRequisiteLines(executor, { addressLabel: "Юридична адреса: " })
+            ${executorRequisiteLines(executor, {
+              addressLabel: "Юридична адреса: ",
+            })
               .map((line) => `<p>${escapeHtml(line)}</p>`)
               .join("")}
             <p class="signature-line">${escapeHtml(executor.signatoryPositionDisplay)}</p>

@@ -553,6 +553,27 @@ export function formatPrintSpecEntries(preset: PrintSpecPreset, values: PrintSpe
 }
 
 /**
+ * Заповнені поля, поділені за частинами виробу — стовпчиками пресету (обкладинка,
+ * блок, кріплення). Так їх друкує специфікація на поліграфію (REQ-358): у
+ * підписаних СП опис позиції йде рядком на частину. Без `columns` — одна частина
+ * з назвою виду. Порожні частини не повертаються.
+ */
+export function formatPrintSpecParts(
+  preset: PrintSpecPreset,
+  values: PrintSpecValues
+): Array<{ title: string; entries: PrintSpecEntry[] }> {
+  const entries = formatPrintSpecEntries(preset, values);
+  const sectionOf = new Map(preset.fields.map((field) => [field.id, field.section]));
+  const columns = preset.columns ?? [{ title: preset.label, sections: preset.sections }];
+  return columns
+    .map((column) => ({
+      title: column.title,
+      entries: entries.filter((entry) => column.sections.includes(sectionOf.get(entry.id) ?? "")),
+    }))
+    .filter((part) => part.entries.length > 0);
+}
+
+/**
  * Значення одного поля текстом, як його бачить людина; порожній рядок — не
  * заповнено. Видимість НЕ перевіряється: це робить той, хто питає.
  */

@@ -5,6 +5,7 @@ import {
 } from "@/features/orders/orderRecords";
 import { buildSpecificationHtml } from "@/features/orders/specificationDocument";
 import { loadSpecificationItemTexts, resolveVisualizationImageUrls } from "@/features/orders/specificationQueries";
+import { effectiveSpecTemplate } from "@/features/orders/specTemplate";
 import { declineToGenitive } from "@/lib/nameDeclension";
 import { supabase } from "@/lib/supabaseClient";
 import { openDocumentWindow } from "../documentPrintWindow";
@@ -52,6 +53,9 @@ export const getSpecificationGroupBlocker = (records: DerivedOrderRecord[]) => {
       record.balanceTiming !== first.balanceTiming
     ) {
       return "Для групової СП обери замовлення з однаковими умовами оплати.";
+    }
+    if (effectiveSpecTemplate(record.specTemplate) !== effectiveSpecTemplate(first.specTemplate)) {
+      return "В одну СП можна додати тільки замовлення одного виду: товари й поліграфія йдуть окремими СП.";
     }
     if (record.incotermsCode !== first.incotermsCode || (record.incotermsPlace ?? "") !== (first.incotermsPlace ?? "")) {
       return "Для групової СП обери замовлення з однаковими умовами Incoterms.";
@@ -134,7 +138,7 @@ export async function openGroupedSpecification(
           .filter((record) => record.specIncludeVisualization !== false)
           .flatMap((record) => record.approvedVisualizationAssets)
       ),
-      loadSpecificationItemTexts(teamId, records).catch(() => []),
+      loadSpecificationItemTexts(teamId, records, effectiveSpecTemplate(first.specTemplate)).catch(() => []),
     ]);
   printWindow.mark("відмінювання ПІБ, візуалізації й тексти позицій");
   printWindow.show(
@@ -145,6 +149,7 @@ export async function openGroupedSpecification(
       visualizationImageUrls,
       customerSignatoryNameGenitive,
       customerSignatoryRoleGenitive,
+      template: effectiveSpecTemplate(first.specTemplate),
     }),
     { teamId, orderId: first.id }
   );
