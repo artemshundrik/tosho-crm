@@ -815,6 +815,7 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
     const result = await decideDesignStatusFromBot({ admin: adminClient, userId: row.user_id, data, buildUrl: buildAppUrl });
     await answerTelegramCallback(cb.id, result.toast.slice(0, 200), { alert: result.alert });
     if (result.edit) await editTelegramCaption(chatId, messageId, result.edit.caption, result.edit.keyboard);
+    await result.followUp?.();
     return;
   }
 

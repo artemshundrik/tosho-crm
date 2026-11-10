@@ -5,6 +5,7 @@ import {
   designApprovalBlockers,
   designCallbackData,
   designKeyboard,
+  isOwnDesignOutputPath,
   DESIGN_STATUS_TEXT,
   parseDesignCallback,
 } from "../../netlify/functions/_lib/designTaskTelegram";
@@ -41,6 +42,22 @@ describe("кнопки під фото макета", () => {
     for (const [status, label] of Object.entries(DESIGN_STATUS_TEXT)) {
       expect(DESIGN_STATUS_LABELS[status as keyof typeof DESIGN_STATUS_LABELS]).toBe(label);
     }
+  });
+});
+
+describe("фото тягнемо лише з візуалів своєї команди", () => {
+  const T = "11111111-1111-4111-8111-111111111111";
+  const ok = (storage_path: string, storage_bucket = "attachments") => isOwnDesignOutputPath({ storage_bucket, storage_path }, T);
+  it("пропускає свій design-outputs", () => {
+    expect(ok(`teams/${T}/design-outputs/q/a.jpg`)).toBe(true);
+  });
+  it("не пропускає чужу команду, чужий бакет і обхід через ..", () => {
+    expect(ok("teams/other/design-outputs/q/a.jpg")).toBe(false);
+    expect(ok(`teams/${T}/design-outputs/q/a.jpg`, "avatars")).toBe(false);
+    expect(ok(`teams/${T}/design-outputs/../../../hr/x.jpg`)).toBe(false);
+    expect(ok(`teams/${T}/design-outputs/%2e%2e/x.jpg`)).toBe(false);
+    expect(ok(`/teams/${T}/design-outputs/a.jpg`)).toBe(false);
+    expect(ok(`teams/${T}/design-outputs/a.jpg?x`)).toBe(false);
   });
 });
 

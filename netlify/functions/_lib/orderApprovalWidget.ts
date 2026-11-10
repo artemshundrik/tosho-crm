@@ -235,7 +235,7 @@ export function isOwnPublicStorageUrl(url: string | null | undefined, supabaseUr
   }
 }
 
-async function fetchLogo(url: string): Promise<Buffer | null> {
+export async function fetchLogo(url: string): Promise<Buffer | null> {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (!response.ok) return null;

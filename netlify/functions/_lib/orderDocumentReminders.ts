@@ -49,6 +49,7 @@ export type ReminderOrderRow = {
   team_id: string;
   quote_number: string | null;
   customer_name: string | null;
+  customer_logo_url?: string | null;
   manager_user_id: string | null;
   payment_method_id: string | null;
   payment_method_label: string | null;
@@ -88,7 +89,7 @@ export type ReminderDispatchRow = {
 };
 
 export const ORDER_REMINDER_COLUMNS =
-  "id,team_id,quote_number,customer_name,manager_user_id,payment_method_id,payment_method_label,order_status,payment_status,contract_created_at,specification_created_at,contract_signed_at,specification_signed_at,invoice_number,invoice_date,invoice_created_at,prepayment_pct,balance_timing,balance_days_after_shipment,balance_days_kind,closing_document,act_date,waybill_date";
+  "id,team_id,quote_number,customer_name,customer_logo_url,manager_user_id,payment_method_id,payment_method_label,order_status,payment_status,contract_created_at,specification_created_at,contract_signed_at,specification_signed_at,invoice_number,invoice_date,invoice_created_at,prepayment_pct,balance_timing,balance_days_after_shipment,balance_days_kind,closing_document,act_date,waybill_date";
 
 /** Закриті замовлення документів уже не чекають. */
 export const CLOSED_ORDER_STATUSES = ["cancelled", "completed"];
@@ -101,6 +102,7 @@ export type DocumentReminderItem = {
   teamId: string;
   orderNumber: string | null;
   customerName: string | null;
+  customerLogoUrl?: string | null;
   managerUserId: string | null;
   document: ReminderDocument;
   section: ReminderSection;
@@ -218,6 +220,7 @@ export function collectOrderReminders(
     teamId: order.team_id,
     orderNumber: order.quote_number,
     customerName: order.customer_name,
+    customerLogoUrl: order.customer_logo_url ?? null,
     managerUserId: order.manager_user_id,
   };
   const items: DocumentReminderItem[] = [];

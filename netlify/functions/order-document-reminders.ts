@@ -1,6 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { deliverNotifications } from "./_notificationDelivery";
+import { buildAppUrl } from "./_lib/appUrl";
+import { buildDocsWidget } from "./_lib/docsWidget";
+import { fetchLogo, isOwnPublicStorageUrl } from "./_lib/orderApprovalWidget";
 import {
   isDeliverable,
   mergeTeamMembers,
@@ -53,7 +56,61 @@ type DigestRow = {
   href: string;
   type: "warning";
   telegramLinks: Array<{ text: string; href: string }>;
+  telegramWidget?: { html: string; chatData: string; caption: string } | null;
 };
+
+const DOCS_CAPTION_DATE = (now: Date) =>
+  now.toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv", day: "numeric", month: "long" });
+
+/** Аватарки менеджерів для зведення керівнику — як у «Команда вчора». */
+async function loadManagerAvatars(admin: SupabaseClient, userIds: string[]): Promise<Map<string, Buffer | null>> {
+  if (userIds.length === 0) return new Map();
+  const { data } = await admin.schema("tosho").from("team_member_profiles").select("user_id,avatar_path").in("user_id", userIds);
+  const rows = ((data ?? []) as Array<{ user_id: string; avatar_path?: string | null }>).filter((row) => row.avatar_path);
+  const entries = await Promise.all(
+    rows.map(async (row) => {
+      const { data: file } = await admin.storage.from("avatars").download(row.avatar_path as string);
+      return [row.user_id, file ? Buffer.from(await file.arrayBuffer()) : null] as const;
+    })
+  );
+  return new Map(entries);
+}
+
+/** Лого замовників — лише з публічного сховища нашого Supabase (SSRF). */
+async function loadCustomerLogos(items: DocumentReminderItem[]): Promise<Map<string, Buffer | null>> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const byUrl = new Map<string, Promise<Buffer | null>>();
+  const entries = await Promise.all(
+    items.map(async (item) => {
+      const url = item.customerLogoUrl?.trim() ?? "";
+      if (!isOwnPublicStorageUrl(url, supabaseUrl)) return [item.orderId, null] as const;
+      if (!byUrl.has(url)) byUrl.set(url, fetchLogo(url));
+      return [item.orderId, await byUrl.get(url)!] as const;
+    })
+  );
+  return new Map(entries);
+}
+
+async function docsWidget(
+  mode: "manager" | "head",
+  items: DocumentReminderItem[],
+  title: string,
+  assets: { avatars?: Map<string, Buffer | null>; logos: Map<string, Buffer | null>; managerName?: (id: string | null) => string }
+) {
+  try {
+    const html = await buildDocsWidget({
+      mode,
+      items,
+      date: DOCS_CAPTION_DATE(new Date()),
+      orderUrlPrefix: buildAppUrl("/orders/production/"),
+      ...assets,
+    });
+    return html ? { html, chatData: "{}", caption: `<b>${title.replace(/[<>&]/g, "")}</b>` } : null;
+  } catch (error) {
+    console.warn("[order-document-reminders] widget skipped", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -178,26 +235,41 @@ export async function buildOrderDocumentDigests(
     }
   }
 
+  // Віджети (REQ-356#p2): аватарки менеджерів у керівника, лого замовників.
+  const headManagerIds = Array.from(
+    new Set(Array.from(headItemsByTeam.values()).flat().map((item) => item.managerUserId).filter((id): id is string => !!id))
+  );
+  const [avatars, logos] = await Promise.all([
+    loadManagerAvatars(adminClient, headManagerIds).catch(() => new Map<string, Buffer | null>()),
+    loadCustomerLogos(items).catch(() => new Map<string, Buffer | null>()),
+  ]);
+
   for (const [userId, own] of managerItems) {
+    const digest = buildManagerDigest(own);
+    const widget = await docsWidget("manager", own, digest.title, { logos });
     rows.push({
       user_id: userId,
-      ...buildManagerDigest(own),
+      ...digest,
       href: managerDigestHref(userId, today),
       type: "warning",
-      telegramLinks: buildDigestLinks(own),
+      // У віджеті кожен рядок і так веде на замовлення — під ним лише CRM.
+      telegramLinks: widget ? [] : buildDigestLinks(own),
+      telegramWidget: widget,
     });
   }
 
   for (const [teamId, own] of headItemsByTeam) {
     const heads = members.filter((member) => member.teamId === teamId && isDeliverable(member) && isHead(member));
     const digest = buildHeadDigest(own, nameOf);
+    const widget = heads.length > 0 ? await docsWidget("head", own, digest.title, { avatars, logos, managerName: nameOf }) : null;
     for (const head of heads) {
       rows.push({
         user_id: head.userId,
         ...digest,
         href: headDigestHref(head.userId, today),
         type: "warning",
-        telegramLinks: buildDigestLinks(own),
+        telegramLinks: widget ? [] : buildDigestLinks(own),
+        telegramWidget: widget,
       });
     }
   }

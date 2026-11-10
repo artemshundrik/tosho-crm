@@ -10,7 +10,7 @@ body{margin:0;padding:12px 14px;font:13px/1.35 system-ui,sans-serif;color:var(--
 .h{display:flex;align-items:center;gap:8px;margin-top:10px;padding:6px 0;font-size:12px;color:var(--h);font-weight:500;text-transform:uppercase;letter-spacing:.3px}
 .g{border-bottom:1px solid var(--s)}.g:last-child{border:0}
 .gh{display:flex;align-items:center;gap:9px;padding:8px 0}
-.av{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:600 11px system-ui,sans-serif;color:#fff}
+.av{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:600 11px system-ui,sans-serif;color:#fff}
 .gh b{flex:1;font-weight:600}.gh .bar{width:64px;height:6px;border-radius:3px;background:var(--s);overflow:hidden}.gh .bar s{display:block;height:100%;background:var(--a);border-radius:3px}
 .gh .n{min-width:18px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
 .gh:after{content:'›';color:var(--h);transition:transform .25s;margin-left:2px}.g.on .gh:after{transform:rotate(90deg)}
@@ -22,7 +22,7 @@ body{margin:0;padding:12px 14px;font:13px/1.35 system-ui,sans-serif;color:var(--
 .r .m{flex:1;min-width:0}.r .m b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .r .m span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--h);font-variant-numeric:tabular-nums}
 .d{flex:none;padding:2px 7px;border-radius:7px;font-size:11px;font-weight:600;background:var(--s)}
-.p{flex:none;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;min-width:38px;text-align:right}
+.p{flex:none;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .p.e{color:var(--e)}.p.w{color:var(--w)}
 .r:after{content:'›';color:var(--h)}
 </style>
@@ -36,8 +36,8 @@ const DOC={c:'договір',s:'СП',i:'рахунок',b:'доплата'},DP
 const COL=['#e17076','#7bc862','#65aadd','#a695e7','#ee7aae','#6ec9cb','#faa774'];
 let D;
 const ini=s=>s.split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
-const row=(r,showSec)=>{const[id,num,cust,doc,sec,days,esc5,logo]=r;
-  return '<div class=r data-u="'+esc(D.u+id)+'"><span class=lg'+(logo>=0?' style="background:var(--lg) '+(-logo*30)+'px 0/'+D.n*30+'px 30px;color:transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)"':' style=background:'+COL[cust.length%7])+'>'+esc(ini(cust))+'</span><div class=m><b>'+esc(cust)+'</b><span>'+esc(num)+(showSec&&sec!='u'?' · '+SEC[sec]:'')+'</span></div><span class=d>'+DOC[doc]+'</span><span class="p'+(esc5?' e':days>=3?' w':'')+'">'+days+' р.д.</span></div>'};
+const row=(r,showSec)=>{const[id,num,cust,doc,sec,det,esc5,logo]=r;
+  return '<div class=r data-u="'+esc(D.u+id)+'"><span class=lg'+(logo>=0?' style="background:var(--lg) '+(-logo*30)+'px 0/'+D.n*30+'px 30px;color:transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)"':' style=background:'+COL[cust.length%7])+'>'+esc(ini(cust))+'</span><div class=m><b>'+esc(cust)+'</b><span>'+esc(num)+(showSec&&sec!='u'?' · '+SEC[sec]:'')+'</span></div><span class=d>'+DOC[doc]+'</span><span class="p'+(esc5?' e':'')+'">'+esc(det)+'</span></div>'};
 function init(){
   D=window.DN;if(!D)try{D=JSON.parse(W.chatData)}catch(e){return}
   $('T').textContent=D.t;$('D').textContent=D.d;
@@ -46,7 +46,7 @@ function init(){
   $('S').innerHTML=(late?'<span class=e><b>'+late+'</b> довше 5 р.д.</span>':'')+(D.m?Object.entries(sc).map(([k,v])=>'<span><b>'+v+'</b> '+SEC[k]+'</span>').join(''):'')+Object.entries(cnt).map(([k,v])=>'<span><b>'+v+'</b> '+pl(v,DP[k])+'</span>').join('');
   if(D.m){ // керівнику: за менеджерами
     const max=Math.max(...D.g.map(g=>g[1].length));
-    $('L').innerHTML=D.g.map((g,i)=>'<div class="g'+(i?'':' on')+'"><div class=gh><span class=av style=background:'+COL[i%7]+'>'+esc(ini(g[0]))+'</span><b>'+esc(g[0])+'</b><span class=bar><s style=width:'+g[1].length/max*100+'%></s></span><span class=n>'+g[1].length+'</span></div><div class=gb><div>'+g[1].map(r=>row(r,1)).join('')+'</div></div></div>').join('');
+    $('L').innerHTML=D.g.map((g,i)=>'<div class="g'+(i?'':' on')+'"><div class=gh><span class=av style="'+(g[2]>=0?'background:var(--av) '+(-g[2]*26)+'px 0/'+D.k*26+'px 26px;color:transparent':'background:'+COL[i%7])+'">'+esc(ini(g[0]))+'</span><b>'+esc(g[0])+'</b><span class=bar><s style=width:'+g[1].length/max*100+'%></s></span><span class=n>'+g[1].length+'</span></div><div class=gb><div>'+g[1].map(r=>row(r,1)).join('')+'</div></div></div>').join('');
   }else{ // менеджеру: за розділами
     $('L').innerHTML=D.g.map(g=>'<div class=h>'+esc(g[0])+' · '+g[1].length+'</div><div class=flat><div class=gb><div>'+g[1].map(r=>row(r,0)).join('')+'</div></div></div>').join('');
   }

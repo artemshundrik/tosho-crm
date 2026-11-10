@@ -18,6 +18,7 @@ import type { InlineKeyboard } from "../_telegram";
  */
 
 export const DESIGN_CALLBACK_PREFIX = "dsg";
+const DESIGN_OUTPUT_BUCKET = "attachments";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Які статуси отримують фото. «Правки» — ні: там важливий текст правок, не старий макет. */
@@ -139,13 +140,24 @@ export async function composeDesignPhoto(images: Buffer[], total: number): Promi
     .toBuffer();
 }
 
+/**
+ * Лише візуали цієї команди в бакеті вкладень. Шлях і бакет у metadata пишуть
+ * люди, а storage-js склеює URL рядком, і fetch розгортає `..`: без цієї
+ * перевірки `teams/<свій>/../../<чужий бакет>/…` дістав би будь-який файл
+ * service-роллю.
+ */
+export function isOwnDesignOutputPath(file: { storage_bucket?: string | null; storage_path?: string | null }, teamId: string): boolean {
+  const bucket = str(file.storage_bucket);
+  const path = str(file.storage_path);
+  if (bucket !== DESIGN_OUTPUT_BUCKET) return false;
+  if (/(^|\/)\.\.?(\/|$)|[%\\?#]|^\//.test(path)) return false;
+  return path.startsWith(`teams/${teamId}/design-outputs/`);
+}
+
 export async function loadDesignPhoto(admin: SupabaseClient, task: DesignTaskRow): Promise<Buffer | null> {
   const files = pickDesignImages(task.metadata);
   if (files.length === 0) return null;
-  // Лише файли цієї команди: шлях у metadata пишуть люди, і чужий префікс
-  // перетворив би бота на спосіб дістати чуже вкладення.
-  const teamPrefix = `teams/${task.team_id}/`;
-  const allowed = files.filter((file) => str(file.storage_path).startsWith(teamPrefix));
+  const allowed = files.filter((file) => isOwnDesignOutputPath(file, task.team_id));
   const buffers = (
     await Promise.all(
       allowed.slice(0, 4).map(async (file) => {
@@ -197,13 +209,12 @@ export function designCaption(task: DesignTaskRow, options: { actorName?: string
   const customer = str(meta.customer_name);
   const number = str(meta.design_task_number);
   return [
-    `<b>${escapeHtml(taskLabel(task))}</b>`,
+    `<b>${escapeHtml(taskLabel(task).slice(0, 200))}</b>`,
     [customer, number ? `#${number}` : ""].filter(Boolean).map(escapeHtml).join(" · "),
     escapeHtml(statusLine),
   ]
     .filter(Boolean)
-    .join("\n")
-    .slice(0, 1000);
+    .join("\n");
 }
 
 /** Кнопки під фото: рішення лише для тих, хто може міняти статуси. */
